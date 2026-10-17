@@ -621,7 +621,10 @@ export default {
     const reactor = InstallReactor({ total: s.order.length });
     cleanups.push(() => reactor.destroy());
     const spot = h('div.spot', { attrs: { 'aria-live': 'off' } });
-    const stage = h('section.inst__stage', { dataset: { stagger: '' }, attrs: { 'aria-label': 'Aktueller Fortschritt' } }, h('div.inst__reactor-wrap', reactor), spot);
+    const reactorWrap = h('div.inst__reactor-wrap', reactor);
+    const stage = h('section.inst__stage', { dataset: { stagger: '' }, attrs: { 'aria-label': 'Aktueller Fortschritt' } }, reactorWrap, spot);
+    // the FX phoenix assembles inside the reactor instead of behind the queue
+    cleanups.push(fx.anchorFor(reactorWrap));
 
     // ---- queue ------------------------------------------------------------------------------------
     const qCount = h('span.inst__qcount.t-num');

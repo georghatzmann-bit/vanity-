@@ -6,9 +6,10 @@
 import { INTRO_FULL, INTRO_SHORT, ASM_W, ASM_J, bootLook, introTau, sstep, mix, clamp01, flashEnv, climaxEnv, shakeN } from './timeline.js';
 import { WORD_DY, WORD_H } from './emblem/raster.js';
 
-export const STATES = ['boot', 'idle', 'home', 'scan', 'installing', 'success', 'error'];
+// afterglow: the success celebration settling behind a results screen (no bird, no wordmark)
+export const STATES = ['boot', 'idle', 'home', 'scan', 'installing', 'success', 'afterglow', 'error'];
 const ALIAS = {};
-const BLEND = { boot: 0.0, idle: 0.6, home: 0.6, scan: 0.6, installing: 0.6, success: 0.6, error: 0.35 };
+const BLEND = { boot: 0.0, idle: 0.6, home: 0.6, scan: 0.6, installing: 0.6, success: 0.6, afterglow: 0.6, error: 0.35 };
 const PROGRESS_STATES = new Set(['installing', 'scan']);
 export const DEFAULT_ANCHOR = Object.freeze([0, 0.16, 0.45]); // world centre + scale of the hero emblem
 const WORD_ASPECT = 1536 / 288; // wordmark SDF box aspect (wordmark.js W / H)
@@ -336,12 +337,13 @@ function scanLook(A, t, anchored) {
   installingLook(A, t);
   if (anchored) return;
   const p = clamp01(C.pv);
-  A[P.intensity] = 0.6 + 0.16 * p;
-  A[P.flameY] = mix(-1.02, -0.72, p);
+  A[P.intensity] = 0.6 + 0.24 * p;
+  A[P.flameY] = mix(-1.05, -0.64, p);
+  A[P.hue] = 0.3 + 0.35 * p;
   A[P.heatAmt] = 0;
   A[P.fill] = 0;
   A[P.cloudA] = 0.75;
-  A[P.diskA] = 0.2;
+  A[P.diskA] = 0.16 + 0.12 * p;
   A[P.asm] = 0;
   A[P.lineReveal] = 0;
   A[P.lineAlpha] = 0;
@@ -391,6 +393,30 @@ function successLook(rec, A, t) {
     homeLook(A1, t);
     for (let k = 0; k < NP; k++) A[k] += (A1[k] - A[k]) * back;
   }
+}
+
+/**
+ * afterglow: the success moment is over and a dense results screen sits on top. The neon bird and
+ * wordmark fade out, the landed particle bird burns away into rising embers, and the plasma stays
+ * warm (magenta, higher flames, more embers) before it eases into the calm idle look.
+ */
+function afterglowLook(rec, A, t) {
+  const sT = t - rec.t0;
+  idleLook(A, t);
+  const warm = 1 - sstep(4, 12, sT);
+  A[P.intensity] = 0.62 + 0.14 * warm;
+  A[P.hue] = 0.45 + 0.17 * warm;
+  A[P.flameY] = mix(-0.84, -0.68, warm);
+  A[P.swirl] = 0.35;
+  A[P.emberRate] = 1 + 0.7 * warm;
+  A[P.emberA] = 1;
+  // the particle bird keeps its landed shape while it burns (F.burnT runs from the entry)
+  A[P.cloudA] = rec.cloud0 * (1 - sstep(1.2, 3.2, sT));
+  A[P.asm] = Math.max(rec.asm0, 1.06);
+  A[P.asmW] = 0.03;
+  A[P.lineReveal] = 1;
+  A[P.lineAlpha] = 0;
+  A[P.wordAlpha] = 0;
 }
 
 function errorLook(rec, A, t) {
@@ -479,6 +505,9 @@ function look(rec, t, snap, env, A, isTop) {
       break;
     case 'success':
       successLook(rec, A, t);
+      break;
+    case 'afterglow':
+      afterglowLook(rec, A, t);
       break;
     case 'error':
       errorLook(rec, A, t);
@@ -593,7 +622,7 @@ export function evaluate(t, snap, env, F) {
     F.introT = -100;
     F.igniteT = -100;
     F.penGain = 0;
-    F.burnT = top.s === 'success' ? t - top.t0 - 3.0 : -100;
+    F.burnT = top.s === 'success' ? t - top.t0 - 3.0 : top.s === 'afterglow' ? t - top.t0 - 0.1 : -100;
     // a look without a particle cloud (idle / home) replacing one whose cloud is burning away (intro
     // end, success settling): the leftover particles keep burning while they fade out – resetting
     // the burn would pop the whole particle bird back for the length of the blend
@@ -601,6 +630,7 @@ export function evaluate(t, snap, env, F) {
       const prev = st[topIdx - 1];
       let pb = -100;
       if (prev.s === 'success') pb = t - prev.t0 - 3.0;
+      else if (prev.s === 'afterglow') pb = t - prev.t0 - 0.1;
       else if (prev.s === 'boot') {
         const K = introConsts(snap);
         const intro = snap.intro || { t0: prev.t0, skipT: null, mode: 'full' };
@@ -636,7 +666,16 @@ export function evaluate(t, snap, env, F) {
   F.burstT = tc;
   F.sparkGain = ev.cs > 0 ? Math.min(1, ev.cs * 1.2) : 0;
   F.sparkFrac = ev.frac;
-  p[P.raysAmt] += climax * ev.rays;
+  if (snap.rm) {
+    // reduced motion: the climax is a glow-up only – no expanding shock rings, flying sparks or
+    // particles thrown outward (spec 4.4: pulses become soft glows, no shake / colour split)
+    F.shock = 0;
+    F.shockAmp = 0;
+    F.shockGlow = 0;
+    F.sparkGain = 0;
+    F.climaxAmt = 0;
+  }
+  p[P.raysAmt] += climax * ev.rays * (snap.rm ? 0.4 : 1);
   p[P.bloomAmt] += 0.15 * climax;
   p[P.streakAmt] += 0.1 * climax;
   p[P.halo] = Math.max(p[P.halo], Math.min(1, climax * 1.2));

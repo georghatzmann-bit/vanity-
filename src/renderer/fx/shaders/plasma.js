@@ -170,6 +170,8 @@ void main() {
   e *= reveal;
 #endif
   e *= uIntensity;
+  // calm looks: soft knee on the highlights – single filaments must not flare up behind the UI
+  e = mix(e, e / (1.0 + 0.22 * e), smoothstep(0.9, 1.0, uIdle));
   vec3 col = ramp(e, hue) * e;
 #if F_REVEAL
   col += rim * vec3(0.55, 0.30, 1.5) * 1.5 * uIntensity;

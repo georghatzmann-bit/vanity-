@@ -69,6 +69,10 @@
   --fx-glow: 1.2;
 }
 
+.fx-static.is-afterglow {
+  --fx-glow: 1.05;
+}
+
 .fx-static.is-error {
   --fx-glow: 0.45;
   filter: saturate(0.45) hue-rotate(-12deg);

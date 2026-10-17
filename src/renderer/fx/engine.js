@@ -7,7 +7,9 @@
 //     header: { emb: DOMRect, word: DOMRect } | () => that,   // glide target of the intro logo
 //     onIntroDone(), onTierChange(tier, reason), onError(err),
 //   });
-//   fx.setState('boot'|'idle'|'home'|'installing'|'success'|'error'|'scan', { immediate })
+//   fx.setState('boot'|'idle'|'home'|'scan'|'installing'|'success'|'afterglow'|'error', { immediate })
+//     scan: progress charges the plasma, no bird (unless a screen anchored one at its entry)
+//     afterglow: success settling behind a results screen – the bird burns into embers, no wordmark
 //   fx.setProgress(p|null, { reset }) · fx.pulse(strength) · fx.burst({ count }) · await fx.warp(ms)
 //   fx.setAnchor(rect|null) · fx.setScrim(rects) · fx.setIntensity(0..1) · fx.setPaused(bool)
 //   fx.playIntro('full'|'short'|'none') · fx.skipIntro() · fx.setQuality(q) · fx.resize()
@@ -89,6 +91,12 @@ function testSnapshot(T) {
     at('installing', -10);
     snapProgress(s, -10, 0.85, true);
     at('success', 0, 0.85);
+  } else if (st === 'afterglow') {
+    at('installing', -10);
+    snapProgress(s, -10, 0.85, true);
+    at('success', -2, 0.85);
+    s.states[s.states.length - 1].cloud0 = 1;
+    s.states.push({ s: 'afterglow', t0: 0, dur: 0.6, p0: 1, cloud0: 1, asm0: 1.06, rev0: 1, alpha0: 0.95 });
   } else if (st === 'error') {
     at('installing', -10);
     snapProgress(s, -10, 0.6, true);
@@ -294,6 +302,9 @@ export async function createFx(canvas, options = {}) {
     add(3, s2);
     s2.states.push({ s: 'success', t0: 4, dur: 0.6, p0: 1, cloud0: 1, asm0: 1, rev0: 1, alpha0: 0.6 });
     for (let t = 4; t < 10; t += 0.1) add(t, s2);
+    s2.states.push({ s: 'afterglow', t0: 10, dur: 0.6, p0: 1, cloud0: 1, asm0: 1.06, rev0: 1, alpha0: 0.6 });
+    add(10.3, s2);
+    add(11.5, s2);
     s2.states.push({ s: 'error', t0: 11, dur: 0.35, p0: 1, cloud0: 1, asm0: 1, rev0: 1, alpha0: 0.6 });
     for (let t = 11; t < 14; t += 0.2) add(t, s2);
     s2.warp = { t0: 15, dur: 0.7 };
@@ -349,7 +360,7 @@ export async function createFx(canvas, options = {}) {
     else {
       const top = snap.states[snap.states.length - 1];
       const age = now() - top.t0;
-      const busy = (top.s === 'success' && age < 5.2) || (top.s === 'error' && age < 3) || F.warpEnv > 0 || F.climax > 0.02 || age < top.dur + 0.2;
+      const busy = (top.s === 'success' && age < 5.2) || (top.s === 'afterglow' && age < 3.4) || (top.s === 'error' && age < 3) || F.warpEnv > 0 || F.climax > 0.02 || age < top.dur + 0.2;
       f = busy ? fp.intro : top.s === 'installing' || top.s === 'scan' ? fp.installing : fp.idle;
     }
     if (now() - lastPulseAt < 1.0) f = Math.max(f, fp.pulse);

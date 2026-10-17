@@ -73,6 +73,13 @@ function shaft(i, len = 0.86) {
   return [s[0], s[1], m1[0], m1[1], m2[0], m2[1], e[0], e[1]];
 }
 
+// Tail outline (right half; mirrored -> closed): root -> side plume tip -> back in -> centre plume tip
+export const TAIL = [0.05, -0.22, 0.22, -0.29, 0.4, -0.43, 0.49, -0.62,
+  0.57, -0.78, 0.6, -0.92, 0.71, -1.04,
+  0.57, -1.0, 0.45, -0.92, 0.38, -0.8,
+  0.3, -0.66, 0.2, -0.52, 0.13, -0.44,
+  0.15, -0.66, 0.1, -0.92, 0, -1.17];
+
 // Each stroke: chain of cubic segments [x0,y0, c1x,c1y, c2x,c2y, x1,y1, c1x,c1y, c2x,c2y, x2,y2, ...]
 // id: name, t: reveal window (pen order), w: line width factor, m: 1 = mirrored to the left half,
 // g: group (body | crest | wing | tail | ring) for colouring.
@@ -108,15 +115,14 @@ export const S = [
   { id: 'shaft2', c: shaft(1), t: [0.5, 0.65], w: 0.5, m: 1, g: 'wing' },
   { id: 'shaft3', c: shaft(2), t: [0.54, 0.68], w: 0.5, m: 1, g: 'wing' },
   { id: 'shaft4', c: shaft(3), t: [0.58, 0.7], w: 0.5, m: 1, g: 'wing' },
-  // tail: two flame plumes flicking outward + the long centre plume (mirrored -> closed outline)
-  { id: 'tail', c: [0.05, -0.22, 0.22, -0.29, 0.4, -0.43, 0.49, -0.62,
-        0.57, -0.78, 0.6, -0.92, 0.71, -1.04,
-        0.57, -1.0, 0.45, -0.92, 0.38, -0.8,
-        0.3, -0.66, 0.2, -0.52, 0.13, -0.44,
-        0.15, -0.66, 0.1, -0.92, 0, -1.17], t: [0.56, 0.8], w: 0.95, m: 1, g: 'tail' },
+  // tail: the long centre plume first, then the two flame plumes flicking outward (one outline,
+  // split into two pen strokes so a half-built bird never reads as a stick figure with legs)
+  // (array order = SVG paint order, kept as before the split; the pen order is the t window)
+  { id: 'tailCentre', c: TAIL.slice(24), t: [0.56, 0.65], w: 0.95, m: 1, g: 'tail' },
+  { id: 'tailSide', c: TAIL.slice(0, 26), t: [0.63, 0.8], w: 0.95, m: 1, g: 'tail' },
   // tail flame shafts
-  { id: 'tailShaft', c: [0.04, -0.3, 0.2, -0.44, 0.36, -0.62, 0.47, -0.84], t: [0.66, 0.82], w: 0.5, m: 1, g: 'tail' },
-  { id: 'tailMid', c: [0, -0.34, 0.012, -0.58, 0.01, -0.8, 0, -1.02], t: [0.68, 0.84], w: 0.5, m: 0, g: 'tail' },
+  { id: 'tailShaft', c: [0.04, -0.3, 0.2, -0.44, 0.36, -0.62, 0.47, -0.84], t: [0.7, 0.84], w: 0.5, m: 1, g: 'tail' },
+  { id: 'tailMid', c: [0, -0.34, 0.012, -0.58, 0.01, -0.8, 0, -1.02], t: [0.6, 0.7], w: 0.5, m: 0, g: 'tail' },
 ];
 
 const byId = (id) => S.find((s) => s.id === id);
@@ -186,7 +192,7 @@ export function emblemSilhouettes() {
   const mirror = (pts) => pts.map(([x, y]) => [-x, y]);
   const wing = chainPoints(byId('wingLead').c, 32).concat(chainPoints(byId('wingTrail').c, 16).slice(1));
   polys.push({ g: 'wing', pts: wing }, { g: 'wing', pts: mirror(wing) });
-  const tailR = chainPoints(byId('tail').c, 24);
+  const tailR = chainPoints(TAIL, 24);
   polys.push({ g: 'tail', pts: tailR.concat(mirror(tailR).reverse().slice(1)) });
   const torsoR = chainPoints(byId('torso').c, 32);
   const head = chainPoints(byId('head').c, 16);

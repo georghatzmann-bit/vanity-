@@ -1,7 +1,7 @@
 {
   "name": "phoenix",
   "productName": "Phoenix",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Phoenix – sichert deine Apps vor dem PC-Reset und installiert sie danach automatisch wieder.",
   "author": "georghatzmann-bit",
   "license": "UNLICENSED",

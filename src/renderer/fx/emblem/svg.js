@@ -6,7 +6,7 @@
 //   emblemPaths({ detail })                       -> { strokes: [{ d, w, g }], fills: [{ d, g }], viewBox }
 //
 // Coordinates: emblem units x100, y flipped (SVG y points down). viewBox "-120 -120 240 240".
-import { S, ringStroke, emblemSilhouettes } from './strokes.js';
+import { S, TAIL, ringStroke, emblemSilhouettes } from './strokes.js';
 
 const K = 100;
 const f = (v) => {
@@ -36,8 +36,10 @@ export function emblemPaths({ detail = 'full' } = {}) {
   const strokes = [];
   for (const s of S) {
     if (simple && s.w < 0.62) continue;
-    strokes.push({ d: chainD(s.c, false), w: s.w, g: s.g });
-    if (s.m) strokes.push({ d: chainD(s.c, true), w: s.w, g: s.g });
+    if (s.id === 'tailCentre') continue; // the tail outline is one path in the SVG (two pen strokes in the FX)
+    const c = s.id === 'tailSide' ? TAIL : s.c;
+    strokes.push({ d: chainD(c, false), w: s.w, g: s.g });
+    if (s.m) strokes.push({ d: chainD(c, true), w: s.w, g: s.g });
   }
   const r = ringStroke();
   const R = Math.hypot(r.pts[0][0], r.pts[0][1]);

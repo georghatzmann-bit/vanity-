@@ -65,8 +65,11 @@ void main() {
   vec3 c = coreCol * core + mix(C_VIOLET, C_LAV, 0.35) * g1 * 1.1 * uGlowAmt + C_VIOLET * g2 * 0.32 * uGlowAmt;
   c *= rev * energy * uLineAlpha;
 #if F_PEN
-  float hp = exp(-pow((P - rt) * 230.0, 2.0)) * step(rt, P + 0.0015) * (1.0 - step(0.9999, P));
-  c += (C_HOT * exp(-de / 0.014) * 5.0 + C_LAV * exp(-de / 0.04) * 0.8) * hp * fall * uPenHead;
+  // pen head: a round spark that tapers off quickly ahead of the pen (no hard cut – a hard cut
+  // showed as flat "chisel" ticks where strokes meet in the nearest-stroke distance field)
+  float dp = P - rt;
+  float hp = exp(-pow(dp * (dp > 0.0 ? 230.0 : 650.0), 2.0)) * (1.0 - step(0.9999, P));
+  c += (C_HOT * exp(-de / 0.011) * 5.0 + C_LAV * exp(-de / 0.03) * 0.8) * hp * fall * uPenHead;
 #endif
   // halo: during the climax a dark band around the lines keeps the bird readable inside the glare
   float halo = (1.0 - ss(hw + 1.0 * px, hw + 0.05, de)) * (1.0 - core);

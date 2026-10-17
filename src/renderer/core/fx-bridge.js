@@ -3,6 +3,10 @@
 // anchor / scrims / intensity are replayed when it arrives, so screens never need to care whether
 // the engine is loaded (or whether WebGL exists at all – the engine falls back to a CSS tier).
 //
+// Screens without own scrims get automatic ones: the biggest glass panels / cards of the visible
+// screen ([data-fx-scrim] opts an element in, [data-fx-noscrim] out). 'success' runs the climax only
+// right after 'installing' / 'scan'; a follow-up results screen gets the engine's 'afterglow' look.
+//
 // Screen helpers (prefer these over raw rects – they follow layout changes and clean up after
 // themselves when the elements leave the DOM):
 //   const release = fx.scrimFor([panelEl, listEl]);   // FX darkens beneath these panels (max 4)
@@ -18,7 +22,7 @@ let engine = null;
 let initPromise = null;
 let readyResolve = null;
 const ready = new Promise((res) => (readyResolve = res));
-const last = { state: null, stateOpts: undefined, progress: undefined, quality: null, anchor: undefined, scrim: null, intensity: null, paused: false };
+const last = { state: null, engineState: null, stateOpts: undefined, progress: undefined, quality: null, anchor: undefined, scrim: null, intensity: null, paused: false };
 const introListeners = new Set();
 const tierListeners = new Set();
 const root = typeof document !== 'undefined' ? document.documentElement : null;
@@ -42,10 +46,7 @@ function endIntro() {
   intro.hold = false;
   intro.pending = null;
   if (root && root.dataset.fxIntro) delete root.dataset.fxIntro;
-  if (pending) {
-    last.state = pending.name;
-    call('setState', pending.name, pending.opts);
-  }
+  if (pending) fx.setState(pending.name, pending.opts);
   return wasActive;
 }
 
@@ -123,9 +124,78 @@ function measure(el) {
   return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
 }
 
+// ---- automatic scrims ---------------------------------------------------------------------------
+// A screen that registers no panels of its own (scrimFor) still gets calm FX behind its glass
+// surfaces: the biggest glass panels / cards of the visible screen are found by a cheap, pruned DOM
+// walk (on screen change, then every few seconds for content that arrives later) and scrimmed.
+// Opt out per element with [data-fx-noscrim], opt in a non-glass element with [data-fx-scrim].
+const AUTO_RESCAN_MS = 2500;
+const auto = { screen: null, els: [], scanAt: 0 };
+
+function activeScreen() {
+  const app = typeof document !== 'undefined' ? document.getElementById('app') : null;
+  if (!app) return null;
+  let last = null;
+  let live = null; // the newest screen that is not leaving (leaving screens are inert)
+  for (const el of app.children) {
+    if (!el.classList.contains('screen')) continue;
+    last = el;
+    if (!el.inert) live = el;
+  }
+  return live || last;
+}
+
+function scanPanels(screen) {
+  const vw = window.innerWidth || 1;
+  const vh = window.innerHeight || 1;
+  const minArea = vw * vh * 0.025;
+  const found = [];
+  const walker = document.createTreeWalker(screen, NodeFilter.SHOW_ELEMENT, {
+    acceptNode(el) {
+      const r = el.getBoundingClientRect();
+      if (r.width * r.height < minArea) return NodeFilter.FILTER_REJECT; // nothing panel-sized below
+      if (el.hasAttribute('data-fx-noscrim')) return NodeFilter.FILTER_REJECT;
+      if (r.width < 120 || r.height < 60 || r.width > vw * 0.98 || r.height > vh * 0.92) return NodeFilter.FILTER_SKIP;
+      let panel = el.matches('.card, .glass, [data-fx-scrim]');
+      if (!panel) {
+        const bf = getComputedStyle(el).backdropFilter;
+        panel = !!bf && bf !== 'none';
+      }
+      if (!panel) return NodeFilter.FILTER_SKIP;
+      found.push(el);
+      return NodeFilter.FILTER_REJECT; // the panel covers its children
+    },
+  });
+  while (walker.nextNode()) {
+    /* acceptNode collects */
+  }
+  return found;
+}
+
+function autoScrimEls() {
+  const screen = activeScreen();
+  const now = performance.now();
+  if (!screen) {
+    auto.screen = null;
+    auto.els = [];
+    return auto.els;
+  }
+  if (screen !== auto.screen || now - auto.scanAt > AUTO_RESCAN_MS) {
+    auto.screen = screen;
+    auto.scanAt = now;
+    try {
+      auto.els = scanPanels(screen);
+    } catch {
+      auto.els = [];
+    }
+  }
+  return auto.els;
+}
+
 function track() {
-  // scrims: every registered panel, biggest four win
-  if (scrimOwners.size || lastScrimKey) {
+  // scrims: every registered panel (or, without any, the screen's own glass panels), biggest four win
+  const autoMode = !scrimOwners.size && !!engine;
+  if (scrimOwners.size || lastScrimKey || autoMode) {
     const rects = [];
     for (const owner of [...scrimOwners]) {
       const alive = owner.els.filter((el) => el && el.isConnected);
@@ -134,6 +204,12 @@ function track() {
         continue;
       }
       for (const el of alive) {
+        const r = measure(el);
+        if (r) rects.push(r);
+      }
+    }
+    if (!scrimOwners.size && engine) {
+      for (const el of autoScrimEls()) {
         const r = measure(el);
         if (r) rects.push(r);
       }
@@ -163,7 +239,7 @@ function track() {
       }
     }
   }
-  if (!scrimOwners.size && !anchorOwner && !lastScrimKey) stopTracking();
+  if (!scrimOwners.size && !anchorOwner && !lastScrimKey && !engine) stopTracking();
 }
 
 function startTracking() {
@@ -234,18 +310,23 @@ export const fx = {
       intro.pending = { name, opts };
       return;
     }
+    let engineState = name;
     if (name === 'success') {
-      // the engine re-triggers the success climax on every call; a follow-up screen that sets
-      // 'success' again (install -> done) keeps the running celebration instead
+      // The climax (bird ignites, wordmark, shockwave) belongs to the screen where the bird was
+      // being built (install). A follow-up results screen that sets 'success' again (install ->
+      // done), or a success shown without a preceding install, gets the 'afterglow' look instead:
+      // the bird burns away into embers, no wordmark behind a dense UI, and no second climax.
       const now = performance.now();
       const repeat = last.state === 'success' && now - successAt < 8000;
+      const built = last.state === 'installing' || last.state === 'scan';
       successAt = now;
-      if (repeat) return;
+      if (repeat || !built) engineState = 'afterglow';
     }
-    if (CENTRE_STATES.has(name)) flushAnchorReset(); // the bird is needed in the centre right away
+    if (CENTRE_STATES.has(name) && engineState !== 'afterglow') flushAnchorReset(); // the bird is needed in the centre right away
     last.state = name;
     last.stateOpts = opts;
-    call('setState', name, opts);
+    last.engineState = engineState;
+    call('setState', engineState, opts);
     if (name === 'boot') syncIntroFlag();
     else if (intro.active) endIntro();
   },
@@ -333,6 +414,7 @@ export const fx = {
   /** 'full' (first launch) | 'short' (later launches) | 'none'. setState('boot') plays the default. */
   playIntro(mode) {
     last.state = 'boot';
+    last.engineState = null;
     if (!engine) return;
     call('playIntro', mode);
     syncIntroFlag();
@@ -352,6 +434,7 @@ export const fx = {
     if (engine.tier === 'static') return { played: false };
     intro.hold = true;
     last.state = 'boot';
+    last.engineState = null;
     call('playIntro', mode);
     const c0 = call('introClock');
     if (!c0 || !c0.live) {
@@ -418,6 +501,13 @@ export const fx = {
   resize() {
     call('resize');
   },
+  /** Deterministic frame tools (tests / debugging): engine snapshot and render-at-time. */
+  snapshot() {
+    return call('snapshot') || null;
+  },
+  renderAt(t, snap) {
+    return call('renderAt', t, snap);
+  },
   dispose() {
     clearTimeout(anchorResetTimer);
     anchorResetTimer = 0;
@@ -452,9 +542,10 @@ export function attachFx(next) {
   if (last.anchor !== undefined) call('setAnchor', last.anchor);
   if (last.scrim) call('setScrim', last.scrim);
   if (last.state) {
-    call('setState', last.state, last.stateOpts);
+    call('setState', last.engineState || last.state, last.stateOpts);
     if (last.state === 'boot') syncIntroFlag();
   }
   if (last.progress !== undefined) call('setProgress', last.progress);
   if (last.paused) call('setPaused', true);
+  if (typeof window !== 'undefined') startTracking(); // automatic scrims behind glass panels
 }
