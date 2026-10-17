@@ -1,5 +1,8 @@
-// PLACEHOLDER first-run cinematic – the FX/feature agents replace this with the full intro.
+// First-run screen. The cinematic itself is the FX engine's boot intro (fx/timeline.js, 7 s): the
+// emblem + wordmark assemble in the background and glide to the titlebar, then this screen reveals
+// its setup panel (onIntroDone). Without live FX (static tier / no WebGL) the DOM logo is shown.
 // Real data: system.info() + winget.ensure() progress; ends with app.markInstalled() -> home.
+// Click, Esc or Space skips the intro.
 import '../styles/screens/boot.css';
 import { h } from '../core/dom.js';
 import { icon, logoMark } from '../components/icons.js';
@@ -57,6 +60,35 @@ export default {
     );
     container.append(inner);
 
+    // --- FX intro: the DOM logo/word would duplicate the FX emblem, so they stay hidden while a live
+    // FX tier plays the cinematic; the setup panel fades in when the logo has reached the titlebar.
+    const cinematic = motionOK() && fx.tier !== 'static';
+    let revealed = !cinematic;
+    const reveal = () => {
+      if (revealed || !alive) return;
+      revealed = true;
+      inner.classList.remove('boot--cinematic');
+      if (fx.tier === 'static' || !fx.attached) inner.classList.add('boot--dom-logo');
+      const panel = inner.querySelector('.boot__panel');
+      if (panel) requestAnimationFrame(() => alive && fx.setScrim?.([panel.getBoundingClientRect()]));
+    };
+    if (cinematic) {
+      inner.classList.add('boot--cinematic');
+      offs.push(fx.onIntroDone?.(reveal));
+      // engine missing / not attached after a moment -> show the DOM version right away
+      const t1 = setTimeout(() => !fx.attached && reveal(), 2500);
+      const t2 = setTimeout(reveal, 9000);
+      offs.push(() => clearTimeout(t1), () => clearTimeout(t2));
+      const skip = (e) => {
+        if (revealed) return;
+        if (e.type === 'keydown' && e.key !== 'Escape' && e.key !== ' ') return;
+        fx.skipIntro?.();
+      };
+      window.addEventListener('keydown', skip);
+      window.addEventListener('pointerdown', skip);
+      offs.push(() => window.removeEventListener('keydown', skip), () => window.removeEventListener('pointerdown', skip));
+    } else inner.classList.add('boot--dom-logo');
+
     const markDone = (step, text, ok = true) => {
       step.state.replaceChildren(icon(ok ? 'check' : 'alert', { size: 14, strokeWidth: 2.5 }));
       step.row.classList.add(ok ? 'is-done' : 'is-warn');
@@ -105,6 +137,7 @@ export default {
 
     return () => {
       alive = false;
+      fx.setScrim?.([]);
       scramble?.cancel();
       offs.forEach((off) => off && off());
       startBtn.destroy();

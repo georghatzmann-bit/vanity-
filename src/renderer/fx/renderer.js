@@ -360,6 +360,8 @@ export class FxRenderer {
 
   /** Compiles the variants for the given frames ahead of time (KHR_parallel_shader_compile when available). */
   async precompile(keys, { async = true } = {}) {
+    async = async && !!this.gl.getExtension('KHR_parallel_shader_compile');
+    const yieldIdle = () => new Promise((res) => setTimeout(res, 16));
     const list = [];
     for (const k of keys.plasma) list.push(this.plasmaMat(k));
     for (const k of keys.comp) list.push(this.compMat(k));
@@ -368,10 +370,15 @@ export class FxRenderer {
     if (this.mRays) list.push(this.mRays);
     if (this.mStreak) list.push(this.mStreak);
     for (const m of list) {
+      if (!this.rtScene) return; // disposed meanwhile
       this.quad.material = m;
       if (async && this.r.compileAsync) await this.r.compileAsync(this.quadScene, this.cam);
-      else this.r.compile(this.quadScene, this.cam);
+      else {
+        this.r.compile(this.quadScene, this.cam);
+        await yieldIdle();
+      }
     }
+    if (!this.rtScene) return;
     if (async && this.r.compileAsync) {
       await this.r.compileAsync(this.pointsScene, this.cam);
       await this.r.compileAsync(this.sparksScene, this.cam);

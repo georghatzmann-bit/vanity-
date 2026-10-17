@@ -141,6 +141,7 @@ export async function createFx(canvas, options = {}) {
   if (devTier && !opts.tier) opts = { ...opts, tier: devTier };
   let cap = test ? T.tier : opts.tier && opts.tier !== 'auto' ? opts.tier : tierForSetting(opts.quality || 'ultra');
   const forced = test || (opts.tier && opts.tier !== 'auto');
+  const forcedTier = forced && !test ? cap : 'ultra';
   let maxTier = 'ultra'; // what the hardware allows (probe result)
   let tier = 'static';
   let gl = null;
@@ -708,7 +709,7 @@ export async function createFx(canvas, options = {}) {
     },
     setQuality(q) {
       if (test || disposed) return;
-      cap = tierForSetting(q);
+      cap = lowerTier(tierForSetting(q), forcedTier);
       const want = lowerTier(cap, maxTier);
       if (want !== tier) switchTier(want, 'setting');
     },

@@ -122,3 +122,19 @@
   min-height: 72px;
   margin-top: var(--s-4);
 }
+
+/* FX cinematic: the engine draws emblem + wordmark, the DOM logo stays hidden; the panel waits for
+   onIntroDone (see screens/boot.js). */
+.boot--cinematic > * {
+  opacity: 0 !important; /* beats the router's inline stagger styles */
+  pointer-events: none;
+}
+
+.boot:not(.boot--dom-logo) .boot__mark,
+.boot:not(.boot--dom-logo) .boot__word {
+  display: none;
+}
+
+.boot > * {
+  transition: opacity 0.5s var(--ease-out, ease-out);
+}
