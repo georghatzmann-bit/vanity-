@@ -123,21 +123,49 @@ export function splitChars(el) {
   return chars;
 }
 
-/** Kinetic headline: characters rise out of a mask with blur + 3D tilt. Returns the timeline. */
-export function revealText(el, { delay = 0, stagger = 0.022, duration = 0.9, y = '105%', blur = 10 } = {}) {
+/** Restores text split by splitChars(). */
+export function unsplit(el) {
+  if (!el || el.dataset.splitText === undefined) return;
+  el.textContent = el.dataset.splitText;
+  delete el.dataset.splitText;
+  el.classList.remove('is-split');
+}
+
+/**
+ * Kinetic headline: characters rise with blur + 3D tilt. Works with gradient text (.t-grad):
+ * each char gets its slice of the gradient, and the plain text is restored at the end.
+ * Returns the timeline (or null).
+ */
+export function revealText(el, { delay = 0, stagger = 0.022, duration = 0.9, y = 105, blur = 10 } = {}) {
   if (!el) return null;
   if (!richMotion()) {
     if (motionOK()) return gsap.fromTo(el, { opacity: 0 }, { opacity: 1, duration: 0.4, delay });
     return null;
   }
+  const cs = getComputedStyle(el);
+  const clipText = /text/.test(cs.webkitBackgroundClip || cs.backgroundClip || '');
   const chars = splitChars(el);
   el.classList.add('is-split');
+  if (clipText) {
+    const box = el.getBoundingClientRect();
+    for (const c of chars) {
+      const r = c.getBoundingClientRect();
+      Object.assign(c.style, {
+        backgroundImage: cs.backgroundImage,
+        backgroundSize: `${box.width}px ${box.height}px`,
+        backgroundPosition: `${box.left - r.left}px ${box.top - r.top}px`,
+        backgroundRepeat: 'no-repeat',
+        webkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+      });
+    }
+  }
   return gsap
-    .timeline({ delay })
+    .timeline({ delay, onComplete: () => clipText && unsplit(el) })
     .fromTo(
       chars,
-      { yPercent: parseFloat(y), rotateX: -70, opacity: 0, filter: `blur(${blur}px)` },
-      { yPercent: 0, rotateX: 0, opacity: 1, filter: 'blur(0px)', duration, ease: 'expo.out', stagger, clearProps: 'filter' },
+      { yPercent: y, rotateX: -70, opacity: 0, filter: `blur(${blur}px)` },
+      { yPercent: 0, rotateX: 0, opacity: 1, filter: 'blur(0px)', duration, ease: 'expo.out', stagger, clearProps: 'filter,transform' },
     );
 }
 

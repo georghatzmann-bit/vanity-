@@ -1,0 +1,5 @@
+/* Screen: restore – screen-specific styles live here. */
+
+.screen--restore {
+  --glyph-rot: 6deg;
+}

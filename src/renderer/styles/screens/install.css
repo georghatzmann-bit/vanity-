@@ -1,0 +1,5 @@
+/* Screen: install – screen-specific styles live here. */
+
+.screen--install {
+  --glyph-rot: 10deg;
+}

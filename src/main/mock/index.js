@@ -29,9 +29,9 @@ const MACHINE = {
 
 const SCAN_IDS = [
   'EpicGames.EpicGamesLauncher', 'Valve.Steam', 'Discord.Discord', 'Spotify.Spotify', 'Google.Chrome', 'Opera.OperaGX',
-  'OBSProject.OBSStudio', '7zip.7zip', 'VideoLAN.VLC', 'Medal.TV', 'Logitech.GHUB', 'Microsoft.VisualStudioCode',
+  'OBSProject.OBSStudio', '7zip.7zip', 'VideoLAN.VLC', 'SteelSeries.GG', 'Logitech.GHUB', 'Microsoft.VisualStudioCode',
   'Notepad++.Notepad++', 'Microsoft.VCRedist.2015+.x64', 'Microsoft.VCRedist.2015+.x86', 'Microsoft.DirectX',
-  'Telegram.TelegramDesktop', 'Mojang.MinecraftLauncher', 'Roblox.Roblox', 'Guru3D.Afterburner', 'REALiX.HWiNFO',
+  'Telegram.TelegramDesktop', 'Mojang.MinecraftLauncher', 'RazerInc.RazerInstaller.Synapse4', 'Guru3D.Afterburner', 'REALiX.HWiNFO',
   'Brave.Brave', 'Malwarebytes.Malwarebytes', 'ShareX.ShareX', 'qBittorrent.qBittorrent',
 ];
 

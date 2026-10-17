@@ -8,6 +8,7 @@ const { spawn } = require('child_process');
 const { createProgressParser } = require('./progress');
 const { watchDownload } = require('./download-watch');
 const { compareVersions } = require('./locate');
+const catalog = require('../catalog');
 const { classify } = require('./errors');
 const { killTree } = require('../util/ps');
 const log = require('../log');
@@ -76,6 +77,12 @@ function installArgs(item, wingetVersion) {
   ];
   // --no-upgrade: skip packages that are already installed (exit 0x8A150061) instead of upgrading them
   if (!wingetVersion || compareVersions(wingetVersion, '1.9.0') >= 0) args.push('--no-upgrade');
+  // Per-package extras come only from the bundled catalog (never from the renderer), e.g.
+  // DirectX: --installer-type exe (legacy runtime instead of the UWP appx), Battle.net: --location.
+  const hit = catalog.lookup(item.id, item.source);
+  if (hit && Array.isArray(hit.args) && (!wingetVersion || compareVersions(wingetVersion, '1.7.0') >= 0)) {
+    args.push(...hit.args.map(String));
+  }
   return args;
 }
 
