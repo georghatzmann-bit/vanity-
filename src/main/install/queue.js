@@ -18,10 +18,12 @@ let current = null;
 
 /**
  * User lane (this non-elevated process): installers that refuse admin rights, per-user installers
- * and Store apps – they belong to the logged-in user. Everything else goes to the elevated worker.
+ * (scope user/both) and Store apps – they belong to the logged-in user. Everything else goes to the
+ * elevated worker.
  */
 function laneOf(item) {
-  return item.elevation === 'prohibited' || item.scope === 'user' || item.source === 'msstore' ? 'user' : 'admin';
+  // 'both': winget prefers the per-user installer by default, which needs no admin rights
+  return item.elevation === 'prohibited' || item.scope === 'user' || item.scope === 'both' || item.source === 'msstore' ? 'user' : 'admin';
 }
 
 function startJob(rawItems, { emit }) {

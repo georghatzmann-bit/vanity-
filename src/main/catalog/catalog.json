@@ -335,7 +335,7 @@
    "desc": "Remote-Gaming & Couch-Koop übers Netz",
    "homepage": "parsec.app",
    "popular": false,
-   "elevation": "required",
+   "elevation": "none",
    "scope": "both"
   },
   {
@@ -429,7 +429,7 @@
   {
    "id": "Microsoft.VCRedist.2015+.x64",
    "source": "winget",
-   "name": "Visual C++ 2015-2022 (x64)",
+   "name": "Visual C++ 2015+ Redistributable (x64)",
    "category": "Treiber & Runtimes",
    "desc": "Pflicht für die meisten Spiele & Apps",
    "homepage": "microsoft.com",
@@ -440,7 +440,7 @@
   {
    "id": "Microsoft.VCRedist.2015+.x86",
    "source": "winget",
-   "name": "Visual C++ 2015-2022 (x86)",
+   "name": "Visual C++ 2015+ Redistributable (x86)",
    "category": "Treiber & Runtimes",
    "desc": "Pflicht für 32-Bit-Spiele & Apps",
    "homepage": "microsoft.com",
