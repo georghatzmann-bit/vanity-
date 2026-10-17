@@ -1,5 +1,5 @@
 {
-  "name": "phoenix-restore",
+  "name": "phoenix",
   "productName": "Phoenix",
   "version": "1.0.0",
   "description": "Phoenix – sichert deine Apps vor dem PC-Reset und installiert sie danach automatisch wieder.",
@@ -12,13 +12,64 @@
     "build:renderer": "vite build",
     "start": "npm run build:renderer && electron .",
     "test": "node --test \"test/**/*.test.js\"",
-    "dist": "npm run build:renderer && electron-builder --win nsis --x64 --publish never"
+    "icon": "node scripts/make-icon.mjs",
+    "dist": "npm run build:renderer && electron-builder --win nsis --x64 --publish never",
+    "dist:linux-host": "node scripts/dist.mjs"
   },
   "devDependencies": {
     "electron": "44.7.2",
-    "electron-builder": "26.15.3",
+    "electron-builder": "26.17.0",
     "gsap": "3.15.0",
     "three": "0.186.1",
     "vite": "8.3.4"
+  },
+  "build": {
+    "appId": "de.phoenix.restore",
+    "productName": "Phoenix",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "package.json",
+      "src/main/**",
+      "src/preload/**",
+      "dist/renderer/**",
+      "!**/*.map"
+    ],
+    "electronLanguages": [
+      "de",
+      "en-US"
+    ],
+    "publish": null,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Phoenix-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": true,
+      "allowElevation": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Phoenix",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "include": "build/installer.nsh",
+      "artifactName": "Phoenix-Setup-${version}.exe"
+    }
   }
 }

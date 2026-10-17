@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="phx-tile" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#151025"/>
+      <stop offset="1" stop-color="#07080C"/>
+    </linearGradient>
+    <radialGradient id="phx-glow" cx="0.5" cy="0.6" r="0.6">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity="0.62"/>
+      <stop offset="0.5" stop-color="#7C3AED" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#7C3AED" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="phx-sheen" cx="0.3" cy="0" r="0.75">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="phx-edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C4B5FD" stop-opacity="0.36"/>
+      <stop offset="0.5" stop-color="#8B5CF6" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="phx-wing" x1="16" y1="7.6" x2="16" y2="28.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5F3FF"/>
+      <stop offset="0.42" stop-color="#A78BFA"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="phx-flame" x1="16" y1="2.6" x2="16" y2="19.9" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.6" stop-color="#EEEAFF"/>
+      <stop offset="1" stop-color="#B9A4FC"/>
+    </linearGradient>
+    <clipPath id="phx-clip"><rect x="41" y="41" width="942" height="942" rx="211.95"/></clipPath>
+    <mask id="phx-knock" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <path transform="translate(162.842 177.372) scale(21.822)" d="M16 2.6c3.4 4.1 4.6 8.4 3.2 12.4-.7 2-1.8 3.5-3.2 4.9-1.4-1.4-2.5-2.9-3.2-4.9-1.4-4-.2-8.3 3.2-12.4z" fill="#000" stroke="#000" stroke-width="1.22" stroke-linejoin="round"/>
+    </mask>
+    <filter id="phx-blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="51.2"/></filter>
+  </defs>
+  <g clip-path="url(#phx-clip)">
+    <rect x="41" y="41" width="942" height="942" fill="url(#phx-tile)"/>
+    <rect x="41" y="41" width="942" height="942" fill="url(#phx-glow)"/>
+    <rect x="41" y="41" width="942" height="942" fill="url(#phx-sheen)"/>
+    <g mask="url(#phx-knock)"><g transform="translate(162.842 177.372) scale(21.822)" filter="url(#phx-blur)">
+      <path fill="#8B5CF6" d="M16 28.5C9.6 24.6 4.6 17.8 4.4 7.6c3.7 4.8 7.3 7.1 11.6 7.9z"/><path fill="#8B5CF6" d="M16 28.5c6.4-3.9 11.4-10.7 11.6-20.9-3.7 4.8-7.3 7.1-11.6 7.9z"/><path fill="#C4B5FD" d="M16 2.6c3.4 4.1 4.6 8.4 3.2 12.4-.7 2-1.8 3.5-3.2 4.9-1.4-1.4-2.5-2.9-3.2-4.9-1.4-4-.2-8.3 3.2-12.4z"/>
+    </g></g>
+    <g mask="url(#phx-knock)">
+      <g transform="translate(162.842 177.372) scale(21.822)">
+        <path fill="url(#phx-wing)" d="M16 28.5C9.6 24.6 4.6 17.8 4.4 7.6c3.7 4.8 7.3 7.1 11.6 7.9z"/>
+        <path fill="url(#phx-wing)" d="M16 28.5c6.4-3.9 11.4-10.7 11.6-20.9-3.7 4.8-7.3 7.1-11.6 7.9z" opacity="0.82"/>
+      </g>
+    </g>
+    <path transform="translate(162.842 177.372) scale(21.822)" fill="url(#phx-flame)" d="M16 2.6c3.4 4.1 4.6 8.4 3.2 12.4-.7 2-1.8 3.5-3.2 4.9-1.4-1.4-2.5-2.9-3.2-4.9-1.4-4-.2-8.3 3.2-12.4z"/>
+  </g>
+  <rect x="44.2" y="44.2" width="935.6" height="935.6" rx="208.75" fill="none" stroke="url(#phx-edge)" stroke-width="6.4"/>
+</svg>
