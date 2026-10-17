@@ -27,7 +27,8 @@ if (!existsSync(setup)) problems.push(`missing ${setup}`);
 if (!existsSync(asarFile)) problems.push(`missing ${asarFile}`);
 let entries = [];
 if (existsSync(asarFile)) {
-  entries = asar.listPackage(asarFile);
+  // asar lists entries with the platform separator (\\ on Windows) – compare with forward slashes
+  entries = asar.listPackage(asarFile).map((e) => e.replace(/\\/g, '/'));
   for (const f of REQUIRED) if (!entries.includes(f)) problems.push(`app.asar lacks ${f}`);
   const maps = entries.filter((f) => f.endsWith('.map'));
   if (maps.length) problems.push(`app.asar contains source maps: ${maps.join(', ')}`);
