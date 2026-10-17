@@ -37,24 +37,25 @@ function killTree(pid) {
 /**
  * Runs a PowerShell script.
  * @param {string} script  ASCII-only script body (preamble is prepended automatically)
- * @param {{args?: string[], timeoutMs?: number, onLine?: (line: string) => void}} [opts]
+ * @param {{args?: string[], timeoutMs?: number, onLine?: (line: string) => void, raw?: boolean}} [opts]
  * @returns {Promise<{code: number, stdout: string, stderr: string, timedOut: boolean}>}
  */
 function runPs(script, opts = {}) {
-  const { args = [], timeoutMs = 120000, onLine } = opts;
+  const { args = [], timeoutMs = 120000, onLine, raw = false } = opts;
   if (/[^\x00-\x7F]/.test(script)) {
     return Promise.reject(new Error('Interner Fehler: PowerShell-Skript enthält Nicht-ASCII-Zeichen.'));
   }
   const dir = path.join(os.tmpdir(), 'phoenix');
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `ps-${crypto.randomUUID()}.ps1`);
-  fs.writeFileSync(file, PREAMBLE + script, 'ascii');
+  // raw: the script brings its own param() block, which must be the first statement
+  fs.writeFileSync(file, (raw ? '' : PREAMBLE) + script, 'ascii');
 
   return new Promise((resolve, reject) => {
     const child = spawn(
       powershellExe(),
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', file, ...args],
-      { windowsHide: true },
+      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     const out = [];
     const err = [];

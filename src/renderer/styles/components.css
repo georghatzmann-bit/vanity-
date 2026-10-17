@@ -1809,3 +1809,24 @@
   background: radial-gradient(60% 50% at 50% 45%, rgba(167, 139, 250, 0.32), rgba(139, 92, 246, 0.08) 45%, transparent 70%);
   mix-blend-mode: plus-lighter;
 }
+
+/* Text effects (motion.js) */
+.split-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.split-char {
+  display: inline-block;
+  transform-origin: 50% 85%;
+  backface-visibility: hidden;
+}
+
+.is-split {
+  perspective: 900px;
+}
+
+.scramble-glyph {
+  color: var(--accent-2);
+  text-shadow: 0 0 12px rgba(139, 92, 246, 0.8);
+}

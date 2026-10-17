@@ -1,10 +1,10 @@
 'use strict';
 // Finds winget and checks that its version supports the flags Phoenix uses.
-const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
-const MIN_VERSION = '1.6.0';
+// Older clients talk to a retired CDN and may exit silently (winget-cli troubleshooting docs).
+const MIN_VERSION = '1.6.3482';
 
 function parseVersion(text) {
   const m = String(text || '').match(/v?(\d+)\.(\d+)\.(\d+)/);
@@ -14,23 +14,30 @@ function parseVersion(text) {
 function compareVersions(a, b) {
   const pa = String(a).split('.').map(Number);
   const pb = String(b).split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
     const d = (pa[i] || 0) - (pb[i] || 0);
     if (d) return d > 0 ? 1 : -1;
   }
   return 0;
 }
 
-/** Possible winget locations, best first (the per-user app execution alias, then PATH lookup). */
+/**
+ * Possible winget locations, best first. The per-package alias folder exists even when the
+ * "app execution alias" toggle is off (Microsoft.WinGet.Client uses it too).
+ * Never fs.stat() these aliases – that throws EACCES; spawn and treat ENOENT as "missing".
+ */
 function candidates() {
   const list = [];
   const local = process.env.LOCALAPPDATA;
-  if (local) list.push(path.join(local, 'Microsoft', 'WindowsApps', 'winget.exe'));
+  if (local) {
+    list.push(path.join(local, 'Microsoft', 'WindowsApps', 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe', 'winget.exe'));
+    list.push(path.join(local, 'Microsoft', 'WindowsApps', 'winget.exe'));
+  }
   list.push('winget.exe');
   return list;
 }
 
-function probe(exe, timeoutMs = 20000) {
+function probe(exe, timeoutMs = 60000) {
   return new Promise((resolve) => {
     let out = '';
     let child;
@@ -71,7 +78,6 @@ async function getStatus({ refresh = false } = {}) {
     return cached;
   }
   for (const exe of candidates()) {
-    if (path.isAbsolute(exe) && !fs.existsSync(exe)) continue;
     const version = await probe(exe);
     if (version) {
       cached = { available: true, version, path: exe, ok: compareVersions(version, MIN_VERSION) >= 0, minVersion: MIN_VERSION };
