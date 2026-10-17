@@ -14,7 +14,6 @@ import { sparkBurst, shockwave, centerIn } from '../components/gamesFx.js';
 const opened = new Map();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const isGameList = (v) => Array.isArray(v) && v.every((g) => g && typeof g === 'object');
 
 /** Games for this screen from the store (installJob → profile → games slot). null = nothing known yet. */
@@ -58,7 +57,7 @@ async function seedGames(api, store) {
 function okText(mode, plat) {
   if (mode === 'msstore') return 'Microsoft Store geöffnet – starte dort die Installation.';
   if (mode === 'store') return `Store-Seite ${plat.inLauncher} geöffnet.`;
-  return `${cap(plat.inLauncher)} geöffnet – dort „Installieren“ bestätigen.`;
+  return `${plat.launcher} geöffnet – bestätige dort „Installieren“.`;
 }
 
 const GUIDE = [
@@ -173,9 +172,9 @@ export default {
       renderState(
         EmptyState({
           icon: 'gamepad',
-          title: 'Keine Spiele in deiner Sicherung',
-          text: 'Dein Profil enthält keine Epic- oder Steam-Spiele. Neue Spiele installierst du einfach direkt im Launcher.',
-          actions: [{ label: 'Zur Startseite', icon: 'arrow-right', onClick: goHome }],
+          title: 'Keine Spiele gefunden',
+          text: 'In deiner Sicherung sind keine Epic- oder Steam-Spiele. Neue Spiele installierst du einfach direkt im Launcher.',
+          actions: [{ label: 'Zur Startseite', iconRight: 'arrow-right', onClick: goHome }],
         }),
       );
     }
@@ -380,6 +379,19 @@ export default {
       else toast.error('Bibliothek nicht geöffnet', (res && res.error) || 'Der Launcher konnte nicht geöffnet werden.');
     }
 
+    async function getLauncher(pid, section) {
+      const plat = PLATFORMS[pid];
+      if (!section.get || !plat.download) return;
+      section.get.setLoading(true);
+      try {
+        await api.shell.open(plat.download);
+        if (alive) toast.info(`Download-Seite für ${plat.launcher} geöffnet`, 'Nach der Installation einfach zurück zu PHOENIX wechseln – die Buttons werden dann automatisch aktiv.');
+      } catch (err) {
+        if (alive) toast.error('Seite lässt sich nicht öffnen', err.message);
+      }
+      if (alive) section.get.setLoading(false);
+    }
+
     function renderContent(games, fromMount) {
       disposeContent();
       body.removeAttribute('aria-busy');
@@ -403,6 +415,7 @@ export default {
           fortniteHere: pid === 'epic' && !!heroGame && hasMsStore(heroGame),
           onLibrary: () => openLibrary(pid, section),
           onRecheck: () => checkLaunchers({ manual: true }),
+          onGetLauncher: () => getLauncher(pid, section),
         });
         section.pid = pid;
         sections.push(section);

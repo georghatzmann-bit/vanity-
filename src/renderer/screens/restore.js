@@ -35,6 +35,9 @@ function placeIndex(location = '') {
   return 1;
 }
 
+/** "USB-Stick E:\" -> "USB-Stick E:" (the trailing backslash reads like a typo in running text). */
+const prettyLocation = (location) => String(location || '').replace(/([A-Za-z]:)[\\/]+$/, '$1').trim();
+
 const POLL_MS = 8000;
 const POLL_MAX = 15;
 
@@ -109,19 +112,19 @@ export default {
     const optFile = optionTile({
       icon: 'file',
       title: 'Datei öffnen',
-      text: 'Phoenix-Profil oder winget-Export (.json) auswählen.',
+      text: 'Profil-Datei (.phoenix.json) oder winget-Export auswählen.',
       onClick: openFile,
     });
     const optCode = optionTile({
-      icon: 'code',
+      icon: 'key',
       title: 'Code einfügen',
       text: 'Den PHX1-Code aus WhatsApp oder Mail einfügen.',
       onClick: openCode,
     });
     const optCatalog = optionTile({
       icon: 'sparkles',
-      title: 'Ohne Profil – aus Katalog wählen',
-      text: 'Beliebte Apps für Gamer sind schon vorausgewählt.',
+      title: 'Ohne Sicherung starten',
+      text: 'Aus dem Katalog wählen – beliebte Apps für Gamer sind schon angehakt.',
       onClick: () => {
         busy = true;
         stopPolling();
@@ -260,7 +263,7 @@ export default {
       for (const r of refs) counts[placeIndex(r.location)]++;
       PLACES.forEach((_, i) => {
         if (counts[i]) {
-          list.setState(i, 'found', plural(counts[i], 'Profil', 'Profile'));
+          list.setState(i, 'found', plural(counts[i], 'Sicherung', 'Sicherungen'));
           radar.setNode(i, 'found');
           radar.ping(i);
         } else {
@@ -269,7 +272,7 @@ export default {
         }
       });
       if (refs.length) {
-        setConsoleStatus(refs.length === 1 ? 'Profil gefunden' : `${refs.length} Profile gefunden`, 'ok');
+        setConsoleStatus(refs.length === 1 ? 'Sicherung gefunden' : `${refs.length} Sicherungen gefunden`, 'ok');
         sound.play('success');
         fx.pulse?.(0.8);
         await wait(rich ? 650 : stepMs ? 250 : 0);
@@ -285,7 +288,7 @@ export default {
 
     // ---------------------------------------------------------------- results
     function locationChip(ref) {
-      return h('span.rs-loc', xicon(PLACES[placeIndex(ref.location)].icon, { size: 15, strokeWidth: 2 }), h('span', ref.location || 'Unbekannter Ort'));
+      return h('span.rs-loc', xicon(PLACES[placeIndex(ref.location)].icon, { size: 15, strokeWidth: 2 }), h('span', prettyLocation(ref.location) || 'Unbekannter Ort'));
     }
 
     function heroCard(ref) {
@@ -363,7 +366,7 @@ export default {
         ),
         errEl,
       );
-      card.setAttribute('aria-label', `Profil ${ref.hostname || ''} vom ${formatRelativeDate(ref.createdAt)} laden`);
+      card.setAttribute('aria-label', `Sicherung von ${ref.hostname || 'unbekanntem PC'}, ${formatRelativeDate(ref.createdAt) || 'Datum unbekannt'}, laden`);
       cleanups.push(() => card.destroy());
       return card;
     }
@@ -372,7 +375,7 @@ export default {
       state = 'results';
       stage.setAttribute('aria-busy', 'false');
       const places = PLACES.filter((_, i) => counts[i]).map((p) => p.label);
-      const heading = h('h2.rs-sum__title', refs.length === 1 ? '1 Profil gefunden' : `${refs.length} Profile gefunden`);
+      const heading = h('h2.rs-sum__title', refs.length === 1 ? 'Sicherung gefunden' : `${refs.length} Sicherungen gefunden`);
       const again = Button({ label: 'Erneut suchen', icon: 'refresh', variant: 'ghost', size: 'sm', onClick: () => search() });
       cleanups.push(() => again.destroy());
       const { card: hero, btn } = heroCard(refs[0]);
@@ -391,7 +394,7 @@ export default {
             h(
               'p.rs-sum__hint',
               refs.length === 1
-                ? `Gefunden: ${refs[0].location || joinList(places)}. Klick auf „Wiederherstellen“, um weiterzumachen.`
+                ? `Gefunden: ${prettyLocation(refs[0].location) || joinList(places)}. Klick auf „Wiederherstellen“, um weiterzumachen.`
                 : `Gefunden: ${joinList(places)}. Die neueste Sicherung ist markiert – ältere stehen darunter.`,
             ),
           ),
@@ -446,7 +449,7 @@ export default {
       const { el, retry } = sideMessage({
         tone: 'idle',
         iconName: 'usb',
-        heading: 'Kein Profil gefunden',
+        heading: 'Keine Sicherung gefunden',
         text: 'Steck den USB-Stick ein und such erneut.',
         hint: `Durchsucht: ${joinList(PLACES.map((p) => p.label))}.`,
         actionLabel: 'Erneut suchen',
@@ -499,7 +502,7 @@ export default {
         }
         if (!alive || state !== 'empty') return;
         if (refs.length) {
-          toast.success('Profil gefunden', refs.length === 1 ? `Auf ${refs[0].location || 'einem Laufwerk'}.` : `${refs.length} Sicherungen entdeckt.`);
+          toast.success('Sicherung gefunden', refs.length === 1 ? `Auf ${prettyLocation(refs[0].location) || 'einem Laufwerk'}.` : `${refs.length} Sicherungen entdeckt.`);
           search();
           return;
         }
@@ -570,7 +573,7 @@ export default {
         if (!alive) return;
         tile.setBusy(false);
         shake(tile);
-        toast.error('Datei konnte nicht geöffnet werden', (err && err.message) || 'Die Datei ist kein gültiges Phoenix-Profil.');
+        toast.error('Datei konnte nicht geöffnet werden', (err && err.message) || 'Die Datei ist keine gültige Phoenix-Profil-Datei.');
       }
     }
 

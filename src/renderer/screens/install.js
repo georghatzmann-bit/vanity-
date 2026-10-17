@@ -258,6 +258,11 @@ function reduce(s, e) {
     }
     case 'elevation': {
       s.elevation = { status: e.status, message: e.message || '' };
+      // Not every backend sends phase 'elevating' first – the header must not keep saying "winget wird geprüft".
+      if (e.status === 'requested') {
+        s.phase = 'elevating';
+        s.phaseMessage = PHASE_TEXT.elevating;
+      }
       const fallback = { requested: 'Administratorrechte werden angefordert', granted: 'Administratorrechte erteilt', declined: 'Administratorrechte abgelehnt', failed: 'Admin-Modus nicht verfügbar' };
       log(e.status === 'granted' ? 'ok' : e.status === 'requested' ? 'info' : 'warn', e.message || fallback[e.status] || e.status);
       break;
@@ -399,7 +404,8 @@ function finalize(s) {
 async function startSession(s, job, { api, store }) {
   // Subscribe BEFORE start: events may stream before the start promise resolves.
   s.unsub = api.on('install:event', (e) => dispatch(s, e));
-  store.set('installJob', { ...job, started: true, sessionSeq: s.seq, jobId: null, result: null });
+  s.job = { ...job, started: true, sessionSeq: s.seq, jobId: null, result: null };
+  store.set('installJob', s.job);
   const items = s.order.map((k) => {
     const r = s.rows.get(k);
     return { key: r.key, id: r.id, source: r.source, name: r.name, elevation: r.elevation, scope: r.scope };
@@ -521,10 +527,20 @@ export default {
       }
     }
 
+    // Re-read after the awaits above: a parallel mount may have started the job meanwhile.
+    job = store.get('installJob') || job;
     let s = null;
     let isNew = false;
-    if (job.started && session && job.sessionSeq === session.seq) {
-      s = session; // remount: attach to the running (or finished) job, never start twice
+    if (session && !session.finished && !session.error) {
+      // A job is still running (remount, rapid re-navigation, or a new selection that arrived
+      // mid-job): always attach to it – main runs one job at a time and a second start would fail.
+      s = session;
+      if (job.sessionSeq !== s.seq) {
+        store.set('installJob', { ...s.job, jobId: s.jobId });
+        if (job.items?.length && !job.started) later(() => toast.info('Es läuft bereits eine Installation', 'PHOENIX macht erst diese fertig – deine neue Auswahl kannst du danach starten.'), 400);
+      }
+    } else if (job.started && session && job.sessionSeq === session.seq) {
+      s = session; // remount after the job ended: show its final state, never start twice
     } else if (job.started && job.result) {
       later(() => router.go('done', {}, { transition: 'fade', replace: true }), 0);
       return cleanup;
@@ -579,7 +595,7 @@ export default {
       }
       const empty = EmptyState({
         icon: 'layers',
-        title: 'Hier gibt es nichts zu tun',
+        title: hasRest ? 'Nur Links und Spiele übrig' : 'Keine Apps ausgewählt',
         text: hasRest ? 'Deine restlichen Apps und Spiele installierst du über die Übersicht – dort findest du die Download-Links.' : 'Wähl ein paar Apps aus, dann legt PHOENIX los.',
         actions,
       });
@@ -720,7 +736,7 @@ export default {
         ref.laneSlot.replaceChildren(laneChip(row.lane));
       }
       ref.sub.textContent = subText(row);
-      ref.sub.title = row.status === 'failed' ? ref.sub.textContent : '';
+      ref.sub.title = row.status === 'failed' ? `${ref.sub.textContent}${row.codeHex ? ` (Code ${row.codeHex})` : ''}` : '';
       ref.code.textContent = row.status === 'failed' && row.codeHex ? row.codeHex : '';
       const p = row.status === 'active' ? itemFraction(row, Date.now()) : DONE.has(row.status) ? 1 : 0;
       ref.li.style.setProperty('--rp', p.toFixed(3));
@@ -994,15 +1010,31 @@ export default {
     }
 
     // ---- cancel ---------------------------------------------------------------------------------------
+    // Own handle instead of modal.confirm(): the dialog must close by itself when the job ends (or the
+    // screen goes) while it is open – without touching other dialogs such as the settings.
+    let confirmHandle = null;
+    const closeConfirm = () => {
+      confirmHandle?.close(false);
+      confirmHandle = null;
+    };
+    cleanups.push(closeConfirm);
+
     async function onCancel() {
-      if (s.finished || s.cancelRequested || s.error) return;
-      const yes = await modal.confirm({
+      if (s.finished || s.cancelRequested || s.error || confirmHandle) return;
+      confirmHandle = modal.open({
         title: 'Installation abbrechen?',
-        message: 'Die laufende App wird gestoppt, alle weiteren werden übersprungen. Was schon installiert ist, bleibt auf deinem PC.',
-        confirmLabel: 'Ja, abbrechen',
-        cancelLabel: 'Weiter installieren',
-        danger: true,
+        icon: 'alert',
+        tone: 'danger',
+        size: 'sm',
+        content: 'Die laufende App wird gestoppt, alle weiteren werden übersprungen. Was schon installiert ist, bleibt auf deinem PC.',
+        actions: [
+          { label: 'Weiter installieren', variant: 'ghost', value: false },
+          { label: 'Ja, abbrechen', variant: 'danger', value: true },
+        ],
       });
+      const handle = confirmHandle;
+      const yes = (await handle.closed) === true;
+      if (confirmHandle === handle) confirmHandle = null;
       if (!yes || !alive || s.finished || s.cancelRequested) return;
       s.cancelRequested = true;
       cancelBtn.setLoading(true);
@@ -1034,6 +1066,7 @@ export default {
       const ok = (t.installed || 0) + (t.already || 0);
       const allBad = ok === 0 && (t.failed || 0) > 0;
       const tone = allBad ? 'err' : t.failed ? 'warn' : 'ok';
+      closeConfirm();
       liveDot.classList.add(allBad ? 'is-err' : 'is-done');
       setPhase(t.cancelled ? 'Abgebrochen' : 'Fertig');
       const headline = allBad ? 'Hat nicht geklappt.' : t.cancelled ? 'Abgebrochen.' : t.failed ? 'Fast geschafft.' : 'Geschafft.';
@@ -1074,6 +1107,7 @@ export default {
     }
 
     function renderError(message) {
+      closeConfirm();
       liveDot.classList.add('is-err');
       setPhase('Fehler');
       title.textContent = 'Start hat nicht geklappt.';
@@ -1126,6 +1160,7 @@ export default {
           break;
         case 'elevation':
           banner.set(e.status);
+          setPhase(s.phaseMessage);
           if (e.status === 'requested') {
             fx.pulse(0.7);
             sound.play('rise');

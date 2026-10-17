@@ -16,6 +16,7 @@ export const PLATFORMS = {
     short: 'EPIC',
     letter: 'E',
     store: 'Epic Store',
+    download: 'https://store.epicgames.com/de/download',
     rgb: '232, 234, 244',
   },
   steam: {
@@ -29,6 +30,7 @@ export const PLATFORMS = {
     short: 'STEAM',
     letter: 'S',
     store: 'Steam-Store',
+    download: 'https://store.steampowered.com/about/',
     rgb: '102, 192, 244',
   },
   other: {

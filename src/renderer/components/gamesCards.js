@@ -387,10 +387,10 @@ const STATE_TEXT = {
 };
 
 /**
- * LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck, fortniteHere })
- * Returns the <section> with: panel, notice, grid, chip, library, recheck, setState(state, { retried }), destroy().
+ * LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck, onGetLauncher, fortniteHere })
+ * Returns the <section> with: panel, notice, grid, chip, library, recheck, get, setState(state, { retried }), destroy().
  */
-export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck, fortniteHere = false }) {
+export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck, onGetLauncher, fortniteHere = false }) {
   const plat = PLATFORMS[pid];
   const titleId = nextId('gsec');
   const bytes = totalBytes(games);
@@ -401,8 +401,11 @@ export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck,
   const status = h('p.gpanel__status', linkable ? STATE_TEXT.checking : 'Ohne Direkt-Link – über den eigenen Launcher.');
 
   const library = linkable ? ActionBlock({ label: 'Bibliothek öffnen', variant: 'secondary', size: 'sm', icon: 'grid', hint: 'Alle Spiele deines Kontos', onClick: onLibrary }) : null;
-  const recheck = linkable ? ActionBlock({ label: 'Erneut prüfen', variant: 'primary', size: 'sm', icon: 'refresh', hint: 'Nach der Installation', onClick: onRecheck }) : null;
+  const recheck = linkable ? ActionBlock({ label: 'Erneut prüfen', variant: 'secondary', size: 'sm', icon: 'refresh', hint: 'Nach der Installation', onClick: onRecheck }) : null;
+  // Missing launcher: a direct way to get it (official download page in the browser).
+  const get = linkable && plat.download ? ActionBlock({ label: 'Launcher holen', variant: 'primary', size: 'sm', iconRight: 'external', hint: 'Offizielle Download-Seite', onClick: onGetLauncher }) : null;
   if (recheck) recheck.hidden = true;
+  if (get) get.hidden = true;
 
   const noticeIcon = h('span.gnotice__icon');
   const noticeText = h('p.gnotice__text');
@@ -422,7 +425,7 @@ export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck,
     h('h2.gpanel__title', { id: titleId }, plat.name),
     h('p.gpanel__count', countText),
     status,
-    linkable ? h('div.gpanel__actions', recheck, library) : null,
+    linkable ? h('div.gpanel__actions', get, recheck, library) : null,
   );
 
   const cells = [panel, ...tiles];
@@ -446,13 +449,17 @@ export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck,
     chip,
     library,
     recheck,
+    get,
     setState(state, { retried = false } = {}) {
       if (!linkable) return;
       chip.set({ dot: false, live: false, icon: null, ...STATE_CHIP[state] });
       el.dataset.state = state;
       status.textContent = STATE_TEXT[state] || '';
       const off = state === 'missing';
-      library.setDisabled(off).setHint(off ? `Braucht ${pid === 'steam' ? 'Steam' : 'den Launcher'}` : 'Alle Spiele deines Kontos');
+      // Missing: "Launcher holen" + "Erneut prüfen" replace the (useless) library button.
+      library.hidden = off;
+      library.setDisabled(off);
+      if (get) get.hidden = !off;
       recheck.hidden = !(state === 'missing' || state === 'unknown');
       if (state === 'installed') {
         notice.hidden = true;
@@ -462,8 +469,8 @@ export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck,
           'warn',
           'alert',
           retried
-            ? `${plat.nom} ist noch nicht da. Installiere ${plat.acc} und klick dann nochmal auf „Erneut prüfen“.${extra}`
-            : `Installiere zuerst ${plat.acc} – danach auf „Erneut prüfen“ klicken, dann werden die Buttons aktiv.${extra}`,
+            ? `${plat.nom} ist noch nicht da. Installiere ${plat.acc} über „Launcher holen“ und klick dann nochmal auf „Erneut prüfen“.${extra}`
+            : `Installiere zuerst ${plat.acc} – „Launcher holen“ öffnet die offizielle Download-Seite. Danach auf „Erneut prüfen“ klicken, dann werden die Buttons aktiv.${extra}`,
         );
       } else if (state === 'unknown') {
         setNotice('info', 'info', `Konnte nicht prüfen, ob ${plat.launcher} installiert ist. Probier es trotzdem – oder prüf erneut.`);
@@ -472,6 +479,7 @@ export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck,
     destroy() {
       library?.destroy();
       recheck?.destroy();
+      get?.destroy();
     },
   });
 }

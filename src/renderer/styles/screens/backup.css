@@ -1326,7 +1326,19 @@
   z-index: 5;
   margin: 0 calc(-1 * var(--s-3));
   padding: var(--s-6) var(--s-3) var(--s-4);
-  background: linear-gradient(180deg, rgba(5, 6, 10, 0), rgba(5, 6, 10, 0.82) 42%);
+  pointer-events: none;
+}
+
+/* Fade band behind the bar. It lives on a pseudo element so the mask does not turn the CTA into a
+   backdrop root – the bar keeps its real glass blur and nothing peeks out underneath it. */
+.bk-cta::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0 calc(-1 * var(--gutter));
+  background: linear-gradient(180deg, rgba(5, 6, 10, 0) 0%, rgba(5, 6, 10, 0.86) 48%, rgba(5, 6, 10, 0.97) 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--gutter), #000 calc(100% - var(--gutter)), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--gutter), #000 calc(100% - var(--gutter)), transparent 100%);
   pointer-events: none;
 }
 
@@ -1661,10 +1673,14 @@
 .bk-code__boxwrap {
   position: relative;
   margin-top: 12px;
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.36);
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.2), inset 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
+/* Surface lives on the wrapper so the scroll fade below only fades text, never the frame. */
 .bk-code__box {
-  max-height: 96px;
+  max-height: 104px;
   margin: 0;
   padding: 12px 14px;
   overflow: auto;
@@ -1674,9 +1690,12 @@
   white-space: pre-wrap;
   word-break: break-all;
   color: var(--accent-4);
-  background: rgba(0, 0, 0, 0.36);
-  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.2), inset 0 2px 10px rgba(0, 0, 0, 0.4);
   cursor: text;
+}
+
+.bk-code__box.is-clipped {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 30px), rgba(0, 0, 0, 0.12) 100%);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 30px), rgba(0, 0, 0, 0.12) 100%);
 }
 
 .bk-code__box:focus-visible {
@@ -2156,12 +2175,6 @@
 :root[data-effects='off'] .bks__pulses,
 :root[data-effects='off'] .bks__orbit {
   display: none;
-}
-
-/* CTA fade band: soft horizontal edges instead of a hard box. */
-.bk-cta {
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%);
 }
 
 /* Save: header lives in the main column, the status panel runs from the top. */

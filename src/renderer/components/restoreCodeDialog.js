@@ -81,7 +81,7 @@ export function openCodeDialog({ api, modal, sound }) {
     try {
       const profile = await api.profile.decode(code);
       result = profile;
-      setStatus('ok', 'Code erkannt – dein Profil wird geladen.');
+      setStatus('ok', 'Code erkannt – deine Sicherung wird geladen.');
       handle.close(profile);
     } catch (err) {
       setStatus('err', (err && err.message) || 'Der Code konnte nicht gelesen werden.');
@@ -109,14 +109,14 @@ export function openCodeDialog({ api, modal, sound }) {
   handle = modal.open({
     title: 'Code einfügen',
     subtitle: 'Den PHX1-Code hast du beim Sichern bekommen – zum Beispiel per WhatsApp oder Mail an dich selbst.',
-    icon: 'code',
+    icon: 'key',
     size: 'md',
     className: 'modal--restore-code',
     content,
     footStart: h('span.rc__kbd', h('kbd', 'Strg'), h('kbd', 'Enter'), h('span', 'lädt den Code')),
     actions: [
       { label: 'Abbrechen', variant: 'ghost', value: null },
-      { label: 'Code laden', variant: 'primary', icon: 'arrow-right', onClick: submit },
+      { label: 'Code laden', variant: 'primary', onClick: submit },
     ],
   });
   if (motionOK()) gsap.fromTo(field, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.5, delay: 0.12, ease: 'expo.out', clearProps: 'transform,opacity' });

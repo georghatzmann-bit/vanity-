@@ -146,6 +146,8 @@
   flex: none;
   width: 52px;
   height: 52px;
+  /* Room for the ripples, so they stay inside the banner and off the text. */
+  margin: 0 4px 0 6px;
 }
 
 .elev__glyph {
@@ -231,7 +233,7 @@
 
 @keyframes elev-ripple {
   0% { transform: scale(1); opacity: 0.9; }
-  100% { transform: scale(1.8); opacity: 0; }
+  100% { transform: scale(1.42); opacity: 0; }
 }
 
 @keyframes elev-throb {
@@ -606,7 +608,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 18px;
+  padding: 16px 18px 16px 22px;
   border-radius: var(--r-lg);
   background: rgba(7, 8, 14, 0.5);
   box-shadow: inset 0 0 0 1px var(--line-2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -656,7 +658,7 @@
 }
 
 .spot__orbit--2 {
-  inset: -13px;
+  inset: -11px;
   border: 1px dashed rgba(196, 181, 253, 0.22);
   filter: none;
   animation-duration: 9s;
@@ -759,6 +761,11 @@
   flex: none;
   max-width: 50%;
   color: var(--faint);
+}
+
+/* Stage changes restart the indeterminate sweep – start it mid-track so the bar never looks empty. */
+.spot .progress.is-indeterminate .progress__fill {
+  animation-delay: -0.55s;
 }
 
 .spot__card[data-s='installed'] .spot__stage { color: var(--ok); }
@@ -985,7 +992,18 @@
 }
 
 .q__row[data-s='active'] .q__sub { color: var(--accent-3); }
-.q__row[data-s='failed'] .q__sub { color: #fca5a5; }
+.q__row[data-s='failed'] .q__sub {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: #fca5a5;
+}
+
+/* Finished rows: the result badge replaces the lane chip (frees room for error messages). */
+.q__row:is([data-s='installed'], [data-s='already'], [data-s='failed'], [data-s='skipped'], [data-s='cancelled']) .q__lane-slot {
+  display: none;
+}
 .q__row[data-s='requeued'] .q__sub { color: #fdba74; }
 
 .q__code {
@@ -1041,6 +1059,10 @@
   }
   .q__row {
     gap: 10px;
+  }
+  /* The code stays in the row tooltip, the log and the summary. */
+  .q__code {
+    display: none;
   }
 }
 
@@ -1259,7 +1281,7 @@
   }
   .spot__card {
     gap: 10px;
-    padding: 12px 14px;
+    padding: 12px 14px 12px 18px;
   }
   .spot__name {
     font-size: 20px;

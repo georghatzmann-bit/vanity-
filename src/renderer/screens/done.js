@@ -11,6 +11,7 @@ import { AppIcon } from '../components/appCard.js';
 import { checkBox } from '../components/checkbox.js';
 import { gsap, motionOK, richMotion, revealText, countUp, pop, shake } from '../core/motion.js';
 import { formatDuration, formatNumber, plural, joinList } from '../core/format.js';
+import { cleanTitle } from '../components/gamesArt.js';
 
 const STATUS = {
   installed: { tone: 'ok', label: 'Installiert', icon: 'check' },
@@ -150,12 +151,20 @@ function leadText(v) {
   switch (v.tone) {
     case 'success':
       return `${plural(v.ok, 'App ist', 'Apps sind')} zurück – in ${formatDuration(v.durationMs)}.${c.already ? ` ${c.already === 1 ? 'Eine davon war' : `${c.already} davon waren`} schon da.` : ''}`;
-    case 'partial':
-      return `${formatNumber(v.ok)} von ${plural(v.total, 'App', 'Apps')} sind drauf. ${notOk === 1 ? 'Eine hat' : `${notOk} haben`} nicht geklappt – unten kannst du es gleich nochmal versuchen.`;
+    case 'partial': {
+      const bits = [
+        c.failed && (c.failed === 1 ? 'eine hat nicht geklappt' : `${c.failed} haben nicht geklappt`),
+        c.cancelled && `${c.cancelled} ${c.cancelled === 1 ? 'wurde' : 'wurden'} abgebrochen`,
+        c.skipped && `${c.skipped} ${c.skipped === 1 ? 'wurde' : 'wurden'} übersprungen`,
+      ].filter(Boolean);
+      const rest = joinList(bits);
+      return `${formatNumber(v.ok)} von ${plural(v.total, 'App', 'Apps')} sind drauf, ${rest} – unten kannst du ${notOk === 1 ? 'es' : 'alles'} gleich nochmal versuchen.`;
+    }
     case 'error':
       return 'Keine App konnte installiert werden. Oft hilft ein zweiter Versuch – prüf vorher kurz deine Internetverbindung.';
     case 'cancelled':
-      return `${plural(v.ok, 'App ist', 'Apps sind')} drauf, ${c.cancelled} ${c.cancelled === 1 ? 'wurde' : 'wurden'} übersprungen. Den Rest kannst du unten jederzeit nachholen.`;
+      if (!v.ok) return 'Du hast abgebrochen, bevor eine App fertig war – es wurde nichts verändert. Unten kannst du alles nachholen.';
+      return `${plural(v.ok, 'App ist', 'Apps sind')} drauf, ${c.cancelled === 1 ? 'eine wurde' : `${c.cancelled} wurden`} nach dem Abbruch nicht mehr installiert. Das kannst du unten jederzeit nachholen.`;
     default:
       return v.links.length ? 'Es gab nichts automatisch zu installieren – die restlichen Apps installierst du unten selbst.' : 'Es wurde nichts installiert.';
   }
@@ -230,7 +239,7 @@ export default {
     const buttons = [];
     const mainAction = h('div.dn__action.dn__action--main');
     if (v.games.length) {
-      const names = v.games.map((g) => g.title).filter(Boolean);
+      const names = v.games.map((g) => g.title && cleanTitle(g.title)).filter(Boolean);
       const list = names.length <= 2 ? joinList(names) : `${names.slice(0, 2).join(', ')} und ${names.length - 2} weitere`;
       const gamesBtn = Button({ label: 'Weiter zu deinen Spielen', icon: 'gamepad', iconRight: 'arrow-right', variant: 'primary', size: 'xl', onClick: () => router.go('games', {}, { transition: 'warp' }) });
       buttons.push(gamesBtn);
@@ -263,14 +272,14 @@ export default {
     const avg = timed.length ? timed.reduce((a, d) => a + d.durationMs, 0) / timed.length : 0;
     const statDefs = [
       { key: 'installed', label: 'Installiert', icon: 'check-circle', tone: c.installed ? 'ok' : 'muted', value: c.installed, hint: c.installed ? 'Neu auf deinem PC' : 'Diesmal nichts Neues' },
-      { key: 'already', label: 'War schon da', icon: 'layers', tone: 'muted', value: c.already, hint: 'Musste nicht neu installiert werden' },
+      { key: 'already', label: 'War schon da', icon: 'layers', tone: 'muted', value: c.already, hint: 'Bereits auf deinem PC' },
       {
         key: 'failed',
         label: 'Fehlgeschlagen',
         icon: 'x-circle',
         tone: c.failed ? 'err' : 'muted',
         value: c.failed,
-        hint: c.failed ? `Unten nochmal versuchen${extra.length ? ` · ${joinList(extra)}` : ''}` : extra.length ? joinList(extra) : 'Alles hat geklappt',
+        hint: c.failed ? (extra.length ? `Dazu ${joinList(extra)}` : 'Unten nochmal versuchen') : extra.length ? joinList(extra) : 'Alles hat geklappt',
       },
       { key: 'duration', label: 'Dauer', icon: 'clock', tone: 'accent', value: v.durationMs, duration: true, hint: avg ? `Etwa ${formatDuration(avg)} pro App` : 'Gesamte Installationszeit' },
     ];
@@ -308,8 +317,9 @@ export default {
     let failPanel = null;
     const selected = new Set(v.notInstalled.map((it) => it.key));
     if (v.notInstalled.length) {
-      const retryBtn = Button({ label: '', icon: 'refresh', variant: 'primary', onClick: () => retry() });
-      const toggleAll = Button({ label: '', variant: 'ghost', size: 'sm', magnetic: false, onClick: () => setAll(selected.size !== v.notInstalled.length) });
+      // Real initial labels: Button only renders a label element when it starts with text (sync() updates it).
+      const retryBtn = Button({ label: 'Erneut versuchen', icon: 'refresh', variant: 'primary', onClick: () => retry() });
+      const toggleAll = Button({ label: 'Keine auswählen', variant: 'ghost', size: 'sm', magnetic: false, onClick: () => setAll(selected.size !== v.notInstalled.length) });
       buttons.push(retryBtn, toggleAll);
       const rowRefs = [];
       const list = h(
@@ -327,8 +337,8 @@ export default {
               'div.dn__fail-body',
               h('div.dn__fail-name', it.name),
               h('div.dn__fail-msg', d.message || (d.status === 'cancelled' ? 'Abgebrochen – nicht installiert' : 'Installation fehlgeschlagen')),
+              d.codeHex ? h('div.dn__fail-meta', h('span.dn__code.t-mono', { title: 'Fehlercode von winget – hilft bei der Suche nach der Ursache' }, `Code ${d.codeHex}`)) : null,
             ),
-            d.codeHex ? h('span.dn__code.t-mono', { title: 'Fehlercode von winget – hilft bei der Suche nach der Ursache' }, d.codeHex) : null,
             Badge(meta),
           );
           input.addEventListener('change', () => {
@@ -464,10 +474,18 @@ export default {
           'ul.dn__all-grid',
           sorted.map((it) => {
             const d = v.byKey[it.key];
+            // The badge already names the status – the meta line adds what it does not say.
+            const meta = {
+              installed: d.durationMs ? `in ${formatDuration(d.durationMs)}` : 'Neu installiert',
+              already: 'Nichts zu tun',
+              failed: d.codeHex ? `Code ${d.codeHex}` : 'Details oben',
+              skipped: 'Nicht ausgeführt',
+              cancelled: 'Nach dem Abbruch',
+            }[d.status] || '';
             return h(
               `li.dn__all-item.dn__all-item--${d.status}`,
               AppIcon({ name: it.name, icon: it.icon, homepage: it.homepage, size: 30 }),
-              h('div.dn__all-body', h('div.dn__all-name', it.name), h('div.dn__all-meta', d.status === 'installed' && d.durationMs ? formatDuration(d.durationMs) : STATUS[d.status]?.label || '')),
+              h('div.dn__all-body', h('div.dn__all-name', { title: it.name }, it.name), h('div.dn__all-meta', meta)),
               Badge(STATUS[d.status] || STATUS.failed),
             );
           }),

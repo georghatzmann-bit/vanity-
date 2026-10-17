@@ -116,7 +116,11 @@ export function BackupSave({ ctx, onDone } = {}) {
     if (!states.has(id)) states.set(id, { state: 'idle' });
     return states.get(id);
   };
-  const saved = () => [...states.entries()].filter(([id, s]) => s.state === 'saved' && id !== 'documents');
+  const KIND_RANK = { removable: 0, network: 1, cloud: 2, fixed: 3, saveas: 4, code: 5 };
+  const saved = () =>
+    [...states.entries()]
+      .filter(([id, s]) => s.state === 'saved' && id !== 'documents')
+      .sort(([, a], [, b]) => (KIND_RANK[a.kind] ?? 9) - (KIND_RANK[b.kind] ?? 9));
   const offPc = () => saved().filter(([, s]) => s.reach === 'off');
   const conditional = () => saved().filter(([, s]) => s.reach === 'cond');
   const usbSaves = () => saved().filter(([, s]) => s.kind === 'removable');
@@ -227,25 +231,32 @@ export function BackupSave({ ctx, onDone } = {}) {
     }
 
     render();
+    cardCleanups.set(`card:${id}`, () => btn?.destroy());
     return Object.assign(el, { render, go });
   }
 
   // ---------------------------------------------------------------- targets
-  function renderDrives() {
+  function clearCardCleanups() {
     for (const fn of cardCleanups.values()) fn();
     cardCleanups.clear();
+  }
+
+  function renderDrives() {
+    clearCardCleanups();
     usbList.replaceChildren();
     moreList.replaceChildren();
 
     if (drives === null && !drivesError) {
       usbList.append(h('div.bk-target.bk-target--skeleton', h('div.bk-target__icon', h('span.spinner')), h('div.bk-target__body', h('div.bk-target__title', 'Laufwerke werden gesucht …'), h('p.bk-target__hint', 'Einen Moment.'))));
     } else if (drivesError) {
+      const errRetry = Button({ label: 'Erneut suchen', icon: 'refresh', size: 'md', onClick: () => loadDrives(true) });
+      cardCleanups.set('drives-error', () => errRetry.destroy());
       usbList.append(
         h(
           'div.bk-target.bk-target--empty',
           h('div.bk-target__icon.bk-target__icon--err', icon('x-circle')),
           h('div.bk-target__body', h('h3.bk-target__title', 'Laufwerke nicht lesbar'), h('p.bk-target__hint', drivesError)),
-          h('div.bk-target__action', Button({ label: 'Erneut suchen', icon: 'refresh', size: 'md', onClick: () => loadDrives(true) })),
+          h('div.bk-target__action', errRetry),
         ),
       );
     }
@@ -275,7 +286,7 @@ export function BackupSave({ ctx, onDone } = {}) {
         setupInfo === undefined
           ? 'Übersteht jeden Reset – dein Rettungs-Stick für danach.'
           : setupInfo
-            ? 'Übersteht jeden Reset. Das Phoenix-Setup kommt gleich mit drauf – so hast du Phoenix nach dem Reset sofort.'
+            ? 'Übersteht jeden Reset. Das Phoenix-Setup kommt mit auf den Stick – so hast du Phoenix nach dem Reset sofort.'
             : 'Übersteht jeden Reset. Kein Phoenix-Setup in Downloads gefunden – nach dem Reset lädst du Phoenix neu herunter.';
       const card = TargetCard({
         id: `drive:${d.root}`,
@@ -348,13 +359,14 @@ export function BackupSave({ ctx, onDone } = {}) {
         actionLabel: 'Ort wählen…',
         actionIcon: 'folder',
         reach: (path) => reachOfPath(path),
-        short: 'eigenen Ort',
+        short: 'eigener Speicherort',
         run: () => api.profile.save(profile),
       }),
     );
   }
 
   // ---------------------------------------------------------------- restore code
+  let codeCleanup = null;
   function renderCode() {
     codeHost.replaceChildren();
     const s = st('code');
@@ -382,6 +394,9 @@ export function BackupSave({ ctx, onDone } = {}) {
     let btn = null;
     let scr = null;
 
+    const syncFade = () => box.classList.toggle('is-clipped', box.scrollHeight - box.scrollTop - box.clientHeight > 2);
+    box.addEventListener('scroll', syncFade, { passive: true });
+
     function render(reveal = false) {
       const hadFocus = actionSlot.contains(document.activeElement);
       card.dataset.state = s.state;
@@ -395,8 +410,12 @@ export function BackupSave({ ctx, onDone } = {}) {
       if (hasCode && box.dataset.code !== s.code) {
         box.dataset.code = s.code;
         scr?.cancel();
-        if (reveal && richMotion() && s.code.length < 6000) scr = scrambleText(box, s.code, { duration: 0.9 });
-        else box.textContent = s.code;
+        box.scrollTop = 0;
+        if (reveal && richMotion() && s.code.length < 6000) {
+          scr = scrambleText(box, s.code, { duration: 0.9 });
+          scr.finished.then(() => requestAnimationFrame(syncFade));
+        } else box.textContent = s.code;
+        requestAnimationFrame(syncFade);
       }
       if (!hasCode) {
         btn = Button({ label: s.state === 'error' ? 'Erneut versuchen' : 'Code erzeugen', icon: s.state === 'error' ? 'refresh' : 'key', variant: 'secondary', onClick: generate });
@@ -450,9 +469,14 @@ export function BackupSave({ ctx, onDone } = {}) {
         else toast.success('Kopiert', 'Der Code ist in der Zwischenablage.');
         renderStatus();
       } catch (err) {
+        if (disposed || myRev !== rev) return;
+        const msg = (err && err.message) || 'Kopieren fehlgeschlagen.';
+        // Already copied once: that copy still counts – just report the failed retry.
+        if (s.state === 'saved') return void toast.error('Kopieren fehlgeschlagen', msg);
         s.state = 'error';
-        s.error = (err && err.message) || 'Kopieren fehlgeschlagen.';
+        s.error = `${msg} Markier den Code und kopier ihn mit Strg+C.`;
         render();
+        sound.play('error');
       }
     }
 
@@ -467,10 +491,11 @@ export function BackupSave({ ctx, onDone } = {}) {
 
     render();
     codeHost.append(card);
-    cardCleanups.set('code', () => {
+    codeCleanup?.();
+    codeCleanup = () => {
       btn?.destroy();
       scr?.cancel();
-    });
+    };
   }
 
   // ---------------------------------------------------------------- documents copy (silent)
@@ -588,8 +613,8 @@ export function BackupSave({ ctx, onDone } = {}) {
     const title = h('h2.bk-status__title.bk-status__title--ok', 'Gesichert.');
     const items = [
       off.length
-        ? checkItem('ok', 'Profil gesichert', places)
-        : checkItem('warn', 'Profil gesichert – mit Vorbehalt', `${places}: beim Reset ‚Nur das Laufwerk mit Windows‘ wählen.`),
+        ? checkItem('ok', 'Sicherung gespeichert', places)
+        : checkItem('warn', 'Sicherung gespeichert – mit Vorbehalt', `${places}: beim Reset ‚Nur das Laufwerk mit Windows‘ wählen.`),
       setupItem,
       docsItem,
       checkItem('next', 'Jetzt kannst du Windows zurücksetzen', 'System › Wiederherstellung › „PC zurücksetzen“'),
@@ -776,7 +801,8 @@ export function BackupSave({ ctx, onDone } = {}) {
     destroy() {
       disposed = true;
       clearTimeout(pollTimer);
-      for (const fn of cardCleanups.values()) fn();
+      clearCardCleanups();
+      codeCleanup?.();
       statusButtons.forEach((b) => b.destroy());
       tweens.forEach((t) => (typeof t.kill === 'function' ? t.kill() : t.cancel?.()));
       el.querySelectorAll('.btn').forEach((b) => b.destroy?.());

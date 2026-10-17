@@ -517,7 +517,7 @@
 .dn__fail-row {
   position: relative;
   display: grid;
-  grid-template-columns: 22px 40px minmax(0, 1fr) auto auto;
+  grid-template-columns: 22px 40px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
@@ -578,6 +578,11 @@
   font-size: 12.5px;
   line-height: 1.4;
   color: var(--muted);
+}
+
+.dn__fail-meta {
+  display: flex;
+  margin-top: 6px;
 }
 
 .dn__code {
@@ -697,7 +702,7 @@
 
 .dn__all-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 6px;
   padding: 4px 14px 16px;
 }
@@ -743,8 +748,15 @@
 }
 
 .dn__all-meta {
+  overflow: hidden;
   font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--faint);
+}
+
+.dn__all-item--failed .dn__all-meta {
+  color: #fca5a5;
 }
 
 .dn__all-item .badge {

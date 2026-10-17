@@ -1014,7 +1014,8 @@
   line-height: 1.6;
   word-break: break-all;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.04);
+  /* Nearly opaque: the modal is glass, blurred page text must not shine through the field. */
+  background: rgba(6, 7, 12, 0.78);
   box-shadow: inset 0 0 0 1px var(--line-2), inset 0 2px 8px rgba(0, 0, 0, 0.25);
   transition: box-shadow var(--dur-3) var(--ease-out), background-color var(--dur-2);
 }
@@ -1024,7 +1025,7 @@
 }
 
 .rc__input:focus {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(10, 11, 18, 0.86);
   box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.7), 0 0 0 4px rgba(139, 92, 246, 0.16), 0 0 32px -8px rgba(139, 92, 246, 0.7);
 }
 
