@@ -31,7 +31,7 @@ export function Titlebar({ api, store, sound, onSettings, version = '' } = {}) {
 
   const el = h(
     'header.titlebar',
-    h('div.titlebar__brand', logoMark({ size: 22 }), h('span.titlebar__wordmark', 'PHOENIX'), versionEl),
+    h('div.titlebar__brand', logoMark({ size: 26 }), h('span.titlebar__wordmark', 'PHOENIX'), versionEl),
     h('div.titlebar__center', status),
     h('div.titlebar__actions', soundBtn, settingsBtn, h('span.tb-sep'), minBtn, maxBtn, closeBtn),
   );

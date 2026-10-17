@@ -14,6 +14,10 @@
 //   }
 //   ctx = { api, store, router, fx, sound, toast, modal, params }
 // Children marked [data-stagger] are revealed in sequence after the screen enters.
+//
+// 'warp' with a live FX engine (fx.canWarp()): the FX hyperspace tunnel runs (fx.warp(700)), the old
+// screen dissolves into it and the new screen + its fxState are swapped in AT THE PEAK (~350 ms).
+// Without live FX (not loaded yet, CSS tier, effects off) the CSS warp below is used instead.
 
 import { gsap } from 'gsap';
 import { motionOK, richMotion, prepareStagger, stagger } from './motion.js';
@@ -65,12 +69,18 @@ function dispose(rec) {
 
 // ---- transitions ------------------------------------------------------------------------------
 
+const WARP_MS = 700;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 function outTimeline(rec, type, direction) {
   const el = rec.el;
   const rich = richMotion();
   const tl = gsap.timeline({ onComplete: () => dispose(rec) });
   const blur = (px) => (rich ? `blur(${px}px)` : 'blur(0px)');
   switch (type) {
+    case 'fxwarp': // dissolves into the FX tunnel, gone right at its peak (WARP_MS / 2)
+      tl.to(el, { opacity: 0, scale: rich ? 1.12 : 1.04, filter: blur(14), duration: (WARP_MS / 2 - 30) / 1000, ease: 'power2.in' });
+      break;
     case 'warp':
       tl.to(el, { opacity: 0, scale: rich ? 1.16 : 1.04, filter: blur(18), duration: 0.5, ease: 'power3.in' });
       break;
@@ -95,6 +105,9 @@ function inTimeline(rec, type, direction) {
   const tl = gsap.timeline();
   const done = { opacity: 1, x: 0, scale: 1, filter: 'blur(0px)', clearProps: 'opacity,transform,filter' };
   switch (type) {
+    case 'fxwarp': // starts at the tunnel peak: the screen arrives out of the light
+      tl.fromTo(el, { opacity: 0, scale: rich ? 0.9 : 0.97, filter: rich ? 'blur(12px)' : 'blur(0px)' }, { ...done, duration: 0.8, ease: 'expo.out' }, 0);
+      break;
     case 'warp':
       tl.fromTo(el, { opacity: 0, scale: rich ? 0.86 : 0.97, filter: rich ? 'blur(16px)' : 'blur(0px)' }, { ...done, duration: 0.9, ease: 'expo.out' }, 0.2);
       if (rich && beam && flash) {
@@ -116,7 +129,7 @@ function inTimeline(rec, type, direction) {
       return tl;
   }
   const kids = stagger(el, { each: type === 'fade' ? 0.04 : 0.06 });
-  if (kids) tl.add(kids, type === 'warp' ? 0.34 : 0.22);
+  if (kids) tl.add(kids, type === 'warp' ? 0.34 : type === 'fxwarp' ? 0.1 : 0.22);
   return tl;
 }
 
@@ -176,7 +189,13 @@ export const router = {
     }
     if (!host) throw new Error('router.init() must run before router.go()');
     const id = ++navId;
-    const type = motionOK() ? transition : 'none';
+    let type = motionOK() ? transition : 'none';
+    // real hyperspace when the FX engine runs live; resolves at the peak (DOM swap point)
+    let warpPeak = null;
+    if (type === 'warp' && baseCtx.fx?.canWarp?.()) {
+      type = 'fxwarp';
+      warpPeak = Promise.race([baseCtx.fx.warp(WARP_MS), sleep(WARP_MS)]);
+    }
 
     // Screens that were only passed through (still mounting, or superseded within 350 ms) are not recorded.
     const settled = current && (current.state === 'active' || (current.enteredAt > 0 && performance.now() - current.enteredAt > 350));
@@ -200,7 +219,7 @@ export const router = {
     }
 
     if (type !== 'none') {
-      baseCtx.fx?.pulse?.(type === 'warp' ? 1 : 0.6);
+      if (type !== 'fxwarp') baseCtx.fx?.pulse?.(type === 'warp' ? 1 : 0.6); // the tunnel is the pulse
       if (type !== 'fade') baseCtx.sound?.play?.('whoosh');
     }
 
@@ -220,11 +239,19 @@ export const router = {
       renderMountError(rec.el, name, err);
     }
 
-    if (id !== navId || rec.disposed) {
-      // Superseded while mounting: dispose now, or run the cleanup that arrived after disposal.
+    const superseded = () => {
+      if (id === navId && !rec.disposed) return false;
+      // Superseded while mounting / waiting: dispose now, or run the cleanup that arrived after disposal.
       if (rec.disposed) runCleanup(rec);
       else dispose(rec);
-      return false;
+      return true;
+    };
+    if (superseded()) return false;
+
+    // FX warp: the new screen (and its FX look) appears at the tunnel peak, never before.
+    if (warpPeak) {
+      await warpPeak;
+      if (superseded()) return false;
     }
 
     const fxState = typeof module.fxState === 'function' ? module.fxState(params) : module.fxState;
@@ -233,7 +260,7 @@ export const router = {
     rec.state = 'entering';
     rec.enteredAt = performance.now();
     rec.el.inert = false;
-    prepareStagger(rec.el);
+    if (rec.el.querySelector('[data-stagger]')) prepareStagger(rec.el);
     rec.tl = inTimeline(rec, type, direction);
     rec.tl.eventCallback('onComplete', () => {
       if (rec.state === 'entering') rec.state = 'active';

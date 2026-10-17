@@ -6,7 +6,7 @@ const invoke = (channel) => (...args) => ipcRenderer.invoke(channel, ...args);
 const EVENT_CHANNELS = new Set(['scan:progress', 'winget:ensure-progress', 'install:event']);
 
 contextBridge.exposeInMainWorld('phoenix', {
-  app: { info: invoke('app:info'), markInstalled: invoke('app:markInstalled') },
+  app: { info: invoke('app:info'), markInstalled: invoke('app:markInstalled'), gpu: invoke('app:gpu') },
   win: {
     minimize: invoke('win:minimize'),
     toggleMaximize: invoke('win:toggleMaximize'),

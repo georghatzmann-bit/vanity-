@@ -1,0 +1,16 @@
+/* PHOENIX FX – DOM side of the intro hand-off (imported by core/fx-bridge.js).
+   While a cinematic intro plays, the FX engine draws the emblem + wordmark and glides them into the
+   titlebar slot; the DOM logo stays hidden and crossfades in (150 ms) when the logo has landed. */
+
+.titlebar__brand > .logo-mark,
+.titlebar__brand > .titlebar__wordmark,
+.titlebar__brand > .titlebar__version {
+  transition: opacity 150ms ease-out;
+}
+
+:root[data-fx-intro='playing'] .titlebar__brand > .logo-mark,
+:root[data-fx-intro='playing'] .titlebar__brand > .titlebar__wordmark,
+:root[data-fx-intro='playing'] .titlebar__brand > .titlebar__version {
+  opacity: 0;
+  transition: none;
+}

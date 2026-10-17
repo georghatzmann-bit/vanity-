@@ -58,6 +58,7 @@ export function createStaticLayer(canvas, { reducedMotion = false } = {}) {
       setTimeout(() => root.classList.remove('is-warp'), ms + 50);
     },
     setAnchor(rect) {
+      root.classList.toggle('is-anchored', !!rect);
       if (!rect) {
         emblem.style.cssText = '';
         return;

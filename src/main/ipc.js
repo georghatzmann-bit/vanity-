@@ -61,6 +61,22 @@ function registerIpc(getWin) {
     const marker = readMarker();
     return { version: app.getVersion(), firstRun: marker !== app.getVersion(), isPackaged: app.isPackaged, mock: MOCK };
   });
+  // read-only GPU facts for the FX tier detection (software renderer / vendor); never throws
+  handle('app:gpu', async () => {
+    let featureStatus = {};
+    let info = null;
+    try {
+      featureStatus = app.getGPUFeatureStatus();
+    } catch {
+      /* not available */
+    }
+    try {
+      info = await Promise.race([app.getGPUInfo('basic'), new Promise((resolve) => setTimeout(() => resolve(null), 1500))]);
+    } catch {
+      info = null;
+    }
+    return { featureStatus, info };
+  });
   handle('app:markInstalled', () => {
     fs.mkdirSync(path.dirname(markerFile()), { recursive: true });
     fs.writeFileSync(markerFile(), app.getVersion(), 'utf8');

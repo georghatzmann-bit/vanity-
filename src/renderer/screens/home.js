@@ -1,5 +1,7 @@
 // PLACEHOLDER home hub – feature agents may extend/replace it (keep the contract).
 // With ?demo=1 a component gallery is appended (dev only).
+// FX: the hero's right half is an empty slot the FX engine draws the ghost emblem into
+// (fx.anchorFor), the cards get scrims (fx.scrimFor), hovering the primary button sends a pulse.
 import '../styles/screens/home.css';
 import { h } from '../core/dom.js';
 import { icon } from '../components/icons.js';
@@ -11,7 +13,7 @@ export default {
   title: 'Startseite',
   fxState: 'home',
   async mount(container, ctx) {
-    const { router, api, store } = ctx;
+    const { router, api, store, fx } = ctx;
     const cleanups = [];
     const go = (name, transition = 'warp') => router.go(name, {}, { transition });
 
@@ -21,6 +23,14 @@ export default {
     const status = h('span.home__status-text', 'Bereit');
 
     const backupBtn = Button({ label: 'Jetzt sichern', icon: 'shield', variant: 'primary', size: 'lg', onClick: () => go('backup') });
+    // the emblem answers the main call to action with a small energy ring (max. every 1.2 s)
+    let lastHoverPulse = 0;
+    backupBtn.addEventListener('pointerenter', () => {
+      const now = performance.now();
+      if (now - lastHoverPulse < 1200) return;
+      lastHoverPulse = now;
+      fx?.pulse?.(0.2);
+    });
     const restoreBtn = Button({ label: 'Wiederherstellen', icon: 'download', variant: 'secondary', size: 'lg', onClick: () => go('restore') });
     cleanups.push(() => backupBtn.destroy(), () => restoreBtn.destroy());
 
@@ -51,22 +61,28 @@ export default {
       icon('arrow-right'),
     );
 
+    const heroCopy = h(
+      'div.home__hero-copy',
+      h('div.home__badge', { dataset: { stagger: '' } }, h('span.home__dot'), status, h('span.home__sep'), h('span.c-muted', 'Deine Apps überleben den Windows-Reset')),
+      title,
+      h(
+        'p.home__lead',
+        { dataset: { stagger: '' } },
+        'Sichere vor dem Reset alle Apps und Spiele – und hol sie danach mit einem Klick zurück. Ohne Suchen, ohne Setup-Dateien.',
+      ),
+    );
+    // empty on purpose: the FX engine draws the breathing neon emblem into this box
+    const emblemSlot = h('div.home__emblem', { attrs: { 'aria-hidden': 'true' } });
     const inner = h(
       'div.screen__inner.home',
-      h(
-        'section.home__hero',
-        h('div.home__badge', { dataset: { stagger: '' } }, h('span.home__dot'), status, h('span.home__sep'), h('span.c-muted', 'Deine Apps überleben den Windows-Reset')),
-        title,
-        h(
-          'p.home__lead',
-          { dataset: { stagger: '' } },
-          'Sichere vor dem Reset alle Apps und Spiele – und hol sie danach mit einem Klick zurück. Ohne Suchen, ohne Setup-Dateien.',
-        ),
-      ),
+      h('section.home__hero', heroCopy, emblemSlot),
       h('section.home__actions', h('div', { dataset: { stagger: '' } }, backupCard), h('div', { dataset: { stagger: '' } }, restoreCard)),
       h('footer.home__foot', { dataset: { stagger: '' } }, quick, machineChip),
     );
     container.append(inner);
+
+    if (fx?.anchorFor) cleanups.push(fx.anchorFor(emblemSlot));
+    if (fx?.scrimFor) cleanups.push(fx.scrimFor([backupCard, restoreCard]));
 
     const tl = revealText(line1, { delay: 0.25 });
     const tl2 = revealText(line2, { delay: 0.45 });

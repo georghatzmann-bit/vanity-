@@ -9,7 +9,7 @@ import { store, EFFECT_LEVELS } from './core/store.js';
 import { router } from './core/router.js';
 import { fx } from './core/fx-bridge.js';
 import { sound } from './core/sound.js';
-import { prefersReducedMotion, onReducedMotionChange, gsap } from './core/motion.js';
+import { prefersReducedMotion, onReducedMotionChange, gsap, motionOK } from './core/motion.js';
 import { Titlebar } from './components/titlebar.js';
 import { createToaster } from './components/toast.js';
 import { createModalHost } from './components/modal.js';
@@ -62,6 +62,21 @@ async function prepareDevState(screen) {
   }
 }
 
+/**
+ * Electron GPU facts (api.app.gpu: app.getGPUFeatureStatus() + app.getGPUInfo('basic')) -> FX gpuHint.
+ * A software WebGL path (SwiftShader / WARP / Basic Render) starts the FX on its lightest tier.
+ */
+function gpuHintFrom(g) {
+  if (!g) return null;
+  const status = g.featureStatus || {};
+  const devices = (g.info && g.info.gpuDevice) || [];
+  const dev = devices.find((d) => d && d.active) || devices[0] || null;
+  const soft = (v) => typeof v === 'string' && v.includes('software');
+  const software =
+    soft(status.webgl2) || soft(status.gpu_compositing) || (!!dev && (dev.vendorId === 0x1414 || (dev.vendorId === 0x1ae0 && dev.deviceId === 0xc0de)));
+  return { software, vendorId: dev ? dev.vendorId : undefined };
+}
+
 async function main() {
   applyUrlOverrides();
   // ?lag=0 (browser mock only): animations follow wall-clock time even at 3 fps, so screenshots
@@ -102,7 +117,16 @@ async function main() {
   ctx.titlebar = titlebar;
   document.body.append(CursorGlow({ store }));
 
-  fx.init(document.getElementById('fx'), { quality: store.get('settings').effects });
+  // FX engine (lazy chunk). The intro mode for the boot screen is 'full'; later launches use the
+  // short splash below. gpuHint is a promise – the bridge waits at most 300 ms for it.
+  const gpuHint = typeof api.app.gpu === 'function' ? api.app.gpu().then(gpuHintFrom).catch(() => null) : null;
+  fx.init(document.getElementById('fx'), {
+    quality: store.get('settings').effects,
+    reducedMotion: prefersReducedMotion(),
+    intro: 'full',
+    gpuHint,
+    onError: (err) => console.warn('[fx]', err && err.message ? err.message : err),
+  });
 
   router.init({ container: appEl, ctx });
   for (const [name, mod] of Object.entries(SCREENS)) router.register(name, mod);
@@ -134,6 +158,13 @@ async function main() {
     await prepareDevState(start).catch((err) => console.warn('[phoenix] dev state', err));
   }
   if (devLinks) window.__phoenix = { store, router, fx, sound, toast, modal, api };
+
+  // Later launches: the short intro (3.2 s) plays as a splash over the still-empty app; home enters
+  // while the logo glides into the titlebar (~2 s). Skippable (click / Esc / Space / Enter); skipped
+  // entirely when the engine is not live within 0.9 s, motion is reduced, or effects are off.
+  // Deep links (?screen=home) and ?splash=0 skip it too (screenshots, dev).
+  const splash = start === 'home' && !info.firstRun && !requested && motionOK() && params.get('splash') !== '0';
+  if (splash) await fx.splash('short', { waitMs: 900 }).catch(() => null);
 
   await router.go(start, {}, { transition: 'fade' });
 

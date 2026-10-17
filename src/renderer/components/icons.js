@@ -1,5 +1,6 @@
 // Hand-drawn 24px stroke icon set (currentColor, 1.75 stroke, round joins). No emoji, no icon fonts.
-import { svg, nextId } from '../core/dom.js';
+import { svg } from '../core/dom.js';
+import { emblemSvg } from '../fx/emblem/svg.js';
 
 const P = {
   shield: '<path d="M12 3.2 19 6v5.4c0 4.3-2.9 8-7 9.6-4.1-1.6-7-5.3-7-9.6V6z"/>',
@@ -73,20 +74,11 @@ export function icon(name, opts = {}) {
   return svg(iconMarkup(name, opts));
 }
 
-/** The PHOENIX app mark: two rising wings + core flame, violet gradient. */
-export function logoMark({ size = 28, className = '' } = {}) {
-  const id = nextId('lg');
-  return svg(`<svg class="logo-mark ${className}" width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-    <defs>
-      <linearGradient id="${id}a" x1="16" y1="2" x2="16" y2="30" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="#EDE9FE"/><stop offset=".45" stop-color="#A78BFA"/><stop offset="1" stop-color="#6D28D9"/>
-      </linearGradient>
-      <linearGradient id="${id}b" x1="16" y1="8" x2="16" y2="30" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="#C4B5FD"/><stop offset="1" stop-color="#5B21B6"/>
-      </linearGradient>
-    </defs>
-    <path fill="url(#${id}b)" d="M16 28.5C9.6 24.6 4.6 17.8 4.4 7.6c3.7 4.8 7.3 7.1 11.6 7.9z"/>
-    <path fill="url(#${id}b)" d="M16 28.5c6.4-3.9 11.4-10.7 11.6-20.9-3.7 4.8-7.3 7.1-11.6 7.9z" opacity=".82"/>
-    <path fill="url(#${id}a)" d="M16 2.6c3.4 4.1 4.6 8.4 3.2 12.4-.7 2-1.8 3.5-3.2 4.9-1.4-1.4-2.5-2.9-3.2-4.9-1.4-4 -.2-8.3 3.2-12.4z"/>
-  </svg>`);
+/**
+ * The PHOENIX app mark – the canonical neon emblem (fx/emblem/svg.js), the same strokes the FX
+ * engine draws, so titlebar, boot, app icon and installer share one logo. Below 40 px the simple
+ * (bolder, fewer lines) variant is used. title = accessible name (omitted: decorative).
+ */
+export function logoMark({ size = 28, className = '', title = '', glow } = {}) {
+  return svg(emblemSvg({ size, className: `logo-mark ${className}`.trim(), title, glow }));
 }

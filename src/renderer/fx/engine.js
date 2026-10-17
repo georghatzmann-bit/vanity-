@@ -16,9 +16,10 @@
 // Every frame is a pure function of (t, snapshot) – see state.js. Deterministic test frames:
 //   index.html?fxt=<seconds>&fxstate=<state>&fxp=<progress|null>[&fxq=<tier>&fxrm=1&fxintro=short
 //   &fxscrim=x,y,w,h;...&fxanchor=x,y,w,h] renders exactly that frame and sets window.__fxReady.
-import { createSnapshot, cloneSnapshot, evaluate, createFrame, pushState, setProgress as snapProgress, addPulse, addBurst, normState, P } from './state.js';
+import { createSnapshot, cloneSnapshot, evaluate, createFrame, pushState, setProgress as snapProgress, addPulse, addBurst, normState, P, DEFAULT_ANCHOR } from './state.js';
 import { TIERS, TIER_ORDER, detectGpu, tierForSetting, lowerTier, tierBelow, tierFromProbe, Governor, loadSavedTier, saveTier } from './tiers.js';
-import { INTRO_FULL, INTRO_SHORT } from './timeline.js';
+import { INTRO_FULL, INTRO_SHORT, introTau } from './timeline.js';
+import { WORD_DY, WORD_H } from './emblem/raster.js';
 import { prepareFont } from './bake.js';
 import { FxRenderer } from './renderer.js';
 import { createStaticLayer } from './static/static.js';
@@ -610,6 +611,43 @@ export async function createFx(canvas, options = {}) {
     get introPlaying() {
       return F.bootActive && F.introT < (snap.intro && snap.intro.mode === 'short' ? INTRO_SHORT.DONE : INTRO_FULL.DONE);
     },
+    /**
+     * Intro clock for DOM overlays (boot HUD, tagline, splash): null when no intro is on screen.
+     * tau = intro time in s (follows skips), plus the phase marks of the active timeline.
+     */
+    introClock() {
+      const top = snap.states[snap.states.length - 1];
+      if (!snap.intro || top.s !== 'boot') return null;
+      const K = snap.intro.mode === 'short' ? INTRO_SHORT : INTRO_FULL;
+      const live = !!R && !reducedMotion && snap.intro.mode !== 'none';
+      return {
+        mode: snap.intro.mode,
+        // test frames (?fxt=…&fxstate=boot) freeze the clock at that intro time
+        tau: test ? T.t : live ? introTau(snap.intro, K, now()) : K.IDLE + (now() - snap.intro.t0),
+        frozen: test,
+        live,
+        skipped: snap.intro.skipT != null,
+        fired: introFiredFor === snap.intro,
+        marks: { ign: K.IGN0, asm0: K.ASM0, asm1: K.ASM1, word0: K.WORD0, clx: K.CLX, burn: K.BURN0, glide: K.GLIDE0, done: K.DONE, idle: K.IDLE },
+      };
+    },
+    /** CSS px rects of the centred boot emblem (ring box) and wordmark (letter box) for DOM overlays. */
+    bootLayout() {
+      const [w, h] = cssSize();
+      const e = envFor(w, h);
+      const ppw = (h * e.content) / 2; // CSS px per world unit
+      const toX = (x) => (((x * e.content) / e.aspect + 1) / 2) * w;
+      const toY = (y) => ((1 - y * e.content) / 2) * h;
+      const [ax, ay, as] = DEFAULT_ANCHOR;
+      const r = as * 1.1 * ppw;
+      const wh = WORD_H * as * ppw;
+      const ww = wh * (1536 / 288) * 0.86;
+      const wy = toY(ay + WORD_DY * as);
+      return {
+        emb: { left: toX(ax) - r, top: toY(ay) - r, width: 2 * r, height: 2 * r },
+        word: { left: toX(ax) - ww / 2, top: wy - wh * 0.32, width: ww, height: wh * 0.64 },
+      };
+    },
     /** Bridge compatibility: the engine is already initialised by createFx. */
     init() {
       return api;
@@ -647,6 +685,8 @@ export async function createFx(canvas, options = {}) {
       if (frozen()) return;
       const count = o && o.count ? Number(o.count) : 220;
       if (reducedMotion) return api.pulse(0.5);
+      const top = snap.states[snap.states.length - 1];
+      if (top.s === 'success' && now() - top.t0 < 1.0) return; // the success climax already bursts
       addBurst(snap, now(), o && o.amp ? Number(o.amp) : 0.7, Math.max(0.25, Math.min(1, count / 220)));
       lastPulseAt = now();
       if (stat) stat.pulse(0.9);
@@ -710,6 +750,16 @@ export async function createFx(canvas, options = {}) {
     setQuality(q) {
       if (test || disposed) return;
       cap = lowerTier(tierForSetting(q), forcedTier);
+      if (cap !== 'static' && !gl && !forced) {
+        // started with effects "off": the GPU was never looked at – classify it before going live
+        if (!ensureGl()) maxTier = 'static';
+        else {
+          const saved = loadSavedTier(gpu.renderer);
+          if (saved) maxTier = saved;
+          else if (gpu.software) maxTier = 'low';
+          else if (!gpu.dedicated) maxTier = lowerTier(maxTier, 'high');
+        }
+      }
       const want = lowerTier(cap, maxTier);
       if (want !== tier) switchTier(want, 'setting');
     },
@@ -883,5 +933,8 @@ function exposeTestHooks(api, T, getR, getGl, getSnap) {
     return { state, after: api.state, tier: api.tier, rendered: !!getR() };
   };
 }
+
+/** Spec name (4.2). */
+export const createPhoenixFX = createFx;
 
 export default { createFx };

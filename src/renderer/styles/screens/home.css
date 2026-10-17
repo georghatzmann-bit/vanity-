@@ -9,10 +9,27 @@
 }
 
 .home__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--s-6);
+}
+
+.home__hero-copy {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--s-5);
+  min-width: 0;
+}
+
+/* FX: empty box the engine draws the ghost emblem into (fx.anchorFor in screens/home.js). The wing
+   tips break out of the ring by ~15 %, the margin keeps them clear of the window edge. */
+.home__emblem {
+  width: clamp(200px, 23vw, 340px);
+  aspect-ratio: 1;
+  margin-right: clamp(0px, 2vw, 32px);
+  pointer-events: none;
 }
 
 .home__badge {
@@ -210,8 +227,11 @@
   .home {
     gap: var(--s-5);
   }
-  .home__hero {
+  .home__hero-copy {
     gap: var(--s-4);
+  }
+  .home__emblem {
+    width: clamp(180px, 20vw, 280px);
   }
   .home__title {
     font-size: clamp(48px, 5.6vw, 76px);

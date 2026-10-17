@@ -74,6 +74,11 @@ export function createMockApi() {
     app: {
       info: async () => ({ version: '1.0.0', firstRun: params.get('firstRun') !== '0', isPackaged: false, mock: true }),
       markInstalled: async () => true,
+      // hardware-GPU-like answer (Electron: app.getGPUFeatureStatus() + app.getGPUInfo('basic'))
+      gpu: async () => ({
+        featureStatus: { gpu_compositing: 'enabled', webgl: 'enabled', webgl2: 'enabled', rasterization: 'enabled', video_decode: 'enabled' },
+        info: { gpuDevice: [{ active: true, vendorId: 0x10de, deviceId: 0x2783, driverVendor: 'NVIDIA', driverVersion: '32.0.15.6094' }] },
+      }),
     },
     win: { minimize: async () => {}, toggleMaximize: async () => {}, close: async () => {} },
     system: { info: async () => MACHINE },

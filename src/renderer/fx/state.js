@@ -203,7 +203,8 @@ const T3a = [0, 0, 0];
 const T3b = [0, 0, 0];
 function anchorAt(snap, env, t, out) {
   const a = snap.anchor;
-  const from = a.from ? rectToXf(env, a.from, T3a) : DEFAULT_ANCHOR;
+  // from: where the emblem was when setAnchor() ran – world transform { w: [x, y, s] } (engine) or a CSS rect
+  const from = a.from ? (a.from.w ? a.from.w : rectToXf(env, a.from, T3a)) : DEFAULT_ANCHOR;
   const to = a.to ? rectToXf(env, a.to, T3b) : DEFAULT_ANCHOR;
   const w = sstep(a.t0, a.t0 + 0.6, t);
   out[0] = mix(from[0], to[0], w);
@@ -279,15 +280,16 @@ function idleLook(A, t) {
   A[P.flare] = 0;
 }
 
-function homeLook(A, t) {
+function homeLook(A, t, hero) {
   idleLook(A, t);
   A[P.intensity] = 0.68;
   A[P.hue] = 0.35;
-  // ghost neon emblem at the anchor, breathing +-0.03 at 0.1 Hz
-  A[P.lineAlpha] = 0.1 + 0.03 * Math.sin(t * Math.PI * 0.2);
-  A[P.glowAmt] = 0.7;
+  // ghost neon emblem at the anchor, breathing +-0.03 at 0.1 Hz. In its own hero slot (anchor set,
+  // nothing on top of it) it may carry more presence than behind text.
+  A[P.lineAlpha] = (hero ? 0.2 : 0.1) + (hero ? 0.04 : 0.03) * Math.sin(t * Math.PI * 0.2);
+  A[P.glowAmt] = hero ? 0.95 : 0.7;
   A[P.occl] = 0.3;
-  A[P.packet] = 0.6;
+  A[P.packet] = hero ? 0.9 : 0.6;
   A[P.emberRate] = 1.2;
 }
 
@@ -434,7 +436,7 @@ function look(rec, t, snap, env, A, isTop) {
       break;
     }
     case 'home':
-      homeLook(A, t);
+      homeLook(A, t, !!(snap.anchor && snap.anchor.to));
       break;
     case 'installing':
       installingLook(A, t);
