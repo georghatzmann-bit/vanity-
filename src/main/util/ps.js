@@ -12,7 +12,8 @@ const JSON_MARK = '@@PHXJSON@@';
 const PREAMBLE = [
   "$ErrorActionPreference = 'Stop'",
   "$ProgressPreference = 'SilentlyContinue'",
-  '$OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false',
+  // the setter can throw without a console; JSON output is ASCII-escaped anyway
+  'try { $OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }',
   // Emits one JSON document on its own line, recognised by runPsJson(). Non-ASCII is escaped
   // to \\uXXXX so the result survives any console code page. -InputObject keeps 1-item arrays.
   'function Write-PhxJson($obj) {',
