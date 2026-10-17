@@ -213,6 +213,7 @@ module.exports = {
   findSetupExe: async () => null,
   startInstall,
   cancelInstall,
+  isInstallRunning: () => !!(job && !job.done),
   detectLaunchers: async () => ({ epic: { installed: true }, steam: { installed: true } }),
   installGame: async (game, mode) => {
     const { installUri } = require('../games/launch');

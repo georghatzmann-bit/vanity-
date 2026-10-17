@@ -28,6 +28,7 @@ module.exports = {
   findSetupExe: () => paths.findSetupExe(),
   startInstall: (items, emit) => queue.startJob(items, { emit }),
   cancelInstall: () => queue.cancelJob(),
+  isInstallRunning: () => queue.isRunning(),
   detectLaunchers: () => games.detectLaunchers(),
   installGame: (game, mode) => games.installGame(game, mode),
 };

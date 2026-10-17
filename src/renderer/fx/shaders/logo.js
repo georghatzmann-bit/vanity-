@@ -59,7 +59,10 @@ void main() {
   float pulse = 0.85 + 0.15 * sin(rt * 34.0 - uTime * 5.0);
   float packet = pow(0.5 + 0.5 * sin(rt * TAU - uTime * 1.3), 30.0) * uPacket;
   float energy = (1.0 + 2.2 * uLineEnergy) * pulse + packet * 1.6;
-  vec3 c = C_HOT * core * 1.15 + mix(C_VIOLET, C_LAV, 0.35) * g1 * 1.1 * uGlowAmt + C_VIOLET * g2 * 0.32 * uGlowAmt;
+  // a faint line (home ghost, early install progress) reads as violet neon, not as grey chalk: the
+  // core only turns white-hot as the line gains strength (intro, finished bird, success)
+  vec3 coreCol = mix(mix(C_LAV, C_PALE, 0.5) * 1.25, C_HOT * 1.15, ss(0.3, 0.8, uLineAlpha + uLineEnergy));
+  vec3 c = coreCol * core + mix(C_VIOLET, C_LAV, 0.35) * g1 * 1.1 * uGlowAmt + C_VIOLET * g2 * 0.32 * uGlowAmt;
   c *= rev * energy * uLineAlpha;
 #if F_PEN
   float hp = exp(-pow((P - rt) * 230.0, 2.0)) * step(rt, P + 0.0015) * (1.0 - step(0.9999, P));

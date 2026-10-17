@@ -52,7 +52,8 @@
   animation: fx-static-breathe 10s ease-in-out infinite;
 }
 
-.fx-static.is-installing .fx-static__emblem {
+.fx-static.is-installing .fx-static__emblem,
+.fx-static.is-scan.is-anchored .fx-static__emblem {
   opacity: calc(0.12 + var(--fx-p) * 0.35);
 }
 

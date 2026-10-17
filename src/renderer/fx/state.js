@@ -6,9 +6,10 @@
 import { INTRO_FULL, INTRO_SHORT, ASM_W, ASM_J, bootLook, introTau, sstep, mix, clamp01, flashEnv, climaxEnv, shakeN } from './timeline.js';
 import { WORD_DY, WORD_H } from './emblem/raster.js';
 
-export const STATES = ['boot', 'idle', 'home', 'installing', 'success', 'error'];
-const ALIAS = { scan: 'installing' };
-const BLEND = { boot: 0.0, idle: 0.6, home: 0.6, installing: 0.6, success: 0.6, error: 0.35 };
+export const STATES = ['boot', 'idle', 'home', 'scan', 'installing', 'success', 'error'];
+const ALIAS = {};
+const BLEND = { boot: 0.0, idle: 0.6, home: 0.6, scan: 0.6, installing: 0.6, success: 0.6, error: 0.35 };
+const PROGRESS_STATES = new Set(['installing', 'scan']);
 export const DEFAULT_ANCHOR = Object.freeze([0, 0.16, 0.45]); // world centre + scale of the hero emblem
 const WORD_ASPECT = 1536 / 288; // wordmark SDF box aspect (wordmark.js W / H)
 
@@ -114,7 +115,7 @@ export function pushState(snap, name, t, F, immediate = false) {
   }
   st.push(rec);
   while (st.length > 4) st.shift();
-  if (s === 'installing' && snap.prog.target >= 0.999 && top.s !== 'installing') setProgress(snap, t, 0, true);
+  if (PROGRESS_STATES.has(s) && snap.prog.target >= 0.999 && top.s !== s) setProgress(snap, t, 0, true);
   return true;
 }
 
@@ -187,7 +188,7 @@ const A0 = new Float32Array(NP);
 const A1 = new Float32Array(NP);
 const D = { climaxLocal: 0, burnT: -100, dropT: -100, introT: -100, igniteT: -100, penT0: 0, penK: 1, penGain: 0, inhale: 0, shakeAmp: 0 };
 const XF = { boot: [0, 0, 0], head: [0, 0, 0], bootWord: [0, 0, 0], headWord: [0, 0, 0] };
-const C = { anc: [0, 0, 0.45], pv: 0, indet: 0, env: null };
+const C = { anc: [0, 0, 0.45], emb: [0, 0, 0.45], pv: 0, indet: 0, env: null };
 
 function rectToXf(env, r, out, ringFit = true) {
   const wpp = 2 / (env.cssH * env.content); // world units per CSS px
@@ -201,7 +202,7 @@ function rectToXf(env, r, out, ringFit = true) {
 
 const T3a = [0, 0, 0];
 const T3b = [0, 0, 0];
-function anchorAt(snap, env, t, out) {
+function anchorAt(snap, env, t, out, outEmb) {
   const a = snap.anchor;
   // from: where the emblem was when setAnchor() ran – world transform { w: [x, y, s] } (engine) or a CSS rect
   const from = a.from ? (a.from.w ? a.from.w : rectToXf(env, a.from, T3a)) : DEFAULT_ANCHOR;
@@ -210,19 +211,25 @@ function anchorAt(snap, env, t, out) {
   out[0] = mix(from[0], to[0], w);
   out[1] = mix(from[1], to[1], w);
   out[2] = mix(from[2], to[2], w);
+  // the plasma / particle anchor always glides (the flame field must not jump); the neon logo only
+  // glides when it was visible at the move – an invisible one is simply there when it fades in
+  const we = a.snapEmb ? (t >= a.t0 ? 1 : 0) : w;
+  outEmb[0] = mix(from[0], to[0], we);
+  outEmb[1] = mix(from[1], to[1], we);
+  outEmb[2] = mix(from[2], to[2], we);
   return out;
 }
 
-function setXf(A, anc) {
+function setXf(A, anc, emb) {
   A[P.ancX] = anc[0];
   A[P.ancY] = anc[1];
   A[P.ancS] = anc[2];
-  A[P.embX] = anc[0];
-  A[P.embY] = anc[1];
-  A[P.embS] = anc[2];
-  A[P.wordX] = anc[0];
-  A[P.wordY] = anc[1] + WORD_DY * anc[2];
-  A[P.wordH] = WORD_H * anc[2];
+  A[P.embX] = emb[0];
+  A[P.embY] = emb[1];
+  A[P.embS] = emb[2];
+  A[P.wordX] = emb[0];
+  A[P.wordY] = emb[1] + WORD_DY * emb[2];
+  A[P.wordH] = WORD_H * emb[2];
 }
 
 function idleLook(A, t) {
@@ -267,7 +274,7 @@ function idleLook(A, t) {
   A[P.sweep] = 0;
   A[P.wordIgnite] = 0;
   A[P.wordGlow] = 1;
-  setXf(A, C.anc);
+  setXf(A, C.anc, C.emb);
   A[P.bloomAmt] = 0.55;
   A[P.raysAmt] = 0;
   A[P.streakAmt] = 0.4;
@@ -317,6 +324,30 @@ function installingLook(A, t) {
   A[P.occl] = 0.8;
   A[P.bloomAmt] = 0.62;
   A[P.streakAmt] = 0.45;
+}
+
+/**
+ * scan (backup screen): the PC is being read – energy charges with the progress, but the screen owns
+ * its own hero (radar + headline), so no bird is built behind the text: the particle cloud only
+ * orbits low in the vortex disk. With an anchor (a screen gave the emblem its own slot) the bird
+ * rebuilds there exactly like installing.
+ */
+function scanLook(A, t, anchored) {
+  installingLook(A, t);
+  if (anchored) return;
+  const p = clamp01(C.pv);
+  A[P.intensity] = 0.6 + 0.16 * p;
+  A[P.flameY] = mix(-1.02, -0.72, p);
+  A[P.heatAmt] = 0;
+  A[P.fill] = 0;
+  A[P.cloudA] = 0.75;
+  A[P.diskA] = 0.2;
+  A[P.asm] = 0;
+  A[P.lineReveal] = 0;
+  A[P.lineAlpha] = 0;
+  A[P.penHead] = 0;
+  A[P.packet] = 0;
+  A[P.bloomAmt] = 0.58;
 }
 
 function successLook(rec, A, t) {
@@ -441,6 +472,11 @@ function look(rec, t, snap, env, A, isTop) {
     case 'installing':
       installingLook(A, t);
       break;
+    case 'scan':
+      // anchored = the scanning screen itself gave the bird a slot (set around its entry), not a
+      // leftover hero anchor of the previous screen that is about to be released
+      scanLook(A, t, !!(snap.anchor && snap.anchor.to && snap.anchor.t0 >= rec.t0 - 1.0));
+      break;
     case 'success':
       successLook(rec, A, t);
       break;
@@ -487,13 +523,21 @@ function pickClimax(snap, t, tauBoot) {
   return EV;
 }
 
+// alpha-weighted blend factor for a transform: the side with the visible logo wins
+function xfWeight(a0, a1, w) {
+  const u0 = (1 - w) * Math.max(0, a0);
+  const u1 = w * Math.max(0, a1);
+  return u0 + u1 > 1e-4 ? u1 / (u0 + u1) : w;
+}
+const XF0 = new Float32Array(6); // pre-blend emblem + wordmark transforms (no per-frame allocation)
+
 /**
  * Evaluates the frame at engine time t. env: { cssW, cssH, aspect, content }.
  * Writes into F (from createFrame()).
  */
 export function evaluate(t, snap, env, F) {
   C.env = env;
-  anchorAt(snap, env, t, C.anc);
+  anchorAt(snap, env, t, C.anc, C.emb);
   const pr = snap.prog;
   springAt(pr, t, SP);
   C.pv = clamp01(SP.x);
@@ -508,7 +552,24 @@ export function evaluate(t, snap, env, F) {
     const w = r.dur > 0 ? sstep(r.t0, r.t0 + r.dur, t) : t >= r.t0 ? 1 : 0;
     if (w <= 0 && i !== topIdx) continue;
     look(r, t, snap, env, A1, i === topIdx);
+    // where the neon emblem / wordmark is drawn follows the look that actually shows it: a logo that
+    // fades in (out) does so in place instead of sliding across the UI from (to) where the other look
+    // keeps its invisible copy (e.g. intro end in the titlebar -> home hero slot)
+    const fe = xfWeight(A0[P.lineAlpha], A1[P.lineAlpha], w);
+    const fw = xfWeight(Math.max(A0[P.wordAlpha], A0[P.wordA]), Math.max(A1[P.wordAlpha], A1[P.wordA]), w);
+    XF0[0] = A0[P.embX];
+    XF0[1] = A0[P.embY];
+    XF0[2] = A0[P.embS];
+    XF0[3] = A0[P.wordX];
+    XF0[4] = A0[P.wordY];
+    XF0[5] = A0[P.wordH];
     for (let k = 0; k < NP; k++) A0[k] += (A1[k] - A0[k]) * w;
+    A0[P.embX] = XF0[0] + (A1[P.embX] - XF0[0]) * fe;
+    A0[P.embY] = XF0[1] + (A1[P.embY] - XF0[1]) * fe;
+    A0[P.embS] = XF0[2] + (A1[P.embS] - XF0[2]) * fe;
+    A0[P.wordX] = XF0[3] + (A1[P.wordX] - XF0[3]) * fw;
+    A0[P.wordY] = XF0[4] + (A1[P.wordY] - XF0[4]) * fw;
+    A0[P.wordH] = XF0[5] + (A1[P.wordH] - XF0[5]) * fw;
   }
   const top = st[topIdx];
   const p = F.p;
@@ -533,6 +594,20 @@ export function evaluate(t, snap, env, F) {
     F.igniteT = -100;
     F.penGain = 0;
     F.burnT = top.s === 'success' ? t - top.t0 - 3.0 : -100;
+    // a look without a particle cloud (idle / home) replacing one whose cloud is burning away (intro
+    // end, success settling): the leftover particles keep burning while they fade out – resetting
+    // the burn would pop the whole particle bird back for the length of the blend
+    if ((top.s === 'idle' || top.s === 'home') && topIdx > 0 && t < top.t0 + top.dur) {
+      const prev = st[topIdx - 1];
+      let pb = -100;
+      if (prev.s === 'success') pb = t - prev.t0 - 3.0;
+      else if (prev.s === 'boot') {
+        const K = introConsts(snap);
+        const intro = snap.intro || { t0: prev.t0, skipT: null, mode: 'full' };
+        pb = (snap.rm || intro.mode === 'none' ? K.IDLE + Math.max(0, t - intro.t0) : introTau(intro, K, t)) - K.BURN0;
+      }
+      if (pb > F.burnT) F.burnT = pb;
+    }
     F.inhale = 0;
     F.introDoneAt = Infinity;
     F.bootActive = false;

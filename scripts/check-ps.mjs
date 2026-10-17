@@ -1,11 +1,12 @@
 // Dev check: parses every embedded PowerShell script (and Ensure-Winget.ps1) with a real PowerShell parser.
-// Usage: PWSH=/path/to/pwsh node scripts/check-ps.mjs
+// Usage: PWSH=/path/to/pwsh node scripts/check-ps.mjs   (CI on Windows: PWSH=powershell.exe, i.e. 5.1)
 import { readFileSync, readdirSync, statSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('../src/main/', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../src/main/', import.meta.url)); // (.pathname is '/D:/...' on Windows)
 const pwsh = process.env.PWSH || 'pwsh';
 const psSrc = readFileSync(join(root, 'util/ps.js'), 'utf8');
 const JSON_MARK = '@@PHXJSON@@';

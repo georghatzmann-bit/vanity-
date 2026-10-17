@@ -82,7 +82,7 @@ function testSnapshot(T) {
     at('home', -10);
     if (st === 'warp') s.warp = { t0: 0, dur: 0.7 };
   } else if (st === 'installing' || st === 'scan') {
-    at('installing', -10);
+    at(st, -10);
     snapProgress(s, -10, T.p == null ? 0.3 : T.p, true);
     if (T.p == null) snapProgress(s, -10, null);
   } else if (st === 'success') {
@@ -298,6 +298,9 @@ export async function createFx(canvas, options = {}) {
     for (let t = 11; t < 14; t += 0.2) add(t, s2);
     s2.warp = { t0: 15, dur: 0.7 };
     add(15.35, s2);
+    s2.states.push({ s: 'scan', t0: 16, dur: 0.6, p0: 0, cloud0: 1, asm0: 0, rev0: 0, alpha0: 0 });
+    add(16.3, s2);
+    add(17, s2);
     return keys;
   }
   function precompileSoon() {
@@ -320,7 +323,7 @@ export async function createFx(canvas, options = {}) {
     evaluate(t, s, env, F);
     // idle caching: quantise the plasma clock in calm states (spec 4.6.7)
     const top = s.states[s.states.length - 1];
-    const calm = (top.s === 'idle' || top.s === 'home' || top.s === 'installing') && t > top.t0 + top.dur;
+    const calm = (top.s === 'idle' || top.s === 'home' || top.s === 'installing' || top.s === 'scan') && t > top.t0 + top.dur;
     if (calm && R && !test) {
       const rate = R.tier.plasmaRate;
       F.plasmaT = Math.floor(t * rate) / rate;
@@ -347,7 +350,7 @@ export async function createFx(canvas, options = {}) {
       const top = snap.states[snap.states.length - 1];
       const age = now() - top.t0;
       const busy = (top.s === 'success' && age < 5.2) || (top.s === 'error' && age < 3) || F.warpEnv > 0 || F.climax > 0.02 || age < top.dur + 0.2;
-      f = busy ? fp.intro : top.s === 'installing' ? fp.installing : fp.idle;
+      f = busy ? fp.intro : top.s === 'installing' || top.s === 'scan' ? fp.installing : fp.idle;
     }
     if (now() - lastPulseAt < 1.0) f = Math.max(f, fp.pulse);
     if (blurred || onBattery) f = Math.min(f, 30);
@@ -496,7 +499,10 @@ export async function createFx(canvas, options = {}) {
   if (start !== 'static' && !forced) {
     const saved = loadSavedTier(gpu.renderer); // re-probed only when the renderer string changes
     if (saved) maxTier = saved;
-    if (gpu.software) start = 'low';
+    if (gpu.software) {
+      start = 'low';
+      maxTier = lowerTier(maxTier, 'low'); // software rasterizers never run above low (also not via setQuality)
+    }
     else if (!saved && !gpu.dedicated && start === 'ultra') start = 'high';
     start = lowerTier(start, maxTier);
   }
@@ -707,7 +713,9 @@ export async function createFx(canvas, options = {}) {
       if (frozen()) return;
       const t = now();
       evaluate(t, snap, env, Fx);
-      snap.anchor = { from: { w: [Fx.p[P.ancX], Fx.p[P.ancY], Fx.p[P.ancS]] }, to: rectArr(rect), t0: t };
+      // invisible neon logo (intro over, idle look): it moves with no glide (see state.js anchorAt)
+      const snapEmb = Fx.p[P.lineAlpha] < 0.03 && Fx.p[P.wordAlpha] < 0.03;
+      snap.anchor = { from: { w: [Fx.p[P.ancX], Fx.p[P.ancY], Fx.p[P.ancS]] }, to: rectArr(rect), t0: t, snapEmb };
       if (stat) stat.setAnchor(rect || null);
     },
     setScrim(rects) {
@@ -760,6 +768,7 @@ export async function createFx(canvas, options = {}) {
           else if (!gpu.dedicated) maxTier = lowerTier(maxTier, 'high');
         }
       }
+      if (gpu.software && !forced) maxTier = lowerTier(maxTier, 'low');
       const want = lowerTier(cap, maxTier);
       if (want !== tier) switchTier(want, 'setting');
     },

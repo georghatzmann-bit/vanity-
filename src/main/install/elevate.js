@@ -79,12 +79,12 @@ async function launchWorker({ timeoutMs = 120000 } = {}) {
   const token = crypto.randomBytes(32).toString('hex');
   const server = net.createServer();
 
+  // The connect timer is armed only after the UAC prompt was answered (see below): the prompt
+  // itself may stay open for minutes.
+  let timer = null;
+  let failConnect = () => {};
   const connected = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      const err = new Error('Der Admin-Prozess hat sich nicht gemeldet.');
-      err.code = 'TIMEOUT';
-      reject(err);
-    }, timeoutMs);
+    failConnect = reject;
     server.on('connection', (socket) => {
       let authed = false;
       const feed = createDecoder(
@@ -112,6 +112,7 @@ async function launchWorker({ timeoutMs = 120000 } = {}) {
       reject(err);
     });
   });
+  connected.catch(() => {}); // early-return paths below never await it
 
   await new Promise((resolve, reject) => {
     server.once('error', reject);
@@ -146,6 +147,11 @@ async function launchWorker({ timeoutMs = 120000 } = {}) {
     throw e;
   }
   log.info(`Worker gestartet (pid ${started.pid}), warte auf Verbindung …`);
+  timer = setTimeout(() => {
+    const err = new Error('Der Admin-Prozess hat sich nicht gemeldet.');
+    err.code = 'TIMEOUT';
+    failConnect(err);
+  }, timeoutMs);
   const me = os.userInfo().username;
 
   let conn;
@@ -154,6 +160,8 @@ async function launchWorker({ timeoutMs = 120000 } = {}) {
   } catch (err) {
     server.close();
     throw err;
+  } finally {
+    clearTimeout(timer); // the worker may have connected before Process.Start returned
   }
   server.close(); // stop accepting further clients; the established socket stays open
   if (conn.hello.user && String(conn.hello.user).toLowerCase() !== String(me).toLowerCase()) {
@@ -172,7 +180,7 @@ function createHandle(socket, hello) {
   const feed = createDecoder(
     (msg) => {
       if (msg.t === 'event' && msg.event && typeof msg.event === 'object') onEvent(msg.event);
-      else if (msg.t === 'log' && typeof msg.line === 'string') log.info(`[worker] ${msg.line}`);
+      else if (msg.t === 'log' && typeof msg.line === 'string') onEvent({ type: 'log', line: msg.line }); // queue.js writes it to the log file
       else if (msg.t === 'bye' && finish) finish({ disconnected: false });
     },
     (err) => log.warn('Ungültige Worker-Nachricht', err.message),

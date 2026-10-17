@@ -43,6 +43,11 @@ function startJob(rawItems, { emit }) {
   return { jobId: job.id };
 }
 
+/** True while an install job runs (used to confirm closing the window). */
+function isRunning() {
+  return !!(current && !current.done);
+}
+
 function cancelJob() {
   if (!current || current.done) return true;
   current.controller.abort();
@@ -50,7 +55,12 @@ function cancelJob() {
   return true;
 }
 
-async function run(job, items, emit) {
+async function run(job, items, emitEvent) {
+  // winget's own output (installer exit codes, hash/agreement texts) must reach the exported log
+  const emit = (event) => {
+    if (event && event.type === 'log' && event.line) log.info(event.key ? `[${event.key}] ${event.line}` : event.line);
+    emitEvent(event);
+  };
   const started = Date.now();
   const summary = { installed: 0, already: 0, failed: 0, skipped: 0, cancelled: 0, rebootRequired: false };
   const finished = new Set();
@@ -65,7 +75,7 @@ async function run(job, items, emit) {
 
   // 1) winget must work (non-elevated attempt; the worker retries with admin rights if needed).
   emit({ type: 'phase', phase: 'winget-check', message: 'winget wird geprüft …' });
-  const wg = await bootstrap.ensureWinget({ onProgress: (p) => emit({ type: 'log', line: p.message }) });
+  const wg = await bootstrap.ensureWinget({ onProgress: (p) => emitEvent({ type: 'log', line: p.message }) }); // bootstrap logs itself
   if (!wg.ok) emit({ type: 'log', line: `winget nicht bereit: ${wg.error || 'unbekannt'}` });
 
   // 2) lanes
@@ -104,6 +114,7 @@ async function run(job, items, emit) {
     ...localAdmin.map((i) => ({ ...i, lane: 'admin' })),
     ...user.map((i) => ({ ...i, lane: 'user' })),
   ];
+  log.info(`Installation (${job.worker ? 'mit' : 'ohne'} Admin-Prozess): ${order.map((i) => `${i.key} [${i.lane}]`).join(', ')}`);
   emit({ type: 'job-start', jobId: job.id, items: order.map((i) => ({ key: i.key, name: i.name, lane: i.lane })) });
   emit({ type: 'phase', phase: 'installing', message: 'Installation läuft …' });
 
@@ -153,4 +164,4 @@ async function run(job, items, emit) {
   emit({ type: 'job-done', summary, durationMs: Date.now() - started });
 }
 
-module.exports = { startJob, cancelJob, laneOf };
+module.exports = { startJob, cancelJob, isRunning, laneOf };

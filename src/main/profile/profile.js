@@ -209,18 +209,29 @@ async function saveToDrive(profile, root) {
   const file = writeProfile(profile, dir);
   let setupCopied = false;
   let setupPath;
+  let tmp = null;
   try {
     const { findSetupExe } = require('../util/paths');
     const found = await findSetupExe();
     if (found && found.path) {
       setupPath = path.join(dir, path.basename(found.path));
       if (!fs.existsSync(setupPath) || fs.statSync(setupPath).size !== fs.statSync(found.path).size) {
-        fs.copyFileSync(found.path, setupPath);
+        // async (a ~100 MB copy to a USB 2.0 stick must not freeze the window) and via a temp
+        // name, so an interrupted copy never looks like a complete Setup
+        tmp = `${setupPath}.part`;
+        await fs.promises.copyFile(found.path, tmp);
+        await fs.promises.rename(tmp, setupPath);
+        tmp = null;
       }
       setupCopied = true;
     }
   } catch {
     setupCopied = false;
+    try {
+      if (tmp) fs.rmSync(tmp, { force: true });
+    } catch {
+      /* best effort */
+    }
   }
   return { path: file, setupCopied, setupPath };
 }

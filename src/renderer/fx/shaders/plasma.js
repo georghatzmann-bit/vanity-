@@ -98,7 +98,8 @@ vec3 ramp(float e, float hue) {
   vec3 hot     = vec3(1.000, 0.860, 1.250);
   vec3 c = mix(indigo, deep, smoothstep(0.03, 0.30, e));
   c = mix(c, mix(violet, magenta, hue), smoothstep(0.25, 0.90, e));
-  c = mix(c, hot, smoothstep(1.10, 2.6, e));
+  // calm looks (idle / home): flame tips stay violet-magenta instead of clipping to white hot spots
+  c = mix(c, hot, smoothstep(1.10, 2.6, e) * (1.0 - 0.6 * smoothstep(0.9, 1.0, uIdle)));
   return c;
 }
 

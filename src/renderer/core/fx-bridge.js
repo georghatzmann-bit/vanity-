@@ -99,6 +99,22 @@ let anchorOwner = null; // { el }
 let trackTimer = 0;
 let lastScrimKey = '';
 let lastAnchorKey = '';
+// Releasing the hero slot (home -> another screen): the emblem fades out with the state change, so
+// it should do that where it is – the centre reset waits until it is gone (or until a state that
+// shows the bird in the centre arrives first).
+const ANCHOR_RESET_MS = 700;
+const CENTRE_STATES = new Set(['boot', 'installing', 'success', 'error']);
+let anchorResetTimer = 0;
+function releaseAnchor() {
+  clearTimeout(anchorResetTimer);
+  anchorResetTimer = setTimeout(flushAnchorReset, ANCHOR_RESET_MS);
+}
+function flushAnchorReset() {
+  if (!anchorResetTimer) return;
+  clearTimeout(anchorResetTimer);
+  anchorResetTimer = 0;
+  if (!anchorOwner) fx.setAnchor(null);
+}
 
 function measure(el) {
   if (!el || !el.isConnected) return null;
@@ -135,12 +151,14 @@ function track() {
     if (!anchorOwner.el.isConnected) {
       anchorOwner = null;
       lastAnchorKey = '';
-      fx.setAnchor(null);
+      releaseAnchor();
     } else {
       const r = measure(anchorOwner.el);
       const key = r ? `${r.left},${r.top},${r.width},${r.height}` : '';
       if (r && key !== lastAnchorKey) {
         lastAnchorKey = key;
+        clearTimeout(anchorResetTimer);
+        anchorResetTimer = 0;
         fx.setAnchor(r);
       }
     }
@@ -224,6 +242,7 @@ export const fx = {
       successAt = now;
       if (repeat) return;
     }
+    if (CENTRE_STATES.has(name)) flushAnchorReset(); // the bird is needed in the centre right away
     last.state = name;
     last.stateOpts = opts;
     call('setState', name, opts);
@@ -258,6 +277,8 @@ export const fx = {
   },
   /** Where the emblem lives (CSS px rect, e.g. the hero slot), null = default centre. */
   setAnchor(rect) {
+    clearTimeout(anchorResetTimer);
+    anchorResetTimer = 0;
     last.anchor = rect ? toRect(rect) : null;
     call('setAnchor', last.anchor);
   },
@@ -297,7 +318,7 @@ export const fx = {
       if (anchorOwner !== owner) return;
       anchorOwner = null;
       lastAnchorKey = '';
-      fx.setAnchor(null);
+      releaseAnchor();
     };
   },
   /** User intensity 0..1. */
@@ -398,6 +419,8 @@ export const fx = {
     call('resize');
   },
   dispose() {
+    clearTimeout(anchorResetTimer);
+    anchorResetTimer = 0;
     call('dispose');
     endIntro();
     engine = null;

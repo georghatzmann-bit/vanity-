@@ -3,7 +3,8 @@ name: Build Windows Setup
 on:
   push:
     branches: [main, 'claude/**']
-    tags: ['v*']
+    # namespaced: this repository also hosts other apps' releases (Konto-Retter owns v1.x tags)
+    tags: ['phoenix-v*']
   workflow_dispatch:
 
 # Least privilege: the build job only reads. Only the tag-triggered release job may write.
@@ -20,6 +21,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       setup: ${{ steps.out.outputs.setup }}
+      version: ${{ steps.out.outputs.version }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false' # never look for a signing certificate -> unsigned build
     steps:
@@ -46,10 +48,24 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Use tag as app version (v1.2.3 -> 1.2.3)
-        if: startsWith(github.ref, 'refs/tags/v')
+      # The restore-only scripts run under Windows PowerShell 5.1, which rejects some pwsh 7 syntax.
+      - name: PowerShell 5.1 parse check
         shell: pwsh
-        run: npm version ($env:GITHUB_REF_NAME -replace '^v','') --no-git-tag-version --allow-same-version
+        run: |
+          $env:PWSH = 'powershell.exe'
+          node scripts/check-ps.mjs
+
+      - name: Use tag as app version (phoenix-v1.2.3 -> 1.2.3)
+        if: startsWith(github.ref, 'refs/tags/phoenix-v')
+        shell: pwsh
+        run: npm version ($env:GITHUB_REF_NAME -replace '^phoenix-v','') --no-git-tag-version --allow-same-version
+
+      # Every test build gets its own version: Setup file name, artifact, Apps & Features, UAC dialog
+      # and the log line "Phoenix x.y.z gestartet" then tell the builds apart.
+      - name: Unique version for CI test builds
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        shell: pwsh
+        run: npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
 
       - name: Build renderer (Vite)
         run: npm run build:renderer
@@ -68,6 +84,7 @@ jobs:
           if (-not $exe) { throw 'Phoenix-Setup-*.exe not found in release/' }
           "{0}  {1:N1} MiB" -f $exe.Name, ($exe.Length / 1MB)
           "setup=$($exe.Name)" >> $env:GITHUB_OUTPUT
+          "version=$((Get-Content package.json -Raw | ConvertFrom-Json).version)" >> $env:GITHUB_OUTPUT
 
       - name: Upload Setup.exe as workflow artifact
         uses: actions/upload-artifact@v7
@@ -78,7 +95,7 @@ jobs:
           retention-days: 14
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/phoenix-v')
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -94,6 +111,18 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          name: Phoenix ${{ needs.build.outputs.version }}
           files: release/${{ needs.build.outputs.setup }}
-          generate_release_notes: true
+          # other apps' releases live in this repository too: never take "Latest" from them and
+          # never diff release notes against their tags
+          make_latest: false
+          generate_release_notes: false
           fail_on_unmatched_files: true
+          body: |
+            Phoenix sichert vor dem Windows-Reset die Liste deiner Apps und Spiele und installiert sie danach wieder.
+
+            1. `${{ needs.build.outputs.setup }}` unten bei *Assets* herunterladen und starten. Bei „Der Computer wurde durch Windows geschützt“: **Weitere Informationen** → **Trotzdem ausführen**.
+            2. Die Windows-Abfrage nach Administratorrechten mit **Ja** bestätigen.
+            3. Nach dem Reset in Phoenix **Wiederherstellen** wählen → Profil vom USB-Stick wählen → Apps anhaken → los.
+
+            Liegt auf deinem Stick noch ein älteres `Phoenix-Setup-*.exe`, nimm dieses neuere Setup.

@@ -64,7 +64,7 @@ package.json "build"         electron-builder config: NSIS oneClick per-MACHINE 
 build/                       icon.ico, icon.png, installer.nsh (buildResources)
 scripts/                     dev helpers (icon generation, screenshot tool, e2e)
 docs/ARCHITECTURE.md         this file
-.github/workflows/build.yml  Windows CI build → artifact + GitHub Release on tag
+.github/workflows/build.yml  Windows CI build → artifact (version 1.0.<run>) + GitHub Release on tag phoenix-vX.Y.Z
 src/main/                    Electron main process (CommonJS, Node 22, no native deps)
   main.js                    entry: `--worker` → install/worker.js, else ui.js
   ui.js                      single-instance, window, first-run marker, registers IPC
@@ -188,7 +188,7 @@ Profile (file *.phoenix.json, UTF-8, pretty JSON) = {
 
 ```js
 { type:'job-start', jobId, items:[{ key, name, lane:'admin'|'user' }] }
-{ type:'phase', phase:'winget-check'|'elevating'|'installing'|'finishing', message }
+{ type:'phase', phase:'winget-check'|'elevating'|'installing'|'finishing', message }   // 'winget-check' may follow job-start when a lane repairs winget (then 'installing' again)
 { type:'elevation', status:'requested'|'granted'|'declined'|'failed', message }
 { type:'item-start', key, index, total }
 { type:'item-progress', key, stage:'resolving'|'downloading'|'verifying'|'installing', pct: 0..100|null, bytes?:{ done, total } }

@@ -14,7 +14,20 @@ const { killTree } = require('../util/ps');
 const log = require('../log');
 
 const ITEM_TIMEOUT_MS = 40 * 60 * 1000;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Resolves after ms, or right away when the signal aborts (cancel must not wait for a back-off). */
+function sleep(ms, signal) {
+  return new Promise((resolve) => {
+    if (signal && signal.aborted) return resolve();
+    let t = null;
+    const done = () => {
+      clearTimeout(t);
+      if (signal) signal.removeEventListener('abort', done);
+      resolve();
+    };
+    t = setTimeout(done, ms);
+    if (signal) signal.addEventListener('abort', done, { once: true });
+  });
+}
 
 /**
  * Runs winget once. Resolves { code, timedOut, aborted }.
@@ -80,9 +93,8 @@ function installArgs(item, wingetVersion) {
   // Per-package extras come only from the bundled catalog (never from the renderer), e.g.
   // DirectX: --installer-type exe (legacy runtime instead of the UWP appx), Battle.net: --location.
   const hit = catalog.lookup(item.id, item.source);
-  if (hit && Array.isArray(hit.args) && (!wingetVersion || compareVersions(wingetVersion, '1.7.0') >= 0)) {
-    args.push(...hit.args.map(String));
-  }
+  // (--installer-type and --location exist in every winget >= locate.MIN_VERSION)
+  if (hit && Array.isArray(hit.args)) args.push(...hit.args.map(String));
   return args;
 }
 
@@ -144,6 +156,7 @@ async function installPackage(item, { wingetPath, wingetVersion, onProgress = ()
     if (last.retry === 'source') {
       onLog('Paketquellen werden aktualisiert und es wird erneut versucht …');
       await updateSources(wingetPath);
+      if (signal && signal.aborted) return { status: 'cancelled', rebootRequired: false, message: 'Abgebrochen.' };
     } else if (last.retry === 'network') {
       onLog(`Netzwerkproblem – neuer Versuch in ${waits[attempt - 1] / 1000} Sekunden …`);
     } else if (last.retry === 'in-use') {
@@ -152,7 +165,7 @@ async function installPackage(item, { wingetPath, wingetVersion, onProgress = ()
       onLog(`Windows installiert gerade etwas anderes (z. B. Updates) – neuer Versuch in ${waits[attempt - 1] / 1000} Sekunden …`);
     }
     onProgress({ stage: 'resolving', pct: null });
-    await sleep(waits[attempt - 1]);
+    await sleep(waits[attempt - 1], signal);
     if (signal && signal.aborted) return { status: 'cancelled', rebootRequired: false, message: 'Abgebrochen.' };
   }
   return { status: last.status, rebootRequired: last.rebootRequired, message: last.message, code: last.code, codeHex: last.codeHex, retry: last.retry };
@@ -182,4 +195,4 @@ async function exportPackages({ wingetPath, timeoutMs = 5 * 60 * 1000 } = {}) {
   return { ok: !!(json && Array.isArray(json.Sources)), json, code: res.code };
 }
 
-module.exports = { installPackage, exportPackages, updateSources, runWinget, installArgs };
+module.exports = { installPackage, exportPackages, updateSources, runWinget, installArgs, sleep };

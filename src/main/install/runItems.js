@@ -13,12 +13,24 @@ const runner = require('../winget/runner');
 async function runItems(items, { emit, log = () => {}, signal, indexOffset = 0, total } = {}) {
   const results = [];
   const count = total || items.length;
+  const cancelled = (item) => {
+    emit({ type: 'item-done', key: item.key, status: 'cancelled', rebootRequired: false, message: 'Abgebrochen', durationMs: 0 });
+    results.push({ key: item.key, status: 'cancelled' });
+  };
+
+  // Cancelled before anything started (e.g. during the winget check): no winget repair needed.
+  if (signal && signal.aborted) {
+    for (const item of items) cancelled(item);
+    return results;
+  }
 
   let status = await locate.getStatus({ refresh: true });
   if (!status.ok) {
     log(`winget nicht bereit (${status.version || 'fehlt'}) – Reparatur wird versucht`);
+    emit({ type: 'phase', phase: 'winget-check', message: 'winget wird repariert …' });
     const fixed = await bootstrap.ensureWinget({ onProgress: (p) => log(p.message) });
     status = await locate.getStatus({ refresh: true });
+    emit({ type: 'phase', phase: 'installing', message: 'Installation läuft …' });
     if (!fixed.ok || !status.ok) {
       for (const item of items) {
         const message = 'winget ist auf diesem PC nicht verfügbar. Installiere „App-Installer“ aus dem Microsoft Store und starte Phoenix neu.';
@@ -32,8 +44,7 @@ async function runItems(items, { emit, log = () => {}, signal, indexOffset = 0, 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (signal && signal.aborted) {
-      emit({ type: 'item-done', key: item.key, status: 'cancelled', rebootRequired: false, message: 'Abgebrochen', durationMs: 0 });
-      results.push({ key: item.key, status: 'cancelled' });
+      cancelled(item);
       continue;
     }
     emit({ type: 'item-start', key: item.key, index: indexOffset + i, total: count });

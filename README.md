@@ -19,7 +19,7 @@ Installiert wird über **winget**, den offiziellen Paketmanager von Windows. Pho
 
 ## Download & Installation
 
-1. **`Phoenix-Setup-x.y.z.exe`** herunterladen (Seite *Releases* dieses Projekts).
+1. **`Phoenix-Setup-x.y.z.exe`** herunterladen: [Release *Phoenix 1.1.0*](https://github.com/georghatzmann-bit/vanity-/releases/tag/phoenix-v1.1.0) → *Assets*. Achtung: Die übrigen Releases dieses Repositorys (z. B. *Konto-Retter*, `v1.x`) gehören zu anderen Programmen – Phoenix-Releases heißen immer *Phoenix …* (Tag `phoenix-v…`).
 2. Doppelklick. Windows fragt **einmal nach Administratorrechten** – mit **Ja** bestätigen (Phoenix wird nach `C:\Programme\Phoenix` installiert).
 3. Ein kleines Fenster „Installation läuft…“ erscheint, danach startet Phoenix von selbst. Verknüpfungen liegen auf dem Desktop und im Startmenü.
 
@@ -48,7 +48,7 @@ Nach einem Reset kann **Smart App Control** aktiv sein. Im Modus *Auswertung* bl
 2. **Sichern** → als Ziel den **USB-Stick** wählen. Zusätzlich lohnt sich der **Wiederherstellungs-Code** (z. B. per WhatsApp oder Mail an dich selbst schicken).
 3. **Setup auch auf den Stick** – Phoenix kopiert `Phoenix-Setup-*.exe` automatisch mit, wenn die Datei in *Downloads* oder auf dem *Desktop* liegt. Sonst einfach selbst auf den Stick ziehen.
 4. **Windows zurücksetzen.**
-5. **Setup vom Stick starten** und Phoenix installieren.
+5. **Phoenix installieren** – mit der **neuesten** Phoenix-Setup-Version (die Versionsnummer steht im Dateinamen). Das Setup auf dem Stick reicht, solange es keine neuere Version gibt.
 6. **Wiederherstellen** → Profil vom Stick wählen → Apps anhaken → los.
 
 > Die Kopie unter `Dokumente\Phoenix` wird beim kompletten Reset **mitgelöscht**. Verlass dich nicht allein darauf.
@@ -81,7 +81,7 @@ Phoenix fragt vor dem Installieren **einmal** nach Adminrechten. Hast du „Nein
 **Einstellungen** (Zahnrad) → **Log exportieren**. Die Datei landet auf dem Desktop und hilft bei der Fehlersuche. Alle Logs liegen außerdem unter `%APPDATA%\Phoenix\logs`.
 
 **Phoenix deinstallieren**
-Windows-Einstellungen → Apps → Phoenix → Deinstallieren. Deine Profile und Logs in `%APPDATA%\Phoenix` bleiben erhalten.
+Windows-Einstellungen → Apps → Phoenix → Deinstallieren. Die Logs in `%APPDATA%\Phoenix` bleiben erhalten. Deine Profile liegen ohnehin woanders: auf dem USB-Stick, in `Dokumente\Phoenix` und ggf. in OneDrive.
 
 ---
 
@@ -116,7 +116,7 @@ npm run dist:linux-host   # unter Linux/macOS, ohne Wine (scripts/dist.mjs)
 - Ergebnis: `release/Phoenix-Setup-<version>.exe` (≈ 107 MB). `dist/` ist die Vite-Ausgabe, nicht das Installer-Verzeichnis.
 - `scripts/dist.mjs` setzt `CSC_IDENTITY_AUTO_DISCOVERY=false`, nutzt die npmmirror-Spiegel, solange keine eigenen gesetzt sind (`PHOENIX_NO_MIRROR=1` = offizielle Server), und prüft danach mit `scripts/verify-dist.mjs` den Inhalt von `app.asar`.
 - Ohne Wine: electron-builder bearbeitet Icon/Version/Manifest per `resedit` (reines JS) und braucht Wine nur, um das Uninstaller-Programm aus einem Zwischen-Installer zu erzeugen. `dist.mjs` legt dafür über `ELECTRON_BUILDER_WINE_TOOLSET_DIR` ein Mini-„wine“ an, das den Uninstaller mit electron-builders eigenem `UninstallerReader` extrahiert (byte-identisch zum Wine-Build). Beim Update von electron-builder prüfen: der Shim nutzt den internen Pfad `app-builder-lib/out/targets/nsis/nsisUtil`.
-- CI: `.github/workflows/build.yml` (Windows-Runner) – `npm ci`, `npm test`, Build, Setup.exe als Artefakt; ein Tag `vX.Y.Z` erzeugt zusätzlich ein GitHub-Release mit dieser Version.
+- CI: `.github/workflows/build.yml` (Windows-Runner) – `npm ci`, `npm test`, Build, Setup.exe als Artefakt; Builds ohne Tag bekommen die Version `1.0.<Run-Nummer>`, damit jedes Test-Setup eindeutig ist. Ein Tag `phoenix-vX.Y.Z` erzeugt zusätzlich ein GitHub-Release *Phoenix X.Y.Z* mit dieser Version (nie als „Latest“ markiert – das Repository enthält auch Releases anderer Programme). Außerdem parst CI alle PowerShell-Skripte mit Windows PowerShell 5.1 (`scripts/check-ps.mjs`).
 
 **Weitere Skripte**
 
