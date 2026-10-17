@@ -698,8 +698,20 @@
   gap: var(--s-2);
 }
 
-.app-card__badge:empty {
+.app-card__badge {
+  display: flex;
+  margin-top: 4px;
+}
+
+.app-card__badge:empty,
+.app-card__body:has(.app-card__badge:not(:empty)) .app-card__desc {
   display: none;
+}
+
+.app-card__badge .badge {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11.5px;
 }
 
 .app-card__progress {
@@ -711,6 +723,11 @@
 
 .app-card__progress .progress {
   filter: none;
+}
+
+/* Badge + bar together: give the bar its own lane under the badge. */
+.app-card:has(.app-card__badge:not(:empty)):has(.app-card__progress:not(:empty)) {
+  padding-bottom: 22px;
 }
 
 .app-card .checkbox__box {

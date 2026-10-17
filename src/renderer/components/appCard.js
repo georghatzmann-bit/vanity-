@@ -80,8 +80,9 @@ export function AppCard({ app = {}, selected = false, selectable = true, disable
       attrs: selectable ? { role: 'checkbox', tabindex: disabled ? '-1' : '0', 'aria-checked': String(!!selected), 'aria-label': app.name } : { role: 'group', 'aria-label': app.name },
     },
     AppIcon(app),
-    h('div.app-card__body', h('div.app-card__name', { title: app.name }, app.name || 'Unbenannt'), h('div.app-card__desc', { title: app.desc || '' }, app.desc || '')),
-    h('div.app-card__aside', badgeSlot, box),
+    // A status badge takes the description's line (status matters more than the blurb while installing).
+    h('div.app-card__body', h('div.app-card__name', { title: app.name }, app.name || 'Unbenannt'), h('div.app-card__desc', { title: app.desc || '' }, app.desc || ''), badgeSlot),
+    h('div.app-card__aside', box),
     progressSlot,
   );
 
