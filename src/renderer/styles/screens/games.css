@@ -5,13 +5,14 @@
 .screen--games {
   --steam-rgb: 102, 192, 244;
   --epic-rgb: 232, 234, 244;
+  --plat-rgb: 167, 139, 250;
 }
 
 .games.screen__inner {
   display: flex;
   flex-direction: column;
-  gap: var(--s-6);
-  padding-top: var(--s-5);
+  gap: var(--s-5);
+  padding-top: var(--s-4);
   padding-bottom: var(--s-4);
 }
 
@@ -24,8 +25,16 @@
   gap: var(--s-2);
 }
 
-.games__head .back-link {
-  margin-bottom: var(--s-2);
+.games__topline {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.games__crumb-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--line-3);
 }
 
 .games__eyebrow-dot {
@@ -88,8 +97,7 @@
 }
 
 .games__lead {
-  max-width: 66ch;
-  margin-top: var(--s-1);
+  max-width: 78ch;
   font-size: 16px;
   line-height: 1.55;
   color: var(--muted);
@@ -103,7 +111,7 @@
 .games__body {
   display: flex;
   flex-direction: column;
-  gap: var(--s-6);
+  gap: var(--s-5);
 }
 
 /* ---------- 3-step guide ---------- */
@@ -116,7 +124,6 @@
   border-radius: var(--r-lg);
   background: var(--glass-tint), var(--glass-1);
   backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: inset 0 0 0 1px var(--line-1), var(--inner-top), var(--shadow-1);
 }
 
@@ -211,7 +218,6 @@
   color: #fff;
   background: rgba(5, 6, 10, 0.58);
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   box-shadow: inset 0 0 0 1px rgba(var(--plat-rgb), 0.38);
 }
 
@@ -452,12 +458,15 @@
 
 .ghero__word {
   position: absolute;
-  right: 3%;
-  bottom: 13%;
+  right: 5%;
+  bottom: 11%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   font-family: var(--font-display);
-  font-size: clamp(104px, 11.5vw, 170px);
+  font-size: clamp(92px, 10vw, 148px);
   font-weight: 900;
-  line-height: 0.8;
+  line-height: 0.84;
   letter-spacing: -0.05em;
   white-space: nowrap;
   color: transparent;
@@ -466,6 +475,10 @@
   -webkit-background-clip: text;
   background-clip: text;
   filter: drop-shadow(0 0 28px rgba(139, 92, 246, 0.55));
+}
+
+.ghero__word span {
+  display: block;
 }
 
 .ghero__sparks span {
@@ -530,7 +543,7 @@
   align-items: flex-start;
   gap: 12px;
   width: min(580px, 60%);
-  padding: 28px var(--s-6) 24px;
+  padding: 26px var(--s-6) 22px;
 }
 
 .ghero__tags {
@@ -563,7 +576,7 @@
 }
 
 .ghero__eyebrow {
-  margin-top: 4px;
+  margin-left: 6px;
 }
 
 .ghero__pulse {
@@ -638,19 +651,64 @@
   opacity: 0.55;
 }
 
-/* ---------- Launcher section ---------- */
+/* ---------- Launcher shelf ---------- */
 
 .gsec {
   position: relative;
   display: flex;
   flex-direction: column;
+  gap: var(--s-3);
+}
+
+.gsec__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--s-4);
 }
 
-.gsec__head {
+.gpanel {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: var(--s-4);
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  min-height: 250px;
+  padding: 18px 18px 16px;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(var(--plat-rgb), 0.14), transparent 60%),
+    var(--glass-tint),
+    var(--glass-1);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 0 0 1px rgba(var(--plat-rgb), 0.14), var(--inner-top), var(--shadow-2);
+}
+
+.gpanel__mark {
+  position: absolute;
+  right: -10px;
+  bottom: -64px;
+  z-index: -1;
+  font-family: var(--font-display);
+  font-size: 260px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.06em;
+  color: transparent;
+  background: linear-gradient(160deg, rgba(var(--plat-rgb), 0.16) 10%, rgba(var(--plat-rgb), 0.02) 70%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  pointer-events: none;
+}
+
+.gpanel__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+  align-self: stretch;
+  margin-bottom: var(--s-4);
 }
 
 .gsec__glyph {
@@ -668,53 +726,41 @@
   box-shadow: inset 0 0 0 1px rgba(var(--plat-rgb), 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 26px -10px rgba(var(--plat-rgb), 0.85);
 }
 
-.gsec__titles {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.gsec__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px var(--s-3);
-}
-
-.gsec__title {
+.gpanel__title {
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.1;
   letter-spacing: -0.02em;
 }
 
-.gsec__sub {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
+.gpanel__count {
+  margin-top: 4px;
   font-size: 13.5px;
-  color: var(--muted);
+  font-weight: 600;
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 
-.gsec__actions {
+.gpanel__status {
+  margin-top: 4px;
+  max-width: 30ch;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.gsec[data-state='missing'] .gpanel__status {
+  color: rgba(var(--warn-rgb), 0.92);
+}
+
+.gpanel__actions {
   display: flex;
-  flex: none;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: var(--s-4);
-}
-
-.gsec__actions .gact {
-  align-items: flex-end;
-}
-
-.gsec__actions .gact__hint {
-  padding: 0 2px 0 0;
-  text-align: right;
+  gap: var(--s-3) var(--s-4);
+  margin-top: auto;
+  padding-top: var(--s-4);
 }
 
 .gnotice {
@@ -741,23 +787,43 @@
   color: rgb(var(--tone-rgb));
 }
 
-.gsec__note {
+.gnote {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
-  color: var(--muted);
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: var(--s-5);
+  border-radius: var(--r-lg);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.018) 0 10px, transparent 10px 20px);
 }
 
-.gsec__note .icon {
-  color: var(--accent-2);
+.gnote__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: var(--s-2);
+  border-radius: 10px;
+  color: var(--accent-3);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-2-rgb), 0.3);
+}
+
+.gnote__icon .icon {
   transform: rotate(-90deg);
 }
 
-.gsec__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--s-4);
+.gnote__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.gnote__text {
+  font-size: 13px;
+  color: var(--muted);
 }
 
 /* ---------- Game tile ---------- */
@@ -768,7 +834,6 @@
 }
 
 .gtile {
-  --plat-rgb: 167, 139, 250;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -776,7 +841,6 @@
   border-radius: var(--r-lg);
   background: var(--glass-tint), var(--glass-1);
   backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: inset 0 0 0 1px var(--line-1), var(--inner-top), var(--shadow-2);
   transition: box-shadow var(--dur-3) var(--ease-out);
 }
@@ -867,7 +931,6 @@
 .ghero__stamp .badge {
   background: rgba(4, 22, 15, 0.78);
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 .gtile__caption {
@@ -941,11 +1004,10 @@
   align-items: center;
   gap: var(--s-5);
   margin-top: auto;
-  padding: 12px 14px 12px 20px;
+  padding: 10px 12px 10px 20px;
   border-radius: var(--r-lg);
-  background: var(--glass-tint), var(--glass-2);
+  background: var(--glass-tint), rgba(13, 15, 24, 0.86);
   backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: inset 0 0 0 1px var(--line-2), var(--inner-top), var(--shadow-3);
 }
 
@@ -1034,7 +1096,6 @@
   border-radius: var(--r-xl);
   background: var(--glass-tint), var(--glass-1);
   backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: inset 0 0 0 1px var(--line-1), var(--inner-top), var(--shadow-2);
 }
 
@@ -1124,8 +1185,7 @@
 
 @media (max-height: 780px) {
   .games.screen__inner {
-    gap: var(--s-5);
-    padding-top: var(--s-4);
+    padding-top: var(--s-3);
   }
   .games__title {
     font-size: clamp(40px, 4.4vw, 54px);
@@ -1133,11 +1193,11 @@
   .games__lead {
     font-size: 15px;
   }
-  .games__body {
-    gap: var(--s-5);
-  }
   .ghero {
     min-height: 300px;
+  }
+  .gfoot__hint {
+    display: none;
   }
   .ghero__content {
     padding: 24px var(--s-5) 20px;
@@ -1149,9 +1209,6 @@
 
 @media (max-width: 1180px) {
   .ghero__content {
-    width: min(560px, 64%);
-  }
-  .ghero__word {
-    right: -2%;
+    width: min(540px, 62%);
   }
 }

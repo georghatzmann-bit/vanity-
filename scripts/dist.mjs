@@ -75,7 +75,11 @@ const t0 = Date.now();
 try {
   run('vite build', 'vite/bin/vite.js', ['build']);
   run('electron-builder --win nsis --x64', 'electron-builder/cli.js', ['--win', 'nsis', '--x64', '--publish', 'never', ...extraArgs]);
-  console.log(`\nfertig in ${((Date.now() - t0) / 1000).toFixed(1)} s -> release/`);
+  if (extraArgs.length === 0) {
+    const v = spawnSync(process.execPath, [join(ROOT, 'scripts', 'verify-dist.mjs')], { cwd: ROOT, stdio: 'inherit' });
+    if (v.status !== 0) throw new Error('verify-dist failed');
+  }
+  console.log(`\nfertig in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 } catch (e) {
   console.error(`\n${e.message}`);
   process.exitCode = 1;

@@ -60,7 +60,7 @@ Same selection + install screens, pre-filled from the curated catalog (`popular`
 ```
 package.json                 scripts, deps (renderer libs are devDependencies – bundled by Vite)
 vite.config.mjs              root: src/renderer, outDir: dist/renderer, base: './'
-electron-builder.yml         NSIS oneClick per-user Setup.exe
+package.json "build"         electron-builder config: NSIS oneClick per-MACHINE Setup.exe → release/ (the elevated worker exe must live in admin-only Program Files)
 build/                       icon.ico, icon.png, installer.nsh (buildResources)
 scripts/                     dev helpers (icon generation, screenshot tool, e2e)
 docs/ARCHITECTURE.md         this file

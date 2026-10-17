@@ -77,7 +77,7 @@ export default {
       h(
         'p.page-head__lead.rs-lead',
         { dataset: { stagger: '' } },
-        'Phoenix sucht deine Sicherung auf USB-Sticks, Laufwerken und in deinen Ordnern. Klick dann einfach auf dein Profil.',
+        'Phoenix sucht deine Sicherung auf allen Laufwerken und in deinen Ordnern – du klickst dann nur noch drauf.',
       ),
     );
 
@@ -143,6 +143,23 @@ export default {
     const tl = revealText(title, { delay: 0.25 });
     cleanups.push(() => tl?.kill());
 
+    // Keyboard users get focus moved to the main action; mouse users keep a calm screen (no ring).
+    let keyboardUser = false;
+    const onKeyMod = (e) => {
+      if (e.key === 'Tab' || e.key.startsWith('Arrow')) keyboardUser = true;
+    };
+    const onPointerMod = () => (keyboardUser = false);
+    window.addEventListener('keydown', onKeyMod, true);
+    window.addEventListener('pointerdown', onPointerMod, true);
+    cleanups.push(() => {
+      window.removeEventListener('keydown', onKeyMod, true);
+      window.removeEventListener('pointerdown', onPointerMod, true);
+    });
+    function focusIfKeyboard(el) {
+      const active = document.activeElement;
+      if (keyboardUser && (active === container || active === document.body || !container.contains(active))) el.focus({ preventScroll: true });
+    }
+
     // ---------------------------------------------------------------- stage swapping
     let swapToken = 0;
     function swap(next, { focus } = {}) {
@@ -158,7 +175,7 @@ export default {
             { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.6, ease: 'expo.out', clearProps: 'filter,transform,opacity' },
           );
         }
-        if (focus && (document.activeElement === container || document.activeElement === document.body)) focus.focus({ preventScroll: true });
+        if (focus) focusIfKeyboard(focus);
       };
       if (!prev || prev === next) return enter();
       if (!motionOK()) return enter();
@@ -368,7 +385,16 @@ export default {
         h(
           'div.rs-sum',
           h('span.rs-sum__icon', xicon('radar', { size: 18, strokeWidth: 2 })),
-          h('div.rs-sum__text', heading, h('p.rs-sum__hint', `Auf ${joinList(places)} · Das neueste Profil ist markiert – klick drauf, um weiterzumachen.`)),
+          h(
+            'div.rs-sum__text',
+            heading,
+            h(
+              'p.rs-sum__hint',
+              refs.length === 1
+                ? `Gefunden: ${refs[0].location || joinList(places)}. Klick auf „Wiederherstellen“, um weiterzumachen.`
+                : `Gefunden: ${joinList(places)}. Die neueste Sicherung ist markiert – ältere stehen darunter.`,
+            ),
+          ),
           again,
         ),
         heroWrap,
@@ -415,6 +441,7 @@ export default {
       ensureConsoleForMessage();
       consoleEl.dataset.mode = 'empty';
       radar.setMode('idle');
+      radar.setNode(0, 'hint');
       setConsoleStatus('Nichts gefunden', 'idle');
       const { el, retry } = sideMessage({
         tone: 'idle',
@@ -452,7 +479,7 @@ export default {
       if (motionOK()) {
         gsap.fromTo(el.children, { opacity: 0, y: 10, filter: richMotion() ? 'blur(6px)' : 'none' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.55, stagger: 0.05, ease: 'expo.out', clearProps: 'filter,transform,opacity' });
       }
-      if (focusEl && (document.activeElement === container || document.activeElement === document.body)) focusEl.focus({ preventScroll: true });
+      if (focusEl) focusIfKeyboard(focusEl);
     }
 
     // Quiet re-check while nothing was found (stick plugged in later).

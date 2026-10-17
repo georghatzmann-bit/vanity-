@@ -1,0 +1,99 @@
+name: Build Windows Setup
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    tags: ['v*']
+  workflow_dispatch:
+
+# Least privilege: the build job only reads. Only the tag-triggered release job may write.
+permissions:
+  contents: read
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    outputs:
+      setup: ${{ steps.out.outputs.setup }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false' # never look for a signing certificate -> unsigned build
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache Electron + electron-builder downloads
+        uses: actions/cache@v6
+        with:
+          # default cache dirs on Windows (Electron zip via @electron/get, NSIS/7zip via electron-builder)
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Use tag as app version (v1.2.3 -> 1.2.3)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: npm version ($env:GITHUB_REF_NAME -replace '^v','') --no-git-tag-version --allow-same-version
+
+      - name: Build renderer (Vite)
+        run: npm run build:renderer
+
+      - name: Build NSIS installer
+        run: npx electron-builder --win nsis --x64 --publish never
+
+      - name: Verify package contents
+        run: node scripts/verify-dist.mjs
+
+      - name: Locate Setup.exe
+        id: out
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem release -Filter 'Phoenix-Setup-*.exe' -File | Select-Object -First 1
+          if (-not $exe) { throw 'Phoenix-Setup-*.exe not found in release/' }
+          "{0}  {1:N1} MiB" -f $exe.Name, ($exe.Length / 1MB)
+          "setup=$($exe.Name)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Setup.exe as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: release/${{ steps.out.outputs.setup }}
+          archive: false # upload the .exe itself (artifact name = file name)
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the GitHub Release
+    steps:
+      - name: Download Setup.exe
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.setup }}
+          path: release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: release/${{ needs.build.outputs.setup }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true

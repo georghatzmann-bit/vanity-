@@ -133,7 +133,9 @@ export default {
     const scanner = BackupScanner();
     const liveText = h('span.bk-scan__live', 'Scan läuft');
     const elapsedEl = h('span.bk-scan__time.t-num', '00:00');
-    const scanTitle = h('h1.bk-scan__title', { tabIndex: -1 }, 'Wir erfassen deinen PC.');
+    const titleL1 = h('span.bk-scan__line', 'Wir erfassen');
+    const titleL2 = h('span.bk-scan__line.t-grad.t-shine.deco', 'deinen PC.');
+    const scanTitle = h('h1.bk-scan__title', { tabIndex: -1, attrs: { 'aria-label': 'Wir erfassen deinen PC.' } }, titleL1, titleL2);
     const feedMsg = h('span.bk-feed__msg', 'Scan wird gestartet …');
     const pctEl = h('span.bk-scan__pct.t-num', '0 %');
     const bar = ProgressBar({ value: 0, size: 'lg', active: true, label: 'Scan-Fortschritt' });
@@ -360,6 +362,7 @@ export default {
         await wait(600);
       } else {
         scanner.lock();
+        await wait(450); // no motion: still give the finished checklist a beat
       }
       if (disposed || my !== scanRun) return;
       fx.setState('idle');
@@ -454,8 +457,8 @@ export default {
     container.append(root);
     syncTop();
 
-    const titleTl = revealText(scanTitle, { delay: 0.35 });
-    track(titleTl);
+    track(revealText(titleL1, { delay: 0.3 }));
+    track(revealText(titleL2, { delay: 0.48 }));
     if (motionOK()) {
       const rich = richMotion();
       const ring = scanner.querySelector('.bks__core');

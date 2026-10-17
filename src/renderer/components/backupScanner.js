@@ -65,14 +65,17 @@ export function BackupScanner({ label = 'Apps erkannt' } = {}) {
     ),
   );
   const blips = h('div.bks__blips');
+  const orbit = h('div.bks__orbit.deco', h('span.bks__sat'), h('span.bks__sat.bks__sat--b'));
+  const pulses = h('div.bks__pulses', h('span.bks__pulse.deco'), h('span.bks__pulse.deco'), h('span.bks__pulse.deco'));
 
   const countEl = h('span.bks__count.t-num', '0');
   const labelEl = h('span.bks__label', label);
   const glyph = h('span.bks__glyph', icon('shield-check', { size: 22, strokeWidth: 1.9 }));
+  const errGlyph = h('span.bks__err', icon('alert', { size: 44, strokeWidth: 1.6 }));
   const core = h(
     'div.bks__core',
     h('span.bks__core-shine'),
-    h('div.bks__core-inner', glyph, countEl, labelEl),
+    h('div.bks__core-inner', glyph, errGlyph, countEl, labelEl),
   );
   const shock = h('span.bks__shock');
   const flyLayer = h('div.bks__fly');
@@ -84,8 +87,10 @@ export function BackupScanner({ label = 'Apps erkannt' } = {}) {
     base,
     dashes,
     ticks,
+    pulses,
     sweep,
     beams,
+    orbit,
     blips,
     core,
     shock,
@@ -184,8 +189,9 @@ export function BackupScanner({ label = 'Apps erkannt' } = {}) {
       const n = nodes.length;
       const each = Math.min(0.045, 1.1 / n);
       nodes.forEach((node, i) => {
-        const a = (i / n) * 360 + gsap.utils.random(-14, 14);
-        const r = size * gsap.utils.random(0.62, 0.82);
+        // Two tidy orbits (alternating) just outside the rim.
+        const a = (i / n) * 360 + gsap.utils.random(-5, 5);
+        const r = size * (i % 2 ? 0.57 : 0.64) + gsap.utils.random(-5, 5);
         const tile = h('div.bks__fly-tile', node);
         const arm = h('div.bks__fly-arm', tile);
         flyLayer.append(arm);

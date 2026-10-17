@@ -99,6 +99,7 @@ export function BackupSave({ ctx, onDone } = {}) {
 
   const main = h(
     'div.bk-save__main',
+    head,
     h(
       'section.bk-sec',
       h('header.bk-sec__head', h('h2.bk-sec__title', 'USB-Stick'), Badge({ tone: 'accent', label: 'Empfohlen', icon: 'star' }), h('span.bk-sec__hint', 'Übersteht garantiert jeden Reset')),
@@ -108,7 +109,7 @@ export function BackupSave({ ctx, onDone } = {}) {
     h('section.bk-sec', h('header.bk-sec__head', h('h2.bk-sec__title', 'Ohne Datei'), h('span.bk-sec__hint', 'Für unterwegs – passt in eine Nachricht')), codeHost),
     docsHost,
   );
-  el.append(head, h('div.bk-save__layout', main, statusEl));
+  el.append(h('div.bk-save__layout', main, statusEl));
 
   // ---------------------------------------------------------------- state helpers
   const st = (id) => {
@@ -341,10 +342,10 @@ export function BackupSave({ ctx, onDone } = {}) {
         id: 'saveas',
         kind: 'saveas',
         iconName: 'folder',
-        title: 'Speichern unter …',
+        title: 'Speichern unter…',
         meta: null,
         hint: 'Wähl selbst einen Ort, z. B. eine externe Festplatte oder einen Netzwerkordner.',
-        actionLabel: 'Ort wählen …',
+        actionLabel: 'Ort wählen…',
         actionIcon: 'folder',
         reach: (path) => reachOfPath(path),
         short: 'eigenen Ort',
@@ -540,13 +541,13 @@ export function BackupSave({ ctx, onDone } = {}) {
 
     const docsItem =
       docs.state === 'saved'
-        ? checkItem('ok', 'Kopie auf diesem PC', 'Dokumente\\Phoenix – wird beim Reset gelöscht')
+        ? checkItem('ok', 'Kopie auf diesem PC', 'In Dokumente – wird beim Reset gelöscht')
         : docs.state === 'error'
           ? checkItem('err', 'Kopie auf diesem PC', 'Fehlgeschlagen – nicht schlimm, wenn du extern sicherst.')
           : checkItem('busy', 'Kopie auf diesem PC', 'Wird gespeichert …');
 
     const setupItem = usbWithSetup
-      ? checkItem('ok', 'Setup auf dem Stick', 'Phoenix startest du nach dem Reset direkt vom Stick.')
+      ? checkItem('ok', 'Setup auf dem Stick', 'Nach dem Reset startest du Phoenix direkt vom Stick.')
       : usb.length
         ? checkItem('info', 'Phoenix nach dem Reset neu laden', 'Kein Setup gefunden – lade Phoenix einfach wieder herunter.')
         : ok
@@ -583,7 +584,7 @@ export function BackupSave({ ctx, onDone } = {}) {
     const resetBtn = Button({ label: 'Windows-Reset öffnen', icon: 'external', variant: 'primary', size: 'lg', block: true, onClick: openReset });
     const doneBtn = Button({ label: 'Fertig', variant: 'secondary', block: true, onClick: () => finish() });
     statusButtons.push(resetBtn, doneBtn);
-    const orb = h('div.bk-status__orb', h('span.bk-status__orb-ring.deco'), icon('shield-check', { size: 30, strokeWidth: 1.9 }), h('span.bk-status__orb-shock'));
+    const orb = h('div.bk-status__orb', h('span.bk-status__orb-ring.deco'), icon('shield-check', { size: 26, strokeWidth: 1.9 }), h('span.bk-status__orb-shock'));
     const title = h('h2.bk-status__title.bk-status__title--ok', 'Gesichert.');
     const items = [
       off.length
@@ -591,13 +592,19 @@ export function BackupSave({ ctx, onDone } = {}) {
         : checkItem('warn', 'Profil gesichert – mit Vorbehalt', `${places}: beim Reset ‚Nur das Laufwerk mit Windows‘ wählen.`),
       setupItem,
       docsItem,
-      checkItem('next', 'Jetzt kannst du Windows zurücksetzen', 'Einstellungen › System › Wiederherstellung › „PC zurücksetzen“'),
+      checkItem('next', 'Jetzt kannst du Windows zurücksetzen', 'System › Wiederherstellung › „PC zurücksetzen“'),
     ];
     const list = h('ul.bk-check', items);
     statusEl.append(
-      orb,
-      title,
-      h('p.bk-status__lead', off.length ? 'Deine Apps und Spiele überleben den Reset.' : 'Sicherer wäre zusätzlich ein USB-Stick oder der Code.'),
+      h(
+        'div.bk-status__hero',
+        orb,
+        h(
+          'div.bk-status__hero-text',
+          title,
+          h('p.bk-status__lead', off.length ? 'Deine Apps und Spiele überleben den Reset.' : 'Sicherer wäre zusätzlich ein USB-Stick oder der Code.'),
+        ),
+      ),
       list,
       h('div.bk-status__actions', resetBtn, h('p.bk-status__hint', 'Öffnet die Windows-Einstellungen zum Zurücksetzen.'), doneBtn),
     );
@@ -674,6 +681,7 @@ export function BackupSave({ ctx, onDone } = {}) {
       if (disposed) return;
       const next = Array.isArray(list) ? list : [];
       const sig = next.map((d) => `${d.kind}:${d.root}`).join('|');
+      const hadList = drives !== null;
       const changed = sig !== drivesSig || drivesError || drives === null;
       drives = next;
       drivesError = null;
@@ -685,7 +693,7 @@ export function BackupSave({ ctx, onDone } = {}) {
           const cards = [...usbList.children, ...moreList.children];
           track(gsap.fromTo(cards, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, ease: 'expo.out', stagger: 0.04, clearProps: 'opacity,transform' }));
         }
-        if (!manual && hadUsb === false && sig.includes('removable:') && rev >= 0 && active) {
+        if (!manual && hadList && !hadUsb && sig.includes('removable:') && active) {
           toast.info('USB-Stick erkannt', 'Du kannst die Sicherung jetzt auf den Stick legen.');
         }
       } else if (manual) {

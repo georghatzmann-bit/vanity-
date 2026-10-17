@@ -318,8 +318,10 @@ export function BackupReview({ onSave } = {}) {
       );
 
       el.append(
-        head,
-        warnEl,
+        ...[
+          head,
+          warnEl,
+        ].filter(Boolean),
         h('div.bk-rev__bar', tabs, h('p.bk-rev__bar-hint', 'Nur zur Übersicht – du musst hier nichts anklicken.')),
         h('div.bk-panels', panels.apps, panels.games, panels.manual),
         cta,

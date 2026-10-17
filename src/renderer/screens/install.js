@@ -614,15 +614,30 @@ export default {
       { dataset: { stagger: '' } },
       h(
         'header.inst__qhead',
-        h('div.inst__qhead-text', h('h2.inst__qtitle', 'Warteschlange'), h('p.inst__qhint', h('b', 'Admin'), ' = eine Windows-Abfrage für alle · ', h('b', 'Benutzer'), ' = nur für dein Konto')),
-        qCount,
+        h('div.inst__qhead-top', h('h2.inst__qtitle', 'Warteschlange'), qCount),
+        h('p.inst__qhint', h('b', 'Admin'), ' – eine Windows-Abfrage für alle · ', h('b', 'Benutzer'), ' – nur für dein Konto, ohne Adminrechte'),
       ),
       list,
     );
 
     // ---- log drawer -------------------------------------------------------------------------------
+    let autoNav = 0;
     const logDrawer = InstallLog({
       max: LOG_MAX,
+      onToggle: (open) => {
+        if (!open) return;
+        // Reading the log after the job finished: stay here instead of jumping to the summary.
+        if (autoNav) {
+          clearTimeout(autoNav);
+          timers.delete(autoNav);
+          autoNav = 0;
+          sideHint.textContent = 'Weiter, sobald du soweit bist.';
+        }
+        // Small windows: the drawer pushes the page – bring it into view.
+        later(() => {
+          if (container.scrollHeight > container.clientHeight + 4) container.scrollTo({ top: container.scrollHeight, behavior: motionOK() ? 'smooth' : 'auto' });
+        }, motionOK() ? 120 : 0);
+      },
       onCopy: async (text) => {
         try {
           await api.clipboard.write(text);
@@ -698,13 +713,13 @@ export default {
         ref.status = row.status;
         ref.li.dataset.s = row.status;
         const meta = STATUS[row.status];
-        ref.badgeSlot.replaceChildren(meta ? Badge(meta) : h('span.q__wait', 'Wartet'));
+        ref.badgeSlot.replaceChildren(...(meta ? [Badge(meta)] : []));
       }
       if (ref.lane !== row.lane) {
         ref.lane = row.lane;
         ref.laneSlot.replaceChildren(laneChip(row.lane));
       }
-      ref.sub.textContent = row.status === 'pending' ? (row.lane === 'admin' ? 'Wartet · mit Adminrechten' : 'Wartet · als Benutzer') : subText(row);
+      ref.sub.textContent = subText(row);
       ref.sub.title = row.status === 'failed' ? ref.sub.textContent : '';
       ref.code.textContent = row.status === 'failed' && row.codeHex ? row.codeHex : '';
       const p = row.status === 'active' ? itemFraction(row, Date.now()) : DONE.has(row.status) ? 1 : 0;
@@ -1055,7 +1070,7 @@ export default {
       if (motionOK() && richMotion()) gsap.fromTo(nextBtn, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, ease: 'elastic.out(1, 0.5)', clearProps: 'transform,opacity' });
       // Stay if the user is reading the log; otherwise move on after the moment has landed.
       if (logDrawer.isOpen) sideHint.textContent = 'Weiter, sobald du soweit bist.';
-      else later(goDone, 1700);
+      else autoNav = later(goDone, 1700);
     }
 
     function renderError(message) {
@@ -1189,7 +1204,6 @@ export default {
         if (e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable="true"]')) return;
         e.preventDefault();
         logDrawer.toggle();
-        if (s.finished && logDrawer.isOpen && !leaving) sideHint.textContent = 'Weiter, sobald du soweit bist.';
       }),
     );
 

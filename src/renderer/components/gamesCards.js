@@ -78,14 +78,14 @@ function openedStamp() {
 // Hint texts per launcher state.
 function installHint(pid, state, hero) {
   const p = PLATFORMS[pid];
-  if (state === 'missing') return hero ? `Erst ${p.launcher} installieren` : `Erst ${p.launcherShort} installieren`;
+  if (state === 'missing') return hero ? `Erst ${p.launcher} installieren` : 'Launcher fehlt noch';
   if (hero) return `Öffnet den Download ${p.inLauncher}`;
-  return pid === 'steam' ? 'Öffnet den Download in Steam' : 'Öffnet den Download bei Epic';
+  return 'Download im Launcher';
 }
 
 function storeHint(pid, state, game, hero) {
   const p = PLATFORMS[pid];
-  if (state === 'missing') return `Braucht ${pid === 'steam' ? 'Steam' : 'den Launcher'}`;
+  if (state === 'missing') return hero ? `Braucht ${p.acc}` : 'Braucht den Launcher';
   if (hero) return `${cleanTitle(game.title)}-Seite im ${p.store}`;
   return 'Falls nichts aufgeht';
 }
@@ -210,7 +210,10 @@ export function GameHero({ game, onAction }) {
       });
     }),
   );
-  const word = h('div.ghero__word', title.toUpperCase());
+  // Poster type: long titles stack in two lines ("FORT" / "NITE").
+  const upper = title.toUpperCase();
+  const half = upper.length >= 7 && !upper.includes(' ') ? Math.ceil(upper.length / 2) : 0;
+  const word = h('div.ghero__word', half ? [h('span', upper.slice(0, half)), h('span', upper.slice(half))] : h('span', upper));
   const impact = h('div.ghero__impact');
   const art = h(
     'div.ghero__art',
@@ -246,8 +249,13 @@ export function GameHero({ game, onAction }) {
   const titleEl = h('h2.ghero__title', title);
   const content = h(
     'div.ghero__content',
-    h('div.ghero__tags', platformPill(pid), size ? h('span.ghero__size', icon('harddrive', { size: 14, strokeWidth: 2 }), size) : null, stamp),
-    h('div.t-eyebrow.ghero__eyebrow', h('span.ghero__pulse.deco'), 'Battle Royale · Kostenlos'),
+    h(
+      'div.ghero__tags',
+      platformPill(pid),
+      size ? h('span.ghero__size', icon('harddrive', { size: 14, strokeWidth: 2 }), size) : null,
+      h('span.t-eyebrow.ghero__eyebrow', h('span.ghero__pulse.deco'), 'Battle Royale · Kostenlos'),
+      stamp,
+    ),
     titleEl,
     h('p.ghero__text', 'Zurück auf die Insel: Ein Klick öffnet die Installation direkt im Epic Games Launcher.'),
     h('div.ghero__actions', install, store),
@@ -360,7 +368,8 @@ export function GameHero({ game, onAction }) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Launcher section: header (glyph, name, status chip, counts), notice, tile grid.
+// Launcher shelf: a launcher panel (glyph, name, status chip, counts, library) as the first cell
+// of the tile grid, a full-width notice above it when the launcher is missing.
 // ---------------------------------------------------------------------------------------------
 
 const STATE_CHIP = {
@@ -370,9 +379,16 @@ const STATE_CHIP = {
   unknown: { tone: 'neutral', label: 'Nicht geprüft', icon: 'info' },
 };
 
+const STATE_TEXT = {
+  checking: 'Launcher wird gesucht …',
+  installed: 'Bereit – melde dich dort mit deinem Konto an.',
+  missing: 'Launcher fehlt noch – installiere ihn zuerst.',
+  unknown: 'Konnte nicht prüfen, ob er installiert ist.',
+};
+
 /**
  * LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck, fortniteHere })
- * Returns the <section> with: setState(state, { retried }), library, recheck, destroy().
+ * Returns the <section> with: panel, notice, grid, chip, library, recheck, setState(state, { retried }), destroy().
  */
 export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck, fortniteHere = false }) {
   const plat = PLATFORMS[pid];
@@ -382,11 +398,10 @@ export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck,
   const linkable = pid !== 'other';
 
   const chip = linkable ? Badge(STATE_CHIP.checking) : null;
-  const status = h('span.gsec__status', linkable ? 'Launcher wird gesucht …' : 'Ohne Direkt-Link');
-  const sub = h('p.gsec__sub', h('span', countText), h('span.gsec__sep'), status);
+  const status = h('p.gpanel__status', linkable ? STATE_TEXT.checking : 'Ohne Direkt-Link – über den eigenen Launcher.');
 
   const library = linkable ? ActionBlock({ label: 'Bibliothek öffnen', variant: 'secondary', size: 'sm', icon: 'grid', hint: 'Alle Spiele deines Kontos', onClick: onLibrary }) : null;
-  const recheck = linkable ? ActionBlock({ label: 'Erneut prüfen', variant: 'ghost', size: 'sm', icon: 'refresh', hint: 'Nach der Installation', onClick: onRecheck }) : null;
+  const recheck = linkable ? ActionBlock({ label: 'Erneut prüfen', variant: 'primary', size: 'sm', icon: 'refresh', hint: 'Nach der Installation', onClick: onRecheck }) : null;
   if (recheck) recheck.hidden = true;
 
   const noticeIcon = h('span.gnotice__icon');
@@ -399,15 +414,23 @@ export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck,
     noticeText.textContent = 'Für diese Spiele gibt es keinen Direkt-Link. Installiere sie über ihren eigenen Launcher.';
   }
 
-  const head = h(
-    'header.gsec__head',
-    h('div.gsec__glyph', { dataset: { platform: pid }, attrs: { 'aria-hidden': 'true' } }, plat.letter),
-    h('div.gsec__titles', h('div.gsec__row', h('h2.gsec__title', { id: titleId }, plat.name), chip), sub),
-    linkable ? h('div.gsec__actions', recheck, library) : null,
+  const panel = h(
+    'div.gpanel',
+    { dataset: { platform: pid } },
+    h('span.gpanel__mark', { attrs: { 'aria-hidden': 'true' } }, plat.letter),
+    h('div.gpanel__top', h('div.gsec__glyph', { attrs: { 'aria-hidden': 'true' } }, plat.letter), chip),
+    h('h2.gpanel__title', { id: titleId }, plat.name),
+    h('p.gpanel__count', countText),
+    status,
+    linkable ? h('div.gpanel__actions', recheck, library) : null,
   );
-  const grid = tiles.length ? h('div.gsec__grid', tiles) : null;
-  const noteEl = note ? h('p.gsec__note', icon('arrow-right', { size: 14, strokeWidth: 2 }), h('span', note)) : null;
-  const el = h('section.gsec', { dataset: { platform: pid }, attrs: { 'aria-labelledby': titleId } }, head, notice, noteEl, grid);
+
+  const cells = [panel, ...tiles];
+  if (note) {
+    cells.push(h('div.gnote', h('span.gnote__icon', icon('arrow-right', { size: 18, strokeWidth: 2 })), h('p.gnote__title', note.title), h('p.gnote__text', note.text)));
+  }
+  const grid = h('div.gsec__grid', cells);
+  const el = h('section.gsec', { dataset: { platform: pid }, attrs: { 'aria-labelledby': titleId } }, notice, grid);
 
   function setNotice(tone, iconName, text) {
     notice.dataset.tone = tone;
@@ -417,24 +440,23 @@ export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck,
   }
 
   return Object.assign(el, {
-    head,
+    panel,
     notice,
+    grid,
+    chip,
     library,
     recheck,
-    chip,
     setState(state, { retried = false } = {}) {
       if (!linkable) return;
       chip.set({ dot: false, live: false, icon: null, ...STATE_CHIP[state] });
       el.dataset.state = state;
-      library.setDisabled(state === 'missing');
+      status.textContent = STATE_TEXT[state] || '';
+      const off = state === 'missing';
+      library.setDisabled(off).setHint(off ? `Braucht ${pid === 'steam' ? 'Steam' : 'den Launcher'}` : 'Alle Spiele deines Kontos');
       recheck.hidden = !(state === 'missing' || state === 'unknown');
       if (state === 'installed') {
-        status.textContent = 'Bereit – melde dich dort mit deinem Konto an';
         notice.hidden = true;
-      } else if (state === 'checking') {
-        status.textContent = 'Launcher wird gesucht …';
       } else if (state === 'missing') {
-        status.textContent = 'Launcher fehlt noch';
         const extra = fortniteHere ? ' Fortnite geht auch ohne – über den Microsoft Store oben.' : '';
         setNotice(
           'warn',
@@ -443,8 +465,7 @@ export function LauncherSection({ pid, games, tiles, note, onLibrary, onRecheck,
             ? `${plat.nom} ist noch nicht da. Installiere ${plat.acc} und klick dann nochmal auf „Erneut prüfen“.${extra}`
             : `Installiere zuerst ${plat.acc} – danach auf „Erneut prüfen“ klicken, dann werden die Buttons aktiv.${extra}`,
         );
-      } else {
-        status.textContent = 'Status unbekannt';
+      } else if (state === 'unknown') {
         setNotice('info', 'info', `Konnte nicht prüfen, ob ${plat.launcher} installiert ist. Probier es trotzdem – oder prüf erneut.`);
       }
     },

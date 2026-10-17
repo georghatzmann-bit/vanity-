@@ -97,8 +97,7 @@ export default {
     const stats = h('div.games__stats', { hidden: true, attrs: { 'aria-live': 'polite' } }, icon('gamepad', { size: 16, strokeWidth: 2 }), h('span.games__stat', countNum, ' ', countWord), h('span.games__sep'), sizePart);
     const head = h(
       'header.games__head',
-      h('div', { dataset: { stagger: '' } }, back),
-      h('div.t-eyebrow', { dataset: { stagger: '' } }, h('span.games__eyebrow-dot.deco'), 'Letzter Schritt'),
+      h('div.games__topline', { dataset: { stagger: '' } }, back, h('span.games__crumb-sep'), h('span.t-eyebrow', h('span.games__eyebrow-dot.deco'), 'Letzter Schritt')),
       h('div.games__title-row', title, stats),
       h(
         'p.games__lead',
@@ -395,7 +394,7 @@ export default {
         if (!list.length) continue;
         const tiles = list.filter((g) => g !== heroGame).map((g) => GameTile({ game: g, onAction: runAction }));
         uis.push(...tiles);
-        const note = pid === 'epic' && heroGame && !tiles.length ? 'Fortnite findest du oben – weitere Epic-Spiele waren nicht in deiner Sicherung.' : null;
+        const note = pid === 'epic' && heroGame && !tiles.length ? { title: 'Fortnite steht oben im Rampenlicht.', text: 'Weitere Epic-Spiele waren nicht in deiner Sicherung.' } : null;
         const section = LauncherSection({
           pid,
           games: list,
@@ -461,13 +460,11 @@ export default {
         if (heroTl) tl.add(heroTl, 0.12);
       }
       sections.forEach((s, i) => {
-        const at = (hero ? 0.75 : 0.25) + i * 0.22;
-        const kids = [s.head, s.notice, s.querySelector('.gsec__note')].filter((k) => k && !k.hidden);
-        tl.fromTo(kids, { opacity: 0, x: -26 }, { opacity: 1, x: 0, duration: 0.8, ease: 'expo.out', stagger: 0.06, clearProps: 'transform,opacity' }, at);
-        const wraps = content.uis.filter((u) => u !== hero && u.platform === s.pid);
-        if (!wraps.length) return;
+        const at = (hero ? 0.75 : 0.3) + i * 0.24;
+        if (!s.notice.hidden) tl.fromTo(s.notice, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', clearProps: 'transform,opacity' }, at);
+        const cells = Array.from(s.grid.children);
         tl.fromTo(
-          wraps,
+          cells,
           rich
             ? { opacity: 0, y: 70, rotationX: -38, rotationY: (j) => (j % 2 ? 16 : -16), scale: 0.88, filter: 'blur(10px)', transformPerspective: 900, transformOrigin: '50% 100%' }
             : { opacity: 0, y: 24 },
@@ -481,9 +478,15 @@ export default {
             duration: rich ? 1.1 : 0.6,
             ease: 'expo.out',
             clearProps: 'transform,filter,opacity',
-            stagger: { each: 0.08, onComplete() { const t = this.targets()[0]; if (t && t.sweep) t.sweep(); } },
+            stagger: {
+              each: 0.08,
+              onComplete() {
+                const t = this.targets()[0];
+                if (t && t.sweep) t.sweep();
+              },
+            },
           },
-          at + 0.08,
+          at + 0.04,
         );
       });
       tl.fromTo(foot.el, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.9, ease: 'expo.out', clearProps: 'transform,opacity' }, 0.55);
@@ -504,7 +507,7 @@ export default {
         const bx = b.left + b.width / 2;
         const by = b.top + b.height / 2;
         const rich = richMotion();
-        const flyers = uis.map((u) => u.root);
+        const flyers = [...uis.map((u) => u.root), ...content.sections.flatMap((s) => Array.from(s.grid.querySelectorAll('.gpanel, .gnote')))];
         const tl = gsap.timeline();
         tl.to(
           flyers,
@@ -527,7 +530,7 @@ export default {
           },
           0,
         )
-          .to([head, guide, ...content.sections.map((s) => s.head), ...content.sections.map((s) => s.notice)], { opacity: 0, y: -18, duration: 0.35, ease: 'power2.in' }, 0)
+          .to([head, guide, ...content.sections.map((s) => s.notice)], { opacity: 0, y: -18, duration: 0.35, ease: 'power2.in' }, 0)
           .call(() => {
             const { x, y } = centerIn(foot.el, btn);
             shockwave(foot.el, { x, y, size: 420, color: 'rgba(221, 214, 254, 0.9)' });
