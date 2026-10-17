@@ -155,7 +155,6 @@ textarea,
   inset: var(--titlebar-h) 0 0 0;
   z-index: var(--z-app);
   overflow: hidden;
-  isolation: isolate;
 }
 
 /* A routed screen layer. Router stacks these during transitions. */
@@ -166,7 +165,8 @@ textarea,
   overflow-y: auto;
   scrollbar-gutter: stable;
   transform-origin: 50% 42%;
-  will-change: transform, opacity, filter;
+  /* No will-change/filter/opacity here: they would turn the screen into a backdrop root and
+     glass cards inside could no longer blur the FX canvas. */
 }
 
 .screen[inert] {
@@ -187,10 +187,14 @@ textarea,
   bottom: var(--s-5);
   z-index: var(--z-toast);
   display: flex;
-  flex-direction: column-reverse;
-  gap: var(--s-2);
+  flex-direction: column;
+  justify-content: flex-end;
   width: min(380px, calc(100vw - 48px));
   pointer-events: none;
+}
+
+.toast-slot {
+  padding-top: var(--s-2);
 }
 
 #modal-host {

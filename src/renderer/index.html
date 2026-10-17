@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de" data-effects="ultra">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.google.com https://*.gstatic.com; connect-src 'self'; media-src 'self' data: blob:; worker-src 'self' blob:"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Phoenix</title>
+    <style>
+      html,
+      body {
+        background: #05060a;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- WebGL / 2D background engine draws here (src/renderer/fx/engine.js). -->
+    <canvas id="fx" aria-hidden="true"></canvas>
+    <div class="fx-veil" aria-hidden="true"></div>
+    <div class="grain deco" aria-hidden="true"></div>
+
+    <div id="titlebar"></div>
+    <main id="app"></main>
+
+    <div id="toast-host" aria-label="Benachrichtigungen"></div>
+    <div id="modal-host"></div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
