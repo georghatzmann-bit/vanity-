@@ -123,6 +123,6 @@ jobs:
 
             1. `${{ needs.build.outputs.setup }}` unten bei *Assets* herunterladen und starten. Bei „Der Computer wurde durch Windows geschützt“: **Weitere Informationen** → **Trotzdem ausführen**.
             2. Die Windows-Abfrage nach Administratorrechten mit **Ja** bestätigen.
-            3. Nach dem Reset in Phoenix **Wiederherstellen** wählen → Profil vom USB-Stick wählen → Apps anhaken → los.
+            3. Nach dem Reset in Phoenix **Wiederherstellen** wählen → Sicherung vom USB-Stick wählen → Apps anhaken → los.
 
             Liegt auf deinem Stick noch ein älteres `Phoenix-Setup-*.exe`, nimm dieses neuere Setup.
