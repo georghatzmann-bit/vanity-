@@ -59,17 +59,24 @@ export function buildModel({ mode, profile, catalog, machine }) {
   const catIndex = new Map(items.map((it) => [lower(keyOf(it.source, it.id)), it]));
   const entries = new Map();
   const profileKeys = [];
+  // Locale variants: "Mozilla.Firefox" from a backup belongs to the curated "Mozilla.Firefox.de" tile
+  // (one tile instead of an uncategorised duplicate) – but the id from the backup is what gets installed.
+  const variantOf = (source, id) => {
+    const base = `${lower(id)}.`;
+    return items.find((it) => it.source === source && lower(it.id).startsWith(base) && /^[a-z]{2}(-[a-z]{2})?$/.test(lower(it.id).slice(base.length))) || null;
+  };
 
   if (mode === 'restore' && profile) {
     for (const app of profile.apps || []) {
       if (!app || !app.id) continue;
       const source = app.source === 'msstore' ? 'msstore' : 'winget';
-      const cat = catIndex.get(lower(keyOf(source, app.id)));
+      const exact = catIndex.get(lower(keyOf(source, app.id))) || null;
+      const cat = exact || variantOf(source, app.id);
       const key = cat ? keyOf(cat.source, cat.id) : keyOf(source, app.id);
       if (entries.has(key)) continue;
       entries.set(key, {
         key,
-        id: cat ? cat.id : app.id,
+        id: exact ? exact.id : app.id,
         source,
         name: (cat && cat.name) || app.name || prettifyId(app.id),
         desc: (cat && cat.desc) || profileDesc({ ...app, source }),

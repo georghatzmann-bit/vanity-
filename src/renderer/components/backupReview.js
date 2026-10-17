@@ -219,6 +219,9 @@ export function BackupReview({ onSave } = {}) {
     if (appCount && gameCount) t.append(h('span.bk-rev__amp', ' & '));
     if (gameCount) t.append(n(gameCount), ` ${plural(gameCount, 'Spiel', 'Spiele', { withNumber: false })}`);
     t.append(h('span.bk-rev__tail', ' erfasst.'));
+    // The numbers count up from 0 – assistive tech gets the final sentence right away.
+    const parts = [appCount ? plural(appCount, 'App', 'Apps') : '', gameCount ? plural(gameCount, 'Spiel', 'Spiele') : ''].filter(Boolean);
+    t.setAttribute('aria-label', `${parts.join(' und ')} erfasst.`);
     return t;
   }
 

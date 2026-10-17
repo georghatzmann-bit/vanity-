@@ -85,7 +85,12 @@ export default {
     );
 
     // ---------------------------------------------------------------- stage
-    const stage = h('section.rs-stage', { attrs: { 'aria-live': 'polite', 'aria-busy': 'true' } });
+    const stage = h('section.rs-stage', { attrs: { 'aria-busy': 'true' } });
+    // One calm status line for screen readers (the stage itself animates and scrambles text).
+    const srStatus = h('p.sr-only', { attrs: { role: 'status', 'aria-live': 'polite' } });
+    const announce = (text) => {
+      if (srStatus.textContent !== text) srStatus.textContent = text;
+    };
 
     // ---------------------------------------------------------------- alternatives
     function optionTile({ icon: ic, title: t, text, onClick }) {
@@ -140,7 +145,7 @@ export default {
       h('div.rs-alt__grid', optFile, optCode, optCatalog),
     );
 
-    const inner = h('div.screen__inner.rs', head, h('div', { dataset: { stagger: '' } }, stage), options);
+    const inner = h('div.screen__inner.rs', head, h('div', { dataset: { stagger: '' } }, stage), options, srStatus);
     container.append(inner);
 
     const tl = revealText(title, { delay: 0.25 });
@@ -218,6 +223,7 @@ export default {
       consoleSide.replaceChildren(h('div.rs-console__title', 'Wir durchsuchen'), list);
       if (reuse && motionOK()) gsap.fromTo(list.children, { opacity: 0, x: 10 }, { opacity: 1, x: 0, duration: 0.4, stagger: 0.04, ease: 'power2.out', clearProps: 'transform,opacity' });
       setConsoleStatus('Suche läuft', 'run');
+      announce('Phoenix sucht nach deiner Sicherung …');
       PLACES.forEach((_, i) => radar.setNode(i, 'idle'));
       radar.setMode('search');
 
@@ -404,6 +410,7 @@ export default {
         others.length ? h('div.rs-older', h('div.t-eyebrow.rs-older__eyebrow', 'Ältere Sicherungen'), h('div.rs-older__grid', otherWraps)) : null,
       );
       swap(wrap, { focus: btn });
+      announce(`${heading.textContent}. ${wrap.querySelector('.rs-sum__hint').textContent}`);
       const sc = scrambleText(heading, heading.textContent, { duration: 0.7, delay: 0.15 });
       cleanups.push(() => sc.cancel());
       hero._counts();
@@ -455,6 +462,7 @@ export default {
         actionLabel: 'Erneut suchen',
       });
       setSide(el, retry);
+      announce('Keine Sicherung gefunden. Steck den USB-Stick ein – Phoenix sucht automatisch weiter.');
       startPolling();
     }
 
@@ -475,6 +483,7 @@ export default {
         actionLabel: 'Erneut versuchen',
       });
       setSide(el, retry);
+      announce(`Die Suche hat nicht geklappt. ${(err && err.message) || ''}`.trim());
     }
 
     function setSide(el, focusEl) {

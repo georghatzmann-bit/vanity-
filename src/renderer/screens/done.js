@@ -247,7 +247,8 @@ export default {
     } else {
       const homeBtn = Button({ label: 'Zur Startseite', icon: 'arrow-left', variant: 'primary', size: 'lg', onClick: goHome });
       buttons.push(homeBtn);
-      mainAction.append(homeBtn, h('p.dn__hint', 'Alles erledigt – zurück zum Anfang.'));
+      const homeHint = { error: 'Du kannst es später jederzeit nochmal versuchen.', partial: 'Den Rest kannst du auch später nachholen.', cancelled: 'Den Rest kannst du auch später nachholen.' }[v.tone] || 'Alles erledigt – zurück zum Anfang.';
+      mainAction.append(homeBtn, h('p.dn__hint', homeHint));
     }
     const logBtn = Button({ label: 'Protokoll speichern', icon: 'file', variant: 'secondary', autoLoading: true, onClick: saveLog });
     buttons.push(logBtn);
@@ -294,7 +295,8 @@ export default {
       );
       return { el, val, def: d };
     });
-    const stats = h('section.dn__stats', { dataset: { stagger: '' }, attrs: { 'aria-label': 'Ergebnis' } }, statEls.map((s) => s.el));
+    // Nothing ran (only links/games were selected): four zero tiles would just be noise.
+    const stats = v.total ? h('section.dn__stats', { dataset: { stagger: '' }, attrs: { 'aria-label': 'Ergebnis' } }, statEls.map((s) => s.el)) : null;
 
     // ---- reboot ------------------------------------------------------------------------------------------
     let reboot = null;
@@ -321,6 +323,7 @@ export default {
       const retryBtn = Button({ label: 'Erneut versuchen', icon: 'refresh', variant: 'primary', onClick: () => retry() });
       const toggleAll = Button({ label: 'Keine auswählen', variant: 'ghost', size: 'sm', magnetic: false, onClick: () => setAll(selected.size !== v.notInstalled.length) });
       buttons.push(retryBtn, toggleAll);
+      const retryHint = h('p.dn__hint');
       const rowRefs = [];
       const list = h(
         'ul.dn__fail-list',
@@ -369,7 +372,6 @@ export default {
         }
         sync();
       }
-      const retryHint = h('p.dn__hint');
       const tc = c.failed ? 'Nicht installiert' : 'Noch offen';
       failPanel = h(
         'section.card.dn__panel.dn__fail',
@@ -510,7 +512,7 @@ export default {
     keep(revealText(line2, { delay: 0.48 }));
 
     const statDelay = mo ? 0.75 : 0;
-    statEls.forEach((s, i) => {
+    if (stats) statEls.forEach((s, i) => {
       const fmt = s.def.duration ? (x) => formatDuration(x) : undefined;
       keep(countUp(s.val, s.def.value, { delay: statDelay + i * 0.08, duration: s.def.duration ? 1.6 : 1.3, format: fmt }));
     });
@@ -570,7 +572,7 @@ export default {
             fx.burst({ count: v.tone === 'success' ? 260 : 140 });
           }
         }, 0.32);
-      if (rich) {
+      if (rich && stats) {
         tl.fromTo(statEls.map((s) => s.el), { rotationX: -65, y: 24, opacity: 0, transformPerspective: 900, transformOrigin: '50% 0%' }, { rotationX: 0, y: 0, opacity: 1, duration: 0.95, stagger: 0.08, ease: 'expo.out', clearProps: 'transform,opacity' }, 0.55);
       }
       keep(tl);

@@ -322,7 +322,8 @@ function reduce(s, e) {
       info.wasDone = DONE.has(row.status);
       row.status = DONE.has(e.status) ? e.status : 'failed';
       row.message = e.message || '';
-      row.codeHex = e.codeHex || (Number.isFinite(e.code) && e.code ? `0x${(e.code >>> 0).toString(16).toUpperCase()}` : '');
+      // Installer exit codes (MSI 1603 …) read better in decimal, winget's 0x8A15… codes in hex.
+      row.codeHex = e.codeHex || (Number.isFinite(e.code) && e.code ? (e.code > 0 && e.code < 0x10000 ? String(e.code) : `0x${(e.code >>> 0).toString(16).toUpperCase()}`) : '');
       row.rebootRequired = !!e.rebootRequired;
       row.durationMs = Number(e.durationMs) || (row.startedAt ? Date.now() - row.startedAt : 0);
       row.stage = null;
@@ -1084,13 +1085,15 @@ export default {
       updateCounts();
       showSpotDone();
       fx.setProgress(1);
-      // Swap "Abbrechen" for the way forward.
+      // Swap "Abbrechen" for the way forward (keyboard focus moves along instead of falling to <body>).
+      const hadFocus = sideSlot.contains(document.activeElement);
       cancelBtn.remove();
       if (!nextBtn) {
         nextBtn = Button({ label: 'Zur Übersicht', iconRight: 'arrow-right', variant: 'primary', onClick: goDone });
         cleanups.push(() => nextBtn.destroy());
         sideSlot.prepend(nextBtn);
       }
+      if (hadFocus) nextBtn.focus({ preventScroll: true });
       sideHint.textContent = celebrate ? 'Geht gleich von selbst weiter.' : 'Alle Ergebnisse, Fehler und Neustart-Hinweise.';
       sr.textContent = `Installation beendet. ${t.installed || 0} installiert, ${t.failed || 0} fehlgeschlagen.`;
       if (!celebrate) return;
@@ -1116,6 +1119,7 @@ export default {
       reactor.setMode('error');
       reactor.setEta('');
       reactor.setCount(0, 0);
+      const hadFocus = sideSlot.contains(document.activeElement);
       cancelBtn.remove();
       sideHint.remove();
       const retryBtn = Button({ label: 'Erneut versuchen', icon: 'refresh', variant: 'primary', onClick: () => router.go('install', {}, { transition: 'fade', replace: true }) });
@@ -1139,6 +1143,7 @@ export default {
       );
       const grid = inner.querySelector('.inst__grid');
       grid.replaceWith(card);
+      if (hadFocus) retryBtn.focus({ preventScroll: true });
       if (motionOK()) gsap.fromTo(card, { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: 'expo.out', clearProps: 'transform,opacity' });
       fx.setState('error');
       sound.error();

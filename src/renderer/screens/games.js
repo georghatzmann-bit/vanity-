@@ -94,19 +94,26 @@ export default {
     const sizeText = h('span.t-num');
     const sizePart = h('span.games__stat', sizeText);
     const stats = h('div.games__stats', { hidden: true, attrs: { 'aria-live': 'polite' } }, icon('gamepad', { size: 16, strokeWidth: 2 }), h('span.games__stat', countNum, ' ', countWord), h('span.games__sep'), sizePart);
+    const leadFrom = h('span');
+    const lead = h(
+      'p.games__lead',
+      { dataset: { stagger: '' } },
+      'PHOENIX kann Spiele nicht selbst herunterladen – sie kommen direkt von ',
+      leadFrom,
+      '. Ein Klick öffnet die Installation im Launcher, du musst dort nur angemeldet sein.',
+    );
+    /** Names only the launchers this backup actually needs. */
+    function setLead(pids = ['epic', 'steam']) {
+      const names = pids.filter((p) => p !== 'other').map((p) => h('b', PLATFORMS[p].name));
+      const list = names.length ? names : [h('b', 'Epic Games'), h('b', 'Steam')];
+      leadFrom.replaceChildren(...list.flatMap((n, i) => (i ? [' und ', n] : [n])));
+    }
+    setLead();
     const head = h(
       'header.games__head',
       h('div.games__topline', { dataset: { stagger: '' } }, back, h('span.games__crumb-sep'), h('span.t-eyebrow', h('span.games__eyebrow-dot.deco'), 'Letzter Schritt')),
       h('div.games__title-row', title, stats),
-      h(
-        'p.games__lead',
-        { dataset: { stagger: '' } },
-        'PHOENIX kann Spiele nicht selbst herunterladen – sie kommen direkt von ',
-        h('b', 'Epic Games'),
-        ' und ',
-        h('b', 'Steam'),
-        '. Ein Klick öffnet die Installation im Launcher, du musst dort nur angemeldet sein.',
-      ),
+      lead,
     );
     const body = h('div.games__body');
     const inner = h('div.screen__inner.games', head, body);
@@ -211,14 +218,16 @@ export default {
     }
 
     // ---- content -------------------------------------------------------------------------------
-    function buildGuide() {
+    function buildGuide(pids) {
+      const account = pids.includes('epic') && pids.includes('steam') ? 'Mit deinem Epic- bzw. Steam-Konto.' : pids.includes('steam') ? 'Mit deinem Steam-Konto.' : 'Mit deinem Epic-Games-Konto.';
+      const steps = GUIDE.map((s, i) => (i === 0 ? { ...s, text: account } : s));
       return h(
         'ol.gguide',
         { attrs: { 'aria-label': 'So holst du deine Spiele zurück' } },
-        GUIDE.map((s, i) =>
+        steps.map((s, i) =>
           h(
             'li.gguide__step',
-            h('div.gguide__top', h('span.gguide__node', h('span', String(i + 1))), h('strong.gguide__title', s.title), i < GUIDE.length - 1 ? h('span.gguide__seg', h('span.gguide__fill')) : null),
+            h('div.gguide__top', h('span.gguide__node', h('span', String(i + 1))), h('strong.gguide__title', s.title), i < steps.length - 1 ? h('span.gguide__seg', h('span.gguide__fill')) : null),
             h('p.gguide__text', s.text),
           ),
         ),
@@ -420,7 +429,9 @@ export default {
         section.pid = pid;
         sections.push(section);
       }
-      const guide = buildGuide();
+      const pids = sections.map((sec) => sec.pid);
+      setLead(pids);
+      const guide = buildGuide(pids);
       const linkableCount = uis.filter((u) => u.platform !== 'other').length;
       const foot = buildFooter(linkableCount);
       content = { uis, sections, hero, guide, foot, footer: foot.el, done: foot.done };

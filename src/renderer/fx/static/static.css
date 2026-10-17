@@ -1,0 +1,158 @@
+/* PHOENIX FX – static tier (no WebGL, effects "off", or a renderer too slow for live FX).
+   CSS gradients + vignette + a few CSS embers; state, progress, pulses and warps are CSS only. */
+
+.fx-static {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-fx, 0);
+  pointer-events: none;
+  overflow: hidden;
+  background: #05060a;
+  --fx-p: 0;
+  --fx-glow: 0.55;
+  transition: filter 0.6s ease;
+}
+
+.fx-static__flames {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(70% calc(30% + var(--fx-p) * 30%) at 50% 108%, rgba(139, 92, 246, calc(var(--fx-glow) * 0.55)), transparent 70%),
+    radial-gradient(45% 35% at 12% 100%, rgba(217, 70, 239, calc(var(--fx-glow) * 0.22)), transparent 70%),
+    radial-gradient(45% 35% at 88% 100%, rgba(109, 40, 217, calc(var(--fx-glow) * 0.35)), transparent 70%),
+    radial-gradient(60% 50% at 0% 50%, rgba(76, 29, 149, calc(var(--fx-glow) * 0.18)), transparent 70%),
+    radial-gradient(60% 50% at 100% 50%, rgba(76, 29, 149, calc(var(--fx-glow) * 0.18)), transparent 70%);
+  transition: opacity 0.6s ease;
+}
+
+.fx-static__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 45%, transparent 40%, rgba(3, 4, 8, 0.7) 100%);
+}
+
+.fx-static__emblem {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: min(46vh, 60vw);
+  height: min(46vh, 60vw);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.fx-static__emblem svg {
+  width: 100%;
+  height: 100%;
+}
+
+.fx-static.is-home .fx-static__emblem {
+  opacity: 0.1;
+  animation: fx-static-breathe 10s ease-in-out infinite;
+}
+
+.fx-static.is-installing .fx-static__emblem {
+  opacity: calc(0.12 + var(--fx-p) * 0.35);
+}
+
+.fx-static.is-success .fx-static__emblem {
+  opacity: 0.55;
+}
+
+.fx-static.is-error .fx-static__emblem {
+  opacity: 0.12;
+}
+
+.fx-static.is-success {
+  --fx-glow: 0.85;
+}
+
+.fx-static.is-error {
+  --fx-glow: 0.3;
+  filter: saturate(0.45) hue-rotate(-12deg);
+}
+
+.fx-static.is-boot .fx-static__flames {
+  animation: fx-static-fadein 0.4s ease both;
+}
+
+.fx-static__ember {
+  position: absolute;
+  bottom: -12px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #c4b5fd;
+  box-shadow: 0 0 8px 2px rgba(139, 92, 246, 0.7);
+  opacity: 0;
+  animation: fx-static-rise var(--d, 9s) linear var(--delay, 0s) infinite;
+}
+
+.fx-static.is-error .fx-static__ember {
+  animation-direction: reverse;
+}
+
+.fx-static__ring {
+  position: absolute;
+  left: var(--x, 50%);
+  top: var(--y, 42%);
+  width: 40vh;
+  height: 40vh;
+  margin: -20vh 0 0 -20vh;
+  border-radius: 50%;
+  border: 2px solid rgba(167, 139, 250, 0.7);
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.6), inset 0 0 24px rgba(139, 92, 246, 0.4);
+  opacity: 0;
+  transform: scale(0.2);
+  animation: fx-static-ring 1.2s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+.fx-static.is-warp {
+  animation: fx-static-warp var(--warp-ms, 700ms) ease-in-out;
+}
+
+@keyframes fx-static-rise {
+  0% { transform: translate(0, 0); opacity: 0; }
+  10% { opacity: var(--o, 0.7); }
+  85% { opacity: var(--o, 0.7); }
+  100% { transform: translate(var(--dx, 20px), -105vh); opacity: 0; }
+}
+
+@keyframes fx-static-ring {
+  0% { opacity: 0; transform: scale(0.2); }
+  15% { opacity: var(--a, 0.6); }
+  100% { opacity: 0; transform: scale(2.2); }
+}
+
+@keyframes fx-static-breathe {
+  0%, 100% { opacity: 0.07; }
+  50% { opacity: 0.13; }
+}
+
+@keyframes fx-static-fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fx-static-warp {
+  0% { transform: scale(1); filter: brightness(1); }
+  45%, 55% { transform: scale(1.12); filter: brightness(1.35); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-static__ember,
+  .fx-static__ring,
+  .fx-static.is-home .fx-static__emblem,
+  .fx-static.is-warp {
+    animation: none !important;
+  }
+  .fx-static__ember {
+    display: none;
+  }
+}
+
+:root[data-motion='reduced'] .fx-static__ember {
+  display: none;
+}

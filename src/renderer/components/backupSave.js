@@ -95,7 +95,9 @@ export function BackupSave({ ctx, onDone } = {}) {
   const moreList = h('div.bk-targets');
   const codeHost = h('div');
   const docsHost = h('div');
-  const statusEl = h('aside.bk-status', { attrs: { 'aria-live': 'polite', 'aria-label': 'Status der Sicherung' } });
+  // The panel is rebuilt on every change – only this short line is announced to screen readers.
+  const statusEl = h('aside.bk-status', { attrs: { 'aria-label': 'Status der Sicherung' } });
+  const statusLive = h('p.sr-only', { attrs: { role: 'status', 'aria-live': 'polite' } });
 
   const main = h(
     'div.bk-save__main',
@@ -109,7 +111,7 @@ export function BackupSave({ ctx, onDone } = {}) {
     h('section.bk-sec', h('header.bk-sec__head', h('h2.bk-sec__title', 'Ohne Datei'), h('span.bk-sec__hint', 'Für unterwegs – passt in eine Nachricht')), codeHost),
     docsHost,
   );
-  el.append(h('div.bk-save__layout', main, statusEl));
+  el.append(h('div.bk-save__layout', main, statusEl), statusLive);
 
   // ---------------------------------------------------------------- state helpers
   const st = (id) => {
@@ -606,6 +608,8 @@ export function BackupSave({ ctx, onDone } = {}) {
 
     succeeded = true;
     const places = joinList(off.concat(cond).map(([, s]) => s.short));
+    const liveText = `Gesichert: ${places}.`;
+    if (statusLive.textContent !== liveText) statusLive.textContent = liveText;
     const resetBtn = Button({ label: 'Windows-Reset öffnen', icon: 'external', variant: 'primary', size: 'lg', block: true, onClick: openReset });
     const doneBtn = Button({ label: 'Fertig', variant: 'secondary', block: true, onClick: () => finish() });
     statusButtons.push(resetBtn, doneBtn);

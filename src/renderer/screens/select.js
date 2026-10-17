@@ -67,13 +67,16 @@ export default {
     const side = h('aside.sel-side', { dataset: { stagger: '' } }, sideHead, nav, sideFoot);
 
     const titleEl = h('h1.sel-title', mode === 'restore' ? 'Was soll zurück?' : 'Was soll drauf?');
-    const search = SearchInput({ placeholder: 'App suchen – Name oder ID', label: 'Apps suchen', onInput: (v) => setQuery(v) });
+    const search = SearchInput({ placeholder: 'Apps suchen …', label: 'Apps suchen (Name, Beschreibung oder winget-ID)', onInput: (v) => setQuery(v) });
     const btnAll = Button({ label: 'Alle', icon: 'check', variant: 'secondary', size: 'sm', magnetic: false, onClick: () => bulkView(true) });
     const btnNone = Button({ label: 'Keine', icon: 'minus', variant: 'secondary', size: 'sm', magnetic: false, onClick: () => bulkView(false) });
     const chipGamer = chip('flame', 'Empfohlen für Gamer', () => togglePreset('gamer'));
-    const chipProfile = chip('user', 'Alles aus dem Profil', () => togglePreset('profile'));
+    const chipProfile = chip('user', 'Ganze Sicherung', () => togglePreset('profile'));
     chipProfile.hidden = mode !== 'restore';
     const hintEl = h('p.sel-hint', { attrs: { 'aria-live': 'polite' } }, 'Apps werden geladen …');
+    const eyebrowText = h('span');
+    const syncEyebrow = () => (eyebrowText.textContent = mode === 'restore' ? 'Nach dem Reset · Schritt 2 von 3' : 'Schnell-Setup · Schritt 1 von 2');
+    syncEyebrow();
     cleanups.push(() => search.destroy(), () => btnAll.destroy(), () => btnNone.destroy());
 
     const head = h(
@@ -82,7 +85,7 @@ export default {
         'div.sel-top',
         { dataset: { stagger: '' } },
         h('button.back-link', { type: 'button', onClick: () => router.back() }, icon('arrow-left'), 'Zurück'),
-        h('span.t-eyebrow', h('span.sel-live'), 'Schritt 2 von 3 · Auswahl'),
+        h('span.t-eyebrow', h('span.sel-live'), eyebrowText),
       ),
       titleEl,
       h(
@@ -146,12 +149,12 @@ export default {
         const n = rendered.reduce((a, s) => a + (s.keys ? s.keys.length : s.games ? s.games.length : s.items.length), 0);
         return n ? `${plural(n, 'Treffer', 'Treffer')} für „${query}“ in „${viewLabel(view)}“. Esc leert die Suche.` : `Keine Treffer für „${query}“.`;
       }
-      if (view === 'profile') return 'Apps und Spiele aus deinem Profil. Ein Klick auf eine Kachel wählt sie an oder ab.';
+      if (view === 'profile') return 'Apps und Spiele aus deiner Sicherung. Ein Klick auf eine Kachel wählt sie an oder ab.';
       if (view === 'games') return 'Werden nach den Launchern über Epic/Steam installiert.';
       if (view === 'selected') return 'Das wird installiert. Ein Klick auf eine Kachel nimmt sie wieder raus.';
-      if (view === 'all') return mode === 'restore' ? 'Alle Apps aus dem Katalog. Der Punkt am Icon heißt: war in deinem Profil.' : 'Alle Apps aus dem Katalog. Mit Haken wird installiert.';
+      if (view === 'all') return mode === 'restore' ? 'Alle Apps aus dem Katalog. Der Punkt am Icon heißt: war in deiner Sicherung.' : 'Alle Apps aus dem Katalog. Mit Haken wird installiert.';
       const cat = view.slice(4);
-      return cat === OTHER ? 'Apps aus deinem Profil, die Phoenix keiner Kategorie zuordnen kann.' : `${plural(keysOfView(view).length, 'App', 'Apps')} in „${cat}“. Mit Haken wird installiert.`;
+      return cat === OTHER ? 'Apps aus deiner Sicherung, die Phoenix keiner Kategorie zuordnen kann.' : `${plural(keysOfView(view).length, 'App', 'Apps')} in „${cat}“. Mit Haken wird installiert.`;
     }
     function paintHint() {
       hintEl.textContent = hintOverride || defaultHint();
@@ -159,7 +162,7 @@ export default {
     }
     function explain(el, text) {
       const show = () => {
-        hintOverride = typeof text === 'function' ? text() : text;
+        hintOverride = (typeof text === 'function' ? text() : text) || null;
         paintHint();
       };
       const hide = () => {
@@ -179,9 +182,10 @@ export default {
         : `Wählt ${plural(model ? model.popularKeys.length : 0, 'beliebte App', 'beliebte Apps')} aus – Steam, Discord, OBS und Co.`,
     );
     explain(chipProfile, () =>
-      isPresetActive('profile') ? 'Alles aus deinem Profil ist drin. Noch ein Klick nimmt es raus.' : 'Wählt alle Apps und Spiele aus deinem Profil wieder aus.',
+      isPresetActive('profile') ? 'Alles aus deiner Sicherung ist drin. Noch ein Klick nimmt es raus.' : 'Wählt alle Apps und Spiele aus deiner Sicherung wieder aus.',
     );
-    explain(search.querySelector('input'), 'Tipp: / oder Strg+F springt in die Suche, Esc leert sie.');
+    // While a query is active the hint line shows the hit count instead of the tip.
+    explain(search.querySelector('input'), () => (qTerms.length ? null : 'Sucht in Name, Beschreibung und winget-ID. / oder Strg+F springt hierher, Esc leert die Suche.'));
 
     function dockExplain(el, text) {
       const show = () => {
@@ -237,7 +241,7 @@ export default {
       return h('div.sel-nav__group', h('div.sel-nav__heading', label), list);
     }
 
-    function navItem(id, label, iconName) {
+    function navItem(id, label, iconName, longLabel = label) {
       const countEl = h('span.sel-nav__count');
       const el = h(
         'button.sel-nav__item',
@@ -255,7 +259,7 @@ export default {
         h('span.sel-nav__label', label),
         countEl,
       );
-      navItems.set(id, { el, countEl, label });
+      navItems.set(id, { el, countEl, label: longLabel });
       return el;
     }
 
@@ -265,7 +269,7 @@ export default {
     async function ensureProfile() {
       const p = store.get('profile');
       if (p) return p;
-      // Standalone (?screen=select&mode=restore): seed from the first profile the API finds.
+      // Standalone (?screen=select&mode=restore): seed from the first backup the API finds.
       try {
         const refs = await api.profile.find();
         if (refs && refs[0]) {
@@ -294,6 +298,7 @@ export default {
     function applyMode() {
       root.dataset.mode = mode;
       chipProfile.hidden = mode !== 'restore';
+      syncEyebrow();
       const text = mode === 'restore' ? 'Was soll zurück?' : 'Was soll drauf?';
       if ((titleEl.dataset.splitText ?? titleEl.textContent) !== text) {
         titleTl?.kill();
@@ -317,11 +322,11 @@ export default {
       if (mode === 'restore' && !prof) {
         mode = 'catalog';
         applyMode();
-        toast.info('Kein Profil geladen', 'Du siehst den Katalog – beliebte Apps sind schon ausgewählt.');
+        toast.info('Keine Sicherung geladen', 'Du siehst den Katalog – beliebte Apps sind schon ausgewählt.');
       }
       profile = prof;
       if (!cat.ok && (mode === 'catalog' || !(prof.apps || []).length)) return showLoadError(cat.err);
-      if (!cat.ok) toast.warn('Katalog nicht verfügbar', 'Du siehst nur die Apps aus deinem Profil.');
+      if (!cat.ok) toast.warn('Katalog nicht verfügbar', 'Du siehst nur die Apps aus deiner Sicherung.');
 
       model = buildModel({ mode, profile, catalog: cat.ok ? cat.c : null, machine });
       initSelection();
@@ -360,13 +365,13 @@ export default {
 
     function buildSide(machine) {
       if (mode === 'restore' && profile) {
-        const host = (profile.machine && profile.machine.hostname) || 'Dein Profil';
+        const host = (profile.machine && profile.machine.hostname) || 'Deine Sicherung';
         const when = formatRelativeDate(profile.createdAt);
         sideHead.replaceChildren(
           h('span.sel-side__tile', icon('user', { size: 20 })),
           h(
             'div.sel-side__who',
-            h('div.sel-side__eyebrow', 'Profil'),
+            h('div.sel-side__eyebrow', 'Sicherung'),
             h('div.sel-side__name', { title: host }, host),
             h('div.sel-side__meta', when ? `Gesichert ${when}` : `${plural(model.profileKeys.length, 'App', 'Apps')}`),
           ),
@@ -374,13 +379,18 @@ export default {
       } else {
         sideHead.replaceChildren(
           h('span.sel-side__tile', icon('sparkles', { size: 20 })),
-          h('div.sel-side__who', h('div.sel-side__eyebrow', 'Ohne Profil'), h('div.sel-side__name', 'Schnell-Setup'), h('div.sel-side__meta', `Katalog · ${plural(model.entries.size, 'App', 'Apps')}`)),
+          h('div.sel-side__who', h('div.sel-side__eyebrow', 'Ohne Sicherung'), h('div.sel-side__name', 'Schnell-Setup'), h('div.sel-side__meta', `Katalog · ${plural(model.entries.size, 'App', 'Apps')}`)),
         );
       }
       navItems.clear();
       const groups = [];
       if (mode === 'restore') {
-        groups.push(navGroup('Aus deinem Profil', [navItem('profile', 'Alles aus dem Profil', 'user'), model.games.length ? navItem('games', 'Spiele', 'gamepad') : null]));
+        groups.push(
+          navGroup('Aus deiner Sicherung', [
+            navItem('profile', 'Alles', 'user', 'Alles aus der Sicherung'),
+            model.games.length ? navItem('games', 'Spiele', 'gamepad', 'Spiele aus der Sicherung') : null,
+          ]),
+        );
       }
       groups.push(navGroup('Übersicht', [navItem('all', 'Alle Apps', 'layers'), navItem('selected', 'Ausgewählt', 'check-circle')]));
       groups.push(navGroup('Kategorien', model.categories.map((c) => navItem(`cat:${c.name}`, c.name, CATEGORY_ICONS[c.name] || 'grid'))));
@@ -434,7 +444,7 @@ export default {
             kind: 'apps',
             title: c.name,
             icon: CATEGORY_ICONS[c.name] || 'grid',
-            hint: c.name === OTHER ? 'Aus deinem Profil, ohne Kategorie' : '',
+            hint: c.name === OTHER ? 'Aus deiner Sicherung, ohne Kategorie' : '',
             keys: ks,
           });
         }
@@ -484,7 +494,9 @@ export default {
     function setQuery(v) {
       query = String(v || '').trim();
       qTerms = fold(query).split(/\s+/).filter(Boolean);
+      hintOverride = null; // typing: the hint line reports hits instead of the focus tip
       if (model) render({ quiet: true });
+      else paintHint();
     }
 
     // ================================================================ rendering
@@ -571,7 +583,7 @@ export default {
         c.append(h('span.sel-tag', { title: 'Nicht über winget verfügbar – Phoenix öffnet am Ende die Download-Seite.' }, icon('external', { size: 11, strokeWidth: 2.4 }), 'Manuell'));
         c.querySelector('.app-card__desc')?.setAttribute('title', e.desc || '');
       }
-      if (mode === 'restore' && e.inProfile) c.querySelector('.app-card__icon')?.append(h('span.sel-pdot', { title: 'War in deinem Profil' }));
+      if (mode === 'restore' && e.inProfile) c.querySelector('.app-card__icon')?.append(h('span.sel-pdot', { title: 'War in deiner Sicherung' }));
       if (model.gpu && key === model.gpu.key) {
         c.classList.add('sel-card--gpu', 'beam', 'deco');
         c.setBadge({ tone: 'accent', icon: 'sparkles', label: `Passend zu deiner ${model.gpu.short}` });
@@ -708,17 +720,25 @@ export default {
           actions,
         });
       } else if (id === 'selected') {
+        const restore = mode === 'restore' && (model.profileKeys.length || model.games.length);
         el = EmptyState({
           icon: 'check-circle',
           title: 'Noch nichts ausgewählt',
-          text: 'Klick Apps an, die Phoenix installieren soll – oder nimm die Empfehlung für Gamer.',
-          actions: [{ label: 'Empfohlene auswählen', icon: 'flame', onClick: () => togglePreset('gamer', { force: true }) }],
+          text: restore
+            ? 'Klick Apps an, die Phoenix installieren soll – oder hol alles aus deiner Sicherung zurück.'
+            : 'Klick Apps an, die Phoenix installieren soll – oder nimm die Empfehlung für Gamer.',
+          actions: restore
+            ? [
+                { label: 'Ganze Sicherung auswählen', icon: 'user', onClick: () => togglePreset('profile', { force: true }) },
+                { label: 'Empfohlene für Gamer', icon: 'flame', variant: 'secondary', onClick: () => togglePreset('gamer', { force: true }) },
+              ]
+            : [{ label: 'Empfohlene auswählen', icon: 'flame', onClick: () => togglePreset('gamer', { force: true }) }],
         });
       } else if (id === 'profile') {
         el = EmptyState({
           icon: 'user',
-          title: 'Keine Apps im Profil',
-          text: 'Dein Profil enthält nichts, was Phoenix automatisch installieren kann. Such dir was aus dem Katalog aus.',
+          title: 'Keine Apps in der Sicherung',
+          text: 'Deine Sicherung enthält nichts, was Phoenix automatisch installieren kann. Such dir was aus dem Katalog aus.',
           actions: [{ label: 'Alle Apps ansehen', icon: 'layers', onClick: () => setView('all') }],
         });
       } else {
@@ -841,7 +861,7 @@ export default {
       wave([...keys, ...games]);
       scheduleRefresh();
       if (view === 'selected') render({ quiet: true });
-      const name = kind === 'gamer' ? 'Empfehlung für Gamer' : 'Alles aus dem Profil';
+      const name = kind === 'gamer' ? 'Empfehlung für Gamer' : 'Ganze Sicherung';
       if (n) undoToast(on ? `${plural(n, 'Eintrag', 'Einträge')} hinzugefügt` : `${plural(n, 'Eintrag', 'Einträge')} entfernt`, name, snap);
       hintOverride = null;
       paintHint();
@@ -909,7 +929,7 @@ export default {
       launcherNote.hidden = !missing.length;
       if (missing.length) {
         const names = missing.map((k) => model.entries.get(k).name);
-        launcherText.textContent = `Für deine Spiele fehlt ${joinList(names)}. Ohne Launcher kann Phoenix sie nicht installieren.`;
+        launcherText.textContent = `Für deine Spiele ${names.length === 1 ? 'fehlt' : 'fehlen'} ${joinList(names)}. Ohne Launcher kann Phoenix sie nicht installieren.`;
       }
       // chips
       chipGamer.setAttribute('aria-pressed', String(isPresetActive('gamer')));

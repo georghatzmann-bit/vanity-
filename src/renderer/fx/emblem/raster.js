@@ -133,8 +133,8 @@ function drawSilhouette(ctx, toPx, scalePx, polys, sils, alphaFill = 0.55, lineW
 }
 
 /**
- * Heat texture (RG8 data): R = soft blurred heat (flames licking off bird + wordmark), G = sharper mask.
- * Covers HEAT_BOX in logo-local units. Returns { w, h, data: Uint8Array (RGBA) }.
+ * Heat texture (RGBA8, rows bottom-up = y up): R = soft emblem heat, G = sharp emblem mask,
+ * B = soft wordmark heat, A = sharp wordmark mask. Covers HEAT_BOX in logo-local units.
  */
 export function rasterHeat(polys, wordCanvas, wordInfo, size = 256) {
   const bw = HEAT_BOX.x1 - HEAT_BOX.x0;
@@ -144,30 +144,37 @@ export function rasterHeat(polys, wordCanvas, wordInfo, size = 256) {
   const sils = emblemSilhouettes();
   const scalePx = w / bw;
   const toPx = (x, y) => [(x - HEAT_BOX.x0) * scalePx, (HEAT_BOX.y1 - y) * scalePx];
-  const layer = (blur, fillA, wordA) => {
+  const layer = (blur, fillA, word) => {
     const c = makeCanvas(w, h);
-    const ctx = c.getContext('2d');
+    const ctx = c.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, w, h);
     if (blur) ctx.filter = `blur(${blur}px)`;
-    drawSilhouette(ctx, toPx, scalePx, polys, sils, fillA, 0.05);
-    if (wordCanvas && wordA > 0) {
+    if (!word) drawSilhouette(ctx, toPx, scalePx, polys, sils, fillA, 0.05);
+    else if (wordCanvas) {
       const ww = WORD_H * wordInfo.aspect;
       const [x0, y0] = toPx(-ww / 2, WORD_DY + WORD_H / 2);
-      ctx.globalAlpha = wordA;
+      ctx.globalAlpha = fillA;
       ctx.drawImage(wordCanvas, x0, y0, ww * scalePx, WORD_H * scalePx);
       ctx.globalAlpha = 1;
     }
     return ctx.getImageData(0, 0, w, h).data;
   };
-  const soft = layer(Math.max(2, size / 64), 0.7, 0.55);
-  const sharp = layer(Math.max(1, size / 256), 0.9, 0.6);
+  const softE = layer(Math.max(2, size / 64), 0.7, false);
+  const sharpE = layer(Math.max(1, size / 256), 0.9, false);
+  const softW = layer(Math.max(2, size / 64), 0.8, true);
+  const sharpW = layer(Math.max(1, size / 256), 0.9, true);
   const data = new Uint8Array(w * h * 4);
-  for (let i = 0; i < w * h; i++) {
-    data[i * 4] = soft[i * 4];
-    data[i * 4 + 1] = sharp[i * 4];
-    data[i * 4 + 2] = 0;
-    data[i * 4 + 3] = 255;
+  for (let y = 0; y < h; y++) {
+    const src = (h - 1 - y) * w; // flip: texture row 0 = bottom (y0)
+    for (let x = 0; x < w; x++) {
+      const i = (src + x) * 4;
+      const o = (y * w + x) * 4;
+      data[o] = softE[i];
+      data[o + 1] = sharpE[i];
+      data[o + 2] = softW[i];
+      data[o + 3] = sharpW[i];
+    }
   }
   return { w, h, data };
 }
@@ -333,7 +340,7 @@ export function sampleWord(canvas, n, rng, opts = {}) {
   const sizeMul = opts.sizeMul || 1;
   const w = canvas.width;
   const h = canvas.height;
-  const data = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+  const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
   const A = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : data[(y * w + x) * 4 + 3]);
   const fill = [];
   const edge = [];

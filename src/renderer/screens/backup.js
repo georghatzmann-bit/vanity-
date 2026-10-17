@@ -137,6 +137,8 @@ export default {
     const titleL2 = h('span.bk-scan__line.t-grad.t-shine.deco', 'deinen PC.');
     const scanTitle = h('h1.bk-scan__title', { tabIndex: -1, attrs: { 'aria-label': 'Wir erfassen deinen PC.' } }, titleL1, titleL2);
     const feedMsg = h('span.bk-feed__msg', 'Scan wird gestartet …');
+    // The visible feed scrambles letter by letter – screen readers get the plain text instead.
+    const feedLive = h('span.sr-only', { attrs: { role: 'status', 'aria-live': 'polite' } });
     const pctEl = h('span.bk-scan__pct.t-num', '0 %');
     const bar = ProgressBar({ value: 0, size: 'lg', active: true, label: 'Scan-Fortschritt' });
     const phaseRows = PHASES.map((p) =>
@@ -153,7 +155,8 @@ export default {
       h('div.t-eyebrow.bk-scan__eyebrow', { dataset: { stagger: '' } }, h('span.bk-live-dot'), liveText, h('span.bk-scan__sep'), elapsedEl),
       scanTitle,
       h('p.bk-scan__lead', { dataset: { stagger: '' } }, 'Apps, Spiele und Hardware-Infos – alles kommt in die Sicherung. Du musst nichts auswählen.'),
-      h('div.bk-feed.t-mono', { dataset: { stagger: '' }, attrs: { 'aria-live': 'polite' } }, h('span.bk-feed__caret', '›'), feedMsg),
+      h('div.bk-feed.t-mono', { dataset: { stagger: '' }, attrs: { 'aria-hidden': 'true' } }, h('span.bk-feed__caret', '›'), feedMsg),
+      feedLive,
       h('ol.bk-plist', { dataset: { stagger: '' } }, phaseRows),
       h('div.bk-scan__progress', { dataset: { stagger: '' } }, bar, pctEl),
     );
@@ -170,6 +173,7 @@ export default {
     function setFeed(text) {
       if (!text || feedMsg.dataset.text === text) return;
       feedMsg.dataset.text = text;
+      feedLive.textContent = text;
       feedScr?.cancel();
       feedScr = scrambleText(feedMsg, text, { duration: 0.45 });
     }

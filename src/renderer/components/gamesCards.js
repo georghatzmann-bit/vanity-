@@ -78,7 +78,7 @@ function openedStamp() {
 // Hint texts per launcher state.
 function installHint(pid, state, hero) {
   const p = PLATFORMS[pid];
-  if (state === 'missing') return hero ? `Erst ${p.launcher} installieren` : 'Launcher fehlt noch';
+  if (state === 'missing') return hero ? `Erst ${p.launcher} installieren – Link unten` : 'Launcher fehlt noch';
   if (hero) return `Öffnet den Download ${p.inLauncher}`;
   return 'Download im Launcher';
 }
@@ -190,7 +190,6 @@ function layer(cls, depth, ...children) {
 
 export function GameHero({ game, onAction }) {
   const pid = 'epic';
-  const plat = PLATFORMS[pid];
   const title = cleanTitle(game.title);
   const size = formatGameSize(game.sizeBytes);
   const self = {};
