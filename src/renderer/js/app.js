@@ -159,13 +159,16 @@ async function showDrift(d) {
   if (driftOpen || !d || d.status !== 'drift') return;
   driftOpen = true;
   const list = h('ul.list.compact', d.changed.map((c) => h('li', icon(c.missing ? 'x' : 'file', 16), h('span', c.label || c.rel), h('span.hint', c.rel))));
-  const text = d.likelyCloud
-    ? `Fortnite hat kurz nach dem Start Einstellungen von „${d.profileName}“ überschrieben. Das passiert meistens, weil Fortnite die Einstellungen des Kontos aus der Epic-Cloud zurückholt.`
-    : `Seit dem Anwenden von „${d.profileName}“ wurden diese Dateien verändert – im Spiel oder durch die Cloud.`;
+  const onlyCloud = d.changed.every((c) => c.kind === 'controls');
+  const text = onlyCloud
+    ? `Fortnite hat Tastenbelegung und Sensi aus der Epic-Cloud deines Kontos geholt und die Kopie von „${d.profileName}“ ersetzt. Das ist normal: Diese Einstellungen gehören zum Konto. Willst du sie ändern, stelle sie einmal im Spiel ein – Fortnite speichert sie dann in der Cloud.`
+    : d.likelyCloud
+      ? `Fortnite hat kurz nach dem Start Einstellungen von „${d.profileName}“ überschrieben – wahrscheinlich aus der Epic-Cloud zurückgeholt.`
+      : `Seit dem Anwenden von „${d.profileName}“ wurden diese Dateien verändert – im Spiel oder durch die Cloud.`;
   const r = await ui.modal({
     title: 'Achtung: Einstellungen wurden verändert',
     subtitle: 'HELIX hat nach dem Anwenden eine Abweichung bemerkt.',
-    content: [h('p', text), list, h('p.hint', 'Tipp: Mit Schreibschutz kann Fortnite die Dateien nicht mehr überschreiben. Änderungen im Spiel werden dann aber auch nicht gespeichert.')],
+    content: [h('p', text), list, onlyCloud ? null : h('p.hint', 'Tipp: Mit Schreibschutz für die Grafik-Datei kann Fortnite sie nicht mehr überschreiben. Änderungen im Spiel werden dann aber auch nicht gespeichert.')],
     actions: [
       { label: 'Ignorieren', value: 'ack' },
       { label: 'Änderungen ins Profil übernehmen', value: 'adopt' },

@@ -6,3 +6,4 @@ test-results/
 .DS_Store
 installer/**/bin/
 installer/**/obj/
+build/sfx/*.wav

@@ -36,7 +36,7 @@ export async function playTransition(swap) {
   if (!fx.src) fx.src = 'assets/video/transition.mp4';
   fx.currentTime = 0;
   fx.classList.add('show');
-  const swapAt = Number(fx.dataset.swapAt || 0.42);
+  const swapAt = Number(fx.dataset.swapAt || 0.78); // Sekunde, in der der Clip das Bild ganz füllt
   let swapped = false;
   const doSwap = async () => {
     if (swapped) return;

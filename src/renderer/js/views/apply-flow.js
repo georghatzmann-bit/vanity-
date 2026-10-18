@@ -10,21 +10,21 @@ const ACTION_TEXT = {
   locked: ['gesperrt', 'err'],
 };
 
-const RO_OPTIONS = [
-  ['none', 'Aus', 'Fortnite darf die Dateien wie gewohnt ändern.'],
-  ['controls', 'Nur Tasten & Sensi', 'Schützt ClientSettings.Sav vor dem Überschreiben durch die Cloud.'],
-  ['all', 'Alle Dateien', 'Nichts kann die Dateien ändern – auch Änderungen im Spiel werden nicht gespeichert.'],
+export const RO_OPTIONS = [
+  ['none', 'Aus', 'Fortnite darf die Dateien wie gewohnt ändern. Empfohlen.'],
+  ['video', 'Nur Grafik-Datei', 'Schützt GameUserSettings.ini (Auflösung, FPS, Grafik). Änderungen im Spiel an der Grafik werden dann nicht gespeichert.'],
+  ['all', 'Alle Config-Dateien', 'Nichts im Config-Ordner kann sich ändern. Die Tasten-/Sensi-Datei aus der Cloud bleibt ausgenommen.'],
 ];
 
-function roKey(ro) {
+export function roKey(ro) {
   if (ro === 'all') return 'all';
-  if (Array.isArray(ro) && ro.length) return 'controls';
+  if (Array.isArray(ro) && ro.includes('video')) return 'video';
   return 'none';
 }
 
-function roValue(key) {
+export function roValue(key) {
   if (key === 'all') return 'all';
-  if (key === 'controls') return ['controls'];
+  if (key === 'video') return ['video'];
   return 'none';
 }
 
@@ -104,6 +104,9 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
 
   const content = [
     h('div.callout.info', icon('info'), h('div', h('strong', 'Richtiges Konto?'), h('p.hint', 'Logge dich vorher im Epic Games Launcher selbst in das Konto ein, zu dem dieses Profil gehört. HELIX fasst keine Login-Daten an.'))),
+    preview.items.some((i) => i.kind === 'controls')
+      ? h('p.hint', 'Hinweis: Tastenbelegung und Sensi speichert Fortnite pro Konto in der Epic-Cloud. HELIX legt die gesicherte Kopie zurück – unterscheidet sie sich von der Cloud, holt Fortnite beim Einloggen die Cloud-Version. HELIX sagt dir dann Bescheid.')
+      : null,
     fnBox,
     h('h4', 'Was passiert'),
     summary,

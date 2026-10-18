@@ -1,6 +1,6 @@
 // Hauptfunktion: Settings-Profile verwalten, gefundene Dateien, Zeitmaschine (Backups).
 
-import { applyFlow } from './apply-flow.js';
+import { applyFlow, RO_OPTIONS, roKey, roValue } from './apply-flow.js';
 
 let cleanup = [];
 
@@ -83,10 +83,8 @@ export default {
     }
 
     function roText(p) {
-      const ro = p.options?.readOnly;
-      if (ro === 'all') return 'Schreibschutz: alle Dateien';
-      if (Array.isArray(ro) && ro.length) return 'Schreibschutz: Tasten & Sensi';
-      return 'Schreibschutz: aus';
+      const k = roKey(p.options?.readOnly);
+      return k === 'all' ? 'Schreibschutz: alle Config-Dateien' : k === 'video' ? 'Schreibschutz: Grafik-Datei' : 'Schreibschutz: aus';
     }
 
     function profileCard(p) {
@@ -185,23 +183,18 @@ export default {
     }
 
     async function readOnlyOptions(p) {
-      let sel = p.options?.readOnly === 'all' ? 'all' : (Array.isArray(p.options?.readOnly) && p.options.readOnly.length ? 'controls' : 'none');
-      const opts = [
-        ['none', 'Aus', 'Fortnite darf die Dateien wie gewohnt ändern.'],
-        ['controls', 'Nur Tasten & Sensi', 'Schützt ClientSettings.Sav – dort holt die Cloud am häufigsten alte Werte zurück.'],
-        ['all', 'Alle Dateien', 'Nichts kann die Dateien ändern. Achtung: Änderungen im Spiel werden dann nicht gespeichert.'],
-      ];
-      const group = h('div.radio-list', opts.map(([k, label, hint]) => h('label.radio',
+      let sel = roKey(p.options?.readOnly);
+      const group = h('div.radio-list', RO_OPTIONS.map(([k, label, hint]) => h('label.radio',
         h('input', { type: 'radio', name: 'ro', value: k, checked: sel === k, onchange: () => { sel = k; } }),
         h('span', h('strong', label), h('span.hint', hint)))));
       const r = await ui.modal({
         title: `Schreibschutz für „${p.name}“`,
         subtitle: 'Wird nach jedem Anwenden dieses Profils gesetzt.',
-        content: [group, h('p.hint', 'Den Schreibschutz kannst du jederzeit unter „Gefundene Dateien“ wieder aufheben.')],
+        content: [group, h('p.hint', 'Den Schreibschutz kannst du jederzeit unter „Gefundene Dateien“ wieder aufheben. Tastenbelegung und Sensi kommen immer aus der Epic-Cloud deines Kontos – dort hilft Schreibschutz nicht.')],
         actions: [{ label: 'Abbrechen', value: null }, { label: 'Speichern', value: 'save', variant: 'primary' }],
       });
       if (r !== 'save') return;
-      const readOnly = sel === 'all' ? 'all' : sel === 'controls' ? ['controls'] : 'none';
+      const readOnly = roValue(sel);
       try { await env.call('profiles.options', { id: p.id, options: { readOnly } }); ui.toast('Gespeichert.'); renderAll(); } catch (e) { ui.showError(e); }
     }
 

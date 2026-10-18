@@ -132,9 +132,9 @@ function start() {
   });
 
   app.whenReady().then(async () => {
-    session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
-      cb(['pointerLock', 'fullscreen', 'clipboard-sanitized-write'].includes(permission));
-    });
+    const allowed = ['pointerLock', 'fullscreen', 'clipboard-sanitized-write'];
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.includes(permission)));
+    session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.includes(permission));
     log('info', `HELIX ${app.getVersion()} gestartet`);
     await router.initAll();
     createWindow();

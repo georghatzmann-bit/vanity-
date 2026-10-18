@@ -24,6 +24,9 @@ function isBlockedPath(rel) {
 
 const SECTION_RE = /(remember\s*me|credential|oauth|\bauth\b|authentication|token|password|cookie|login)/i;
 const KEY_RE = /(token|password|passwd|secret|credential|cookie|refresh|oauth|api_?key|session_?id|auth_?code|exchange_?code|remember_?me|^auth$|^authorization$)/i;
+// Werte, die zu einem bestimmten Epic-Konto gehören (Konto-IDs, Mitspieler-Listen). Sie werden nicht
+// gespeichert und beim Anwenden vom gerade eingeloggten Konto übernommen.
+const ACCOUNT_KEY_RE = /^(EulaAcceptedUserId|RecentPlayerEncounters|FailedInviteMap|NamedTimes|LastTimeSettingsSnapshotUploaded|LocalUserId)(\[\d+\])?$/i;
 const BLOB_RE = /^[A-Za-z0-9+/=_\-.]{120,}$/;
 
 function isSensitiveSection(name) {
@@ -32,6 +35,7 @@ function isSensitiveSection(name) {
 
 function isSensitiveKey(key, value) {
   if (KEY_RE.test(String(key || ''))) return true;
+  if (ACCOUNT_KEY_RE.test(String(key || ''))) return true;
   const v = String(value ?? '').trim().replace(/^"|"$/g, '');
   return BLOB_RE.test(v);
 }

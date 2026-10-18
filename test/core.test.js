@@ -11,7 +11,7 @@ const { scan } = require('../src/main/core/scanner');
 const { CoreService } = require('../src/main/core/service');
 const { safeJoin, isReadOnly } = require('../src/main/core/fsutil');
 const { summarizeGameUserSettings } = require('../src/main/core/summary');
-const { makeLocalAppData, tmpDir, fakeExec, GUS_MAIN } = require('./helpers');
+const { makeLocalAppData, tmpDir, fakeExec, GUS_MAIN, ACCOUNT_B } = require('./helpers');
 
 function core(env, exec = fakeExec()) {
   return new CoreService({ dataDir: tmpDir(), env, exec });
@@ -63,6 +63,13 @@ test('Schutzfilter: [RememberMe] und Token-Schlüssel werden entfernt', () => {
   assert.match(s.text, /\[B\]\r\ny=2/);
 });
 
+test('Schutzfilter: kontogebundene Werte (Konto-IDs, Mitspieler) bleiben beim Konto', () => {
+  const s = sensitive.sanitizeIniText('[/Script/FortniteGame.FortGameUserSettings]\r\nFrameRateLimit=240.000000\r\nEulaAcceptedUserId=abc\r\nRecentPlayerEncounters=(x)\r\nRecentPlayerEncounters=(y)\r\n');
+  assert.doesNotMatch(s.text, /EulaAcceptedUserId|RecentPlayerEncounters/);
+  const m = sensitive.mergeKeepTargetSensitive(s.text, '[/Script/FortniteGame.FortGameUserSettings]\r\nFrameRateLimit=60.000000\r\nEulaAcceptedUserId=ZIEL\r\nRecentPlayerEncounters=(a)\r\nRecentPlayerEncounters=(b)\r\n');
+  assert.match(m.text, /FrameRateLimit=240\.000000\r\nEulaAcceptedUserId=ZIEL\r\nRecentPlayerEncounters=\(a\)\r\nRecentPlayerEncounters=\(b\)/);
+});
+
 test('Schutzfilter: beim Anwenden bleiben die Login-Daten des Zielkontos erhalten', () => {
   const profile = '[A]\r\nx=9\r\n';
   const current = '[A]\r\nx=1\r\nAccessToken=CUR\r\n\r\n[RememberMe]\r\nData=TARGETDATA\r\n';
@@ -102,7 +109,7 @@ test('Scan: liest Config mit Unterordnern, Cookies und Logs bleiben draußen', a
   const r = await scan({ configDir: fx.config, savedDir: fx.saved });
   const rels = r.files.filter((f) => f.included).map((f) => f.rel).sort();
   assert.deepEqual(rels, [
-    'ClientSettings.Sav',
+    'Cloud/0123456789abcdef0123456789abcdef/ClientSettings.Sav',
     'CrashReportClient/UECC-Windows-ABC/CrashReportClient.ini',
     'WindowsClient/Engine.ini',
     'WindowsClient/GameUserSettings.ini',
@@ -111,6 +118,20 @@ test('Scan: liest Config mit Unterordnern, Cookies und Logs bleiben draußen', a
   const gus = r.files.find((f) => f.kind === 'video');
   assert.ok(gus.sensitive, 'RememberMe wird erkannt');
   assert.equal(r.totals.hasClientSettings, true);
+});
+
+test('Scan: von mehreren Konten kommt nur die neueste ClientSettings ins Profil', async () => {
+  const fx = makeLocalAppData();
+  const other = path.join(fx.cloudRoot, ACCOUNT_B);
+  fs.mkdirSync(other, { recursive: true });
+  fs.writeFileSync(path.join(other, 'ClientSettings.Sav'), 'B');
+  const old = new Date(Date.now() - 3600 * 1000);
+  fs.utimesSync(fx.cs, old, old);
+  const r = await scan({ configDir: fx.config, savedDir: fx.saved });
+  const cs = r.files.filter((f) => f.kind === 'controls');
+  assert.equal(cs.length, 2);
+  assert.equal(cs.find((f) => f.included).rel, `Cloud/${ACCOUNT_B}/ClientSettings.Sav`);
+  assert.match(cs.find((f) => !f.included).reason, /anderen/);
 });
 
 test('Zusammenfassung: liest Auflösung, FPS und Leistungsmodus', () => {
@@ -131,7 +152,7 @@ test('Profile: speichern, wechseln, anwenden mit Backup und Wiederherstellen', a
   assert.equal(main.summary.resolution, '1920×1080');
 
   // Zweitaccount: andere Tasten, andere Auflösung, kein Engine.ini
-  fs.writeFileSync(path.join(fx.config, 'ClientSettings.Sav'), 'ZWEIT-KEYS');
+  fs.writeFileSync(fx.cs, 'ZWEIT-KEYS');
   fs.writeFileSync(path.join(fx.wc, 'GameUserSettings.ini'), GUS_MAIN.replace('ResolutionSizeX=1920', 'ResolutionSizeX=1280'));
   fs.rmSync(path.join(fx.wc, 'Engine.ini'));
   const zweit = await c.createProfile({ name: 'Zweitaccount' });
@@ -144,7 +165,7 @@ test('Profile: speichern, wechseln, anwenden mit Backup und Wiederherstellen', a
 
   const res = await c.applyProfile(main.id);
   assert.equal(res.ok, true, JSON.stringify(res.failed));
-  assert.equal(fs.readFileSync(path.join(fx.config, 'ClientSettings.Sav')).subarray(8).toString(), 'MAIN-KEYS');
+  assert.equal(fs.readFileSync(fx.cs).subarray(8).toString(), 'MAIN-KEYS');
   assert.match(fs.readFileSync(path.join(fx.wc, 'GameUserSettings.ini'), 'utf8'), /ResolutionSizeX=1920/);
   assert.ok(fs.existsSync(path.join(fx.wc, 'Engine.ini')), 'Engine.ini kommt aus dem Profil zurück');
   assert.ok(res.backupId);
@@ -155,13 +176,13 @@ test('Profile: speichern, wechseln, anwenden mit Backup und Wiederherstellen', a
   assert.equal(res2.ok, true);
   assert.equal(res2.removed.length, 1);
   assert.ok(!fs.existsSync(path.join(fx.wc, 'Engine.ini')));
-  assert.equal(fs.readFileSync(path.join(fx.config, 'ClientSettings.Sav'), 'utf8'), 'ZWEIT-KEYS');
+  assert.equal(fs.readFileSync(fx.cs, 'utf8'), 'ZWEIT-KEYS');
 
   // Backup von vorhin (Zustand vor "Zweitaccount") zurückspielen -> wieder Main
   const restored = await c.restoreBackup(res2.backupId);
   assert.equal(restored.ok, true, JSON.stringify(restored.failed));
   assert.ok(fs.existsSync(path.join(fx.wc, 'Engine.ini')));
-  assert.equal(fs.readFileSync(path.join(fx.config, 'ClientSettings.Sav')).subarray(8).toString(), 'MAIN-KEYS');
+  assert.equal(fs.readFileSync(fx.cs).subarray(8).toString(), 'MAIN-KEYS');
 
   const backups = await c.listBackups();
   assert.ok(backups.some((b) => b.reason === 'original' && b.pinned), 'Originalzustand ist gesichert');
@@ -174,19 +195,20 @@ test('Profile: Schreibschutz setzen, trotzdem überschreibbar, Notfall-Knopf', a
   const c = core({ LOCALAPPDATA: fx.local });
   await c.init();
   const p = await c.createProfile({ name: 'Turnier' });
-  await c.setProfileOptions(p.id, { readOnly: ['controls'] });
-  fs.writeFileSync(path.join(fx.config, 'ClientSettings.Sav'), 'CLOUD');
+  await c.setProfileOptions(p.id, { readOnly: ['video'] });
+  fs.writeFileSync(path.join(fx.wc, 'GameUserSettings.ini'), 'GEAENDERT');
   const r = await c.applyProfile(p.id);
   assert.equal(r.ok, true);
-  assert.equal(await isReadOnly(path.join(fx.config, 'ClientSettings.Sav')), true);
-  assert.equal(await isReadOnly(path.join(fx.wc, 'GameUserSettings.ini')), false);
+  assert.equal(await isReadOnly(path.join(fx.wc, 'GameUserSettings.ini')), true);
+  assert.equal(await isReadOnly(path.join(fx.wc, 'Engine.ini')), false);
   // erneutes Anwenden mit "alles schützen" klappt trotz bestehendem Schreibschutz
   const r2 = await c.applyProfile(p.id, { readOnly: 'all' });
   assert.equal(r2.ok, true);
-  assert.equal(await isReadOnly(path.join(fx.wc, 'GameUserSettings.ini')), true);
+  assert.equal(await isReadOnly(path.join(fx.wc, 'Engine.ini')), true);
+  assert.equal(await isReadOnly(fx.cs), false, 'Cloud-Kopie wird nie schreibgeschützt');
   const cleared = await c.clearAllReadOnly();
   assert.ok(cleared.cleared.length >= 2);
-  assert.equal(await isReadOnly(path.join(fx.config, 'ClientSettings.Sav')), false);
+  assert.equal(await isReadOnly(path.join(fx.wc, 'GameUserSettings.ini')), false);
 });
 
 test('Profile: Login-Daten werden nie gespeichert und beim Anwenden nicht überschrieben', async () => {
@@ -214,13 +236,16 @@ test('Profile: Login-Daten werden nie gespeichert und beim Anwenden nicht übers
 
 test('Profile: Fortnite läuft -> nicht anwenden, schließen hilft', async () => {
   const fx = makeLocalAppData();
-  const running = { value: ['FortniteClient-Win64-Shipping.exe', 'FortniteLauncher.exe'] };
+  const running = { value: ['FortniteClient-Win64-Shipping.exe', 'FortniteClient-Win64-Shipping_EAC_EOS.exe', 'FortniteLauncher.exe'] };
   const c = core({ LOCALAPPDATA: fx.local }, fakeExec(running));
   await c.init();
   const p = await c.createProfile({ name: 'Main' });
   await assert.rejects(() => c.applyProfile(p.id), (e) => e.code === 'FORTNITE_RUNNING');
   const closed = await c.closeFortnite();
   assert.equal(closed.closed, true);
+  // nur das Spiel selbst wurde geschlossen, nie das Anti-Cheat-Startprogramm
+  const kills = c.exec.calls.filter((x) => /taskkill/i.test(x[0])).map((x) => x.join(' '));
+  assert.deepEqual(kills, ['taskkill.exe /IM FortniteClient-Win64-Shipping.exe']);
   const r = await c.applyProfile(p.id);
   assert.equal(r.ok, true);
 });
@@ -283,7 +308,7 @@ test('Cloud-Wächter: erkennt, wenn Fortnite nach dem Anwenden Dateien ändert',
   const p = await c.createProfile({ name: 'Main' });
   await c.applyProfile(p.id);
   assert.equal((await c.checkDrift()).status, 'ok');
-  fs.writeFileSync(path.join(fx.config, 'ClientSettings.Sav'), 'AUS-DER-CLOUD');
+  fs.writeFileSync(fx.cs, 'AUS-DER-CLOUD');
   const d = await c.checkDrift(true);
   assert.equal(d.status, 'drift');
   assert.equal(d.changed[0].kind, 'controls');

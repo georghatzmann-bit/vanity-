@@ -12,7 +12,7 @@ const MAX_FILE = 25 * 1024 * 1024;
 
 const KINDS = [
   { re: /(^|\/)GameUserSettings\.ini$/i, kind: 'video', label: 'Grafik, Auflösung, FPS & Anzeige' },
-  { re: /(^|\/)ClientSettings[^/]*\.sav$/i, kind: 'controls', label: 'Tastenbelegung, Empfindlichkeit & Spieleinstellungen' },
+  { re: /(^|\/)ClientSettings[^/]*\.sav$/i, kind: 'controls', label: 'Tastenbelegung, Sensi & Spieleinstellungen (Cloud-Kopie)' },
   { re: /(^|\/)Engine\.ini$/i, kind: 'engine', label: 'Engine-Einstellungen' },
   { re: /(^|\/)Input\.ini$/i, kind: 'input', label: 'Eingabe' },
   { re: /(^|\/)Game\.ini$/i, kind: 'game', label: 'Spiel' },
@@ -29,6 +29,12 @@ function classify(rel) {
 }
 
 const isIni = (rel) => /\.ini$/i.test(rel);
+
+/** Kurzform des Konto-Ordners (nur die letzten 4 Zeichen, die volle Konto-ID wird nicht angezeigt). */
+function accountFolder(rel) {
+  const parts = rel.split('/');
+  return parts.length >= 2 ? `…${parts[parts.length - 2].slice(-4)}` : null;
+}
 
 /** Ordner außerhalb von Config, in denen zusätzlich nach ClientSettings*.Sav gesucht wird. */
 function skipSavedDir(rel, name) {
@@ -87,13 +93,21 @@ async function scan({ configDir, savedDir }) {
   errors.push(...cfg.errors.map((e) => ({ root: 'config', ...e })));
   for (const f of cfg.files) files.push(await describe('config', f));
 
-  // ClientSettings*.Sav kann je nach Fortnite-Version auch außerhalb von Config liegen
+  // ClientSettings.Sav liegt bei aktuellen Versionen in Saved\Cloud\<Konto-Ordner>\ – eine lokale
+  // Kopie der Cloud-Einstellungen des Kontos. Es kommt nur die neueste ins Profil (= zuletzt
+  // benutztes Konto), die anderen Konten werden angezeigt, aber nicht gespeichert.
   if (savedDir) {
     const extra = await walk(savedDir, { maxDepth: 5, maxFiles: 3000, skipDir: skipSavedDir });
-    for (const f of extra.files) {
-      if (f.rel.split('/').length === 1 && !/^ClientSettings[^/]*\.sav$/i.test(f.rel)) continue;
-      if (!/(^|\/)ClientSettings[^/]*\.sav$/i.test(f.rel)) continue;
-      files.push(await describe('saved', f));
+    const cs = extra.files.filter((f) => /(^|\/)ClientSettings[^/]*\.sav$/i.test(f.rel));
+    cs.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    for (const [i, f] of cs.entries()) {
+      const entry = await describe('saved', f);
+      entry.account = accountFolder(f.rel);
+      if (i > 0 && entry.included) {
+        entry.included = false;
+        entry.reason = 'Gehört zu einem anderen, früher benutzten Konto';
+      }
+      files.push(entry);
     }
   }
 

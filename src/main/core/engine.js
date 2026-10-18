@@ -173,8 +173,9 @@ async function apply(snapDir, meta, roots, currentScan, options = {}) {
     const fileMeta = meta.files.find((m) => keyOf(m.root, m.rel) === keyOf(f.root, f.rel)) || {};
     let want;
     if (restoreReadOnly) want = !!fileMeta.readOnly;
-    else if (readOnly === 'all') want = true;
-    else if (Array.isArray(readOnly)) want = readOnly.includes(fileMeta.kind);
+    // ClientSettings (Cloud-Kopie) wird nie schreibgeschützt: Fortnite holt sie ohnehin aus der Cloud
+    else if (readOnly === 'all') want = f.root === 'config';
+    else if (Array.isArray(readOnly)) want = f.root === 'config' && readOnly.includes(fileMeta.kind);
     else want = false;
     try {
       const isRo = await isReadOnly(target);

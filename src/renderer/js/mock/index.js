@@ -6,7 +6,7 @@ const H = 3600 * 1000;
 
 const FILES = [
   { root: 'config', rel: 'WindowsClient/GameUserSettings.ini', size: 4310, kind: 'video', label: 'Grafik, Auflösung, FPS & Anzeige' },
-  { root: 'config', rel: 'ClientSettings.Sav', size: 18122, kind: 'controls', label: 'Tastenbelegung, Empfindlichkeit & Spieleinstellungen' },
+  { root: 'saved', rel: 'Cloud/9f2c41d0a7b3e8c6d5f4a3b2c1d0e9f8/ClientSettings.Sav', size: 18122, kind: 'controls', label: 'Tastenbelegung, Sensi & Spieleinstellungen (Cloud-Kopie)' },
   { root: 'config', rel: 'WindowsClient/Engine.ini', size: 220, kind: 'engine', label: 'Engine-Einstellungen' },
   { root: 'config', rel: 'WindowsClient/Input.ini', size: 96, kind: 'input', label: 'Eingabe' },
   { root: 'config', rel: 'CrashReportClient/UECC-Windows-4F1C/CrashReportClient.ini', size: 64, kind: 'crash', label: 'Einstellungen für Fehlerberichte' },
@@ -16,7 +16,7 @@ const db = {
   fortnite: { running: false, gameRunning: false, processes: [] },
   activeId: 'p-main-1a2b3c',
   profiles: [
-    mkProfile('p-main-1a2b3c', 'Main', 196, { resolution: '1920×1080', fps: '240 FPS', renderMode: 'Leistungsmodus', quality: 'Niedrig', windowMode: 'Vollbild' }, 14, ['controls']),
+    mkProfile('p-main-1a2b3c', 'Main', 196, { resolution: '1920×1080', fps: '240 FPS', renderMode: 'Leistungsmodus', quality: 'Niedrig', windowMode: 'Vollbild' }, 14, ['video']),
     mkProfile('p-zweitaccount-4d5e6f', 'Zweitaccount', 276, { resolution: '1600×900', fps: '165 FPS', renderMode: 'DirectX 12', quality: 'Mittel', windowMode: 'Vollbild' }, 3, 'none'),
     mkProfile('p-turnier-778899', 'Turnier', 32, { resolution: '1920×1080', fps: '360 FPS', renderMode: 'Leistungsmodus', quality: 'Niedrig', windowMode: 'Vollbild' }, 6, 'all'),
   ],
@@ -59,7 +59,7 @@ const CORE = {
     configDir: 'C:\\Users\\Spieler\\AppData\\Local\\FortniteGame\\Saved\\Config',
     totals: { found: FILES.length + 1, included: FILES.length, bytes: 22812, readOnly: 1 },
     files: [
-      ...FILES.map((f, i) => ({ ...f, mtimeMs: now - i * 5 * H, included: true, readOnly: f.kind === 'controls', reason: null, protectedParts: f.kind === 'video' ? 0 : 0 })),
+      ...FILES.map((f, i) => ({ ...f, mtimeMs: now - i * 5 * H, included: true, readOnly: f.kind === 'video', reason: null, protectedParts: f.kind === 'video' ? 0 : 0 })),
       { root: 'config', rel: 'WindowsClient/helix-tmp.log', size: 12, kind: 'other', label: 'Weitere Datei', mtimeMs: now, included: false, readOnly: false, reason: 'Schutzfilter: sieht nach Login-, Browser- oder Protokolldaten aus', protectedParts: 0 },
     ],
     errors: [],
@@ -68,7 +68,7 @@ const CORE = {
   'core.fortniteClose': async () => { await wait(600); db.fortnite = { running: false, gameRunning: false, processes: [] }; emit('fortnite.state', db.fortnite); return { closed: true, remaining: [] }; },
   'core.driftCheck': () => ({ status: 'ok' }),
   'core.driftAck': () => ({ ok: true }),
-  'core.readOnlyClearAll': () => ({ cleared: ['ClientSettings.Sav'] }),
+  'core.readOnlyClearAll': () => ({ cleared: ['WindowsClient/GameUserSettings.ini'] }),
   'core.readOnlySet': (a) => ({ rel: a.rel, readOnly: !!a.on }),
   'core.openFolder': (a) => ({ opened: a.which }),
   'core.showFile': () => ({}),
@@ -116,7 +116,7 @@ const CORE = {
     return {
       ok: true, profile: pub(p), backupId: db.backups[0].id, readOnlyMode: a.readOnly,
       written: FILES.slice(0, 3).map((f, i) => ({ ...f, action: i === 2 ? 'new' : 'change' })), removed: [], same: FILES.slice(3), failed: [],
-      readOnlySet: a.readOnly && a.readOnly !== 'none' ? ['ClientSettings.Sav'] : [], readOnlyCleared: [],
+      readOnlySet: a.readOnly && a.readOnly !== 'none' ? ['WindowsClient/GameUserSettings.ini'] : [], readOnlyCleared: [],
     };
   },
   'profiles.diff': (a) => ({

@@ -44,6 +44,9 @@ const GUS_MAIN = [
   '',
 ].join('\r\n');
 
+const ACCOUNT_A = '0123456789abcdef0123456789abcdef';
+const ACCOUNT_B = 'fedcba9876543210fedcba9876543210';
+
 function makeLocalAppData({ withRememberMe = false, clientSettings = 'MAIN-KEYBINDS', extraEngine = true } = {}) {
   const local = fs.mkdtempSync(path.join(os.tmpdir(), 'helix-local-'));
   const saved = path.join(local, 'FortniteGame', 'Saved');
@@ -52,8 +55,10 @@ function makeLocalAppData({ withRememberMe = false, clientSettings = 'MAIN-KEYBI
   let gus = GUS_MAIN;
   if (withRememberMe) gus += '\r\n[RememberMe]\r\nEnable=True\r\nData=' + 'A'.repeat(200) + '\r\n';
   fs.writeFileSync(path.join(wc, 'GameUserSettings.ini'), gus);
-  // ClientSettings.Sav ist eine Binärdatei
-  fs.writeFileSync(path.join(saved, 'Config', 'ClientSettings.Sav'), Buffer.concat([Buffer.from([0x47, 0x56, 0x41, 0x53, 0, 1, 2, 255]), Buffer.from(clientSettings)]));
+  // ClientSettings.Sav: Binärdatei, lokale Cloud-Kopie unter Saved\Cloud\<Konto-ID>\
+  const cloud = path.join(saved, 'Cloud', ACCOUNT_A);
+  fs.mkdirSync(cloud, { recursive: true });
+  fs.writeFileSync(path.join(cloud, 'ClientSettings.Sav'), Buffer.concat([Buffer.from([0x45, 0x43, 0x46, 0x44, 0, 1, 2, 255]), Buffer.from(clientSettings)]));
   if (extraEngine) fs.writeFileSync(path.join(wc, 'Engine.ini'), '[SystemSettings]\r\nr.Tonemapper.Sharpen=1\r\n');
   fs.mkdirSync(path.join(saved, 'Config', 'CrashReportClient', 'UECC-Windows-ABC'), { recursive: true });
   fs.writeFileSync(path.join(saved, 'Config', 'CrashReportClient', 'UECC-Windows-ABC', 'CrashReportClient.ini'), '[CrashReportClient]\r\nbAgreeToCrashUpload=false\r\n');
@@ -62,7 +67,7 @@ function makeLocalAppData({ withRememberMe = false, clientSettings = 'MAIN-KEYBI
   fs.writeFileSync(path.join(saved, 'webcache_4430', 'Cookies', 'Cookies'), 'secret-cookie');
   fs.mkdirSync(path.join(saved, 'Logs'), { recursive: true });
   fs.writeFileSync(path.join(saved, 'Logs', 'FortniteGame.log'), 'log');
-  return { local, saved, config: path.join(saved, 'Config'), wc };
+  return { local, saved, config: path.join(saved, 'Config'), wc, cs: path.join(cloud, 'ClientSettings.Sav'), cloudRoot: path.join(saved, 'Cloud') };
 }
 
 function tmpDir(prefix = 'helix-data-') {
@@ -88,4 +93,4 @@ function fakeExec(runningRef = { value: [] }) {
   return exec;
 }
 
-module.exports = { makeLocalAppData, tmpDir, fakeExec, GUS_MAIN };
+module.exports = { makeLocalAppData, tmpDir, fakeExec, GUS_MAIN, ACCOUNT_A, ACCOUNT_B };
