@@ -191,7 +191,12 @@ jobs:
           done
 
   release:
-    if: startsWith(github.ref, 'refs/tags/helix-v')
+    # Version veröffentlichen: per Tag helix-v* – oder per Commit auf dem Branch mit „[helix-release]“
+    # in der Nachricht (der Tag wird dann von der Release-Aktion selbst angelegt).
+    if: >-
+      startsWith(github.ref, 'refs/tags/helix-v') ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/claude/helix-') &&
+       contains(github.event.head_commit.message, '[helix-release]'))
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -206,6 +211,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: helix-v${{ needs.build.outputs.version }}
+          target_commitish: ${{ github.sha }}
           name: HELIX ${{ needs.build.outputs.version }}
           files: |
             release/HELIX-Setup-${{ needs.build.outputs.version }}.exe
