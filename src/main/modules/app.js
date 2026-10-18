@@ -9,6 +9,7 @@ const DEFAULTS = {
   intro: true,
   lightWhilePlaying: true, // Videos pausieren, solange Fortnite läuft
   reduceMotion: false,
+  closeToTray: true, // beim Schließen im Infobereich weiterlaufen (Spielzeit, Cloud-Wächter)
 };
 
 const ALLOWED_HOSTS = /^(www\.)?(nvidia\.com|amd\.com|intel\.com|intel\.de|epicgames\.com|fortnite\.com|microsoft\.com|support\.microsoft\.com|learn\.microsoft\.com)$/i;

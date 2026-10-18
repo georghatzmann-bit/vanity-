@@ -3,7 +3,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, ipcMain, dialog, shell, screen, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, screen, session, Tray, Menu, nativeImage } = require('electron');
 const { Router } = require('./router');
 const { CoreService } = require('./core/service');
 const { SessionTracker } = require('./core/sessions');
@@ -78,6 +78,38 @@ function start() {
   process.on('uncaughtException', (e) => log('fatal', e.stack || e));
   process.on('unhandledRejection', (e) => log('error', 'unhandledRejection', e && e.stack ? e.stack : e));
 
+  // ---------- Infobereich: HELIX läuft auf Wunsch weiter (Spielzeit, Cloud-Wächter) ----------
+  const testMode = !!(process.env.HELIX_NO_INTRO || process.env.HELIX_SMOKE_SHOT);
+  let tray = null;
+  let quitting = false;
+
+  function showWindow() {
+    if (!win) { createWindow(); return; }
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  }
+
+  function ensureTray() {
+    if (tray) return tray;
+    const img = nativeImage.createFromPath(path.join(__dirname, '..', 'renderer', 'assets', 'img', 'icon.png')).resize({ width: 32, height: 32 });
+    tray = new Tray(img);
+    tray.setToolTip('HELIX – läuft im Hintergrund');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'HELIX öffnen', click: showWindow },
+      { type: 'separator' },
+      { label: 'HELIX beenden', click: () => { quitting = true; app.quit(); } },
+    ]));
+    tray.on('click', showWindow);
+    return tray;
+  }
+
+  async function closeToTrayWanted() {
+    if (testMode) return false;
+    const s = await core.readState('app', {}).catch(() => ({}));
+    return s.closeToTray !== false;
+  }
+
   function createWindow() {
     const display = screen.getPrimaryDisplay().workAreaSize;
     win = new BrowserWindow({
@@ -105,6 +137,28 @@ function start() {
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (e) => e.preventDefault());
     win.once('ready-to-show', () => win.show());
+    let trayDecided = false;
+    win.on('close', (e) => {
+      if (quitting || trayDecided) return;
+      e.preventDefault();
+      closeToTrayWanted().then(async (toTray) => {
+        if (!win) return;
+        if (!toTray) { trayDecided = true; win.close(); return; }
+        win.hide();
+        ensureTray();
+        const st = await core.readState('app', {}).catch(() => ({}));
+        if (!st.trayHintShown && process.platform === 'win32') {
+          tray.displayBalloon({
+            title: 'HELIX läuft weiter',
+            content: 'HELIX zählt deine Spielzeit und passt auf deine Einstellungen auf. Beenden: Rechtsklick auf das HELIX-Symbol unten rechts.',
+            iconType: 'info',
+          });
+          await core.writeState('app', { ...st, trayHintShown: true }).catch(() => {});
+        }
+      });
+    });
+    // Windows wird heruntergefahren / abgemeldet: nie aufhalten
+    win.on('session-end', () => { quitting = true; });
     win.on('closed', () => { win = null; });
     // HELIX_NO_INTRO=1 (automatische Tests): ohne Intro-Clip starten
     const query = process.env.HELIX_NO_INTRO ? { nointro: '1' } : undefined;
@@ -126,12 +180,7 @@ function start() {
     }
   }
 
-  app.on('second-instance', () => {
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.focus();
-    }
-  });
+  app.on('second-instance', () => showWindow());
 
   app.whenReady().then(async () => {
     const allowed = ['pointerLock', 'fullscreen', 'clipboard-sanitized-write'];
@@ -142,6 +191,6 @@ function start() {
     createWindow();
   });
 
-  app.on('window-all-closed', () => app.quit());
-  app.on('before-quit', () => { router.disposeAll(); });
+  app.on('window-all-closed', () => { if (!tray) app.quit(); });
+  app.on('before-quit', () => { quitting = true; router.disposeAll(); });
 }

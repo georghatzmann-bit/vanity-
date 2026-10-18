@@ -25,7 +25,7 @@ const db = {
     { id: '20261017-220500-cd34', createdAt: now - 14 * H, reason: 'manuell', label: 'Vor Season-Update', pinned: true, fileCount: 5, bytes: 22790 },
     { id: '20261010-090000-ef56', createdAt: now - 8 * 24 * H, reason: 'original', label: 'Originalzustand beim ersten Start von HELIX', pinned: true, fileCount: 4, bytes: 21900 },
   ],
-  app: { sound: true, volume: 0.7, intro: true, lightWhilePlaying: true, reduceMotion: false },
+  app: { sound: true, volume: 0.7, intro: true, lightWhilePlaying: true, reduceMotion: false, closeToTray: true },
 };
 
 function mkProfile(id, name, color, summary, applied, readOnly) {
