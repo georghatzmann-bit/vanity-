@@ -10,7 +10,7 @@ kopiert keine Login-Daten und blendet nichts im Spiel ein.
    die Datei `HELIX-Setup-<Version>.exe` herunterladen und starten.
    Wenn Windows „Der Computer wurde durch Windows geschützt“ zeigt: **Weitere Informationen** → **Trotzdem ausführen**.
    (Das kommt, weil das Setup nicht gegen Geld signiert ist.)
-2. Nach dem Intro auf **Installieren** klicken. Das Setup lädt die neueste HELIX-Version von GitHub,
+2. Nach dem kurzen Logo auf **Installieren** klicken. Das Setup lädt die neueste HELIX-Version von GitHub,
    prüft sie und richtet Verknüpfungen ein. Kein Administrator nötig.
 3. Fertig: **HELIX starten**.
 
@@ -45,7 +45,7 @@ Wichtig zu wissen:
 - **Zeitmaschine**: Vor jedem Anwenden sichert HELIX den alten Zustand. Dort kannst du alles mit einem Klick
   zurückholen. Den Zustand beim allerersten Start von HELIX hebt es immer auf.
 
-## Die Tools (Planeten)
+## Die Tools (farbige Kreise im Cockpit)
 
 | Planet | Wofür |
 |---|---|
@@ -86,7 +86,7 @@ Gut zu wissen:
 
 ## Woran merke ich, dass alles geklappt hat?
 
-1. Nach dem Start siehst du das Cockpit mit dem leuchtenden Kern und 13 Planeten.
+1. Nach dem Start siehst du das Cockpit: in der Mitte der große Kreis für die Profile, drumherum 13 farbige Tools.
 2. Oben rechts steht „Fortnite geschlossen“ (grün) und der Fortnite-Ordner wurde „automatisch gefunden“.
 3. Nach dem Speichern erscheint dein Profil unten in der Leiste „Profil anwenden“.
 4. Nach dem Anwenden zeigt HELIX eine Liste „kopiert / neu / entfernt“ und oben „Aktiv: <Profilname>“.

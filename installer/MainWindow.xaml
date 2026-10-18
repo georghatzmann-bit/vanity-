@@ -6,15 +6,20 @@
         Background="{StaticResource Bg}" UseLayoutRounding="True" SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display">
   <Grid x:Name="Root">
-    <!-- Hintergrund: Higgsfield-Nebel-Loop -->
-    <MediaElement x:Name="BgVideo" LoadedBehavior="Manual" UnloadedBehavior="Stop" IsMuted="True" Stretch="UniformToFill" Opacity="0.9"/>
-    <Image x:Name="BgFallback" Stretch="UniformToFill" Visibility="Collapsed"/>
+    <!-- Hintergrund: ruhig, dunkel, zwei weiche Farbflächen (wie in der App) -->
     <Rectangle IsHitTestVisible="False">
       <Rectangle.Fill>
-        <RadialGradientBrush Center="0.5,0.45" GradientOrigin="0.5,0.45" RadiusX="0.75" RadiusY="0.8">
-          <GradientStop Color="#0005060A" Offset="0"/>
-          <GradientStop Color="#9905060A" Offset="0.75"/>
-          <GradientStop Color="#E605060A" Offset="1"/>
+        <RadialGradientBrush Center="0,0" GradientOrigin="0,0" RadiusX="0.9" RadiusY="0.9">
+          <GradientStop Color="#2E7C5CFF" Offset="0"/>
+          <GradientStop Color="#007C5CFF" Offset="1"/>
+        </RadialGradientBrush>
+      </Rectangle.Fill>
+    </Rectangle>
+    <Rectangle IsHitTestVisible="False">
+      <Rectangle.Fill>
+        <RadialGradientBrush Center="1,1" GradientOrigin="1,1" RadiusX="0.8" RadiusY="0.8">
+          <GradientStop Color="#2222C3EE" Offset="0"/>
+          <GradientStop Color="#0022C3EE" Offset="1"/>
         </RadialGradientBrush>
       </Rectangle.Fill>
     </Rectangle>
@@ -29,15 +34,10 @@
       <Grid x:Name="TitleBar" Grid.Row="0" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
           <Image Source="assets/emblem.png" Width="24" Height="24" Margin="0,0,10,0"/>
-          <TextBlock Text="H E L I X" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="15" VerticalAlignment="Center">
-            <TextBlock.Effect>
-              <DropShadowEffect Color="#4FD8FF" BlurRadius="16" ShadowDepth="0" Opacity="0.6"/>
-            </TextBlock.Effect>
-          </TextBlock>
+          <TextBlock Text="H E L I X" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
           <TextBlock x:Name="TitleSub" Text="Setup" Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Center"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0">
-          <Button x:Name="MuteBtn" Style="{StaticResource WinBtn}" Content="&#xE767;" ToolTip="Ton aus/an" Click="Mute_Click"/>
           <Button Style="{StaticResource WinBtn}" Content="&#xE921;" ToolTip="Minimieren" Click="Min_Click"/>
           <Button x:Name="CloseBtn" Style="{StaticResource WinBtn}" Content="&#xE8BB;" ToolTip="Schließen" Click="Close_Click"/>
         </StackPanel>
@@ -51,43 +51,18 @@
               <ColumnDefinition Width="300"/>
               <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <Grid VerticalAlignment="Center">
-              <Ellipse Width="250" Height="250" Opacity="0.35">
-                <Ellipse.Fill>
-                  <RadialGradientBrush>
-                    <GradientStop Color="#664FD8FF" Offset="0"/>
-                    <GradientStop Color="#004FD8FF" Offset="1"/>
-                  </RadialGradientBrush>
-                </Ellipse.Fill>
-              </Ellipse>
-              <Image Source="assets/emblem.png" Width="220" Height="220">
-                <Image.Effect>
-                  <DropShadowEffect Color="#4FD8FF" BlurRadius="40" ShadowDepth="0" Opacity="0.55"/>
-                </Image.Effect>
-              </Image>
-            </Grid>
+            <Image Source="assets/emblem.png" Width="160" Height="160" VerticalAlignment="Center"/>
             <StackPanel Grid.Column="1" Margin="32,0,0,0" VerticalAlignment="Center">
               <TextBlock Text="Willkommen bei HELIX" Style="{StaticResource H1}"/>
-              <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,20" FontSize="14"
-                         Text="Dein Fortnite-Tuning-Cockpit. Das Setup holt die neueste Version und richtet alles ein – in etwa einer Minute."/>
-              <TextBlock x:Name="WhatText" Margin="0,0,0,16" LineHeight="22"/>
-              <CheckBox x:Name="OptDesktop" IsChecked="True" Margin="0,4">
-                <StackPanel>
-                  <TextBlock Text="Verknüpfung auf dem Desktop"/>
-                  <TextBlock Style="{StaticResource Hint}" Text="Zum schnellen Starten."/>
-                </StackPanel>
+              <TextBlock x:Name="WhatText" Style="{StaticResource Hint}" Margin="0,6,0,24" FontSize="14"/>
+              <CheckBox x:Name="OptDesktop" IsChecked="True" Margin="0,6">
+                <TextBlock Text="Verknüpfung auf dem Desktop"/>
               </CheckBox>
-              <CheckBox x:Name="OptStart" IsChecked="True" Margin="0,4">
-                <StackPanel>
-                  <TextBlock Text="Eintrag im Startmenü"/>
-                  <TextBlock Style="{StaticResource Hint}" Text="HELIX findest du dann über die Windows-Suche."/>
-                </StackPanel>
+              <CheckBox x:Name="OptStart" IsChecked="True" Margin="0,6">
+                <TextBlock Text="Eintrag im Startmenü"/>
               </CheckBox>
-              <CheckBox x:Name="OptRun" IsChecked="True" Margin="0,4,0,12">
-                <StackPanel>
-                  <TextBlock Text="HELIX danach starten"/>
-                  <TextBlock Style="{StaticResource Hint}" Text="Öffnet das Programm direkt nach der Installation."/>
-                </StackPanel>
+              <CheckBox x:Name="OptRun" IsChecked="True" Margin="0,6,0,16">
+                <TextBlock Text="HELIX danach starten"/>
               </CheckBox>
               <TextBlock Text="Ordner" Style="{StaticResource Hint}" Margin="0,0,0,6"/>
               <Grid>
@@ -98,7 +73,7 @@
                 <TextBox x:Name="DirBox" IsReadOnly="True"/>
                 <Button Grid.Column="1" Content="Ändern …" Style="{StaticResource BtnBase}" MinHeight="40" Margin="8,0,0,0" Click="ChangeDir_Click"/>
               </Grid>
-              <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,24" Text="Kein Administrator nötig: HELIX wird nur für deinen Windows-Benutzer installiert."/>
+              <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,24" Text="Kein Administrator nötig."/>
               <StackPanel Orientation="Horizontal">
                 <Button x:Name="InstallBtn" Content="Installieren" Style="{StaticResource Primary}" MinWidth="180" Click="Install_Click" IsDefault="True"/>
                 <Button Content="Abbrechen" Style="{StaticResource Ghost}" Margin="8,0,0,0" Click="Close_Click"/>
@@ -121,11 +96,7 @@
                       <ColumnDefinition Width="28"/>
                       <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Ellipse Width="10" Height="10" Fill="{Binding Dot}" HorizontalAlignment="Left" VerticalAlignment="Center">
-                      <Ellipse.Effect>
-                        <DropShadowEffect Color="#4FD8FF" BlurRadius="{Binding Glow}" ShadowDepth="0" Opacity="0.9"/>
-                      </Ellipse.Effect>
-                    </Ellipse>
+                    <Ellipse Width="10" Height="10" Fill="{Binding Dot}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
                     <TextBlock Grid.Column="1" Text="{Binding Text}" Foreground="{Binding Fg}"/>
                   </Grid>
                 </DataTemplate>
@@ -141,11 +112,7 @@
         <Border x:Name="DonePanel" Background="{StaticResource Glass}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Visibility="Collapsed" Opacity="0"
                 HorizontalAlignment="Center" VerticalAlignment="Center" Width="620">
           <StackPanel Margin="40,32" HorizontalAlignment="Center">
-            <Image Source="assets/emblem.png" Width="140" Height="140" Margin="0,0,0,16">
-              <Image.Effect>
-                <DropShadowEffect Color="#4FD8FF" BlurRadius="40" ShadowDepth="0" Opacity="0.6"/>
-              </Image.Effect>
-            </Image>
+            <Image Source="assets/emblem.png" Width="96" Height="96" Margin="0,0,0,16"/>
             <TextBlock x:Name="DoneTitle" Text="HELIX ist bereit" Style="{StaticResource H1}" TextAlignment="Center"/>
             <TextBlock x:Name="DoneText" Style="{StaticResource Hint}" FontSize="14" TextAlignment="Center" Margin="0,8,0,24"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -156,7 +123,7 @@
         </Border>
 
         <!-- Fehler -->
-        <Border x:Name="ErrorPanel" Background="{StaticResource Glass}" BorderBrush="#66FF5D6C" BorderThickness="1" CornerRadius="12" Visibility="Collapsed" Opacity="0"
+        <Border x:Name="ErrorPanel" Background="{StaticResource Glass}" BorderBrush="#66F87171" BorderThickness="1" CornerRadius="12" Visibility="Collapsed" Opacity="0"
                 HorizontalAlignment="Center" VerticalAlignment="Center" Width="620">
           <StackPanel Margin="40,32">
             <TextBlock Text="Das hat nicht geklappt" Style="{StaticResource H1}" FontSize="24"/>
@@ -183,7 +150,7 @@
             <CheckBox x:Name="KeepData" IsChecked="True" Margin="0,0,0,24">
               <StackPanel>
                 <TextBlock Text="Meine Profile und Sicherungen behalten (empfohlen)"/>
-                <TextBlock Style="{StaticResource Hint}" Text="Bleiben in %APPDATA%\HELIX. Bei einer neuen Installation sind sie sofort wieder da. Deine Fortnite-Einstellungen bleiben in jedem Fall unverändert."/>
+                <TextBlock Style="{StaticResource Hint}" Text="Deine Fortnite-Einstellungen bleiben in jedem Fall unverändert."/>
               </StackPanel>
             </CheckBox>
             <StackPanel Orientation="Horizontal">
@@ -195,15 +162,15 @@
       </Grid>
     </Grid>
 
-    <!-- Intro: Higgsfield-Clip mit Ton -->
-    <Grid x:Name="IntroLayer" Background="Black" Visibility="Collapsed" MouseLeftButtonDown="Intro_Click">
-      <MediaElement x:Name="IntroVideo" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform"/>
-      <Image x:Name="IntroStill" Source="assets/emblem.png" Width="300" Height="300" Visibility="Collapsed" Opacity="0">
-        <Image.Effect>
-          <DropShadowEffect Color="#4FD8FF" BlurRadius="60" ShadowDepth="0" Opacity="0.7"/>
-        </Image.Effect>
-      </Image>
-      <Button Content="Überspringen" Style="{StaticResource BtnBase}" MinHeight="36" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,24" Background="#59000000" Click="Intro_Click"/>
+    <!-- Kurzes Intro (unter 2 Sekunden, ohne Knopf, ohne Ton): Logo und Name blenden ein -->
+    <Grid x:Name="IntroLayer" Background="{StaticResource Bg}" Visibility="Collapsed">
+      <StackPanel x:Name="IntroContent" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0" RenderTransformOrigin="0.5,0.5">
+        <StackPanel.RenderTransform>
+          <ScaleTransform ScaleX="0.88" ScaleY="0.88"/>
+        </StackPanel.RenderTransform>
+        <Image Source="assets/emblem.png" Width="96" Height="96"/>
+        <TextBlock Text="H E L I X" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="22" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+      </StackPanel>
     </Grid>
   </Grid>
 </Window>

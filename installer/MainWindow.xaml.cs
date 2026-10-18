@@ -1,5 +1,5 @@
-// HELIX-Setup – das Fenster: Intro-Clip, Willkommen, Fortschritt, Fertig, Fehler, Deinstallation.
-// Bewegung kommt nur aus den Higgsfield-Clips; im Code gibt es nur kurze Überblendungen zwischen den Seiten.
+// HELIX-Setup – das Fenster: kurzes Intro, Willkommen, Fortschritt, Fertig, Fehler, Deinstallation.
+// Schlicht wie die App: flache Flächen, kurze Überblendungen, leise Töne nur bei Start und Ende.
 
 using System;
 using System.Collections.ObjectModel;
@@ -27,16 +27,14 @@ namespace HelixSetup
     public partial class MainWindow : Window
     {
         static readonly Brush DotIdle = new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
-        static readonly Brush DotActive = new SolidColorBrush(Color.FromRgb(0x4F, 0xD8, 0xFF));
-        static readonly Brush DotDone = new SolidColorBrush(Color.FromRgb(0x3D, 0xDC, 0x97));
+        static readonly Brush DotActive = new SolidColorBrush(Color.FromRgb(0x8B, 0x6C, 0xFF));
+        static readonly Brush DotDone = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99));
         static readonly Brush TextMain = new SolidColorBrush(Color.FromRgb(0xE8, 0xEA, 0xF0));
-        static readonly Brush TextMuted = new SolidColorBrush(Color.FromRgb(0x6F, 0x76, 0x89));
+        static readonly Brush TextMuted = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x84));
 
         readonly ObservableCollection<StepItem> steps = new ObservableCollection<StepItem>();
         string[] stepTexts;
         CancellationTokenSource cts;
-        SoundPlayer loopPlayer;
-        bool muted;
         bool busy;
         bool introDone;
         string installedDir;
@@ -47,7 +45,7 @@ namespace HelixSetup
             InitializeComponent();
             StepList.ItemsSource = steps;
             DirBox.Text = Engine.InstalledDir() ?? Engine.DefaultInstallDir;
-            WhatText.Text = "• Neueste HELIX-Version von GitHub laden und prüfen\n• In deinen Benutzerordner installieren\n• Verknüpfungen und Deinstallation einrichten";
+            WhatText.Text = "Holt die neueste Version und richtet alles ein – in etwa einer Minute.";
             Loaded += OnLoaded;
             Closing += (s, e) =>
             {
@@ -57,14 +55,11 @@ namespace HelixSetup
                     return;
                 }
                 cts?.Cancel();
-                StopLoop();
             };
-            KeyDown += (s, e) => { if (e.Key == Key.Escape && IntroLayer.Visibility == Visibility.Visible) EndIntro(); };
         }
 
         void OnLoaded(object sender, RoutedEventArgs e)
         {
-            StartBackground();
             if (App.Args.Uninstall)
             {
                 TitleSub.Text = "Deinstallation";
@@ -79,117 +74,50 @@ namespace HelixSetup
             if (!string.IsNullOrEmpty(v))
             {
                 InstallBtn.Content = "Aktualisieren";
-                WhatText.Text = $"• HELIX {v} ist schon installiert – das Setup holt die neueste Version\n• Deine Profile und Sicherungen bleiben erhalten\n• Verknüpfungen werden erneuert";
+                WhatText.Text = $"HELIX {v} ist installiert. Das Setup holt die neueste Version – deine Profile bleiben erhalten.";
             }
             PlayIntro();
         }
 
-        // ------------------------------------------------------------ Clips & Klang
+        // ------------------------------------------------------------ Intro & Klang
 
-        void StartBackground()
-        {
-            var bg = Engine.Media("bg-loop.mp4");
-            if (bg == null) { ShowBgFallback(); return; }
-            BgVideo.MediaEnded += (s, e) => { BgVideo.Position = TimeSpan.Zero; BgVideo.Play(); };
-            BgVideo.MediaFailed += (s, e) => { Engine.Log("Hintergrund-Video: " + e.ErrorException?.Message); ShowBgFallback(); };
-            BgVideo.Source = new Uri(bg);
-            BgVideo.Play();
-        }
-
-        void ShowBgFallback()
-        {
-            BgVideo.Visibility = Visibility.Collapsed;
-            BgFallback.Visibility = Visibility.Visible;
-            BgFallback.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/assets/emblem.png"));
-            BgFallback.Stretch = Stretch.None;
-            BgFallback.Opacity = 0.08;
-        }
-
+        /// <summary>Kurzes Intro (unter 2 Sekunden): Logo und Name blenden weich ein, dann kommt die Startseite.</summary>
         void PlayIntro()
         {
-            var clip = Engine.Media("intro.mp4");
             IntroLayer.Visibility = Visibility.Visible;
-            if (clip == null) { IntroFallback(); return; }
-            IntroVideo.MediaEnded += (s, e) => EndIntro();
-            IntroVideo.MediaFailed += (s, e) => { Engine.Log("Intro-Video: " + e.ErrorException?.Message); IntroFallback(); };
-            IntroVideo.Source = new Uri(clip);
-            IntroVideo.Volume = 0.85;
-            IntroVideo.IsMuted = muted;
-            IntroVideo.Play();
-            // Sicherheitsnetz, falls das Video hängen bleibt
-            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(9) };
+            var appear = TimeSpan.FromMilliseconds(380);
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            IntroContent.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, appear));
+            if (IntroContent.RenderTransform is ScaleTransform scale)
+            {
+                scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.88, 1, appear) { EasingFunction = ease });
+                scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.88, 1, appear) { EasingFunction = ease });
+            }
+            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1250) };
             t.Tick += (s, e) => { t.Stop(); EndIntro(); };
             t.Start();
         }
-
-        /// <summary>Ohne Video-Wiedergabe (z. B. Windows N): Emblem einblenden und den Intro-Klang spielen.</summary>
-        void IntroFallback()
-        {
-            IntroVideo.Visibility = Visibility.Collapsed;
-            IntroStill.Visibility = Visibility.Visible;
-            IntroStill.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(900)));
-            PlayOnce("install-intro.wav");
-            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3.2) };
-            t.Tick += (s, e) => { t.Stop(); EndIntro(); };
-            t.Start();
-        }
-
-        void Intro_Click(object sender, RoutedEventArgs e) => EndIntro();
-        void Intro_Click(object sender, MouseButtonEventArgs e) => EndIntro();
 
         void EndIntro()
         {
             if (introDone) return;
             introDone = true;
-            var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(450));
-            fade.Completed += (s, e) =>
-            {
-                IntroLayer.Visibility = Visibility.Collapsed;
-                IntroVideo.Stop();
-                IntroVideo.Source = null;
-            };
+            var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(300));
+            fade.Completed += (s, e) => IntroLayer.Visibility = Visibility.Collapsed;
             IntroLayer.BeginAnimation(OpacityProperty, fade);
             Show(WelcomePanel);
             InstallBtn.Focus();
         }
 
+        /// <summary>Leiser, kurzer Ton (nur beim Start der Installation und wenn sie fertig ist).</summary>
         void PlayOnce(string name)
         {
-            if (muted) return;
             try
             {
                 var f = Engine.Media(name);
                 if (f != null) new SoundPlayer(f).Play();
             }
             catch (Exception e) { Engine.Log("Ton: " + e.Message); }
-        }
-
-        void StartLoop()
-        {
-            if (muted) return;
-            try
-            {
-                var f = Engine.Media("install-loop.wav");
-                if (f == null) return;
-                loopPlayer = new SoundPlayer(f);
-                loopPlayer.PlayLooping();
-            }
-            catch (Exception e) { Engine.Log("Ton: " + e.Message); }
-        }
-
-        void StopLoop()
-        {
-            try { loopPlayer?.Stop(); } catch { }
-            loopPlayer = null;
-        }
-
-        void Mute_Click(object sender, RoutedEventArgs e)
-        {
-            muted = !muted;
-            MuteBtn.Content = muted ? "" : "";
-            IntroVideo.IsMuted = muted;
-            if (muted) StopLoop();
-            else if (busy) StartLoop();
         }
 
         // ------------------------------------------------------------ Seitenwechsel
@@ -265,10 +193,9 @@ namespace HelixSetup
             CancelBtn.IsEnabled = true;
             SetSteps("Neueste Version suchen", "Herunterladen", "Prüfen", "Installieren", "Verknüpfungen & Deinstallation", "Fertig");
             ProgressTitle.Text = "HELIX wird installiert";
-            ProgressSub.Text = "Bitte kurz warten – du kannst das Fenster offen lassen.";
+            ProgressSub.Text = "Bitte kurz warten.";
             Bar.Value = 0;
             Show(ProgressPanel);
-            StartLoop();
             var progress = new Progress<StepProgress>(OnProgress);
             var opts = new InstallOptions
             {
@@ -288,7 +215,6 @@ namespace HelixSetup
                 await Task.Run(() => Engine.Install(zip, rel, opts, progress));
                 if (rel.Source != "local") { try { File.Delete(zip); } catch { } }
                 busy = false;
-                StopLoop();
                 PlayOnce("install-done.wav");
                 DoneTitle.Text = "HELIX ist bereit";
                 DoneText.Text = $"Version {rel.Version} ist installiert in „{installedDir}“."
@@ -300,13 +226,11 @@ namespace HelixSetup
             catch (OperationCanceledException)
             {
                 busy = false;
-                StopLoop();
                 Show(WelcomePanel);
             }
             catch (Exception ex)
             {
                 busy = false;
-                StopLoop();
                 Engine.Log("FEHLER: " + ex);
                 ShowError(ex);
             }
@@ -329,7 +253,6 @@ namespace HelixSetup
                 ErrorText.Text = "Unerwarteter Fehler: " + ex.Message;
                 ErrorAdvice.Text = "Versuche es noch einmal. Hilft das nicht, lade HELIX von der Release-Seite herunter.";
             }
-            PlayOnce("click.wav");
             Show(ErrorPanel);
         }
 

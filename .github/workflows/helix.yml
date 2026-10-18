@@ -131,9 +131,9 @@ jobs:
         run: |
           $v = '${{ steps.ver.outputs.version }}'
           $p = Start-Process "release\HELIX-Setup-$v.exe" -PassThru
-          Start-Sleep -Seconds 3
+          Start-Sleep -Milliseconds 900
           pwsh -File scripts/ci-shot.ps1 -Name setup-intro
-          Start-Sleep -Seconds 8
+          Start-Sleep -Seconds 4
           pwsh -File scripts/ci-shot.ps1 -Name setup-willkommen
           Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
 

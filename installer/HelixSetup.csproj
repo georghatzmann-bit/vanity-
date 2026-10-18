@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    HELIX-Setup: eigener, animierter Installer (WPF, .NET Framework 4.8 – ist auf jedem Windows 10/11 vorhanden).
+    HELIX-Setup: eigener, schlichter Installer (WPF, .NET Framework 4.8 – ist auf jedem Windows 10/11 vorhanden).
     Lädt die fertige App von den GitHub-Releases herunter, installiert pro Benutzer (kein Administrator nötig),
     legt Verknüpfungen an und trägt die Deinstallation unter "Apps & Features" ein.
     Bauen:  dotnet build -c Release -p:Version=1.0.0
@@ -40,12 +40,8 @@
     <Reference Include="System.Web.Extensions" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Clips (Higgsfield), Klänge und Bilder werden in die EXE eingebettet -->
-    <EmbeddedResource Include="assets\intro.mp4" LogicalName="intro.mp4" />
-    <EmbeddedResource Include="assets\bg-loop.mp4" LogicalName="bg-loop.mp4" />
-    <EmbeddedResource Include="assets\install-loop.wav" LogicalName="install-loop.wav" />
+    <!-- leise Klänge und das Logo werden in die EXE eingebettet -->
     <EmbeddedResource Include="assets\install-done.wav" LogicalName="install-done.wav" />
-    <EmbeddedResource Include="assets\install-intro.wav" LogicalName="install-intro.wav" />
     <EmbeddedResource Include="assets\click.wav" LogicalName="click.wav" />
     <Resource Include="assets\emblem.png" />
   </ItemGroup>

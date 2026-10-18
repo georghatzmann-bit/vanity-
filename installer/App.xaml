@@ -3,20 +3,25 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnMainWindowClose">
   <Application.Resources>
-    <!-- Farben: tiefer Kosmos, eine Akzentfarbe (Energie-Cyan), Status in Grün/Orange/Rot -->
-    <Color x:Key="BgColor">#05060A</Color>
-    <SolidColorBrush x:Key="Bg" Color="#05060A"/>
-    <SolidColorBrush x:Key="Glass" Color="#C40C0F18"/>
-    <SolidColorBrush x:Key="Glass2" Color="#D9141926"/>
-    <SolidColorBrush x:Key="Line" Color="#1FFFFFFF"/>
-    <SolidColorBrush x:Key="Line2" Color="#33FFFFFF"/>
+    <!-- Farben wie in der App: dunkle, flache Flächen, Violett→Cyan als Akzent, Status in Grün/Rot -->
+    <Color x:Key="BgColor">#0C0E13</Color>
+    <SolidColorBrush x:Key="Bg" Color="#0C0E13"/>
+    <SolidColorBrush x:Key="Glass" Color="#151922"/>
+    <SolidColorBrush x:Key="Glass2" Color="#1B202B"/>
+    <SolidColorBrush x:Key="Line" Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="Line2" Color="#1FFFFFFF"/>
     <SolidColorBrush x:Key="Text" Color="#E8EAF0"/>
-    <SolidColorBrush x:Key="Muted" Color="#A3A9B9"/>
-    <SolidColorBrush x:Key="Faint" Color="#6F7689"/>
-    <SolidColorBrush x:Key="Accent" Color="#4FD8FF"/>
-    <SolidColorBrush x:Key="AccentSoft" Color="#244FD8FF"/>
-    <SolidColorBrush x:Key="Ok" Color="#3DDC97"/>
-    <SolidColorBrush x:Key="Err" Color="#FF5D6C"/>
+    <SolidColorBrush x:Key="Muted" Color="#9AA1B2"/>
+    <SolidColorBrush x:Key="Faint" Color="#6B7284"/>
+    <SolidColorBrush x:Key="Accent" Color="#8B6CFF"/>
+    <SolidColorBrush x:Key="AccentSoft" Color="#248B6CFF"/>
+    <SolidColorBrush x:Key="Ok" Color="#34D399"/>
+    <SolidColorBrush x:Key="Err" Color="#F87171"/>
+    <LinearGradientBrush x:Key="Grad" StartPoint="0,0" EndPoint="1,1">
+      <GradientStop Color="#8B6CFF" Offset="0"/>
+      <GradientStop Color="#4C7DFF" Offset="0.55"/>
+      <GradientStop Color="#22C3EE" Offset="1"/>
+    </LinearGradientBrush>
     <FontFamily x:Key="Ui">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="Display">Segoe UI Variable Display, Segoe UI</FontFamily>
 
@@ -73,26 +78,14 @@
       </Setter>
     </Style>
     <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource BtnBase}">
-      <Setter Property="Foreground" Value="#EAFAFF"/>
-      <Setter Property="BorderBrush" Value="#8C4FD8FF"/>
-      <Setter Property="Background">
-        <Setter.Value>
-          <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-            <GradientStop Color="#474FD8FF" Offset="0"/>
-            <GradientStop Color="#244FD8FF" Offset="1"/>
-          </LinearGradientBrush>
-        </Setter.Value>
-      </Setter>
-      <Setter Property="Effect">
-        <Setter.Value>
-          <DropShadowEffect Color="#4FD8FF" BlurRadius="24" ShadowDepth="0" Opacity="0.35"/>
-        </Setter.Value>
-      </Setter>
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Background" Value="{StaticResource Grad}"/>
     </Style>
     <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource BtnBase}">
       <Setter Property="Foreground" Value="#FFD9DD"/>
-      <Setter Property="BorderBrush" Value="#80FF5D6C"/>
-      <Setter Property="Background" Value="#1FFF5D6C"/>
+      <Setter Property="BorderBrush" Value="#80F87171"/>
+      <Setter Property="Background" Value="#1FF87171"/>
     </Style>
     <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource BtnBase}">
       <Setter Property="Background" Value="Transparent"/>
@@ -128,9 +121,9 @@
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Track" Property="Background" Value="#4D4FD8FF"/>
-                <Setter TargetName="Track" Property="BorderBrush" Value="#994FD8FF"/>
-                <Setter TargetName="Knob" Property="Fill" Value="{StaticResource Accent}"/>
+                <Setter TargetName="Track" Property="Background" Value="{StaticResource Accent}"/>
+                <Setter TargetName="Track" Property="BorderBrush" Value="Transparent"/>
+                <Setter TargetName="Knob" Property="Fill" Value="#FFFFFF"/>
                 <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/>
                 <Setter TargetName="Knob" Property="Margin" Value="0,0,3,0"/>
               </Trigger>
@@ -143,7 +136,7 @@
       </Setter>
     </Style>
 
-    <!-- schmaler, leuchtender Fortschrittsbalken -->
+    <!-- schmaler, farbiger Fortschrittsbalken -->
     <Style TargetType="ProgressBar">
       <Setter Property="Height" Value="6"/>
       <Setter Property="Template">
@@ -154,13 +147,10 @@
               <Border x:Name="PART_Indicator" CornerRadius="3" HorizontalAlignment="Left">
                 <Border.Background>
                   <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                    <GradientStop Color="#7A5CFF" Offset="0"/>
-                    <GradientStop Color="#4FD8FF" Offset="1"/>
+                    <GradientStop Color="#8B6CFF" Offset="0"/>
+                    <GradientStop Color="#22C3EE" Offset="1"/>
                   </LinearGradientBrush>
                 </Border.Background>
-                <Border.Effect>
-                  <DropShadowEffect Color="#4FD8FF" BlurRadius="12" ShadowDepth="0" Opacity="0.8"/>
-                </Border.Effect>
               </Border>
             </Grid>
           </ControlTemplate>
@@ -169,7 +159,7 @@
     </Style>
 
     <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#8C05060A"/>
+      <Setter Property="Background" Value="#11141B"/>
       <Setter Property="Foreground" Value="{StaticResource Text}"/>
       <Setter Property="BorderBrush" Value="{StaticResource Line2}"/>
       <Setter Property="BorderThickness" Value="1"/>
