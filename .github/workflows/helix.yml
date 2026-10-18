@@ -93,15 +93,6 @@ jobs:
           Get-Content "$data\helix.log"
           if (-not (Get-ChildItem "$data\backups" -Directory)) { throw 'Originalzustand wurde nicht gesichert' }
 
-      - name: End-to-end test (Profile speichern/anwenden, alle Tools öffnen)
-        shell: pwsh
-        env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-          SHOTS_DIR: test-results\e2e
-        run: |
-          npm install --no-save --no-audit --no-fund playwright@1.56.1
-          node test/e2e/smoke.mjs "release\win-unpacked\HELIX.exe"
-
       - name: Build Setup (WPF, .NET Framework 4.8)
         shell: pwsh
         run: |
@@ -134,6 +125,15 @@ jobs:
           if (Test-Path $key) { throw 'Eintrag in Apps & Features nach der Deinstallation noch vorhanden' }
           if (Test-Path $lnk) { throw 'Verknüpfung nach der Deinstallation noch vorhanden' }
           'Installieren und Deinstallieren: ok'
+
+      - name: End-to-end test (Profile speichern/anwenden, alle Tools öffnen)
+        shell: pwsh
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          SHOTS_DIR: test-results\e2e
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          node test/e2e/smoke.mjs "release\win-unpacked\HELIX.exe"
 
       - name: Upload Setup + App
         uses: actions/upload-artifact@v7
