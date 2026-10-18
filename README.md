@@ -1,3 +1,6 @@
-# Jarvis
+# HELIX
 
-Ein eigener Sprachassistent mit PC-Steuerung und Alexa-Anbindung. Neustart am 29.09.2026.
+Dein Fortnite-Tuning-Cockpit für Windows: Settings-Profile für mehrere Konten, Sensi-Kalibrierung,
+PC- und Monitor-Tuning und weitere Tools. Arbeitet nur mit lokalen Dateien und normalen Windows-Funktionen.
+
+Aufbau für Entwickler: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md)

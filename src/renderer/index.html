@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>HELIX</title>
+  <link rel="stylesheet" href="css/helix.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <!-- Hintergrund: mit Higgsfield gerenderter Kosmos-Loop -->
+  <video id="bg" class="bg-video" src="assets/video/bg-loop.mp4" poster="assets/img/bg.jpg" autoplay muted loop playsinline aria-hidden="true"></video>
+  <div class="bg-shade" aria-hidden="true"></div>
+
+  <header class="titlebar">
+    <div class="brand" aria-label="HELIX">
+      <img class="brand-mark" src="assets/img/icon.png" alt="">
+      <span class="brand-word">HELIX</span>
+      <span class="brand-sub">Fortnite-Tuning-Cockpit</span>
+    </div>
+    <div id="status" class="status" aria-live="polite"></div>
+    <button id="btn-settings" class="icon-btn titlebar-btn" type="button" title="Einstellungen" aria-label="Einstellungen">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9a3 3 0 110 6 3 3 0 010-6zM19 12l2-1-2-4-2 .5-1.5-1.2L15 4h-4l-.5 2.3L9 7.5 7 7 5 11l2 1v1l-2 1 2 4 2-.5 1.5 1.2.5 2.3h4l.5-2.3 1.5-1.2 2 .5 2-4-2-1z"/></svg>
+    </button>
+  </header>
+
+  <main id="stage" class="stage"></main>
+
+  <!-- Übergangs-Clip (Higgsfield), wird über die Oberfläche geblendet -->
+  <video id="fx" class="fx-transition" muted playsinline preload="auto" aria-hidden="true"></video>
+
+  <div id="intro" class="intro" hidden>
+    <video playsinline preload="auto"></video>
+    <button type="button" class="intro-skip">Überspringen</button>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <div id="modal-root"></div>
+</body>
+</html>

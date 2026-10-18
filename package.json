@@ -1,0 +1,63 @@
+{
+  "name": "helix",
+  "productName": "HELIX",
+  "version": "1.0.0",
+  "description": "HELIX – dein Fortnite-Tuning-Cockpit: Settings-Profile, Sensi-Kalibrierung, PC- und Monitor-Tuning. Arbeitet nur mit lokalen Dateien.",
+  "main": "src/main/main.js",
+  "author": "Georg Hatzmann",
+  "license": "UNLICENSED",
+  "private": true,
+  "homepage": "https://github.com/georghatzmann-bit/vanity-",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/georghatzmann-bit/vanity-.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "preview": "node scripts/preview-server.mjs",
+    "pack:dir": "electron-builder --win dir --x64 --publish never",
+    "pack:zip": "node scripts/zip-app.mjs"
+  },
+  "dependencies": {
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "electron": "44.9.0",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "de.helix.tuning",
+    "productName": "HELIX",
+    "copyright": "HELIX – kein offizielles Programm von Epic Games",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "package.json",
+      "src/**/*",
+      "!src/renderer/js/mock/**",
+      "!**/*.map"
+    ],
+    "electronLanguages": [
+      "de",
+      "en-US"
+    ],
+    "publish": null,
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "executableName": "HELIX"
+    }
+  }
+}
