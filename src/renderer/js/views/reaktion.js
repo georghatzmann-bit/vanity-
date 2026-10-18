@@ -536,7 +536,7 @@ export default {
       });
 
       return [
-        ui.section('Deine Tasten', 'Trag hier die Tasten ein, die du in Fortnite benutzt: Klick auf die Taste und drück dann die neue. Maustasten 3 bis 5 und das Mausrad gehen auch. Esc bricht ab.',
+        ui.section('Deine Tasten', 'Trag hier die Tasten ein, die du in Fortnite benutzt: Klick auf die Taste und drück dann die neue. Rechte und mittlere Maustaste, die Seitentasten (Maus 4 und 5) und das Mausrad gehen auch. Esc bricht ab.',
           grid,
           h('div.row',
             ui.button('Fortnite-Standard laden', {
