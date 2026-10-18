@@ -470,7 +470,8 @@ test('Modul mit echtem Kern: Vorschau, Übernehmen mit Backup, nur GameUserSetti
   assert.ok(res.keys >= res.applied);
   assert.deepEqual(res.skipped, ['grass']);
   assert.equal((await core.backups.list()).length, backupsBefore + 1, 'vorher wurde ein Backup gemacht');
-  const backup = (await core.backups.list())[0];
+  // nicht nach Position suchen: das Original-Backup kann in derselben Millisekunde entstanden sein
+  const backup = (await core.listBackups()).find((b) => b.reason !== 'original');
   assert.match(backup.label, /^PC-Check: Vorschlag „Ausgewogen“$/);
 
   const text = fs.readFileSync(path.join(fx.wc, 'GameUserSettings.ini'), 'utf8');

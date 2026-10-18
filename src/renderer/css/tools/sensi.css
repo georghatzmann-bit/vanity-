@@ -3,6 +3,10 @@
 [data-tool="sensi"] .sensi-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 [data-tool="sensi"] .sensi-grid > div > .block:last-child { margin-bottom: 0; }
 [data-tool="sensi"] .sensi-grid .block { margin-bottom: 16px; }
+[data-tool="sensi"] .sensi-werte { grid-template-areas: "form live" "howto live"; grid-template-rows: auto 1fr; }
+[data-tool="sensi"] .sensi-a-form { grid-area: form; }
+[data-tool="sensi"] .sensi-a-live { grid-area: live; }
+[data-tool="sensi"] .sensi-a-howto { grid-area: howto; }
 [data-tool="sensi"] .sensi-gap { margin-top: 8px; }
 [data-tool="sensi"] .sensi-err { color: #ffb3bc; font-size: 12.5px; min-height: 0; }
 [data-tool="sensi"] .sensi-err:empty { display: none; }
@@ -98,4 +102,5 @@
 
 @media (max-width: 1100px) {
   [data-tool="sensi"] .sensi-grid, [data-tool="sensi"] .sensi-result { grid-template-columns: minmax(0, 1fr); }
+  [data-tool="sensi"] .sensi-werte { grid-template-areas: "form" "live" "howto"; grid-template-rows: none; }
 }

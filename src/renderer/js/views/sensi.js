@@ -96,11 +96,13 @@ function createView(root, env) {
     }
   }
 
-  function renderBody() {
+  function renderBody({ keepScroll = false } = {}) {
     if (destroyed) return;
+    const scroller = body.parentElement;
+    const top = scroller ? scroller.scrollTop : 0;
     const fn = { werte: renderWerte, test: renderTest, umrechner: renderUmrechner, verlauf: renderVerlauf }[tab];
     ui.mount(body, fn());
-    body.parentElement?.scrollTo?.({ top: 0 });
+    if (scroller) scroller.scrollTop = keepScroll ? top : 0;
   }
 
   function later(fn, ms) {
@@ -186,11 +188,10 @@ function createView(root, env) {
     refresh();
     return [
       intro,
-      h('div.sensi-grid',
-        h('div',
-          ui.section('Deine Werte', 'Trag ein, was in Fortnite und in deiner Maus-Software steht. Komma oder Punkt ist egal.', form),
-          howTo),
-        h('div', liveBox)),
+      h('div.sensi-grid.sensi-werte',
+        h('div.sensi-a-form', ui.section('Deine Werte', 'Trag ein, was in Fortnite und in deiner Maus-Software steht. Komma oder Punkt ist egal.', form)),
+        h('div.sensi-a-live', liveBox),
+        h('div.sensi-a-howto', howTo)),
     ];
   }
 
@@ -208,7 +209,7 @@ function createView(root, env) {
           stat(`${SM.fmtNum(lv.inch360, 1)} Zoll`, 'pro Umdrehung', 'dasselbe in Zoll (1 Zoll = 2,54 cm)')),
         h('div.stat-row.sensi-stats',
           stat(`${SM.fmtNum(lv.adsCm360, 1)} cm`, 'beim Zielen', `mit ${numText(v.targeting)} % Zielen`),
-          stat(`${SM.fmtNum(lv.scopeCm360, 1)} cm`, 'mit Zielfernrohr', `mit ${numText(v.scope)} %, ohne Zoom-Effekt`)),
+          stat(`${SM.fmtNum(lv.scopeCm360, 1)} cm`, 'mit Zielfernrohr', `mit ${numText(v.scope)} %, Zoom nicht eingerechnet`)),
         h('div.callout.info', icon('info'), h('div',
           h('strong', 'Was ist eDPI?'),
           h('p.hint', 'eDPI ist deine echte Maus-Geschwindigkeit: DPI mal Sensi geteilt durch 100. So kannst du dich mit anderen vergleichen, auch wenn sie eine andere DPI haben. Beispiel: 800 DPI und 6,5 % ergeben eDPI 52 – genau wie 1600 DPI und 3,25 %.')))),
@@ -428,12 +429,13 @@ function createView(root, env) {
         h('div.sensi-result-text',
           rec.lines.map((l) => h('p', l)),
           h('p.hint', 'Tipp: Klick die Ziele direkt an, sobald dein Fadenkreuz darauf liegt. Beim Tracking hältst du das Fadenkreuz einfach auf dem Ziel.'),
+          dpiMode ? h('p.hint', `Stell deine Maus wieder auf ${plan.baseDpi} DPI zurück.`) : null,
           h('div.row',
             ui.button('Nochmal testen', { variant: 'primary', iconName: 'refresh', onClick: () => { outcome = null; renderBody(); } }))));
     }
     const conf = CONF[rec.confidence] || CONF.mittel;
     const adopted = Math.abs(s.sens - rec.sens) < 1e-9 && s.dpi === rec.dpi;
-    const adoptBtn = ui.button(adopted ? 'Ist schon deine Sensi' : 'Als meine Sensi übernehmen', {
+    const adoptBtn = ui.button(adopted ? (dpiMode ? 'Ist schon deine Einstellung' : 'Ist schon deine Sensi') : (dpiMode ? 'Als meine Einstellung übernehmen' : 'Als meine Sensi übernehmen'), {
       variant: 'primary', iconName: 'check', disabled: adopted,
       onClick: async () => {
         const ok = await saveSettings({ ...data.settings, sens: rec.sens, dpi: rec.dpi },
@@ -650,7 +652,7 @@ function createView(root, env) {
         icon('clock', 16),
         head,
         e.confidence && CONF[e.confidence] ? ui.badge(CONF[e.confidence][0], CONF[e.confidence][1]) : null,
-        ui.button(open ? 'Weniger' : 'Details', { small: true, variant: 'ghost', iconName: 'chevron', onClick: () => { if (open) openDetails.delete(e.at); else openDetails.add(e.at); renderBody(); } }),
+        ui.button(open ? 'Weniger' : 'Details', { small: true, variant: 'ghost', iconName: 'chevron', onClick: () => { if (open) openDetails.delete(e.at); else openDetails.add(e.at); renderBody({ keepScroll: true }); } }),
         ui.button('', { small: true, variant: 'ghost', iconName: 'trash', title: 'Diesen Test löschen', onClick: () => removeEntry(e) })),
       details);
   }
@@ -663,7 +665,7 @@ function createView(root, env) {
       data.history = data.history.filter((x) => x.at !== e.at);
       ui.toast('Test gelöscht.');
       renderTabs();
-      renderBody();
+      renderBody({ keepScroll: true });
     } catch (err) { ui.showError(err); }
   }
 

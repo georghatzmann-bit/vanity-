@@ -223,6 +223,8 @@ export function createArena({ h, session, dpi, onFinish, onAbort, onMode, sound 
   const hits = [];
   let hitAt = -1e9;
   let lastHud = '';
+  let lastBanner = '';
+  let dirty = true;
   let destroyed = false;
 
   const perf = () => performance.now();
@@ -232,6 +234,7 @@ export function createArena({ h, session, dpi, onFinish, onAbort, onMode, sound 
   const locked = () => document.pointerLockElement === canvas;
 
   function setOverlay(kind, error = '') {
+    dirty = true;
     ovError.textContent = error;
     if (!kind) { overlay.hidden = true; return; }
     overlay.hidden = false;
@@ -262,6 +265,9 @@ export function createArena({ h, session, dpi, onFinish, onAbort, onMode, sound 
   }
 
   function setBanner(title, text) {
+    const key = title ? `${title}|${text || ''}` : '';
+    if (key === lastBanner) return;
+    lastBanner = key;
     if (!title) { banner.classList.remove('show'); return; }
     bannerTitle.textContent = title;
     bannerText.textContent = text || '';
@@ -289,6 +295,7 @@ export function createArena({ h, session, dpi, onFinish, onAbort, onMode, sound 
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.max(1, Math.round(r.width * dpr)); const hh = Math.max(1, Math.round(r.height * dpr));
     if (canvas.width !== w || canvas.height !== hh) { canvas.width = w; canvas.height = hh; }
+    dirty = true;
     render();
   }
 
@@ -334,7 +341,8 @@ export function createArena({ h, session, dpi, onFinish, onAbort, onMode, sound 
   function loop() {
     if (destroyed || state === 'finished') return;
     if (state === 'running') handleEvents(session.update(T()));
-    render();
+    // in der Pause nur neu zeichnen, wenn sich etwas geändert hat
+    if (state === 'running' || dirty || hits.length) { dirty = false; render(); }
     raf = requestAnimationFrame(loop);
   }
 
@@ -363,6 +371,8 @@ export function createArena({ h, session, dpi, onFinish, onAbort, onMode, sound 
 
   function onLockChange() {
     if (destroyed) return;
+    dirty = true;
+    if (locked() && state === 'finished') { document.exitPointerLock(); return; }
     if (locked()) {
       if (state === 'idle') { handleEvents(session.start(T())); if (state === 'idle') state = 'running'; }
       else if (state === 'paused') state = 'running';
