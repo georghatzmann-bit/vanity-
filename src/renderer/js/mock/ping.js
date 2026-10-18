@@ -2,7 +2,7 @@
 
 const REGIONS = [
   { id: 'EU', label: 'Europa', game: 'Europa', subs: [['de', 'Deutschland', true], ['gb', 'Großbritannien', true], ['fr', 'Frankreich', true]] },
-  { id: 'NA', label: 'Nordamerika', game: 'Nordamerika (NA)', subs: [['va', 'Virginia', true, 'central'], ['oh', 'Ohio', true, 'central'], ['ia', 'Iowa', false, 'central'], ['tx', 'Texas', false, 'central'], ['mx', 'Mexiko', true, 'central'], ['ncal', 'Nordkalifornien', true, 'west'], ['or', 'Oregon', true, 'west']] },
+  { id: 'NA', label: 'Nordamerika', game: 'Nordamerika (NA)', subs: [['va', 'Virginia', true], ['oh', 'Ohio', true], ['ia', 'Iowa', false], ['tx', 'Texas', false, 'central'], ['mx', 'Mexiko', true], ['ncal', 'Nordkalifornien', true, 'west'], ['or', 'Oregon', true, 'west']] },
   { id: 'ME', label: 'Naher Osten', game: 'Naher Osten', subs: [['bah', 'Bahrain', true], ['mum', 'Mumbai', true], ['il', 'Israel', true]] },
   { id: 'BR', label: 'Brasilien', game: 'Brasilien', subs: [['sao', 'São Paulo', true]] },
   { id: 'ASIA', label: 'Asien', game: 'Asien', subs: [['tok', 'Tokio', true]] },

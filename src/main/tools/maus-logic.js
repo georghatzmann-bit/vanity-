@@ -115,19 +115,23 @@ function planFix(values, { speed = true, accel = true } = {}) {
 /**
  * Rückgängig-Eintrag für eine neue Korrektur.
  * Steht noch eine frühere HELIX-Änderung unverändert da (z. B. erst Geschwindigkeit, dann Beschleunigung),
- * bleibt der ursprüngliche Vorher-Stand erhalten – „Rückgängig“ führt dann ganz zum Zustand vor HELIX zurück.
+ * behalten die damals geänderten Werte ihren ursprünglichen Vorher-Stand – „Rückgängig“ führt dann ganz zum
+ * Zustand vor HELIX zurück. Alle anderen Werte gelten so, wie sie jetzt sind (auch wenn der Nutzer sie
+ * inzwischen selbst in Windows geändert hat).
  */
 function nextUndo(prev, current, plan, at) {
   const chained = prev && validValues(prev.before) && Array.isArray(prev.changes) && prev.changes.length
     && prev.changes.every((c) => NAMES.includes(c.name) && current[c.name] === c.to);
   if (!chained) return { at, before: { ...current }, changes: plan.changes };
   const byName = new Map(prev.changes.map((c) => [c.name, { ...c }]));
+  const before = { ...current };
+  for (const n of byName.keys()) before[n] = prev.before[n] ?? null;
   for (const c of plan.changes) {
     const old = byName.get(c.name);
-    byName.set(c.name, { name: c.name, from: old ? old.from : prev.before[c.name] ?? null, to: c.to });
+    byName.set(c.name, { name: c.name, from: old ? old.from : c.from, to: c.to });
   }
   const changes = NAMES.filter((n) => byName.has(n)).map((n) => byName.get(n)).filter((c) => c.from !== c.to);
-  return { at, before: { ...prev.before }, changes };
+  return { at, before, changes };
 }
 
 function validValues(v) {

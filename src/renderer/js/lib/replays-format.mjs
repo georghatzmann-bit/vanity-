@@ -59,6 +59,8 @@ export function statusBadges(e, where, newestVersion) {
   else if (e.incomplete) out.push({ text: 'unvollständig', type: 'warn', title: 'Die Aufnahme wurde nicht sauber beendet (z. B. Absturz). Sie lässt sich vielleicht nur teilweise abspielen.' });
   if (where === 'demos' && e.inVault) out.push({ text: 'im Tresor', type: 'ok', title: 'Eine Kopie liegt sicher im Tresor.' });
   if (where === 'vault' && e.inDemos) out.push({ text: 'auch in Fortnite', type: 'accent', title: 'Fortnite hat dieses Replay noch in seinem Ordner.' });
+  // Fortnite hat das Original schon gelöscht: Die Tresor-Kopie ist jetzt die einzige – und sicher.
+  if (where === 'vault' && !e.inDemos) out.push({ text: 'nur im Tresor', type: 'ok', title: 'Fortnite hat das Original nicht mehr. Die Kopie im Tresor ist sicher – sie bleibt, bis du sie selbst löschst.' });
   if (e.ok && e.version && newestVersion && compareVersions(e.version, newestVersion) < 0) {
     out.push({ text: 'ältere Version', type: '', title: `Aufgenommen mit Fortnite ${e.version}. Läuft nur in dieser Version.` });
   }

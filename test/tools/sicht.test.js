@@ -155,16 +155,59 @@ test('Regeln: alles außerhalb der Liste oder im falschen Format wird abgelehnt'
   assert.deepEqual(ok, [{ section: S, key: 'sg.EffectsQuality', value: '0' }], 'Schreibweise wird vereinheitlicht');
 });
 
+/** Datei-Werte ({ 'Abschnitt|Schlüssel': Text }) aus Änderungen */
+const rawOf = (changes) => Object.fromEntries(changes.map((c) => [`${c.section}|${c.key}`, c.value]));
+
 test('Regeln: Zeile fürs Cockpit', () => {
-  const raw = { [`${G}|DisplayGamma`]: '2.350000', [`${S}|sg.ShadowQuality`]: '0' };
-  const last = { id: 'sturm', name: 'Sturm', short: 'Sturm', changes: [{ section: G, key: 'DisplayGamma', value: '2.350000' }, { section: S, key: 'sg.ShadowQuality', value: '0' }] };
+  const sturm = lib.presetChanges(lib.findPreset('sturm'));
+  const raw = { ...rawOf(sturm), [`${S}|sg.FoliageQuality`]: '2' };
+  const last = { id: 'sturm', name: 'Sturm', short: 'Sturm', changes: sturm };
   assert.deepEqual(rules.summaryText({ last }, raw), { text: 'Aktiv: Sturm' });
+  assert.deepEqual(rules.summaryText({}, raw), { text: 'Aktiv: Sturm' }, 'auch ohne gemerktes letztes Preset – wie die Ansicht');
   assert.deepEqual(rules.summaryText({ last }, { ...raw, [`${G}|DisplayGamma`]: '2.35' }), { text: 'Aktiv: Sturm' }, '2.35 = 2.350000');
   assert.deepEqual(rules.summaryText({ last }, { ...raw, [`${G}|DisplayGamma`]: '2.200000' }), { text: 'Kein Sicht-Preset aktiv · Helligkeit 100 %' });
-  assert.deepEqual(rules.summaryText({ last: { ...last, id: 'eigen' } }, raw), { text: 'Aktiv: eigene Sicht-Werte' });
+  // eigene Werte: nur solange sie noch in der Datei stehen
+  const eigen = lib.toChanges(lib.customValues({ brightness: 121, uiContrast: 1.15 }));
+  const rawEigen = { ...raw, ...rawOf(eigen) };
+  assert.deepEqual(rules.summaryText({ last: { id: 'eigen', changes: eigen } }, rawEigen), { text: 'Aktiv: eigene Sicht-Werte' });
+  assert.deepEqual(rules.summaryText({ last: { id: 'eigen', changes: eigen } }, raw), { text: 'Aktiv: Sturm' }, 'Preset geht vor alten eigenen Werten');
+  assert.deepEqual(rules.summaryText({ last: { id: 'sturm', changes: eigen } }, rawEigen), { text: 'Kein Sicht-Preset aktiv · Helligkeit 121 %' });
+  // „Standard“ nur mit gemerkten Originalwerten
+  const fresh = { [`${G}|DisplayGamma`]: '2.200000', [`${G}|UserInterfaceContrast`]: '1.000000', [`${S}|sg.ShadowQuality`]: '2' };
+  assert.deepEqual(rules.summaryText({}, fresh), { text: 'Kein Sicht-Preset aktiv · Helligkeit 100 %' });
+  assert.deepEqual(rules.summaryText({ original: { [`${S}|sg.ShadowQuality`]: '2' } }, fresh), { text: 'Aktiv: Standard' });
   assert.equal(rules.summaryText({}, {}), null);
   assert.equal(rules.cleanName('  „Böse“\u0000Name  ', 'x'), 'BöseName');
   assert.equal(rules.cleanName('', 'Ersatz'), 'Ersatz');
+});
+
+test('Cockpit und Ansicht kennen dieselben Presets und erkennen sie gleich', () => {
+  assert.deepEqual(
+    rules.PRESETS.map((p) => ({ id: p.id, name: p.name, short: p.short, values: p.values, restoreOriginal: !!p.restoreOriginal })),
+    lib.PRESETS.map((p) => ({ id: p.id, name: p.name, short: p.short, values: p.values, restoreOriginal: !!p.restoreOriginal })),
+  );
+  // gleiche Erkennung für viele Datei-Stände (Presets, leicht daneben, andere Schreibweise, mit/ohne Originalwerte)
+  const origRaw = rawOf(lib.toChanges({ brightness: 120, uiContrast: 1, shadows: 2, postProcess: 3, effects: 1, foliage: 1, gi: 2, grass: true, motionBlur: true }));
+  const variants = [];
+  for (const p of lib.PRESETS) {
+    for (const opts of [{}, { original: lib.valuesFromIni(origRaw) }]) {
+      const base = rawOf(lib.presetChanges(p, opts));
+      variants.push(base, { ...base, [`${S}|sg.GlobalIlluminationQuality`]: '3' });
+      variants.push({ ...base, [`${G}|DisplayGamma`]: (Number(base[`${G}|DisplayGamma`]) + 0.004).toFixed(6) }, { ...base, [`${G}|DisplayGamma`]: (Number(base[`${G}|DisplayGamma`]) + 0.01).toFixed(6) });
+      variants.push({ ...base, [`${G}|UserInterfaceContrast`]: (Number(base[`${G}|UserInterfaceContrast`]) + 0.004).toFixed(2) });
+      if (base[`${G}|bMotionBlur`]) variants.push({ ...base, [`${G}|bMotionBlur`]: base[`${G}|bMotionBlur`].toLowerCase() }, { ...base, [`${G}|bMotionBlur`]: 'True' });
+      if (base[`${S}|sg.ShadowQuality`]) variants.push({ ...base, [`${S}|sg.ShadowQuality`]: '0.0' }, { ...base, [`${S}|sg.ShadowQuality`]: '1' });
+    }
+  }
+  for (let g = 1.7; g <= 2.7; g += 0.0125) variants.push({ ...rawOf(lib.presetChanges(lib.findPreset('nacht'))), [`${G}|DisplayGamma`]: g.toFixed(6) });
+  for (const raw of variants) {
+    for (const original of [null, origRaw]) {
+      const viewP = lib.activePreset(lib.valuesFromIni(raw), { original: original ? lib.valuesFromIni(original) : null });
+      const mainP = rules.activePreset(rules.valuesFromIni(raw), { original: original ? rules.valuesFromIni(original) : null });
+      assert.equal(mainP?.id ?? null, viewP?.id ?? null, JSON.stringify(raw));
+    }
+  }
+  assert.deepEqual(rules.valuesFromIni(origRaw), lib.valuesFromIni(origRaw));
 });
 
 // ---------------------------------------------------------------- Ablauf mit echtem CoreService
@@ -227,6 +270,22 @@ test('Ablauf: aktuelle Werte -> Vorschau -> Anwenden mit Sicherung -> Cockpit-Ze
   assert.deepEqual(await sicht.handlers.summary({}, ctx), { text: 'Kein Sicht-Preset aktiv · Helligkeit 140 %' });
 });
 
+test('Ablauf: nach „Rückgängig machen“ zeigt das Cockpit dasselbe Preset wie die Ansicht', async () => {
+  const { core, ctx } = setup();
+  await core.init();
+  const P = (id) => lib.findPreset(id);
+  await sicht.handlers.apply({ changes: lib.presetChanges(P('sturm')), presetId: 'sturm', presetName: 'Sturm', presetShort: 'Sturm' }, ctx);
+  const r2 = await sicht.handlers.apply({ changes: lib.presetChanges(P('nacht')), presetId: 'nacht', presetName: 'Nacht / Dunkle Gebiete', presetShort: 'Nacht' }, ctx);
+  assert.deepEqual(await sicht.handlers.summary({}, ctx), { text: 'Aktiv: Nacht' });
+  // „Rückgängig machen“ im Ergebniskasten = backups.restore -> die Datei hat wieder die Sturm-Werte
+  assert.equal((await core.restoreBackup(r2.backupId)).ok, true);
+  const cur = await sicht.handlers.current({}, ctx);
+  const viewActive = lib.activePreset(lib.valuesFromIni(cur.raw), { original: cur.original ? lib.valuesFromIni(cur.original) : null });
+  assert.equal(viewActive?.id, 'sturm', 'Ansicht: Aktiv: Sturm');
+  assert.equal(cur.last.id, 'nacht', 'zuletzt angewendet war Nacht');
+  assert.deepEqual(await sicht.handlers.summary({}, ctx), { text: 'Aktiv: Sturm' }, 'Cockpit sagt dasselbe');
+});
+
 test('Ablauf: Fortnite läuft -> nichts wird geschrieben', async () => {
   const { core, ctx, gus } = setup({ running: ['FortniteClient-Win64-Shipping.exe'] });
   await core.init();
@@ -263,4 +322,226 @@ test('Modul: id und Handler', () => {
   assert.deepEqual(Object.keys(sicht.handlers).sort(), ['apply', 'current', 'preview', 'summary']);
   const src = fs.readFileSync(path.join(__dirname, '../../src/main/modules/tools/sicht.js'), 'utf8');
   assert.doesNotMatch(src, /writeFile|registry|Engine\.ini|ClientSettings/, 'schreibt nur über ctx.core.applyIniChanges');
+});
+
+// ---------------------------------------------------------------- Ansicht (nachgemachte Oberfläche)
+// Ein sehr kleines Element-Modell statt eines Browsers: reicht, um die Ansicht zu laden, Knöpfe zu drücken
+// und zu prüfen, was der Nutzer sieht. ui kommt wie in der App über env.ui.
+
+class FakeEl {
+  constructor(tag) {
+    this.tagName = String(tag).toUpperCase();
+    this.children = [];
+    this.parentNode = null;
+    this.attrs = {};
+    this.dataset = {};
+    this.listeners = {};
+    this.cls = new Set();
+    this.text = '';
+    this.scrolled = [];
+  }
+  get classList() {
+    const s = this.cls;
+    return { add: (...c) => c.forEach((x) => s.add(x)), remove: (...c) => c.forEach((x) => s.delete(x)), contains: (c) => s.has(c) };
+  }
+  get firstChild() { return this.children[0] || null; }
+  get textContent() { return this.tagName === '#TEXT' ? this.text : this.children.map((c) => c.textContent).join(''); }
+  set textContent(v) { [...this.children].forEach((c) => this.removeChild(c)); if (v != null && v !== '') this.append(v); }
+  appendChild(c) { c.parentNode?.removeChild(c); c.parentNode = this; this.children.push(c); return c; }
+  append(...cs) { for (const c of cs.flat(Infinity)) if (c != null && c !== false) this.appendChild(c instanceof FakeEl ? c : textNode(c)); }
+  removeChild(c) { this.children = this.children.filter((x) => x !== c); c.parentNode = null; return c; }
+  setAttribute(k, v) { this.attrs[k] = String(v); }
+  getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+  addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }
+  click() { return Promise.all((this.listeners.click || []).map((f) => f({ currentTarget: this, target: this, preventDefault() {} }))); }
+  focus() {}
+  scrollIntoView(opts) { this.scrolled.push(opts ?? true); }
+}
+const textNode = (v) => Object.assign(new FakeEl('#text'), { text: String(v) });
+function findAll(root, pred) {
+  const out = [];
+  const walk = (e) => { for (const c of e.children) { if (pred(c)) out.push(c); walk(c); } };
+  walk(root);
+  return out;
+}
+const byClass = (root, c) => findAll(root, (e) => e.cls.has(c));
+const buttonsWith = (root, re) => findAll(root, (e) => e.tagName === 'BUTTON' && re.test(e.textContent));
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+function fakeUi() {
+  const toasts = [];
+  const modals = [];
+  const h = (spec, attrs, ...children) => {
+    if (attrs == null || typeof attrs !== 'object' || attrs instanceof FakeEl || Array.isArray(attrs)) {
+      if (attrs != null) children.unshift(attrs);
+      attrs = {};
+    }
+    const [tag, ...classes] = String(spec).split('.');
+    const el = new FakeEl(tag || 'div');
+    classes.filter(Boolean).forEach((c) => el.cls.add(c));
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === 'dataset') Object.assign(el.dataset, v);
+      else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+      else if (k === 'value' || k === 'checked' || k === 'disabled') el[k] = v;
+      else el.setAttribute(k, v);
+    }
+    el.append(children);
+    return el;
+  };
+  const clear = (el) => { [...el.children].forEach((c) => el.removeChild(c)); return el; };
+  const ui = {
+    h, clear,
+    icon: () => new FakeEl('svg'),
+    mount: (el, ...c) => { clear(el); el.append(c); return el; },
+    button(label, { onClick, variant = '', disabled } = {}) {
+      const b = h(`button.btn${variant ? `.${variant}` : ''}`, { disabled }, label ? h('span', label) : null);
+      if (onClick) {
+        b.addEventListener('click', async (e) => {
+          if (b.dataset.busy) return;
+          b.dataset.busy = '1';
+          try { await onClick(e); } finally { delete b.dataset.busy; }
+        });
+      }
+      return b;
+    },
+    toast: (msg, type = 'ok') => { toasts.push({ msg, type }); },
+    showError: (e, title) => { toasts.push({ msg: `${title || 'Fehler'}: ${e.message}`, type: 'err' }); },
+    emptyState: ({ title, text, action }) => h('div.empty', h('h3', title), h('p.hint', text), action || null),
+    section: (title, hint, ...c) => h('section.block', h('h3', title), hint ? h('p.hint', hint) : null, c),
+    badge: (t) => h('span.badge', t),
+    spinner: () => h('span.spinner'),
+    // wie ui.modal: Esc/X/„Abbrechen“ = close(null); ein Knopf mit onClick schließt erst, wenn onClick nicht false liefert
+    modal(opts) {
+      return new Promise((resolve) => {
+        const m = { opts, open: true };
+        m.close = (v) => { if (!m.open) return; m.open = false; resolve(v); };
+        m.press = async (re) => {
+          const a = opts.actions.find((x) => re.test(x.label));
+          const r = a.onClick ? await a.onClick({ close: m.close }) : undefined;
+          if (r !== false) m.close(a.value ?? a.label);
+        };
+        modals.push(m);
+      });
+    },
+  };
+  return { ui, toasts, modals };
+}
+
+/** Lädt die Ansicht (als .mjs-Kopie, damit Node sie ohne "type": "module" als ES-Modul liest). */
+async function loadView() {
+  const dir = tmpDir('helix-view-');
+  fs.mkdirSync(path.join(dir, 'views'));
+  fs.mkdirSync(path.join(dir, 'lib'));
+  const src = path.join(__dirname, '../../src/renderer/js/views/sicht.js');
+  for (const m of fs.readFileSync(src, 'utf8').matchAll(/from '\.\.\/lib\/([\w-]+\.mjs)'/g)) {
+    fs.copyFileSync(path.join(path.dirname(LIB), m[1]), path.join(dir, 'lib', m[1]));
+  }
+  // geteilte Ansichts-Bausteine (z. B. ./profile-sync.js) mitkopieren; package.json macht sie zu ES-Modulen
+  fs.writeFileSync(path.join(dir, 'package.json'), '{"type":"module"}');
+  for (const m of fs.readFileSync(src, 'utf8').matchAll(/from '\.\/([\w-]+\.js)'/g)) {
+    fs.copyFileSync(path.join(path.dirname(src), m[1]), path.join(dir, 'views', m[1]));
+  }
+  fs.copyFileSync(src, path.join(dir, 'views', 'sicht.mjs'));
+  return (await import(pathToFileURL(path.join(dir, 'views', 'sicht.mjs')).href)).default;
+}
+
+/** Ansicht mit nachgemachtem Hauptprozess: sicht.apply wartet, bis der Test es freigibt. */
+async function mountView({ holdApply = false } = {}) {
+  const raw = { [`${G}|DisplayGamma`]: '2.200000', [`${G}|UserInterfaceContrast`]: '1.000000', [`${G}|bMotionBlur`]: 'True', [`${S}|sg.ShadowQuality`]: '2', [`${S}|sg.PostProcessQuality`]: '2', [`${S}|sg.EffectsQuality`]: '1' };
+  let release;
+  const gate = holdApply ? new Promise((r) => { release = r; }) : Promise.resolve();
+  const calls = [];
+  const { ui, toasts, modals } = fakeUi();
+  const env = {
+    ui,
+    on: () => () => {},
+    nav: { go() {} },
+    refreshStatus() {},
+    async call(name, a = {}) {
+      calls.push(name);
+      if (name === 'sicht.current') return { found: true, rel: 'WindowsClient/GameUserSettings.ini', raw: { ...raw }, fortnite: { running: false }, original: null, last: null };
+      if (name === 'sicht.preview') {
+        return { readOnly: false, fortnite: { running: false }, changes: a.changes.map((c) => ({ ...c, from: raw[`${c.section}|${c.key}`] ?? null, to: c.value, changed: raw[`${c.section}|${c.key}`] !== c.value })) };
+      }
+      if (name === 'sicht.apply') {
+        await gate;
+        const applied = a.changes.filter((c) => raw[`${c.section}|${c.key}`] !== c.value);
+        for (const c of applied) raw[`${c.section}|${c.key}`] = c.value;
+        return { applied, backupId: '20261018-101500-ab12', label: 'Sicht-Preset' };
+      }
+      if (name === 'core.fortniteStatus') return { running: false };
+      throw new Error(`unerwarteter Aufruf ${name}`);
+    },
+  };
+  const root = new FakeEl('div');
+  await view.mount(root, env);
+  return { root, env, raw, calls, toasts, modals, release: () => release?.() };
+}
+
+let view;
+const savedGlobals = {};
+test.before(async () => {
+  view = await loadView();
+  for (const [k, v] of Object.entries({
+    document: { body: new FakeEl('body'), querySelectorAll: () => [] },
+    requestAnimationFrame: (f) => setTimeout(f, 0),
+  })) {
+    savedGlobals[k] = Object.getOwnPropertyDescriptor(globalThis, k);
+    Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true });
+  }
+});
+test.after(async () => {
+  await new Promise((r) => setTimeout(r, 20)); // offene requestAnimationFrame-Aufrufe der Ansicht laufen noch mit den Ersatz-Objekten
+  for (const [k, d] of Object.entries(savedGlobals)) {
+    if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k];
+  }
+  view?.unmount();
+});
+
+test('Ansicht: Dialog schließen, während noch angewendet wird -> echtes Ergebnis statt „nichts wurde geändert“', async () => {
+  const v = await mountView({ holdApply: true });
+  const flow = buttonsWith(v.root, /Vorschau & anwenden/)[0].click(); // Karte „Sturm“
+  while (!v.modals.length) await tick();
+  const m = v.modals[0];
+  assert.match(m.opts.title, /Sturm/);
+  m.press(/Werte? anwenden$/); // sicht.apply läuft und wartet
+  await tick();
+  m.close(null); // Esc / X / „Abbrechen“ mitten im Anwenden
+  await tick();
+  await tick();
+  assert.ok(!v.toasts.some((t) => /nichts wurde geändert/.test(t.msg)), `keine falsche Entwarnung: ${JSON.stringify(v.toasts)}`);
+  v.release(); // die Datei wird geschrieben
+  await flow;
+  assert.equal(v.raw[`${G}|DisplayGamma`], '2.350000');
+  assert.ok(v.toasts.some((t) => /Sicht-Preset „Sturm“ angewendet/.test(t.msg)), JSON.stringify(v.toasts));
+  assert.ok(!v.toasts.some((t) => /nichts wurde geändert/.test(t.msg)));
+  assert.match(byClass(v.root, 'sicht-result')[0].textContent, /„Sturm“ ist aktiv.*Rückgängig machen/);
+  assert.equal(v.calls.filter((c) => c === 'sicht.current').length, 2, 'Werte neu eingelesen');
+  assert.match(byClass(v.root, 'sicht-meta')[0].textContent, /Aktiv: Sturm/);
+});
+
+test('Ansicht: echtes Abbrechen meldet „nichts wurde geändert“ und schreibt nichts', async () => {
+  const v = await mountView();
+  const flow = buttonsWith(v.root, /Vorschau & anwenden/)[1].click(); // Karte „Nacht“
+  while (!v.modals.length) await tick();
+  v.modals[0].close(null);
+  await flow;
+  assert.deepEqual(v.toasts.map((t) => t.msg), ['Abgebrochen – nichts wurde geändert.']);
+  assert.equal(v.calls.includes('sicht.apply'), false);
+  assert.equal(byClass(v.root, 'sicht-result')[0].children.length, 0);
+});
+
+test('Ansicht: der Kasten mit „Rückgängig machen“ wird nach dem Anwenden ins Bild geholt', async () => {
+  const v = await mountView();
+  const flow = buttonsWith(v.root, /Vorschau & anwenden/)[1].click(); // Karte „Nacht“ (liegt unten)
+  while (!v.modals.length) await tick();
+  await v.modals[0].press(/Werte? anwenden$/);
+  await flow;
+  const box = byClass(byClass(v.root, 'sicht-result')[0], 'callout')[0];
+  assert.ok(box, 'Ergebnis-Kasten da');
+  assert.match(box.textContent, /Rückgängig machen/);
+  assert.match(box.textContent, /Denk an den Schritt im Spiel/);
+  assert.equal(box.scrolled.length, 1, 'scrollIntoView aufgerufen');
+  assert.equal(box.scrolled[0].block, 'nearest');
 });

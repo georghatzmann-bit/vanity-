@@ -5,6 +5,7 @@
 // Server: die Ping-Adressen, die Epic seit v42.20 je Unterregion veröffentlicht (*.ds.on.epicgames.com).
 // Ausweich-Ziele für TCP (Port 443): regionale AWS-Endpunkte im selben Rechenzentrum (dynamodb.<region>.amazonaws.com).
 // Iowa (Google Cloud) und Texas (AWS Local Zone) haben kein passendes TCP-Ziel – dort nur Ping (ICMP).
+// Competitive (comp): NA-Central ist nur Texas (ping-nac = ping-tx), NA-West ist Nordkalifornien + Oregon.
 // Bahrain läuft inzwischen bei Google in Doha; AWS Bahrain ist nur eine Schätzung.
 // Fortnites eigener UDP-Test (Port 22222) wird bewusst NICHT nachgeahmt.
 
@@ -20,11 +21,11 @@ const REGIONS = [
   {
     id: 'NA', label: 'Nordamerika', game: 'Nordamerika (NA)',
     subs: [
-      { id: 'va', name: 'Virginia', host: 'ping-va.ds.on.epicgames.com', tcp: 'dynamodb.us-east-1.amazonaws.com', lat: 39.04, lon: -77.49, comp: 'central' },
-      { id: 'oh', name: 'Ohio', host: 'ping-oh.ds.on.epicgames.com', tcp: 'dynamodb.us-east-2.amazonaws.com', lat: 39.96, lon: -83.0, comp: 'central' },
-      { id: 'ia', name: 'Iowa', host: 'ping-ia.ds.on.epicgames.com', tcp: null, lat: 41.26, lon: -95.86, comp: 'central' },
+      { id: 'va', name: 'Virginia', host: 'ping-va.ds.on.epicgames.com', tcp: 'dynamodb.us-east-1.amazonaws.com', lat: 39.04, lon: -77.49 },
+      { id: 'oh', name: 'Ohio', host: 'ping-oh.ds.on.epicgames.com', tcp: 'dynamodb.us-east-2.amazonaws.com', lat: 39.96, lon: -83.0 },
+      { id: 'ia', name: 'Iowa', host: 'ping-ia.ds.on.epicgames.com', tcp: null, lat: 41.26, lon: -95.86 },
       { id: 'tx', name: 'Texas', host: 'ping-tx.ds.on.epicgames.com', tcp: null, lat: 32.78, lon: -96.8, comp: 'central' },
-      { id: 'mx', name: 'Mexiko', host: 'ping-mx.ds.on.epicgames.com', tcp: 'dynamodb.mx-central-1.amazonaws.com', lat: 20.59, lon: -100.39, comp: 'central' },
+      { id: 'mx', name: 'Mexiko', host: 'ping-mx.ds.on.epicgames.com', tcp: 'dynamodb.mx-central-1.amazonaws.com', lat: 20.59, lon: -100.39 },
       { id: 'ncal', name: 'Nordkalifornien', host: 'ping-ncal.ds.on.epicgames.com', tcp: 'dynamodb.us-west-1.amazonaws.com', lat: 37.34, lon: -121.89, comp: 'west' },
       { id: 'or', name: 'Oregon', host: 'ping-or.ds.on.epicgames.com', tcp: 'dynamodb.us-west-2.amazonaws.com', lat: 45.84, lon: -119.7, comp: 'west' },
     ],
@@ -287,9 +288,13 @@ async function measureAll(o) {
     // TCP: bei "tcp" für alle, bei "auto" nur für Ziele ohne jede Ping-Antwort
     const need = targets.filter((t) => (useIcmp ? results.get(t.id).received === 0 : true));
     const withTcp = need.filter((t) => t.tcp);
-    for (const t of need.filter((x) => !x.tcp)) {
-      const r = results.get(t.id);
-      results.set(t.id, { ...r, noFallback: true, method: r.method || null });
+    // "nur mit Ping messbar" nur, wenn gar kein Ping gesendet wurde. Kam der Ping nicht zurück,
+    // bleibt es bei "keine Antwort" (method 'icmp', 100 % Verlust).
+    if (!usedIcmp) {
+      for (const t of need.filter((x) => !x.tcp)) {
+        const r = results.get(t.id);
+        results.set(t.id, { ...r, noFallback: true, method: r.method || null });
+      }
     }
     if (withTcp.length) {
       const map = await runTcp(withTcp, { samples, timeoutMs: LIMITS.tcpTimeoutMs, gapMs: o.gapMs ?? 60 }, o.tcpDeps, tracker('tcp', withTcp.length * samples), signal);

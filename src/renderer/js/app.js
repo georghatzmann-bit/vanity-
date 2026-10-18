@@ -20,6 +20,8 @@ const state = {
 const stage = document.getElementById('stage');
 const statusBar = document.getElementById('status');
 
+const MOUNT_WAIT_MS = 450;
+
 const VIEW_LOADERS = {
   profiles: () => import('./views/profiles.js'),
   settings: () => import('./views/settings.js'),
@@ -38,9 +40,12 @@ const env = {
 };
 
 async function go(id, { instant = false } = {}) {
-  if (id === state.current) return;
+  // Ziel ist das laufende Navigationsziel, nicht die zuletzt fertige Ansicht – sonst ginge ein Klick
+  // auf „Cockpit“ verloren, solange ein Tool noch lädt.
+  if (id === (state.navigating ? state.target : state.current)) { state.pending = null; return; }
   if (state.navigating) { state.pending = id; return; } // nach dem laufenden Übergang dorthin
   state.navigating = true;
+  state.target = id;
   document.body.classList.add('navigating');
   try {
     const swap = async () => {
@@ -50,6 +55,7 @@ async function go(id, { instant = false } = {}) {
       if (id === 'cockpit') {
         stage.className = 'stage cockpit-stage';
         state.view = renderCockpit(stage, env);
+        applyLightMode(); // das neue Kern-Video gleich anhalten, wenn „Leichtlauf“ greift
       } else {
         stage.className = 'stage tool-stage';
         await mountTool(id);
@@ -94,14 +100,23 @@ async function mountTool(id) {
     ui.mount(body, ui.emptyState({ title: 'Noch nicht verfügbar', text: 'Dieses Tool gibt es in dieser Version noch nicht.' }));
     return;
   }
+  const failed = (e) => {
+    console.error(e);
+    if (panel.isConnected) ui.mount(body, ui.emptyState({ title: 'Das Tool konnte nicht geladen werden', text: e.message || String(e) }));
+  };
   try {
     const mod = await loader();
     const view = mod.default;
     state.view = view;
-    await view.mount(body, env);
+    // Lädt ein Tool länger (z. B. Windows-Abfragen), ist der Wechsel trotzdem nach kurzer Zeit fertig:
+    // „Cockpit“ und Esc reagieren sofort, das Tool füllt sich im Hintergrund weiter.
+    panel.classList.add('loading');
+    const mounting = Promise.resolve().then(() => view.mount(body, env))
+      .catch(failed)
+      .finally(() => panel.classList.remove('loading'));
+    await Promise.race([mounting, new Promise((r) => setTimeout(r, MOUNT_WAIT_MS))]);
   } catch (e) {
-    console.error(e);
-    ui.mount(body, ui.emptyState({ title: 'Das Tool konnte nicht geladen werden', text: e.message || String(e) }));
+    failed(e);
   }
 }
 

@@ -6,6 +6,7 @@ export const ROUNDS = 5;
 export const MIN_DELAY_MS = 1500;
 export const MAX_DELAY_MS = 4000;
 export const MIN_HUMAN_MS = 100; // schneller reagiert kein Mensch auf ein Bild – das war geraten
+export const MAX_REACTION_MS = 2000; // länger = abgelenkt: die Runde zählt nicht und wird wiederholt
 export const PROMPTS = 20;
 export const PROMPT_TIMEOUT_MS = 2500;
 export const GAP_MIN_MS = 450;
@@ -29,6 +30,8 @@ const BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 
 export const RESERVED = /^(Escape|MetaLeft|MetaRight|OSLeft|OSRight|ContextMenu|Unidentified)$/;
 const CODE_RE = /^[A-Za-z][A-Za-z0-9]{0,23}$/;
+// Längster Name unten ist „Mittlere Maustaste“ (18 Zeichen), ein Tasten-Code hat höchstens 24 Zeichen
+export const LABEL_MAX = 24;
 
 export function actionById(id) {
   return BY_ID.get(id) || null;
@@ -49,6 +52,10 @@ const NAMES = {
   Insert: 'Einfg', Delete: 'Entf', Home: 'Pos1', End: 'Ende', PageUp: 'Bild hoch', PageDown: 'Bild runter',
   Mouse0: 'Linke Maustaste', Mouse1: 'Mittlere Maustaste', Mouse2: 'Rechte Maustaste', Mouse3: 'Maus 4', Mouse4: 'Maus 5',
   WheelUp: 'Mausrad hoch', WheelDown: 'Mausrad runter',
+  // deutsche Tastatur: ^ und ´ sind „tote“ Tasten (ohne eigenes Zeichen im Ereignis), < steht neben der linken Umschalttaste
+  Backquote: '^', Equal: '´', IntlBackslash: '<',
+  NumpadAdd: 'Num +', NumpadSubtract: 'Num -', NumpadMultiply: 'Num *', NumpadDivide: 'Num /',
+  NumpadDecimal: 'Num ,', NumpadComma: 'Num ,', NumpadEnter: 'Num Enter',
 };
 
 /** Lesbarer Name zu einem Tasten-Code (ohne Tastatur-Layout: Ersatz, wenn kein gespeicherter Name da ist). */
@@ -87,8 +94,10 @@ export function bindFromEvent(e) {
     const code = e.code;
     if (!code || !CODE_RE.test(code) || RESERVED.test(code)) return null;
     const k = typeof e.key === 'string' ? e.key : '';
-    const label = k.length === 1 && k !== ' ' ? k.toUpperCase() : codeLabel(code);
-    return { code, label };
+    // Ziffernblock immer als „Num …“, damit man ihn nicht mit den Zahlen oben verwechselt
+    if (/^Numpad/.test(code) || k.length !== 1 || k === ' ') return { code, label: codeLabel(code) };
+    const up = k.toUpperCase();
+    return { code, label: up.length === 1 ? up : k }; // „ß“ bleibt „ß“ (nicht „SS“)
   }
   return null;
 }
@@ -100,7 +109,7 @@ export function normalizeBinds(input) {
   for (const id of ACTION_IDS) {
     const b = src[id];
     if (b && typeof b === 'object' && typeof b.code === 'string' && CODE_RE.test(b.code) && !RESERVED.test(b.code)) {
-      out[id] = { code: b.code, label: typeof b.label === 'string' && b.label ? b.label.slice(0, 14) : codeLabel(b.code), on: typeof b.on === 'boolean' ? b.on : def[id].on };
+      out[id] = { code: b.code, label: typeof b.label === 'string' && b.label ? b.label.slice(0, LABEL_MAX) : codeLabel(b.code), on: typeof b.on === 'boolean' ? b.on : def[id].on };
     } else out[id] = { ...def[id] };
   }
   return out;
@@ -150,18 +159,29 @@ export function randomGap(rand = Math.random) {
   return GAP_MIN_MS + rand() * (GAP_MAX_MS - GAP_MIN_MS);
 }
 
-/** Zufällige Befehlsfolge: jede Aktion etwa gleich oft, nie zweimal direkt hintereinander. */
+/**
+ * Zufällige Befehlsfolge: jede Aktion etwa gleich oft.
+ * Ab drei Aktionen nie zweimal direkt hintereinander. Bei nur zwei Aktionen darf dieselbe auch zweimal
+ * hintereinander kommen (höchstens zweimal) – sonst wäre es immer A, B, A, B und man könnte ohne Lesen drücken.
+ */
 export function makeSequence(ids, count = PROMPTS, rand = Math.random) {
   if (!ids.length) return [];
   if (ids.length === 1) return Array(count).fill(ids[0]);
+  const two = ids.length === 2;
   const out = [];
   while (out.length < count) {
-    const bag = ids.slice();
+    const bag = two ? [...ids, ...ids] : ids.slice();
     for (let i = bag.length - 1; i > 0; i--) {
       const j = Math.floor(rand() * (i + 1));
       [bag[i], bag[j]] = [bag[j], bag[i]];
     }
-    if (out.length && bag[0] === out[out.length - 1]) [bag[0], bag[bag.length - 1]] = [bag[bag.length - 1], bag[0]];
+    const last = out[out.length - 1];
+    if (two) {
+      // Übergang zum vorigen Beutel: nie dreimal dieselbe Aktion -> sonst beide Aktionen im Beutel tauschen
+      const tail = out.length > 1 && out[out.length - 2] === last ? 2 : 1;
+      const head = bag[1] === bag[0] ? 2 : 1;
+      if (out.length && bag[0] === last && tail + head > 2) bag.forEach((x, i) => { bag[i] = x === ids[0] ? ids[1] : ids[0]; });
+    } else if (out.length && bag[0] === last) [bag[0], bag[bag.length - 1]] = [bag[bag.length - 1], bag[0]];
     out.push(...bag);
   }
   return out.slice(0, count);
@@ -169,9 +189,10 @@ export function makeSequence(ids, count = PROMPTS, rand = Math.random) {
 
 // ---------------------------------------------------------------- Reaktionstest
 
-/** Ein Klick nach dem Hellwerden: 'early' wenn unter 100 ms (geraten), sonst 'ok'. */
+/** Ein Klick nach dem Hellwerden: 'early' wenn unter 100 ms (geraten), 'slow' wenn über 2 Sekunden (abgelenkt), sonst 'ok'. */
 export function classifyPress(ms) {
-  return Number.isFinite(ms) && ms >= MIN_HUMAN_MS ? 'ok' : 'early';
+  if (!Number.isFinite(ms) || ms < MIN_HUMAN_MS) return 'early';
+  return ms > MAX_REACTION_MS ? 'slow' : 'ok';
 }
 
 export function evaluateReaction(times) {

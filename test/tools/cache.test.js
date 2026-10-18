@@ -163,6 +163,21 @@ test('Cache: Saved-Ordner über einen anderen Pfad (Kurzname/Verknüpfung) – P
   assert.ok(fs.existsSync(path.join(p.saved, 'Config', 'WindowsClient', 'GameUserSettings.ini')), 'Einstellungen bleiben');
 });
 
+test('Cache: TEMP als Kurzname/Verknüpfung (C:\\Users\\GEORGH~1\\…) – Temp-Bereich bleibt erhalten', (t) => {
+  const p = makeProfile();
+  const alias = path.join(tmp('helix-short-'), 'GEORGH~1');
+  try { fs.symlinkSync(p.home, alias, 'junction'); } catch (e) { t.skip(e.code); return; }
+  const shortTemp = path.join(alias, 'AppData', 'Local', 'Temp');
+  const cats = logic.buildCategories({ ...p.env, TEMP: shortTemp }, p.location);
+  const temp = cats.find((c) => c.id === 'temp');
+  assert.ok(temp, 'Temp-Bereich ist da');
+  assert.equal(temp.roots[0], fs.realpathSync.native(p.temp), 'mit dem echten, langen Pfad');
+  assert.ok(cats.find((c) => c.id === 'nvidia').roots.some((r) => r.endsWith(path.join('NVIDIA Corporation', 'NV_Cache')) && r.startsWith(fs.realpathSync.native(p.temp))));
+  // ein Temp-Ordner außerhalb des Benutzerordners bleibt verboten
+  const other = tmp('helix-fremd-temp-');
+  assert.equal(logic.buildCategories({ ...p.env, TEMP: other }, p.location).find((c) => c.id === 'temp'), undefined);
+});
+
 test('Cache: Verknüpfungen nach außen werden NICHT verfolgt (Messen und Löschen)', async (t) => {
   const p = makeProfile();
   const d3d = path.join(p.local, 'D3DSCache');

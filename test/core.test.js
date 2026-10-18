@@ -524,3 +524,13 @@ test('Prüfung: „Ignorieren“ bleibt, auch wenn Fortnite die Datei mit gleich
   const d = await c.checkDrift();
   assert.equal(d.acknowledged, true);
 });
+
+test('Prüfung: tasklist-Ausgabe in Codepage 850 (Umlaute) wird richtig gelesen', async () => {
+  const { listProcesses } = require('../src/main/sys/processes');
+  const line = Buffer.concat([Buffer.from('"'), Buffer.from([0x9a]), Buffer.from('bersetzer.exe","1234","Console","1","10.000 K"\r\n')]);
+  let enc;
+  const list = await listProcesses({}, async (file, args, opts) => { enc = opts.encoding; return line; });
+  assert.equal(enc, 'buffer');
+  assert.equal(list[0].name, 'Übersetzer.exe');
+  assert.equal(list[0].pid, 1234);
+});

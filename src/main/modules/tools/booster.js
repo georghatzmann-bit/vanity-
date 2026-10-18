@@ -6,7 +6,7 @@
 // - Optional: Energieplan "Höchstleistung" während des Boosts (vorherigen Plan merken und zurückstellen).
 // - Optional: automatisch boosten, wenn Fortnite startet, und wiederherstellen, wenn es schließt (aus ab Werk).
 
-const { HelixError } = require('../../sys/exec');
+const { HelixError, decodeConsole } = require('../../sys/exec');
 const logic = require('../../tools/booster-logic');
 
 const ID = 'booster';
@@ -15,6 +15,7 @@ const MAX_LIST = 50;
 
 let deps = { sleep: (ms) => new Promise((r) => setTimeout(r, ms)), closeWaitMs: 8000, forceWaitMs: 2000, pollMs: 700 };
 let queue = Promise.resolve();
+let stateQueue = Promise.resolve();
 let disposed = false;
 let busy = null; // 'boost' | 'restore' | 'force' während einer Aktion
 
@@ -60,28 +61,61 @@ async function save(ctx, st) {
   await ctx.core.writeState(STATE, st);
 }
 
+/**
+ * Zustand lesen, ändern, speichern – nacheinander und ohne Wartezeit dazwischen.
+ * Ein Boost, der auf Programme wartet, schreibt am Ende nur seine eigenen Felder (active, lastReport)
+ * über diesen Weg. So gehen Änderungen an Liste und Optionen aus der Zwischenzeit nicht verloren.
+ */
+function update(ctx, fn) {
+  const run = stateQueue.then(async () => {
+    const st = await load(ctx);
+    const out = await fn(st);
+    await save(ctx, st);
+    return out;
+  });
+  stateQueue = run.catch(() => {});
+  return run;
+}
+
 // ---------- Windows-Aufrufe (alle über ctx.exec, damit Tests sie ersetzen können) ----------
 
+// Fortnite, Anti-Cheat und der Epic Launcher werden nur am Namen erkannt und danach übersprungen –
+// kein Pfad, keine Version, kein Fenstertitel, kein Öffnen des Prozesses. Get-Process liefert Name,
+// Sitzung und Speicher aus der Prozessliste von Windows, ohne einen Prozess zu öffnen.
+const SKIP = logic.untouchablePattern();
+
 const PS_RUNNING = String.raw`
+$cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64({ skip: SKIP })}')) | ConvertFrom-Json
+$skip = [string]$cfg.skip
 $sid = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
-$out = @(Get-Process | Where-Object { $_.SessionId -eq $sid } | ForEach-Object {
+$out = @(Get-Process | Where-Object { $_.SessionId -eq $sid -and $_.ProcessName -notmatch $skip } | ForEach-Object {
   $path = $null; $company = $null; $desc = $null
   try { $path = $_.Path } catch { }
-  try { $company = $_.Company } catch { }
-  try { $desc = $_.Description } catch { }
+  if ($path) {
+    try { $vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($path); $company = $vi.CompanyName; $desc = $vi.FileDescription } catch { }
+  }
   [pscustomobject]@{ Name = [string]$_.ProcessName; Id = [int]$_.Id; Path = [string]$path; MainWindowTitle = [string]$_.MainWindowTitle; Company = [string]$company; Description = [string]$desc; WorkingSet = [double]$_.WorkingSet64 }
 })
 ConvertTo-Json -InputObject $out -Compress -Depth 3
 `;
 
+// Erst die passenden Prozess-Nummern über die Namen finden, dann nur diese einzeln abfragen
+// (Pfad und Befehlszeile für den Neustart). Andere Prozesse – vor allem Fortnite – fragt HELIX nicht ab.
 function psDetails(names) {
   return String.raw`
-$cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64({ names })}')) | ConvertFrom-Json
+$cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64({ names, skip: SKIP })}')) | ConvertFrom-Json
 $set = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 foreach ($n in @($cfg.names)) { [void]$set.Add([string]$n) }
+$skip = [string]$cfg.skip
 $sid = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
-$out = @(Get-CimInstance -ClassName Win32_Process -Filter "SessionId = $sid" | Where-Object { $set.Contains(([string]$_.Name -replace '\.exe$', '')) } | ForEach-Object {
-  [pscustomobject]@{ Name = [string]$_.Name; Id = [int]$_.ProcessId; ParentId = [int]$_.ParentProcessId; Path = [string]$_.ExecutablePath; CommandLine = [string]$_.CommandLine }
+$ids = @(Get-Process | Where-Object { $_.SessionId -eq $sid -and $set.Contains([string]$_.ProcessName) -and $_.ProcessName -notmatch $skip } | ForEach-Object { [int]$_.Id })
+$out = @(foreach ($id in $ids) {
+  $c = $null
+  try { $c = Get-CimInstance -ClassName Win32_Process -Filter "Handle = '$id'" -ErrorAction Stop } catch { }
+  foreach ($x in @($c)) {
+    if ($null -eq $x) { continue }
+    [pscustomobject]@{ Name = [string]$x.Name; Id = [int]$x.ProcessId; ParentId = [int]$x.ParentProcessId; Path = [string]$x.ExecutablePath; CommandLine = [string]$x.CommandLine }
+  }
 })
 ConvertTo-Json -InputObject $out -Compress -Depth 3
 `;
@@ -106,15 +140,34 @@ ConvertTo-Json -InputObject $out -Compress -Depth 3
 `;
 }
 
-/** Laufende Prozesse (tasklist, schnell): Map pid -> normalisierter Name. */
+/**
+ * Laufende Prozesse (tasklist, schnell): Map pid -> normalisierter Name.
+ * Nur die Windows-Sitzung von HELIX – Dienste und andere Benutzerkonten am selben PC zählen nicht.
+ */
 async function snapshot(ctx) {
-  const list = await ctx.processes.listProcesses({}, ctx.exec.run);
-  return new Map(list.map((p) => [p.pid, logic.normalizeName(p.name)]));
+  // tasklist schreibt in der Konsolen-Codepage (deutsch 850) – Umlaute in Programmnamen sonst kaputt
+  const out = decodeConsole(await ctx.exec.run('tasklist.exe', ['/FO', 'CSV', '/NH'], { timeout: 10000, encoding: 'buffer' }));
+  return new Map(logic.ownSession(logic.parseTasklistSessions(out)).map((p) => [p.pid, logic.normalizeName(p.name)]));
 }
 
 async function details(ctx, names) {
   if (!names.length) return [];
   return logic.asArray(await ctx.exec.powershell(psDetails(names), { json: true, timeout: 30000 }));
+}
+
+/**
+ * Laufende Prozesse dieser Programme in der eigenen Windows-Sitzung: Map pid -> Name.
+ * Gleiche Abfrage wie beim Boost (CIM, nach Sitzung gefiltert); klappt sie nicht, tasklist (auch nur eigene Sitzung).
+ */
+async function ownPids(ctx, names) {
+  let rows;
+  try {
+    rows = (await details(ctx, names)).map((p) => [Number(p.Id), logic.normalizeName(p.Name)]);
+  } catch (e) {
+    ctx.log?.('warn', 'booster: Prozessdetails', e && e.message);
+    rows = [...(await snapshot(ctx))];
+  }
+  return new Map(rows.filter(([pid, n]) => names.includes(n) && Number.isInteger(pid) && pid > 4 && pid !== process.pid));
 }
 
 async function closePids(ctx, pids, force) {
@@ -162,8 +215,9 @@ async function switchToHigh(ctx, report) {
       report.powerPlan = { changed: false, missing: true, text: 'Den Energieplan „Höchstleistung“ gibt es auf diesem PC nicht (bei vielen Laptops ausgeblendet). Nichts verändert.' };
       return null;
     }
-    if (active && active.guid === target.guid) {
-      report.powerPlan = { changed: false, already: true, text: `Der Energieplan „${logic.planLabel(target)}“ war schon aktiv.` };
+    if (active && (active.guid === target.guid || logic.isHighPlan(active))) {
+      // auch "Ultimative Leistung" zählt – nie auf einen schwächeren Plan herunterschalten
+      report.powerPlan = { changed: false, already: true, text: `Der Energieplan „${logic.planLabel(active)}“ war schon aktiv.` };
       return null;
     }
     if (!logic.validGuid(target.guid)) throw new Error('GUID');
@@ -215,10 +269,16 @@ async function doBoost(ctx, { trigger = 'manual' } = {}) {
     const now = Date.now();
     const report = { kind: 'boost', at: now, trigger, closed: [], stillOpen: [], notRunning: [], failed: [], powerPlan: null };
     const procs = (await details(ctx, names)).filter((p) => names.includes(logic.normalizeName(p.Name)) && !logic.isBlocked(p.Name));
+    const active = st.active || { startedAt: now, trigger, apps: [], powerPlan: null };
     const targets = [];
     for (const name of names) {
       const mine = procs.filter((p) => logic.normalizeName(p.Name) === name && Number(p.Id) > 4 && Number(p.Id) !== process.pid);
-      if (!mine.length) { report.notRunning.push(displayOf(st, name)); continue; }
+      if (!mine.length) {
+        const prev = active.apps.find((a) => a.name === name);
+        if (prev?.status === 'open') Object.assign(prev, { status: 'closed', openPids: [], closedAt: now }); // inzwischen selbst beendet
+        else if (!prev) report.notRunning.push(displayOf(st, name)); // schon von diesem Boost geschlossen: nicht als "lief nicht" melden
+        continue;
+      }
       targets.push({ name, pids: mine.map((p) => Number(p.Id)), instances: logic.pickRoots(mine) });
     }
     const expect = new Map(targets.flatMap((t) => t.pids.map((pid) => [pid, t.name])));
@@ -227,7 +287,6 @@ async function doBoost(ctx, { trigger = 'manual' } = {}) {
       await closePids(ctx, [...expect.keys()], false); // normal schließen, nie /F
       alive = await waitGone(ctx, expect, deps.closeWaitMs);
     }
-    const active = st.active || { startedAt: now, trigger, apps: [], powerPlan: null };
     for (const t of targets) {
       const open = t.pids.filter((p) => alive.has(p));
       const prev = active.apps.find((a) => a.name === t.name);
@@ -240,15 +299,18 @@ async function doBoost(ctx, { trigger = 'manual' } = {}) {
         closedAt: open.length ? (prev?.closedAt || null) : now,
       };
       if (prev) Object.assign(prev, app); else active.apps.push(app);
-      (open.length ? report.stillOpen : report.closed).push(app.display);
     }
     if (st.options.powerPlan && !active.powerPlan) active.powerPlan = await switchToHigh(ctx, report);
-    const hasSomething = active.apps.length > 0 || !!active.powerPlan;
-    st.active = hasSomething ? active : null;
-    st.lastReport = report;
-    await save(ctx, st);
-    ctx.emit?.('booster.state', { active: !!st.active });
-    return { report, active: st.active };
+    // Bericht über den ganzen Boost – auch nach "Erneut boosten" stehen die schon geschlossenen Programme drin
+    const byStatus = (s) => active.apps.filter((a) => a.status === s).map((a) => a.display);
+    report.closed = byStatus('closed');
+    report.forced = byStatus('forced');
+    report.stillOpen = byStatus('open');
+    if (!report.powerPlan && st.active && st.lastReport?.kind === 'boost') report.powerPlan = st.lastReport.powerPlan || null;
+    const next = active.apps.length > 0 || !!active.powerPlan ? active : null;
+    await update(ctx, (fresh) => { fresh.active = next; fresh.lastReport = report; });
+    ctx.emit?.('booster.state', { active: !!next });
+    return { report, active: next };
   });
 }
 
@@ -262,9 +324,8 @@ async function doForce(ctx, { names, confirm } = {}) {
     const apps = st.active.apps.filter((a) => a.status === 'open' && (!want || want.has(a.name)) && !logic.isBlocked(a.name));
     const report = { kind: 'force', at: Date.now(), trigger: 'manual', forced: [], stillOpen: [], failed: [] };
     if (!apps.length) return { report, active: st.active, nothing: true };
-    const snap = await snapshot(ctx);
-    const expect = new Map();
-    for (const a of apps) for (const [pid, n] of snap) if (n === a.name && pid > 4 && pid !== process.pid) expect.set(pid, n);
+    // Wie beim Boost nur die eigene Windows-Sitzung – nie Dienste oder Programme anderer Benutzerkonten
+    const expect = await ownPids(ctx, apps.map((a) => a.name));
     if (expect.size) {
       await closePids(ctx, [...expect.keys()], true);
       await deps.sleep(300);
@@ -281,8 +342,7 @@ async function doForce(ctx, { names, confirm } = {}) {
     const last = st.lastReport && st.lastReport.kind === 'boost' ? st.lastReport : { kind: 'boost', at: report.at, trigger: 'manual', closed: [], stillOpen: [], notRunning: [], failed: [] };
     last.stillOpen = (last.stillOpen || []).filter((d) => !report.forced.includes(d));
     last.forced = [...new Set([...(last.forced || []), ...report.forced])];
-    st.lastReport = last;
-    await save(ctx, st);
+    await update(ctx, (fresh) => { fresh.active = st.active; fresh.lastReport = last; });
     ctx.emit?.('booster.state', { active: true });
     return { report, active: st.active };
   });
@@ -294,8 +354,9 @@ async function doRestore(ctx, { trigger = 'manual' } = {}) {
     const st = await load(ctx);
     if (!st.active) return { nothing: true, report: null };
     const report = { kind: 'restore', at: Date.now(), trigger, restarted: [], alreadyRunning: [], failed: [], untouched: [], powerPlan: null };
-    const snap = await snapshot(ctx);
-    const runningNames = new Set(snap.values());
+    // Läuft es schon wieder? Nur die eigene Windows-Sitzung zählt (Discord eines anderen Benutzerkontos nicht)
+    const check = (st.active.apps || []).filter((a) => a.status !== 'open' && !logic.isBlocked(a.name)).map((a) => a.name);
+    const runningNames = new Set((await ownPids(ctx, check)).values());
     const items = [];
     const keyToApp = new Map();
     for (const a of st.active.apps || []) {
@@ -331,9 +392,7 @@ async function doRestore(ctx, { trigger = 'manual' } = {}) {
       }
     }
     if (st.active.powerPlan) await restorePlan(ctx, st.active.powerPlan, report);
-    st.active = null;
-    st.lastReport = report;
-    await save(ctx, st);
+    await update(ctx, (fresh) => { fresh.active = null; fresh.lastReport = report; });
     ctx.emit?.('booster.state', { active: false });
     return { report, active: null };
   });
@@ -436,29 +495,33 @@ module.exports = {
       const protect = logic.classify(name);
       if (protect?.level === 'block') throw new HelixError('PROTECTED', `„${display}“ ist geschützt: ${protect.reason}`, { kind: protect.kind });
       if (protect?.level === 'warn' && a.confirm !== true) throw new HelixError('CONFIRM_NEEDED', protect.reason, { kind: protect.kind, display });
-      const st = await load(ctx);
-      if (st.list.some((e) => e.name === name)) return { added: false, already: true, info: await publicInfo(ctx) };
-      if (st.list.length >= MAX_LIST) throw new HelixError('LIST_FULL', `Die Liste ist voll (${MAX_LIST} Programme).`);
-      st.list.push({ name, display, path: logic.validExePath(a.path) ? String(a.path) : null, addedAt: Date.now(), warn: protect ? protect.kind : null });
-      await save(ctx, st);
+      const added = await update(ctx, (st) => {
+        if (st.list.some((e) => e.name === name)) return false;
+        if (st.list.length >= MAX_LIST) throw new HelixError('LIST_FULL', `Die Liste ist voll (${MAX_LIST} Programme).`);
+        st.list.push({ name, display, path: logic.validExePath(a.path) ? String(a.path) : null, addedAt: Date.now(), warn: protect ? protect.kind : null });
+        return true;
+      });
+      if (!added) return { added: false, already: true, info: await publicInfo(ctx) };
       return { added: true, display, info: await publicInfo(ctx) };
     },
 
     async remove(a, ctx) {
       const name = logic.normalizeName(a.name);
-      const st = await load(ctx);
-      const before = st.list.length;
-      st.list = st.list.filter((e) => e.name !== name);
-      await save(ctx, st);
-      return { removed: st.list.length < before, info: await publicInfo(ctx) };
+      const removed = await update(ctx, (st) => {
+        const before = st.list.length;
+        st.list = st.list.filter((e) => e.name !== name);
+        return st.list.length < before;
+      });
+      return { removed, info: await publicInfo(ctx) };
     },
 
     async setOptions(a, ctx) {
-      const st = await load(ctx);
-      if (typeof a.powerPlan === 'boolean') st.options.powerPlan = a.powerPlan;
-      if (typeof a.auto === 'boolean') st.options.auto = a.auto;
-      await save(ctx, st);
-      return { options: st.options };
+      const options = await update(ctx, (st) => {
+        if (typeof a.powerPlan === 'boolean') st.options.powerPlan = a.powerPlan;
+        if (typeof a.auto === 'boolean') st.options.auto = a.auto;
+        return { ...st.options };
+      });
+      return { options };
     },
 
     boost: (_a, ctx) => doBoost(ctx, { trigger: 'manual' }),
@@ -468,6 +531,6 @@ module.exports = {
   _test: {
     PS_RUNNING, psDetails, psStart, onFortnite,
     setDeps(d) { deps = { ...deps, ...d }; },
-    reset() { queue = Promise.resolve(); disposed = false; busy = null; },
+    reset() { queue = Promise.resolve(); stateQueue = Promise.resolve(); disposed = false; busy = null; },
   },
 };

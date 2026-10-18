@@ -661,6 +661,31 @@ export function recommendDpi({ blocks = [], baseDpi, baseSens, rawInput = true }
   return { mode: 'dpi', mult: 1, dpi, sens, edpi: edpi(dpi, sens), cm360: cm360(dpi, sens), method: 'dpi', edge: false, confidence, r2: null, bestDpi: best.dpi, lines };
 }
 
+/**
+ * DPI-Modus, Ergebnis: Was muss der Spieler an der Maus umstellen?
+ * mouseDpi: worauf die Maus jetzt steht (nach dem Test meist wieder die eigene DPI).
+ * Nie "zurückstellen" sagen, wenn die Maus schon richtig steht – mit einer DPI-Taste, die durchschaltet, landet man sonst woanders.
+ */
+export function dpiResultHint({ recDpi, baseDpi, mouseDpi }) {
+  if (recDpi === mouseDpi) return `Deine Maus steht schon ${mouseDpi === baseDpi ? 'wieder' : 'richtig'} auf ${mouseDpi} DPI. Du musst an der Maus nichts umstellen.`;
+  if (recDpi === baseDpi) return `Deine Maus steht noch auf ${mouseDpi} DPI. Stell sie wieder auf ${baseDpi} DPI zurück.`;
+  if (mouseDpi === baseDpi) return `Deine Maus steht jetzt wieder auf ${baseDpi} DPI. Für die Empfehlung stellst du sie auf ${recDpi} DPI um. Bleibst du bei ${baseDpi} DPI, musst du an der Maus nichts umstellen.`;
+  return `Deine Maus steht jetzt auf ${mouseDpi} DPI. Für die Empfehlung stellst du sie auf ${recDpi} DPI um, sonst wieder auf ${baseDpi} DPI.`;
+}
+
+/**
+ * DPI-Modus, Abbruch: Hinweis, die Maus wieder auf die eigene DPI zu stellen ('' = nichts zu tun).
+ * switchDpi: worauf HELIX gerade umstellen lassen wollte (null, wenn gerade nicht gefragt). Ob der Spieler
+ * das schon gemacht hat, weiß HELIX dann nicht – deshalb fragt der Text nach.
+ */
+export function dpiAbortHint({ baseDpi, mouseDpi, switchDpi = null }) {
+  const asked = Number.isFinite(switchDpi) && switchDpi !== mouseDpi;
+  if (!asked) return mouseDpi === baseDpi ? '' : `Deine Maus steht noch auf ${mouseDpi} DPI. Stell sie wieder auf ${baseDpi} DPI zurück.`;
+  if (switchDpi === baseDpi) return `Steht deine Maus noch auf ${mouseDpi} DPI? Dann stell sie wieder auf ${baseDpi} DPI zurück.`;
+  if (mouseDpi === baseDpi) return `Hast du die Maus schon auf ${switchDpi} DPI umgestellt? Dann stell sie wieder auf ${baseDpi} DPI zurück.`;
+  return `Stell deine Maus wieder auf ${baseDpi} DPI zurück.`;
+}
+
 // ---------------------------------------------------------------- Verlauf
 
 /**

@@ -13,6 +13,7 @@ const { makeLocalAppData, tmpDir, fakeExec } = require('../helpers');
 
 const GB = 1024 ** 3;
 const VIEW_LIB = path.join(__dirname, '../../src/renderer/js/lib/pccheck-view.mjs');
+const VIEW_SRC = path.join(__dirname, '../../src/renderer/js/views/pccheck.js');
 
 /** Baut eine PowerShell-Antwort wie vom Scan-Skript. */
 function psData({
@@ -126,6 +127,42 @@ test('Bildschirm: size × scaleFactor = echte Pixel, Hauptbildschirm zählt, kru
   ps.gpu.CurrentVerticalResolution = 1440;
   const hw2 = L.parseHardware(ps, {}, {});
   assert.deepEqual([hw2.display.width, hw2.display.height, hw2.display.hz], [2560, 1440, 144]);
+});
+
+test('Bildschirm: Chromium rundet die DIP-Größe auf – HELIX schreibt trotzdem die echte Auflösung (150 %, 125 %, 175 %)', () => {
+  // [echte Pixel, Skalierung, was Electron als size meldet (gfx::ScaleToEnclosingRect)]
+  const cases = [
+    [2560, 1600, 1.5, 1707, 1067], [2560, 1440, 1.5, 1707, 960], [1366, 768, 1.25, 1093, 615], [1920, 1080, 1.75, 1098, 618],
+    [2256, 1504, 1.5, 1504, 1003], [1920, 1080, 1.25, 1536, 864], [3840, 2160, 1.5, 2560, 1440],
+  ];
+  for (const [w, hgt, s, dw, dh] of cases) {
+    const name = `${w} × ${hgt} bei ${s * 100} %`;
+    assert.deepEqual([L.chromiumDip(w, s), L.chromiumDip(hgt, s)], [dw, dh], `${name}: Nachbau der Chromium-Rechnung`);
+    const d = { displays: [{ id: 1, size: { width: dw, height: dh }, bounds: { x: 0, y: 0, width: dw, height: dh }, scaleFactor: s, displayFrequency: 165, internal: true }], primaryId: 1 };
+    const { hw, a } = analyzeFor({}, d);
+    assert.deepEqual([hw.display.width, hw.display.height], [w, hgt], name);
+    assert.match(a.ratings.display.details, new RegExp(`^${w} × ${hgt}`), name);
+    for (const p of a.presets) {
+      for (const k of ['ResolutionSizeX', 'LastUserConfirmedResolutionSizeX', 'DesiredScreenWidth', 'LastUserConfirmedDesiredScreenWidth']) assert.equal(valueOf(p, k), String(w), `${name}: ${p.id} ${k}`);
+      for (const k of ['ResolutionSizeY', 'LastUserConfirmedResolutionSizeY', 'DesiredScreenHeight', 'LastUserConfirmedDesiredScreenHeight']) assert.equal(valueOf(p, k), String(hgt), `${name}: ${p.id} ${k}`);
+      assert.ok(p.items.find((i) => i.id === 'resolution').why.includes(`(${w} × ${hgt})`), `${name}: Erklärung`);
+    }
+  }
+});
+
+test('Bildschirm: die Auflösung, die Windows für die Grafikkarte meldet, gilt nur, wenn sie zum Bildschirm passt', () => {
+  const d = { displays: [{ id: 1, size: { width: 1504, height: 1003 }, scaleFactor: 1.5 }], primaryId: 1 };
+  const ps = psData();
+  // 1504 DIP bei 150 % können 2255 oder 2256 Pixel sein – Windows weiß es genau
+  ps.gpu.CurrentHorizontalResolution = 2255;
+  ps.gpu.CurrentVerticalResolution = 1504;
+  let hw = L.parseHardware(ps, {}, d);
+  assert.deepEqual([hw.display.width, hw.display.height], [2255, 1504]);
+  // Die Grafikkarte meldet einen anderen Bildschirm (1920 × 1080): dann zählt die Rechnung
+  ps.gpu.CurrentHorizontalResolution = 1920;
+  ps.gpu.CurrentVerticalResolution = 1080;
+  hw = L.parseHardware(ps, {}, d);
+  assert.deepEqual([hw.display.width, hw.display.height], [2256, 1504]);
 });
 
 // ---------------------------------------------------------------- Grafikkarte und Prozessor einordnen
@@ -359,6 +396,54 @@ test('Vorschau: abgewählte Zeilen werden nicht geschrieben, gestreckte Auflösu
   assert.equal(L.renderModeText('dx12', 'es31'), 'Leistungsmodus');
 });
 
+test('Vorschau: Stufen heißen wie im Fortnite-Menü (Schatten, Beleuchtung, Reflexionen „Aus“; Sichtweite „Nah“ bis „Episch“)', () => {
+  const { a } = analyzeFor();
+  const lei = presetOf(a, 'leistung');
+  const current = {
+    'sg.ShadowQuality': '0', 'sg.ViewDistanceQuality': '2', 'sg.EffectsQuality': '0',
+    DesiredGlobalIlluminationQuality: '0', 'sg.GlobalIlluminationQuality': '0', DesiredReflectionQuality: '0', 'sg.ReflectionQuality': '0',
+  };
+  const rows = L.buildRows(lei.items, previewFrom(changesOf(lei), current));
+  const row = (id) => rows.find((r) => r.id === id);
+  for (const id of ['shadows', 'gi', 'reflections']) {
+    assert.deepEqual([row(id).from, row(id).to, row(id).changed], ['Aus', 'Aus', false], id);
+    assert.doesNotMatch(row(id).why, /Niedrig/, `${id}: Erklärung nennt dieselbe Stufe wie die Tabelle`);
+  }
+  assert.match(row('gi').why, /„Aus“/);
+  assert.match(row('reflections').why, /„Aus“/);
+  assert.equal(row('viewDistance').from, 'Weit');
+  assert.equal(row('viewDistance').to, ['Nah', 'Mittel', 'Weit', 'Episch'][Number(valueOf(lei, 'sg.ViewDistanceQuality'))]);
+  assert.ok(row('viewDistance').why.includes(`„${row('viewDistance').to}“`));
+  assert.equal(row('effects').to, 'Niedrig', 'Effekte heißen im Spiel weiter „Niedrig“');
+  const vd = lei.items.find((i) => i.id === 'viewDistance');
+  assert.deepEqual(['0', '1', '2', '3'].map((v) => L.describe(vd, () => v)), ['Nah', 'Mittel', 'Weit', 'Episch']);
+  const sh = lei.items.find((i) => i.id === 'shadows');
+  assert.deepEqual(['0', '1', '2', '3'].map((v) => L.describe(sh, () => v)), ['Aus', 'Mittel', 'Hoch', 'Episch']);
+  // Ausgewogen/Qualität: Erklärung nennt dieselbe Stufe wie die Spalte „neu“
+  for (const id of ['ausgewogen', 'qualitaet']) {
+    const p = presetOf(a, id);
+    const r = L.buildRows(p.items, previewFrom(changesOf(p), {}));
+    for (const k of ['shadows', 'viewDistance']) assert.ok(r.find((x) => x.id === k).why.includes(`„${r.find((x) => x.id === k).to}“`), `${id}/${k}`);
+  }
+});
+
+test('Vorschau: sieht eine Zeile vorher und nachher gleich aus, zeigt HELIX, was sich in der Datei ändert', () => {
+  const { a } = analyzeFor();
+  const lei = presetOf(a, 'leistung');
+  const current = {
+    PreferredRHI: 'dx11', PreferredFeatureLevel: 'es31', 'sg.GlobalIlluminationQuality': '0',
+    FullscreenMode: '0', LastConfirmedFullscreenMode: '1', PreferredFullscreenMode: '0',
+  };
+  const rows = L.buildRows(lei.items, previewFrom(changesOf(lei), current));
+  const row = (id) => rows.find((r) => r.id === id);
+  assert.deepEqual([row('renderMode').from, row('renderMode').to], ['Leistungsmodus (DirectX 11)', 'Leistungsmodus (DirectX 12)']);
+  assert.deepEqual([row('gi').from, row('gi').to], ['Aus (1 Eintrag fehlt)', 'Aus']);
+  assert.deepEqual([row('windowMode').from, row('windowMode').to], ['Vollbild (1 Eintrag weicht ab)', 'Vollbild']);
+  for (const r of rows) if (r.changed) assert.notEqual(r.from, r.to, r.id);
+  // Normalfall bleibt kurz
+  assert.equal(L.renderModeText('dx12', 'es31'), 'Leistungsmodus');
+});
+
 test('Cockpit-Zeile: Grafikkarte und Empfehlung bzw. übernommener Vorschlag', () => {
   assert.equal(L.summaryText({}), null);
   assert.equal(L.summaryText({ lastScan: { gpuShort: 'RTX 4070', recommended: 'ausgewogen' } }), 'RTX 4070 · empfohlen: Ausgewogen');
@@ -492,6 +577,27 @@ test('Modul mit echtem Kern: Vorschau, Übernehmen mit Backup, nur GameUserSetti
   assert.equal((await mod.handlers.summary({}, ctx)).text, 'RTX 4070 · übernommen: Ausgewogen');
 });
 
+test('Modul mit echtem Kern: jede Änderung in der Vorschau ist sichtbar („jetzt“ und „neu“ sind nie gleich)', async () => {
+  mod._test.resetCache();
+  const fx = makeLocalAppData();
+  const core = new CoreService({ dataDir: tmpDir(), env: { LOCALAPPDATA: fx.local }, exec: fakeExec() });
+  await core.init();
+  const ctx = moduleCtx({ core });
+  await mod.handlers.scan({ fresh: true }, ctx);
+  for (const preset of L.PRESET_IDS) {
+    const pv = await mod.handlers.preview({ preset }, ctx);
+    for (const r of pv.rows) if (r.changed) assert.notEqual(r.from, r.to, `${preset}/${r.id}: ${r.from}`);
+  }
+  // Testdatei: dx11 + es31, ohne DesiredGlobalIlluminationQuality/DesiredReflectionQuality und DesiredScreen*
+  const pv = await mod.handlers.preview({ preset: 'leistung' }, ctx);
+  const row = (id) => pv.rows.find((r) => r.id === id);
+  assert.deepEqual([row('renderMode').from, row('renderMode').to], ['Leistungsmodus (DirectX 11)', 'Leistungsmodus (DirectX 12)']);
+  assert.deepEqual([row('gi').from, row('gi').to], ['Aus (1 Eintrag fehlt)', 'Aus']);
+  assert.deepEqual([row('reflections').from, row('reflections').to], ['Aus (1 Eintrag fehlt)', 'Aus']);
+  assert.deepEqual([row('resolution').from, row('resolution').to], ['1920 × 1080 (4 Einträge fehlen)', '1920 × 1080']);
+  assert.deepEqual([row('shadows').from, row('shadows').changed], ['Aus', false]);
+});
+
 test('Modul mit echtem Kern: Fortnite läuft -> FORTNITE_RUNNING, Datei bleibt gleich', async () => {
   mod._test.resetCache();
   const fx = makeLocalAppData();
@@ -583,4 +689,40 @@ test('Ansicht: Gruppen, Zähler und Anzeigestufen', async () => {
   assert.equal(v.meterLevel('display', {}, { hz: 165 }), 3);
   assert.equal(v.estText({ typical: 270, low: 200 }), 'ca. 270 FPS');
   assert.equal(v.estFightText({ low: 200 }), 'in großen Kämpfen ca. 200 FPS');
+});
+
+test('Ansicht: mount wartet nicht auf den Hardware-Scan – „Cockpit“ und Esc gehen sofort', async () => {
+  // Ansicht samt Helfer als .mjs in einen Testordner kopieren (die App lädt sie als ES-Modul)
+  const dir = tmpDir();
+  fs.mkdirSync(path.join(dir, 'views'));
+  fs.mkdirSync(path.join(dir, 'lib'));
+  fs.copyFileSync(VIEW_SRC, path.join(dir, 'views', 'pccheck.mjs'));
+  fs.copyFileSync(VIEW_LIB, path.join(dir, 'lib', 'pccheck-view.mjs'));
+  const view = (await import(require('node:url').pathToFileURL(path.join(dir, 'views', 'pccheck.mjs')).href)).default;
+  // nachgemachte Oberfläche: jedes ui.* liefert ein leeres Element
+  const el = () => ({ append() {}, appendChild() {} });
+  const ui = new Proxy({ h: () => el(), icon: () => el() }, { get: (t, k) => (k in t ? t[k] : () => el()) });
+  const calls = [];
+  let finishScan;
+  const env = {
+    ui,
+    on: () => () => {},
+    nav: { go() {} },
+    call(name) {
+      calls.push(name);
+      if (name === 'pccheck.scan') return new Promise((resolve) => { finishScan = resolve; }); // PowerShell braucht noch
+      return Promise.resolve(null);
+    },
+  };
+  const first = await Promise.race([
+    view.mount(el(), env).then(() => 'mount fertig'),
+    new Promise((resolve) => setTimeout(() => resolve('wartet noch'), 300)),
+  ]);
+  assert.equal(first, 'mount fertig', 'mount darf nicht auf den Scan warten, sonst gehen Klicks auf „Cockpit“ verloren');
+  assert.deepEqual(calls, ['pccheck.scan']);
+  // Nutzer geht zurück, danach kommt die Antwort: wird verworfen, keine Vorschau mehr
+  view.unmount();
+  finishScan({ unsupported: false, presets: [], recommended: 'leistung', hardware: {}, ratings: {}, perf: {} });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(calls, ['pccheck.scan']);
 });

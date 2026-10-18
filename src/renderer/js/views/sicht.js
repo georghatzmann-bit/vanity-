@@ -6,6 +6,7 @@ import {
   PRESETS, KEYS, KEY_IDS, BRIGHTNESS, UI_CONTRAST, valuesFromIni, renderMode, valueText, rawText,
   presetValues, toChanges, customValues, matchesValues, activePreset, describeValues, percentToGamma,
 } from '../lib/sicht-presets.mjs';
+import { profileSyncBox } from './profile-sync.js';
 
 let cleanup = [];
 
@@ -238,6 +239,22 @@ export default {
         h('p.hint', 'Vorher legt HELIX automatisch eine Sicherung an. Du findest sie bei den Settings-Profilen unter „Zeitmaschine“.'),
       ];
       let result = null;
+      let applyRun = null; // läuft (oder lief) „anwenden“? Esc, X oder „Abbrechen“ schließen den Dialog auch währenddessen.
+      const runApply = async () => {
+        try {
+          result = await env.call('sicht.apply', {
+            changes, presetId: preset ? preset.id : 'eigen', presetName: preset ? preset.name : '', presetShort: preset ? preset.short : '',
+          });
+          return true;
+        } catch (e) {
+          if (e.code === 'FORTNITE_RUNNING') {
+            fortnite = await env.call('core.fortniteStatus').catch(() => ({ running: true }));
+            paintFortnite();
+          }
+          ui.showError(e, 'Nicht angewendet');
+          return false;
+        }
+      };
       const pending = ui.modal({
         title: preset ? `Sicht-Preset „${name}“` : 'Eigene Sicht-Werte',
         subtitle: 'Vorschau – noch wird nichts geändert.',
@@ -248,21 +265,7 @@ export default {
           {
             label: changedCount ? `${changedCount} ${changedCount === 1 ? 'Wert' : 'Werte'} anwenden` : 'Nichts zu ändern',
             variant: 'primary', icon: 'check', value: 'applied', disabled: changedCount === 0,
-            onClick: async () => {
-              try {
-                result = await env.call('sicht.apply', {
-                  changes, presetId: preset ? preset.id : 'eigen', presetName: preset ? preset.name : '', presetShort: preset ? preset.short : '',
-                });
-                return true;
-              } catch (e) {
-                if (e.code === 'FORTNITE_RUNNING') {
-                  fortnite = await env.call('core.fortniteStatus').catch(() => ({ running: true }));
-                  paintFortnite();
-                }
-                ui.showError(e, 'Nicht angewendet');
-                return false;
-              }
-            },
+            onClick: () => (applyRun = runApply()),
           },
         ],
       });
@@ -270,8 +273,11 @@ export default {
         applyBtn = [...document.querySelectorAll('.modal .modal-actions .btn.primary')].pop() || null;
         paintFortnite();
       });
-      const r = await pending;
-      if (r !== 'applied' || !result) {
+      await pending;
+      // Wurde der Dialog geschlossen, während das Anwenden noch lief? Dann auf das echte Ergebnis warten –
+      // die Datei wird trotzdem geändert, also nicht „nichts wurde geändert“ melden.
+      if (applyRun) await applyRun;
+      if (!result) {
         ui.toast('Abgebrochen – nichts wurde geändert.', 'info');
         return;
       }
@@ -304,6 +310,7 @@ export default {
         h('strong', preset ? `„${preset.name}“ ist aktiv` : 'Eigene Werte sind aktiv'),
         h('p.hint', 'Starte Fortnite und probiere es aus. Gefällt es dir nicht, holst du mit einem Klick den Stand von vorher zurück.'),
         preset?.inGame?.length ? h('p.hint', `Denk an ${preset.inGame.length === 1 ? 'den Schritt' : 'die Schritte'} im Spiel: ${preset.inGame.map((s) => s.title).join(' · ')}`) : null,
+        profileSyncBox(env),
         h('div.row',
           ui.button('Rückgängig machen', {
             small: true, iconName: 'refresh',
@@ -320,6 +327,8 @@ export default {
           }),
           ui.button('Ausblenden', { small: true, variant: 'ghost', onClick: () => { ui.clear(resultBox); ui.toast('Hinweis ausgeblendet.', 'info'); } }))));
       resultBox.append(box);
+      // Der Kasten steht ganz oben – nach dem Anwenden von einer Preset-Karte weiter unten wäre er sonst nicht zu sehen.
+      box.scrollIntoView?.({ block: 'nearest', behavior: document.body.classList.contains('reduce-motion') ? 'auto' : 'smooth' });
     }
 
     const offFn = env.on('fortnite.state', () => { if (alive) load(); });

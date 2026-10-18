@@ -24,6 +24,16 @@ export function quality(ms) {
   return { label: 'hoch', type: 'err' };
 }
 
+/**
+ * Server ohne Messwert (nach der Messung): Abzeichen und Erklärung.
+ * r.tcp kommt aus der Server-Liste (gibt es ein TCP-Ziel?), r.method aus der Messung.
+ */
+export function noValueInfo(r) {
+  if (r?.noFallback) return { label: 'nur mit Ping messbar', type: '', text: 'Für diesen Standort gibt es kein TCP-Ziel – er lässt sich nur mit Ping messen.' };
+  if (r?.method === 'icmp' && r.tcp === false) return { label: 'keine Antwort', type: 'err', text: 'Der Ping kam nicht zurück. Für diesen Standort gibt es keinen Ersatz über TCP.' };
+  return { label: 'keine Antwort', type: 'err', text: 'Der Server hat auf keine Anfrage geantwortet.' };
+}
+
 /** Median einer Liste (null = verloren). */
 export function median(values) {
   const ok = (values || []).filter(isNum).sort((a, b) => a - b);
@@ -102,7 +112,7 @@ export function recommendation(catalog, results, best) {
   let competitive = null;
   if (group.id === 'NA') {
     const west = bestOf(results, ['ncal', 'or']);
-    const central = bestOf(results, ['tx', 'ia']);
+    const central = bestOf(results, ['tx']); // NA-Central = nur Texas (Dallas); Iowa gehört nicht dazu
     competitive = 'Turniere (Competitive) laufen in Nordamerika weiter nur über NA-West und NA-Central – dort gibt es keine Unterregion.';
     if (west && central) {
       const pick = west.medianMs < central.medianMs ? `NA-West (${west.name}: ${fmtMs(west.medianMs)})` : `NA-Central (${central.name}: ${fmtMs(central.medianMs)})`;

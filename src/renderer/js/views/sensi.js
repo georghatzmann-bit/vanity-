@@ -43,7 +43,15 @@ function createView(root, env) {
   let tab = 'werte';
   const cfg = { mode: 'sens', length: 'short', spread: 0.2, dpi2: '' };
   const conv = { dir: 'from', sens: '', dpi: '', targetDpi: '', fov: String(SM.PUBG_DEFAULT_FOV), game: 'valorant', value: '', gameDpi: '', fnDpi: '' };
+  // Umrechner-Felder mit deinen Werten als Vorschlag. Sie folgen „Deine Sensi“, bis du sie selbst änderst.
+  const CONV_FROM_SETTINGS = {
+    sens: (s) => numText(s.sens), dpi: (s) => String(s.dpi), targetDpi: (s) => String(s.dpi),
+    gameDpi: (s) => String(s.dpi), fnDpi: (s) => String(s.dpi),
+  };
+  const convEdited = new Set();
   let arena = null;
+  let testSession = null;
+  let abortNote = '';
   let outcome = null;
   let lastMode = null;
   const openDetails = new Set();
@@ -77,10 +85,8 @@ function createView(root, env) {
 
   function setTab(id) {
     if (id === tab) return;
-    if (arena) {
-      stopArena();
-      ui.toast('Test abgebrochen. Es wurde nichts gespeichert.', 'info');
-    }
+    if (arena) cancelTest();
+    abortNote = '';
     tab = id;
     renderTabs();
     renderBody();
@@ -160,15 +166,19 @@ function createView(root, env) {
       ui.mount(howTo, howToBox(v.ok ? v.values : s));
     };
     let saving = null;
+    let intro = null;
+    let saveRow = null;
     const save = async () => {
+      while (saving) await saving; // erst fertig speichern lassen, dann mit dem neuen Stand vergleichen
       const v = read();
       if (!v.ok) return;
       const same = Object.keys(v.values).every((k) => v.values[k] === data.settings[k]);
       if (same && data.saved) return;
-      if (saving) await saving;
+      const first = !data.saved;
       saving = saveSettings(v.values);
-      await saving;
+      const ok = await saving;
       saving = null;
+      if (ok && first) { intro?.remove(); saveRow?.remove(); }
     };
 
     const form = h('div.sensi-form', FIELDS.map(([k, label, hint, ph]) => {
@@ -181,15 +191,19 @@ function createView(root, env) {
       return h('div.field', h('label', { for: id }, label), inputs[k], h('p.hint', hint), errs[k]);
     }));
 
-    const intro = data.saved ? null : h('div.callout.info', icon('info'), h('div',
+    intro = data.saved ? null : h('div.callout.info', icon('info'), h('div',
       h('strong', 'Trag zuerst deine eigenen Werte ein'),
-      h('p.hint', 'Du findest sie in Fortnite unter Einstellungen > Maus und Tastatur. Bis dahin rechnet HELIX mit Beispielwerten (800 DPI, 6,5 %). Gespeichert wird, sobald du ein Feld verlässt.')));
+      h('p.hint', 'Du findest sie in Fortnite unter Einstellungen > Maus und Tastatur. Bis dahin rechnet HELIX mit Beispielwerten (800 DPI, 6,5 %). Gespeichert wird, sobald du ein Feld verlässt – oder mit „Diese Werte speichern“, wenn die Werte schon stimmen.')));
+    // Spielt jemand genau mit den Beispielwerten, ändert sich kein Feld – dann speichert dieser Knopf.
+    saveRow = data.saved ? null : h('div.row.sensi-gap',
+      ui.button('Diese Werte speichern', { variant: 'primary', iconName: 'check', onClick: save }),
+      h('span.hint', 'Stimmen die Werte schon? Dann hier speichern.'));
 
     refresh();
     return [
       intro,
       h('div.sensi-grid.sensi-werte',
-        h('div.sensi-a-form', ui.section('Deine Werte', 'Trag ein, was in Fortnite und in deiner Maus-Software steht. Komma oder Punkt ist egal.', form)),
+        h('div.sensi-a-form', ui.section('Deine Werte', 'Trag ein, was in Fortnite und in deiner Maus-Software steht. Komma oder Punkt ist egal.', form, saveRow)),
         h('div.sensi-a-live', liveBox),
         h('div.sensi-a-howto', howTo)),
     ];
@@ -236,10 +250,12 @@ function createView(root, env) {
         h('span', `schnell ${MAX}`)));
   }
 
-  function howToBox(s, { compact = false } = {}) {
+  /** dpiStep: DPI, auf die der Spieler die Maus erst umstellen muss (nur nach einem DPI-Vergleich). */
+  function howToBox(s, { compact = false, dpiStep = null } = {}) {
     const sens = SM.fmtSens(s.sens);
     return ui.section('So stellst du es in Fortnite ein', 'HELIX ändert deine Fortnite-Sensi nicht selbst. Fortnite speichert sie in der Epic-Cloud deines Kontos – so geht nichts verloren.',
       h('ol.sensi-steps',
+        dpiStep ? h('li', `Stell deine Maus auf ${dpiStep} DPI um – mit der DPI-Taste unter dem Mausrad oder in der Software deiner Maus.`) : null,
         h('li', 'Starte Fortnite und öffne die Einstellungen (Menü oben rechts, dann das Zahnrad).'),
         h('li', 'Wähle den Reiter „Maus und Tastatur“.'),
         h('li', `Stell die Sensi für die X-Achse und die Y-Achse auf ${sens} %.`),
@@ -306,6 +322,9 @@ function createView(root, env) {
     });
 
     return [
+      abortNote ? h('div.callout.warn', icon('warn'), h('div',
+        h('strong', 'Test abgebrochen – denk an deine Maus'),
+        h('p.hint', abortNote))) : null,
       pointerOk ? null : h('div.callout.warn', icon('warn'), h('div',
         h('strong', 'Der Aim-Test geht hier leider nicht'),
         h('p.hint', 'Für den Test muss HELIX die Maus einfangen können. Das klappt in der Windows-App von HELIX. Umrechner und eDPI kannst du trotzdem nutzen.'))),
@@ -357,6 +376,8 @@ function createView(root, env) {
       return;
     }
     const session = new TestSession(plan);
+    testSession = session;
+    abortNote = '';
     lastMode = null;
     const modeBadge = h('span.sensi-mode', ui.badge('Mausmodus: wird beim Start geprüft'));
     const modeHint = h('p.hint.sensi-mode-hint');
@@ -370,8 +391,7 @@ function createView(root, env) {
           : `Rohdaten gehen hier nicht. Die Mausbeschleunigung von Windows kann mitwirken.${(window.devicePixelRatio || 1) !== 1 ? ' Auch die Windows-Skalierung kann die Drehung etwas verändern.' : ''}`;
       },
       onAbort: () => {
-        stopArena();
-        ui.toast('Test abgebrochen. Es wurde nichts gespeichert.', 'info');
+        abortNote = cancelTest();
         renderBody();
       },
       onFinish: (out) => finishTest(out, plan),
@@ -390,6 +410,23 @@ function createView(root, env) {
   function stopArena() {
     arena?.destroy();
     arena = null;
+    testSession = null;
+  }
+
+  /** DPI-Vergleich: Hinweis, die Maus wieder auf die eigene DPI zu stellen ('' = nichts zu tun). */
+  function dpiBackNote() {
+    const s = testSession;
+    if (!s || s.plan.mode !== 'dpi') return '';
+    return SM.dpiAbortHint({ baseDpi: s.plan.baseDpi, mouseDpi: s.mouseDpi, switchDpi: s.phase === 'switch' ? s.dpi : null });
+  }
+
+  /** Bricht den laufenden Test ab und sagt, was mit der Maus zu tun ist. Gibt den DPI-Hinweis zurück. */
+  function cancelTest() {
+    const note = dpiBackNote();
+    stopArena();
+    if (note) ui.toast(`Test abgebrochen. Es wurde nichts gespeichert. ${note}`, 'warn', { timeout: 10000 });
+    else ui.toast('Test abgebrochen. Es wurde nichts gespeichert.', 'info');
+    return note;
   }
 
   async function finishTest(out, plan) {
@@ -420,6 +457,8 @@ function createView(root, env) {
       ];
     }
     const dpiMode = plan.mode === 'dpi';
+    const mouseDpi = Number.isFinite(outcome.mouseDpi) ? outcome.mouseDpi : plan.baseDpi;
+    const dpiHint = dpiMode ? h('p.hint', SM.dpiResultHint({ recDpi: rec.dpi, baseDpi: plan.baseDpi, mouseDpi })) : null;
     if (rec.method === 'zuwenig') {
       return h('div.sensi-result.glass',
         h('div.sensi-result-main',
@@ -429,7 +468,7 @@ function createView(root, env) {
         h('div.sensi-result-text',
           rec.lines.map((l) => h('p', l)),
           h('p.hint', 'Tipp: Klick die Ziele direkt an, sobald dein Fadenkreuz darauf liegt. Beim Tracking hältst du das Fadenkreuz einfach auf dem Ziel.'),
-          dpiMode ? h('p.hint', `Stell deine Maus wieder auf ${plan.baseDpi} DPI zurück.`) : null,
+          dpiHint,
           h('div.row',
             ui.button('Nochmal testen', { variant: 'primary', iconName: 'refresh', onClick: () => { outcome = null; renderBody(); } }))));
     }
@@ -439,7 +478,7 @@ function createView(root, env) {
       variant: 'primary', iconName: 'check', disabled: adopted,
       onClick: async () => {
         const ok = await saveSettings({ ...data.settings, sens: rec.sens, dpi: rec.dpi },
-          `Übernommen. Stell jetzt in Fortnite ${SM.fmtSens(rec.sens)} % ein${dpiMode && rec.dpi !== plan.baseDpi ? ` und deine Maus auf ${rec.dpi} DPI` : ''}.`);
+          `Übernommen. Stell jetzt in Fortnite ${SM.fmtSens(rec.sens)} % ein${dpiMode && rec.dpi !== mouseDpi ? ` und deine Maus auf ${rec.dpi} DPI` : ''}.`);
         if (ok) renderBody();
       },
     });
@@ -453,16 +492,14 @@ function createView(root, env) {
           h('p.hint.sensi-gap', conf[2])),
         h('div.sensi-result-text',
           rec.lines.map((l) => h('p', l)),
-          dpiMode ? h('p.hint', rec.dpi === plan.baseDpi
-            ? `Stell deine Maus wieder auf ${plan.baseDpi} DPI zurück.`
-            : `Willst du die Empfehlung nicht übernehmen, stell deine Maus wieder auf ${plan.baseDpi} DPI zurück.`) : null,
+          dpiHint,
           h('div.row', adoptBtn,
             ui.button('Nochmal testen', { iconName: 'refresh', onClick: () => { outcome = null; renderBody(); } }),
             ui.button('Verlauf ansehen', { variant: 'ghost', iconName: 'clock', onClick: () => setTab('verlauf') })))),
       ui.section(dpiMode ? 'Punkte pro DPI' : 'Punkte pro getesteter Sensi', 'Punkte aus Treffern, Genauigkeit, Tempo, Tracking und wie oft du übers Ziel geschossen bist (0 bis 100).',
         barChart(entry.rounds, rec, plan)),
       ui.section('Alle Werte im Detail', null, roundsTable(entry.rounds, dpiMode)),
-      howToBox({ ...s, sens: rec.sens }, { compact: true }),
+      howToBox({ ...s, sens: rec.sens }, { compact: true, dpiStep: dpiMode && rec.dpi !== mouseDpi ? rec.dpi : null }),
     ];
   }
 
@@ -504,18 +541,17 @@ function createView(root, env) {
   // ---------------------------------------------------------------- Umrechner
 
   function renderUmrechner() {
-    const s = data.settings;
-    if (!conv.sens) conv.sens = numText(s.sens);
-    if (!conv.dpi) conv.dpi = String(s.dpi);
-    if (!conv.targetDpi) conv.targetDpi = String(s.dpi);
-    if (!conv.gameDpi) conv.gameDpi = String(s.dpi);
-    if (!conv.fnDpi) conv.fnDpi = String(s.dpi);
+    for (const [k, fill] of Object.entries(CONV_FROM_SETTINGS)) if (!convEdited.has(k)) conv[k] = fill(data.settings);
     const out = h('div.sensi-conv-out');
 
     const field = (key, label, hint, mode = 'decimal') => {
       const id = `sensi-conv-${key}`;
       const input = h('input.input', { id, type: 'text', inputmode: mode, value: conv[key], autocomplete: 'off' });
-      input.addEventListener('input', () => { conv[key] = input.value; update(); });
+      input.addEventListener('input', () => {
+        conv[key] = input.value;
+        if (key in CONV_FROM_SETTINGS) { if (input.value.trim()) convEdited.add(key); else convEdited.delete(key); }
+        update();
+      });
       return h('div.field', h('label', { for: id }, label), input, h('p.hint', hint));
     };
 
@@ -575,6 +611,7 @@ function createView(root, env) {
       const exact = SM.gameToFortnite(g, { value, gameDpi: gdpi, dpi: fdpi, fov });
       if (!(exact >= SM.LIMITS.sens[0] && exact <= SM.LIMITS.sens[1])) return bad('Das ergibt keinen Wert, den Fortnite einstellen kann. Prüf deine Eingaben.');
       const fn = SM.roundSens(exact);
+      const s = data.settings;
       const adopted = Math.abs(s.sens - fn) < 1e-9 && s.dpi === Math.round(fdpi);
       return [
         h('div.sensi-conv-result',
@@ -587,7 +624,10 @@ function createView(root, env) {
           variant: 'primary', iconName: 'check', disabled: adopted,
           onClick: async () => {
             const ok = await saveSettings({ ...data.settings, sens: fn, dpi: Math.round(fdpi) }, `Übernommen. Stell jetzt in Fortnite ${SM.fmtSens(fn)} % ein.`);
-            if (ok) update();
+            if (!ok) return;
+            // Die DPI im anderen Spiel bleibt stehen, sonst rechnet der Umrechner gleich mit der neuen Fortnite-DPI weiter.
+            convEdited.add('gameDpi');
+            renderBody({ keepScroll: true });
           },
         }), h('span.hint', 'Speichert den Wert hier in HELIX. In Fortnite stellst du ihn selbst ein.')),
       ];
@@ -685,7 +725,10 @@ function createView(root, env) {
     start,
     destroy() {
       destroyed = true;
+      // Tool verlassen, während der DPI-Vergleich lief: trotzdem an die Maus-DPI erinnern
+      const note = arena ? dpiBackNote() : '';
       stopArena();
+      if (note) ui.toast(`Test abgebrochen. ${note}`, 'warn', { timeout: 10000 });
       for (const t of timers) clearTimeout(t);
       timers.clear();
     },

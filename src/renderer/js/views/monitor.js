@@ -37,7 +37,8 @@ export default {
     root.append(tabs, body);
 
     // ---------------- Testbild-Fläche ----------------
-    function patternView({ pattern, variant = 'mittel', compact = false, onChange }) {
+    /** fixed: das Bild bleibt immer dasselbe (Pfeiltasten im Vollbild wechseln es nicht), z. B. der Sturm-Test der Kontrolle. */
+    function patternView({ pattern, variant = 'mittel', compact = false, fixed = false, onChange }) {
       const st = { pattern, base: pattern, variant, seed: randomSeed(), reveal: false, hintUntil: 0 };
       let scene = stormScene(st.seed);
       const canvas = h('canvas.mon-canvas', { tabindex: '0', role: 'img' });
@@ -54,7 +55,7 @@ export default {
           const fs = document.fullscreenElement === canvas;
           const p = findPattern(st.pattern);
           const hint = fs && Date.now() < st.hintUntil
-            ? [`${p.name}: ${p.instruction}`, 'Pfeiltasten ← → wechseln das Bild · Esc beendet das Vollbild']
+            ? [`${p.name}: ${p.instruction}`, fixed ? 'Esc beendet das Vollbild' : 'Pfeiltasten ← → wechseln das Bild · Esc beendet das Vollbild']
             : null;
           drawPattern(canvas.getContext('2d'), st.pattern, canvas.width, canvas.height, { variant: st.variant, scene, reveal: st.reveal, hint, dpr: b.dpr });
           canvas.setAttribute('aria-label', `Testbild ${p.name}. ${p.instruction}`);
@@ -66,6 +67,7 @@ export default {
           onChange?.(st);
         },
         step(dir) {
+          if (fixed) return;
           view.set({ pattern: nextPatternId(st.pattern, dir), reveal: false });
           if (document.fullscreenElement === canvas) showHint(view);
         },
@@ -411,7 +413,8 @@ export default {
     }
 
     function controlStep() {
-      const v = patternView({ pattern: 'sturm' });
+      // fest auf den Sturm-Test: Frage, Bewertung und „Lösung zeigen“ gehören zu diesem Bild
+      const v = patternView({ pattern: 'sturm', fixed: true });
       return h('div.mon-step-grid.mon-control',
         h('div.mon-step-main', v.el,
           h('div.row', ui.button('Vollbild', { small: true, iconName: 'eye', onClick: () => v.fullscreen() }), h('span.hint', 'Im Vollbild ist der Test am ehrlichsten. Mit Esc kommst du zurück.'))),

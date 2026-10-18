@@ -333,6 +333,48 @@ test('Replay-Modul: umbenennen (nur im Tresor) und doppelte Namen', async () => 
   assert.equal(list.demos.entries.find((e) => e.file === s.a).inVault, true);
 });
 
+test('Replay-Modul: Umbenennen klappt nicht (Datei gesperrt) – deutsche Meldung statt EBUSY-Text', async () => {
+  const s = setup();
+  await replaysModule.handlers.copyToVault({ file: s.a }, s.ctx);
+  const fspMod = require('node:fs/promises');
+  const orig = fspMod.rename;
+  fspMod.rename = async (from, to) => {
+    const e = new Error(`EBUSY: resource busy or locked, rename '${from}' -> '${to}'`);
+    e.code = 'EBUSY';
+    throw e;
+  };
+  try {
+    await assert.rejects(replaysModule.handlers.rename({ file: s.a, name: 'Erster Sieg' }, s.ctx), (e) => {
+      assert.equal(e.code, 'RENAME_FAILED');
+      assert.doesNotMatch(e.message, /EBUSY|resource busy|rename '/);
+      assert.match(e.message, /Umbenennen hat nicht geklappt/);
+      return true;
+    });
+  } finally { fspMod.rename = orig; }
+  assert.ok(fs.existsSync(path.join(s.vault, s.a)), 'Datei bleibt unter dem alten Namen');
+});
+
+test('Replay-Modul: Fortnite-Replay-Ordner öffnen, den es noch nicht gibt – verständliche Meldung', async () => {
+  const s = setup();
+  fs.rmSync(s.demos, { recursive: true, force: true }); // Fortnite hat noch nie ein Replay aufgenommen
+  const opened = [];
+  s.ctx.electron.shell.openPath = async (p) => { opened.push(p); return 'Failed to open path'; };
+  await assert.rejects(replaysModule.handlers.openFolder({ which: 'demos' }, s.ctx), (e) => {
+    assert.equal(e.code, 'NOT_FOUND');
+    assert.doesNotMatch(e.message, /Failed to open path/);
+    assert.match(e.message, /noch keinen Replay-Ordner/);
+    return true;
+  });
+  assert.equal(opened.length, 0, 'Explorer wird gar nicht erst aufgerufen');
+  assert.ok(!fs.existsSync(s.demos), 'HELIX legt im Fortnite-Ordner nichts an');
+  const list = await replaysModule.handlers.list({}, s.ctx);
+  assert.equal(list.demos.found, false, 'Ansicht blendet „Fortnite-Ordner öffnen“ dann aus');
+  // vorhandener Ordner geht weiter auf
+  fs.mkdirSync(s.demos, { recursive: true });
+  s.ctx.electron.shell.openPath = async (p) => { opened.push(p); return ''; };
+  assert.deepEqual(await replaysModule.handlers.openFolder({ which: 'demos' }, s.ctx), { opened: s.demos });
+});
+
 test('Replay-Modul: zurück in Fortnite nur bei geschlossenem Fortnite', async () => {
   const s = setup();
   await replaysModule.handlers.copyToVault({ file: s.a }, s.ctx);
@@ -462,6 +504,14 @@ test('Replay-Ansicht: Statusplaketten haben immer Text', async () => {
   assert.deepEqual(b({ incomplete: true, inVault: true, version: '42.20' }), ['unvollständig', 'im Tresor']);
   assert.deepEqual(b({ version: '41.40' }), ['ältere Version']);
   assert.deepEqual(b({ inDemos: true, version: '42.20' }, 'vault'), ['auch in Fortnite']);
+  // Fortnite hat das Original gelöscht: Die Tresor-Kopie ist sicher, nicht „noch nicht gesichert“
+  assert.deepEqual(b({ inDemos: false, version: '42.20' }, 'vault'), ['nur im Tresor']);
+  assert.deepEqual(b({ inDemos: false, version: '41.40' }, 'vault'), ['nur im Tresor', 'ältere Version']);
+  for (const e of [{ version: '42.20' }, { inDemos: true, version: '42.20' }, { ok: false }, { incomplete: true, version: '42.20' }]) {
+    const list = f.statusBadges({ ok: true, ...e }, 'vault', '42.20');
+    assert.ok(list.length, 'Tresor-Zeilen haben immer einen Status');
+    assert.ok(list.every((x) => !/nicht gesichert/.test(x.text)));
+  }
   for (const x of f.statusBadges({ ok: true, recording: true, inVault: true, version: '1.0' }, 'demos', '42.20')) {
     assert.ok(x.text && x.title, 'Text und Erklärung');
   }
@@ -473,4 +523,78 @@ test('Replay-Ansicht: offene Replays zählen und Ergebnis von "Alle sichern"', a
   assert.equal(f.copyAllText({ copied: 3, already: 2, recording: 1, failed: 0, unreadable: 0 }), '3 Replays gesichert, 1 läuft noch.');
   assert.equal(f.copyAllText({ copied: 0, already: 5, recording: 0, failed: 0, unreadable: 1 }), 'Nichts Neues zu sichern, 1 nicht lesbar.');
   assert.equal(f.copyAllText({ copied: 1, failed: 2 }), '1 Replay gesichert, 2 fehlgeschlagen.');
+});
+
+// ---------------------------------------------------------------- Ansicht (lib/replays-fortnite.mjs)
+const fnPath = path.join(__dirname, '../../src/renderer/js/lib/replays-fortnite.mjs');
+
+function fakeEnv({ running = false, confirm = true, close = { closed: true, remaining: [] }, statusFails = false } = {}) {
+  const calls = [];
+  const dialogs = [];
+  const toasts = [];
+  const errors = [];
+  return {
+    calls, dialogs, toasts, errors,
+    env: {
+      call: async (name, args) => {
+        calls.push([name, args]);
+        if (name === 'core.fortniteStatus') {
+          if (statusFails) throw new Error('kaputt');
+          return { running };
+        }
+        if (name === 'core.fortniteClose') {
+          if (close instanceof Error) throw close;
+          return close;
+        }
+        throw new Error(`unerwartet: ${name}`);
+      },
+      ui: {
+        confirmDialog: async (o) => { dialogs.push(o); return confirm; },
+        toast: (msg, type) => toasts.push([msg, type]),
+        showError: (e, prefix) => errors.push([e, prefix]),
+      },
+    },
+  };
+}
+
+test('Replay-Ansicht: läuft Fortnite, bietet HELIX vor dem Löschen/Zurücklegen an, es zu schließen', async () => {
+  const f = await import(require('node:url').pathToFileURL(fnPath).href);
+  // Fortnite zu: keine Rückfrage
+  let x = fakeEnv();
+  assert.equal(await f.fortniteClosedFor(x.env, 'das Replay löschen'), true);
+  assert.equal(x.dialogs.length, 0);
+  assert.ok(!x.calls.some(([n]) => n === 'core.fortniteClose'));
+  // Fortnite läuft, Nutzer will schließen -> normales Schließen (ohne Zwang), dann weiter
+  x = fakeEnv({ running: true });
+  assert.equal(await f.fortniteClosedFor(x.env, 'das Replay löschen'), true);
+  assert.equal(x.dialogs.length, 1);
+  assert.equal(x.dialogs[0].confirmLabel, 'Fortnite schließen');
+  assert.match(x.dialogs[0].text, /das Replay löschen/);
+  assert.deepEqual(x.calls.find(([n]) => n === 'core.fortniteClose'), ['core.fortniteClose', { force: false }]);
+  // Nutzer bricht ab -> nichts schließen, Aktion abbrechen
+  x = fakeEnv({ running: true, confirm: false });
+  assert.equal(await f.fortniteClosedFor(x.env, 'das Replay zurücklegen'), false);
+  assert.ok(!x.calls.some(([n]) => n === 'core.fortniteClose'));
+  // Fortnite beendet sich nicht -> Hinweis, Aktion abbrechen
+  x = fakeEnv({ running: true, close: { closed: false, remaining: [{ name: 'FortniteClient-Win64-Shipping.exe' }] } });
+  assert.equal(await f.fortniteClosedFor(x.env, 'das Replay löschen'), false);
+  assert.equal(x.toasts.at(-1)[1], 'warn');
+  // Schließen schlägt fehl -> Fehlermeldung, Aktion abbrechen
+  x = fakeEnv({ running: true, close: new Error('geht nicht') });
+  assert.equal(await f.fortniteClosedFor(x.env, 'das Replay löschen'), false);
+  assert.equal(x.errors.length, 1);
+  // Status unbekannt -> weiter (das Backend prüft vor dem Löschen selbst)
+  x = fakeEnv({ statusFails: true });
+  assert.equal(await f.fortniteClosedFor(x.env, 'das Replay löschen'), true);
+});
+
+test('Replay-Ansicht: "Fortnite läuft noch" verspricht keine Hilfe, die es in der Ansicht nicht gibt', async () => {
+  const f = await import(require('node:url').pathToFileURL(fnPath).href);
+  const core = { code: 'FORTNITE_RUNNING', message: 'Fortnite läuft noch. Schließe Fortnite zuerst – HELIX kann das für dich übernehmen.' };
+  const out = f.replayError(core);
+  assert.equal(out.code, 'FORTNITE_RUNNING');
+  assert.doesNotMatch(out.message, /übernehmen/);
+  assert.match(out.message, /Fortnite läuft noch/);
+  const other = { code: 'NOT_FOUND', message: 'weg' };
+  assert.equal(f.replayError(other), other);
 });

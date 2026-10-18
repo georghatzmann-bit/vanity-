@@ -90,13 +90,113 @@ function lastStillActive(last, raw) {
   return last.changes.every((c) => sameValue(raw[`${c.section}|${c.key}`], c.value));
 }
 
+// ---------- Preset-Erkennung fürs Cockpit ----------
+// Dieselben Preset-Werte und dieselbe Erkennung wie in src/renderer/js/lib/sicht-presets.mjs
+// (PRESETS, valuesFromIni, presetValues, activePreset) – ein Test stellt sicher, dass beide gleich bleiben.
+// So zeigt das Cockpit „Aktiv: Sturm“ auch nach „Rückgängig machen“ oder einem Settings-Profil,
+// genau wie die Sicht-Ansicht.
+
+const VALUE_KEYS = {
+  brightness: { section: S_GUS, key: 'DisplayGamma', type: 'gamma' },
+  uiContrast: { section: S_GUS, key: 'UserInterfaceContrast', type: 'float' },
+  shadows: { section: S_SG, key: 'sg.ShadowQuality', type: 'level' },
+  postProcess: { section: S_SG, key: 'sg.PostProcessQuality', type: 'level' },
+  effects: { section: S_SG, key: 'sg.EffectsQuality', type: 'level' },
+  foliage: { section: S_SG, key: 'sg.FoliageQuality', type: 'level' },
+  gi: { section: S_SG, key: 'sg.GlobalIlluminationQuality', type: 'level' },
+  grass: { section: S_GUS, key: 'bShowGrass', type: 'bool' },
+  motionBlur: { section: S_GUS, key: 'bMotionBlur', type: 'bool' },
+};
+const VALUE_IDS = Object.keys(VALUE_KEYS);
+
+const PRESETS = [
+  { id: 'sturm', name: 'Sturm', short: 'Sturm', values: { brightness: 115, uiContrast: 1.2, shadows: 0, postProcess: 0, effects: 0, motionBlur: false } },
+  { id: 'nacht', name: 'Nacht / Dunkle Gebiete', short: 'Nacht', values: { brightness: 130, uiContrast: 1.1, shadows: 0, postProcess: 0, motionBlur: false } },
+  { id: 'hell', name: 'Helle Karte', short: 'Helle Karte', values: { brightness: 90, uiContrast: 1.3, postProcess: 0, effects: 0, motionBlur: false } },
+  { id: 'turnier', name: 'Turnier-Klarheit', short: 'Turnier-Klarheit', values: { brightness: 110, uiContrast: 1, shadows: 0, postProcess: 0, effects: 0, foliage: 0, grass: false, motionBlur: false } },
+  { id: 'standard', name: 'Standard zurück', short: 'Standard', values: { brightness: 100, uiContrast: 1 }, restoreOriginal: true },
+];
+
+const round2 = (v) => Math.round((v + Number.EPSILON * Math.sign(v)) * 100) / 100;
+
+function parseNum(s) {
+  if (s == null) return null;
+  const t = String(s).trim();
+  return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null;
+}
+
+function fromIni(id, raw) {
+  const def = VALUE_KEYS[id];
+  if (!def || raw == null) return null;
+  if (def.type === 'bool') {
+    const t = String(raw).trim().toLowerCase();
+    if (t === 'true' || t === '1') return true;
+    if (t === 'false' || t === '0') return false;
+    return null;
+  }
+  const n = parseNum(raw);
+  if (n == null) return null;
+  if (def.type === 'gamma') return gammaToPercent(n);
+  if (def.type === 'float') return round2(n);
+  return Math.round(n);
+}
+
+/** { 'Abschnitt|Schlüssel': Text } -> { brightness: 115, shadows: 0, … } */
+function valuesFromIni(raw = {}) {
+  const out = {};
+  for (const id of VALUE_IDS) {
+    const d = VALUE_KEYS[id];
+    out[id] = fromIni(id, raw[`${d.section}|${d.key}`] ?? null);
+  }
+  return out;
+}
+
+function presetValues(preset, { original } = {}) {
+  const vals = { ...preset.values };
+  if (preset.restoreOriginal && original) {
+    for (const id of VALUE_IDS) {
+      if (id in preset.values) continue;
+      if (original[id] != null) vals[id] = original[id];
+    }
+  }
+  return vals;
+}
+
+function sameFach(id, a, b) {
+  if (a == null || b == null) return false;
+  const t = VALUE_KEYS[id].type;
+  if (t === 'float') return Math.abs(a - b) < 0.006;
+  if (t === 'gamma') return Math.abs(a - b) < 0.6;
+  return a === b;
+}
+
+function matchesValues(current, values) {
+  const ids = Object.keys(values).filter((id) => values[id] != null);
+  return ids.length > 0 && ids.every((id) => sameFach(id, current?.[id], values[id]));
+}
+
+/** Welches Preset passt zu den Werten? (genaueste Übereinstimmung; „Standard“ nur mit Originalwerten) */
+function activePreset(current, { original } = {}) {
+  let best = null;
+  let bestN = 0;
+  for (const p of PRESETS) {
+    if (p.restoreOriginal && !original) continue;
+    const vals = presetValues(p, { original });
+    if (!matchesValues(current, vals)) continue;
+    const n = Object.keys(vals).length;
+    if (n > bestN) { best = p; bestN = n; }
+  }
+  return best;
+}
+
 /** Zeile fürs Cockpit oder null. */
 function summaryText(state, raw) {
   if (!raw) return null;
+  const original = state?.original ? valuesFromIni(state.original) : null;
+  const p = activePreset(valuesFromIni(raw), { original });
+  if (p) return { text: `Aktiv: ${p.short || p.name}` };
   const last = state?.last;
-  if (last && lastStillActive(last, raw)) {
-    return { text: last.id === 'eigen' ? 'Aktiv: eigene Sicht-Werte' : `Aktiv: ${last.short || last.name}` };
-  }
+  if (last && last.id === 'eigen' && lastStillActive(last, raw)) return { text: 'Aktiv: eigene Sicht-Werte' };
   const pct = gammaToPercent(raw[`${S_GUS}|DisplayGamma`]);
   if (pct == null) return null;
   return { text: `Kein Sicht-Preset aktiv · Helligkeit ${pct} %` };
@@ -114,4 +214,5 @@ function readKeys() {
 module.exports = {
   FILE, S_GUS, S_SG, ALLOWED, READ_EXTRA, findRule, validValue, validateChanges, sameValue,
   gammaToPercent, lastStillActive, summaryText, cleanName, readKeys,
+  PRESETS, valuesFromIni, presetValues, activePreset,
 };

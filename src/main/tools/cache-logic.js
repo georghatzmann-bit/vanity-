@@ -10,6 +10,7 @@
 // - Vor jedem Löschen: echte Lage des Ordners (realpath) muss im Bereichsordner liegen.
 // - Nie: Config, Cloud, Demos, PersistentDownloadDir, Fortnite-Installation, Epic Games Launcher, Anti-Cheat.
 
+const fsSync = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 
@@ -42,6 +43,11 @@ function absBase(p) {
 
 function segments(p) {
   return String(p).split(/[\\/]+/).filter(Boolean).map((s) => s.toLowerCase());
+}
+
+/** Echter (langer) Pfad, falls es ihn gibt – sonst der Pfad selbst. */
+function realOrSelf(p) {
+  try { return fsSync.realpathSync.native(p); } catch { return p; }
 }
 
 /** Liegt child innerhalb von parent (nicht gleich)? Unter Windows ohne Groß-/Kleinschreibung. */
@@ -78,7 +84,12 @@ function buildCategories(env = {}, location = null) {
   const localLow = profile ? path.join(profile, 'AppData', 'LocalLow') : null;
   let temp = absBase(env.TEMP) || absBase(env.TMP) || (local ? path.join(local, 'Temp') : null);
   // Nur einen Temp-Ordner im eigenen Benutzerordner benutzen (nie z. B. C:\Windows\Temp).
-  if (temp && !((profile && isInside(profile, temp)) || (local && isInside(local, temp)))) temp = null;
+  // Windows setzt TEMP oft als Kurznamen (C:\Users\GEORGH~1\…) – dann über die echten Pfade vergleichen.
+  const inProfile = (t, p, l) => (p && isInside(p, t)) || (l && isInside(l, t));
+  if (temp && !inProfile(temp, profile, local)) {
+    const t = realOrSelf(temp);
+    temp = inProfile(t, profile && realOrSelf(profile), local && realOrSelf(local)) ? t : null;
+  }
   const saved = location && location.found && absBase(location.savedDir) ? path.resolve(location.savedDir) : null;
   // Protokolle/Absturzberichte nur, wenn der Ordner wirklich wie ...\<Fortnite…>\Saved aussieht
   // (schützt vor einem selbst gewählten, fremden Ordner).

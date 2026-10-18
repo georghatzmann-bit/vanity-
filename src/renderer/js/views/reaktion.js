@@ -2,7 +2,7 @@
 // Es wird nur innerhalb des HELIX-Fensters gehört – keine globalen Tastatur-Hooks, nichts im Spiel.
 
 import {
-  ROUNDS, PROMPTS, PROMPT_TIMEOUT_MS, ACTIONS, actionById, defaultBinds, normalizeBinds, codeLabel, bindFromEvent,
+  ROUNDS, PROMPTS, PROMPT_TIMEOUT_MS, MAX_REACTION_MS, ACTIONS, actionById, defaultBinds, normalizeBinds, codeLabel, bindFromEvent,
   findDuplicates, activeActions, actionForCode, trainingBlocker, randomDelay, randomGap, makeSequence, classifyPress,
   evaluateReaction, rateReaction, evaluateKeys, rateKeys, keysTip, trend, bars,
 } from '../lib/reaktion-logic.mjs';
@@ -131,7 +131,14 @@ export default {
           if (phase !== 'wait') return;
           setPhase('go', 'JETZT!', 'Klicken oder Leertaste');
           goAt = performance.now();
+          timer = later(() => { if (phase === 'go') tooSlow(); }, MAX_REACTION_MS);
         }), randomDelay());
+      }
+
+      // Wer abgelenkt war, wiederholt die Runde – sonst verdirbt eine einzige Runde den ganzen Schnitt
+      function tooSlow() {
+        setPhase('slow', 'Zu langsam', `Länger als ${MAX_REACTION_MS / 1000} Sekunden – die Runde zählt nicht. Klick, um sie zu wiederholen.`);
+        readyAt = performance.now();
       }
 
       async function finish() {
@@ -163,7 +170,7 @@ export default {
           return;
         }
         if (phase === 'early') { waitRound(); return; }
-        if (phase === 'result') {
+        if (phase === 'result' || phase === 'slow') {
           if (performance.now() - readyAt < 250) return; // Doppelklick nicht als neue Runde zählen
           waitRound();
           return;
@@ -176,13 +183,16 @@ export default {
           return;
         }
         if (phase === 'go') {
+          cancelLater(timer);
           const ms = Math.max(0, ts - goAt);
-          if (classifyPress(ms) === 'early') {
+          const kind = classifyPress(ms);
+          if (kind === 'early') {
             falseStarts++;
             setPhase('early', 'Geraten!', 'Unter 100 ms schafft das kein Mensch – zählt als Fehlstart. Klick für einen neuen Versuch.');
             renderSlots();
             return;
           }
+          if (kind === 'slow') { tooSlow(); return; }
           times.push(ms);
           renderSlots();
           if (times.length >= ROUNDS) { finish(); return; }

@@ -105,4 +105,18 @@ function powershellStream(script, onObject, onExit) {
   return () => { try { child.kill(); } catch { /* schon beendet */ } };
 }
 
-module.exports = { run, powershell, powershellStream, HelixError, notOnWindows, IS_WIN };
+// Konsolenprogramme (tasklist, powercfg …) schreiben in der OEM-Codepage (deutsch: 850), nicht UTF-8.
+const CP850 = 'ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈıÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´\u00ad±‗¾¶§÷¸°¨·¹³²■\u00a0';
+
+/** Liest Konsolen-Ausgabe: gültiges UTF-8 bleibt, sonst Codepage 850. */
+function decodeConsole(buf) {
+  if (typeof buf === 'string') return buf;
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf || []);
+  const utf8 = b.toString('utf8');
+  if (!utf8.includes('\ufffd')) return utf8;
+  let s = '';
+  for (const byte of b) s += byte < 0x80 ? String.fromCharCode(byte) : CP850[byte - 0x80];
+  return s;
+}
+
+module.exports = { run, powershell, powershellStream, decodeConsole, HelixError, notOnWindows, IS_WIN };

@@ -59,6 +59,20 @@ test('reaktion: unter 100 ms ist geraten (Fehlstart), Auswertung und Einordnung'
   for (const ms of [150, 220, 280, 330, 500]) assert.ok(m.rateReaction(ms).text.length > 5, 'jede Einordnung hat einen erklärenden Satz');
 });
 
+test('reaktion: eine abgelenkte Runde (über 2 s) zählt nicht, das Ergebnis bleibt speicherbar', async () => {
+  const m = await lib();
+  assert.equal(m.MAX_REACTION_MS, 2000);
+  assert.equal(m.classifyPress(2000), 'ok');
+  assert.equal(m.classifyPress(2001), 'slow');
+  assert.equal(m.classifyPress(15000), 'slow', '15 Sekunden weggeschaut -> Runde wird wiederholt');
+  // Was gezählt wird, liegt höchstens bei MAX_REACTION_MS – der Hauptprozess nimmt das Ergebnis immer an
+  const kept = [15000, 250, 240, 260, 255, 270].filter((ms) => m.classifyPress(ms) === 'ok');
+  const ev = m.evaluateReaction(kept);
+  assert.ok(L.sanitizeReaction({ avgMs: ev.avgMs, bestMs: ev.bestMs, rounds: kept.length, falseStarts: 0 }));
+  const worst = m.evaluateReaction(Array(m.ROUNDS).fill(m.MAX_REACTION_MS));
+  assert.ok(L.sanitizeReaction({ avgMs: worst.avgMs, bestMs: worst.bestMs, rounds: m.ROUNDS, falseStarts: 0 }), 'auch fünfmal 2000 ms ist speicherbar');
+});
+
 // ---------------------------------------------------------------- Tasten
 
 test('reaktion: Standard-Tasten sind in Oberfläche und Hauptprozess gleich', async () => {
@@ -67,6 +81,7 @@ test('reaktion: Standard-Tasten sind in Oberfläche und Hauptprozess gleich', as
   assert.deepEqual(m.ACTION_IDS, L.ACTION_IDS);
   assert.deepEqual(m.ACTIONS.map((a) => a.label), L.ACTIONS.map((a) => a.label));
   assert.equal(m.RESERVED.source, L.RESERVED.source);
+  assert.equal(m.LABEL_MAX, L.LABEL_MAX);
   const d = m.defaultBinds();
   assert.deepEqual(m.activeActions(d), ['wall', 'floor', 'stairs', 'roof', 'edit'], 'Waffen sind erst einmal aus');
   assert.equal(d.edit.code, 'KeyG');
@@ -89,6 +104,31 @@ test('reaktion: Tasten aus Ereignissen (Tastatur, Maustasten, Mausrad), Esc und 
   assert.equal(m.bindFromEvent({ type: 'wheel', deltaY: 0 }), null);
   assert.equal(m.codeLabel('Numpad3'), 'Num 3');
   assert.equal(m.codeLabel('Digit7'), '7');
+});
+
+test('reaktion: Tasten-Namen kommen nach dem Speichern vollständig und deutsch zurück', async () => {
+  const m = await lib();
+  const cases = [
+    [{ type: 'mousedown', button: 1 }, 'Mittlere Maustaste'],
+    [{ type: 'mousedown', button: 2 }, 'Rechte Maustaste'],
+    [{ type: 'keydown', code: 'ShiftRight', key: 'Shift' }, 'Umschalt rechts'],
+    [{ type: 'keydown', code: 'IntlBackslash', key: '<' }, '<'],
+    [{ type: 'keydown', code: 'IntlBackslash', key: '>' }, '>'],
+    [{ type: 'keydown', code: 'Minus', key: 'ß' }, 'ß'],
+    [{ type: 'keydown', code: 'Backquote', key: 'Dead' }, '^'],
+    [{ type: 'keydown', code: 'Equal', key: 'Dead' }, '´'],
+    [{ type: 'keydown', code: 'Numpad1', key: '1' }, 'Num 1'],
+    [{ type: 'keydown', code: 'NumpadAdd', key: '+' }, 'Num +'],
+    [{ type: 'keydown', code: 'KeyQ', key: 'q' }, 'Q'],
+    [{ type: 'keydown', code: 'Semicolon', key: 'ö' }, 'Ö'],
+  ];
+  for (const [e, want] of cases) {
+    const b = m.bindFromEvent(e);
+    assert.equal(b.label, want, `beim Drücken: ${JSON.stringify(e)}`);
+    const saved = L.sanitizeBinds({ edit: { ...b, on: true } }).edit; // Hauptprozess
+    const shown = m.normalizeBinds({ edit: saved }).edit; // Tastenkappe und Hinweis im Training
+    assert.equal(shown.label, want, `nach dem Speichern: ${JSON.stringify(e)}`);
+  }
 });
 
 test('reaktion: doppelte Tasten blockieren das Training, zu wenige Aktionen auch', async () => {
@@ -119,6 +159,29 @@ test('reaktion: Befehlsfolge – 20 Befehle, nie zweimal hintereinander, gleichm
   }
   assert.deepEqual(m.makeSequence([], 5), []);
   assert.deepEqual(m.makeSequence(['wall'], 3), ['wall', 'wall', 'wall']);
+});
+
+test('reaktion: Befehlsfolge mit nur zwei Aktionen ist nicht einfach abwechselnd', async () => {
+  const m = await lib();
+  const ids = ['wall', 'floor'];
+  let alternating = 0;
+  let repeats = 0;
+  for (let seed = 1; seed < 60; seed++) {
+    const seq = m.makeSequence(ids, 20, seeded(seed));
+    assert.equal(seq.length, 20);
+    for (const id of ids) assert.equal(seq.filter((x) => x === id).length, 10, 'beide gleich oft');
+    for (let i = 2; i < seq.length; i++) assert.ok(!(seq[i] === seq[i - 1] && seq[i] === seq[i - 2]), `dreimal hintereinander bei seed ${seed}`);
+    let r = 0;
+    for (let i = 1; i < seq.length; i++) if (seq[i] === seq[i - 1]) r++;
+    if (r === 0) alternating++;
+    repeats += r;
+  }
+  assert.ok(alternating <= 2, `zu oft nur abwechselnd: ${alternating}`);
+  assert.ok(repeats / (59 * 19) > 0.2, 'auf einen Befehl folgt oft derselbe – man muss lesen');
+  // auch mit echtem Zufall
+  const seen = new Set();
+  for (let k = 0; k < 20; k++) seen.add(m.makeSequence(ids, 20).join());
+  assert.ok(seen.size > 5);
 });
 
 test('reaktion: Auswertung Tasten-Trainer (nur richtige Tasten zählen für die Zeit)', async () => {
@@ -188,7 +251,8 @@ test('reaktion: Tastenbelegung – nur bekannte Aktionen, gültige Codes, kurze 
   assert.deepEqual(b.floor, { code: 'F2', label: 'F2', on: true }, 'Esc ist reserviert -> Standard');
   assert.equal(b.stairs.code, 'F3');
   assert.doesNotMatch(b.roof.label, /[<>]/);
-  assert.ok(b.roof.label.length <= 14);
+  assert.ok(b.roof.label.length <= L.LABEL_MAX);
+  assert.equal(L.sanitizeBinds({ roof: { code: 'IntlBackslash', label: '<', on: true } }).roof.label, '<', 'die Taste „<“ allein ist kein HTML');
   assert.equal(b.weapon1.on, true);
   assert.equal(b.hacker, undefined);
   assert.deepEqual(Object.keys(b), L.ACTION_IDS);

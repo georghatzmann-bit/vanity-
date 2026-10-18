@@ -38,6 +38,7 @@ export class TestSession {
     this.blockStats = [];
     this.results = [];
     this.switched = new Set();
+    this.mouseDpi = plan.baseDpi; // worauf die Maus gerade steht (zuletzt bestätigt), am Anfang die eigene DPI
     this.events = [];
     this.doneMs = 0; // fertig gespielte Zeit (für den Gesamt-Fortschritt)
     this.totalMs = this.queue.reduce((n, b) => n + b.rounds.reduce((m, r) => m + r.durationMs + this.leadInMs, 0), 0);
@@ -72,6 +73,7 @@ export class TestSession {
       this.emit({ type: 'switch', dpi: b.dpi });
       return;
     }
+    this.mouseDpi = b.dpi;
     this.ri = 0;
     this.blockStats = [];
     this.emit({ type: 'block', warmup: !!b.warmup, blockNo: this.blockNo });
@@ -182,7 +184,7 @@ export class TestSession {
     };
   }
 
-  /** Ergebnis: Empfehlung und Verlaufseintrag (Form siehe 'tool-sensi'). */
+  /** Ergebnis: Empfehlung, Verlaufseintrag (Form siehe 'tool-sensi') und worauf die Maus am Ende steht. */
   outcome(at = Date.now()) {
     const p = this.plan;
     const blocks = this.results.map((x) => ({
@@ -193,7 +195,7 @@ export class TestSession {
       ? recommendDpi({ blocks, baseDpi: p.baseDpi, baseSens: p.baseSens, rawInput: this.rawInput })
       : recommend({ blocks, baseSens: p.baseSens, dpi: p.baseDpi, rawInput: this.rawInput });
     const entry = buildHistoryEntry({ plan: p, blockResults: this.results, rec, rawInput: this.rawInput, at });
-    return { rec, entry, blockResults: this.results };
+    return { rec, entry, blockResults: this.results, mouseDpi: this.mouseDpi };
   }
 }
 

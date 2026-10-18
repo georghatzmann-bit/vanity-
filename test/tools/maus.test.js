@@ -148,6 +148,13 @@ test('maus: Rückgängig behält den Stand vor der ersten HELIX-Änderung', () =
   const manual = { MouseSensitivity: 6, MouseSpeed: 1, MouseThreshold1: 6, MouseThreshold2: 10 };
   const u3 = L.nextUndo(u1, manual, L.planFix(manual), 3);
   assert.deepEqual(u3.before, manual);
+  // Erst Beschleunigung (HELIX), dann selbst 14, dann Geschwindigkeit (HELIX): nur die Beschleunigung bleibt beim Original
+  const start = { MouseSensitivity: 10, MouseSpeed: 1, MouseThreshold1: 6, MouseThreshold2: 10 };
+  const a1 = L.nextUndo(null, start, L.planFix(start, { speed: false }), 1);
+  const own = { MouseSensitivity: 14, MouseSpeed: 0, MouseThreshold1: 0, MouseThreshold2: 0 };
+  const a2 = L.nextUndo(a1, own, L.planFix(own, { accel: false }), 2);
+  assert.deepEqual(a2.before, { MouseSensitivity: 14, MouseSpeed: 1, MouseThreshold1: 6, MouseThreshold2: 10 });
+  assert.deepEqual(a2.changes.find((c) => c.name === 'MouseSensitivity'), { name: 'MouseSensitivity', from: 14, to: 10 });
 });
 
 test('maus: Fortnite-Wert lesen', () => {
@@ -250,6 +257,20 @@ test('maus.undo: holt die gesicherten Werte zurück und löscht den Rückgängig
   assert.match(ps[1], /\[IntPtr\]14/);
   assert.equal(JSON.parse(store.get('tool-maus')).undo, undefined);
   await assert.rejects(() => mod.handlers.undo({}, ctx), (e) => e.code === 'NO_UNDO');
+});
+
+test('maus.undo nach zwei HELIX-Änderungen: selbst eingestellte Zeigergeschwindigkeit geht nicht verloren', async () => {
+  const { ctx, regData } = fakeCtx();
+  await mod.handlers.fix({ speed: false, accel: true }, ctx); // 1) HELIX: nur Beschleunigung aus
+  regData.MouseSensitivity = { type: 'REG_SZ', value: '14' }; // 2) Nutzer stellt in Windows selbst 8/11 ein
+  const r = await mod.handlers.fix({ speed: true, accel: false }, ctx); // 3) HELIX: Geschwindigkeit 6/11
+  assert.equal(regData.MouseSensitivity.value, '10');
+  assert.deepEqual(r.status.undo.changes.map((c) => [c.name, c.from, c.to]),
+    [['MouseSensitivity', 14, 10], ['MouseSpeed', 1, 0], ['MouseThreshold1', 6, 0], ['MouseThreshold2', 10, 0]],
+    'die Liste nennt auch die Geschwindigkeit');
+  await mod.handlers.undo({}, ctx); // 4) Rückgängig
+  assert.equal(regData.MouseSensitivity.value, '14', 'die eigene 8/11 kommt zurück, nicht der Wert von vor HELIX');
+  assert.deepEqual([regData.MouseSpeed.value, regData.MouseThreshold1.value, regData.MouseThreshold2.value], ['1', '6', '10']);
 });
 
 test('maus.fix/undo: ohne Windows -> NOT_WINDOWS, nichts wird geschrieben', async () => {

@@ -140,7 +140,8 @@ body[data-view]:not([data-view="cockpit"]) .bg-shade { background: rgba(5, 6, 10
 .hud {
   position: absolute; left: 24px; top: 16px; width: 300px; padding: 12px 16px;
   background: var(--glass); border: 1px solid var(--line); border-radius: var(--radius);
-  backdrop-filter: blur(16px) saturate(140%); pointer-events: none; z-index: 30;
+  backdrop-filter: blur(16px) saturate(140%); pointer-events: none;
+  z-index: 5; /* unter den Planeten (10–20): ein Planet in der Ecke bleibt immer sichtbar */
   transition: border-color var(--t);
 }
 .hud.active { border-color: rgba(155, 233, 255, 0.3); }
@@ -364,6 +365,12 @@ body.light-mode .bg-video { filter: brightness(0.45) saturate(0.8); }
   .brand-sub { display: none; }
   .orbit-strip { display: none; }
   .hud { width: 240px; }
+}
+/* kleines Fenster: die Infobox bleibt knapp, damit sie keinen Planeten verdeckt */
+@media (max-width: 1240px), (max-height: 820px) {
+  .hud { left: 16px; top: 12px; width: 230px; padding: 8px 12px; }
+  .hud:not(.active) .hud-desc { display: none; }
+  .hud-title { font-size: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0ms !important; }

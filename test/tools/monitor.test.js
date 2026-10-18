@@ -5,6 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { pathToFileURL } = require('node:url');
@@ -362,4 +363,196 @@ test('Modul: id, Handler und keine verbotenen Dinge', () => {
   assert.deepEqual(Object.keys(monitor.handlers).sort(), ['detectGpu', 'openCalibration', 'openHdrStore', 'saveStormTest', 'saveWizard', 'state', 'summary']);
   const src = fs.readFileSync(path.join(__dirname, '../../src/main/modules/tools/monitor.js'), 'utf8');
   assert.doesNotMatch(src, /writeValue|applyIniChanges|taskkill|Fortnite.*\.exe|C:\\\\Windows/i);
+});
+
+// ---------------------------------------------------------------- Ansicht (nachgemachte Oberfläche)
+// Ein sehr kleines Element-Modell statt eines Browsers: reicht, um die Ansicht zu laden, Knöpfe zu drücken,
+// das Vollbild nachzuspielen und zu prüfen, welches Testbild gezeigt wird. ui kommt wie in der App über env.ui.
+
+class FakeEl {
+  constructor(tag) {
+    this.tagName = String(tag).toUpperCase();
+    this.children = [];
+    this.parentNode = null;
+    this.attrs = {};
+    this.dataset = {};
+    this.listeners = {};
+    this.cls = new Set();
+    this.text = '';
+    this.ctx = null;
+  }
+  get classList() {
+    const s = this.cls;
+    return {
+      add: (...c) => c.forEach((x) => s.add(x)),
+      remove: (...c) => c.forEach((x) => s.delete(x)),
+      toggle: (c, on = !s.has(c)) => { if (on) s.add(c); else s.delete(c); return on; },
+      contains: (c) => s.has(c),
+    };
+  }
+  get firstChild() { return this.children[0] || null; }
+  get textContent() { return this.tagName === '#TEXT' ? this.text : this.children.map((c) => c.textContent).join(''); }
+  set textContent(v) { [...this.children].forEach((c) => this.removeChild(c)); if (v != null && v !== '') this.append(v); }
+  appendChild(c) { c.parentNode?.removeChild(c); c.parentNode = this; this.children.push(c); return c; }
+  append(...cs) { for (const c of cs.flat(Infinity)) if (c != null && c !== false) this.appendChild(c instanceof FakeEl ? c : textNode(c)); }
+  removeChild(c) { this.children = this.children.filter((x) => x !== c); c.parentNode = null; return c; }
+  replaceWith(n) {
+    const p = this.parentNode;
+    if (!p) return;
+    n.parentNode?.removeChild(n);
+    p.children[p.children.indexOf(this)] = n;
+    n.parentNode = p;
+    this.parentNode = null;
+  }
+  setAttribute(k, v) { this.attrs[k] = String(v); }
+  getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+  addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }
+  click() { return Promise.all((this.listeners.click || []).map((f) => f({ currentTarget: this, target: this, preventDefault() {} }))); }
+  matches(sel) { const [tag, ...cls] = sel.split('.'); return (!tag || this.tagName === tag.toUpperCase()) && cls.every((c) => this.cls.has(c)); }
+  querySelectorAll(sel) { return findAll(this, (e) => e.matches(sel)); }
+  querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
+  focus() {}
+  // Canvas
+  getBoundingClientRect() { return { width: 640, height: 360 }; }
+  getContext() { this.ctx ||= fakeCtx(); return this.ctx; }
+  async requestFullscreen() { fakeDoc.fullscreenElement = this; fakeDoc.fire('fullscreenchange'); }
+}
+const textNode = (v) => Object.assign(new FakeEl('#text'), { text: String(v) });
+function findAll(root, pred) {
+  const out = [];
+  const walk = (e) => { for (const c of e.children) { if (pred(c)) out.push(c); walk(c); } };
+  walk(root);
+  return out;
+}
+const byClass = (root, c) => findAll(root, (e) => e.cls.has(c));
+const buttonsWith = (root, re) => findAll(root, (e) => e.tagName === 'BUTTON' && re.test(e.textContent));
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+/** document/window mit Vollbild und Tastatur zum Nachspielen. */
+function fakeTarget() {
+  const l = {};
+  return {
+    l,
+    addEventListener(t, f) { (l[t] ||= []).push(f); },
+    removeEventListener(t, f) { l[t] = (l[t] || []).filter((x) => x !== f); },
+    fire(t, e = {}) { for (const f of [...(l[t] || [])]) f(e); },
+  };
+}
+const fakeDoc = Object.assign(fakeTarget(), {
+  fullscreenElement: null,
+  body: new FakeEl('body'),
+  async exitFullscreen() { fakeDoc.fullscreenElement = null; fakeDoc.fire('fullscreenchange'); },
+});
+const fakeWin = Object.assign(fakeTarget(), { devicePixelRatio: 1 });
+const press = (key) => fakeWin.fire('keydown', { key, preventDefault() {}, stopImmediatePropagation() {} });
+
+function fakeUi() {
+  const toasts = [];
+  const h = (spec, attrs, ...children) => {
+    if (attrs == null || typeof attrs !== 'object' || attrs instanceof FakeEl || Array.isArray(attrs)) {
+      if (attrs != null) children.unshift(attrs);
+      attrs = {};
+    }
+    const [tag, ...classes] = String(spec).split('.');
+    const el = new FakeEl(tag || 'div');
+    classes.filter(Boolean).forEach((c) => el.cls.add(c));
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === 'dataset') Object.assign(el.dataset, v);
+      else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+      else if (k === 'value' || k === 'checked' || k === 'disabled') el[k] = v;
+      else el.setAttribute(k, v);
+    }
+    el.append(children);
+    return el;
+  };
+  const clear = (el) => { [...el.children].forEach((c) => el.removeChild(c)); return el; };
+  const ui = {
+    h, clear,
+    icon: () => new FakeEl('svg'),
+    mount: (el, ...c) => { clear(el); el.append(c); return el; },
+    button(label, { onClick, variant = '', disabled } = {}) {
+      const b = h(`button.btn${variant ? `.${variant}` : ''}`, { disabled }, label ? h('span', label) : null);
+      if (onClick) b.addEventListener('click', (e) => onClick(e));
+      return b;
+    },
+    toast: (msg, type = 'ok') => { toasts.push({ msg, type }); },
+    showError: (e, title) => { toasts.push({ msg: `${title || 'Fehler'}: ${e.message}`, type: 'err' }); },
+    badge: (t) => h('span.badge', t),
+    fmtAgo: () => 'gerade eben',
+    fmtDate: () => 'heute',
+  };
+  return { ui, toasts };
+}
+
+/** Lädt die Ansicht (als .mjs-Kopie, damit Node sie ohne "type": "module" als ES-Modul liest). */
+async function loadMonitorView() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'helix-view-'));
+  fs.mkdirSync(path.join(dir, 'views'));
+  fs.mkdirSync(path.join(dir, 'lib'));
+  const src = path.join(__dirname, '../../src/renderer/js/views/monitor.js');
+  for (const m of fs.readFileSync(src, 'utf8').matchAll(/from '\.\.\/lib\/([\w-]+\.mjs)'/g)) {
+    fs.copyFileSync(path.join(LIB, m[1]), path.join(dir, 'lib', m[1]));
+  }
+  fs.copyFileSync(src, path.join(dir, 'views', 'monitor.mjs'));
+  return (await import(pathToFileURL(path.join(dir, 'views', 'monitor.mjs')).href)).default;
+}
+
+test('Ansicht: Kontrolle bleibt beim Sturm-Test – auch nach Vollbild und Pfeiltaste', async (t) => {
+  const view = await loadMonitorView();
+  const globals = { document: fakeDoc, window: fakeWin, requestAnimationFrame: (f) => setTimeout(f, 0), ResizeObserver: class { observe() {} disconnect() {} } };
+  const saved = {};
+  for (const [k, v] of Object.entries(globals)) {
+    saved[k] = Object.getOwnPropertyDescriptor(globalThis, k);
+    Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true });
+  }
+  t.after(async () => {
+    view.unmount();
+    await new Promise((r) => setTimeout(r, 20));
+    for (const [k, d] of Object.entries(saved)) { if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k]; }
+  });
+  const { ui } = fakeUi();
+  const env = {
+    ui,
+    nav: { go() {} },
+    async call(name) {
+      if (name === 'monitor.state') return { wizard: { step: guide.STEPS.findIndex((s) => s.id === 'kontrolle'), checks: {} }, stormTests: [] };
+      if (name === 'monitor.detectGpu') return { vendor: 'nvidia', name: 'NVIDIA GeForce' };
+      return {};
+    },
+  };
+  const root = new FakeEl('div');
+  await view.mount(root, env);
+  const sturm = pat.findPattern('sturm').name;
+  const label = (c) => c.getAttribute('aria-label') || '';
+  const hintTexts = (c) => c.ctx.calls.filter((x) => x.m === 'fillText').map((x) => String(x.args[0])).join(' | ');
+
+  // Testbilder-Tab: dort wechseln die Pfeiltasten im Vollbild weiterhin das Bild
+  const mainCanvas = findAll(root, (e) => e.tagName === 'CANVAS')[0];
+  await buttonsWith(root, /^Vollbild$/)[0].click();
+  const first = label(mainCanvas);
+  press('ArrowRight');
+  assert.notEqual(label(mainCanvas), first, 'Testbilder: Pfeiltaste wechselt das Bild');
+  press('Escape');
+  assert.equal(fakeDoc.fullscreenElement, null);
+
+  // Geführte Einrichtung -> Schritt „Kontrolle“
+  await buttonsWith(root, /Geführte Einrichtung/)[0].click();
+  await tick();
+  const control = byClass(root, 'mon-control')[0];
+  assert.ok(control, 'Schritt Kontrolle offen');
+  const canvas = findAll(control, (e) => e.tagName === 'CANVAS')[0];
+  await buttonsWith(control, /^Vollbild$/)[0].click();
+  assert.equal(fakeDoc.fullscreenElement, canvas);
+  assert.match(label(canvas), new RegExp(`^Testbild ${sturm}`));
+  assert.match(hintTexts(canvas), /Esc beendet das Vollbild/);
+  assert.doesNotMatch(hintTexts(canvas), /Pfeiltasten/, 'kein Hinweis auf Bildwechsel, den es hier nicht gibt');
+  press('ArrowRight');
+  press('ArrowLeft');
+  press(' ');
+  assert.match(label(canvas), new RegExp(`^Testbild ${sturm}`), 'im Vollbild bleibt der Sturm-Test');
+  press('Escape');
+  assert.equal(fakeDoc.fullscreenElement, null);
+  assert.match(label(canvas), new RegExp(`^Testbild ${sturm}`), 'nach dem Vollbild: Sturm-Test, passend zur Frage daneben');
+  assert.match(control.textContent, /Wie viele Figuren erkennst du\?/);
 });

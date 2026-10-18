@@ -24,6 +24,8 @@ const ACTION_IDS = ACTIONS.map((a) => a.id);
 // Tasten, die nie belegt werden dürfen (Esc bricht ab, Windows-Taste öffnet das Startmenü)
 const RESERVED = /^(Escape|MetaLeft|MetaRight|OSLeft|OSRight|ContextMenu|Unidentified)$/;
 const CODE_RE = /^[A-Za-z][A-Za-z0-9]{0,23}$/;
+// Längster HELIX-Name ist „Mittlere Maustaste“ (18 Zeichen), ein Tasten-Code hat höchstens 24 Zeichen
+const LABEL_MAX = 24;
 
 function defaultBinds() {
   const out = {};
@@ -32,7 +34,10 @@ function defaultBinds() {
 }
 
 function cleanLabel(v, fallback) {
-  const s = typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 14) : '';
+  const t = typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, '').trim() : '';
+  // „<“ bzw. „>“ allein ist eine echte Taste (deutsche Tastatur, neben der linken Umschalttaste).
+  // In längeren Namen werden spitze Klammern entfernt (kein HTML).
+  const s = (/^[<>]$/.test(t) ? t : t.replace(/[<>]/g, '').trim()).slice(0, LABEL_MAX);
   return s || fallback;
 }
 
@@ -134,6 +139,6 @@ function stats(state) {
 }
 
 module.exports = {
-  MAX_HISTORY, ACTIONS, ACTION_IDS, RESERVED, defaultBinds, validCode, sanitizeBinds,
+  MAX_HISTORY, ACTIONS, ACTION_IDS, RESERVED, LABEL_MAX, defaultBinds, validCode, sanitizeBinds,
   sanitizeReaction, sanitizeKeys, pushCapped, normalizeState, summaryText, stats,
 };

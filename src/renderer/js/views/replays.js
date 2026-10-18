@@ -2,6 +2,7 @@
 // Zeigt Replays aus Fortnite (Demos-Ordner) und aus dem Tresor, mit Dauer, Datum, Größe und Version.
 
 import { fmtLength, displayName, baseName, shortTitle, statusBadges, unsavedCount, countText, copyAllText } from '../lib/replays-format.mjs';
+import { fortniteClosedFor, replayError } from '../lib/replays-fortnite.mjs';
 
 let cleanup = [];
 
@@ -88,7 +89,7 @@ export default {
         const el = ui.badge(b.text, b.type);
         if (b.title) el.title = b.title;
         return el;
-      }) : ui.badge('noch nicht gesichert', '')));
+      }) : where === 'demos' ? ui.badge('noch nicht gesichert', '') : null));
     }
 
     function demoRow(e) {
@@ -137,7 +138,7 @@ export default {
       const head = h('div.toolbar',
         ui.button(open ? `Alle neuen sichern (${open})` : 'Alle neuen sichern', { variant: 'primary', iconName: 'shield', disabled: !open || !!data.vault.problem, onClick: copyAll }),
         ui.button('Aktualisieren', { iconName: 'refresh', onClick: () => load(true) }),
-        d.dir ? ui.button('Fortnite-Ordner öffnen', { iconName: 'folder', variant: 'ghost', onClick: () => openFolder('demos') }) : null,
+        d.dir && d.found ? ui.button('Fortnite-Ordner öffnen', { iconName: 'folder', variant: 'ghost', onClick: () => openFolder('demos') }) : null,
         h('span.grow'),
         h('p.hint', 'Kopieren lässt das Original in Fortnite. Laufende Aufnahmen wartet HELIX ab.'));
       if (!d.dir) {
@@ -225,15 +226,11 @@ export default {
     }
 
     async function restoreOne(e) {
+      if (!(await fortniteClosedFor(env, 'das Replay zurücklegen'))) return;
       try {
-        const st = await env.call('core.fortniteStatus').catch(() => ({ running: false }));
-        if (st.running) {
-          ui.toast('Fortnite läuft gerade. Schließe Fortnite, dann kannst du das Replay zurücklegen.', 'warn', { timeout: 6000 });
-          return;
-        }
         const r = await env.call('replays.restore', { file: e.file });
         ui.toast(r.already ? 'Fortnite hat dieses Replay schon.' : 'Zurück in Fortnite – im Spiel unter Karriere → Replays. Tipp: Benenne es dort um, sonst löscht Fortnite es irgendwann wieder. Die Kopie im Tresor bleibt.', r.already ? 'info' : 'ok', { timeout: 8000 });
-      } catch (err) { ui.showError(err, 'Zurücklegen nicht möglich'); }
+      } catch (err) { ui.showError(replayError(err), 'Zurücklegen nicht möglich'); }
       await load();
     }
 
@@ -255,6 +252,8 @@ export default {
     }
 
     async function removeOne(e, where) {
+      // Aus Fortnite löschen geht nur bei geschlossenem Spiel – vorher anbieten, es zu schließen
+      if (where === 'demos' && !(await fortniteClosedFor(env, 'das Replay löschen'))) return;
       const ok = await ui.confirmDialog({
         title: `${shortTitle(e, where, ui.fmtDate)} löschen?`,
         text: where === 'vault'
@@ -267,7 +266,7 @@ export default {
       try {
         await env.call('replays.remove', { file: e.file, where });
         ui.toast('In den Papierkorb verschoben.');
-      } catch (err) { ui.showError(err, 'Löschen nicht möglich'); }
+      } catch (err) { ui.showError(replayError(err), 'Löschen nicht möglich'); }
       await load();
     }
 

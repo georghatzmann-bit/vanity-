@@ -1,6 +1,7 @@
 // Simulator für die Sicht-Presets (nur Browser-Vorschau).
 // Hält eine kleine Kopie der Fortnite-Werte im Speicher, damit Vorschau und Anwenden echt wirken.
 
+import { activePreset, valuesFromIni } from '../lib/sicht-presets.mjs';
 
 const G = '/Script/FortniteGame.FortGameUserSettings';
 const S = 'ScalabilityGroups';
@@ -64,11 +65,13 @@ export default {
     state.last = { id: a.presetId, name, short: a.presetShort || name, at: Date.now(), changes };
     return { rel: 'WindowsClient/GameUserSettings.ini', applied, backupId: '20261018-101500-ab12', label: `Sicht-Preset „${name}“`, preset: { id: a.presetId, name } };
   },
-  // wie der Hauptprozess: aktiv, solange die zuletzt angewendeten Werte noch in der Datei stehen
+  // wie der Hauptprozess: Preset nach den Werten erkennen (wie die Ansicht), eigene Werte nur solange sie noch gelten
   async summary() {
+    const p = activePreset(valuesFromIni(ini), { original: state.original ? valuesFromIni(state.original) : null });
+    if (p) return { text: `Aktiv: ${p.short || p.name}` };
     const last = state.last;
-    if (last && last.changes.every((c) => same(ini[`${c.section}|${c.key}`], c.value))) {
-      return { text: last.id === 'eigen' ? 'Aktiv: eigene Sicht-Werte' : `Aktiv: ${last.short || last.name}` };
+    if (last && last.id === 'eigen' && last.changes.every((c) => same(ini[`${c.section}|${c.key}`], c.value))) {
+      return { text: 'Aktiv: eigene Sicht-Werte' };
     }
     const pct = Math.round((Number(ini[`${G}|DisplayGamma`]) - 2.2) * 100 + 100);
     return { text: `Kein Sicht-Preset aktiv · Helligkeit ${pct} %` };

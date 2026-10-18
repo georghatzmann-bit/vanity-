@@ -3,6 +3,7 @@
 // Befehlszeilen, Energiepläne). Wird vom Modul und von den Tests benutzt.
 
 const path = require('node:path');
+const { parseCsvLine } = require('../sys/processes');
 
 const REASONS = {
   system: 'Teil von Windows – ohne dieses Programm läuft der PC nicht richtig.',
@@ -81,6 +82,28 @@ function classify(name, { self = selfNames() } = {}) {
 }
 
 const isBlocked = (name, o) => classify(name, o)?.level === 'block';
+
+/** Diese Prozesse fasst HELIX nie an – nicht einmal zum Auslesen von Pfad oder Fenstertitel. */
+const UNTOUCHABLE_KINDS = ['anticheat', 'fortnite', 'epic'];
+
+/**
+ * Regulärer Ausdruck (für PowerShell -notmatch, ohne Groß/klein) aus den Mustern oben:
+ * Fortnite, Anti-Cheat und Epic werden am Namen erkannt, bevor irgendetwas an ihnen abgefragt wird.
+ */
+function untouchablePattern() {
+  const esc = (t) => t.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
+  const parts = [];
+  for (const [kind, patterns] of RULES) {
+    if (!UNTOUCHABLE_KINDS.includes(kind)) continue;
+    for (const p of patterns) {
+      const start = p.startsWith('*');
+      const end = p.endsWith('*');
+      const core = esc(p.replace(/^\*|\*$/g, ''));
+      parts.push(`${start ? '' : '^'}${core}${end ? '' : '$'}`);
+    }
+  }
+  return parts.join('|');
+}
 
 /** Anzeigename aufräumen. */
 function cleanDisplay(s, fallback) {
@@ -179,6 +202,37 @@ function pickRoots(procs) {
   return out.slice(0, 5);
 }
 
+// ---------- Windows-Sitzung ----------
+
+/**
+ * `tasklist /FO CSV /NH` mit Sitzungsnummer: [{ name, pid, session }].
+ * Spalten: Name, PID, Sitzungsname, Sitzungsnummer, Speicher – die Reihenfolge ist in jeder Sprache gleich.
+ */
+function parseTasklistSessions(text) {
+  const out = [];
+  for (const raw of String(text ?? '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line.startsWith('"')) continue; // "INFO: ..." u. Ä.
+    const cols = parseCsvLine(line);
+    const pid = Number.parseInt(cols[1], 10);
+    if (!Number.isFinite(pid)) continue;
+    const session = Number.parseInt(cols[3], 10);
+    out.push({ name: cols[0], pid, session: Number.isFinite(session) ? session : null });
+  }
+  return out;
+}
+
+/**
+ * Nur Prozesse aus der Windows-Sitzung von HELIX selbst – keine Dienste (Sitzung 0) und
+ * keine Programme anderer Benutzerkonten am selben PC. Fehlt HELIX in der Liste, bleibt sie ungefiltert.
+ */
+function ownSession(rows, selfPid = process.pid) {
+  const list = rows || [];
+  const self = list.find((r) => r.pid === selfPid);
+  if (!self || self.session == null) return list;
+  return list.filter((r) => r.session === self.session);
+}
+
 // ---------- Energiepläne ----------
 
 const PLAN = {
@@ -220,12 +274,20 @@ function planLabel(plan) {
   return KNOWN_PLANS[plan.guid] || plan.name || 'Eigener Energieplan';
 }
 
+const HIGH_NAME_RE = /höchstleistung|hochleistung|high performance|ultimative leistung|ultimate performance/i;
+
 /** Ziel-Plan "Höchstleistung": Standard-GUID, sonst ein Plan mit passendem Namen. */
 function chooseHighPlan(plans) {
   const list = plans || [];
   return list.find((p) => p.guid === PLAN.high)
-    || list.find((p) => /höchstleistung|hochleistung|high performance|ultimative leistung|ultimate performance/i.test(p.name || ''))
+    || list.find((p) => HIGH_NAME_RE.test(p.name || ''))
     || null;
+}
+
+/** Gibt dieser Plan schon volle Leistung? (Höchstleistung, Ultimative Leistung oder ein Plan mit so einem Namen) */
+function isHighPlan(plan) {
+  if (!plan) return false;
+  return plan.guid === PLAN.high || plan.guid === PLAN.ultimate || HIGH_NAME_RE.test(plan.name || '');
 }
 
 // Codepage 850 (deutsche Konsole) – für Ausgaben, die nicht als UTF-8 kommen.
@@ -256,7 +318,7 @@ function summaryText(state) {
 
 module.exports = {
   REASONS, RULES, PLAN, KNOWN_PLANS,
-  normalizeName, validName, classify, isBlocked, selfNames, cleanDisplay, validExePath, asArray,
-  groupRunning, argsFromCommandLine, pickRoots,
-  parsePowercfgList, parseActiveScheme, planLabel, chooseHighPlan, validGuid, decodeConsole, summaryText,
+  normalizeName, validName, classify, isBlocked, untouchablePattern, UNTOUCHABLE_KINDS, selfNames, cleanDisplay, validExePath, asArray,
+  groupRunning, argsFromCommandLine, pickRoots, parseTasklistSessions, ownSession,
+  parsePowercfgList, parseActiveScheme, planLabel, chooseHighPlan, isHighPlan, validGuid, decodeConsole, summaryText,
 };

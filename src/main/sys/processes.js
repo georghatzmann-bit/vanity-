@@ -2,7 +2,7 @@
 // Laufende Programme auflisten und (auf Wunsch) normal schließen.
 // Nur Programme des angemeldeten Benutzers, keine Systemdienste.
 
-const { run, IS_WIN, notOnWindows } = require('./exec');
+const { run, decodeConsole, IS_WIN, notOnWindows } = require('./exec');
 
 /** Zerlegt eine CSV-Zeile von tasklist ("a","b","c"). */
 function parseCsvLine(line) {
@@ -43,8 +43,9 @@ async function listProcesses({ filter } = {}, exec = run) {
   if (!IS_WIN && exec === run) throw notOnWindows('Die Prozessliste');
   const args = ['/FO', 'CSV', '/NH'];
   if (filter) args.push('/FI', `IMAGENAME eq ${filter}`);
-  const out = await exec('tasklist.exe', args, { timeout: 10000 });
-  return parseTasklist(out);
+  // tasklist schreibt in der Konsolen-Codepage – sonst würde aus „Übersetzer.exe“ „�bersetzer.exe“
+  const out = await exec('tasklist.exe', args, { timeout: 10000, encoding: 'buffer' });
+  return parseTasklist(decodeConsole(out));
 }
 
 /**

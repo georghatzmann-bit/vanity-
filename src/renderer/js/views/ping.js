@@ -1,6 +1,6 @@
 // Ping-Tester: misst die Antwortzeit zu allen Fortnite-Regionen und zeigt, welcher Server für dich am schnellsten ist.
 
-import { fmtMs, fmtPct, quality, liveStats, scaleMax, barPct, groupResults, recommendation, historyRows, trend, methodLabel } from '../lib/ping-view.mjs';
+import { fmtMs, fmtPct, quality, noValueInfo, liveStats, scaleMax, barPct, groupResults, recommendation, historyRows, trend, methodLabel } from '../lib/ping-view.mjs';
 
 let cleanup = [];
 
@@ -227,13 +227,13 @@ export default {
     function resultRow(r, max, bestId, proxyIds) {
       const measured = typeof r.medianMs === 'number';
       const q = quality(r.medianMs);
+      const none = noValueInfo(r);
       const isBest = !running && r.id === bestId;
       const badges = [];
       if (isBest) badges.push(ui.badge('Bester', 'accent'));
       if (measured) badges.push(ui.badge(q.label, q.type));
       else if (running && !r.sent) badges.push(ui.badge('wartet', ''));
-      else if (r.noFallback) badges.push(ui.badge('nur mit Ping messbar', ''));
-      else badges.push(ui.badge('keine Antwort', 'err'));
+      else badges.push(ui.badge(none.label, none.type));
       if (r.method === 'tcp' && !running) badges.push(ui.badge('TCP', ''));
       if (r.estimate) badges.push(ui.badge('Schätzung', 'warn'));
       if (proxyIds.has(r.id)) badges.push(ui.badge('unmöglich schnell', 'warn'));
@@ -243,8 +243,7 @@ export default {
       const detail = measured
         ? (running ? `${r.sent} von ${settings.samples} · ${stats}` : stats)
         : running ? (r.sent ? `${r.sent} gesendet, noch keine Antwort` : 'noch nicht gemessen')
-          : r.noFallback ? 'Für diesen Standort gibt es kein TCP-Ziel – er lässt sich nur mit Ping messen.'
-            : 'Der Server hat auf keine Anfrage geantwortet.';
+          : none.text;
       return h(`li.ping-row${isBest ? '.best' : ''}`,
         h('div.ping-name', h('strong', r.name), h('span.hint', detail)),
         h('div.ping-bar', { 'aria-hidden': 'true' }, h(`span.q-${isBest ? 'best' : q.type}`, { style: { width: `${barPct(r.medianMs, max)}%` } })),

@@ -158,6 +158,8 @@ export function idOf(section, key) {
 
 const COLORBLIND_PATH = 'Fortnite: Einstellungen → Barrierefreiheit (bei älteren Versionen: Video) → Farbenblind-Modus.';
 
+// Die Werte (values, restoreOriginal, short) stehen auch in src/main/tools/sicht-rules.js für die
+// Cockpit-Zeile – ein Test stellt sicher, dass beide gleich bleiben.
 export const PRESETS = [
   {
     id: 'sturm',

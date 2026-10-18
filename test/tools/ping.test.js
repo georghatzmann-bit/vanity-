@@ -183,7 +183,9 @@ test('Messung "Automatisch" unter Windows: Ping für alle, TCP nur für stumme S
   assert.equal(de.host, 'dynamodb.eu-central-1.amazonaws.com');
   assert.equal(de.medianMs, 20);
   const tx = rep.results.find((r) => r.id === 'tx');
-  assert.equal(tx.noFallback, true, 'Texas hat kein TCP-Ziel');
+  assert.equal(tx.noFallback, false, 'Ping wurde gesendet, kam aber nicht zurück: "keine Antwort", nicht "nur mit Ping messbar"');
+  assert.equal(tx.method, 'icmp');
+  assert.equal(tx.lossPct, 100);
   assert.equal(tx.unreachable, true);
   assert.equal(rep.results.find((r) => r.id === 'fr').method, 'icmp');
   assert.equal(rep.method, 'mixed');
@@ -426,6 +428,39 @@ test('Anzeige: Empfehlung nennt Region und Unterregion, bei NA auch Competitive'
   assert.equal(v.recommendation(cat, results, null), null);
 });
 
+test('Anzeige: Ping blockiert -> Iowa/Texas "keine Antwort", nicht "nur mit Ping messbar"', async () => {
+  const v = await import(require("node:url").pathToFileURL(VIEW).href);
+  const cat = logic.catalog();
+  const all = logic.TARGETS.map((t) => t.id);
+  const items = (rep) => new Map(v.groupResults(cat, rep.results).flatMap((g) => g.items).map((i) => [i.id, i]));
+  // Windows, "Automatisch": Router lässt keinen Ping durch
+  const blocked = items(await logic.measureAll({ method: 'auto', samples: 3, canIcmp: true, icmp: fakeIcmp({ silent: all }), tcpDeps: fakeTcp(), gapMs: 0 }));
+  for (const id of ['tx', 'ia']) {
+    const info = v.noValueInfo(blocked.get(id));
+    assert.deepEqual([info.label, info.type], ['keine Antwort', 'err'], id);
+    assert.match(info.text, /Ping kam nicht zurück/);
+    assert.doesNotMatch(info.text, /nur mit Ping messen/);
+  }
+  // "TCP-Verbindung": dort wurde kein Ping gesendet -> neutraler Hinweis
+  const tcpOnly = items(await logic.measureAll({ method: 'tcp', samples: 3, canIcmp: true, icmp: fakeIcmp(), tcpDeps: fakeTcp({ fail: ['dynamodb.eu-central-1.amazonaws.com'] }), gapMs: 0 }));
+  assert.deepEqual([v.noValueInfo(tcpOnly.get('ia')).label, v.noValueInfo(tcpOnly.get('ia')).type], ['nur mit Ping messbar', '']);
+  assert.equal(v.noValueInfo(tcpOnly.get('de')).text, 'Der Server hat auf keine Anfrage geantwortet.');
+});
+
+test('Anzeige: Competitive NA-Central ist nur Texas (Iowa zählt nicht)', async () => {
+  const v = await import(require("node:url").pathToFileURL(VIEW).href);
+  const cat = logic.catalog();
+  const na = cat.find((g) => g.id === 'NA');
+  assert.deepEqual(na.subs.filter((s) => s.comp === 'central').map((s) => s.id), ['tx']);
+  assert.deepEqual(na.subs.filter((s) => s.comp === 'west').map((s) => s.id), ['ncal', 'or']);
+  // Spieler in Denver: Iowa 25 ms, Texas 40 ms, Oregon 33 ms -> NA-West ist für Turniere besser
+  const res = [['va', 22], ['oh', 30], ['ia', 25], ['tx', 40], ['mx', 60], ['ncal', 36], ['or', 33]]
+    .map(([id, ms]) => ({ id, name: logic.TARGET_BY_ID.get(id).name, medianMs: ms, lossPct: 0 }));
+  const rec = v.recommendation(cat, res, { id: 'va', name: 'Virginia', region: 'Nordamerika', ms: 22 });
+  assert.match(rec.competitive, /Für dich ist dort NA-West \(Oregon: 33 ms\) besser\./);
+  assert.doesNotMatch(rec.competitive, /Iowa/);
+});
+
 test('Anzeige: Verlauf und Vergleich mit der letzten Messung', async () => {
   const v = await import(require("node:url").pathToFileURL(VIEW).href);
   const h = [
@@ -457,6 +492,7 @@ test('Automatisch: scheitert der Ping ganz (z. B. PowerShell gesperrt), misst TC
   const rep = await logic.measureAll({ method: 'auto', samples: 3, canIcmp: true, icmp: broken, tcpDeps: tcp, gapMs: 0 });
   assert.equal(rep.method, 'tcp');
   assert.equal(rep.results.find((r) => r.id === 'de').method, 'tcp');
+  assert.equal(rep.results.find((r) => r.id === 'tx').noFallback, true, 'kein Ping gesendet: Texas ist "nur mit Ping messbar"');
   assert.equal(rep.best.id, 'de');
   await assert.rejects(logic.measureAll({ method: 'icmp', samples: 3, canIcmp: true, icmp: broken, tcpDeps: tcp }), (e) => e.code === 'PING_FAILED');
 });

@@ -107,6 +107,7 @@ for (const id of ids) {
   await win.waitForSelector('body:not(.navigating)');
   await win.click(`.planet[data-id="${id}"]`);
   await win.waitForSelector(`.tool-panel[data-tool="${id}"]`, { timeout: 15000 });
+  await win.waitForSelector(`.tool-panel[data-tool="${id}"]:not(.loading)`, { timeout: 30000 });
   await win.waitForTimeout(1200);
   const failed = await win.locator('.tool-body .empty h3:has-text("konnte nicht geladen werden")').count();
   check(failed === 0, `Tool ${id} konnte nicht geladen werden`);

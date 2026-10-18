@@ -498,7 +498,13 @@ export default {
       if (st.preview) renderDiff();
     }));
 
-    await scan(false);
+    // Nicht auf den Scan warten: PowerShell braucht ein paar Sekunden. So bleiben „Cockpit“ und Esc
+    // sofort bedienbar; späte Antworten nach dem Verlassen verwirft alive().
+    scan(false).catch((e) => {
+      if (!alive()) return;
+      console.error(e);
+      renderScanError(e);
+    });
   },
 
   unmount() {

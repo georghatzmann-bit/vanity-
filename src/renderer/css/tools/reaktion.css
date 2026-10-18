@@ -21,8 +21,10 @@
 [data-tool="reaktion"] .arena.wait .arena-title { color: var(--muted); }
 [data-tool="reaktion"] .arena.go { background: var(--accent); border-color: var(--accent-2); color: #031018; }
 [data-tool="reaktion"] .arena.go .arena-sub { color: #06303d; }
-[data-tool="reaktion"] .arena.early { border-color: rgba(255, 181, 71, 0.55); background: rgba(255, 181, 71, 0.06); }
-[data-tool="reaktion"] .arena.early .arena-title { color: var(--warn); }
+[data-tool="reaktion"] .arena.early,
+[data-tool="reaktion"] .arena.slow { border-color: rgba(255, 181, 71, 0.55); background: rgba(255, 181, 71, 0.06); }
+[data-tool="reaktion"] .arena.early .arena-title,
+[data-tool="reaktion"] .arena.slow .arena-title { color: var(--warn); }
 [data-tool="reaktion"] .arena.result .arena-title { color: var(--accent-2); font-variant-numeric: tabular-nums; }
 
 [data-tool="reaktion"] .round-slots { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 12px 0 8px; }

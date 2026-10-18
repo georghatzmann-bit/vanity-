@@ -97,7 +97,9 @@ export function setBackgroundPaused(paused) {
     if (!paused && v.paused) v.play().catch(() => {});
   }
   document.querySelectorAll('video.loop-media').forEach((v) => {
-    if (paused && !v.paused) v.pause();
+    // Ein gerade erst eingefügtes Video gilt noch als „paused“, startet aber gleich per autoplay –
+    // deshalb autoplay abschalten und immer pause() aufrufen.
+    if (paused) { v.autoplay = false; v.pause(); }
     if (!paused && v.paused) v.play().catch(() => {});
   });
 }

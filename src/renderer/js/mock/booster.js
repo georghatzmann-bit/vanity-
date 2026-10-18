@@ -123,12 +123,15 @@ export default {
       const app = { name: e.name, display: e.display, status: stays ? 'open' : 'closed' };
       const i = active.apps.findIndex((x) => x.name === e.name);
       if (i >= 0) active.apps[i] = app; else active.apps.push(app);
-      (stays ? report.stillOpen : report.closed).push(e.display);
     }
     if (state.options.powerPlan && !active.powerPlan) {
       active.powerPlan = { beforeName: 'Ausbalanciert', setName: 'Höchstleistung' };
       report.powerPlan = { changed: true, text: 'Energieplan von „Ausbalanciert“ auf „Höchstleistung“ gestellt.' };
     }
+    // wie das echte Modul: Bericht über den ganzen Boost (auch nach "Erneut boosten")
+    const by = (s) => active.apps.filter((x) => x.status === s).map((x) => x.display);
+    Object.assign(report, { closed: by('closed'), forced: by('forced'), stillOpen: by('open') });
+    if (!report.powerPlan && state.active && state.lastReport?.kind === 'boost') report.powerPlan = state.lastReport.powerPlan || null;
     state.active = active;
     state.lastReport = report;
     busy = null;

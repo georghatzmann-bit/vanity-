@@ -46,17 +46,25 @@ function cp850(text) {
   return Buffer.from(text.replace(/ö/g, '\x94').replace(/ä/g, '\x84').replace(/ü/g, '\x81'), 'latin1');
 }
 
-function makeWorld({ win = true, procs = defaultProcs(), ignoreClose = ['steam.exe'], plans = [PLAN.balanced, PLAN.high, PLAN.saver], active = PLAN.balanced, setactiveFails = false, state = {} } = {}) {
+// Windows-Sitzungen: Prozesse ohne "session" laufen in der eigenen Sitzung (mySession); 0 = Dienste.
+// denied: PIDs, bei denen taskkill "Zugriff verweigert" meldet (fremde Sitzung, SYSTEM).
+// gate: Promise – die CIM-Abfrage (Boost-Details) wartet darauf, so lässt sich "während des Boosts" nachstellen.
+function makeWorld({ win = true, procs = defaultProcs(), ignoreClose = ['steam.exe'], plans = [PLAN.balanced, PLAN.high, PLAN.saver], extraPlans = [], active = PLAN.balanced, setactiveFails = false, state = {}, mySession = 1, denied = [], gate = null } = {}) {
   const w = { procs: procs.map((p) => ({ ...p })), plan: active, taskkill: [], powercfg: [], started: [], scripts: [], nextPid: 5000 };
+  const sessionOf = (p) => p.session ?? mySession;
+  const mine = (p) => sessionOf(p) === mySession;
   const run = async (file, args = []) => {
     if (file === 'tasklist.exe') {
-      return w.procs.map((p) => `"${p.name}","${p.pid}","Console","1","10.000 K"`).join('\r\n');
+      // wie echt: alle Sitzungen, und HELIX selbst (hier node) steht auch in der Liste
+      const rows = [{ name: 'node.exe', pid: process.pid, session: mySession }, ...w.procs];
+      return rows.map((p) => `"${p.name}","${p.pid}","${sessionOf(p) ? 'Console' : 'Services'}","${sessionOf(p)}","10.000 K"`).join('\r\n');
     }
     if (file === 'taskkill.exe') {
       w.taskkill.push(args.slice());
       const pid = Number(args[args.indexOf('/PID') + 1]);
       const force = args.includes('/F');
       const p = w.procs.find((x) => x.pid === pid);
+      if (p && denied.includes(pid)) return 'FEHLER: Zugriff verweigert';
       if (p && (force || !ignoreClose.includes(p.name.toLowerCase()))) w.procs = w.procs.filter((x) => x.pid !== pid);
       return 'OK';
     }
@@ -64,6 +72,7 @@ function makeWorld({ win = true, procs = defaultProcs(), ignoreClose = ['steam.e
       w.powercfg.push(args.slice());
       if (args[0] === '/list') {
         const lines = POWERCFG_LIST.split('\r\n').filter((l) => !/GUID/.test(l) || plans.some((g) => l.includes(g)));
+        for (const [g, n] of extraPlans) lines.push(`GUID des Energieschemas: ${g}  (${n})`);
         return cp850(lines.map((l) => (l.includes(w.plan) ? `${l} *` : l)).join('\r\n'));
       }
       if (args[0] === '/getactivescheme') return cp850(`GUID des Energieschemas: ${w.plan}  (Name)`);
@@ -79,8 +88,10 @@ function makeWorld({ win = true, procs = defaultProcs(), ignoreClose = ['steam.e
   const powershell = async (script) => {
     w.scripts.push(script);
     if (/Win32_Process/.test(script)) {
+      if (gate) await gate;
       const names = decode(script).names.map((n) => n.toLowerCase());
-      return w.procs.filter((p) => names.includes(p.name.toLowerCase().replace(/\.exe$/, '')))
+      // wie das echte Skript: nur die eigene Sitzung
+      return w.procs.filter((p) => mine(p) && names.includes(p.name.toLowerCase().replace(/\.exe$/, '')))
         .map((p) => ({ Name: p.name, Id: p.pid, ParentId: p.parent, Path: p.path, CommandLine: p.cmd }));
     }
     if (/Start-Process/.test(script)) {
@@ -92,7 +103,7 @@ function makeWorld({ win = true, procs = defaultProcs(), ignoreClose = ['steam.e
       });
     }
     if (/Get-Process/.test(script)) {
-      return w.procs.map((p) => ({ Name: p.name.replace(/\.exe$/i, ''), Id: p.pid, Path: p.path, MainWindowTitle: /discord|spotify/i.test(p.name) ? 'Fenster' : '', Company: '', Description: '', WorkingSet: 100 * 1024 * 1024 }));
+      return w.procs.filter(mine).map((p) => ({ Name: p.name.replace(/\.exe$/i, ''), Id: p.pid, Path: p.path, MainWindowTitle: /discord|spotify/i.test(p.name) ? 'Fenster' : '', Company: '', Description: '', WorkingSet: 100 * 1024 * 1024 }));
     }
     throw new Error('unbekanntes Skript');
   };
@@ -376,6 +387,141 @@ test('Energieplan: gesperrt (powercfg verweigert) -> verständlicher Hinweis, Bo
   assert.deepEqual(r.report.closed, ['Discord']);
 });
 
+test('Energieplan: "Ultimative Leistung" ist schon volle Leistung – HELIX schaltet nicht herunter', async () => {
+  booster._test.reset();
+  const ULT = '1d6f3a2b-1111-4222-8333-944455556666'; // mit powercfg -duplicatescheme angelegt: eigene GUID
+  const { w, ctx, store } = makeWorld({ ignoreClose: [], extraPlans: [[ULT, 'Ultimative Leistung']], active: ULT, state: listState(['Discord.exe'], { options: { powerPlan: true, auto: false } }) });
+  const r = await booster.handlers.boost({}, ctx);
+  assert.equal(w.plan, ULT);
+  assert.equal(w.powercfg.filter((a) => a[0] === '/setactive').length, 0);
+  assert.equal(r.report.powerPlan.already, true);
+  assert.match(r.report.powerPlan.text, /„Ultimative Leistung“ war schon aktiv/);
+  assert.equal(store['tool-booster'].active.powerPlan, null, 'nichts zum Zurückstellen');
+  assert.equal(logic.isHighPlan({ guid: PLAN.ultimate, name: '' }), true);
+  assert.equal(logic.isHighPlan({ guid: '11111111-2222-3333-4444-555555555555', name: 'Ultimate Performance' }), true);
+  assert.equal(logic.isHighPlan({ guid: PLAN.balanced, name: 'Ausbalanciert' }), false);
+  assert.equal(logic.isHighPlan(null), false);
+});
+
+test('Während der Boost wartet: Änderungen an Liste und Optionen gehen nicht verloren', async () => {
+  booster._test.reset();
+  let open;
+  const gate = new Promise((r) => { open = r; });
+  const { ctx, store } = makeWorld({ ignoreClose: [], gate, state: listState(['Discord.exe', 'steam.exe', 'Spotify.exe'], { options: { powerPlan: false, auto: true } }) });
+  const boosting = booster.handlers.boost({}, ctx);
+  await new Promise((r) => setImmediate(r)); // der Boost hat den Zustand gelesen und wartet auf Windows
+  const opt = await booster.handlers.setOptions({ auto: false }, ctx);
+  assert.deepEqual(opt.options, { powerPlan: false, auto: false });
+  const rm = await booster.handlers.remove({ name: 'Spotify.exe' }, ctx);
+  assert.equal(rm.removed, true);
+  const add = await booster.handlers.add({ name: 'OneDrive.exe' }, ctx);
+  assert.equal(add.added, true);
+  open();
+  const r = await boosting;
+  const st = store['tool-booster'];
+  assert.deepEqual(st.options, { powerPlan: false, auto: false }, 'Automatik bleibt aus');
+  assert.deepEqual(st.list.map((e) => e.name), ['discord', 'steam', 'onedrive'], 'Spotify bleibt entfernt, OneDrive bleibt drin');
+  // Spotify war beim Start des Boosts noch in der Liste: geschlossen und wird später wieder gestartet
+  assert.deepEqual(r.report.closed.sort(), ['Discord', 'Spotify', 'steam']);
+  assert.ok(st.active.apps.some((a) => a.name === 'spotify'));
+  assert.equal(st.lastReport.kind, 'boost');
+});
+
+test('Erneut boosten: schon geschlossene Programme bleiben im Bericht und gelten nicht als "lief nicht"', async () => {
+  booster._test.reset();
+  const v = await import(require('node:url').pathToFileURL(VIEW).href);
+  const { w, ctx, store } = makeWorld({ state: listState(['Discord.exe', 'steam.exe', 'OneDrive.exe']) }); // Steam versteckt sich nur
+  const first = await booster.handlers.boost({}, ctx);
+  assert.deepEqual([first.report.closed, first.report.stillOpen, first.report.notRunning], [['Discord'], ['steam'], ['OneDrive']]);
+  const again = await booster.handlers.boost({}, ctx);
+  assert.deepEqual(again.report.closed, ['Discord']);
+  assert.deepEqual(again.report.stillOpen, ['steam']);
+  assert.deepEqual(again.report.notRunning, ['OneDrive'], 'Discord ist zu, nicht "lief gerade nicht"');
+  // Steam beendet der Nutzer selbst im Infobereich, dann noch einmal boosten
+  w.procs = w.procs.filter((p) => p.name !== 'steam.exe');
+  const third = await booster.handlers.boost({}, ctx);
+  assert.deepEqual(third.report.closed, ['Discord', 'steam']);
+  assert.deepEqual(third.report.stillOpen, []);
+  assert.equal(v.reportHeadline(store['tool-booster'].lastReport), 'Boost: 2 Programme geschlossen');
+  assert.equal(store['tool-booster'].active.apps.find((a) => a.name === 'steam').status, 'closed');
+  assert.equal((await booster.handlers.summary({}, ctx)).text, 'Boost aktiv – 2 Programme geschlossen');
+  const r = await booster.handlers.restore({}, ctx);
+  assert.deepEqual(r.report.restarted.sort(), ['Discord', 'steam']);
+});
+
+test('Windows-Sitzungen: Sofort beenden, Wiederherstellen und "läuft" nur in der eigenen Sitzung', async () => {
+  // A) NVIDIA Container: Dienst (Sitzung 0, SYSTEM) und eigene Instanz ohne Fenster
+  booster._test.reset();
+  const nv = `${PF}\\NVIDIA Corporation\\NvContainer\\nvcontainer.exe`;
+  const A = makeWorld({
+    procs: [...defaultProcs().filter((p) => p.name !== 'nvcontainer.exe'),
+      { pid: 2100, name: 'nvcontainer.exe', parent: 650, path: nv, cmd: `"${nv}" -s NvContainerLocalSystem`, session: 0 },
+      { pid: 2200, name: 'nvcontainer.exe', parent: 2100, path: nv, cmd: `"${nv}" -f user` }],
+    ignoreClose: ['nvcontainer.exe'], denied: [2100], state: listState(['nvcontainer.exe']),
+  });
+  const b = await booster.handlers.boost({}, A.ctx);
+  assert.deepEqual(b.report.stillOpen, ['nvcontainer']);
+  const before = A.w.taskkill.length;
+  const f = await booster.handlers.forceClose({ names: ['nvcontainer'], confirm: true }, A.ctx);
+  assert.deepEqual(A.w.taskkill.slice(before), [['/PID', '2200', '/F']], 'der Dienst in Sitzung 0 wird nie angefasst');
+  assert.deepEqual(f.report.forced, ['nvcontainer']);
+  assert.deepEqual(f.report.stillOpen, []);
+  assert.ok(A.w.procs.some((p) => p.pid === 2100), 'der Dienst läuft weiter');
+  const ra = await booster.handlers.restore({}, A.ctx);
+  assert.deepEqual(ra.report.restarted, ['nvcontainer']);
+  assert.equal(A.w.started[0].args, '-f user');
+
+  // B) Zweites Benutzerkonto am selben PC (schneller Benutzerwechsel) hat Discord und Spotify offen
+  booster._test.reset();
+  const other = 'C:\\Users\\Schwester\\AppData\\Local';
+  const B = makeWorld({
+    procs: [...defaultProcs().filter((p) => !/spotify/i.test(p.name)),
+      { pid: 3001, name: 'Discord.exe', parent: 3000, path: `${other}\\Discord\\app-1.0.9200\\Discord.exe`, cmd: '', session: 2 },
+      { pid: 3101, name: 'Spotify.exe', parent: 3000, path: `${other}\\Spotify\\Spotify.exe`, cmd: '', session: 2 }],
+    ignoreClose: [], denied: [3001, 3101], state: listState(['Discord.exe', 'Spotify.exe']),
+  });
+  const info = await booster.handlers.info({}, B.ctx);
+  assert.equal(info.list.find((e) => e.name === 'spotify').running, false, 'Spotify des anderen Kontos zählt nicht');
+  assert.equal(info.list.find((e) => e.name === 'discord').running, true);
+  const bb = await booster.handlers.boost({}, B.ctx);
+  assert.deepEqual(bb.report.closed, ['Discord']);
+  assert.deepEqual(bb.report.notRunning, ['Spotify']);
+  const rb = await booster.handlers.restore({}, B.ctx);
+  assert.deepEqual(rb.report.restarted, ['Discord'], 'das eigene Discord wird wieder gestartet');
+  assert.deepEqual(rb.report.alreadyRunning, []);
+  assert.ok(B.w.taskkill.every((a) => !['3001', '3101'].includes(a[1])), 'fremde Programme werden nie angefasst');
+});
+
+test('Wiederherstellen: klappt die CIM-Abfrage nicht, zählt tasklist – auch nur die eigene Sitzung', async () => {
+  booster._test.reset();
+  const B = makeWorld({
+    procs: [...defaultProcs(), { pid: 3001, name: 'Discord.exe', parent: 3000, path: 'C:\\Users\\Schwester\\AppData\\Local\\Discord\\Discord.exe', cmd: '', session: 2 }],
+    ignoreClose: [], denied: [3001], state: listState(['Discord.exe']),
+  });
+  await booster.handlers.boost({}, B.ctx);
+  const ps = B.ctx.exec.powershell;
+  B.ctx.exec.powershell = async (script, o) => { if (/Win32_Process/.test(script)) throw new Error('WMI kaputt'); return ps(script, o); };
+  const r = await booster.handlers.restore({}, B.ctx);
+  assert.deepEqual(r.report.restarted, ['Discord']);
+  assert.deepEqual(r.report.alreadyRunning, []);
+});
+
+test('tasklist mit Sitzungsnummer (deutsche Ausgabe)', () => {
+  const text = [
+    '"System","4","Services","0","152 K"',
+    '"svchost.exe","900","Services","0","12.344 K"',
+    `"HELIX.exe","${process.pid}","Console","1","120.000 K"`,
+    '"Discord.exe","1001","Console","1","200.112 K"',
+    '"Discord.exe","3001","","2","180.000 K"',
+    'INFO: Es werden keine Aufgaben mit den angegebenen Kriterien ausgeführt.',
+  ].join('\r\n');
+  const rows = logic.parseTasklistSessions(text);
+  assert.equal(rows.length, 5);
+  assert.deepEqual(rows[4], { name: 'Discord.exe', pid: 3001, session: 2 });
+  assert.deepEqual(logic.ownSession(rows).map((r) => r.pid), [process.pid, 1001]);
+  assert.equal(logic.ownSession(rows, 99999).length, 5, 'HELIX nicht gefunden: ungefiltert');
+});
+
 test('Leere Liste: verständlicher Fehler', async () => {
   booster._test.reset();
   const { ctx } = makeWorld();
@@ -478,4 +624,25 @@ test('Codepage 850: Tabelle vollständig, Umlaute richtig', () => {
   const all = logic.decodeConsole(Buffer.from(Array.from({ length: 128 }, (_, i) => 0x80 + i)));
   assert.equal(all.length, 128);
   assert.ok(!all.includes('undefined'));
+});
+
+
+test('Sicherheit: Fortnite, Anti-Cheat und Epic werden vor jeder Abfrage am Namen aussortiert', () => {
+  const re = new RegExp(logic.untouchablePattern(), 'i');
+  for (const n of ['FortniteClient-Win64-Shipping', 'FortniteClient-Win64-Shipping_EAC_EOS', 'FortniteClient-Win64-Shipping_BE', 'FortniteLauncher',
+    'EasyAntiCheat_EOS', 'BEService', 'EpicGamesLauncher', 'EpicWebHelper', 'EOSOverlayRenderer-Win64-Shipping', 'vgc']) {
+    assert.ok(re.test(n), n);
+  }
+  for (const n of ['Discord', 'Steam', 'Spotify', 'chrome', 'OneDrive']) assert.ok(!re.test(n), n);
+  const decode = (script) => JSON.parse(Buffer.from(/FromBase64String\('([^']+)'\)/.exec(script)[1], 'base64').toString('utf8'));
+  // Programmauswahl: Name/Sitzung filtern, BEVOR Pfad, Firma oder Fenstertitel gelesen werden
+  const ps = booster._test.PS_RUNNING;
+  assert.equal(decode(ps).skip, logic.untouchablePattern());
+  assert.ok(ps.indexOf('-notmatch $skip') > 0 && ps.indexOf('-notmatch $skip') < ps.indexOf('$_.Path'), 'erst aussortieren, dann Pfad lesen');
+  assert.doesNotMatch(ps, /\$_\.(Company|Description)|MainModule/, 'Firma/Beschreibung kommen aus der Datei, nicht aus dem Prozess');
+  // Neustart-Daten: nur die Prozesse aus der Liste, einzeln per Nummer abgefragt
+  const pd = booster._test.psDetails(['discord']);
+  assert.deepEqual(decode(pd).names, ['discord']);
+  assert.match(pd, /Handle = '\$id'/);
+  assert.doesNotMatch(pd, /-Filter "SessionId/, 'keine Abfrage aller Prozesse der Sitzung');
 });

@@ -8,7 +8,7 @@ const out = process.argv[2] || 'test-results/shots';
 const views = process.argv.slice(3).length ? process.argv.slice(3) : ['cockpit', 'profiles'];
 fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ viewport: { width: Number(process.env.VW || 1440), height: Number(process.env.VH || 900) } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });

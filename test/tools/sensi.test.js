@@ -2,7 +2,7 @@
 // Tests für die Sensi-Kalibrierung: Rechenregeln, Umrechner, Projektion, Runden, ganzer Testablauf
 // (mit einem simulierten Spieler), Empfehlung, Verlauf und das Hauptprozess-Modul.
 
-const { test, before } = require('node:test');
+const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -510,6 +510,325 @@ test('Ganzer Test im DPI-Modus: fordert zum Umstellen auf, wartet, gruppiert nac
   s.confirmSwitch(T + 60000);
   assert.equal(s.phase, 'round');
   near(s.sens * s.dpi, 5200, 1e-9);
+});
+
+test('DPI-Modus: die Sitzung weiß, worauf die Maus gerade steht (am Ende wieder die eigene DPI)', () => {
+  const plan = M.buildPlan({ mode: 'dpi', settings: { dpi: 800, sens: 6.5 }, dpis: [1600], rng: M.mulberry32(1) });
+  assert.deepEqual(plan.blocks.map((b) => b.dpi), [800, 1600, 1600, 800]);
+  const s = new S.TestSession(plan, { rng: M.mulberry32(1) });
+  assert.equal(s.mouseDpi, 800, 'vor dem Start: eigene DPI');
+  s.start(0);
+  const seen = [];
+  let T = 0;
+  while (!s.finished && T < 600000) {
+    if (s.phase === 'switch') {
+      assert.notEqual(s.mouseDpi, s.dpi, 'noch nicht umgestellt, solange nicht bestätigt');
+      s.confirmSwitch(T);
+      assert.equal(s.mouseDpi, s.dpi, 'nach dem Bestätigen');
+    }
+    if (s.phase === 'round' && !s.warmup && seen.at(-1) !== `${s.blockNo}:${s.mouseDpi}`) seen.push(`${s.blockNo}:${s.mouseDpi}`);
+    T += 50;
+    s.update(T);
+  }
+  assert.deepEqual(seen, ['1:800', '2:1600', '3:1600', '4:800']);
+  assert.equal(s.outcome().mouseDpi, 800, 'das Ergebnis sagt, worauf die Maus am Ende steht');
+});
+
+test('DPI-Modus: Hinweise sagen nur „umstellen“, wenn die Maus wirklich falsch steht', () => {
+  // Ergebnis: Maus steht nach A-B-B-A wieder auf 800
+  const same = M.dpiResultHint({ recDpi: 800, baseDpi: 800, mouseDpi: 800 });
+  assert.match(same, /steht schon wieder auf 800 DPI/);
+  assert.doesNotMatch(same, /zurück|stell(st)? (sie|deine Maus) (wieder )?auf/i, 'nichts umstellen lassen, was schon stimmt');
+  const other = M.dpiResultHint({ recDpi: 1600, baseDpi: 800, mouseDpi: 800 });
+  assert.match(other, /Für die Empfehlung stellst du sie auf 1600 DPI um/);
+  assert.doesNotMatch(other, /zurück/);
+  assert.match(M.dpiResultHint({ recDpi: 800, baseDpi: 800, mouseDpi: 1600 }), /noch auf 1600 DPI\. Stell sie wieder auf 800 DPI zurück/);
+  // Abbruch
+  assert.equal(M.dpiAbortHint({ baseDpi: 800, mouseDpi: 800 }), '', 'Maus steht auf der eigenen DPI: kein Hinweis');
+  assert.equal(M.dpiAbortHint({ baseDpi: 800, mouseDpi: 1600 }), 'Deine Maus steht noch auf 1600 DPI. Stell sie wieder auf 800 DPI zurück.');
+  assert.match(M.dpiAbortHint({ baseDpi: 800, mouseDpi: 800, switchDpi: 1600 }), /^Hast du die Maus schon auf 1600 DPI umgestellt\? Dann stell sie wieder auf 800 DPI zurück/);
+  assert.match(M.dpiAbortHint({ baseDpi: 800, mouseDpi: 1600, switchDpi: 800 }), /^Steht deine Maus noch auf 1600 DPI\? Dann stell sie wieder auf 800 DPI zurück/);
+});
+
+// ---------------------------------------------------------------- Ansicht (mit kleinem DOM-Nachbau)
+
+/** Kleinster DOM-Nachbau für die Ansicht: Elemente, Text, Klassen und Ereignisse. */
+class FakeNode {
+  constructor(tag, text = '') {
+    this.tagName = tag ? String(tag).toUpperCase() : null;
+    this.childNodes = [];
+    this.parentNode = null;
+    this.text = text;
+    this.listeners = {};
+    this.attrs = {};
+    this.style = { setProperty(k, v) { this[k] = v; } };
+    this.dataset = {};
+    this.value = '';
+    this.disabled = false;
+    this.checked = false;
+    this.scrollTop = 0;
+    const cls = new Set();
+    this.classList = {
+      add: (...c) => c.forEach((x) => cls.add(x)),
+      remove: (...c) => c.forEach((x) => cls.delete(x)),
+      toggle: (c, on) => { const v = on === undefined ? !cls.has(c) : !!on; if (v) cls.add(c); else cls.delete(c); return v; },
+      contains: (c) => cls.has(c),
+    };
+  }
+
+  get parentElement() { return this.parentNode; }
+  get firstChild() { return this.childNodes[0] || null; }
+  get id() { return this.attrs.id || ''; }
+  set id(v) { this.attrs.id = String(v); }
+  get textContent() { return this.tagName ? this.childNodes.map((c) => c.textContent).join('') : this.text; }
+  set textContent(v) {
+    if (!this.tagName) { this.text = String(v); return; }
+    while (this.firstChild) this.removeChild(this.firstChild);
+    if (v != null && v !== '') this.append(String(v));
+  }
+
+  appendChild(c) { c.parentNode?.removeChild(c); c.parentNode = this; this.childNodes.push(c); return c; }
+  append(...cs) { for (const c of cs) this.appendChild(c instanceof FakeNode ? c : new FakeNode(null, String(c))); }
+  removeChild(c) { this.childNodes = this.childNodes.filter((x) => x !== c); c.parentNode = null; return c; }
+  remove() { this.parentNode?.removeChild(this); }
+  replaceChildren(...cs) { while (this.firstChild) this.removeChild(this.firstChild); this.append(...cs); }
+  setAttribute(k, v) { this.attrs[k] = String(v); }
+  getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+  removeAttribute(k) { delete this.attrs[k]; }
+  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+  removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn); }
+  focus() {}
+  blur() {}
+
+  /** Löst ein Ereignis aus und wartet, bis alle (auch asynchronen) Handler fertig sind. */
+  async fire(type, extra = {}) {
+    const ev = { type, target: this, preventDefault() {}, stopPropagation() {}, ...extra };
+    await Promise.all((this.listeners[type] || []).slice().map((fn) => fn(ev)));
+  }
+}
+
+const walk = (n, out = []) => { out.push(n); for (const c of n.childNodes) walk(c, out); return out; };
+const findAll = (root, pred) => walk(root).filter((n) => n.tagName && pred(n));
+const byId = (root, id) => findAll(root, (n) => n.id === id)[0] || null;
+const buttons = (root, text) => findAll(root, (n) => n.tagName === 'BUTTON' && n.textContent.includes(text));
+const tabBtn = (root, label) => findAll(root, (n) => n.classList.contains('tab') && n.textContent.includes(label))[0];
+async function typeInto(input, value, { change = false } = {}) {
+  input.value = value;
+  await input.fire('input');
+  if (change) await input.fire('change');
+}
+
+let VIEW; let UI; let VIEW_DIR;
+after(() => { if (VIEW_DIR) fs.rmSync(VIEW_DIR, { recursive: true, force: true }); });
+async function loadView() {
+  if (VIEW) return;
+  globalThis.Node = FakeNode;
+  globalThis.document = { createElement: (t) => new FakeNode(t), createElementNS: (_ns, t) => new FakeNode(t), createTextNode: (t) => new FakeNode(null, String(t)) };
+  globalThis.HTMLCanvasElement = class { requestPointerLock() {} };
+  // Ansicht mit echtem ui.js und echter Rechenlogik in einen eigenen Ordner kopieren (als ES-Module).
+  // Ton und Canvas-Arena sind ersetzt: die Arena merkt sich Sitzung und Rückrufe, der Test steuert den Ablauf.
+  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'helix-sensi-view-'));
+  VIEW_DIR = dir;
+  fs.mkdirSync(path.join(dir, 'views'));
+  fs.mkdirSync(path.join(dir, 'lib'));
+  fs.writeFileSync(path.join(dir, 'package.json'), '{ "type": "module" }\n');
+  fs.copyFileSync(path.join(ROOT, 'src', 'renderer', 'js', 'views', 'sensi.js'), path.join(dir, 'views', 'sensi.js'));
+  fs.copyFileSync(path.join(ROOT, 'src', 'renderer', 'js', 'ui.js'), path.join(dir, 'ui.js'));
+  for (const f of ['sensi-math.mjs', 'sensi-session.mjs', 'sensi-rounds.mjs']) fs.copyFileSync(path.join(LIB, f), path.join(dir, 'lib', f));
+  fs.writeFileSync(path.join(dir, 'sound.js'), 'export function sfx() {}\n');
+  fs.writeFileSync(path.join(dir, 'lib', 'sensi-arena.mjs'), [
+    "export const MODE_TEXT = { raw: 'Rohdaten', normal: 'normal' };",
+    'export function createArena(opts) {',
+    '  globalThis.__sensiArena = opts;',
+    "  return { el: opts.h('div.sensi-arena'), state: 'idle', mode: 'raw', focus() {}, abort() { opts.onAbort?.(); }, destroy() {} };",
+    '}',
+  ].join('\n'));
+  VIEW = (await import(pathToFileURL(path.join(dir, 'views', 'sensi.js')).href)).default;
+  UI = await import(pathToFileURL(path.join(dir, 'ui.js')).href);
+}
+
+async function mountView({ settings = { dpi: 800, sens: 6.5, targeting: 45, scope: 45 }, saved = true } = {}) {
+  await loadView();
+  const db = { settings: { ...settings }, saved, history: [] };
+  const calls = []; const toasts = [];
+  const env = {
+    ui: { ...UI, toast: (m, type = 'ok') => toasts.push({ m, type }), showError: (e, p) => toasts.push({ m: `${p}: ${e.message}`, type: 'err' }) },
+    nav: { go() {} },
+    on: () => () => {},
+    async call(name, args = {}) {
+      calls.push({ name, args });
+      if (name === 'sensi.state') return JSON.parse(JSON.stringify(db));
+      if (name === 'sensi.saveSettings') {
+        await new Promise((r) => setTimeout(r, 2));
+        const v = M.validateSettings(args.settings);
+        if (!v.ok) throw new Error('ungültig');
+        db.settings = v.values; db.saved = true;
+        return { settings: { ...v.values } };
+      }
+      if (name === 'sensi.saveResult') return { entry: args.entry };
+      throw new Error(`unerwartet: ${name}`);
+    },
+  };
+  const root = new FakeNode('div');
+  new FakeNode('div').appendChild(root);
+  await VIEW.mount(root, env);
+  return { root, db, calls, toasts, saves: () => calls.filter((c) => c.name === 'sensi.saveSettings') };
+}
+
+/** Startet im Aim-Test einen DPI-Vergleich 800 gegen 1600 und gibt Sitzung und Rückrufe der Arena zurück. */
+async function startDpiTest(v) {
+  if (!buttons(v.root, 'Test vorbereiten').length) await tabBtn(v.root, 'Aim-Test').fire('click');
+  await buttons(v.root, 'DPI vergleichen')[0].fire('click');
+  await typeInto(byId(v.root, 'sensi-dpi2'), '1600');
+  await buttons(v.root, 'Test vorbereiten')[0].fire('click');
+  const arena = globalThis.__sensiArena;
+  arena.session.start(0);
+  return { arena, s: arena.session };
+}
+
+/** Spielt bis zur nächsten Bitte ums Umstellen (ohne zu bestätigen). */
+function untilSwitch(s, T) {
+  while (s.phase !== 'switch' && !s.finished) { T += 50; s.update(T); }
+  return T;
+}
+
+test('Ansicht: Beispielwerte (800 DPI, 6,5 %, 45 %, 45 %) lassen sich speichern, ohne ein Feld zu ändern', async () => {
+  const v = await mountView({ saved: false });
+  try {
+    assert.match(v.root.textContent, /Trag zuerst deine eigenen Werte ein/);
+    const [btn] = buttons(v.root, 'Diese Werte speichern');
+    assert.ok(btn, 'Knopf zum Speichern ist da');
+    await btn.fire('click');
+    assert.equal(v.saves().length, 1);
+    assert.deepEqual(v.saves()[0].args.settings, M.DEFAULT_SETTINGS);
+    assert.match(v.toasts.at(-1).m, /^Gespeichert: 6,5 % bei 800 DPI/);
+    assert.doesNotMatch(v.root.textContent, /Trag zuerst|Diese Werte speichern/, 'Hinweis und Knopf sind weg');
+    await tabBtn(v.root, 'Aim-Test').fire('click');
+    assert.doesNotMatch(v.root.textContent, /Beispielwerte/, 'Aim-Test warnt nicht mehr');
+  } finally { VIEW.unmount(); }
+
+  // Feld geändert und gleich auf den Knopf geklickt (Wegklicken löst „change“ aus): nur einmal speichern
+  const w = await mountView({ saved: false });
+  try {
+    const dpi = byId(w.root, 'sensi-dpi');
+    dpi.value = '1600';
+    await Promise.all([dpi.fire('change'), buttons(w.root, 'Diese Werte speichern')[0].fire('click')]);
+    assert.equal(w.saves().length, 1, 'nicht doppelt gespeichert');
+    assert.equal(w.db.settings.dpi, 1600);
+    assert.doesNotMatch(w.root.textContent, /Diese Werte speichern/);
+  } finally { VIEW.unmount(); }
+});
+
+test('Ansicht: Umrechner folgt geänderten Werten, „Übernehmen“ zeigt sofort „Ist schon deine Sensi“', async () => {
+  const v = await mountView();
+  try {
+    await tabBtn(v.root, 'Umrechner').fire('click');
+    assert.deepEqual([byId(v.root, 'sensi-conv-sens').value, byId(v.root, 'sensi-conv-dpi').value], ['6,5', '800']);
+    await tabBtn(v.root, 'Deine Sensi').fire('click');
+    await typeInto(byId(v.root, 'sensi-sens'), '3,2', { change: true });
+    await typeInto(byId(v.root, 'sensi-dpi'), '1600', { change: true });
+    assert.deepEqual(v.db.settings, { dpi: 1600, sens: 3.2, targeting: 45, scope: 45 });
+    await tabBtn(v.root, 'Umrechner').fire('click');
+    assert.deepEqual(['sens', 'dpi', 'targetDpi'].map((k) => byId(v.root, `sensi-conv-${k}`).value), ['3,2', '1600', '1600'], 'neue Werte statt 6,5 / 800');
+    assert.match(v.root.textContent, /Gleiche Drehung wie in Fortnite: 32,2 cm für eine Umdrehung \(eDPI 51,2\)/, 'Tabelle rechnet mit den neuen Werten');
+    await typeInto(byId(v.root, 'sensi-conv-targetDpi'), '400');
+
+    // Anderes Spiel -> Fortnite, mit anderer Fortnite-DPI
+    await buttons(v.root, 'Anderes Spiel → Fortnite')[0].fire('click');
+    assert.equal(byId(v.root, 'sensi-conv-gameDpi').value, '1600');
+    await typeInto(byId(v.root, 'sensi-conv-value'), '0,4');
+    await typeInto(byId(v.root, 'sensi-conv-fnDpi'), '800');
+    const [adopt] = buttons(v.root, 'Als meine Sensi übernehmen');
+    assert.equal(adopt.disabled, false);
+    await adopt.fire('click');
+    assert.deepEqual(v.db.settings, { dpi: 800, sens: 10.1, targeting: 45, scope: 45 });
+    const [done] = buttons(v.root, 'Ist schon deine Sensi');
+    assert.ok(done, 'Knopf zeigt sofort, dass es schon deine Sensi ist');
+    assert.equal(done.disabled, true);
+    assert.equal(buttons(v.root, 'Als meine Sensi übernehmen').length, 0);
+    assert.equal(byId(v.root, 'sensi-conv-gameDpi').value, '1600', 'DPI im anderen Spiel bleibt stehen');
+
+    await buttons(v.root, 'Fortnite → anderes Spiel')[0].fire('click');
+    assert.deepEqual(['sens', 'dpi', 'targetDpi'].map((k) => byId(v.root, `sensi-conv-${k}`).value), ['10,1', '800', '400'], 'eigene Eingabe (400) bleibt');
+  } finally { VIEW.unmount(); }
+});
+
+test('Ansicht DPI-Vergleich: Ergebnis sagt nur „umstellen“, wenn nötig – Abbruch bei 1600 DPI erinnert ans Zurückstellen', async () => {
+  const blocksFor = (s800, s1600) => [{ dpi: 800, sens: 6.5, score: s800 }, { dpi: 1600, sens: 3.25, score: s1600 }];
+  const finish = async ({ arena, s }, scores) => {
+    let T = 0;
+    while (!s.finished && T < 600000) { if (s.phase === 'switch') s.confirmSwitch(T); T += 50; s.update(T); }
+    const out = s.outcome();
+    assert.equal(out.mouseDpi, 800);
+    await arena.onFinish({ ...out, rec: M.recommendDpi({ blocks: blocksFor(...scores), baseDpi: 800, baseSens: 6.5 }) });
+  };
+
+  // a) 800 DPI gewinnt: Maus steht schon richtig, kein "zurück"
+  let v = await mountView();
+  try {
+    await finish(await startDpiTest(v), [80, 60]);
+    const txt = v.root.textContent;
+    assert.match(txt, /Deine Maus steht schon wieder auf 800 DPI\. Du musst an der Maus nichts umstellen\./);
+    assert.doesNotMatch(txt, /zurück/);
+    assert.doesNotMatch(txt, /Stell deine Maus auf \d+ DPI um/);
+  } finally { VIEW.unmount(); }
+
+  // b) 1600 DPI gewinnt: umstellen auf 1600, auch als Schritt in der Anleitung
+  v = await mountView();
+  try {
+    await finish(await startDpiTest(v), [60, 80]);
+    const txt = v.root.textContent;
+    assert.match(txt, /Deine Maus steht jetzt wieder auf 800 DPI\. Für die Empfehlung stellst du sie auf 1600 DPI um\./);
+    assert.doesNotMatch(txt, /zurück/);
+    const steps = findAll(v.root, (n) => n.classList.contains('sensi-steps'))[0];
+    assert.match(steps.childNodes[0].textContent, /^Stell deine Maus auf 1600 DPI um/, 'DPI-Schritt zuerst');
+    assert.match(steps.textContent, /3,3 %/);
+    await buttons(v.root, 'Als meine Einstellung übernehmen')[0].fire('click');
+    assert.match(v.toasts.at(-1).m, /3,3 % ein und deine Maus auf 1600 DPI\.$/);
+  } finally { VIEW.unmount(); }
+
+  // c) Abbruch (Esc/Abbrechen) im 2. Durchgang bei 1600 DPI
+  v = await mountView();
+  try {
+    const { arena, s } = await startDpiTest(v);
+    let T = untilSwitch(s, 0);
+    s.confirmSwitch(T);
+    for (let i = 0; i < 100; i++) { T += 50; s.update(T); }
+    assert.equal(s.mouseDpi, 1600);
+    arena.onAbort();
+    const t = v.toasts.at(-1);
+    assert.equal(t.type, 'warn');
+    assert.match(t.m, /^Test abgebrochen\. Es wurde nichts gespeichert\. Deine Maus steht noch auf 1600 DPI\. Stell sie wieder auf 800 DPI zurück\.$/);
+    assert.match(v.root.textContent, /Deine Maus steht noch auf 1600 DPI\. Stell sie wieder auf 800 DPI zurück\./, 'auch als Hinweis über dem Test');
+  } finally { VIEW.unmount(); }
+
+  // d) Tab gewechselt bei 1600 DPI, e) Abbruch, während HELIX ums Umstellen bittet, f) Tool verlassen
+  v = await mountView();
+  try {
+    let { s } = await startDpiTest(v);
+    s.confirmSwitch(untilSwitch(s, 0));
+    await tabBtn(v.root, 'Verlauf').fire('click');
+    assert.match(v.toasts.at(-1).m, /Deine Maus steht noch auf 1600 DPI\. Stell sie wieder auf 800 DPI zurück\./);
+
+    ({ s } = await startDpiTest(v));
+    untilSwitch(s, 0);
+    globalThis.__sensiArena.onAbort();
+    assert.match(v.toasts.at(-1).m, /Hast du die Maus schon auf 1600 DPI umgestellt\? Dann stell sie wieder auf 800 DPI zurück\./);
+
+    ({ s } = await startDpiTest(v));
+    s.confirmSwitch(untilSwitch(s, 0));
+    VIEW.unmount();
+    assert.match(v.toasts.at(-1).m, /Deine Maus steht noch auf 1600 DPI\. Stell sie wieder auf 800 DPI zurück\./);
+  } finally { VIEW.unmount(); }
+
+  // g) Abbruch, solange die Maus noch auf der eigenen DPI steht: nur die normale Meldung
+  v = await mountView();
+  try {
+    const { arena } = await startDpiTest(v);
+    arena.onAbort();
+    assert.deepEqual(v.toasts.at(-1), { m: 'Test abgebrochen. Es wurde nichts gespeichert.', type: 'info' });
+    assert.doesNotMatch(v.root.textContent, /denk an deine Maus/);
+  } finally { VIEW.unmount(); }
 });
 
 test('Sprung-Filter: echte schnelle Flicks bleiben, einzelne Riesen-Sprünge fliegen raus', () => {

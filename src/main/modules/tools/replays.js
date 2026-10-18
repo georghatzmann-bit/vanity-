@@ -187,7 +187,13 @@ module.exports = {
       if (exists && target.toLowerCase() !== name.toLowerCase()) {
         throw new HelixError('NAME_TAKEN', `Im Tresor gibt es schon „${clean}“. Bitte wähle einen anderen Namen.`);
       }
-      await fsp.rename(src, dest);
+      try {
+        await fsp.rename(src, dest);
+      } catch (e) {
+        if (e.code === 'ENOENT') throw new HelixError('NOT_FOUND', 'Diese Datei ist nicht mehr im Tresor.');
+        // z. B. EBUSY/EPERM: OneDrive lädt die Datei gerade hoch oder der Virenscanner prüft sie
+        throw new HelixError('RENAME_FAILED', 'Umbenennen hat nicht geklappt – die Datei wird gerade benutzt (z. B. von OneDrive oder dem Virenscanner). Bitte gleich nochmal versuchen.');
+      }
       return { file: target };
     },
 
@@ -250,6 +256,9 @@ module.exports = {
       let dir;
       if (a.which === 'demos') {
         dir = await requireDemos(ctx);
+        // Den Ordner legt Fortnite erst nach dem ersten aufgenommenen Match an – HELIX legt ihn nicht an.
+        const st = await fsp.stat(dir).catch(() => null);
+        if (!st || !st.isDirectory()) throw new HelixError('NOT_FOUND', 'Fortnite hat noch keinen Replay-Ordner angelegt. Er entsteht nach dem ersten aufgenommenen Match.');
       } else {
         dir = await requireVault(ctx);
         await fsp.mkdir(dir, { recursive: true });

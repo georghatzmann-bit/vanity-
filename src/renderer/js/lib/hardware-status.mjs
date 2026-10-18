@@ -53,6 +53,7 @@ export function gpuLoadStatus(p, fnRunning) {
     return { type: 'ok', word: 'Reserve', text: 'Die Grafikkarte hat viel Luft. Oft bremst dann der Prozessor oder das FPS-Limit.' };
   }
   if (p >= 80) return { type: 'warn', word: 'hohe Last', text: 'Die Grafikkarte ist stark belastet, obwohl Fortnite nicht läuft. Läuft ein anderes Spiel oder ein Video?' };
+  if (p >= 30) return { type: 'ok', word: 'arbeitet', text: 'Fortnite läuft nicht – die Grafikkarte arbeitet gerade für ein anderes Programm.' };
   return { type: 'ok', word: 'normal', text: 'Fortnite läuft nicht – die Grafikkarte hat wenig zu tun.' };
 }
 
@@ -99,7 +100,7 @@ export function gpuTempMissing(caps = {}, windows = true) {
     return 'Das kleine Messprogramm „nvidia-smi“ vom NVIDIA-Treiber fehlt. Installiere den aktuellen Treiber von nvidia.com.';
   }
   if (caps.vendor === 'nvidia') return 'Der NVIDIA-Treiber meldet gerade keine Temperatur.';
-  if (caps.vendor === 'amd') return 'AMD-Grafikkarten geben die Temperatur nur an die AMD-Software (Adrenalin) weiter. Dort steht sie unter „Leistung“.';
+  if (caps.vendor === 'amd') return 'Die Temperatur von AMD-Karten kann HELIX nicht auslesen. Du siehst sie im Task-Manager unter „Leistung“ > „GPU“ oder in der AMD-Software (Adrenalin) unter „Leistung“.';
   if (caps.vendor === 'intel') return 'Intel-Grafik meldet ihre Temperatur nicht an Windows. Die Intel Graphics Software zeigt sie an.';
   return 'Windows meldet keine Temperatur der Grafikkarte. Tipp: Der Task-Manager zeigt sie unter „Leistung“ bei vielen Karten.';
 }
@@ -115,8 +116,9 @@ export function buildTiles(sample, history, status = {}) {
   const caps = status.caps || s.caps || {};
   const windows = status.windows !== false;
   const stream = s.stream || status.stream;
-  const pending = windows && (stream === 'starting' || stream === 'off') && !s.psFresh;
-  const waitText = 'Messung startet … das dauert ein paar Sekunden.';
+  // 'ok' ohne frische Skript-Zeile: Windows antwortet gerade langsam – dann "misst …" statt "nicht verfügbar"
+  const pending = windows && (stream === 'starting' || stream === 'off' || stream === 'ok') && !s.psFresh;
+  const waitText = stream === 'ok' ? 'Windows antwortet gerade langsam. Der nächste Wert kommt gleich.' : 'Messung startet … das dauert ein paar Sekunden.';
   const tiles = [];
 
   const tile = (id, label, value, unit, st, extra = {}) => ({ id, label, value, unit, badge: st ? { text: st.word, type: st.type } : null, text: st ? st.text : '', ...extra });
@@ -194,8 +196,11 @@ export function buildTiles(sample, history, status = {}) {
     tiles.push(missing('fortnite', 'Fortnite', 'Ob Fortnite läuft, sieht HELIX nur unter Windows.'));
   } else if (pending) {
     tiles.push(missing('fortnite', 'Fortnite', ''));
-  } else {
+  } else if (s.fnRunning === false) {
     tiles.push({ id: 'fortnite', label: 'Fortnite', value: '–', unit: '', badge: { text: 'läuft nicht', type: '' }, text: 'Starte Fortnite. Dann siehst du hier, wie viel Arbeitsspeicher das Spiel braucht.', spark: null, available: false });
+  } else {
+    // ohne Messwerte von Windows weiß HELIX nicht, ob Fortnite läuft
+    tiles.push({ id: 'fortnite', label: 'Fortnite', value: '–', unit: '', badge: { text: 'unbekannt', type: '' }, text: 'Ob Fortnite läuft, sieht HELIX gerade nicht – Windows liefert keine Messwerte.', spark: null, available: false });
   }
   return tiles;
 }

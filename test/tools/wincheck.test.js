@@ -230,6 +230,7 @@ function fakeWindows({ active = BAL, reg = {}, setactiveFails = false } = {}) {
   const norm = (k) => k.replace(/^HKCU\\/i, 'HKEY_CURRENT_USER\\').replace(/^HKLM\\/i, 'HKEY_LOCAL_MACHINE\\').toLowerCase();
   for (const [k, v] of Object.entries(reg)) keys[norm(k)] = { full: k, values: { ...v } };
   let plan = active;
+  let listFails = false;
   const exec = async (file, args) => {
     calls.push([file, ...args]);
     if (file === 'reg.exe' && args[0] === 'query') {
@@ -246,7 +247,10 @@ function fakeWindows({ active = BAL, reg = {}, setactiveFails = false } = {}) {
     }
     if (file === 'powercfg.exe') {
       if (args[0] === '/getactivescheme') return cp850(PC_DE_ACTIVE(plan, plan === HP ? 'Höchstleistung' : plan === SAVER ? 'Energiesparmodus' : 'Ausbalanciert'));
-      if (args[0] === '/list') return cp850(PC_DE_LIST(plan));
+      if (args[0] === '/list') {
+        if (listFails) throw new HelixError('EXEC_TIMEOUT', 'powercfg.exe hat zu lange gebraucht.');
+        return cp850(PC_DE_LIST(plan));
+      }
       if (args[0] === '/setactive') {
         if (setactiveFails) throw new HelixError('EXEC_FAILED', 'powercfg.exe ist fehlgeschlagen (Code 1).');
         plan = args[1];
@@ -269,7 +273,7 @@ function fakeWindows({ active = BAL, reg = {}, setactiveFails = false } = {}) {
     },
     log: () => {},
   };
-  return { ctx, calls, keys, store, plan: () => plan };
+  return { ctx, calls, keys, store, plan: () => plan, setListFails: (v) => { listFails = !!v; } };
 }
 
 const DEPS = {
@@ -350,6 +354,24 @@ test('Ablauf: Energieplan umstellen und zurück', async () => {
   assert.equal(u.message, 'Energieplan „Energiesparmodus“ ist wieder aktiv.');
   assert.equal(w.plan(), SAVER);
   await assert.rejects(mod.handlers.undo({ id: 'power' }, w.ctx), (e) => e.code === 'NO_UNDO');
+  mod._test.setDeps({});
+});
+
+test('Ablauf: Energieplan-Liste einmal nicht lesbar -> Rückgängig bleibt erhalten und klappt beim nächsten Versuch', async () => {
+  mod._test.setDeps(DEPS);
+  mod._test.resetLock();
+  const w = fakeWindows({ active: BAL, reg: START_REG });
+  await mod.handlers.fix({ id: 'power' }, w.ctx);
+  assert.equal(w.plan(), HP);
+  w.setListFails(true);
+  await assert.rejects(mod.handlers.undo({ id: 'power' }, w.ctx), (e) => e.code === 'POWER_UNKNOWN' && /nochmal|noch einmal/.test(e.message));
+  assert.equal(w.plan(), HP, 'nichts umgeschaltet');
+  assert.equal(w.store['tool-wincheck'].undo.power.prevGuid, BAL, 'Rückgängig-Eintrag bleibt');
+  w.setListFails(false);
+  const u = await mod.handlers.undo({ id: 'power' }, w.ctx);
+  assert.equal(u.message, 'Energieplan „Ausbalanciert“ ist wieder aktiv.');
+  assert.equal(w.plan(), BAL);
+  assert.equal(w.store['tool-wincheck'].undo.power, undefined);
   mod._test.setDeps({});
 });
 

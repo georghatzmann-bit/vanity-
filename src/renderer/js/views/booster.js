@@ -52,7 +52,7 @@ export default {
         const r = await env.call('booster.boost');
         await refresh();
         const rep = r.report;
-        const closed = rep.closed.length;
+        const closed = rep.closed.length + (rep.forced?.length || 0);
         if (rep.stillOpen.length) ui.toast(`${closed} geschlossen, ${rep.stillOpen.length} noch offen: ${rep.stillOpen.join(', ')}.`, 'warn', { timeout: 6500 });
         else if (closed) ui.toast(`Boost aktiv: ${closed} ${closed === 1 ? 'Programm' : 'Programme'} geschlossen.`);
         else ui.toast(rep.powerPlan?.changed ? 'Boost aktiv: Energieplan umgestellt. Keines deiner Programme lief gerade.' : 'Keines deiner Programme lief gerade – es gab nichts zu schließen.', 'info');

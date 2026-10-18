@@ -5,6 +5,7 @@ import {
   NEED_MOVE_MS, RULER_CM, CARD_CM, RUNS,
   analyzePolling, movingTime, pollingAdvice, evaluateDpi, moveLength, buildChecklist, classifyLabel, fmtInt, fmtDec,
 } from '../lib/maus-measure.mjs';
+import { profileSyncBox } from './profile-sync.js';
 
 let cleanup = [];
 
@@ -35,6 +36,8 @@ export default {
     let status = null;
     let fn = null;
     let fnRunning = false;
+    let fnChanged = false; // in dieser Sitzung über HELIX geändert -> Profil-Hinweis zeigen
+    const syncMemo = {};
     let pollLast = null; // letzte Messung (diese Sitzung oder gespeichert)
     let measure = null; // laufende Messung: { kind, stop() }
     let lastUnlockAt = 0;
@@ -179,6 +182,7 @@ export default {
       return ui.section(title, top, row,
         fnRunning ? h('div.callout.warn', icon('warn'), h('div', h('strong', 'Fortnite läuft gerade'), h('p.hint', 'Schließe Fortnite. Danach kannst du den Wert hier ändern – sonst überschreibt Fortnite ihn beim Beenden.'))) : null,
         actions,
+        fnChanged ? profileSyncBox(env, syncMemo) : null,
         h('p.hint', 'Vor jeder Änderung legt HELIX automatisch eine Sicherung an. Du findest sie bei Settings-Profile → Zeitmaschine.'),
         fn.readOnly ? h('p.hint', 'Die Datei ist schreibgeschützt. HELIX ändert nur diesen einen Wert und lässt den Schreibschutz danach wieder an.') : null);
     }
@@ -239,7 +243,11 @@ export default {
         fn = res;
         fnRunning = !!res.fortniteRunning;
         if (!res.applied?.length) ui.toast('Der Wert war schon so eingestellt.', 'info');
-        else ui.toast(disable ? 'Mausbeschleunigung in Fortnite ist jetzt aus. Eine Sicherung liegt in der Zeitmaschine.' : 'Mausbeschleunigung in Fortnite ist wieder an.');
+        else {
+          fnChanged = true;
+          syncMemo.savedId = null;
+          ui.toast(disable ? 'Mausbeschleunigung in Fortnite ist jetzt aus. Eine Sicherung liegt in der Zeitmaschine.' : 'Mausbeschleunigung in Fortnite ist wieder an.');
+        }
       } catch (e) {
         if (e.code === 'FORTNITE_RUNNING') fnRunning = true;
         ui.showError(e);

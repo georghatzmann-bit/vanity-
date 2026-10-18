@@ -225,7 +225,11 @@ module.exports = {
         if (!rec) throw new HelixError('NO_UNDO', 'Hier gibt es nichts rückgängig zu machen.');
         if (id === 'power') {
           const power = await readPower(ctx);
-          if (!logic.isGuid(rec.prevGuid) || !power || !power.list.some((x) => x.guid === rec.prevGuid)) {
+          // Liste nicht gelesen (z. B. powercfg zu langsam): Rückgängig-Eintrag behalten, später nochmal versuchen
+          if (logic.isGuid(rec.prevGuid) && (!power || !power.list.length)) {
+            throw new HelixError('POWER_UNKNOWN', 'Windows hat die Energiepläne gerade nicht verraten. Bitte versuche es gleich noch einmal.');
+          }
+          if (!logic.isGuid(rec.prevGuid) || !power.list.some((x) => x.guid === rec.prevGuid)) {
             delete st.undo.power;
             await ctx.core.writeState(STATE, st);
             throw new HelixError('POWER_PLAN_MISSING', 'Den vorherigen Energieplan gibt es nicht mehr. Wähle ihn bitte in den Windows-Einstellungen.');

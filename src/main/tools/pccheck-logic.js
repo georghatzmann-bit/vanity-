@@ -10,6 +10,13 @@ const PERF = 'PerformanceMode';
 
 const PRESET_IDS = ['leistung', 'ausgewogen', 'qualitaet'];
 const QUALITY = ['Niedrig', 'Mittel', 'Hoch', 'Episch', 'Kino'];
+// Manche Einstellungen nennt Fortnite im Menü anders – HELIX zeigt dieselben Namen wie das Spiel
+const QUALITY_NAMES = {
+  shadows: ['Aus', 'Mittel', 'Hoch', 'Episch', 'Kino'],
+  gi: ['Aus', 'Mittel', 'Hoch', 'Episch', 'Kino'],
+  reflections: ['Aus', 'Mittel', 'Hoch', 'Episch', 'Kino'],
+  viewDistance: ['Nah', 'Mittel', 'Weit', 'Episch', 'Kino'],
+};
 const WINDOW_MODE = { 0: 'Vollbild', 1: 'Fenster-Vollbild', 2: 'Fenster' };
 const REFLEX = { 0: 'Aus', 1: 'An', 2: 'An + Boost' };
 const AA_TEXT = {
@@ -305,6 +312,50 @@ function cpuTier(score) {
 
 const MEM_TYPE = { 20: 'DDR', 21: 'DDR2', 24: 'DDR3', 26: 'DDR4', 29: 'LPDDR3', 30: 'LPDDR4', 34: 'DDR5', 35: 'LPDDR5' };
 
+// Übliche Pixelzahlen von Bildschirmen (Breite oder Höhe). Passen zwei Werte, gewinnt der übliche.
+const COMMON_PX = new Set([
+  720, 768, 800, 900, 1024, 1050, 1080, 1200, 1280, 1350, 1366, 1400, 1440, 1504, 1536, 1600, 1620, 1664, 1680, 1800, 1824, 1920,
+  2000, 2048, 2160, 2256, 2400, 2560, 2736, 2880, 3000, 3200, 3440, 3456, 3840, 4320, 5120, 7680,
+]);
+
+/** So rechnet Chromium echte Pixel in DIP um: gfx::ScaleToEnclosingRect mit float, der rechte/untere Rand wird aufgerundet. */
+function chromiumDip(px, sf) {
+  return Math.ceil(Math.fround(px * Math.fround(1 / Math.fround(sf))));
+}
+
+/**
+ * Echte Pixel einer Bildschirmseite aus Electrons DIP-Größe.
+ * size × scaleFactor allein ist bei 125/150/175 % oft 1–2 Pixel zu groß, weil Chromium aufrundet
+ * (2560 ÷ 1,5 = 1706,67 -> 1707 -> × 1,5 = 2561). Gesucht wird die Pixelzahl, aus der Chromium genau diese
+ * DIP-Größe macht; passen mehrere, gewinnt ein üblicher, dann ein glatter (durch 8, 4, 2 teilbar), dann der größere Wert.
+ */
+function dipToPx(dip, sf) {
+  if (!(dip > 0)) return 0;
+  if (sf === 1 || !Number.isInteger(dip)) return Math.round(dip * sf);
+  const hits = [];
+  for (let px = Math.floor((dip - 1) * sf); px <= Math.ceil(dip * sf); px++) {
+    if (px > 0 && chromiumDip(px, sf) === dip) hits.push(px);
+  }
+  if (!hits.length) return Math.round(dip * sf);
+  const rank = (px) => (COMMON_PX.has(px) ? 8 : 0) + (px % 8 === 0 ? 4 : px % 4 === 0 ? 2 : px % 2 === 0 ? 1 : 0);
+  return hits.reduce((best, px) => (rank(px) > rank(best) || (rank(px) === rank(best) && px > best) ? px : best));
+}
+
+/**
+ * Echte Auflösung eines Electron-Bildschirms.
+ * Zuerst die Auflösung, die Windows für die Grafikkarte meldet – wenn sie zu diesem Bildschirm passt.
+ * Sonst wird Chromiums Rundung rückwärts gerechnet (dipToPx).
+ */
+function displayPixels(d, gpus = []) {
+  const sf = num(d?.scaleFactor) || 1;
+  const dw = num(d?.size?.width) || num(d?.bounds?.width) || 0;
+  const dh = num(d?.size?.height) || num(d?.bounds?.height) || 0;
+  const tol = Math.ceil(sf);
+  const g = gpus.find((x) => x.resX && x.resY && Math.abs(x.resX - dw * sf) <= tol && Math.abs(x.resY - dh * sf) <= tol);
+  if (g) return { width: g.resX, height: g.resY, scale: sf };
+  return { width: dipToPx(dw, sf), height: dipToPx(dh, sf), scale: sf };
+}
+
 /** "32.0.15.6636" -> "566.36" (so zeigt NVIDIA die Treiberversion an). */
 function nvidiaDriverVersion(v) {
   const p = str(v).split('.');
@@ -389,14 +440,12 @@ function parseHardware(ps, node = {}, disp = {}) {
   };
   if (!ram.gb) warnings.push('Der Arbeitsspeicher wurde nicht erkannt.');
 
-  // Bildschirme: size * scaleFactor = echte Pixel
+  // Bildschirme: Electron meldet DIP (echte Pixel ÷ Skalierung, aufgerundet) – zurück in echte Pixel
   const displays = asArray(disp.displays).map((d) => {
-    const sf = num(d?.scaleFactor) || 1;
-    const w = Math.round((num(d?.size?.width) || num(d?.bounds?.width) || 0) * sf);
-    const h = Math.round((num(d?.size?.height) || num(d?.bounds?.height) || 0) * sf);
+    const px = displayPixels(d, gpus);
     return {
-      id: d?.id ?? null, label: str(d?.label), width: w, height: h, hz: normalizeHz(d?.displayFrequency),
-      scale: sf, internal: !!d?.internal, primary: disp.primaryId != null && d?.id === disp.primaryId,
+      id: d?.id ?? null, label: str(d?.label), width: px.width, height: px.height, hz: normalizeHz(d?.displayFrequency),
+      scale: px.scale, internal: !!d?.internal, primary: disp.primaryId != null && d?.id === disp.primaryId,
     };
   }).filter((d) => d.width >= 320 && d.height >= 200);
   let display = displays.find((d) => d.primary) || displays[0] || null;
@@ -623,7 +672,8 @@ function aaMethod(presetId, cls) {
   return 'TSRMedium';
 }
 
-const q = (l) => QUALITY[l] || String(l);
+/** Name einer Stufe, wie Fortnite ihn im Menü zeigt (id = Eintrag, z. B. 'shadows' -> 0 = „Aus“). */
+const q = (l, id) => (QUALITY_NAMES[id] || QUALITY)[l] || String(l);
 
 /**
  * Baut alle Einträge eines Vorschlags. Jeder Eintrag = eine Zeile in der Vorschau,
@@ -681,7 +731,7 @@ function buildItems(presetId, b) {
     [{ section: SG, key: 'sg.ResolutionQuality', value: '100' }]);
 
   add('viewDistance', 'Sichtweite', 'Grafik', 'quality',
-    `Wie weit entfernte Gebäude und Objekte mit Details gezeigt werden. „${q(view)}“ kostet wenig Leistung und hilft, Gegner früh zu sehen.`,
+    `Wie weit entfernte Gebäude und Objekte mit Details gezeigt werden. „${q(view, 'viewDistance')}“ kostet wenig Leistung und hilft, Gegner früh zu sehen.`,
     [{ section: SG, key: 'sg.ViewDistanceQuality', value: fmtInt(view) }]);
 
   add('textures', 'Texturen', 'Grafik', 'quality',
@@ -702,8 +752,8 @@ function buildItems(presetId, b) {
     shadow === 0
       ? 'Schatten aus: mehr FPS, und Gegner in dunklen Ecken sind leichter zu sehen.'
       : presetId === 'qualitaet'
-        ? `Schatten auf „${q(shadow)}“ für ein echtes Bild. Schatten kosten viel Leistung – wird es zu langsam, stell sie zuerst runter.`
-        : `Schatten auf „${q(shadow)}“ sehen natürlich aus und kosten nur mäßig FPS.`,
+        ? `Schatten auf „${q(shadow, 'shadows')}“ für ein echtes Bild. Schatten kosten viel Leistung – wird es zu langsam, stell sie zuerst runter.`
+        : `Schatten auf „${q(shadow, 'shadows')}“ sehen natürlich aus und kosten nur mäßig FPS.`,
     [{ section: SG, key: 'sg.ShadowQuality', value: fmtInt(shadow) }]);
 
   add('gi', 'Globale Beleuchtung', 'Grafik', 'quality',
@@ -711,13 +761,13 @@ function buildItems(presetId, b) {
       ? `Wie Licht von Wänden zurückstrahlt. Ab „Hoch“ nutzt Fortnite „Lumen“ (sehr echtes Licht) – sieht toll aus, kostet aber viel Leistung.`
       : gi === 1
         ? 'Wie Licht von Wänden zurückstrahlt. Auf „Mittel“ bleibt das teure Lumen-Licht aus – das spart viele FPS.'
-        : 'Wie Licht von Wänden zurückstrahlt. „Niedrig“ bringt die meisten FPS.',
+        : 'Wie Licht von Wänden zurückstrahlt. „Aus“ bringt die meisten FPS.',
     [{ section: FGUS, key: 'DesiredGlobalIlluminationQuality', value: fmtInt(gi) }, { section: SG, key: 'sg.GlobalIlluminationQuality', value: fmtInt(gi) }]);
 
   add('reflections', 'Reflexionen', 'Grafik', 'quality',
     refl >= 2
       ? 'Spiegelungen auf Wasser und Glas. Ab „Hoch“ mit Lumen: echte Spiegelungen, kostet viel Leistung.'
-      : `Spiegelungen auf Wasser und Glas. „${q(refl)}“ spart Leistung.`,
+      : `Spiegelungen auf Wasser und Glas. „${q(refl, 'reflections')}“ spart Leistung.`,
     [{ section: FGUS, key: 'DesiredReflectionQuality', value: fmtInt(refl) }, { section: SG, key: 'sg.ReflectionQuality', value: fmtInt(refl) }]);
 
   add('effects', 'Effekte', 'Grafik', 'quality',
@@ -849,22 +899,28 @@ function analyze(hw, { now = Date.now(), fpsOverride = {} } = {}) {
 
 // ---------------------------------------------------------------- Vorschau: INI-Werte -> lesbarer Text
 
-function renderModeText(rhi, level) {
+const RHI_TEXT = { dx11: 'DirectX 11', dx12: 'DirectX 12' };
+
+/** detail: beim Leistungsmodus auch DirectX dazuschreiben ("Leistungsmodus (DirectX 11)"). */
+function renderModeText(rhi, level, detail = false) {
   const r = str(rhi).toLowerCase();
   const l = str(level).toLowerCase();
   if (!r && !l) return null;
-  if (l === 'es31' || r === 'performance') return 'Leistungsmodus';
+  if (l === 'es31' || r === 'performance') return detail && RHI_TEXT[r] ? `Leistungsmodus (${RHI_TEXT[r]})` : 'Leistungsmodus';
   if (r === 'dx11' || l === 'sm5') return 'DirectX 11 (alt)';
   if (r === 'dx12' || l === 'sm6') return 'DirectX 12';
   return `${rhi ?? '?'} / ${level ?? '?'}`;
 }
 
-/** Zeigt die Werte eines Eintrags lesbar an. get(key) liefert den Rohwert oder null. */
-function describe(item, get) {
+/**
+ * Zeigt die Werte eines Eintrags lesbar an. get(key) liefert den Rohwert oder null.
+ * detail: genauer, falls die kurze Form vorher und nachher gleich aussieht.
+ */
+function describe(item, get, detail = false) {
   const k0 = item.changes[0].key;
   const v = get(k0);
   switch (item.kind) {
-    case 'renderMode': return renderModeText(get('PreferredRHI'), get('PreferredFeatureLevel'));
+    case 'renderMode': return renderModeText(get('PreferredRHI'), get('PreferredFeatureLevel'), detail);
     case 'resolution': {
       const x = int(get('ResolutionSizeX'));
       const y = int(get('ResolutionSizeY'));
@@ -889,10 +945,21 @@ function describe(item, get) {
         return a === b || b == null ? q(a ?? b) : `${q(a)} / ${q(b)}`;
       }
       const n = int(v ?? (item.changes[1] ? get(item.changes[1].key) : null));
-      return n == null ? null : q(n);
+      return n == null ? null : q(n, item.id);
     }
     default: return v == null ? null : str(v);
   }
+}
+
+/** "1 Eintrag fehlt", "2 Einträge weichen ab" – was sich in der Datei ändert, obwohl es im Spiel gleich aussieht. */
+function hiddenChangeText(raw) {
+  const ch = raw.filter((r) => r.changed);
+  const missing = ch.filter((r) => r.from == null).length;
+  const differ = ch.length - missing;
+  const parts = [];
+  if (missing) parts.push(missing === 1 ? '1 Eintrag fehlt' : `${missing} Einträge fehlen`);
+  if (differ) parts.push(differ === 1 ? '1 Eintrag weicht ab' : `${differ} Einträge weichen ab`);
+  return parts.join(', ');
 }
 
 /**
@@ -915,13 +982,21 @@ function buildRows(items, preview) {
       return { section: c.section, key: c.key, from, to: c.value, changed: !sameValue(from, c.value) };
     });
     const target = new Map(item.changes.map((c) => [c.key.toLowerCase(), c.value]));
+    const getTo = (k) => target.get(k.toLowerCase()) ?? get(k);
     const changed = raw.some((r) => r.changed);
     const row = {
       id: item.id, label: item.label, group: item.group, why: item.why,
       from: describe(item, get) ?? 'nicht gesetzt',
-      to: describe(item, (k) => target.get(k.toLowerCase()) ?? get(k)),
+      to: describe(item, getTo),
       changed, raw, note: null,
     };
+    // Sieht vorher und nachher gleich aus, ändert aber Einträge: genauer zeigen, was sich ändert
+    if (changed && row.from === row.to) {
+      const from = describe(item, get, true);
+      const to = describe(item, getTo, true);
+      if (from && to && from !== to) Object.assign(row, { from, to });
+      else row.from = `${row.from} (${hiddenChangeText(raw)})`;
+    }
     if (item.id === 'resolution' && changed) {
       const x = int(get('ResolutionSizeX'));
       const y = int(get('ResolutionSizeY'));
@@ -967,7 +1042,7 @@ module.exports = {
   FGUS, SG, RHI, PERF, PRESET_IDS, PRESET_META, FPS_STEPS,
   asArray, pciId, num, int, sameValue, normalizeHz, fmtFloat, fmtBool,
   normGpuName, shortGpuName, shortCpuName, classifyGpu, gpuTier, classifyCpu, cpuTier, nvidiaDriverVersion,
-  parseHardware, rateGpu, rateCpu, rateRam, rateDisplay, performanceClass,
+  chromiumDip, dipToPx, parseHardware, rateGpu, rateCpu, rateRam, rateDisplay, performanceClass,
   estimateFps, fpsCapFor, fpsOptions, validFpsCap, buildItems, analyze,
   renderModeText, describe, buildRows, changesToWrite, allChanges, summaryText,
 };

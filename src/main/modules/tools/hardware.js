@@ -159,6 +159,10 @@ class HardwareMonitor {
       if (this.isWin && !this.kill && this.stream === 'failed') { this.restarts = 0; this.startStream(); }
       return;
     }
+    // Neuer Start: alte Werte von früher nicht als "live" oder "letzte 2 Minuten" zeigen
+    this.history = [];
+    this.lastPs = null;
+    this.lastPsAt = 0;
     this.buildState = {};
     this.buildState.prevCpu = logic.cpuTimes(this.safeCpus());
     this.timer = this.setIntervalFn(() => this.onTimer(), this.intervalMs);
@@ -228,8 +232,9 @@ class HardwareMonitor {
       this.release('view');
       if (!this.timer) return;
     }
-    // Mit Windows-Skript: Messung kommt mit jeder Skript-Zeile. Der Zeitgeber springt nur ein, wenn sie ausbleibt.
-    if (this.isWin && this.stream === 'ok' && now - this.lastPsAt < this.intervalMs * 1.5) return;
+    // Mit Windows-Skript: Messung kommt mit jeder Skript-Zeile. Der Zeitgeber springt nur ein, wenn sie
+    // länger ausbleibt (eine langsame Zeile unter Last ist noch frisch und darf nicht verworfen werden).
+    if (this.isWin && this.stream === 'ok' && logic.isFresh(this.lastPsAt, now)) return;
     this.tick();
   }
 

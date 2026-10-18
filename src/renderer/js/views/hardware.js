@@ -326,7 +326,37 @@ export default {
         loadSessions();
       }, 2500));
     });
-    const ping = setInterval(() => { env.call('hardware.ping').catch(() => {}); }, 30000);
+    let ping = null;
+    const startPing = () => { if (!ping) ping = setInterval(() => { env.call('hardware.ping').catch(() => {}); }, 30000); };
+    const stopPing = () => { if (ping) clearInterval(ping); ping = null; };
+    startPing();
+
+    // Fenster im Infobereich oder minimiert: Messung anhalten, sonst läuft sie beim Spielen stundenlang mit.
+    // Die Hintergrund-Aufzeichnung (falls eingeschaltet) läuft im Hauptprozess davon unabhängig weiter.
+    let paused = false;
+    async function onVisibility() {
+      if (!alive) return;
+      if (document.hidden) {
+        if (paused) return;
+        paused = true;
+        stopPing();
+        env.call('hardware.stop').catch(() => {});
+        return;
+      }
+      if (!paused) return;
+      paused = false;
+      try {
+        const st = await env.call('hardware.start');
+        if (!alive || paused) return;
+        status = st;
+        history = (st.history || []).slice(-HISTORY_MAX);
+        last = history[history.length - 1] || null;
+        caps = st.caps || caps;
+        startPing();
+        renderAll();
+      } catch (e) { if (alive) ui.showError(e, 'Hardware-Überblick'); }
+    }
+    document.addEventListener('visibilitychange', onVisibility);
     let ro = null;
     if (typeof ResizeObserver === 'function') {
       ro = new ResizeObserver(() => redrawAll());
