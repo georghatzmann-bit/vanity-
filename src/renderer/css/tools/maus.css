@@ -1,6 +1,6 @@
 /* Maus-Check – nur Regeln innerhalb von [data-tool="maus"] */
 
-[data-tool="maus"] .tab-body { max-width: 1080px; }
+[data-tool="maus"] .tab-body { max-width: none; }
 [data-tool="maus"] .btn[hidden] { display: none; }
 [data-tool="maus"] .row + .hint { margin-top: 8px; }
 

@@ -1,6 +1,6 @@
 /* Reaktions-Labor – nur Regeln innerhalb von [data-tool="reaktion"] */
 
-[data-tool="reaktion"] .tab-body { max-width: 1080px; }
+[data-tool="reaktion"] .tab-body { max-width: none; }
 [data-tool="reaktion"] .btn[hidden] { display: none; }
 
 /* ---------- Reaktionsfläche ---------- */
