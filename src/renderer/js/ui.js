@@ -244,6 +244,11 @@ export async function promptDialog({ title, label, value = '', hint, confirmLabe
 
 // ---------- Formatierung ----------
 
+/** Zeigt Pfade ohne volle Konto-IDs (32 Hex-Zeichen werden auf die letzten 4 gekürzt). */
+export function displayPath(rel) {
+  return String(rel ?? '').replace(/\b[0-9a-f]{28}([0-9a-f]{4})\b/gi, '…$1');
+}
+
 export function fmtBytes(n) {
   if (!Number.isFinite(n)) return '–';
   if (n < 1024) return `${n} B`;

@@ -106,7 +106,9 @@ function start() {
     win.webContents.on('will-navigate', (e) => e.preventDefault());
     win.once('ready-to-show', () => win.show());
     win.on('closed', () => { win = null; });
-    win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+    // HELIX_NO_INTRO=1 (automatische Tests): ohne Intro-Clip starten
+    const query = process.env.HELIX_NO_INTRO ? { nointro: '1' } : undefined;
+    win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), query ? { query } : undefined);
 
     // Nur fürs automatische Testen: Bildschirmfoto speichern und beenden
     const shot = process.env.HELIX_SMOKE_SHOT;

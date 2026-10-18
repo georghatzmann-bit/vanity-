@@ -204,7 +204,7 @@ export default {
       const STATUS = { same: ['gleich', 'ok'], 'same-values': ['gleiche Werte', 'ok'], different: ['anders', 'warn'], missing: ['fehlt gerade', 'err'] };
       const blocks = d.files.map((f) => {
         const [t, c] = STATUS[f.status] || [f.status, ''];
-        return h('div.diff-file', h('div.diff-head', icon('file', 16), h('div.grow', h('strong', f.label || f.rel), h('span.hint.mono', f.rel)), ui.badge(t, c)),
+        return h('div.diff-file', h('div.diff-head', icon('file', 16), h('div.grow', h('strong', f.label || f.rel), h('span.hint.mono', ui.displayPath(f.rel))), ui.badge(t, c)),
           f.changes?.length ? h('table.diff-table', h('thead', h('tr', h('th', 'Einstellung'), h('th', 'Jetzt'), h('th', kind === 'backup' ? 'In der Sicherung' : 'Im Profil'))),
             h('tbody', f.changes.map((c) => h('tr', h('td.mono', `${c.key}`, h('span.hint', ` [${c.section}]`)), h('td.mono', c.current ?? '–'), h('td.mono.accent-text', c.saved ?? '–'))))) : null);
       });
@@ -229,7 +229,7 @@ export default {
         h('span.grow'),
         h('p.hint', `${sc.totals.included} von ${sc.totals.found} Dateien kommen ins Profil · ${ui.fmtBytes(sc.totals.bytes)}`));
       const rows = sc.files.map((f) => h(`tr${f.included ? '' : '.excluded'}`,
-        h('td', h('div.file-cell', icon('file', 16), h('div', h('span', f.label), h('span.hint.mono', (f.root === 'saved' ? 'Saved/' : 'Config/') + f.rel)))),
+        h('td', h('div.file-cell', icon('file', 16), h('div', h('span', f.label), h('span.hint.mono', ui.displayPath((f.root === 'saved' ? 'Saved/' : 'Config/') + f.rel))))),
         h('td.num', ui.fmtBytes(f.size)),
         h('td', ui.fmtDate(f.mtimeMs)),
         h('td', f.included ? ui.badge('wird gesichert', 'ok') : ui.badge(f.reason || 'ausgeschlossen', '')),

@@ -1,0 +1,189 @@
+name: HELIX Windows Build
+
+on:
+  push:
+    branches: ['claude/helix-**']
+    # eigene Tag-Reihe: in diesem Repository liegen auch andere Programme (v1.x, phoenix-v*)
+    tags: ['helix-v*']
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: helix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false' # nie nach einem Signatur-Zertifikat suchen
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache Electron + electron-builder downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests (auf echtem Windows)
+        run: npm test
+
+      - name: Version
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/helix-v*') {
+            $v = $env:GITHUB_REF_NAME -replace '^helix-v',''
+            npm version $v --no-git-tag-version --allow-same-version | Out-Null
+          } else {
+            $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "HELIX $v"
+
+      - name: Build app (electron-builder, Ordner)
+        run: npx electron-builder --win dir --x64 --publish never
+
+      - name: Pack app ZIP + SHA-256
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $dir = 'release\win-unpacked'
+          if (-not (Test-Path "$dir\HELIX.exe")) { throw 'HELIX.exe fehlt in release\win-unpacked' }
+          $zip = "release\HELIX-App-$v-win-x64.zip"
+          Push-Location $dir
+          7z a -tzip -mx=7 "..\HELIX-App-$v-win-x64.zip" * | Out-Null
+          Pop-Location
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  HELIX-App-$v-win-x64.zip" | Set-Content -NoNewline -Encoding ascii "$zip.sha256"
+          "{0}  {1:N1} MiB  {2}" -f $zip, ((Get-Item $zip).Length / 1MB), $hash
+
+      - name: Smoke test (App startet, Bildschirmfoto)
+        shell: pwsh
+        run: |
+          $fx = node -e "console.log(require('./test/helpers').makeLocalAppData({withRememberMe:true}).local)"
+          $env:LOCALAPPDATA_FAKE = $fx
+          $data = Join-Path $env:RUNNER_TEMP 'helix-smoke-data'
+          New-Item -ItemType Directory -Force $data | Out-Null
+          New-Item -ItemType Directory -Force test-results | Out-Null
+          $shot = Join-Path (Resolve-Path test-results) 'smoke.png'
+          $p = Start-Process -FilePath 'release\win-unpacked\HELIX.exe' -PassThru -Environment @{ LOCALAPPDATA = $fx; HELIX_DATA_DIR = $data; HELIX_SMOKE_SHOT = $shot; HELIX_SMOKE_DELAY = '5000'; HELIX_NO_INTRO = '1' }
+          if (-not $p.WaitForExit(90000)) { $p.Kill(); throw 'HELIX hat sich nicht beendet' }
+          if (-not (Test-Path $shot)) { Get-Content "$data\helix.log" -ErrorAction SilentlyContinue; throw 'Kein Bildschirmfoto' }
+          Get-Content "$data\helix.log"
+          if (-not (Get-ChildItem "$data\backups" -Directory)) { throw 'Originalzustand wurde nicht gesichert' }
+
+      - name: End-to-end test (Profile speichern/anwenden, alle Tools öffnen)
+        shell: pwsh
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          SHOTS_DIR: test-results\e2e
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          node test/e2e/smoke.mjs "release\win-unpacked\HELIX.exe"
+
+      - name: Build Setup (WPF, .NET Framework 4.8)
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          dotnet build installer\HelixSetup.csproj -c Release "-p:Version=$v"
+          if ($LASTEXITCODE -ne 0) { throw 'Setup-Build fehlgeschlagen' }
+          Copy-Item installer\bin\Release\net48\HELIX-Setup.exe "release\HELIX-Setup-$v.exe"
+          "{0:N1} MiB" -f ((Get-Item "release\HELIX-Setup-$v.exe").Length / 1MB)
+
+      - name: Setup test (still installieren, prüfen, deinstallieren)
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $dir = Join-Path $env:RUNNER_TEMP 'HELIX-Test'
+          $p = Start-Process "release\HELIX-Setup-$v.exe" -ArgumentList '/silent', "/source=$((Resolve-Path "release\HELIX-App-$v-win-x64.zip").Path)", "/dir=$dir", '/nodesktop' -PassThru -Wait
+          Get-Content "$env:TEMP\HELIX-Setup.log" -ErrorAction SilentlyContinue | Select-Object -Last 20
+          if ($p.ExitCode -ne 0) { throw "Setup Exit-Code $($p.ExitCode)" }
+          foreach ($f in 'HELIX.exe', 'HELIX-Setup.exe', '.helix-install') { if (-not (Test-Path (Join-Path $dir $f))) { throw "$f fehlt nach der Installation" } }
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HELIX'
+          $reg = Get-ItemProperty $key
+          if ($reg.DisplayVersion -ne $v) { throw "Falsche Version in Apps & Features: $($reg.DisplayVersion)" }
+          $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) 'HELIX.lnk'
+          if (-not (Test-Path $lnk)) { throw 'Startmenü-Verknüpfung fehlt' }
+          # Deinstallation über den Eintrag in Apps & Features (startet sich selbst aus %TEMP% neu)
+          Start-Process (Join-Path $dir 'HELIX-Setup.exe') -ArgumentList '/uninstall', '/silent' -Wait
+          $t = 0
+          while ((Test-Path $dir) -and $t -lt 60) { Start-Sleep 1; $t++ }
+          Get-Content "$env:TEMP\HELIX-Setup.log" -ErrorAction SilentlyContinue | Select-Object -Last 10
+          if (Test-Path $dir) { throw 'Ordner nach der Deinstallation noch vorhanden' }
+          if (Test-Path $key) { throw 'Eintrag in Apps & Features nach der Deinstallation noch vorhanden' }
+          if (Test-Path $lnk) { throw 'Verknüpfung nach der Deinstallation noch vorhanden' }
+          'Installieren und Deinstallieren: ok'
+
+      - name: Upload Setup + App
+        uses: actions/upload-artifact@v7
+        with:
+          name: HELIX-${{ steps.ver.outputs.version }}
+          path: |
+            release/HELIX-Setup-*.exe
+            release/HELIX-App-*-win-x64.zip
+            release/HELIX-App-*-win-x64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Bildschirmfotos
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: HELIX-Bildschirmfotos
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/helix-v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # GitHub-Release anlegen
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: HELIX-${{ needs.build.outputs.version }}
+          path: release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: HELIX ${{ needs.build.outputs.version }}
+          files: |
+            release/HELIX-Setup-${{ needs.build.outputs.version }}.exe
+            release/HELIX-App-${{ needs.build.outputs.version }}-win-x64.zip
+            release/HELIX-App-${{ needs.build.outputs.version }}-win-x64.zip.sha256
+          # andere Programme in diesem Repository behalten "Latest"
+          make_latest: false
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          body: |
+            HELIX – dein Fortnite-Tuning-Cockpit.
+
+            1. `HELIX-Setup-${{ needs.build.outputs.version }}.exe` unten bei *Assets* herunterladen und starten.
+               Bei „Der Computer wurde durch Windows geschützt“: **Weitere Informationen** → **Trotzdem ausführen**.
+            2. Das Setup lädt die App automatisch (die ZIP-Datei hier) und richtet Verknüpfungen ein. Kein Administrator nötig.
+            3. Entfernen: Windows-Einstellungen → Apps → HELIX → Deinstallieren.

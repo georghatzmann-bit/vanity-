@@ -85,7 +85,7 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
   const listItems = preview.items.filter((i) => i.action !== 'same' || preview.items.length < 12);
   const fileList = h('ul.list.files', listItems.map((i) => {
     const [txt, cls] = ACTION_TEXT[i.action] || [i.action, ''];
-    return h('li', icon(i.action === 'remove' ? 'trash' : 'file', 16), h('div.grow', h('span', i.label || i.rel), h('span.hint.mono', i.rel)), ui.badge(txt, cls));
+    return h('li', icon(i.action === 'remove' ? 'trash' : 'file', 16), h('div.grow', h('span', i.label || i.rel), h('span.hint.mono', ui.displayPath(i.rel))), ui.badge(txt, cls));
   }));
   const summary = h('div.stat-row',
     stat(counts.change, 'werden ersetzt'), stat(counts.new, 'kommen neu'), stat(counts.remove, 'werden entfernt'), stat(counts.same, 'schon gleich'));
@@ -179,7 +179,7 @@ export async function showResult(env, p, result) {
       title: 'Das Anwenden hat nicht geklappt',
       content: [
         h('p', 'Einige Dateien konnten nicht geschrieben werden. HELIX hat den vorherigen Zustand automatisch wiederhergestellt.'),
-        h('ul.list.compact', result.failed.map((f) => h('li', icon('x', 16), h('span', f.rel), h('span.hint', f.message)))),
+        h('ul.list.compact', result.failed.map((f) => h('li', icon('x', 16), h('span', ui.displayPath(f.rel)), h('span.hint', f.message)))),
         h('p.hint', result.rollback?.ok ? 'Wiederherstellung: erfolgreich.' : 'Wiederherstellung: bitte in den Sicherungen prüfen.'),
       ],
       actions: [{ label: 'OK', variant: 'primary' }],
@@ -188,9 +188,9 @@ export async function showResult(env, p, result) {
   }
   ui.toast(`„${p.name}“ ist jetzt aktiv.`);
   const rows = [
-    ...result.written.map((f) => h('li', icon('check', 16), h('div.grow', h('span', f.label || f.rel), h('span.hint.mono', f.rel)), ui.badge(f.action === 'new' ? 'neu kopiert' : 'kopiert', 'ok'))),
-    ...result.removed.map((f) => h('li', icon('trash', 16), h('div.grow', h('span', f.label || f.rel), h('span.hint.mono', f.rel)), ui.badge('entfernt', 'warn'))),
-    ...result.same.map((f) => h('li', icon('check', 16), h('div.grow', h('span', f.label || f.rel), h('span.hint.mono', f.rel)), ui.badge('war schon gleich', ''))),
+    ...result.written.map((f) => h('li', icon('check', 16), h('div.grow', h('span', f.label || f.rel), h('span.hint.mono', ui.displayPath(f.rel))), ui.badge(f.action === 'new' ? 'neu kopiert' : 'kopiert', 'ok'))),
+    ...result.removed.map((f) => h('li', icon('trash', 16), h('div.grow', h('span', f.label || f.rel), h('span.hint.mono', ui.displayPath(f.rel))), ui.badge('entfernt', 'warn'))),
+    ...result.same.map((f) => h('li', icon('check', 16), h('div.grow', h('span', f.label || f.rel), h('span.hint.mono', ui.displayPath(f.rel))), ui.badge('war schon gleich', ''))),
   ];
   const ro = result.readOnlySet.length
     ? `Schreibschutz ist an für: ${result.readOnlySet.join(', ')}`

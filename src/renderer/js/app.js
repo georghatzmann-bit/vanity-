@@ -38,8 +38,10 @@ const env = {
 };
 
 async function go(id, { instant = false } = {}) {
-  if (state.navigating || id === state.current) return;
+  if (id === state.current) return;
+  if (state.navigating) { state.pending = id; return; } // nach dem laufenden Übergang dorthin
   state.navigating = true;
+  document.body.classList.add('navigating');
   try {
     const swap = async () => {
       if (state.view?.unmount) { try { state.view.unmount(); } catch { /* weiter */ } }
@@ -63,6 +65,12 @@ async function go(id, { instant = false } = {}) {
     }
   } finally {
     state.navigating = false;
+    document.body.classList.remove('navigating');
+  }
+  if (state.pending) {
+    const next = state.pending;
+    state.pending = null;
+    go(next);
   }
 }
 
@@ -158,7 +166,7 @@ let driftOpen = false;
 async function showDrift(d) {
   if (driftOpen || !d || d.status !== 'drift') return;
   driftOpen = true;
-  const list = h('ul.list.compact', d.changed.map((c) => h('li', icon(c.missing ? 'x' : 'file', 16), h('span', c.label || c.rel), h('span.hint', c.rel))));
+  const list = h('ul.list.compact', d.changed.map((c) => h('li', icon(c.missing ? 'x' : 'file', 16), h('span', c.label || c.rel), h('span.hint', ui.displayPath(c.rel)))));
   const onlyCloud = d.changed.every((c) => c.kind === 'controls');
   const text = onlyCloud
     ? `Fortnite hat Tastenbelegung und Sensi aus der Epic-Cloud deines Kontos geholt und die Kopie von „${d.profileName}“ ersetzt. Das ist normal: Diese Einstellungen gehören zum Konto. Willst du sie ändern, stelle sie einmal im Spiel ein – Fortnite speichert sie dann in der Cloud.`

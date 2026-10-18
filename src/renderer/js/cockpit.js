@@ -46,7 +46,7 @@ export function renderCockpit(stage, env) {
     return { t, btn };
   });
 
-  const coreVideo = h('video.core-video.loop-media', { src: 'assets/video/core-loop.mp4', autoplay: true, muted: true, loop: true, playsinline: true, poster: 'assets/img/core.png' });
+  const coreVideo = h('video.core-video.loop-media', { src: 'assets/video/core-loop.webm', autoplay: true, muted: true, loop: true, playsinline: true, poster: 'assets/img/core.png' });
   coreVideo.muted = true;
   const coreBtn = h('button.core', {
     type: 'button',
@@ -107,9 +107,9 @@ export function renderCockpit(stage, env) {
         p.btn.style.setProperty('--depth', depth.toFixed(2));
       });
     };
-    const innerSize = Math.max(64, Math.min(96, w / 15));
+    const innerSize = Math.max(72, Math.min(116, w / 12.5));
     place(inner, rings[0], -60, innerSize);
-    place(outer, rings[1], 90 + 360 / (outer.length * 2), innerSize * 0.82);
+    place(outer, rings[1], 90 + 360 / (outer.length * 2), innerSize * 0.86);
   }
 
   const ro = new ResizeObserver(layout);

@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    HELIX-Setup: eigener, animierter Installer (WPF, .NET Framework 4.8 – ist auf jedem Windows 10/11 vorhanden).
+    Lädt die fertige App von den GitHub-Releases herunter, installiert pro Benutzer (kein Administrator nötig),
+    legt Verknüpfungen an und trägt die Deinstallation unter "Apps & Features" ein.
+    Bauen:  dotnet build -c Release -p:Version=1.0.0
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>HELIX-Setup</AssemblyName>
+    <RootNamespace>HelixSetup</RootNamespace>
+    <ApplicationIcon>assets\icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version Condition="'$(Version)' == ''">1.0.0</Version>
+    <Product>HELIX</Product>
+    <Company>HELIX</Company>
+    <Description>HELIX Setup</Description>
+    <Copyright>HELIX – kein offizielles Programm von Epic Games</Copyright>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>none</DebugType>
+    <SatelliteResourceLanguages>de</SatelliteResourceLanguages>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Web.Extensions" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Clips (Higgsfield), Klänge und Bilder werden in die EXE eingebettet -->
+    <EmbeddedResource Include="assets\intro.mp4" LogicalName="intro.mp4" />
+    <EmbeddedResource Include="assets\bg-loop.mp4" LogicalName="bg-loop.mp4" />
+    <EmbeddedResource Include="assets\install-loop.wav" LogicalName="install-loop.wav" />
+    <EmbeddedResource Include="assets\install-done.wav" LogicalName="install-done.wav" />
+    <EmbeddedResource Include="assets\install-intro.wav" LogicalName="install-intro.wav" />
+    <EmbeddedResource Include="assets\click.wav" LogicalName="click.wav" />
+    <Resource Include="assets\emblem.png" />
+  </ItemGroup>
+</Project>
