@@ -1,11 +1,11 @@
-// HELIX – Oberfläche: Intro, Cockpit, Navigation mit Übergangs-Clips, Statusleiste.
+// HELIX – Oberfläche: Intro, Cockpit, Navigation mit kurzen Übergängen, Statusleiste.
 
 import { call, on, isMock } from './api.js';
 import * as ui from './ui.js';
-import { configureSound, sfx } from './sound.js';
+import { configureSound } from './sound.js';
 import { CORE, TOOLS, findTarget } from './tools.js';
 import { renderCockpit } from './cockpit.js';
-import { videoAvailable, playTransition, playIntro, setBackgroundPaused } from './fx.js';
+import { playTransition, playIntro } from './fx.js';
 
 const { h, icon } = ui;
 
@@ -66,7 +66,6 @@ async function go(id, { instant = false } = {}) {
     if (instant || !state.current) {
       await swap();
     } else {
-      sfx('whoosh');
       await playTransition(swap);
     }
   } finally {
@@ -86,10 +85,11 @@ async function mountTool(id) {
   const header = h('header.tool-head',
     h('button.back', { type: 'button', onclick: () => go('cockpit'), title: 'Zurück zum Cockpit (Esc)' }, icon('back'), h('span', 'Cockpit')),
     h('div.tool-title',
-      h('div.tool-planet', { style: { '--hue': target?.hue ?? 190 } }, h('img', { src: id === 'profiles' ? 'assets/img/core.png' : id === 'settings' ? 'assets/img/icon.png' : `assets/img/planet-${id}.png`, alt: '', onerror: (e) => e.target.remove() })),
+      h('div.tool-planet.glyph', icon(target?.icon || 'sparkle', 20)),
       h('div', h('h1', target?.title || id), h('p.hint', target?.desc || ''))),
     orbitStrip(id));
-  const panel = h('div.tool-panel.glass', { dataset: { tool: id } }, header, body);
+  // Jedes Tool bekommt seine eigene Farbe (Knöpfe, Reiter, Schalter …)
+  const panel = h('div.tool-panel.glass', { dataset: { tool: id }, style: { '--hue': target?.hue ?? 262 } }, header, body);
   stage.appendChild(panel);
   // eigenes Stylesheet des Tools (css/tools/<id>.css), falls vorhanden
   if (TOOLS.some((t) => t.id === id) && !document.querySelector(`link[data-tool-css="${id}"]`)) {
@@ -127,10 +127,9 @@ function orbitStrip(activeId) {
     type: 'button',
     title: t.title,
     'aria-label': t.title,
-    style: { '--hue': t.hue ?? 190 },
+    style: { '--hue': t.hue ?? 262 },
     onclick: () => go(t.id),
-    onmouseenter: () => sfx('hover'),
-  }, h('img', { src: t.id === CORE.id ? 'assets/img/core.png' : `assets/img/planet-${t.id}.png`, alt: '', onerror: (e) => { e.target.replaceWith(h('span.dot-fallback')); } }))));
+  }, icon(t.icon, 14))));
 }
 
 // ---------- Statusleiste ----------
@@ -169,10 +168,8 @@ async function refreshStatus() {
 }
 
 function applyLightMode() {
-  const playing = !!state.status?.fortnite?.running;
-  const light = state.settings?.lightWhilePlaying !== false && playing;
-  document.body.classList.toggle('light-mode', light);
-  setBackgroundPaused(light || document.hidden);
+  // Es laufen keine Hintergrund-Videos mehr; die Klasse bleibt als Hinweis für Tools, dass Fortnite läuft.
+  document.body.classList.toggle('light-mode', !!state.status?.fortnite?.running);
 }
 
 // ---------- Cloud-Warnung ----------
@@ -224,7 +221,7 @@ async function boot() {
   document.body.classList.toggle('mock', isMock);
   try {
     state.settings = await call('app.settings');
-  } catch { state.settings = { sound: true, volume: 0.7, intro: true }; }
+  } catch { state.settings = { sound: true, volume: 0.4, intro: true }; }
   configureSound({ enabled: state.settings.sound, volume: state.settings.volume });
   document.body.classList.toggle('reduce-motion', !!state.settings.reduceMotion);
 
@@ -244,7 +241,7 @@ async function boot() {
   document.getElementById('btn-settings').addEventListener('click', () => go('settings'));
 
   const introWanted = state.settings.intro !== false && !new URLSearchParams(location.search).has('nointro');
-  const introPromise = introWanted && (await videoAvailable('assets/video/intro.mp4')) ? playIntro(state.settings) : Promise.resolve();
+  const introPromise = introWanted ? playIntro() : Promise.resolve();
   await refreshStatus();
   await go(new URLSearchParams(location.search).get('view') || 'cockpit', { instant: true });
   await introPromise;

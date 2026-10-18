@@ -10,7 +10,7 @@ Oberfläche = HTML/CSS/JS ohne Framework. Alles bleibt lokal auf dem PC.
   Login-Daten/Tokens/Cookies, Dateien des Epic Games Launchers kopieren, Overlays im Spiel, Prozesse des Spiels beeinflussen
   (Priorität, Affinität, Injektion …).
 - Kein Administrator nötig. Registry-Schreibzugriffe nur unter HKCU.
-- Animationen kommen als fertige Higgsfield-Clips/-Bilder (`src/renderer/assets`). Im Code nur schlichte Übergänge (≤ 200 ms).
+- Design: flache Farbflächen, jedes Tool mit eigenem Farbton (`hue`) und Symbol (`icon`) aus `src/renderer/js/tools.js`. Keine Videos; nur kurze CSS-Übergänge (≤ 200 ms). Längere Erklärungen hinter `ui.more()` („Warum?“).
 
 ## Ordner
 
@@ -97,11 +97,13 @@ Leere Zustände gestalten (`ui.emptyState`). Nach jeder Aktion kurze Rückmeldun
 Status nie nur über Farbe – immer Text dazu (`ui.badge('gut', 'ok')`).
 Nie `innerHTML` mit Daten. `h()` setzt Text sicher.
 
-Vorhandene CSS-Klassen: `.glass .block .toolbar .row .callout(.ok/.warn/.err/.info) .stat-row .stat .list .table-wrap .table
+Vorhandene CSS-Klassen: `.glass .block .more .toolbar .row .callout(.ok/.warn/.err/.info) .stat-row .stat .list .table-wrap .table
 .kv .segmented .seg .radio-list .radio .field .input .range .badge .btn(.primary/.ghost/.danger/.small) .hint .mono .grow`.
 Tool-eigenes CSS in `src/renderer/css/tools/<id>.css`, alle Regeln mit `[data-tool="<id>"]` beginnen.
-Design: dunkel, eine Akzentfarbe `var(--accent)` (Cyan), Grün/Orange/Rot nur für Status, Abstände 4/8/12/16/24/32,
-Ecken 6–10 px, Übergänge ≤ 200 ms, keine Emojis als Icons.
+Design: dunkel und flach (keine Glas-Effekte, keine Videos). `var(--accent)` ist die Farbe des jeweiligen Tools
+(aus seinem `hue`, gesetzt auf `.tool-panel`), dazu `--accent-2`, `--accent-soft`, `--accent-line`, `--grad`.
+Grün/Orange/Rot nur für Status, Abstände 4/8/12/16/24/32, Ecken 8–12 px, Übergänge ≤ 200 ms, keine Emojis als Icons.
+Wenig Text: pro Abschnitt höchstens eine kurze graue Zeile; längere Erklärungen mit `ui.more('Warum?', …)`.
 
 ### 3. Simulator: `src/renderer/js/mock/<id>.js`
 

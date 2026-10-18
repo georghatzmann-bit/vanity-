@@ -3,19 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>HELIX</title>
   <link rel="stylesheet" href="css/helix.css">
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
-  <!-- Hintergrund: mit Higgsfield gerenderter Kosmos-Loop -->
-  <video id="bg" class="bg-video" src="assets/video/bg-loop.mp4" poster="assets/img/bg.jpg" autoplay muted loop playsinline aria-hidden="true"></video>
-  <div class="bg-shade" aria-hidden="true"></div>
-
   <header class="titlebar">
     <div class="brand" aria-label="HELIX">
-      <img class="brand-mark" src="assets/img/icon.png" alt="">
+      <span class="brand-mark glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M17 4v16M7 14.5l10-5"/></svg></span>
       <span class="brand-word">HELIX</span>
       <span class="brand-sub">Fortnite-Tuning-Cockpit</span>
     </div>
@@ -27,12 +23,12 @@
 
   <main id="stage" class="stage"></main>
 
-  <!-- Übergangs-Clip (Higgsfield), wird über die Oberfläche geblendet -->
-  <video id="fx" class="fx-transition" muted playsinline preload="auto" aria-hidden="true"></video>
-
-  <div id="intro" class="intro" hidden>
-    <video playsinline preload="auto"></video>
-    <button type="button" class="intro-skip">Überspringen</button>
+  <div id="intro" class="intro" hidden aria-hidden="true">
+    <div class="intro-inner">
+      <span class="intro-mark glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M17 4v16M7 14.5l10-5"/></svg></span>
+      <span class="intro-word">HELIX</span>
+      <span class="intro-line"></span>
+    </div>
   </div>
 
   <div id="toasts" class="toasts" aria-live="polite"></div>

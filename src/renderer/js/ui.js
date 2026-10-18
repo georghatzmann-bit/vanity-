@@ -87,6 +87,20 @@ const ICONS = {
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 110 6 3 3 0 010-6z',
   volume: 'M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 010 6M19 6a8 8 0 010 12',
   mute: 'M4 9h4l5-4v14l-5-4H4zM17 9l5 6M22 9l-5 6',
+  // Tool-Symbole
+  layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5',
+  crosshair: 'M12 4a8 8 0 110 16 8 8 0 010-16zM12 2v5M12 17v5M2 12h5M17 12h5',
+  cpu: 'M7 7h10v10H7zM10 10h4v4h-4zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4',
+  mouse: 'M12 3a5 5 0 015 5v8a5 5 0 01-10 0V8a5 5 0 015-5zM12 7v4',
+  signal: 'M4 20v-3M9 20v-7M14 20V9M19 20V4',
+  bolt: 'M13 2L4 14h7l-1 8 9-12h-7z',
+  monitor: 'M3 5h18v11H3zM8 20h8M12 16v4',
+  sweep: 'M14 3l7 7M17.5 6.5L11 13M4 21l3-8 4 4zM7 13l4 4',
+  thermo: 'M10 5a2 2 0 014 0v9.3a4 4 0 11-4 0zM12 9v7',
+  chart: 'M4 20V11M10 20V5M16 20v-7M2 20h20',
+  film: 'M4 5h16v14H4zM8 5v14M16 5v14M4 9.5h4M4 14.5h4M16 9.5h4M16 14.5h4',
+  timer: 'M12 7a7 7 0 110 14 7 7 0 010-14zM12 11v3.5M9.5 3h5M12 3v4',
+  windows: 'M4 5.5l7-1V11H4zM13 4.2l7-1.2V11h-7zM4 13h7v6.5l-7-1zM13 13h7v8l-7-1.2z',
 };
 
 export function icon(name, size = 18) {
@@ -114,10 +128,9 @@ export function icon(name, size = 18) {
 export function button(label, { onClick, variant = '', iconName, title, disabled, small } = {}) {
   const b = h(`button.btn${variant ? '.' + variant : ''}${small ? '.small' : ''}`, { type: 'button', title, disabled },
     iconName ? icon(iconName, small ? 16 : 18) : null, label ? h('span', label) : null);
-  b.addEventListener('mouseenter', () => sfx('hover'));
   if (onClick) {
     b.addEventListener('click', async (e) => {
-      sfx('click');
+      if (variant === 'primary') sfx('click'); // nur Hauptaktionen klicken hörbar
       if (b.dataset.busy) return;
       b.dataset.busy = '1';
       b.classList.add('busy');
@@ -130,7 +143,7 @@ export function button(label, { onClick, variant = '', iconName, title, disabled
 /** Schalter mit Titel und grauer Erklärungszeile. */
 export function toggle({ label, hint, checked, onChange, disabled }) {
   const input = h('input', { type: 'checkbox', checked, disabled, role: 'switch' });
-  input.addEventListener('change', () => { sfx('click'); onChange?.(input.checked); });
+  input.addEventListener('change', () => onChange?.(input.checked));
   return h('label.toggle', h('span.toggle-text', h('span.toggle-label', label), hint ? h('span.hint', hint) : null), h('span.switch', input, h('span.knob')));
 }
 
@@ -141,7 +154,7 @@ export function toast(message, type = 'ok', { timeout = 4200 } = {}) {
   toastRoot ||= document.getElementById('toasts');
   const t = h(`div.toast.${type}`, { role: 'status' }, icon(type === 'ok' ? 'check' : type === 'warn' ? 'warn' : type === 'err' ? 'x' : 'info'), h('span', message));
   toastRoot.appendChild(t);
-  sfx(type === 'err' ? 'error' : type === 'ok' ? 'success' : 'click');
+  if (type === 'err' || type === 'ok') sfx(type === 'err' ? 'error' : 'success');
   requestAnimationFrame(() => t.classList.add('show'));
   setTimeout(() => {
     t.classList.remove('show');
@@ -290,6 +303,14 @@ export function emptyState({ title, text, action }) {
 /** Abschnitt mit Überschrift und grauer Erklärung. */
 export function section(title, hint, ...children) {
   return h('section.block', h('div.block-head', h('h3', title), hint ? h('p.hint', hint) : null), ...children);
+}
+
+/**
+ * Längere Erklärung nur auf Klick („Warum?“), damit die Ansicht ruhig bleibt.
+ * more('Warum?', 'Text …') oder more('Mehr dazu', h('ul', …))
+ */
+export function more(summary, ...content) {
+  return h('details.more', h('summary', summary || 'Warum?'), ...content.map((c) => (typeof c === 'string' ? h('p', c) : c)));
 }
 
 /** Statusplakette, immer mit Text (nicht nur Farbe). */

@@ -5,9 +5,8 @@ const { HelixError } = require('../sys/exec');
 
 const DEFAULTS = {
   sound: true,
-  volume: 0.7,
+  volume: 0.4,
   intro: true,
-  lightWhilePlaying: true, // Videos pausieren, solange Fortnite läuft
   reduceMotion: false,
   closeToTray: true, // beim Schließen im Infobereich weiterlaufen (Spielzeit, Cloud-Wächter)
 };

@@ -1,17 +1,15 @@
-// Klänge der Oberfläche. Die Dateien stammen aus den Higgsfield-Clips (siehe assets/README.md).
+// Leise, kurze Klänge – nur bei wichtigen Aktionen (Klick auf ein Tool, Erfolg, Fehler). Kein Hover-Ton.
 
 const FILES = {
-  hover: 'assets/sfx/hover.mp3',
   click: 'assets/sfx/click.mp3',
-  whoosh: 'assets/sfx/whoosh.mp3',
   success: 'assets/sfx/success.mp3',
   error: 'assets/sfx/error.mp3',
 };
 
-// relative Lautstärke je Klang (Hover ganz leise)
-const LEVEL = { hover: 0.18, click: 0.45, whoosh: 0.7, success: 0.6, error: 0.6 };
+// relative Lautstärke je Klang – bewusst dezent
+const LEVEL = { click: 0.35, success: 0.5, error: 0.5 };
 
-const state = { enabled: true, volume: 0.7, cache: {}, lastHover: 0 };
+const state = { enabled: true, volume: 0.4, cache: {} };
 
 export function configureSound({ enabled, volume }) {
   if (typeof enabled === 'boolean') state.enabled = enabled;
@@ -23,12 +21,7 @@ export function soundState() {
 }
 
 export function sfx(name) {
-  if (!state.enabled || !FILES[name]) return;
-  if (name === 'hover') {
-    const now = performance.now();
-    if (now - state.lastHover < 90) return;
-    state.lastHover = now;
-  }
+  if (!state.enabled || !FILES[name]) return; // alte Namen (hover, whoosh) bleiben einfach stumm
   try {
     let base = state.cache[name];
     if (!base) {
@@ -37,7 +30,7 @@ export function sfx(name) {
       state.cache[name] = base;
     }
     const a = base.paused ? base : base.cloneNode();
-    a.volume = Math.min(1, state.volume * (LEVEL[name] ?? 0.5));
+    a.volume = Math.min(1, state.volume * (LEVEL[name] ?? 0.4));
     a.currentTime = 0;
     a.play().catch(() => {});
   } catch { /* ohne Ton weiter */ }
