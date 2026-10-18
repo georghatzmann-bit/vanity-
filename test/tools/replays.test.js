@@ -439,7 +439,7 @@ test('Replay-Modul: liest höchstens die ersten 64 KB jeder Datei', async () => 
 const fmtPath = path.join(__dirname, '../../src/renderer/js/lib/replays-format.mjs');
 
 test('Replay-Ansicht: Dauer, Namen und Titel', async () => {
-  const f = await import(fmtPath);
+  const f = await import(require("node:url").pathToFileURL(fmtPath).href);
   assert.equal(f.fmtLength(0), '0:00');
   assert.equal(f.fmtLength(65_000), '1:05');
   assert.equal(f.fmtLength(23 * 60_000 + 41_000), '23:41');
@@ -455,7 +455,7 @@ test('Replay-Ansicht: Dauer, Namen und Titel', async () => {
 });
 
 test('Replay-Ansicht: Statusplaketten haben immer Text', async () => {
-  const f = await import(fmtPath);
+  const f = await import(require("node:url").pathToFileURL(fmtPath).href);
   const b = (e, w = 'demos', v = '42.20') => f.statusBadges({ ok: true, ...e }, w, v).map((x) => x.text);
   assert.deepEqual(b({ recording: true, version: '42.20' }), ['wird gerade aufgenommen']);
   assert.deepEqual(b({ ok: false, error: 'kaputt' }), ['nicht lesbar']);
@@ -468,7 +468,7 @@ test('Replay-Ansicht: Statusplaketten haben immer Text', async () => {
 });
 
 test('Replay-Ansicht: offene Replays zählen und Ergebnis von "Alle sichern"', async () => {
-  const f = await import(fmtPath);
+  const f = await import(require("node:url").pathToFileURL(fmtPath).href);
   assert.equal(f.unsavedCount([{ ok: true }, { ok: true, inVault: true }, { ok: true, recording: true }, { ok: false }]), 1);
   assert.equal(f.copyAllText({ copied: 3, already: 2, recording: 1, failed: 0, unreadable: 0 }), '3 Replays gesichert, 1 läuft noch.');
   assert.equal(f.copyAllText({ copied: 0, already: 5, recording: 0, failed: 0, unreadable: 1 }), 'Nichts Neues zu sichern, 1 nicht lesbar.');

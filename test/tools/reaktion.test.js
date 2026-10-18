@@ -8,7 +8,7 @@ const L = require('../../src/main/tools/reaktion-logic');
 const mod = require('../../src/main/modules/tools/reaktion');
 
 const LIB = path.join(__dirname, '..', '..', 'src', 'renderer', 'js', 'lib', 'reaktion-logic.mjs');
-const lib = () => import(LIB);
+const lib = () => import(require("node:url").pathToFileURL(LIB).href);
 
 function fakeCtx(initial) {
   const store = new Map();

@@ -11,7 +11,7 @@ const { CoreService } = require('../../src/main/core/service');
 const { makeLocalAppData, tmpDir, fakeExec } = require('../helpers');
 
 const MEASURE = path.join(__dirname, '..', '..', 'src', 'renderer', 'js', 'lib', 'maus-measure.mjs');
-const measure = () => import(MEASURE);
+const measure = () => import(require("node:url").pathToFileURL(MEASURE).href);
 
 const REG_ON = {
   MouseSensitivity: { type: 'REG_SZ', value: '10' },

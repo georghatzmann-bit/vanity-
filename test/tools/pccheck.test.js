@@ -547,7 +547,7 @@ test('Sicherheit: das Modul schreibt nur über ctx.core.applyIniChanges in GameU
 // ---------------------------------------------------------------- Helfer der Ansicht (ES-Modul)
 
 test('Ansicht: Bildzeit, FPS-Erklärung und Zeitleiste', async () => {
-  const v = await import(VIEW_LIB);
+  const v = await import(require("node:url").pathToFileURL(VIEW_LIB).href);
   assert.equal(v.frameTimeMs(0), null);
   assert.ok(Math.abs(v.frameTimeMs(144) - 6.944) < 0.01);
   assert.equal(v.fmtMs(1000 / 60), '16,7 ms');
@@ -571,7 +571,7 @@ test('Ansicht: Bildzeit, FPS-Erklärung und Zeitleiste', async () => {
 });
 
 test('Ansicht: Gruppen, Zähler und Anzeigestufen', async () => {
-  const v = await import(VIEW_LIB);
+  const v = await import(require("node:url").pathToFileURL(VIEW_LIB).href);
   const rows = [
     { id: 'aa', group: 'Grafik', changed: true }, { id: 'fps', group: 'Anzeige', changed: true },
     { id: 'grass', group: 'Extras', changed: false }, { id: 'x', group: 'Sonstiges', changed: true },

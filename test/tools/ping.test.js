@@ -374,7 +374,7 @@ test('Modul: "Nur Ping" ohne Windows -> NOT_WINDOWS, keine zweite Messung gleich
 
 // ---------------------------------------------------------------- Anzeige-Logik (ES-Modul der Oberfläche)
 test('Anzeige: Bewertung, Balken, Formatierung', async () => {
-  const v = await import(VIEW);
+  const v = await import(require("node:url").pathToFileURL(VIEW).href);
   assert.equal(v.quality(18).label, 'sehr gut');
   assert.equal(v.quality(45).type, 'ok');
   assert.equal(v.quality(80).type, 'warn');
@@ -398,7 +398,7 @@ test('Anzeige: Bewertung, Balken, Formatierung', async () => {
 });
 
 test('Anzeige: Regionen nach bestem Wert sortiert, innen schnellste zuerst', async () => {
-  const v = await import(VIEW);
+  const v = await import(require("node:url").pathToFileURL(VIEW).href);
   const results = Object.entries(BASE).map(([id, ms]) => ({ id, medianMs: ms, lossPct: 0 }));
   const groups = v.groupResults(logic.catalog(), results);
   assert.deepEqual(groups.map((g) => g.id), ['EU', 'ME', 'NA', 'BR', 'ASIA', 'OCE']);
@@ -408,7 +408,7 @@ test('Anzeige: Regionen nach bestem Wert sortiert, innen schnellste zuerst', asy
 });
 
 test('Anzeige: Empfehlung nennt Region und Unterregion, bei NA auch Competitive', async () => {
-  const v = await import(VIEW);
+  const v = await import(require("node:url").pathToFileURL(VIEW).href);
   const cat = logic.catalog();
   const results = Object.entries(BASE).map(([id, ms]) => ({ id, name: logic.TARGET_BY_ID.get(id).name, medianMs: ms, lossPct: 0 }));
   const eu = v.recommendation(cat, results, { id: 'de', name: 'Deutschland', region: 'Europa', ms: 17 });
@@ -427,7 +427,7 @@ test('Anzeige: Empfehlung nennt Region und Unterregion, bei NA auch Competitive'
 });
 
 test('Anzeige: Verlauf und Vergleich mit der letzten Messung', async () => {
-  const v = await import(VIEW);
+  const v = await import(require("node:url").pathToFileURL(VIEW).href);
   const h = [
     { at: 1, best: { id: 'de', name: 'Deutschland', ms: 25 }, results: [{ id: 'de', medianMs: 25 }] },
     { at: 2, best: { id: 'de', name: 'Deutschland', ms: 18 }, results: [{ id: 'de', medianMs: 18 }] },

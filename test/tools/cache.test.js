@@ -146,6 +146,23 @@ test('Cache: Messung zählt Bytes und Dateien je Bereich, nur vorhandene Bereich
   assert.ok(by.logs.privacy, 'Protokolle haben den Datenschutz-Hinweis');
 });
 
+test('Cache: Saved-Ordner über einen anderen Pfad (Kurzname/Verknüpfung) – Protokolle werden trotzdem gemessen und geleert', async (t) => {
+  // Unter Windows liefert os.tmpdir() oft einen Kurznamen (RUNNER~1), realpath den langen Namen.
+  const p = makeProfile();
+  const alias = path.join(tmp('helix-alias-'), 'home');
+  try { fs.symlinkSync(p.home, alias, 'junction'); } catch (e) { t.skip(e.code); return; }
+  const local = path.join(alias, 'AppData', 'Local');
+  const saved = path.join(local, 'FortniteGame', 'Saved');
+  const cats = logic.buildCategories({ LOCALAPPDATA: local, USERPROFILE: alias, TEMP: path.join(local, 'Temp') }, { found: true, savedDir: saved, configDir: path.join(saved, 'Config') });
+  const found = await logic.scanCategories(cats, { savedDir: saved });
+  const by = Object.fromEntries(found.map((c) => [c.id, c]));
+  assert.equal(by.logs?.bytes, 1000);
+  assert.equal(by.crashes?.bytes, 2000);
+  const r = await logic.cleanCategories(cats.filter((c) => c.id === 'logs'), { savedDir: saved });
+  assert.equal(r.freedBytes, 1000);
+  assert.ok(fs.existsSync(path.join(p.saved, 'Config', 'WindowsClient', 'GameUserSettings.ini')), 'Einstellungen bleiben');
+});
+
 test('Cache: Verknüpfungen nach außen werden NICHT verfolgt (Messen und Löschen)', async (t) => {
   const p = makeProfile();
   const d3d = path.join(p.local, 'D3DSCache');
@@ -330,7 +347,7 @@ test('Cache-Modul: außerhalb von Windows freundlich "nicht unterstützt"', asyn
 const selPath = path.join(__dirname, '../../src/renderer/js/lib/cache-select.mjs');
 
 test('Cache-Ansicht: Standard-Auswahl lässt leere Bereiche weg, Summen stimmen', async () => {
-  const sel = await import(selPath);
+  const sel = await import(require("node:url").pathToFileURL(selPath).href);
   const cats = [
     { id: 'directx', group: 'shader', bytes: 100, count: 2 },
     { id: 'nvidia', group: 'shader', bytes: 900, count: 5 },
@@ -347,7 +364,7 @@ test('Cache-Ansicht: Standard-Auswahl lässt leere Bereiche weg, Summen stimmen'
 });
 
 test('Cache-Ansicht: Auswahl nach neuer Messung – abgewählte bleiben abgewählt, neue werden gewählt', async () => {
-  const sel = await import(selPath);
+  const sel = await import(require("node:url").pathToFileURL(selPath).href);
   const before = [{ id: 'a', bytes: 1 }, { id: 'b', bytes: 1 }];
   const known = new Set(before.map((c) => c.id));
   const prev = new Set(['a']);
@@ -358,7 +375,7 @@ test('Cache-Ansicht: Auswahl nach neuer Messung – abgewählte bleiben abgewäh
 });
 
 test('Cache-Ansicht: Texte für Dateien und Ergebnis', async () => {
-  const sel = await import(selPath);
+  const sel = await import(require("node:url").pathToFileURL(selPath).href);
   const fmt = (n) => logic.fmtBytesDe(n);
   assert.equal(sel.filesText(1), '1 Datei');
   assert.equal(sel.filesText(0), '0 Dateien');

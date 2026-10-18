@@ -441,7 +441,7 @@ test('Cockpit-Zeile', () => {
 
 // ---------------------------------------------------------------- Anzeige-Logik (ES-Modul der Oberfläche)
 test('Anzeige: Status immer mit Text', async () => {
-  const v = await import(VIEW);
+  const v = await import(require("node:url").pathToFileURL(VIEW).href);
   assert.deepEqual(v.statusOf({ boost: 'closed' }), { label: 'geschlossen', type: 'ok' });
   assert.equal(v.statusOf({ boost: 'open' }).label, 'noch offen');
   assert.equal(v.statusOf({ running: true }).label, 'läuft');
@@ -451,7 +451,7 @@ test('Anzeige: Status immer mit Text', async () => {
 });
 
 test('Anzeige: Bericht, Suche, Zahlen', async () => {
-  const v = await import(VIEW);
+  const v = await import(require("node:url").pathToFileURL(VIEW).href);
   const boost = { kind: 'boost', closed: ['Discord', 'Spotify'], stillOpen: ['Steam'], notRunning: ['OneDrive'], failed: [] };
   assert.equal(v.reportHeadline(boost), 'Boost: 2 Programme geschlossen, 1 noch offen');
   assert.deepEqual(v.reportSections(boost).map((s) => s.title), ['Geschlossen', 'Noch offen', 'Liefen gerade nicht']);

@@ -8,7 +8,7 @@ const mod = require('../../src/main/modules/tools/hardware');
 
 const { HardwareMonitor, PS_SAMPLER } = mod._test;
 const GB = 1024 ** 3;
-const libUrl = 'file://' + path.join(__dirname, '..', '..', 'src', 'renderer', 'js', 'lib', 'hardware-status.mjs');
+const libUrl = require('node:url').pathToFileURL(path.join(__dirname, '..', '..', 'src', 'renderer', 'js', 'lib', 'hardware-status.mjs')).href;
 
 // Eine echte Zeile, wie sie das PowerShell-Skript (ConvertTo-Json -Compress) ausgibt
 const LINE_NVIDIA = JSON.stringify({

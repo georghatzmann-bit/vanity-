@@ -216,16 +216,26 @@ async function collect(root, { filterTop = null, maxFiles = 200000, maxDepth = 2
 }
 
 /**
+ * Echter Pfad des Saved-Ordners. Echte Pfade (realpath) werden nur mit ihm verglichen – sonst passt
+ * z. B. ein Kurzname (C:\Users\JRGEN~1) oder eine Verknüpfung im Benutzerordner nie zusammen.
+ */
+async function realSaved(savedDir, fs = fsp) {
+  if (!savedDir) return null;
+  try { return await fs.realpath(savedDir); } catch { return savedDir; }
+}
+
+/**
  * Misst alle Bereiche. Nur Bereiche mit mindestens einem vorhandenen Ordner kommen zurück.
  */
 async function scanCategories(categories, { savedDir = null, fs = fsp, maxFiles } = {}) {
+  const savedReal = await realSaved(savedDir, fs);
   const out = [];
   for (const c of categories) {
     const roots = [];
     for (const root of c.roots) {
       const info = await inspectRoot(root, fs);
       if (!info.ok) continue;
-      if (isForbiddenPath(info.real, { savedDir }) || isForbiddenPath(root, { savedDir })) continue;
+      if (isForbiddenPath(info.real, { savedDir: savedReal }) || isForbiddenPath(root, { savedDir })) continue;
       const r = await collect(root, { filterTop: c.filterTop, fs, maxFiles });
       roots.push({ path: root, bytes: r.bytes, count: r.count, truncated: r.truncated, links: r.links });
     }
@@ -246,14 +256,14 @@ async function scanCategories(categories, { savedDir = null, fs = fsp, maxFiles 
 }
 
 /** Löscht eine Datei, wenn sie wirklich im Bereichsordner liegt. Rückgabe: 'deleted' | 'locked' | 'gone' | 'outside' */
-async function deleteInside(abs, rootReal, { savedDir = null, fs = fsp } = {}) {
+async function deleteInside(abs, rootReal, { savedDir = null, savedReal = savedDir, fs = fsp } = {}) {
   let st;
   try { st = await fs.lstat(abs); } catch (e) { return e.code === 'ENOENT' ? 'gone' : 'locked'; }
   if (st.isSymbolicLink() || !st.isFile()) return 'outside';
   let parentReal;
   try { parentReal = await fs.realpath(path.dirname(abs)); } catch { return 'gone'; }
   if (!isInside(rootReal, parentReal, { allowEqual: true })) return 'outside';
-  if (isForbiddenPath(abs, { savedDir }) || isForbiddenPath(path.join(parentReal, path.basename(abs)), { savedDir })) return 'outside';
+  if (isForbiddenPath(abs, { savedDir }) || isForbiddenPath(path.join(parentReal, path.basename(abs)), { savedDir: savedReal })) return 'outside';
   try {
     await fs.unlink(abs);
     return 'deleted';
@@ -283,6 +293,7 @@ async function deleteInside(abs, rootReal, { savedDir = null, fs = fsp } = {}) {
  * Rückgabe: { freedBytes, deleted, skipped, skippedBytes, perCategory: [{id, label, freedBytes, deleted, skipped}] }
  */
 async function cleanCategories(categories, { savedDir = null, fs = fsp, onProgress, maxFiles } = {}) {
+  const savedReal = await realSaved(savedDir, fs);
   const perCategory = [];
   let index = 0;
   for (const c of categories) {
@@ -292,10 +303,10 @@ async function cleanCategories(categories, { savedDir = null, fs = fsp, onProgre
     for (const root of c.roots) {
       const info = await inspectRoot(root, fs);
       if (!info.ok) continue;
-      if (isForbiddenPath(info.real, { savedDir }) || isForbiddenPath(root, { savedDir })) continue;
+      if (isForbiddenPath(info.real, { savedDir: savedReal }) || isForbiddenPath(root, { savedDir })) continue;
       const r = await collect(root, { filterTop: c.filterTop, fs, maxFiles });
       for (const f of r.files) {
-        const what = await deleteInside(f.abs, info.real, { savedDir, fs });
+        const what = await deleteInside(f.abs, info.real, { savedDir, savedReal, fs });
         if (what === 'deleted') { res.deleted++; res.freedBytes += f.size; } else if (what === 'locked') { res.skipped++; res.skippedBytes += f.size; }
       }
       // leere Unterordner entfernen (tiefste zuerst) – nie den Bereichsordner selbst
