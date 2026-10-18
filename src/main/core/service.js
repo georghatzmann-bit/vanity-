@@ -13,6 +13,7 @@ const { SnapshotStore } = require('./snapshots');
 const archive = require('./archive');
 const fortnite = require('./fortnite');
 const { summarizeGameUserSettings } = require('./summary');
+const { watchedValues, diffValues } = require('./drift');
 const {
   readJson, writeJson, sha256, safeJoin, normRel, exists, isReadOnly, setReadOnly, writeFileSafe, walk,
 } = require('./fsutil');
@@ -398,10 +399,15 @@ class CoreService {
 
   /** Merkt sich, welcher Stand nach dem Anwenden erwartet wird (für den Cloud-Wächter). */
   async recordApplied(meta, sc) {
-    const files = meta.files.map((f) => {
+    const files = [];
+    for (const f of meta.files) {
       const cur = sc.files.find((x) => engine.keyOf(x.root, x.rel) === engine.keyOf(f.root, f.rel));
-      return { root: f.root, rel: f.rel, label: f.label, kind: f.kind, sha256: cur?.sha256 || null, readOnly: !!cur?.readOnly };
-    });
+      let values = null;
+      if (cur?.abs) {
+        try { values = watchedValues(f.rel, await fsp.readFile(cur.abs)); } catch { /* gesperrt */ }
+      }
+      files.push({ root: f.root, rel: f.rel, label: f.label, kind: f.kind, sha256: cur?.sha256 || null, readOnly: !!cur?.readOnly, values });
+    }
     await this.writeState('applied', {
       profileId: meta.id, profileName: meta.name, appliedAt: Date.now(), files, acknowledged: null,
     });
@@ -420,14 +426,24 @@ class CoreService {
     for (const f of applied.files) {
       let p;
       try { p = safeJoin(this.roots()[f.root], f.rel); } catch { continue; }
-      let cur = null;
+      let buf = null;
       let mtimeMs = null;
       try {
-        const buf = await fsp.readFile(p);
-        cur = sha256(buf);
+        buf = await fsp.readFile(p);
         mtimeMs = Math.round((await fsp.stat(p)).mtimeMs);
       } catch { /* fehlt oder gesperrt */ }
-      if (cur !== f.sha256) changed.push({ rel: f.rel, label: f.label, kind: f.kind, missing: cur === null, mtimeMs });
+      if (!buf) {
+        if (f.sha256) changed.push({ rel: f.rel, label: f.label, kind: f.kind, missing: true, mtimeMs: null, settings: [] });
+        continue;
+      }
+      if (f.values) {
+        // INI: nur echte Einstellungen vergleichen (Fortnite schreibt beim Beenden Zeitstempel u. Ä. neu)
+        let settings;
+        try { settings = diffValues(f.values, watchedValues(f.rel, buf)); } catch { settings = []; }
+        if (settings.length) changed.push({ rel: f.rel, label: f.label, kind: f.kind, missing: false, mtimeMs, settings: settings.slice(0, 20) });
+      } else if (sha256(buf) !== f.sha256) {
+        changed.push({ rel: f.rel, label: f.label, kind: f.kind, missing: false, mtimeMs, settings: [] });
+      }
     }
     const sessions = await this.readState('sessions', { list: [] });
     const since = (sessions.list || []).filter((s) => s.start > applied.appliedAt);
@@ -720,7 +736,9 @@ class CoreService {
     const entry = applied.files.find((x) => engine.keyOf(x.root, x.rel) === engine.keyOf(root, rel));
     if (!entry) return;
     try {
-      entry.sha256 = sha256(await fsp.readFile(safeJoin(this.roots()[root], rel)));
+      const buf = await fsp.readFile(safeJoin(this.roots()[root], rel));
+      entry.sha256 = sha256(buf);
+      entry.values = watchedValues(rel, buf);
       await this.writeState('applied', applied);
     } catch { /* egal */ }
   }

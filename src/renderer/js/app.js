@@ -80,7 +80,7 @@ async function mountTool(id) {
   const header = h('header.tool-head',
     h('button.back', { type: 'button', onclick: () => go('cockpit'), title: 'Zurück zum Cockpit (Esc)' }, icon('back'), h('span', 'Cockpit')),
     h('div.tool-title',
-      h('div.tool-planet', { style: { '--hue': target?.hue ?? 190 } }, h('img', { src: `assets/img/planet-${id}.png`, alt: '', onerror: (e) => e.target.remove() })),
+      h('div.tool-planet', { style: { '--hue': target?.hue ?? 190 } }, h('img', { src: id === 'profiles' ? 'assets/img/core.png' : id === 'settings' ? 'assets/img/icon.png' : `assets/img/planet-${id}.png`, alt: '', onerror: (e) => e.target.remove() })),
       h('div', h('h1', target?.title || id), h('p.hint', target?.desc || ''))),
     orbitStrip(id));
   const panel = h('div.tool-panel.glass', { dataset: { tool: id } }, header, body);
@@ -166,7 +166,10 @@ let driftOpen = false;
 async function showDrift(d) {
   if (driftOpen || !d || d.status !== 'drift') return;
   driftOpen = true;
-  const list = h('ul.list.compact', d.changed.map((c) => h('li', icon(c.missing ? 'x' : 'file', 16), h('span', c.label || c.rel), h('span.hint', ui.displayPath(c.rel)))));
+  const list = h('ul.list.compact', d.changed.map((c) => h('li', icon(c.missing ? 'x' : 'file', 16),
+    h('div.grow', h('span', c.label || c.rel), h('span.hint', ui.displayPath(c.rel)),
+      c.missing ? h('span.hint', 'Datei fehlt jetzt') : null,
+      (c.settings || []).slice(0, 6).map((x) => h('span.hint.mono', `${x.key}: ${x.from ?? '–'} → ${x.to ?? '–'}`))))));
   const onlyCloud = d.changed.every((c) => c.kind === 'controls');
   const text = onlyCloud
     ? `Fortnite hat Tastenbelegung und Sensi aus der Epic-Cloud deines Kontos geholt und die Kopie von „${d.profileName}“ ersetzt. Das ist normal: Diese Einstellungen gehören zum Konto. Willst du sie ändern, stelle sie einmal im Spiel ein – Fortnite speichert sie dann in der Cloud.`

@@ -126,6 +126,17 @@ jobs:
           if (Test-Path $lnk) { throw 'Verknüpfung nach der Deinstallation noch vorhanden' }
           'Installieren und Deinstallieren: ok'
 
+      - name: Setup-Oberfläche (Bildschirmfotos)
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $p = Start-Process "release\HELIX-Setup-$v.exe" -PassThru
+          Start-Sleep -Seconds 3
+          pwsh -File scripts/ci-shot.ps1 -Name setup-intro
+          Start-Sleep -Seconds 8
+          pwsh -File scripts/ci-shot.ps1 -Name setup-willkommen
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+
       - name: End-to-end test (Profile speichern/anwenden, alle Tools öffnen)
         shell: pwsh
         env:
@@ -154,6 +165,29 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  bilder:
+    # macht die Bildschirmfotos im Protokoll sichtbar (für die Kontrolle ohne Artefakt-Download)
+    if: always()
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: HELIX-Bildschirmfotos
+          path: shots
+      - name: Bilder ausgeben
+        run: |
+          shopt -s nullglob globstar
+          for f in shots/**/*.png; do
+            n=$(basename "$f" .png)
+            convert "$f" -resize 560x -quality 62 "/tmp/$n.jpg"
+            echo "===SHOT $n BEGIN==="
+            base64 -w 160 "/tmp/$n.jpg"
+            echo "===SHOT $n END==="
+          done
 
   release:
     if: startsWith(github.ref, 'refs/tags/helix-v')

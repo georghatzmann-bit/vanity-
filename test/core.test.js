@@ -321,6 +321,22 @@ test('Cloud-Wächter: erkennt, wenn Fortnite nach dem Anwenden Dateien ändert',
   assert.equal((await c.checkDrift()).status, 'ok');
 });
 
+test('Cloud-Wächter: Zeitstempel beim Beenden sind keine Änderung, echte Einstellungen schon', async () => {
+  const fx = makeLocalAppData();
+  const c = core({ LOCALAPPDATA: fx.local });
+  await c.init();
+  const p = await c.createProfile({ name: 'Main' });
+  await c.applyProfile(p.id);
+  const gusPath = path.join(fx.wc, 'GameUserSettings.ini');
+  // so schreibt Fortnite beim Beenden: Zusatzwerte, Zeitstempel, 240 statt 240.000000
+  fs.writeFileSync(gusPath, fs.readFileSync(gusPath, 'utf8').replace('FrameRateLimit=240.000000', 'FrameRateLimit=240').replace('[ScalabilityGroups]', 'LastTimeSettingsSnapshotUploaded=2026.10.18-12.00.00\r\nLastGPUBenchmarkResult=123.4\r\n\r\n[ScalabilityGroups]'));
+  assert.equal((await c.checkDrift()).status, 'ok');
+  fs.writeFileSync(gusPath, fs.readFileSync(gusPath, 'utf8').replace('FrameRateLimit=240', 'FrameRateLimit=60.000000'));
+  const d = await c.checkDrift();
+  assert.equal(d.status, 'drift');
+  assert.deepEqual(d.changed[0].settings, [{ section: '/Script/FortniteGame.FortGameUserSettings', key: 'FrameRateLimit', from: '240.000000', to: '60.000000' }]);
+});
+
 test('Tools-Schnittstelle: INI-Werte ändern mit Backup, Schreibschutz bleibt', async () => {
   const fx = makeLocalAppData();
   const c = core({ LOCALAPPDATA: fx.local });

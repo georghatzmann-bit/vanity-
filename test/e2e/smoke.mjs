@@ -66,7 +66,8 @@ async function saveProfile(name) {
 
 await saveProfile('Main');
 // Zweitaccount: andere Grafik, andere Tasten, kein Engine.ini
-fs.writeFileSync(path.join(fx.wc, 'GameUserSettings.ini'), GUS_MAIN.replace('ResolutionSizeX=1920', 'ResolutionSizeX=1280').replace('FrameRateLimit=240.000000', 'FrameRateLimit=60.000000'));
+// (das Zweitkonto ist gerade eingeloggt: eigener Login-Abschnitt in der Datei)
+fs.writeFileSync(path.join(fx.wc, 'GameUserSettings.ini'), GUS_MAIN.replace('ResolutionSizeX=1920', 'ResolutionSizeX=1280').replace('FrameRateLimit=240.000000', 'FrameRateLimit=60.000000') + '\r\n[RememberMe]\r\nEnable=True\r\nData=ZWEITLOGIN\r\n');
 fs.writeFileSync(fx.cs, 'ZWEIT-KEYS');
 fs.rmSync(path.join(fx.wc, 'Engine.ini'));
 await saveProfile('Zweitaccount');
@@ -83,7 +84,8 @@ await win.waitForSelector('.modal h2:has-text("wurde angewendet")', { timeout: 2
 await shot('anwenden-ergebnis');
 const gus = fs.readFileSync(path.join(fx.wc, 'GameUserSettings.ini'), 'utf8');
 check(/ResolutionSizeX=1920/.test(gus) && /FrameRateLimit=240/.test(gus), 'GameUserSettings.ini wurde nicht auf "Main" gesetzt');
-check(/RememberMe/.test(gus), 'Login-Abschnitt des Zielkontos muss erhalten bleiben');
+check(/Data=ZWEITLOGIN/.test(gus), 'Login-Abschnitt des gerade eingeloggten Kontos muss erhalten bleiben');
+check(!/A{200}/.test(gus), 'Login-Daten aus dem Profil dürfen nie zurückgeschrieben werden');
 check(fs.existsSync(path.join(fx.wc, 'Engine.ini')), 'Engine.ini aus dem Profil fehlt');
 check(fs.readFileSync(fx.cs).subarray(8).toString() === 'MAIN-KEYS', 'ClientSettings.Sav wurde nicht zurückgelegt');
 await win.click('.modal .btn.primary:has-text("Fertig")');
