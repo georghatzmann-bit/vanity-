@@ -7,37 +7,37 @@ export const PATTERNS = [
   {
     id: 'schwarz',
     name: 'Schwarzwert',
-    instruction: 'Du solltest ab Stufe 3–4 etwas sehen. Erkennst du erst ab Stufe 8 etwas, gehen dunkle Ecken im Spiel unter.',
+    instruction: 'Ab Stufe 3–4 solltest du etwas sehen. Erst ab Stufe 8? Dann ist es zu dunkel.',
   },
   {
     id: 'weiss',
     name: 'Weißwert',
-    instruction: 'Du solltest die Felder bis etwa Stufe 250–253 unterscheiden. Verschwinden sie früher, ist der Kontrast am Monitor zu hoch.',
+    instruction: 'Die Felder sollten bis etwa 250–253 sichtbar sein. Sonst ist der Kontrast zu hoch.',
   },
   {
     id: 'gamma',
     name: 'Gamma',
-    instruction: 'Kneif die Augen leicht zu oder geh einen Schritt zurück. Bei welchem Feld verschmilzt die Mitte mit den Streifen? Ideal ist 2,2.',
+    instruction: 'Augen leicht zukneifen: Wo verschmilzt die Mitte mit den Streifen? Ideal ist 2,2.',
   },
   {
     id: 'verlauf',
     name: 'Kontrast-Verlauf',
-    instruction: 'Alle 32 Stufen sollten sich unterscheiden. Im glatten Verlauf darunter sollten keine harten Streifen sein.',
+    instruction: 'Alle 32 Stufen sollten sich unterscheiden, der Verlauf ohne harte Streifen.',
   },
   {
     id: 'farben',
     name: 'Farbbalken',
-    instruction: 'Die Farben sollten kräftig, aber nicht grell sein. Die Graustufen unten sollten keinen Farbstich haben.',
+    instruction: 'Farben kräftig, aber nicht grell. Graustufen ohne Farbstich.',
   },
   {
     id: 'sturm',
     name: 'Sturm-Test',
-    instruction: 'Wie viele Figuren erkennst du im lila Sturm? Zähle in Ruhe und gib die Zahl unten ein.',
+    instruction: 'Wie viele Figuren erkennst du im lila Sturm? Zähle in Ruhe.',
   },
   {
     id: 'ausleuchtung',
     name: 'Ausleuchtung',
-    instruction: 'Die Fläche sollte überall gleich hell sein. Leicht hellere Ränder (Lichthöfe) sind bei vielen Monitoren normal.',
+    instruction: 'Die Fläche sollte überall gleich hell sein. Leicht hellere Ränder sind normal.',
     variants: [
       { id: 'schwarz', label: 'Schwarz', level: 0 },
       { id: 'dunkel', label: 'Dunkelgrau', level: 40 },
@@ -184,12 +184,12 @@ export function rateStorm(seen, total) {
   const s = Math.round(Number(seen));
   if (!Number.isFinite(s) || s < 0 || !total) return null;
   if (s > total) {
-    return { level: 'warn', label: 'zu viele', text: `Es sind nur ${total} Figuren im Bild. Zähle noch einmal genau oder lass dir die Lösung zeigen.` };
+    return { level: 'warn', label: 'zu viele', text: `Es sind nur ${total} Figuren im Bild. Zähle noch einmal.` };
   }
   const q = s / total;
-  if (q >= 0.85) return { level: 'ok', label: 'sehr gut', text: `${s} von ${total} erkannt. Dein Bild zeigt dunkle Gegner im Sturm gut.` };
-  if (q >= 0.6) return { level: 'warn', label: 'geht so', text: `${s} von ${total} erkannt. Die dunkelsten Figuren gehen unter. Schwarz-Stabilisator eine Stufe höher oder Fortnite-Helligkeit auf 110–120 % probieren.` };
-  return { level: 'err', label: 'zu dunkel', text: `${s} von ${total} erkannt. Viele Gegner würden im Sturm untergehen. Geh die Schritte 1 bis 3 noch einmal durch.` };
+  if (q >= 0.85) return { level: 'ok', label: 'sehr gut', text: `${s} von ${total} erkannt. Dunkle Gegner im Sturm siehst du gut.` };
+  if (q >= 0.6) return { level: 'warn', label: 'geht so', text: `${s} von ${total} erkannt. Schwarz-Stabilisator eine Stufe höher oder Fortnite-Helligkeit 110–120 %.` };
+  return { level: 'err', label: 'zu dunkel', text: `${s} von ${total} erkannt. Geh die Schritte 1 bis 3 noch einmal durch.` };
 }
 
 // ---------- Zeichnen ----------

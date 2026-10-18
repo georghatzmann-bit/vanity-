@@ -479,6 +479,7 @@ function fakeUi() {
     toast: (msg, type = 'ok') => { toasts.push({ msg, type }); },
     showError: (e, title) => { toasts.push({ msg: `${title || 'Fehler'}: ${e.message}`, type: 'err' }); },
     badge: (t) => h('span.badge', t),
+    more: (summary, ...c) => h('details.more', h('summary', summary), c.map((x) => (typeof x === 'string' ? h('p', x) : x))),
     fmtAgo: () => 'gerade eben',
     fmtDate: () => 'heute',
   };

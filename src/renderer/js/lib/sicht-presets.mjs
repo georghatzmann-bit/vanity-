@@ -165,9 +165,9 @@ export const PRESETS = [
     id: 'sturm',
     name: 'Sturm',
     short: 'Sturm',
-    wofuer: 'Für das Ende der Runde: Im lila Sturm siehst du Gegner und Bauteile besser.',
+    wofuer: 'Im lila Sturm siehst du Gegner und Bauteile besser.',
     values: { brightness: 115, uiContrast: 1.2, shadows: 0, postProcess: 0, effects: 0, motionBlur: false },
-    why: 'Etwas mehr Helligkeit hebt den dunklen Sturm an. Weniger Nachbearbeitung und Effekte nehmen Dunst und Leuchten aus dem Bild. Der höhere Anzeige-Kontrast hält Leben und Munition auf Lila gut lesbar.',
+    why: 'Heller, ohne Dunst und Leuchten – und Leben und Munition bleiben auf Lila gut lesbar.',
     inGame: [
       {
         title: 'Farbenblind-Modus: Tritanopie, Stärke 5 bis 7',
@@ -180,9 +180,9 @@ export const PRESETS = [
     id: 'nacht',
     name: 'Nacht / Dunkle Gebiete',
     short: 'Nacht',
-    wofuer: 'Für Nacht-Runden, Höhlen und Häuser: Dunkle Ecken werden sichtbar.',
+    wofuer: 'Nacht, Höhlen und Häuser: dunkle Ecken werden sichtbar.',
     values: { brightness: 130, uiContrast: 1.1, shadows: 0, postProcess: 0, motionBlur: false },
-    why: 'Mehr Helligkeit macht dunkle Stellen sichtbar. Ohne Schatten verstecken sich Gegner nicht mehr in schwarzen Ecken. Noch heller (über 140 %) wirkt das Bild schnell grau und flau.',
+    why: 'Mehr Helligkeit und keine Schatten: Gegner verstecken sich nicht mehr in schwarzen Ecken.',
     inGame: [
       {
         title: 'Farbenblind-Modus so lassen',
@@ -195,9 +195,9 @@ export const PRESETS = [
     id: 'hell',
     name: 'Helle Karte',
     short: 'Helle Karte',
-    wofuer: 'Für Tag, Schnee und Wüste: weniger Blenden, klarere Umrisse.',
+    wofuer: 'Tag, Schnee und Wüste: weniger Blenden, klarere Umrisse.',
     values: { brightness: 90, uiContrast: 1.3, postProcess: 0, effects: 0, motionBlur: false },
-    why: 'Etwas weniger Helligkeit verhindert, dass helle Flächen ausbleichen. Ohne Nachbearbeitung gibt es weniger Leuchten und Blenden. Der höhere Anzeige-Kontrast hält Texte auf hellem Hintergrund lesbar.',
+    why: 'Etwas dunkler und ohne Leuchten: helle Flächen bleichen nicht aus, Texte bleiben lesbar.',
     inGame: [
       {
         title: 'Farbenblind-Modus aus oder schwach (Stärke 1 bis 3)',
@@ -210,9 +210,9 @@ export const PRESETS = [
     id: 'turnier',
     name: 'Turnier-Klarheit',
     short: 'Turnier-Klarheit',
-    wofuer: 'Für Turniere und Arena: möglichst ruhiges, klares Bild ohne Ablenkung.',
+    wofuer: 'Turnier und Arena: ruhiges, klares Bild ohne Ablenkung.',
     values: { brightness: 110, uiContrast: 1, shadows: 0, postProcess: 0, effects: 0, foliage: 0, grass: false, motionBlur: false },
-    why: 'Alles, was das Bild unruhig macht, ist aus: Schatten, Dunst, Effekte, Gras und Unschärfe. Die Helligkeit ist leicht angehoben, damit dunkle Stellen nicht absaufen.',
+    why: 'Schatten, Dunst, Effekte, Gras und Unschärfe sind aus. Etwas heller, damit dunkle Stellen sichtbar bleiben.',
     inGame: [
       {
         title: 'HUD-Größe nicht über 100 %',
@@ -230,10 +230,10 @@ export const PRESETS = [
     id: 'standard',
     name: 'Standard zurück',
     short: 'Standard',
-    wofuer: 'Setzt Helligkeit und Anzeige-Kontrast auf Fortnite-Standard. Die Grafikwerte kommen zurück, wie sie vor dem ersten Sicht-Preset waren.',
+    wofuer: 'Helligkeit und Anzeige-Kontrast zurück auf Fortnite-Standard.',
     values: { brightness: 100, uiContrast: 1 },
     restoreOriginal: true,
-    why: '100 % Helligkeit und Kontrast 1,00 sind die Werte, mit denen Fortnite startet.',
+    why: 'Helligkeit 100 % und Kontrast 1,00 – so startet Fortnite.',
     inGame: [
       {
         title: 'Farbenblind-Modus wieder auf „Aus“',

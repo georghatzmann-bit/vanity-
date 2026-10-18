@@ -25,7 +25,7 @@ export default {
     async function openSettings(uri) {
       try {
         await env.call('app.openWindowsSettings', { uri });
-        ui.toast('Die Windows-Einstellungen sind geöffnet.', 'info');
+        ui.toast('Windows-Einstellungen geöffnet.', 'info');
       } catch (e) { ui.showError(e, 'Windows-Einstellungen'); }
     }
 
@@ -56,13 +56,13 @@ export default {
     async function fixAll() {
       const ids = result?.safeFixes || [];
       const list = result.items.filter((i) => ids.includes(i.id));
-      if (!list.length) { ui.toast('Es gibt nichts, was HELIX sicher selbst ändern kann.', 'info'); return; }
+      if (!list.length) { ui.toast('Nichts, was HELIX sicher selbst ändern kann.', 'info'); return; }
       const r = await ui.modal({
         title: 'Alles Empfohlene anwenden?',
         subtitle: 'Nur Einstellungen deines Benutzerkontos. Alles lässt sich einzeln rückgängig machen.',
         content: [
           h('ul.list.compact', list.map((i) => h('li', icon('check', 16), h('div.grow', h('strong', `${i.title}: ${i.fix.label}`), i.fix.note ? h('span.hint', i.fix.note) : null)))),
-          h('p.hint', 'Wirkt ab dem nächsten Fortnite-Start. Andere Punkte (z. B. Energieplan oder Speicherplatz) änderst du selbst über den Knopf daneben.'),
+          h('p.hint', 'Wirkt ab dem nächsten Fortnite-Start.'),
         ],
         actions: [{ label: 'Abbrechen', value: null }, { label: 'Anwenden', value: 'go', variant: 'primary', icon: 'check' }],
       });
@@ -71,7 +71,7 @@ export default {
         const res = await env.call('wincheck.fixAll');
         if (!alive) return;
         const n = res.applied.length;
-        if (n) ui.toast(n === 1 ? '1 Einstellung geändert. Wirkt ab dem nächsten Fortnite-Start.' : `${n} Einstellungen geändert. Wirkt ab dem nächsten Fortnite-Start.`);
+        if (n) ui.toast(`${n === 1 ? '1 Einstellung' : `${n} Einstellungen`} geändert – wirkt ab dem nächsten Fortnite-Start.`);
         else if (!res.failed.length) ui.toast('Alles war schon richtig eingestellt.', 'info');
         if (res.failed.length) ui.toast(`Nicht geklappt: ${res.failed.map((f) => f.message).join(' ')}`, 'warn', { timeout: 7000 });
         show(res.result);
@@ -85,14 +85,12 @@ export default {
       return h(`div.callout.wc-summary.${open ? 'warn' : 'ok'}`, icon(open ? 'warn' : 'check'), h('div.grow',
         h('strong', r.summary.text),
         h('p.hint', open
-          ? (safe
-            ? `${safe === 1 ? 'Einen Punkt' : `${safe} Punkte`} kann HELIX sicher für dich ändern. Den Rest erklärt HELIX dir unten.`
-            : 'HELIX erklärt dir unten, was du in Windows ändern kannst.')
+          ? (safe ? `${safe === 1 ? 'Einen Punkt' : `${safe} Punkte`} kann HELIX sicher für dich ändern.` : 'Unten steht, was du in Windows ändern kannst.')
           : 'Windows ist fürs Spielen gut eingestellt.'),
-        h('p.hint', `Geprüft ${ui.fmtAgo(r.at)}${r.system ? ` · ${r.system.label}` : ''}. HELIX ändert nur Einstellungen deines Benutzerkontos und den Energieplan.`),
         h('div.row',
           safe ? ui.button('Alles Empfohlene anwenden', { variant: 'primary', iconName: 'sparkle', onClick: fixAll }) : null,
-          ui.button('Neu prüfen', { iconName: 'refresh', onClick: async () => { await load(); if (alive && result) ui.toast('Neu geprüft.', 'info'); } }))));
+          ui.button('Neu prüfen', { iconName: 'refresh', onClick: async () => { await load(); if (alive && result) ui.toast('Neu geprüft.', 'info'); } }),
+          h('span.hint.wc-when', `Geprüft ${ui.fmtAgo(r.at)}`))));
     }
 
     function itemRow(it) {
@@ -113,7 +111,7 @@ export default {
           h('div.wc-title-row', h('strong', it.title), it.value ? h('span.wc-value', it.value) : null),
           h('p.hint', it.text),
           it.note ? h('p.hint.wc-note', icon('info', 14), h('span', it.note)) : null,
-          it.undo ? h('p.hint.wc-undo', icon('clock', 14), h('span', `${it.undo.label} ${ui.fmtAgo(it.undo.at)}. „Rückgängig“ stellt den alten Zustand wieder her.`)) : null),
+          it.undo ? h('p.hint.wc-undo', icon('clock', 14), h('span', `${it.undo.label} · ${ui.fmtAgo(it.undo.at)}`)) : null),
         h('div.wc-actions', actions));
     }
 
@@ -127,13 +125,17 @@ export default {
         return ui.section(g.title, g.hint, h('ul.wc-list', items.map(itemRow)));
       });
       ui.mount(body, groups,
-        h('p.hint.wc-foot', icon('shield', 14), h('span', 'HELIX braucht keine Administrator-Rechte und fasst weder Fortnite noch den Anti-Cheat an. Was nur mit Administrator-Rechten geht, öffnet HELIX dir in den Windows-Einstellungen.')));
+        h('div.wc-foot',
+          h('p.hint.wc-foot-line', icon('shield', 14), h('span', 'HELIX ändert nur Benutzer-Einstellungen und den Energieplan.')),
+          ui.more('So funktioniert es',
+            'Keine Administrator-Rechte nötig. Fortnite und der Anti-Cheat bleiben unberührt.',
+            'Was nur mit Administrator-Rechten geht, öffnet HELIX dir in den Windows-Einstellungen. Jede Änderung lässt sich mit „Rückgängig“ zurücknehmen.')));
     }
 
     async function load() {
       if (!result) {
         ui.clear(top);
-        ui.mount(body, h('div.loading', h('div.wc-loading', ui.spinner(), h('span.hint', 'HELIX prüft deine Windows-Einstellungen …'))));
+        ui.mount(body, h('div.loading', h('div.wc-loading', ui.spinner(), h('span.hint', 'HELIX prüft Windows …'))));
       }
       let r;
       try {
@@ -151,12 +153,10 @@ export default {
       if (!alive) return;
       if (r.unsupported) {
         result = null;
-        ui.mount(top, h('div.callout.info', icon('info'), h('div',
-          h('strong', 'Nur unter Windows'),
-          h('p.hint', r.message))));
+        ui.clear(top);
         ui.mount(body, ui.emptyState({
-          title: 'Hier gibt es nichts zu prüfen',
-          text: 'Öffne HELIX auf deinem Windows-PC. Dann prüft der Check Spielmodus, Aufnahme im Hintergrund, GPU-Planung, Energieplan und Speicherplatz.',
+          title: 'Nur unter Windows',
+          text: 'Öffne HELIX auf deinem Windows-PC, dann prüft der Check deine Einstellungen.',
         }));
         return;
       }

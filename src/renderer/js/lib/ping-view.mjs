@@ -29,8 +29,8 @@ export function quality(ms) {
  * r.tcp kommt aus der Server-Liste (gibt es ein TCP-Ziel?), r.method aus der Messung.
  */
 export function noValueInfo(r) {
-  if (r?.noFallback) return { label: 'nur mit Ping messbar', type: '', text: 'Für diesen Standort gibt es kein TCP-Ziel – er lässt sich nur mit Ping messen.' };
-  if (r?.method === 'icmp' && r.tcp === false) return { label: 'keine Antwort', type: 'err', text: 'Der Ping kam nicht zurück. Für diesen Standort gibt es keinen Ersatz über TCP.' };
+  if (r?.noFallback) return { label: 'nur mit Ping messbar', type: '', text: 'Für diesen Standort gibt es kein TCP-Ziel.' };
+  if (r?.method === 'icmp' && r.tcp === false) return { label: 'keine Antwort', type: 'err', text: 'Der Ping kam nicht zurück, ein TCP-Ersatz fehlt.' };
   return { label: 'keine Antwort', type: 'err', text: 'Der Server hat auf keine Anfrage geantwortet.' };
 }
 
@@ -113,7 +113,7 @@ export function recommendation(catalog, results, best) {
   if (group.id === 'NA') {
     const west = bestOf(results, ['ncal', 'or']);
     const central = bestOf(results, ['tx']); // NA-Central = nur Texas (Dallas); Iowa gehört nicht dazu
-    competitive = 'Turniere (Competitive) laufen in Nordamerika weiter nur über NA-West und NA-Central – dort gibt es keine Unterregion.';
+    competitive = 'Turniere (Competitive) in Nordamerika laufen nur über NA-West und NA-Central.';
     if (west && central) {
       const pick = west.medianMs < central.medianMs ? `NA-West (${west.name}: ${fmtMs(west.medianMs)})` : `NA-Central (${central.name}: ${fmtMs(central.medianMs)})`;
       competitive += ` Für dich ist dort ${pick} besser.`;
@@ -130,7 +130,7 @@ export function recommendation(catalog, results, best) {
     text,
     competitive,
     alt,
-    auto: 'Steht die Region auf „Automatisch“, wählt Fortnite meist schon richtig. Eine feste Wahl hilft, wenn du oft auf weit entfernten Servern landest.',
+    auto: 'Bei „Automatisch“ wählt Fortnite meist schon richtig. Eine feste Wahl hilft, wenn du oft auf fernen Servern landest.',
   };
 }
 

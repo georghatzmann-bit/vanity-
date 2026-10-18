@@ -243,12 +243,10 @@ export function createArena({ h, session, dpi, onFinish, onAbort, onMode, sound 
     if (kind === 'start') {
       ovTitle.textContent = 'Klicke zum Starten – Esc zum Abbrechen';
       overlay.setAttribute('aria-label', 'Klicke zum Starten');
-      lines.push('Die Maus wird eingefangen, solange der Test läuft. Du siehst dann keinen Mauszeiger.');
-      lines.push(`Ablauf: kurz aufwärmen, dann ${v.blockCount} Durchgänge mit je Flicks, Tracking und bewegten Zielen.`);
+      lines.push(`Kurz aufwärmen, dann ${v.blockCount} Durchgänge. Der Mauszeiger ist dabei weg.`);
       lines.push(session.plan.mode === 'dpi'
         ? 'Zwischendurch bittet dich HELIX, die DPI an der Maus umzustellen.'
-        : 'In jedem Durchgang ist die Sensi etwas anders. Welche, siehst du erst am Ende.');
-      lines.push('Mit Esc pausierst du jederzeit.');
+        : 'Jeder Durchgang hat eine andere Sensi. Welche, siehst du am Ende.');
     } else if (kind === 'paused') {
       ovTitle.textContent = 'Pause';
       overlay.setAttribute('aria-label', 'Klicke zum Weitermachen');
@@ -257,8 +255,7 @@ export function createArena({ h, session, dpi, onFinish, onAbort, onMode, sound 
     } else if (kind === 'switch') {
       ovTitle.textContent = `Stell deine Maus jetzt auf ${v.switchDpi} DPI um`;
       overlay.setAttribute('aria-label', 'Klicke, wenn du die DPI umgestellt hast');
-      lines.push('Meist geht das mit der DPI-Taste unter dem Mausrad oder in der Software deiner Maus.');
-      lines.push('HELIX passt die Sensi selbst an, damit eine Drehung gleich weit bleibt.');
+      lines.push('Mit der DPI-Taste unter dem Mausrad oder in der Maus-Software. Die Sensi passt HELIX an.');
       lines.push('Klicke hier, wenn du fertig bist – Esc zum Abbrechen.');
     }
     ovText.replaceChildren(...lines.map((t) => h('p', t)));

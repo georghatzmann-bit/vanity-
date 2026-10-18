@@ -255,19 +255,19 @@ export function evaluateKeys(results) {
 
 export function rateKeys({ avgMs, accuracy }) {
   if (!Number.isFinite(accuracy)) return { label: '–', text: '', tone: '' };
-  if (accuracy < 80) return { label: 'Genauigkeit üben', text: 'Lieber etwas langsamer und dafür die richtige Taste. Tempo kommt von allein.', tone: 'warn' };
+  if (accuracy < 80) return { label: 'Genauigkeit üben', text: 'Lieber langsamer, dafür die richtige Taste.', tone: 'warn' };
   if (!Number.isFinite(avgMs)) return { label: '–', text: '', tone: '' };
   if (avgMs < 380 && accuracy >= 95) return { label: 'Sehr gut', text: 'Deine Finger wissen, wo die Tasten sind.', tone: 'ok' };
   if (avgMs < 500) return { label: 'Gut', text: 'Solide. Mit Übung wird es noch schneller.', tone: 'ok' };
-  if (avgMs < 650) return { label: 'Okay', text: 'Übe die langsamste Taste extra – das bringt am meisten.', tone: 'accent' };
+  if (avgMs < 650) return { label: 'Okay', text: 'Übe die langsamste Taste extra.', tone: 'accent' };
   return { label: 'Weiter üben', text: 'Jeden Tag ein paar Runden helfen schon viel.', tone: 'warn' };
 }
 
 /** Tipp nach dem Training (oder null). */
 export function keysTip(ev) {
   if (!ev) return null;
-  if (ev.weakest && ev.weakest.misses >= 2) return `Am häufigsten daneben: ${ev.weakest.label} (${ev.weakest.misses}-mal). Schau dir die Taste vor der nächsten Runde noch einmal an.`;
-  if (ev.slowest) return `Am langsamsten: ${ev.slowest.label} (Ø ${ev.slowest.avgMs} ms). Diese Taste lohnt sich zum Üben.`;
+  if (ev.weakest && ev.weakest.misses >= 2) return `Am häufigsten daneben: ${ev.weakest.label} (${ev.weakest.misses}-mal).`;
+  if (ev.slowest) return `Am langsamsten: ${ev.slowest.label} (Ø ${ev.slowest.avgMs} ms).`;
   return null;
 }
 

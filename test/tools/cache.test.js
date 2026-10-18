@@ -397,6 +397,6 @@ test('Cache-Ansicht: Texte für Dateien und Ergebnis', async () => {
   assert.match(sel.filesText(1843), /^1\.?843 Dateien$/);
   assert.equal(sel.resultText({ deleted: 0, skipped: 0, freedBytes: 0 }, fmt), 'Es war nichts zu löschen.');
   assert.equal(sel.resultText({ deleted: 10, skipped: 0, freedBytes: 2.1 * 1024 ** 3 }, fmt), '2,1 GB frei geworden.');
-  assert.equal(sel.resultText({ deleted: 10, skipped: 1, freedBytes: 1024 }, fmt), '1 KB frei geworden. 1 Datei war gerade in Benutzung und wurde übersprungen.');
-  assert.match(sel.resultText({ deleted: 10, skipped: 3, freedBytes: 1024 }, fmt), /3 Dateien waren gerade in Benutzung/);
+  assert.equal(sel.resultText({ deleted: 10, skipped: 1, freedBytes: 1024 }, fmt), '1 KB frei geworden, 1 Datei übersprungen (gerade in Benutzung).');
+  assert.match(sel.resultText({ deleted: 10, skipped: 3, freedBytes: 1024 }, fmt), /3 Dateien übersprungen \(gerade in Benutzung\)/);
 });

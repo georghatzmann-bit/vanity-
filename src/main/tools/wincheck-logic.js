@@ -36,9 +36,9 @@ const GUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const GB = 1024 ** 3;
 
 const GROUPS = [
-  { id: 'leistung', title: 'Leistung beim Spielen', hint: 'Diese Einstellungen wirken direkt auf FPS und Ruckler.' },
-  { id: 'system', title: 'System', hint: 'Genug Platz für Updates und eine aktuelle Windows-Version.' },
-  { id: 'ruhe', title: 'Ruhe und Komfort', hint: 'Weniger Ablenkung beim Spielen und eine gleichmäßige Maus.' },
+  { id: 'leistung', title: 'Leistung beim Spielen', hint: 'Wirkt direkt auf FPS und Ruckler.' },
+  { id: 'system', title: 'System', hint: 'Speicherplatz und Windows-Version.' },
+  { id: 'ruhe', title: 'Ruhe und Komfort', hint: 'Weniger Ablenkung, gleichmäßige Maus.' },
 ];
 
 const SAFE_FIXES = ['gamemode', 'gamedvr'];
@@ -181,9 +181,9 @@ function item(id, group, title, status, value, text, extra = {}) {
 function evalGameMode(gameBar) {
   const on = effective(gameBar, 'AutoGameModeEnabled') !== 0;
   const links = [settingsLink('ms-settings:gaming-gamemode', 'Windows-Einstellung')];
-  if (on) return item('gamemode', 'leistung', 'Spielmodus', 'good', 'An', 'Windows gibt Fortnite Vorrang und hält Updates und Neustart-Hinweise beim Spielen zurück.', { links });
+  if (on) return item('gamemode', 'leistung', 'Spielmodus', 'good', 'An', 'Windows gibt Fortnite Vorrang und hält Updates beim Spielen zurück.', { links });
   return item('gamemode', 'leistung', 'Spielmodus', 'change', 'Aus',
-    'Ohne Spielmodus können Updates und andere Aufgaben im Hintergrund das Spiel stören. Einschalten wird empfohlen.',
+    'Ohne Spielmodus können Updates im Hintergrund das Spiel stören.',
     { links, fix: { label: 'Einschalten', safe: true } });
 }
 
@@ -194,11 +194,11 @@ function evalGameDvr(gameConfig, gameDvr) {
   const fix = { label: 'Ausschalten', safe: true, note: 'Danach gehen Clips mit der Xbox Game Bar nicht mehr. Mit „Rückgängig“ holst du sie zurück.' };
   if (historical) {
     return item('gamedvr', 'leistung', 'Aufnahme im Hintergrund', 'change', 'Nimmt dauernd auf',
-      'Windows filmt ständig die letzten Minuten mit („Aufzeichnen, was passiert ist“). Das kostet FPS. Ausschalten wird empfohlen.', { links, fix });
+      'Windows filmt ständig die letzten Minuten mit. Das kostet FPS.', { links, fix });
   }
   if (capture) {
     return item('gamedvr', 'leistung', 'Aufnahme im Hintergrund', 'hint', 'Bereit, nimmt nicht auf',
-      'Clips mit der Xbox Game Bar (Win + Alt + R) sind möglich, eine Daueraufnahme läuft nicht. Ausschalten nur, wenn du damit keine Clips machst.', { links, fix });
+      'Clips mit der Xbox Game Bar gehen, eine Daueraufnahme läuft nicht.', { links, fix });
   }
   return item('gamedvr', 'leistung', 'Aufnahme im Hintergrund', 'good', 'Aus', 'Windows nimmt im Hintergrund nichts auf.', { links });
 }
@@ -208,13 +208,13 @@ function evalHags(graphics) {
   const links = [settingsLink('ms-settings:display-advancedgraphics', 'Grafikeinstellungen öffnen')];
   const note = 'HELIX ändert das nicht selbst, weil es Administrator-Rechte braucht.';
   const title = 'Hardwarebeschleunigte GPU-Planung';
-  if (mode === 2) return item('hags', 'leistung', title, 'good', 'An', 'Die Grafikkarte verteilt ihre Arbeit selbst. Das kann Verzögerungen etwas senken.', { links });
+  if (mode === 2) return item('hags', 'leistung', title, 'good', 'An', 'Die Grafikkarte verteilt ihre Arbeit selbst – kann Verzögerung senken.', { links });
   if (mode === 1) {
     return item('hags', 'leistung', title, 'hint', 'Aus',
-      'Bei neueren Grafikkarten kann es helfen, wenn die Grafikkarte ihre Arbeit selbst verteilt. Umschalten geht in den Windows-Einstellungen und braucht einen Neustart.', { links, note });
+      'Kann bei neueren Grafikkarten helfen. Umschalten braucht einen Neustart.', { links, note });
   }
   return item('hags', 'leistung', title, 'hint', 'Nicht festgelegt',
-    'Windows entscheidet selbst – oder deine Grafikkarte kann das nicht. In den Grafikeinstellungen siehst du, ob es den Schalter gibt.', { links, note });
+    'Windows entscheidet selbst – oder deine Grafikkarte kann es nicht.', { links, note });
 }
 
 function evalPower(power, battery) {
@@ -228,20 +228,20 @@ function evalPower(power, battery) {
   const hasHigh = list.some((p) => p.guid === HIGH_PERFORMANCE);
   const confirm = `Windows nutzt dann den Plan „Höchstleistung“. Der Prozessor bleibt immer auf Tempo und braucht mehr Strom.${battery ? ' Am Akku hält der Laptop damit kürzer durch.' : ''} Mit „Rückgängig“ kommt „${info.name}“ zurück.`;
   const fix = hasHigh ? { label: 'Höchstleistung einschalten', safe: false, confirm } : null;
-  const noHigh = hasHigh ? null : 'Den Plan „Höchstleistung“ gibt es auf diesem PC nicht (typisch für neuere Laptops). Stelle stattdessen in den Windows-Einstellungen den Energiemodus auf „Beste Leistung“.';
+  const noHigh = hasHigh ? null : '„Höchstleistung“ gibt es hier nicht. Stell in Windows den Energiemodus auf „Beste Leistung“.';
   if (info.kind === 'high' || info.kind === 'ultimate') {
     return item('power', 'leistung', title, 'good', info.name, 'Der Prozessor darf immer volle Leistung geben.', { links });
   }
   if (info.kind === 'saver') {
     return item('power', 'leistung', title, 'change', info.name,
-      'Der Energiesparmodus bremst den Prozessor – Fortnite läuft dann langsamer. Mindestens „Ausbalanciert“ wird empfohlen.', { links, fix, note: noHigh });
+      'Bremst den Prozessor – Fortnite läuft langsamer.', { links, fix, note: noHigh });
   }
   if (info.kind === 'balanced') {
     return item('power', 'leistung', title, 'hint', info.name,
-      'Für die meisten PCs gut. „Höchstleistung“ hält den Prozessor immer auf Tempo – das kann ein paar FPS bringen, braucht aber mehr Strom.', { links, fix, note: noHigh });
+      'Passt für die meisten PCs. „Höchstleistung“ kann ein paar FPS bringen.', { links, fix, note: noHigh });
   }
   return item('power', 'leistung', title, 'hint', info.name,
-    'Ein eigener Plan, oft vom PC-Hersteller. HELIX kennt ihn nicht genau – meistens passt das.', { links, fix, note: noHigh });
+    'Ein Plan vom PC-Hersteller – meistens passt das.', { links, fix, note: noHigh });
 }
 
 function evalDisk(d) {
@@ -256,9 +256,9 @@ function evalDisk(d) {
   const gb = d.free / GB;
   if (gb < 15) {
     return item(id, 'system', title, 'change', value,
-      'Sehr wenig Platz. Fortnite-Updates können scheitern und Windows wird langsamer. Lösche alte Programme oder leere Zwischenspeicher.', { links });
+      'Sehr wenig Platz: Updates können scheitern. Alte Programme löschen hilft.', { links });
   }
-  if (gb < 40) return item(id, 'system', title, 'hint', value, 'Es wird eng. Für große Fortnite-Updates sind 40 GB oder mehr frei gut.', { links });
+  if (gb < 40) return item(id, 'system', title, 'hint', value, 'Es wird eng. Für Fortnite-Updates sind 40 GB frei gut.', { links });
   return item(id, 'system', title, 'good', value, 'Genug Platz für Updates.', { links });
 }
 
@@ -267,11 +267,11 @@ function evalWindows(win) {
   if (!win) return item('windows', 'system', 'Windows-Version', 'hint', 'Unbekannt', 'Die Windows-Version konnte nicht gelesen werden.', { links });
   if (!win.win11) {
     return item('windows', 'system', 'Windows-Version', 'hint', win.label,
-      'Windows 10 bekommt keine normalen Sicherheits-Updates mehr. Fortnite läuft noch – ein Wechsel auf Windows 11 ist aber sicherer.', { links });
+      'Bekommt keine normalen Sicherheits-Updates mehr. Windows 11 ist sicherer.', { links });
   }
   if (win.build < 26100) {
     return item('windows', 'system', 'Windows-Version', 'hint', win.label,
-      'Eine ältere Windows-11-Version. Windows Update bringt dich auf den neuesten Stand – mit aktuellen Verbesserungen für Spiele und Sicherheit.', { links });
+      'Eine ältere Version. Windows Update bringt dich auf den neuesten Stand.', { links });
   }
   return item('windows', 'system', 'Windows-Version', 'good', win.label, 'Eine aktuelle Windows-11-Version.', { links });
 }
@@ -280,25 +280,25 @@ function evalMouse(mouse) {
   const v = regStr(mouse, 'MouseSpeed');
   const on = v == null ? true : v !== '0';
   const links = [toolLink('maus', 'Zum Maus-Check')];
-  if (!on) return item('mouse', 'ruhe', 'Zeigerbeschleunigung', 'good', 'Aus', 'Die Maus bewegt sich immer gleich weit – gut fürs Muskelgedächtnis.', { links });
+  if (!on) return item('mouse', 'ruhe', 'Zeigerbeschleunigung', 'good', 'Aus', 'Die Maus bewegt sich immer gleich weit.', { links });
   return item('mouse', 'ruhe', 'Zeigerbeschleunigung', 'hint', 'An',
-    'Zeigerbeschleunigung (schnelle Bewegungen schieben den Zeiger weiter) wirkt vor allem im Menü und auf dem Desktop. Beim Zielen liest Fortnite die Maus direkt. Ausschalten kannst du im Maus-Check.', { links });
+    'Schnelle Bewegungen schieben den Zeiger weiter – nur im Menü, nicht beim Zielen.', { links });
 }
 
 function tipNotifications(win11) {
   if (win11 === false) {
     return item('notifications', 'ruhe', 'Fokus-Assistent beim Spielen', 'tip', null,
-      'Der Fokus-Assistent blendet Meldungen aus. Unter „Automatische Regeln“ die Regel „Wenn ich ein Spiel spiele“ einschalten.',
+      'Unter „Automatische Regeln“ die Regel „Wenn ich ein Spiel spiele“ einschalten.',
       { links: [settingsLink('ms-settings:quiethours', 'Fokus-Assistent öffnen')] });
   }
   return item('notifications', 'ruhe', 'Nicht stören beim Spielen', 'tip', null,
-    '„Nicht stören“ blendet Meldungen aus. Unter „Benachrichtigungen“ kannst du es beim Spielen automatisch einschalten lassen.',
+    'Kann Meldungen automatisch ausblenden, solange ein Spiel läuft.',
     { links: [settingsLink('ms-settings:notifications', 'Benachrichtigungen öffnen')] });
 }
 
 function tipVisualEffects(win11) {
   return item('visual', 'ruhe', 'Visuelle Effekte', 'tip', null,
-    'Durchsichtige Fenster und Animationen kosten auf schwachen PCs etwas Leistung. Ausschalten macht Windows schlichter – in Fortnite selbst ändert sich kaum etwas.',
+    'Kosten auf schwachen PCs etwas Leistung – in Fortnite kaum spürbar.',
     { links: [settingsLink(win11 === false ? 'ms-settings:easeofaccess-display' : 'ms-settings:easeofaccess-visualeffects', 'Visuelle Effekte öffnen')] });
 }
 
@@ -388,8 +388,8 @@ function undoWrites(values) {
 }
 
 const FIX_MESSAGES = {
-  gamemode: 'Spielmodus ist an. Er wirkt ab dem nächsten Fortnite-Start.',
-  gamedvr: 'Aufnahme im Hintergrund ist aus. Das wirkt ab dem nächsten Fortnite-Start.',
+  gamemode: 'Spielmodus ist an – wirkt ab dem nächsten Fortnite-Start.',
+  gamedvr: 'Aufnahme im Hintergrund ist aus – wirkt ab dem nächsten Fortnite-Start.',
   power: 'Energieplan „Höchstleistung“ ist jetzt aktiv.',
 };
 const UNDO_MESSAGES = {

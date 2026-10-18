@@ -1,7 +1,7 @@
 // Cache-Cleaner: zeigt, wie viel Platz Shader-, DirectX- und Fortnite-Zwischenspeicher belegen,
 // und löscht die gewählten Bereiche nach einer Bestätigung.
 
-import { defaultSelection, mergeSelection, selectedTotals, grouped, filesText, resultText } from '../lib/cache-select.mjs';
+import { defaultSelection, mergeSelection, selectedTotals, grouped, filesText, resultText, rowHint } from '../lib/cache-select.mjs';
 
 let cleanup = [];
 
@@ -32,9 +32,11 @@ export default {
     const progressLine = h('p.hint.cache-progress', { 'aria-live': 'polite' });
 
     const intro = h('div.callout.info', icon('info'), h('div',
-      h('strong', 'Was wird hier gelöscht?'),
-      h('p.hint', 'Zwischenspeicher (Cache) sind Dateien, die Windows, der Grafiktreiber und Fortnite anlegen, damit später alles schneller lädt. Löschen ist sicher: Sie werden von selbst neu erstellt.'),
-      h('p.hint', 'Wann lohnt es sich? Wenn Fortnite nach einem Treiber- oder Spiel-Update ruckelt oder der Speicherplatz knapp wird. Dauerhaft schneller wird der PC dadurch nicht.')));
+      h('strong', 'Löschen ist sicher'),
+      h('p.hint', 'Windows, Grafiktreiber und Fortnite legen alles von selbst neu an.'),
+      ui.more('Wann lohnt es sich?',
+        'Zwischenspeicher (Cache) sind Dateien, die Windows, der Grafiktreiber und Fortnite anlegen, damit später alles schneller lädt.',
+        'Aufräumen lohnt sich, wenn Fortnite nach einem Treiber- oder Spiel-Update ruckelt oder der Speicherplatz knapp wird. Dauerhaft schneller wird der PC dadurch nicht.')));
 
     const toolbar = h('div.toolbar',
       ui.button('Neu messen', { iconName: 'refresh', onClick: () => load(true) }),
@@ -48,7 +50,7 @@ export default {
       if (!fortniteRunning) return;
       fortniteBox.append(h('div.callout.warn', icon('warn'), h('div.grow',
         h('strong', 'Fortnite läuft gerade'),
-        h('p.hint', 'Solange Fortnite offen ist, benutzt es seine Dateien. Schließe Fortnite, dann kannst du aufräumen.'),
+        h('p.hint', 'Schließe Fortnite, dann kannst du aufräumen.'),
         h('div.row',
           ui.button('Fortnite schließen', {
             small: true, iconName: 'power',
@@ -57,7 +59,7 @@ export default {
               const st = await env.call('core.fortniteStatus').catch(() => ({ running: true }));
               fortniteRunning = !!st.running;
               if (r && !fortniteRunning) ui.toast('Fortnite ist geschlossen.');
-              else if (r) ui.toast('Fortnite hat sich nicht beendet. Bitte schließe es selbst.', 'warn');
+              else if (r) ui.toast('Fortnite hat sich nicht beendet – bitte schließe es selbst.', 'warn');
               renderFortnite(); renderBar();
             },
           }),
@@ -98,8 +100,8 @@ export default {
             empty ? ui.badge('leer', '') : null,
             c.privacy ? ui.badge('Datenschutz-Plus', 'accent') : null,
             c.truncated ? ui.badge('sehr viele Dateien', 'warn') : null),
-          h('p.hint', c.hint),
-          c.privacy ? h('p.hint.cache-privacy', icon('shield', 14), h('span', c.privacy)) : null),
+          h('p.hint', rowHint(c)),
+          c.privacy ? h('p.hint.cache-privacy', icon('shield', 14), h('span', rowHint(c, 'privacy'))) : null),
         h('div.cache-size',
           h('strong', ui.fmtBytes(c.bytes)),
           h('span.hint', c.folders > 1 ? `${filesText(c.count)} · ${c.folders} Ordner` : filesText(c.count))),
@@ -113,13 +115,13 @@ export default {
       if (scan.unsupported) {
         listBox.append(h('div.callout.info', icon('info'), h('div',
           h('strong', 'Nur unter Windows'),
-          h('p.hint', 'Der Cache-Cleaner kennt die Ordner von Windows und den Grafiktreibern. Auf diesem System gibt es sie nicht.'))));
+          h('p.hint', 'Diese Ordner gibt es nur auf einem Windows-PC.'))));
         return;
       }
       if (!scan.categories.length) {
         listBox.append(ui.emptyState({
           title: 'Keine Zwischenspeicher gefunden',
-          text: 'Auf diesem PC liegen gerade keine Shader-, DirectX- oder Fortnite-Zwischenspeicher. Das ist völlig in Ordnung – es gibt nichts aufzuräumen.',
+          text: 'Alles sauber – es gibt nichts aufzuräumen.',
           action: ui.button('Neu messen', { iconName: 'refresh', onClick: () => load(true) }),
         }));
         return;
@@ -148,16 +150,15 @@ export default {
       if (!lastResult) return;
       const r = lastResult;
       const type = r.skipped ? 'warn' : 'ok';
-      resultBox.append(ui.section('Ergebnis', 'So viel ist beim letzten Aufräumen frei geworden.',
+      resultBox.append(ui.section('Ergebnis', null,
         h('div.stat-row',
           h('div.stat', h('span.hint', 'Frei geworden'), h('strong', ui.fmtBytes(r.freedBytes))),
           h('div.stat', h('span.hint', 'Gelöscht'), h('strong', r.deleted.toLocaleString('de-DE')), h('span.hint', r.deleted === 1 ? 'Datei' : 'Dateien')),
           h('div.stat', h('span.hint', 'Übersprungen'), h('strong', r.skipped.toLocaleString('de-DE')), h('span.hint', 'gerade in Benutzung'))),
-        h(`div.callout.${type}`, icon(type === 'ok' ? 'check' : 'warn'), h('div',
-          h('strong', resultText(r, ui.fmtBytes)),
-          h('p.hint', r.skipped
-            ? 'Übersprungene Dateien benutzt gerade ein Programm (zum Beispiel der Grafiktreiber oder ein anderes Spiel). Nach einem Neustart des PCs lassen sie sich meist löschen.'
-            : 'Beim nächsten Start baut Fortnite die Zwischenspeicher neu auf. Das erste Match kann kurz ruckeln – danach läuft es wie gewohnt.')))));
+        h(`div.callout.${type}`, icon(type === 'ok' ? 'check' : 'warn'), h('p',
+          r.skipped ? 'Übersprungenes lässt sich nach einem PC-Neustart meist löschen.'
+            : r.deleted ? 'Fertig. Das erste Match danach kann kurz ruckeln.'
+              : resultText(r, ui.fmtBytes)))));
     }
 
     async function load(manual = false) {
@@ -194,8 +195,7 @@ export default {
         subtitle: 'Diese Zwischenspeicher werden gelöscht:',
         content: [
           h('ul.list.compact', chosen.map((c) => h('li', icon('trash', 16), h('div.grow', h('span', c.label)), h('span.hint', ui.fmtBytes(c.bytes))))),
-          h('p.hint', 'Das lässt sich nicht rückgängig machen. Es sind aber nur Zwischenspeicher – Windows, der Grafiktreiber und Fortnite legen sie von selbst neu an. Das erste Match danach kann kurz ruckeln.'),
-          h('p.hint', 'Dateien, die gerade benutzt werden, lässt HELIX einfach stehen.'),
+          h('p.hint', 'Nicht rückgängig zu machen – sie werden aber von selbst neu angelegt.'),
         ],
         actions: [
           { label: 'Abbrechen', value: false },

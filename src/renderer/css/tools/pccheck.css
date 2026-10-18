@@ -7,13 +7,11 @@
 [data-tool="pccheck"] .pc-verdict {
   display: flex; gap: 24px; align-items: center; flex-wrap: wrap;
   padding: 16px; margin-bottom: 12px; border-radius: 10px;
-  background: var(--accent-soft); border: 1px solid rgba(79, 216, 255, 0.28);
+  background: var(--accent-soft); border: 1px solid var(--accent-line);
 }
-[data-tool="pccheck"] .pc-verdict-main { display: flex; flex-direction: column; gap: 4px; min-width: 200px; }
-[data-tool="pccheck"] .pc-verdict-title { display: flex; align-items: center; gap: 8px; }
+[data-tool="pccheck"] .pc-verdict-title { display: flex; align-items: center; gap: 8px; min-width: 200px; }
 [data-tool="pccheck"] .pc-verdict-title strong { font-family: var(--font-display); font-size: 22px; font-weight: 600; }
 [data-tool="pccheck"] .pc-verdict p { margin: 0 0 4px; }
-[data-tool="pccheck"] .pc-os { margin-top: 12px; }
 
 /* ---------- Hardware-Karten ---------- */
 [data-tool="pccheck"] .pc-hw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
@@ -27,13 +25,14 @@
 [data-tool="pccheck"] .pc-hw-text { margin: 0; font-size: 13px; }
 [data-tool="pccheck"] .pc-meter { display: flex; gap: 4px; }
 [data-tool="pccheck"] .pc-meter span { flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); }
-[data-tool="pccheck"] .pc-meter span.on { background: var(--accent); box-shadow: 0 0 8px rgba(79, 216, 255, 0.35); }
+[data-tool="pccheck"] .pc-meter span.on { background: var(--accent); }
 [data-tool="pccheck"] .pc-tip {
   display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 8px;
   background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); font-size: 12.5px; color: var(--muted);
 }
 [data-tool="pccheck"] .pc-tip > .icon { flex: none; margin-top: 2px; color: var(--accent); }
 [data-tool="pccheck"] .pc-tip-actions { margin-top: 4px; margin-left: -12px; }
+[data-tool="pccheck"] .pc-tip .more { margin-top: 2px; }
 
 /* ---------- Vorschläge ---------- */
 [data-tool="pccheck"] .pc-preset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 12px; }
@@ -41,10 +40,10 @@
   display: flex; flex-direction: column; gap: 8px; padding: 16px; text-align: left; cursor: pointer;
   border-radius: 10px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.025);
   color: var(--text); font: inherit;
-  transition: border-color var(--t), background var(--t), box-shadow var(--t);
+  transition: border-color var(--t), background var(--t);
 }
-[data-tool="pccheck"] .pc-preset:hover { border-color: rgba(255, 255, 255, 0.22); background: var(--glass-2); }
-[data-tool="pccheck"] .pc-preset.selected { border-color: var(--accent); background: rgba(79, 216, 255, 0.07); box-shadow: 0 0 24px rgba(79, 216, 255, 0.14); }
+[data-tool="pccheck"] .pc-preset:hover { border-color: var(--accent-line); background: var(--surface-2); }
+[data-tool="pccheck"] .pc-preset.selected { border-color: var(--accent); background: var(--accent-soft); }
 [data-tool="pccheck"] .pc-preset-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 [data-tool="pccheck"] .pc-preset-head h3 { margin-right: auto; font-size: 16px; }
 [data-tool="pccheck"] .pc-preset-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 4px 0 0; font-size: 13px; }
@@ -54,9 +53,10 @@
 
 /* ---------- FPS-Grenze ---------- */
 [data-tool="pccheck"] .pc-seg-rec { color: var(--accent-2); font-size: 11.5px; }
-[data-tool="pccheck"] .pc-seg-hint { margin: 8px 0 12px; }
-[data-tool="pccheck"] .pc-fps-explain { margin-bottom: 0; }
+[data-tool="pccheck"] .pc-fps-explain { margin: 12px 0 0; }
 [data-tool="pccheck"] .pc-fps-explain p { margin: 0 0 4px; }
+[data-tool="pccheck"] .pc-fps-warn { color: var(--warn); font-size: 13px; }
+[data-tool="pccheck"] .pc-fps-explain .more { margin-top: 8px; }
 [data-tool="pccheck"] .pc-tl { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 [data-tool="pccheck"] .pc-tl-row { display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: center; }
 [data-tool="pccheck"] .pc-tl-label { display: flex; flex-direction: column; font-size: 13px; }
@@ -64,7 +64,6 @@
 [data-tool="pccheck"] .pc-tl-track i { position: absolute; top: 4px; bottom: 4px; width: 2px; margin-left: 4px; border-radius: 1px; }
 [data-tool="pccheck"] .pc-tl-track.monitor i { background: var(--muted); }
 [data-tool="pccheck"] .pc-tl-track.game i { background: var(--accent); }
-[data-tool="pccheck"] .pc-tl-legend { margin-top: 0; }
 
 /* ---------- Vorschau ---------- */
 [data-tool="pccheck"] .pc-diff-bar { margin-bottom: 12px; }
@@ -75,12 +74,16 @@
 [data-tool="pccheck"] .pc-check input:disabled { cursor: default; opacity: 0.4; }
 [data-tool="pccheck"] .pc-name { min-width: 170px; }
 [data-tool="pccheck"] .pc-name > span:first-child { display: block; font-weight: 500; }
-[data-tool="pccheck"] .pc-name .mono { display: block; font-size: 11px; color: var(--faint); word-break: break-all; }
+[data-tool="pccheck"] .pc-keys { font-size: 11px; color: var(--faint); word-break: break-all; }
 [data-tool="pccheck"] .pc-from { color: var(--muted); white-space: nowrap; }
 [data-tool="pccheck"] .pc-to { white-space: nowrap; }
 [data-tool="pccheck"] .pc-to strong { color: var(--accent-2); font-weight: 600; }
 [data-tool="pccheck"] .pc-same { display: block; margin-top: 4px; }
 [data-tool="pccheck"] .pc-why { min-width: 260px; }
+[data-tool="pccheck"] .pc-why .more { margin-top: 0; }
+[data-tool="pccheck"] .pc-why .more > summary { display: block; color: var(--muted); }
+[data-tool="pccheck"] .pc-why .more > summary::before { margin-right: 4px; color: var(--accent-2); }
+[data-tool="pccheck"] .pc-why .more > summary:hover { color: var(--text); }
 [data-tool="pccheck"] .pc-note { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 [data-tool="pccheck"] .pc-table tr.same td { color: var(--faint); }
 [data-tool="pccheck"] .pc-table tr.same .pc-name > span:first-child { color: var(--muted); }
@@ -93,10 +96,9 @@
 [data-tool="pccheck"] .pc-apply {
   position: sticky; bottom: -24px; z-index: 2; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   margin: 16px -16px -16px; padding: 16px; border-top: 1px solid var(--line);
-  border-radius: 0 0 10px 10px; background: rgba(12, 15, 24, 0.94); backdrop-filter: blur(12px);
+  border-radius: 0 0 10px 10px; background: var(--surface);
 }
 [data-tool="pccheck"] .pc-apply strong { display: block; }
-[data-tool="pccheck"] .pc-file { margin-top: 12px; }
 [data-tool="pccheck"] .pc-done { margin-top: 12px; }
 [data-tool="pccheck"] .pc-done-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
 

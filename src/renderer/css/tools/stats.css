@@ -1,9 +1,8 @@
 /* Session-Statistik – alle Regeln beginnen mit [data-tool="stats"]. */
 
-[data-tool="stats"] .stats-top { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
-[data-tool="stats"] .stats-range { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-[data-tool="stats"] .stats-label { font-weight: 500; font-size: 13px; }
-[data-tool="stats"] .stats-export { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 340px; text-align: right; }
+[data-tool="stats"] .stats-top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+[data-tool="stats"] .stats-range { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+[data-tool="stats"] .stats-export { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
 
 /* Kennzahlen */
 [data-tool="stats"] .stats-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -26,7 +25,8 @@
 [data-tool="stats"] .stats-grid > .block { margin: 0; min-width: 0; }
 [data-tool="stats"] .stats-foot { margin-top: 8px; }
 [data-tool="stats"] .stats-none { padding: 16px 0; }
-[data-tool="stats"] .stats-center { text-align: center; margin-top: -24px; padding-bottom: 8px; }
+[data-tool="stats"] .stats-center { display: flex; justify-content: center; margin-top: -24px; padding-bottom: 8px; text-align: center; }
+[data-tool="stats"] .stats-recent + .more { margin-top: 12px; }
 [data-tool="stats"] .stats-live { align-items: center; }
 [data-tool="stats"] .stats-live .icon { margin-top: 0; color: var(--ok); }
 
@@ -57,7 +57,7 @@
 [data-tool="stats"] .stats-tip {
   position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none;
   display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; white-space: nowrap;
-  background: rgba(14, 18, 28, 0.96); border: 1px solid var(--line-2); border-radius: var(--radius-s);
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--radius-s);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); font-size: 12.5px; color: var(--muted);
   transform: translate(-50%, -100%); opacity: 0; transition: opacity 120ms;
 }

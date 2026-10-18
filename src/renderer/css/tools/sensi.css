@@ -1,8 +1,8 @@
 /* Sensi-Kalibrierung – alle Regeln gelten nur in diesem Tool. */
 
 [data-tool="sensi"] .sensi-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-[data-tool="sensi"] .sensi-grid > div > .block:last-child { margin-bottom: 0; }
 [data-tool="sensi"] .sensi-grid .block { margin-bottom: 16px; }
+[data-tool="sensi"] .sensi-grid > .block, [data-tool="sensi"] .sensi-grid .block:last-child { margin-bottom: 0; }
 [data-tool="sensi"] .sensi-werte { grid-template-areas: "form live" "howto live"; grid-template-rows: auto 1fr; }
 [data-tool="sensi"] .sensi-a-form { grid-area: form; }
 [data-tool="sensi"] .sensi-a-live { grid-area: live; }
@@ -16,14 +16,18 @@
 [data-tool="sensi"] .sensi-stats .stat strong { color: var(--accent-2); font-variant-numeric: tabular-nums; }
 [data-tool="sensi"] .sensi-stats .stat .hint { font-size: 12px; }
 [data-tool="sensi"] .sensi-steps { margin: 0 0 8px; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
-[data-tool="sensi"] .sensi-tips { margin: 8px 0 12px; padding-left: 20px; color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; }
+[data-tool="sensi"] .sensi-tips { margin: 8px 0 16px; padding-left: 20px; color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; }
+[data-tool="sensi"] .sensi-form + .row { margin-top: 4px; }
+[data-tool="sensi"] .block > .more { margin-top: 12px; }
+[data-tool="sensi"] .sensi-form + .more { margin-top: 0; }
+[data-tool="sensi"] .more > .table-wrap { color: var(--text); font-size: 13px; }
 
 /* Profi-Skala */
 [data-tool="sensi"] .sensi-scale { position: relative; padding: 24px 0 4px; }
-[data-tool="sensi"] .sensi-scale-track { position: relative; height: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); }
-[data-tool="sensi"] .sensi-scale-band { position: absolute; top: -1px; bottom: -1px; border-radius: 6px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.28); }
-[data-tool="sensi"] .sensi-scale-median { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: rgba(255, 255, 255, 0.7); }
-[data-tool="sensi"] .sensi-scale-you { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px rgba(79, 216, 255, 0.7); border: 2px solid #eafaff; transition: left var(--t); }
+[data-tool="sensi"] .sensi-scale-track { position: relative; height: 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); }
+[data-tool="sensi"] .sensi-scale-band { position: absolute; top: -1px; bottom: -1px; border-radius: 8px; background: var(--accent-soft); border: 1px solid var(--accent-line); }
+[data-tool="sensi"] .sensi-scale-median { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--muted); }
+[data-tool="sensi"] .sensi-scale-you { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--accent); border: 3px solid var(--surface); transition: left var(--t); }
 [data-tool="sensi"] .sensi-scale-you span { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--accent-2); white-space: nowrap; }
 [data-tool="sensi"] .sensi-scale-labels { position: relative; display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--faint); height: 18px; }
 [data-tool="sensi"] .sensi-scale-mid { position: absolute; transform: translateX(-50%); color: var(--muted); white-space: nowrap; }
@@ -33,17 +37,16 @@
 [data-tool="sensi"] .sensi-arena {
   position: relative; width: min(100%, calc((100vh - 300px) * 16 / 9)); min-width: 480px; aspect-ratio: 16 / 9;
   border-radius: 10px; overflow: hidden; border: 1px solid var(--line-2); background: #05070c;
-  box-shadow: 0 0 0 1px rgba(79, 216, 255, 0.06), 0 20px 60px rgba(0, 0, 0, 0.45);
   user-select: none;
 }
 [data-tool="sensi"] .sensi-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
-[data-tool="sensi"] .sensi-progress { position: absolute; left: 0; top: 0; height: 3px; width: 0; background: var(--accent); box-shadow: 0 0 10px rgba(79, 216, 255, 0.6); pointer-events: none; }
-[data-tool="sensi"] .sensi-hud { position: absolute; left: 0; right: 0; top: 3px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; padding: 12px 16px; font-size: 13px; color: var(--text); pointer-events: none; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
+[data-tool="sensi"] .sensi-progress { position: absolute; left: 0; top: 0; height: 3px; width: 0; background: var(--accent); pointer-events: none; }
+[data-tool="sensi"] .sensi-hud { position: absolute; left: 0; right: 0; top: 3px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; padding: 12px 16px; font-size: 13px; color: var(--text); pointer-events: none; }
 [data-tool="sensi"] .sensi-hud-mid { color: var(--accent-2); text-align: center; font-weight: 600; }
 [data-tool="sensi"] .sensi-hud-right { text-align: right; font-variant-numeric: tabular-nums; }
 [data-tool="sensi"] .sensi-banner {
   position: absolute; left: 50%; top: 22%; transform: translate(-50%, -4px); display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 12px 24px; border-radius: 10px; background: rgba(8, 11, 18, 0.72); border: 1px solid rgba(79, 216, 255, 0.25);
+  padding: 12px 24px; border-radius: 10px; background: var(--surface); border: 1px solid var(--accent-line);
   text-align: center; pointer-events: none; opacity: 0; transition: opacity 150ms, transform 150ms; max-width: 80%;
 }
 [data-tool="sensi"] .sensi-banner.show { opacity: 1; transform: translate(-50%, 0); }
@@ -54,11 +57,11 @@
 [data-tool="sensi"] .sensi-overlay:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 10px; }
 [data-tool="sensi"] .sensi-overlay-card {
   max-width: 560px; padding: 24px; border-radius: 10px; text-align: center;
-  background: rgba(12, 16, 26, 0.9); border: 1px solid rgba(79, 216, 255, 0.35); box-shadow: 0 0 40px rgba(79, 216, 255, 0.12);
-  transition: border-color var(--t), box-shadow var(--t);
+  background: var(--surface); border: 1px solid var(--accent-line);
+  transition: border-color var(--t);
 }
-[data-tool="sensi"] .sensi-overlay:hover .sensi-overlay-card { border-color: var(--accent); box-shadow: 0 0 48px rgba(79, 216, 255, 0.22); }
-[data-tool="sensi"] .sensi-overlay-card h2 { font-size: 20px; margin-bottom: 12px; color: #eafaff; }
+[data-tool="sensi"] .sensi-overlay:hover .sensi-overlay-card { border-color: var(--accent); }
+[data-tool="sensi"] .sensi-overlay-card h2 { font-size: 20px; margin-bottom: 12px; color: var(--accent-2); }
 [data-tool="sensi"] .sensi-overlay-text p { color: var(--muted); font-size: 13px; margin: 0 0 4px; }
 [data-tool="sensi"] .sensi-overlay-card .sensi-err { margin-top: 12px; }
 [data-tool="sensi"] .sensi-arena-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px auto 0; max-width: min(100%, calc((100vh - 300px) * 16 / 9)); }
@@ -66,27 +69,27 @@
 [data-tool="sensi"] .sensi-mode-hint:empty { display: none; }
 
 /* Ergebnis */
-[data-tool="sensi"] .sensi-result { display: grid; grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr); gap: 24px; padding: 24px; margin-bottom: 24px; border-color: rgba(79, 216, 255, 0.3); }
+[data-tool="sensi"] .sensi-result { display: grid; grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr); gap: 24px; padding: 24px; margin-bottom: 24px; border-color: var(--accent-line); box-shadow: none; }
 [data-tool="sensi"] .sensi-result-main { display: flex; flex-direction: column; gap: 4px; }
 [data-tool="sensi"] .sensi-result-text p { margin-bottom: 8px; }
 [data-tool="sensi"] .sensi-result-text .row { margin-top: 16px; }
-[data-tool="sensi"] .sensi-big { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1.15; color: #eafaff; text-shadow: 0 0 24px rgba(79, 216, 255, 0.45); font-variant-numeric: tabular-nums; }
+[data-tool="sensi"] .sensi-big { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1.15; color: var(--accent-2); font-variant-numeric: tabular-nums; }
 [data-tool="sensi"] .sensi-bars { display: flex; gap: 12px; align-items: stretch; height: 220px; padding-top: 4px; }
 [data-tool="sensi"] .sensi-bar { flex: 1; min-width: 56px; max-width: 120px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 [data-tool="sensi"] .sensi-bar-value { font-variant-numeric: tabular-nums; font-weight: 600; }
 [data-tool="sensi"] .sensi-bar-track { flex: 1; width: 100%; display: flex; align-items: flex-end; border-radius: 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); overflow: hidden; }
-[data-tool="sensi"] .sensi-bar-fill { width: 100%; background: linear-gradient(180deg, rgba(155, 233, 255, 0.35), rgba(79, 216, 255, 0.12)); border-top: 2px solid rgba(155, 233, 255, 0.5); transition: height var(--t); }
-[data-tool="sensi"] .sensi-bar.best .sensi-bar-fill { background: linear-gradient(180deg, rgba(79, 216, 255, 0.85), rgba(79, 216, 255, 0.3)); border-top-color: #eafaff; box-shadow: 0 0 18px rgba(79, 216, 255, 0.35); }
+[data-tool="sensi"] .sensi-bar-fill { width: 100%; background: var(--accent-soft); border-top: 2px solid var(--accent-line); transition: height var(--t); }
+[data-tool="sensi"] .sensi-bar.best .sensi-bar-fill { background: var(--accent); border-top-color: var(--accent-2); }
 [data-tool="sensi"] .sensi-bar.best .sensi-bar-value, [data-tool="sensi"] .sensi-bar.best .sensi-bar-label { color: var(--accent-2); }
 [data-tool="sensi"] .sensi-bar-label { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 [data-tool="sensi"] .sensi-bar .hint { font-size: 11.5px; min-height: 16px; }
 
 /* Umrechner */
 [data-tool="sensi"] .sensi-conv-lead { color: var(--accent-2); }
-[data-tool="sensi"] .sensi-conv-val { font-weight: 600; color: #eafaff; }
-[data-tool="sensi"] .sensi-conv-result { display: flex; flex-direction: column; gap: 4px; padding: 16px; margin-bottom: 12px; border-radius: 8px; background: var(--accent-soft); border: 1px solid rgba(79, 216, 255, 0.35); }
+[data-tool="sensi"] .sensi-conv-out th { white-space: nowrap; }
+[data-tool="sensi"] .sensi-conv-val { font-weight: 600; color: var(--text); }
+[data-tool="sensi"] .sensi-conv-result { display: flex; flex-direction: column; gap: 4px; padding: 16px; margin-bottom: 12px; border-radius: 8px; background: var(--accent-soft); border: 1px solid var(--accent-line); }
 [data-tool="sensi"] select.input { width: 100%; }
-[data-tool="sensi"] .toolbar > .hint { margin-left: 4px; }
 
 /* Verlauf */
 [data-tool="sensi"] .sensi-history-item { flex-direction: column; align-items: stretch; gap: 8px; }
@@ -94,10 +97,12 @@
 [data-tool="sensi"] .sensi-history-row > .icon { color: var(--accent); flex: none; }
 [data-tool="sensi"] .sensi-history-row .grow { display: flex; flex-direction: column; gap: 2px; }
 [data-tool="sensi"] .sensi-history-details { padding: 4px 0 4px 28px; }
+[data-tool="sensi"] .sensi-history-stats { margin: 0 0 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+[data-tool="sensi"] .sensi-history-details .table-wrap { margin-top: 8px; }
 [data-tool="sensi"] .sensi-trend { display: flex; gap: 8px; align-items: stretch; }
 [data-tool="sensi"] .sensi-trend-item { flex: 1; min-width: 48px; max-width: 96px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
 [data-tool="sensi"] .sensi-trend-track { position: relative; width: 100%; height: 64px; border-radius: 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); }
-[data-tool="sensi"] .sensi-trend-dot { position: absolute; left: 50%; width: 10px; height: 10px; margin: 0 0 -5px -5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px rgba(79, 216, 255, 0.6); }
+[data-tool="sensi"] .sensi-trend-dot { position: absolute; left: 50%; width: 10px; height: 10px; margin: 0 0 -5px -5px; border-radius: 50%; background: var(--accent); }
 [data-tool="sensi"] .sensi-trend-item .hint { font-size: 11.5px; }
 
 @media (max-width: 1100px) {

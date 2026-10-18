@@ -178,7 +178,7 @@ export default {
         }, String(n))));
       const last = stormTests[stormTests.length - 1];
       return h('div.mon-storm',
-        h('div.mon-storm-q', h('strong', 'Wie viele Figuren erkennst du?'), h('p.hint', 'Tippe die Zahl an. Schau dabei aus normalem Abstand – nicht ganz nah an den Bildschirm.')),
+        h('div.mon-storm-q', h('strong', 'Wie viele Figuren erkennst du?'), h('p.hint', 'Aus normalem Abstand schauen, nicht ganz nah ran.')),
         numbers,
         resultBox,
         h('div.row',
@@ -205,15 +205,15 @@ export default {
       const paintInfo = (st) => {
         const p = findPattern(st.pattern);
         ui.mount(info, icon('info'), h('div', h('strong', p.name), h('p.hint', p.instruction),
-          p.id === 'gamma' ? h('p.hint', 'So liest du es: Jedes Feld hat feine Streifen außen und eine feste Fläche in der Mitte. Das Feld, bei dem beides gleich hell wirkt, ist dein Gamma (Gamma = wie hell Mitteltöne dargestellt werden). Liegt es bei 2,4 oder 2,6, wirken dunkle Stellen zu dunkel.') : null,
-          p.id === 'schwarz' ? h('p.hint', 'Am besten in einem nicht zu hellen Raum prüfen. Siehst du die ersten Stufen nicht, hilft der Schwarz-Stabilisator im Monitor-Menü (Schritt 1 der Einrichtung).') : null));
+          p.id === 'gamma' ? ui.more('So liest du es', 'Jedes Feld hat feine Streifen außen und eine feste Fläche in der Mitte. Das Feld, bei dem beides gleich hell wirkt, ist dein Gamma (wie hell Mitteltöne sind). Bei 2,4 oder 2,6 wirken dunkle Stellen zu dunkel.') : null,
+          p.id === 'schwarz' ? ui.more('Erste Stufen unsichtbar?', 'Prüfe in einem nicht zu hellen Raum. Hilft das nicht, stell den Schwarz-Stabilisator im Monitor-Menü höher (Schritt 1 der Einrichtung).') : null));
         seg.querySelectorAll('.seg').forEach((b) => { const on = b.dataset.id === st.pattern; b.classList.toggle('active', on); b.setAttribute('aria-checked', String(on)); });
         ui.clear(variantBox);
         if (p.variants) {
           variantBox.append(h('div.segmented', { role: 'radiogroup', 'aria-label': 'Helligkeit der Fläche' }, p.variants.map((v) => h(`button.seg${st.variant === v.id ? '.active' : ''}`, {
             type: 'button', role: 'radio', 'aria-checked': String(st.variant === v.id),
             onclick: () => { view.set({ variant: v.id }); ui.toast(`Fläche: ${v.label}`, 'info', { timeout: 1600 }); },
-          }, v.label))), h('p.hint', 'Im Vollbild wechselst du die Helligkeit mit den Pfeiltasten ↑ ↓.'));
+          }, v.label))), h('p.hint', 'Im Vollbild: Helligkeit mit ↑ ↓.'));
         }
         if (p.id === 'sturm' && !extra.dataset.storm) {
           extra.dataset.storm = '1';
@@ -240,7 +240,7 @@ export default {
               h('div.mon-controls-pair',
                 ui.button('Zurück', { iconName: 'back', onClick: () => view.step(-1) }),
                 ui.button('Weiter', { iconName: 'chevron', onClick: () => view.step(1) }))),
-            h('p.hint', 'Am genauesten ist das Vollbild. Dort wechseln die Pfeiltasten das Bild, Esc beendet es. Doppelklick aufs Bild geht auch.'),
+            h('p.hint', 'Vollbild ist am genauesten. Pfeiltasten wechseln, Esc beendet.'),
             variantBox,
             extra)),
       ];
@@ -259,13 +259,13 @@ export default {
       try {
         if (a.type === 'settings') {
           await env.call('app.openWindowsSettings', { uri: a.uri });
-          ui.toast('Die Windows-Einstellungen sind geöffnet.');
+          ui.toast('Windows-Einstellungen geöffnet.');
         } else if (a.type === 'hdrStore') {
           await env.call('monitor.openHdrStore');
-          ui.toast('Der Microsoft Store öffnet die App „Windows HDR Calibration“.');
+          ui.toast('Der Microsoft Store öffnet „Windows HDR Calibration“.');
         } else if (a.type === 'calibration') {
           await env.call('monitor.openCalibration');
-          ui.toast('Die Windows-Farbkalibrierung startet gleich in einem eigenen Fenster.');
+          ui.toast('Die Farbkalibrierung startet gleich in einem eigenen Fenster.');
         } else if (a.type === 'nav') {
           env.nav.go(a.to);
         }
@@ -279,7 +279,8 @@ export default {
     }
 
     function checkRow(c) {
-      const input = h('input', { type: 'checkbox', checked: !!wiz.checks[c.id] });
+      const id = `mon-check-${c.id}`;
+      const input = h('input', { type: 'checkbox', id, checked: !!wiz.checks[c.id] });
       input.addEventListener('change', () => {
         if (input.checked) wiz.checks[c.id] = true; else delete wiz.checks[c.id];
         paintProgress();
@@ -287,7 +288,10 @@ export default {
         saveProgress();
       });
       return h('div.mon-check',
-        h('label.mon-check-main', input, h('span.mon-check-text', h('strong', c.label), h('span.hint', c.hint))),
+        h('div.mon-check-main', input, h('div.mon-check-text',
+          h('label', { for: id }, h('strong', c.label), h('span.hint', c.hint)),
+          c.how ? ui.more('So geht’s', c.how) : null,
+          c.why ? ui.more('Warum?', c.why) : null)),
         c.action ? ui.button(c.action.label, { small: true, iconName: c.action.type === 'nav' ? 'chevron' : 'settings', onClick: () => runAction(c.action) }) : null);
     }
 
@@ -312,7 +316,7 @@ export default {
     function paintProgress() {
       if (!progressEl) return;
       const pr = progress(wiz.checks, wiz.vendor || 'nvidia');
-      progressEl.textContent = `Schritt ${wiz.step + 1} von ${STEPS.length} · ${pr.done} von ${pr.total} Punkten erledigt`;
+      progressEl.textContent = `${pr.done} von ${pr.total} Punkten erledigt`;
     }
 
     /** Schritt ist erledigt, wenn alle Haken gesetzt sind (Kontrolle: wenn ein Sturm-Test gespeichert ist). */
@@ -354,16 +358,16 @@ export default {
             : detected
               ? ui.badge(`Erkannt: ${gpu.name || VENDORS.find((x) => x.id === detected)?.label}`, 'ok')
               : ui.badge('Nicht erkannt – bitte selbst wählen', 'warn')),
-        h('p.hint', 'Wähle den Hersteller deiner Grafikkarte. HELIX erkennt ihn meist selbst. Hast du zwei (z. B. Intel im Prozessor und NVIDIA als Karte), gilt die Karte, an der dein Monitor steckt.'));
+        h('p.hint', 'Zwei Grafikkarten? Es zählt die, an der dein Monitor steckt.'));
     }
 
     function brandTable() {
       return h('div.mon-brands',
-        h('h4', 'So heißt der Schwarz-Stabilisator bei deiner Marke'),
+        h('h4', 'Schwarz-Stabilisator je Marke'),
         h('div.table-wrap', h('table.table',
           h('thead', h('tr', h('th', 'Marke'), h('th', 'Name im Menü'), h('th', 'Startwert'))),
           h('tbody', BRANDS.map((b) => h('tr', h('td', b.brand), h('td', h('strong', b.name)), h('td.hint', b.tip)))))),
-        h('p.hint', 'Namen und Stufen können je nach Modell abweichen. Richtig ist die Stufe, bei der du im Schwarzwert-Bild Stufe 3–4 gerade so siehst – und das Bild noch nicht grau wirkt.'));
+        h('p.hint', 'Je nach Modell anders. Ziel: Schwarzwert-Bild Stufe 3–4 gerade sichtbar.'));
     }
 
     function renderWizard() {
@@ -372,7 +376,7 @@ export default {
       const checks = stepChecks(step, wiz.vendor || 'nvidia');
       const parts = [
         wiz.completedAt
-          ? h('div.callout.ok', icon('check'), h('div', h('strong', `Einrichtung abgeschlossen am ${ui.fmtDate(wiz.completedAt)}`), h('p.hint', 'Du kannst die Schritte jederzeit noch einmal durchgehen – zum Beispiel nach einem Treiber-Update.')))
+          ? h('div.callout.ok', icon('check'), h('div', h('strong', `Einrichtung abgeschlossen am ${ui.fmtDate(wiz.completedAt)}`), h('p.hint', 'Nach einem Treiber-Update lohnt sich ein neuer Durchgang.')))
           : null,
         (stepperEl = stepper()),
         progressEl,
@@ -392,7 +396,7 @@ export default {
               h('aside.mon-step-side',
                 step.patterns.length
                   ? [h('h4', 'Zum Prüfen'), h('div.mon-previews', step.patterns.map(previewCard))]
-                  : h('div.callout.info', icon('info'), h('div', h('strong', 'Tipp'), h('p.hint', 'Den Erfolg prüfst du im letzten Schritt mit dem Sturm-Test.')))))),
+                  : h('div.callout.info', icon('info'), h('p.hint', 'Den Erfolg prüfst du im letzten Schritt mit dem Sturm-Test.'))))),
         h('div.mon-nav',
           ui.button('Zurück', { iconName: 'back', disabled: wiz.step === 0, onClick: () => goStep(wiz.step - 1) }),
           h('span.grow'),
@@ -417,10 +421,10 @@ export default {
       const v = patternView({ pattern: 'sturm', fixed: true });
       return h('div.mon-step-grid.mon-control',
         h('div.mon-step-main', v.el,
-          h('div.row', ui.button('Vollbild', { small: true, iconName: 'eye', onClick: () => v.fullscreen() }), h('span.hint', 'Im Vollbild ist der Test am ehrlichsten. Mit Esc kommst du zurück.'))),
+          h('div.row', ui.button('Vollbild', { small: true, iconName: 'eye', onClick: () => v.fullscreen() }), h('span.hint', 'Im Vollbild ist der Test am ehrlichsten. Esc beendet es.'))),
         h('aside.mon-step-side',
           stormPanel(v, { onRated: () => { if (alive) paintStepper(); } }),
-          h('p.hint', 'Weniger als die Hälfte erkannt? Geh zurück zu Schritt 1 und erhöhe den Schwarz-Stabilisator um eine Stufe. Dann noch einmal testen.')));
+          h('p.hint', 'Weniger als die Hälfte? Schwarz-Stabilisator (Schritt 1) eine Stufe höher.')));
     }
 
     // ---------------- Rahmen ----------------

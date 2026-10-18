@@ -396,12 +396,13 @@ test('Modul: Handler vorhanden, summary liefert null ohne Messung', async () => 
 // ---------------------------------------------------------------- Texte der Ansicht
 test('Ansicht: Temperatur-Texte in einfachen Worten', async () => {
   const lib = await import(libUrl);
-  assert.equal(lib.gpuTempStatus(72).text, '72 °C – normal für Grafikkarten unter Last.');
+  assert.equal(lib.gpuTempStatus(72).text, 'Normal für eine Grafikkarte unter Last.');
   assert.equal(lib.gpuTempStatus(72).type, 'ok');
   assert.equal(lib.gpuTempStatus(83).type, 'warn');
   assert.equal(lib.gpuTempStatus(90).type, 'err');
   assert.equal(lib.gpuTempStatus(null), null);
-  assert.match(lib.boardTempStatus(50).text, /nicht unbedingt die Prozessor-Temperatur/);
+  assert.match(lib.boardTempStatus(50).text, /Nicht unbedingt die Prozessor-Temperatur/);
+  assert.match(lib.boardTempStatus(95).text, /Nicht unbedingt die Prozessor-Temperatur/, 'auch bei "sehr heiß" ehrlich');
   assert.equal(lib.boardTempStatus(50, true).word, 'ändert sich nicht');
   assert.equal(lib.ramStatus(15 * GB, 16 * GB).type, 'err');
   assert.equal(lib.ramStatus(13 * GB, 16 * GB).type, 'warn');
@@ -443,7 +444,7 @@ test('Ansicht: NVIDIA-Kacheln mit Strom und Takt, Runden-Zeile', async () => {
   const s = logic.buildSample({ ps: JSON.parse(LINE_NVIDIA), node: { cpus: cpus(1, 1), totalmem: 16 * GB, freemem: 6 * GB }, now: 1, state: {} });
   s.stream = 'ok';
   const t = Object.fromEntries(lib.buildTiles(s, [s], { windows: true }).map((x) => [x.id, x]));
-  assert.equal(t.gpuTemp.text, '66 °C – normal für Grafikkarten unter Last.');
+  assert.equal(t.gpuTemp.text, 'Normal für eine Grafikkarte unter Last.');
   assert.equal(t.gpu.extra, '152 W Strom · 2.610 MHz Takt');
   assert.equal(t.fortnite.badge.text, 'läuft');
   assert.match(t.fortnite.text, /4,4 GB Arbeitsspeicher/);
@@ -593,6 +594,7 @@ test('Ansicht: Fenster im Infobereich/minimiert stoppt die Messung, wieder sicht
   const ui = {
     h, mount, icon: () => new El('svg'), badge: (text) => h('span.badge', text), spinner: () => new El('div'),
     section: (title, hint, ...c) => h('section', h('h2', title), c), toggle: () => new El('label'), button: (label) => h('button', label),
+    more: (summary, ...c) => h('details', h('summary', summary), c),
     emptyState: ({ title }) => h('div.empty', title), toast() {}, showError(e) { throw e; }, fmtDate: () => 'heute', fmtDuration: () => '1 Min.',
   };
   const calls = [];

@@ -13,14 +13,14 @@ export async function fortniteClosedFor(env, action) {
   if (!st || !st.running) return true;
   const ok = await ui.confirmDialog({
     title: 'Fortnite läuft noch',
-    text: `Solange Fortnite offen ist, benutzt es seine Replay-Dateien. Soll HELIX Fortnite jetzt schließen? Danach kannst du ${action}.`,
+    text: `Fortnite benutzt gerade seine Replay-Dateien. Soll HELIX es schließen, damit du ${action} kannst?`,
     confirmLabel: 'Fortnite schließen',
   });
   if (!ok) return false;
   const r = await env.call('core.fortniteClose', { force: false }).catch((e) => { ui.showError(e, 'Fortnite schließen nicht möglich'); return null; });
   if (!r) return false;
   if (!r.closed) {
-    ui.toast('Fortnite hat sich nicht beendet. Bitte schließe es im Spiel selbst und versuche es dann nochmal.', 'warn', { timeout: 6000 });
+    ui.toast('Fortnite hat sich nicht beendet – bitte schließe es selbst und versuch es nochmal.', 'warn', { timeout: 6000 });
     return false;
   }
   ui.toast('Fortnite ist geschlossen.');

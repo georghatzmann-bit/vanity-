@@ -409,6 +409,7 @@ function fakeUi() {
     showError: (e, title) => { toasts.push({ msg: `${title || 'Fehler'}: ${e.message}`, type: 'err' }); },
     emptyState: ({ title, text, action }) => h('div.empty', h('h3', title), h('p.hint', text), action || null),
     section: (title, hint, ...c) => h('section.block', h('h3', title), hint ? h('p.hint', hint) : null, c),
+    more: (summary, ...c) => h('details.more', h('summary', summary || 'Warum?'), c.map((x) => (typeof x === 'string' ? h('p', x) : x))),
     badge: (t) => h('span.badge', t),
     spinner: () => h('span.spinner'),
     // wie ui.modal: Esc/X/„Abbrechen“ = close(null); ein Knopf mit onClick schließt erst, wenn onClick nicht false liefert

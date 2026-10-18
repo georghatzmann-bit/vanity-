@@ -13,7 +13,7 @@ export default {
     const tabs = h('div.tabs', { role: 'tablist' });
     const body = h('div.tab-body');
     const statusLine = h('div.status-line');
-    root.append(statusLine, tabs, body);
+    root.append(tabs, statusLine, body);
 
     const TABS = [
       ['profiles', 'Profile', 'sparkle'],
@@ -37,10 +37,11 @@ export default {
       if (!st.location.found) {
         statusLine.append(h('div.callout.err', icon('warn'), h('div',
           h('strong', 'Fortnite-Einstellungen nicht gefunden'),
-          h('p.hint', 'HELIX hat in deinem Benutzerordner (AppData\\Local) gesucht. Starte Fortnite einmal, damit der Ordner angelegt wird – oder wähle ihn selbst aus.'),
+          h('p.hint', 'Starte Fortnite einmal oder wähle den Ordner selbst aus.'),
           h('div.row',
             ui.button('Ordner auswählen', { variant: 'primary', iconName: 'folder', small: true, onClick: pickFolder }),
-            ui.button('Erneut suchen', { iconName: 'refresh', small: true, onClick: async () => { await env.call('core.locate'); env.refreshStatus(); renderAll(); } })))));
+            ui.button('Erneut suchen', { iconName: 'refresh', small: true, onClick: async () => { await env.call('core.locate'); env.refreshStatus(); renderAll(); } })),
+          ui.more('Warum?', 'HELIX sucht in deinem Benutzerordner unter AppData\\Local. Fortnite legt den Ordner beim ersten Start an.'))));
         return;
       }
       statusLine.append(h('div.path-line', icon('folder', 16), h('span.mono', st.location.configDir),
@@ -62,11 +63,11 @@ export default {
         ui.button('Aktuelle Einstellungen als Profil speichern', { variant: 'primary', iconName: 'plus', onClick: createProfile }),
         ui.button('Importieren', { iconName: 'upload', onClick: importProfile }),
         h('span.grow'),
-        h('p.hint', 'Tipp: Stelle in Fortnite alles ein, schließe das Spiel und speichere dann hier.'));
+        list.length ? h('p.hint', 'Erst in Fortnite einstellen, Spiel schließen, dann speichern.') : null);
       if (!list.length) {
         return [head, ui.emptyState({
           title: 'Noch kein Profil gespeichert',
-          text: 'So geht’s: In Fortnite mit deinem Konto einloggen, alles einstellen, Fortnite schließen – dann oben „Aktuelle Einstellungen als Profil speichern“ klicken.',
+          text: 'Stell in Fortnite mit deinem Konto alles ein, schließ das Spiel – dann oben speichern.',
         })];
       }
       const grid = h('div.profile-grid', list.map((p) => profileCard(p)));
@@ -98,14 +99,14 @@ export default {
       return h(`article.profile-card.glass${p.active ? '.active' : ''}`, { style: { '--hue': p.color ?? 200 } },
         h('div.card-top',
           h('span.card-orb'),
-          h('div.grow', h('h3', p.name), h('p.hint', `${p.fileCount} Dateien · gespeichert ${ui.fmtAgo(p.updatedAt)}`)),
+          h('div.grow', h('h3', p.name), h('p.hint', { title: `${p.fileCount} Dateien` }, `gespeichert ${ui.fmtAgo(p.updatedAt)}`)),
           p.active ? ui.badge('aktiv', 'accent') : null),
         summaryRows(p),
         h('div.card-meta',
           h('span.hint', icon('lock', 14), ' ', roText(p)),
-          h('span.hint', icon('clock', 14), ' ', p.stats?.lastAppliedAt ? `zuletzt angewendet ${ui.fmtAgo(p.stats.lastAppliedAt)}` : 'noch nie angewendet')),
+          h('span.hint', icon('clock', 14), ' ', p.stats?.lastAppliedAt ? `angewendet ${ui.fmtAgo(p.stats.lastAppliedAt)}` : 'noch nie angewendet')),
         h('div.card-actions',
-          ui.button(p.active ? 'Erneut anwenden' : 'Anwenden', { variant: 'primary', iconName: 'play', onClick: () => applyFlow(env, p.id, { onDone: renderAll }) }),
+          ui.button('Anwenden', { variant: 'primary', iconName: 'play', title: p.active ? 'Ist schon aktiv – nochmal anwenden' : null, onClick: () => applyFlow(env, p.id, { onDone: renderAll }) }),
           ui.button('Vergleichen', { iconName: 'eye', onClick: () => showDiff('profile', p.id, p.name) }),
           menu));
     }
@@ -115,7 +116,7 @@ export default {
         title: 'Neues Profil speichern',
         label: 'Name des Profils',
         value: '',
-        hint: 'Zum Beispiel „Main“, „Zweitaccount“ oder „Turnier“. Gespeichert werden alle Dateien aus dem Fortnite-Config-Ordner – keine Login-Daten.',
+        hint: 'Zum Beispiel „Main“ oder „Turnier“. Login-Daten werden nie gespeichert.',
       });
       if (!name) return;
       try {
@@ -123,7 +124,7 @@ export default {
         if (st.running) {
           const ok = await ui.confirmDialog({
             title: 'Fortnite läuft noch',
-            text: 'Fortnite speichert manche Einstellungen erst beim Beenden. Trotzdem jetzt speichern? Besser: Fortnite zuerst schließen.',
+            text: 'Fortnite speichert manche Einstellungen erst beim Beenden. Besser erst schließen – trotzdem jetzt speichern?',
             confirmLabel: 'Trotzdem speichern',
           });
           if (!ok) return;
@@ -147,7 +148,7 @@ export default {
     async function update(p) {
       const ok = await ui.confirmDialog({
         title: `„${p.name}“ überschreiben?`,
-        text: 'Das Profil wird mit den aktuellen Fortnite-Einstellungen auf diesem PC überschrieben. Name und Schreibschutz-Einstellung bleiben.',
+        text: 'Das Profil bekommt die aktuellen Fortnite-Einstellungen dieses PCs. Name und Schreibschutz bleiben.',
         confirmLabel: 'Überschreiben',
       });
       if (!ok) return;
@@ -157,7 +158,7 @@ export default {
     async function remove(p) {
       const ok = await ui.confirmDialog({
         title: `„${p.name}“ löschen?`,
-        text: 'Das Profil wird gelöscht. Es bleibt 30 Tage im HELIX-Papierkorb, falls du es doch noch brauchst. Deine Fortnite-Dateien bleiben unverändert.',
+        text: 'Es bleibt 30 Tage im HELIX-Papierkorb. Deine Fortnite-Dateien bleiben unverändert.',
         confirmLabel: 'Löschen',
         danger: true,
       });
@@ -177,7 +178,7 @@ export default {
         const r = await env.call('profiles.import');
         if (r.canceled) return;
         ui.toast(`Profil „${r.profile.name}“ importiert.`);
-        if (r.rejected?.length) ui.toast(`${r.rejected.length} Einträge wurden aus Sicherheitsgründen nicht übernommen.`, 'warn');
+        if (r.rejected?.length) ui.toast(`${r.rejected.length} Einträge aus Sicherheitsgründen nicht übernommen.`, 'warn');
         renderAll();
       } catch (e) { ui.showError(e); }
     }
@@ -190,7 +191,8 @@ export default {
       const r = await ui.modal({
         title: `Schreibschutz für „${p.name}“`,
         subtitle: 'Wird nach jedem Anwenden dieses Profils gesetzt.',
-        content: [group, h('p.hint', 'Den Schreibschutz kannst du jederzeit unter „Gefundene Dateien“ wieder aufheben. Tastenbelegung und Sensi kommen immer aus der Epic-Cloud deines Kontos – dort hilft Schreibschutz nicht.')],
+        content: [group, h('p.hint', 'Aufheben geht jederzeit unter „Gefundene Dateien“.'),
+          ui.more('Was ist mit Tasten und Sensi?', 'Tastenbelegung und Sensi kommen immer aus der Epic-Cloud deines Kontos – dort hilft Schreibschutz nicht.')],
         actions: [{ label: 'Abbrechen', value: null }, { label: 'Speichern', value: 'save', variant: 'primary' }],
       });
       if (r !== 'save') return;
@@ -208,7 +210,7 @@ export default {
           f.changes?.length ? h('table.diff-table', h('thead', h('tr', h('th', 'Einstellung'), h('th', 'Jetzt'), h('th', kind === 'backup' ? 'In der Sicherung' : 'Im Profil'))),
             h('tbody', f.changes.map((c) => h('tr', h('td.mono', `${c.key}`, h('span.hint', ` [${c.section}]`)), h('td.mono', c.current ?? '–'), h('td.mono.accent-text', c.saved ?? '–'))))) : null);
       });
-      await ui.modal({ title: `Vergleich: ${name}`, subtitle: 'Aktueller Stand auf diesem PC gegenüber dem gespeicherten Stand', wide: true, content: blocks, actions: [{ label: 'Schließen', variant: 'primary' }] });
+      await ui.modal({ title: `Vergleich: ${name}`, wide: true, content: blocks, actions: [{ label: 'Schließen', variant: 'primary' }] });
     }
 
     // ---------------- Gefundene Dateien ----------------
@@ -244,7 +246,11 @@ export default {
         }, icon(f.readOnly ? 'lock' : 'unlock', 16), h('span', f.readOnly ? 'geschützt' : 'offen')))));
       const table = h('table.table', h('thead', h('tr', h('th', 'Datei'), h('th', 'Größe'), h('th', 'Geändert'), h('th', 'Profil'), h('th', 'Login-Schutz'), h('th', 'Schreibschutz'))), h('tbody', rows));
       return [head,
-        h('p.hint', 'HELIX liest den kompletten Ordner „FortniteGame\\Saved\\Config“ mit allen Unterordnern. Login-Daten, Browser-Daten und Protokolle werden nie gesichert. Geschützte Einträge (z. B. Anmeldedaten) werden beim Speichern entfernt und beim Anwenden vom gerade eingeloggten Konto übernommen.'),
+        h('div', { style: { margin: '-4px 0 16px' } },
+          h('p.hint', 'Login-Daten, Browser-Daten und Protokolle werden nie gesichert.'),
+          ui.more('Was wird gesichert?',
+            'HELIX liest den kompletten Ordner „FortniteGame\\Saved\\Config“ mit allen Unterordnern.',
+            'Geschützte Einträge (z. B. Anmeldedaten) werden beim Speichern entfernt und beim Anwenden vom gerade eingeloggten Konto übernommen.')),
         h('div.table-wrap', table)];
     }
 
@@ -262,7 +268,7 @@ export default {
         }),
         ui.button('Ordner öffnen', { iconName: 'folder', onClick: () => env.call('core.openFolder', { which: 'backups' }).catch(ui.showError) }),
         h('span.grow'),
-        h('p.hint', 'Vor jedem Anwenden sichert HELIX automatisch. Die letzten 40 Sicherungen bleiben, angeheftete und der Originalzustand immer.'));
+        h('p.hint', 'Automatisch vor jedem Anwenden · die letzten 40 bleiben, angeheftete immer'));
       if (!list.length) return [head, ui.emptyState({ title: 'Noch keine Sicherung', text: 'Sobald du ein Profil anwendest, entsteht hier automatisch eine Sicherung.' })];
       const REASON = { original: 'Originalzustand', 'vor-anwenden': 'Vor dem Anwenden', 'vor-wiederherstellen': 'Vor dem Wiederherstellen', manuell: 'Manuell', tool: 'Vor Tool-Änderung' };
       const items = list.map((b) => h('li.backup-item.glass',
@@ -272,7 +278,7 @@ export default {
         ui.button('Wiederherstellen', {
           small: true, iconName: 'refresh', variant: 'primary',
           onClick: async () => {
-            const ok = await ui.confirmDialog({ title: 'Sicherung wiederherstellen?', text: `Der Fortnite-Ordner wird auf den Stand „${b.label}“ vom ${ui.fmtDate(b.createdAt)} zurückgesetzt. Der jetzige Stand wird vorher gesichert.`, confirmLabel: 'Wiederherstellen' });
+            const ok = await ui.confirmDialog({ title: 'Sicherung wiederherstellen?', text: `Der Fortnite-Ordner geht zurück auf den Stand vom ${ui.fmtDate(b.createdAt)} (${b.label}). Der jetzige Stand wird vorher gesichert.`, confirmLabel: 'Wiederherstellen' });
             if (!ok) return;
             try {
               const r = await withFortniteClosed(env, () => env.call('backups.restore', { id: b.id }));
@@ -287,7 +293,7 @@ export default {
         b.reason === 'original' ? null : ui.button('', {
           small: true, variant: 'ghost', iconName: 'trash', title: 'Löschen',
           onClick: async () => {
-            if (!(await ui.confirmDialog({ title: 'Sicherung löschen?', text: b.label, confirmLabel: 'Löschen', danger: true }))) return;
+            if (!(await ui.confirmDialog({ title: 'Sicherung löschen?', text: `${b.label} (${ui.fmtDate(b.createdAt)}) wird endgültig gelöscht.`, confirmLabel: 'Löschen', danger: true }))) return;
             await env.call('backups.remove', { id: b.id }).catch(ui.showError); renderAll();
           },
         })));

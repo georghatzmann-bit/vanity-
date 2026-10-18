@@ -798,7 +798,7 @@ test('Ansicht DPI-Vergleich: Ergebnis sagt nur „umstellen“, wenn nötig – 
     arena.onAbort();
     const t = v.toasts.at(-1);
     assert.equal(t.type, 'warn');
-    assert.match(t.m, /^Test abgebrochen\. Es wurde nichts gespeichert\. Deine Maus steht noch auf 1600 DPI\. Stell sie wieder auf 800 DPI zurück\.$/);
+    assert.match(t.m, /^Test abgebrochen, nichts gespeichert\. Deine Maus steht noch auf 1600 DPI\. Stell sie wieder auf 800 DPI zurück\.$/);
     assert.match(v.root.textContent, /Deine Maus steht noch auf 1600 DPI\. Stell sie wieder auf 800 DPI zurück\./, 'auch als Hinweis über dem Test');
   } finally { VIEW.unmount(); }
 
@@ -826,7 +826,7 @@ test('Ansicht DPI-Vergleich: Ergebnis sagt nur „umstellen“, wenn nötig – 
   try {
     const { arena } = await startDpiTest(v);
     arena.onAbort();
-    assert.deepEqual(v.toasts.at(-1), { m: 'Test abgebrochen. Es wurde nichts gespeichert.', type: 'info' });
+    assert.deepEqual(v.toasts.at(-1), { m: 'Test abgebrochen, nichts gespeichert.', type: 'info' });
     assert.doesNotMatch(v.root.textContent, /denk an deine Maus/);
   } finally { VIEW.unmount(); }
 });

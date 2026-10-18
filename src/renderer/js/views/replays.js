@@ -18,14 +18,14 @@ export default {
 
     const statusLine = h('div.status-line');
     const intro = h('div.callout.info', icon('info'), h('div',
-      h('strong', 'Warum ein Tresor?'),
-      h('p.hint', 'Fortnite behält nur deine letzten 100 ungespeicherten Replays (Aufnahmen deiner Matches) und löscht ältere von selbst. Lege gute Spiele hier in den Tresor – dort bleiben sie, bis du sie selbst löschst.')));
+      h('p.replays-intro', 'Fortnite löscht alte Replays von selbst – im Tresor bleiben sie, bis du sie löschst.'),
+      ui.more('Warum?', 'Fortnite behält nur deine letzten 100 ungespeicherten Replays (Aufnahmen deiner Matches). Ältere löscht es ohne Nachfrage.')));
     const stats = h('div.stat-row');
     const tabs = h('div.replays-tabs', { role: 'tablist' });
     const body = h('div');
-    const notes = h('div.replays-notes',
-      h('p.hint', icon('info', 14), h('span', 'Replays laufen nur in der Fortnite-Version, mit der sie aufgenommen wurden. Nach einem Update kannst du ältere Replays nicht mehr abspielen – im Tresor bleiben sie trotzdem erhalten.')),
-      h('p.hint', icon('shield', 14), h('span', 'Replays enthalten die Namen deiner Mitspieler. Teile die Dateien nur mit Leuten, denen du vertraust.')));
+    const notes = h('div.replays-notes', ui.more('Gut zu wissen',
+      'Replays laufen nur in der Fortnite-Version, mit der sie aufgenommen wurden. Nach einem Update lassen sie sich nicht mehr abspielen – im Tresor bleiben sie trotzdem.',
+      'Replays enthalten die Namen deiner Mitspieler. Teile sie nur mit Leuten, denen du vertraust.'));
     root.append(statusLine, intro, stats, tabs, body, notes);
 
     // ---------------- Kopfzeile: Tresor-Ordner ----------------
@@ -35,10 +35,9 @@ export default {
       const v = data.vault;
       statusLine.append(h('div.path-line', icon('folder', 16), h('span', 'Tresor:'), h('span.mono', v.dir || 'nicht festgelegt'),
         v.isDefault ? ui.badge('Standardordner', 'ok') : ui.badge('selbst gewählt', 'accent'),
-        ui.button('Ordner ändern', { small: true, variant: 'ghost', iconName: 'edit', onClick: pickVault }),
+        ui.button('Ordner ändern', { small: true, variant: 'ghost', iconName: 'edit', title: 'Eigenen Ordner wählen – nicht im Fortnite-Ordner', onClick: pickVault }),
         v.isDefault ? null : ui.button('Standard', { small: true, variant: 'ghost', iconName: 'refresh', title: 'Zurück zu Dokumente\\HELIX Replays', onClick: resetVault }),
-        ui.button('Öffnen', { small: true, variant: 'ghost', iconName: 'folder', onClick: () => openFolder('vault') })),
-        h('p.hint.replays-pathhint', 'Hier legt HELIX die Kopien ab. Du kannst jeden eigenen Ordner wählen – nur nicht im Fortnite-Ordner, sonst könnte Fortnite die Dateien löschen.'));
+        ui.button('Öffnen', { small: true, variant: 'ghost', iconName: 'folder', onClick: () => openFolder('vault') })));
       if (v.problem) {
         statusLine.append(h('div.callout.err', icon('warn'), h('div',
           h('strong', 'Dieser Tresor-Ordner passt nicht'),
@@ -140,18 +139,18 @@ export default {
         ui.button('Aktualisieren', { iconName: 'refresh', onClick: () => load(true) }),
         d.dir && d.found ? ui.button('Fortnite-Ordner öffnen', { iconName: 'folder', variant: 'ghost', onClick: () => openFolder('demos') }) : null,
         h('span.grow'),
-        h('p.hint', 'Kopieren lässt das Original in Fortnite. Laufende Aufnahmen wartet HELIX ab.'));
+        h('p.hint', 'Das Original bleibt in Fortnite.'));
       if (!d.dir) {
         return [ui.emptyState({
           title: 'Fortnite-Ordner nicht gefunden',
-          text: 'HELIX weiß noch nicht, wo Fortnite seine Dateien ablegt. Starte Fortnite einmal oder wähle den Ordner unter „Settings-Profile“ aus.',
+          text: 'Starte Fortnite einmal oder wähle den Ordner unter „Settings-Profile“.',
           action: ui.button('Zu den Settings-Profilen', { iconName: 'folder', onClick: () => env.nav.go('profiles') }),
         })];
       }
       if (!d.entries.length) {
         return [head, ui.emptyState({
           title: 'Noch keine Replays',
-          text: 'Fortnite hat noch keine Replays gespeichert. Prüfe in Fortnite unter Einstellungen → Spiel, ob die Replay-Aufnahme eingeschaltet ist. Nach dem nächsten Match taucht es hier auf.',
+          text: 'Ist in Fortnite unter Einstellungen → Spiel die Replay-Aufnahme an?',
           action: ui.button('Aktualisieren', { iconName: 'refresh', onClick: () => load(true) }),
         })];
       }
@@ -168,12 +167,11 @@ export default {
       if (!v.entries.length) {
         return [head, ui.emptyState({
           title: 'Dein Tresor ist noch leer',
-          text: 'Wähle im Reiter „Neue Replays“ ein gutes Spiel und klicke „In den Tresor“. Dann bleibt es erhalten, auch wenn Fortnite es löscht.',
+          text: 'Leg gute Spiele unter „Neue Replays“ mit „In den Tresor“ hier ab.',
           action: ui.button('Zu den neuen Replays', { iconName: 'play', variant: 'primary', onClick: () => { tab = 'demos'; renderTabs(); renderBody(); } }),
         })];
       }
-      return [head, table(v.entries.map(vaultRow)),
-        h('p.hint.replays-foot', 'Umbenennen ändert nur den Dateinamen im Tresor. In Fortnite erscheint weiter der Name aus der Aufnahme.')];
+      return [head, table(v.entries.map(vaultRow))];
     }
 
     function renderBody() {
@@ -229,7 +227,7 @@ export default {
       if (!(await fortniteClosedFor(env, 'das Replay zurücklegen'))) return;
       try {
         const r = await env.call('replays.restore', { file: e.file });
-        ui.toast(r.already ? 'Fortnite hat dieses Replay schon.' : 'Zurück in Fortnite – im Spiel unter Karriere → Replays. Tipp: Benenne es dort um, sonst löscht Fortnite es irgendwann wieder. Die Kopie im Tresor bleibt.', r.already ? 'info' : 'ok', { timeout: 8000 });
+        ui.toast(r.already ? 'Fortnite hat dieses Replay schon.' : 'Zurück in Fortnite (Karriere → Replays) – benenne es dort um, sonst löscht Fortnite es wieder.', r.already ? 'info' : 'ok', { timeout: 8000 });
       } catch (err) { ui.showError(replayError(err), 'Zurücklegen nicht möglich'); }
       await load();
     }
@@ -239,7 +237,7 @@ export default {
         title: 'Replay umbenennen',
         label: 'Neuer Name',
         value: /^UnsavedReplay-/i.test(baseName(e.file)) ? '' : baseName(e.file),
-        hint: 'Zum Beispiel „Erster Sieg Solo“. Der Name gilt nur im Tresor – in Fortnite steht weiter der Name aus der Aufnahme.',
+        hint: 'Zum Beispiel „Erster Sieg Solo“. Gilt nur im Tresor, nicht in Fortnite.',
         maxLength: 80,
         confirmLabel: 'Umbenennen',
       });
@@ -257,8 +255,8 @@ export default {
       const ok = await ui.confirmDialog({
         title: `${shortTitle(e, where, ui.fmtDate)} löschen?`,
         text: where === 'vault'
-          ? 'Die Kopie im Tresor wird in den Windows-Papierkorb verschoben. Von dort kannst du sie zurückholen, solange du den Papierkorb nicht leerst.'
-          : `Das Replay wird aus Fortnite entfernt und in den Windows-Papierkorb verschoben.${e.inVault ? ' Die Kopie im Tresor bleibt.' : ' Es liegt noch nicht im Tresor.'} Fortnite muss dafür geschlossen sein.`,
+          ? 'Die Tresor-Kopie kommt in den Windows-Papierkorb. Von dort kannst du sie zurückholen.'
+          : `Das Replay kommt aus Fortnite in den Windows-Papierkorb.${e.inVault ? ' Die Kopie im Tresor bleibt.' : ' Es liegt noch nicht im Tresor!'}`,
         confirmLabel: 'In den Papierkorb',
         danger: true,
       });
@@ -274,7 +272,7 @@ export default {
       try {
         const r = await env.call('replays.pickVault');
         if (r.canceled) return;
-        ui.toast('Tresor-Ordner geändert. Frühere Kopien bleiben im alten Ordner.');
+        ui.toast('Tresor geändert – frühere Kopien bleiben im alten Ordner.');
       } catch (err) { ui.showError(err); }
       await load();
     }

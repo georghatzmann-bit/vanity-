@@ -1,7 +1,7 @@
 // Hardware-Überblick: Bewertung der Messwerte in einfachen Worten (ohne DOM).
 // Wird von der Ansicht und den Unit-Tests benutzt.
 //
-// Jede Kachel bekommt: Wert, Einheit, Plakette (Text + Art) und eine Erklärungszeile.
+// Jede Kachel bekommt: Wert, Einheit, Plakette (Text + Art) und eine kurze Zeile (leer, wenn die Plakette reicht).
 // Plakette-Arten: 'ok' (grün), 'warn' (orange), 'err' (rot), 'accent', '' (neutral).
 
 export const HISTORY_SECONDS = 120;
@@ -40,69 +40,68 @@ export function pct(used, total) {
 
 export function cpuStatus(p) {
   if (!isNum(p)) return null;
-  if (p >= 90) return { type: 'warn', word: 'am Limit', text: 'Der Prozessor ist voll ausgelastet. Hintergrundprogramme schließen hilft (Spiel-Booster).' };
-  if (p >= 70) return { type: 'warn', word: 'viel zu tun', text: 'Der Prozessor arbeitet viel. Beim Spielen ist das normal.' };
-  return { type: 'ok', word: 'normal', text: 'Der Prozessor hat noch Reserve.' };
+  if (p >= 90) return { type: 'warn', word: 'am Limit', text: 'Voll ausgelastet. Der Spiel-Booster kann helfen.' };
+  if (p >= 70) return { type: 'warn', word: 'viel zu tun', text: 'Arbeitet viel – beim Spielen normal.' };
+  return { type: 'ok', word: 'normal', text: 'Hat noch Reserve.' };
 }
 
 export function gpuLoadStatus(p, fnRunning) {
   if (!isNum(p)) return null;
   if (fnRunning) {
-    if (p >= 95) return { type: 'accent', word: 'voll ausgelastet', text: 'Die Grafikkarte gibt alles. Sie bestimmt gerade, wie viele FPS du bekommst.' };
-    if (p >= 60) return { type: 'ok', word: 'arbeitet', text: 'Die Grafikkarte arbeitet und hat noch etwas Reserve.' };
-    return { type: 'ok', word: 'Reserve', text: 'Die Grafikkarte hat viel Luft. Oft bremst dann der Prozessor oder das FPS-Limit.' };
+    if (p >= 95) return { type: 'accent', word: 'voll ausgelastet', text: 'Gibt alles – sie bestimmt gerade deine FPS.' };
+    if (p >= 60) return { type: 'ok', word: 'arbeitet', text: 'Arbeitet und hat noch etwas Reserve.' };
+    return { type: 'ok', word: 'Reserve', text: 'Viel Luft – dann bremst oft Prozessor oder FPS-Limit.' };
   }
-  if (p >= 80) return { type: 'warn', word: 'hohe Last', text: 'Die Grafikkarte ist stark belastet, obwohl Fortnite nicht läuft. Läuft ein anderes Spiel oder ein Video?' };
-  if (p >= 30) return { type: 'ok', word: 'arbeitet', text: 'Fortnite läuft nicht – die Grafikkarte arbeitet gerade für ein anderes Programm.' };
-  return { type: 'ok', word: 'normal', text: 'Fortnite läuft nicht – die Grafikkarte hat wenig zu tun.' };
+  if (p >= 80) return { type: 'warn', word: 'hohe Last', text: 'Stark belastet ohne Fortnite. Läuft ein Spiel oder Video?' };
+  if (p >= 30) return { type: 'ok', word: 'arbeitet', text: 'Fortnite läuft nicht – arbeitet für ein anderes Programm.' };
+  return { type: 'ok', word: 'normal', text: 'Fortnite läuft nicht – wenig zu tun.' };
 }
 
 export function gpuTempStatus(c) {
   if (!isNum(c)) return null;
-  const v = `${fmtNum(c)} °C`;
-  if (c >= 87) return { type: 'err', word: 'sehr heiß', text: `${v} – sehr heiß. Lüfter, Staub und Luftzufuhr im Gehäuse prüfen.` };
-  if (c >= 80) return { type: 'warn', word: 'warm', text: `${v} – warm, aber noch okay. Gute Belüftung hilft.` };
-  if (c >= 45) return { type: 'ok', word: 'normal', text: `${v} – normal für Grafikkarten unter Last.` };
-  return { type: 'ok', word: 'kühl', text: `${v} – kühl. Die Grafikkarte hat wenig zu tun.` };
+  if (c >= 87) return { type: 'err', word: 'sehr heiß', text: 'Sehr heiß. Lüfter, Staub und Luftzufuhr prüfen.' };
+  if (c >= 80) return { type: 'warn', word: 'warm', text: 'Warm, aber okay. Gute Belüftung hilft.' };
+  if (c >= 45) return { type: 'ok', word: 'normal', text: 'Normal für eine Grafikkarte unter Last.' };
+  return { type: 'ok', word: 'kühl', text: 'Kühl – die Grafikkarte hat wenig zu tun.' };
 }
 
 export function boardTempStatus(c, flat = false) {
   if (!isNum(c)) return null;
-  const note = 'Sensor auf dem Mainboard (ACPI), nicht unbedingt die Prozessor-Temperatur.';
-  if (flat) return { type: '', word: 'ändert sich nicht', text: `Der Wert bleibt immer gleich – vermutlich ein fester Platzhalter des Mainboards, keine echte Messung.` };
-  if (c >= 90) return { type: 'err', word: 'sehr heiß', text: `${fmtNum(c)} °C – sehr heiß. Lüfter und Staub prüfen. ${note}` };
-  if (c >= 75) return { type: 'warn', word: 'warm', text: `${fmtNum(c)} °C – warm. ${note}` };
-  return { type: 'ok', word: 'normal', text: `${fmtNum(c)} °C – normal. ${note}` };
+  const note = 'Nicht unbedingt die Prozessor-Temperatur.';
+  if (flat) return { type: '', word: 'ändert sich nicht', text: 'Bleibt immer gleich – wohl keine echte Messung.' };
+  if (c >= 90) return { type: 'err', word: 'sehr heiß', text: `Sehr heiß – Lüfter prüfen. ${note}` };
+  if (c >= 75) return { type: 'warn', word: 'warm', text: `Warm. ${note}` };
+  return { type: 'ok', word: 'normal', text: note };
 }
 
 export function ramStatus(used, total) {
   const p = pct(used, total);
   if (p == null) return null;
-  if (p >= 90) return { type: 'err', word: 'fast voll', text: 'Der Arbeitsspeicher ist fast voll. Schließe Programme, sonst kann Fortnite ruckeln.' };
-  if (p >= 75) return { type: 'warn', word: 'wird knapp', text: 'Der Arbeitsspeicher wird knapp. Browser mit vielen Tabs schließen hilft.' };
-  return { type: 'ok', word: 'genug frei', text: 'Es ist genug Arbeitsspeicher frei.' };
+  if (p >= 90) return { type: 'err', word: 'fast voll', text: 'Schließ Programme, sonst kann Fortnite ruckeln.' };
+  if (p >= 75) return { type: 'warn', word: 'wird knapp', text: 'Browser mit vielen Tabs schließen hilft.' };
+  return { type: 'ok', word: 'genug frei', text: '' };
 }
 
 export function vramStatus(used, total) {
   const p = pct(used, total);
   if (p == null) {
-    return isNum(used) ? { type: '', word: 'belegt', text: 'So viel Grafikspeicher (Speicher auf der Grafikkarte) ist gerade belegt.' } : null;
+    return isNum(used) ? { type: '', word: 'belegt', text: 'Speicher auf der Grafikkarte.' } : null;
   }
-  if (p >= 95) return { type: 'err', word: 'voll', text: 'Der Grafikspeicher ist voll. Stelle in Fortnite die Texturen niedriger, sonst gibt es Ruckler.' };
-  if (p >= 85) return { type: 'warn', word: 'fast voll', text: 'Der Grafikspeicher wird knapp. Niedrigere Texturen in Fortnite helfen.' };
-  return { type: 'ok', word: 'genug frei', text: 'Auf der Grafikkarte ist genug Speicher frei.' };
+  if (p >= 95) return { type: 'err', word: 'voll', text: 'Stell in Fortnite die Texturen niedriger, sonst ruckelt es.' };
+  if (p >= 85) return { type: 'warn', word: 'fast voll', text: 'Niedrigere Texturen in Fortnite helfen.' };
+  return { type: 'ok', word: 'genug frei', text: '' };
 }
 
 /** Erklärung, warum die Grafikkarten-Temperatur fehlt. */
 export function gpuTempMissing(caps = {}, windows = true) {
-  if (!windows) return 'Die Temperatur der Grafikkarte kann HELIX nur unter Windows lesen.';
+  if (!windows) return 'Geht nur unter Windows.';
   if (caps.vendor === 'nvidia' && caps.nvidiaSmi === false) {
-    return 'Das kleine Messprogramm „nvidia-smi“ vom NVIDIA-Treiber fehlt. Installiere den aktuellen Treiber von nvidia.com.';
+    return '„nvidia-smi“ fehlt. Installiere den aktuellen NVIDIA-Treiber.';
   }
-  if (caps.vendor === 'nvidia') return 'Der NVIDIA-Treiber meldet gerade keine Temperatur.';
-  if (caps.vendor === 'amd') return 'Die Temperatur von AMD-Karten kann HELIX nicht auslesen. Du siehst sie im Task-Manager unter „Leistung“ > „GPU“ oder in der AMD-Software (Adrenalin) unter „Leistung“.';
-  if (caps.vendor === 'intel') return 'Intel-Grafik meldet ihre Temperatur nicht an Windows. Die Intel Graphics Software zeigt sie an.';
-  return 'Windows meldet keine Temperatur der Grafikkarte. Tipp: Der Task-Manager zeigt sie unter „Leistung“ bei vielen Karten.';
+  if (caps.vendor === 'nvidia') return 'Der NVIDIA-Treiber meldet gerade keine.';
+  if (caps.vendor === 'amd') return 'Bei AMD nicht lesbar. Zu sehen im Task-Manager (Leistung › GPU) oder in der AMD-Software.';
+  if (caps.vendor === 'intel') return 'Intel meldet sie nicht an Windows. Zu sehen in der Intel Graphics Software.';
+  return 'Windows meldet keine. Oft zeigt sie der Task-Manager unter „Leistung“.';
 }
 
 // ---------------------------------------------------------------- Kacheln
@@ -118,7 +117,7 @@ export function buildTiles(sample, history, status = {}) {
   const stream = s.stream || status.stream;
   // 'ok' ohne frische Skript-Zeile: Windows antwortet gerade langsam – dann "misst …" statt "nicht verfügbar"
   const pending = windows && (stream === 'starting' || stream === 'off' || stream === 'ok') && !s.psFresh;
-  const waitText = stream === 'ok' ? 'Windows antwortet gerade langsam. Der nächste Wert kommt gleich.' : 'Messung startet … das dauert ein paar Sekunden.';
+  const waitText = stream === 'ok' ? 'Windows antwortet langsam – der Wert kommt gleich.' : 'Messung startet …';
   const tiles = [];
 
   const tile = (id, label, value, unit, st, extra = {}) => ({ id, label, value, unit, badge: st ? { text: st.word, type: st.type } : null, text: st ? st.text : '', ...extra });
@@ -128,7 +127,7 @@ export function buildTiles(sample, history, status = {}) {
   if (isNum(s.cpuPct)) {
     tiles.push(tile('cpu', 'Prozessor', fmtNum(s.cpuPct), '%', cpuStatus(s.cpuPct), { spark: { values: series(history, 'cpuPct'), min: 0, max: 100 }, available: true }));
   } else {
-    tiles.push({ ...missing('cpu', 'Prozessor', 'Noch kein Messwert.'), badge: { text: 'misst …', type: '' }, text: 'Der erste Wert kommt in 2 Sekunden.' });
+    tiles.push({ ...missing('cpu', 'Prozessor', ''), badge: { text: 'misst …', type: '' }, text: 'Erster Wert in 2 Sekunden.' });
   }
 
   // Grafikkarte: Auslastung
@@ -139,8 +138,8 @@ export function buildTiles(sample, history, status = {}) {
     tiles.push(tile('gpu', 'Grafikkarte', fmtNum(s.gpuPct), '%', gpuLoadStatus(s.gpuPct, !!s.fnRunning), { spark: { values: series(history, 'gpuPct'), min: 0, max: 100 }, available: true, extra: parts.join(' · ') }));
   } else {
     tiles.push(missing('gpu', 'Grafikkarte', windows
-      ? 'Windows liefert keine Auslastung der Grafikkarte. Das braucht Windows 10 ab Version 1709 und einen aktuellen Grafiktreiber.'
-      : 'Die Auslastung der Grafikkarte kann HELIX nur unter Windows lesen.'));
+      ? 'Windows liefert keine Werte. Ein aktueller Grafiktreiber hilft.'
+      : 'Geht nur unter Windows.'));
   }
 
   // Grafikkarte: Temperatur
@@ -156,8 +155,8 @@ export function buildTiles(sample, history, status = {}) {
     tiles.push(tile('board', 'Mainboard-Sensor', fmtNum(s.boardTemp), '°C', boardTempStatus(s.boardTemp, flat), { spark: { values: series(history, 'boardTemp'), min: 20, max: 100 }, available: true }));
   } else {
     tiles.push(missing('board', 'Prozessor-Temperatur', windows
-      ? 'Dein PC gibt über Windows keine Temperatur heraus. Die echte Prozessor-Temperatur geht nur mit einem Zusatz-Treiber – den installiert HELIX absichtlich nicht.'
-      : 'Temperaturen kann HELIX nur unter Windows lesen.'));
+      ? 'Nur mit Zusatz-Treiber lesbar – den installiert HELIX bewusst nicht.'
+      : 'Geht nur unter Windows.'));
   }
 
   // Arbeitsspeicher
@@ -165,7 +164,7 @@ export function buildTiles(sample, history, status = {}) {
     const ramPct = series(history, 'ramUsed').map((u, i) => pct(u, history[i] && history[i].ramTotal));
     tiles.push(tile('ram', 'Arbeitsspeicher', `${fmtGB(s.ramUsed)} / ${fmtGB(s.ramTotal)}`, 'GB', ramStatus(s.ramUsed, s.ramTotal), { spark: { values: ramPct, min: 0, max: 100 }, available: true }));
   } else {
-    tiles.push({ ...missing('ram', 'Arbeitsspeicher', 'Noch kein Messwert.'), badge: { text: 'misst …', type: '' }, text: 'Der erste Wert kommt in 2 Sekunden.' });
+    tiles.push({ ...missing('ram', 'Arbeitsspeicher', ''), badge: { text: 'misst …', type: '' }, text: 'Erster Wert in 2 Sekunden.' });
   }
 
   // Grafikspeicher
@@ -178,29 +177,29 @@ export function buildTiles(sample, history, status = {}) {
     }));
   } else {
     tiles.push(missing('vram', 'Grafikspeicher', windows
-      ? 'Windows liefert keinen Wert für den Grafikspeicher (Speicher auf der Grafikkarte).'
-      : 'Den Grafikspeicher kann HELIX nur unter Windows lesen.'));
+      ? 'Windows liefert keinen Wert.'
+      : 'Geht nur unter Windows.'));
   }
 
   // Fortnite (nur Prozess-Werte wie im Task-Manager)
   if (s.fnRunning && isNum(s.fnRam)) {
-    const cpuPart = isNum(s.fnCpuPct) ? ` und ${fmtNum(s.fnCpuPct)} % des Prozessors` : '';
+    const cpuPart = isNum(s.fnCpuPct) ? `, ${fmtNum(s.fnCpuPct)} % Prozessor` : '';
     tiles.push({
       id: 'fortnite', label: 'Fortnite', value: fmtGB(s.fnRam), unit: 'GB RAM',
       badge: { text: 'läuft', type: 'accent' },
-      text: `Fortnite belegt ${fmtGB(s.fnRam)} GB Arbeitsspeicher${cpuPart}.`,
+      text: `Belegt ${fmtGB(s.fnRam)} GB Arbeitsspeicher${cpuPart}.`,
       spark: { values: series(history, 'fnRam'), min: 0, max: isNum(s.ramTotal) ? s.ramTotal : Math.max(1, ...series(history, 'fnRam').filter(isNum)) },
       available: true,
     });
   } else if (!windows) {
-    tiles.push(missing('fortnite', 'Fortnite', 'Ob Fortnite läuft, sieht HELIX nur unter Windows.'));
+    tiles.push(missing('fortnite', 'Fortnite', 'Geht nur unter Windows.'));
   } else if (pending) {
     tiles.push(missing('fortnite', 'Fortnite', ''));
   } else if (s.fnRunning === false) {
-    tiles.push({ id: 'fortnite', label: 'Fortnite', value: '–', unit: '', badge: { text: 'läuft nicht', type: '' }, text: 'Starte Fortnite. Dann siehst du hier, wie viel Arbeitsspeicher das Spiel braucht.', spark: null, available: false });
+    tiles.push({ id: 'fortnite', label: 'Fortnite', value: '–', unit: '', badge: { text: 'läuft nicht', type: '' }, text: 'Starte Fortnite, dann steht hier sein Speicherbedarf.', spark: null, available: false });
   } else {
     // ohne Messwerte von Windows weiß HELIX nicht, ob Fortnite läuft
-    tiles.push({ id: 'fortnite', label: 'Fortnite', value: '–', unit: '', badge: { text: 'unbekannt', type: '' }, text: 'Ob Fortnite läuft, sieht HELIX gerade nicht – Windows liefert keine Messwerte.', spark: null, available: false });
+    tiles.push({ id: 'fortnite', label: 'Fortnite', value: '–', unit: '', badge: { text: 'unbekannt', type: '' }, text: 'Ohne Messwerte von Windows nicht erkennbar.', spark: null, available: false });
   }
   return tiles;
 }
@@ -225,8 +224,8 @@ export function sessionRow(s) {
 
 /** Kurzer Text, welche Quelle die Werte liefert. */
 export function sourceText(status = {}) {
-  if (status.windows === false) return 'Nur Prozessor und Arbeitsspeicher – die anderen Werte gibt es nur unter Windows.';
-  if (status.stream === 'failed') return 'Windows hat keine Messwerte geliefert. Zu sehen sind nur Prozessor und Arbeitsspeicher.';
+  if (status.windows === false) return ''; // das sagen schon Plakette und Hinweis darunter
+  if (status.stream === 'failed') return 'Nur Prozessor und Arbeitsspeicher.';
   if (status.stream === 'starting') return 'Messung startet …';
-  return 'Live – alle 2 Sekunden. Nur lesend, kein Overlay im Spiel.';
+  return 'Alle 2 Sekunden, nur lesend.';
 }

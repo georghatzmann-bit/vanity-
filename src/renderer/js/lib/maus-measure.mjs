@@ -111,14 +111,14 @@ export function analyzePolling(ts, { gap = GAP_MS, needMs = NEED_MOVE_MS } = {})
 /** Kurze, einfache Erklärung zum Ergebnis der Abfragerate. */
 export function pollingAdvice(r) {
   if (!r || r.cls === 'low') {
-    return { tone: 'warn', text: 'Es kamen zu wenige Bewegungen an. Bewege die Maus schneller und ohne Pause im Kreis und miss noch einmal.' };
+    return { tone: 'warn', text: 'Zu wenige Bewegungen. Bewege die Maus schneller und ohne Pause im Kreis.' };
   }
   if (r.cls === '2000+') {
-    return { tone: 'ok', text: 'Deine Maus meldet sich öfter als 1000-mal pro Sekunde. Ein Browser kann so hohe Werte nicht genau messen – die echte Rate steht in der Software deiner Maus.' };
+    return { tone: 'ok', text: 'Über 1000 Hz. So hohe Werte kann HELIX nicht genau messen – schau in die Maus-Software.' };
   }
-  if (r.cls === '1000') return { tone: 'ok', text: '1000 Hz ist ideal für Fortnite: Die Maus meldet ihre Position etwa jede Millisekunde.' };
-  if (r.cls === '500') return { tone: 'warn', text: '500 Hz ist okay. Wenn deine Maus 1000 Hz kann, stell es in der Software des Herstellers ein (oft „Polling Rate“ oder „Report Rate“).' };
-  return { tone: 'warn', text: `${classifyLabel(r.cls)} ist wenig. Stell in der Software deiner Maus 1000 Hz ein, falls sie das kann („Polling Rate“). Bei sehr einfachen Mäusen geht das nicht.` };
+  if (r.cls === '1000') return { tone: 'ok', text: '1000 Hz ist ideal für Fortnite.' };
+  if (r.cls === '500') return { tone: 'warn', text: '500 Hz ist okay. Kann deine Maus 1000 Hz, stell das in ihrer Software ein.' };
+  return { tone: 'warn', text: `${classifyLabel(r.cls)} ist wenig. Stell in der Maus-Software 1000 Hz ein, falls möglich.` };
 }
 
 // ---------------------------------------------------------------- DPI
@@ -179,14 +179,14 @@ export function buildChecklist({ windows = null, fortnite = null, polling = null
       title: 'Windows-Zeigergeschwindigkeit 6/11',
       state: windows.speed.ok ? 'ok' : 'warn',
       now: `jetzt: ${windows.speed.label}`,
-      text: 'Bei Stufe 6 von 11 setzt Windows jede Mausbewegung 1:1 um. Andere Stufen rechnen hoch oder lassen Schritte aus.',
+      text: 'Nur bei 6/11 setzt Windows jede Bewegung 1:1 um.',
     });
     items.push({
       id: 'accel',
       title: 'Zeigerbeschleunigung aus',
       state: windows.accel.ok ? 'ok' : 'warn',
       now: windows.accel.on ? 'jetzt: an' : 'jetzt: aus',
-      text: 'Beschleunigung heißt: schnelle Bewegungen gehen weiter als langsame. Aus ist besser, damit gleiche Handbewegung immer gleich weit geht.',
+      text: 'Dann geht gleiche Handbewegung immer gleich weit.',
     });
   } else {
     items.push({
@@ -194,7 +194,7 @@ export function buildChecklist({ windows = null, fortnite = null, polling = null
       title: 'Windows-Mauseinstellungen',
       state: 'open',
       now: unsupported ? 'nur unter Windows prüfbar' : 'noch nicht gelesen',
-      text: 'Empfohlen: Zeigergeschwindigkeit 6/11 und „Zeigerbeschleunigung verbessern“ aus.',
+      text: 'Empfohlen: Zeiger 6/11 und „Zeigerbeschleunigung verbessern“ aus.',
     });
   }
   if (fortnite && fortnite.found && fortnite.disabled !== null && fortnite.disabled !== undefined) {
@@ -203,7 +203,7 @@ export function buildChecklist({ windows = null, fortnite = null, polling = null
       title: 'Mausbeschleunigung in Fortnite aus',
       state: fortnite.disabled ? 'ok' : 'warn',
       now: fortnite.disabled ? 'jetzt: aus' : 'jetzt: an',
-      text: 'Steht in der Fortnite-Datei GameUserSettings.ini (bDisableMouseAcceleration). Aus ist besser für gleichmäßiges Zielen.',
+      text: 'Aus ist besser für gleichmäßiges Zielen.',
     });
   } else {
     items.push({
@@ -211,7 +211,7 @@ export function buildChecklist({ windows = null, fortnite = null, polling = null
       title: 'Mausbeschleunigung in Fortnite aus',
       state: 'open',
       now: fortnite && fortnite.found ? 'Wert fehlt in der Datei' : 'Fortnite-Datei nicht gefunden',
-      text: 'HELIX liest das aus der Fortnite-Datei GameUserSettings.ini, sobald sie da ist.',
+      text: 'HELIX liest es aus der Fortnite-Datei, sobald sie da ist.',
     });
   }
   if (polling && polling.cls) {
@@ -221,7 +221,7 @@ export function buildChecklist({ windows = null, fortnite = null, polling = null
       title: 'Abfragerate 1000 Hz',
       state: good ? 'ok' : 'warn',
       now: `gemessen: ${classifyLabel(polling.cls)}`,
-      text: 'Die Abfragerate sagt, wie oft die Maus pro Sekunde ihre Position meldet. 1000 Hz ist ideal, wenn deine Maus das kann.',
+      text: 'Ideal, wenn deine Maus das kann.',
     });
   } else {
     items.push({
@@ -229,7 +229,7 @@ export function buildChecklist({ windows = null, fortnite = null, polling = null
       title: 'Abfragerate 1000 Hz',
       state: 'open',
       now: 'noch nicht gemessen',
-      text: 'Miss sie im Reiter „Abfragerate“. Das dauert nur ein paar Sekunden.',
+      text: 'Miss sie im Reiter „Abfragerate“ – dauert ein paar Sekunden.',
     });
   }
   const done = items.filter((i) => i.state === 'ok').length;

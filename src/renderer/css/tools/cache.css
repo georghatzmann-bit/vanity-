@@ -8,11 +8,14 @@
   cursor: pointer; transition: border-color var(--t), background var(--t);
 }
 [data-tool="cache"] .cache-row:hover { border-color: var(--line-2); }
-[data-tool="cache"] .cache-row.checked { border-color: rgba(79, 216, 255, 0.4); background: var(--accent-soft); }
+[data-tool="cache"] .cache-row.checked { border-color: var(--accent-line); background: var(--accent-soft); }
 [data-tool="cache"] .cache-row.is-empty { cursor: default; opacity: 0.7; }
 [data-tool="cache"] .cache-row input[type="checkbox"] { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); flex: none; cursor: inherit; }
 
 [data-tool="cache"] .cache-text { display: flex; flex-direction: column; gap: 4px; }
+[data-tool="cache"] .callout .more { margin-top: 4px; }
+[data-tool="cache"] .cache-result .callout { margin-bottom: 0; }
+[data-tool="cache"] .cache-result .callout > p { margin: 0; }
 [data-tool="cache"] .cache-row-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 [data-tool="cache"] .cache-privacy { display: flex; align-items: flex-start; gap: 6px; color: var(--accent-2); }
 [data-tool="cache"] .cache-privacy .icon { flex: none; margin-top: 2px; }
@@ -26,8 +29,8 @@
 [data-tool="cache"] .cache-bar {
   position: sticky; bottom: -24px; z-index: 5; margin: 8px -24px -24px;
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 24px;
-  background: rgba(12, 15, 24, 0.96); border: 0; border-top: 1px solid var(--line-2); border-radius: 0;
-  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.35);
+  background: var(--surface); border: 0; border-top: 1px solid var(--line-2); border-radius: 0;
+  box-shadow: none;
 }
 [data-tool="cache"] .cache-bar-stats { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
 [data-tool="cache"] .cache-gain { display: flex; flex-direction: column; }

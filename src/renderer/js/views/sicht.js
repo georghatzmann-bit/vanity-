@@ -64,7 +64,8 @@ export default {
     function fortniteCallout(fn, after) {
       return h('div.callout.warn', icon('warn'), h('div',
         h('strong', 'Fortnite läuft gerade'),
-        h('p.hint', 'Solange Fortnite offen ist, kann HELIX nichts ändern – Fortnite würde die Datei beim Beenden wieder überschreiben. Die Vorschau geht trotzdem.'),
+        h('p.hint', 'Schließe Fortnite, bevor du etwas anwendest. Die Vorschau geht trotzdem.'),
+        ui.more('Warum?', 'Fortnite würde die Datei beim Beenden wieder überschreiben.'),
         h('div.row',
           ui.button('Fortnite schließen', {
             variant: 'primary', iconName: 'power', small: true,
@@ -72,7 +73,7 @@ export default {
               try {
                 const r = await env.call('core.fortniteClose', { force: false });
                 if (r && r.closed) ui.toast('Fortnite wurde geschlossen.');
-                else ui.toast('Fortnite hat sich nicht beendet. Bitte schließe es im Spiel selbst.', 'warn');
+                else ui.toast('Fortnite reagiert nicht – schließe es bitte im Spiel.', 'warn');
               } catch (e) { ui.showError(e); }
               await after?.();
             },
@@ -84,13 +85,13 @@ export default {
       if (cur.reason === 'NO_FILE') {
         return ui.emptyState({
           title: 'Grafik-Datei nicht gefunden',
-          text: 'HELIX braucht die Datei GameUserSettings.ini aus dem Fortnite-Ordner. Starte Fortnite einmal und schließe es wieder – dann legt Fortnite die Datei an.',
+          text: 'Starte Fortnite einmal und schließe es wieder – dann legt Fortnite die Datei an.',
           action: ui.button('Erneut suchen', { iconName: 'refresh', onClick: async () => { await load(); ui.toast('Neu eingelesen.', 'info'); } }),
         });
       }
       return ui.emptyState({
         title: 'Fortnite-Ordner nicht gefunden',
-        text: cur.message || 'HELIX hat den Fortnite-Einstellungsordner nicht gefunden. Starte Fortnite einmal oder wähle den Ordner bei den Settings-Profilen selbst aus.',
+        text: cur.message || 'Starte Fortnite einmal oder wähle den Ordner bei den Settings-Profilen.',
         action: h('div.row',
           ui.button('Ordner auswählen', { variant: 'primary', iconName: 'folder', onClick: () => env.nav.go('profiles') }),
           ui.button('Erneut suchen', { iconName: 'refresh', onClick: async () => { await load(); ui.toast('Neu eingelesen.', 'info'); } })),
@@ -101,11 +102,10 @@ export default {
     function nowSection() {
       const mode = renderMode(cur.raw);
       const active = activePreset(values, { original: originalValues });
-      const tiles = KEY_IDS.map((id) => h('div.sicht-tile',
+      const tiles = KEY_IDS.map((id) => h('div.sicht-tile', { title: KEYS[id].hint },
         h('span.hint', KEYS[id].label),
-        h('strong', valueText(id, values[id])),
-        h('span.hint.sicht-tile-hint', KEYS[id].hint)));
-      return ui.section('Deine Sicht-Werte jetzt', 'So steht es gerade in deiner Fortnite-Grafikdatei (GameUserSettings.ini).',
+        h('strong', valueText(id, values[id]))));
+      return ui.section('Deine Sicht-Werte jetzt', null,
         h('div.sicht-meta',
           active ? ui.badge(`Aktiv: ${active.short || active.name}`, 'accent') : ui.badge('Kein Preset aktiv', ''),
           ui.badge(`Darstellung: ${mode.label}`, ''),
@@ -113,7 +113,8 @@ export default {
         mode.id === 'performance'
           ? h('div.callout.info', icon('info'), h('div',
             h('strong', 'Du spielst im Leistungsmodus'),
-            h('p.hint', 'Leistungsmodus = die schnelle Darstellung für schwächere PCs. Schatten, Nachbearbeitung und Gras sind dort schon aus oder wirken kaum. Spürbar sind vor allem Helligkeit und Anzeige-Kontrast.')))
+            h('p.hint', 'Spürbar sind hier vor allem Helligkeit und Anzeige-Kontrast.'),
+            ui.more('Warum?', 'Der Leistungsmodus ist die schnelle Darstellung für schwächere PCs. Schatten, Nachbearbeitung und Gras sind dort schon aus oder wirken kaum.')))
           : null,
         h('div.sicht-tiles', tiles));
     }
@@ -133,42 +134,42 @@ export default {
           h('ul.sicht-chips', describeValues(p.values).map((t) => h('li', t))),
           p.restoreOriginal
             ? h('p.hint', originalValues
-              ? 'Grafikwerte von vorher sind gemerkt und kommen mit zurück.'
-              : 'Noch kein Sicht-Preset benutzt – es werden nur Helligkeit und Anzeige-Kontrast zurückgesetzt.')
+              ? 'Deine Grafikwerte von vorher kommen mit zurück.'
+              : 'Nur Helligkeit und Anzeige-Kontrast werden zurückgesetzt.')
             : null,
-          p.inGame?.length ? h('p.hint.sicht-ingame-note', icon('info', 14), ` Dazu ${p.inGame.length === 1 ? 'ein Schritt' : `${p.inGame.length} Schritte`} im Spiel`) : null,
           h('div.sicht-card-actions',
-            ui.button('Vorschau & anwenden', { variant: isActive ? '' : 'primary', iconName: 'eye', onClick: () => previewFlow({ preset: p, values: vals }) })));
+            ui.button('Vorschau & anwenden', { variant: isActive ? '' : 'primary', iconName: 'eye', onClick: () => previewFlow({ preset: p, values: vals }) }),
+            p.inGame?.length ? h('span.hint.sicht-ingame-note', `+ ${p.inGame.length === 1 ? '1 Schritt' : `${p.inGame.length} Schritte`} im Spiel`) : null));
       });
-      return ui.section('Presets', 'Ein Klick setzt mehrere Werte passend zur Situation. Vorher siehst du genau, was sich ändert.',
+      return ui.section('Presets', 'Vorher siehst du genau, was sich ändert.',
         h('div.sicht-grid', cards));
     }
 
     // ---------------- Eigener Wert ----------------
     function customSection() {
       const bVal = h('strong.sicht-slider-value');
-      const bRaw = h('span.hint.mono');
+      const bRaw = h('p.mono');
       const cVal = h('strong.sicht-slider-value');
       const bRange = h('input.range.sicht-range', { type: 'range', min: BRIGHTNESS.min, max: BRIGHTNESS.max, step: 1, value: custom.brightness, 'aria-label': 'Helligkeit in Prozent' });
       const cRange = h('input.range.sicht-range', { type: 'range', min: 100, max: 150, step: 5, value: Math.round(custom.uiContrast * 100), 'aria-label': 'Anzeige-Kontrast' });
       const paint = () => {
         bVal.textContent = `${custom.brightness} %`;
-        bRaw.textContent = `In der Datei: DisplayGamma ${percentToGamma(custom.brightness).toFixed(2)}`;
+        bRaw.textContent = `In der Datei: DisplayGamma ${percentToGamma(custom.brightness).toFixed(2)}.`;
         cVal.textContent = custom.uiContrast.toFixed(2).replace('.', ',');
       };
       bRange.addEventListener('input', () => { custom.brightness = Number(bRange.value); customTouched = true; paint(); });
       cRange.addEventListener('input', () => { custom.uiContrast = Number(cRange.value) / 100; customTouched = true; paint(); });
       paint();
-      return ui.section('Eigener Wert', 'Feinschliff von Hand. Gleicher Ablauf: erst Vorschau, dann anwenden.',
+      return ui.section('Eigener Wert', 'Feinschliff von Hand – erst Vorschau, dann anwenden.',
         h('div.sicht-slider',
           h('div.sicht-slider-top', h('label', 'Helligkeit'), bVal),
           bRange,
-          h('p.hint', '100 % ist Fortnite-Standard. Für dunkle Ecken 110 bis 130 %. Über 140 % wirkt das Bild schnell grau.'),
-          bRaw),
+          h('p.hint', '100 % ist Standard. Für dunkle Ecken 110 bis 130 %.'),
+          ui.more('Mehr', 'Über 140 % wirkt das Bild schnell grau.', bRaw)),
         h('div.sicht-slider',
           h('div.sicht-slider-top', h('label', 'Anzeige-Kontrast'), cVal),
           cRange,
-          h('p.hint', 'Kontrast von Leben, Munition, Karte und Menüs. 1,00 ist Standard, 1,50 der stärkste Wert. Die Spielwelt ändert sich dadurch nicht.')),
+          h('p.hint', 'Leben, Munition, Karte und Menüs – nicht die Spielwelt. 1,00 ist Standard.')),
         h('div.row',
           ui.button('Vorschau & anwenden', {
             variant: 'primary', iconName: 'eye',
@@ -185,15 +186,15 @@ export default {
               ui.toast('Regler stehen wieder auf deinen jetzigen Werten.', 'info');
             },
           }),
-          h('span.hint', 'Tipp: Prüfe das Ergebnis mit den Testbildern im Monitor-Tuner.'),
-          ui.button('Zum Monitor-Tuner', { small: true, variant: 'ghost', iconName: 'chevron', onClick: () => env.nav.go('monitor') })));
+          ui.button('Mit Testbildern prüfen', { small: true, variant: 'ghost', iconName: 'chevron', onClick: () => env.nav.go('monitor') })));
     }
 
     // ---------------- Cloud-Hinweis ----------------
     function cloudSection() {
       return h('div.callout.info', icon('info'), h('div',
-        h('strong', 'Was HELIX hier nicht einstellen kann'),
-        h('p.hint', 'Farbenblind-Modus, seine Stärke und die HUD-Größe speichert Fortnite in der Epic-Cloud deines Kontos (Cloud = Speicher auf Epic-Servern). Eine Änderung auf dem PC würde beim nächsten Einloggen überschrieben. Deshalb zeigt dir jedes Preset diese Schritte zum Einstellen im Spiel.')));
+        h('strong', 'Farbenblind-Modus und HUD-Größe stellst du im Spiel ein'),
+        h('p.hint', 'Jedes Preset zeigt dir die Schritte dazu.'),
+        ui.more('Warum?', 'Fortnite speichert diese Werte in der Epic-Cloud deines Kontos (Speicher auf Epic-Servern). Eine Änderung auf dem PC würde beim nächsten Einloggen überschrieben.')));
     }
 
     // ---------------- Vorschau & Anwenden ----------------
@@ -229,14 +230,14 @@ export default {
         fnBox,
         preset?.why ? h('p', preset.why) : h('p', 'Du setzt Helligkeit und Anzeige-Kontrast auf deine eigenen Werte.'),
         changedCount === 0
-          ? h('div.callout.ok', icon('check'), h('div', h('strong', 'Schon eingestellt'), h('p.hint', 'Alle Werte stehen bereits so. Es gibt nichts zu ändern.')))
+          ? h('div.callout.ok', icon('check'), h('div', h('strong', 'Schon eingestellt'), h('p.hint', 'Alle Werte stehen schon so.')))
           : null,
         h('div.table-wrap', h('table.table.sicht-diff',
           h('thead', h('tr', h('th', 'Einstellung'), h('th', 'Jetzt'), h('th', 'Neu'), h('th', 'Status'))),
           h('tbody', rows))),
-        prev.readOnly ? h('p.hint', 'Die Datei ist schreibgeschützt. HELIX schreibt die Werte trotzdem und setzt den Schutz danach wieder.') : null,
+        prev.readOnly ? h('p.hint', 'Die Datei ist schreibgeschützt – HELIX schreibt trotzdem und setzt den Schutz danach wieder.') : null,
         preset?.inGame?.length ? inGameList(preset.inGame) : null,
-        h('p.hint', 'Vorher legt HELIX automatisch eine Sicherung an. Du findest sie bei den Settings-Profilen unter „Zeitmaschine“.'),
+        h('p.hint', 'Vorher legt HELIX automatisch eine Sicherung an (Zeitmaschine).'),
       ];
       let result = null;
       let applyRun = null; // läuft (oder lief) „anwenden“? Esc, X oder „Abbrechen“ schließen den Dialog auch währenddessen.
@@ -296,11 +297,11 @@ export default {
     function inGameList(steps) {
       return h('div.sicht-ingame',
         h('h4', 'Im Spiel einstellen'),
-        h('p.hint', 'Diese Werte liegen in der Epic-Cloud. Stelle sie einmal in Fortnite selbst ein.'),
+        h('p.hint', 'Das kann HELIX nicht setzen – stell es einmal in Fortnite ein.'),
         h('ol.sicht-steps', steps.map((s) => h('li',
           h('strong', s.title),
           h('span.hint', s.text),
-          h('span.hint', `Warum: ${s.why}`)))));
+          ui.more('Warum?', s.why)))));
     }
 
     function showResult(result, preset) {
@@ -308,7 +309,7 @@ export default {
       if (!result.backupId) return;
       const box = h('div.callout.ok', icon('check'), h('div.grow',
         h('strong', preset ? `„${preset.name}“ ist aktiv` : 'Eigene Werte sind aktiv'),
-        h('p.hint', 'Starte Fortnite und probiere es aus. Gefällt es dir nicht, holst du mit einem Klick den Stand von vorher zurück.'),
+        h('p.hint', 'Probier es in Fortnite aus. „Rückgängig machen“ holt den Stand von vorher zurück.'),
         preset?.inGame?.length ? h('p.hint', `Denk an ${preset.inGame.length === 1 ? 'den Schritt' : 'die Schritte'} im Spiel: ${preset.inGame.map((s) => s.title).join(' · ')}`) : null,
         profileSyncBox(env),
         h('div.row',

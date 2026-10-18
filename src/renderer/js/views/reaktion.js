@@ -137,14 +137,14 @@ export default {
 
       // Wer abgelenkt war, wiederholt die Runde – sonst verdirbt eine einzige Runde den ganzen Schnitt
       function tooSlow() {
-        setPhase('slow', 'Zu langsam', `Länger als ${MAX_REACTION_MS / 1000} Sekunden – die Runde zählt nicht. Klick, um sie zu wiederholen.`);
+        setPhase('slow', 'Zu langsam', `Über ${MAX_REACTION_MS / 1000} Sekunden zählt nicht. Klick zum Wiederholen.`);
         readyAt = performance.now();
       }
 
       async function finish() {
         const ev = evaluateReaction(times);
         const rate = rateReaction(ev.avgMs);
-        setPhase('done', 'Fertig!', `Ø ${ev.avgMs} ms – das Ergebnis steht unten. Klick für einen neuen Test.`);
+        setPhase('done', 'Fertig!', `Ø ${ev.avgMs} ms · Klick für einen neuen Test`);
         ui.mount(resultBox,
           h('div.stat-row',
             h('div.stat', h('span.hint', 'Durchschnitt'), h('strong', `${ev.avgMs} ms`)),
@@ -178,7 +178,7 @@ export default {
         if (phase === 'wait') {
           cancelLater(timer);
           falseStarts++;
-          setPhase('early', 'Zu früh!', 'Fehlstart – zählt nicht als Runde. Klick, um die Runde neu zu starten.');
+          setPhase('early', 'Zu früh!', 'Fehlstart. Klick, um die Runde neu zu starten.');
           renderSlots();
           return;
         }
@@ -188,7 +188,7 @@ export default {
           const kind = classifyPress(ms);
           if (kind === 'early') {
             falseStarts++;
-            setPhase('early', 'Geraten!', 'Unter 100 ms schafft das kein Mensch – zählt als Fehlstart. Klick für einen neuen Versuch.');
+            setPhase('early', 'Geraten!', 'Unter 100 ms zählt als Fehlstart. Klick für einen neuen Versuch.');
             renderSlots();
             return;
           }
@@ -229,17 +229,18 @@ export default {
       const bestLine = h('p.hint.best-line', bestText());
       reset();
       return [
-        ui.section('Reaktionstest', `Die Fläche wird nach 1,5 bis 4 Sekunden hell. Dann so schnell wie möglich klicken oder die Leertaste drücken. ${ROUNDS} Runden.`,
-          arena, slots, bestLine, resultBox),
-        h('div.callout.info', icon('info'), h('div',
-          h('strong', 'So liest du das Ergebnis'),
-          h('p.hint', 'Die meisten Menschen liegen zwischen 200 und 300 ms. Bildschirm und Maus fügen ein paar Millisekunden hinzu – vergleiche deine Werte deshalb am besten auf demselben PC. Ein Fehlstart heißt: zu früh geklickt.'))),
+        ui.section('Reaktionstest', `${ROUNDS} Runden: Wird die Fläche hell, sofort klicken oder Leertaste.`,
+          arena, slots, bestLine,
+          ui.more('So liest du das Ergebnis',
+            'Die meisten Menschen liegen zwischen 200 und 300 ms.',
+            'Bildschirm und Maus fügen ein paar Millisekunden hinzu – vergleiche deine Werte deshalb am besten auf demselben PC.'),
+          resultBox),
       ];
     }
 
     function bestText() {
       const s = st?.stats?.reaction;
-      if (!s || !s.count) return 'Noch kein Ergebnis gespeichert. Dein erster Test zählt schon.';
+      if (!s || !s.count) return 'Noch kein Ergebnis gespeichert.';
       const last = st.reaction[st.reaction.length - 1];
       return `Dein Bestwert: ${s.bestMs} ms · Letzter Test: Ø ${last.avgMs} ms (${ui.fmtAgo(last.at)})`;
     }
@@ -265,7 +266,7 @@ export default {
       function updateStart() {
         const blocker = trainingBlocker(binds);
         startBtn.disabled = !!blocker || !!run;
-        blockerLine.textContent = blocker || `${activeActions(binds).length} Aktionen im Training · ${PROMPTS} Befehle · bis zu ${String(PROMPT_TIMEOUT_MS / 1000).replace('.', ',')} Sekunden pro Befehl`;
+        blockerLine.textContent = blocker || `${activeActions(binds).length} Aktionen · bis zu ${String(PROMPT_TIMEOUT_MS / 1000).replace('.', ',')} s pro Befehl`;
         blockerLine.classList.toggle('warn-text', !!blocker);
       }
 
@@ -276,7 +277,6 @@ export default {
         for (const a of ACTIONS) {
           const b = binds[a.id];
           const isDup = dupIds.has(a.id);
-          const optional = a.id.startsWith('weapon');
           const sw = h('input', {
             type: 'checkbox', role: 'switch', checked: b.on, 'aria-label': `${a.label} im Training üben`,
             disabled: !!run,
@@ -289,7 +289,7 @@ export default {
           grid.append(h(`div.bind-row${isDup ? '.dup' : ''}${b.on ? '' : '.off'}`,
             h('div.grow',
               h('span.bind-name', a.label),
-              h('span.hint', optional ? `Optional. Fortnite-Standard: Taste ${a.key}` : `Fortnite-Standard: ${a.key}`)),
+              h('span.hint', `Standard: ${a.key}`)),
             isDup ? ui.badge('doppelt belegt', 'warn') : null,
             h(`button.keycap${capturing === a.id ? '.capturing' : ''}`, {
               type: 'button',
@@ -524,7 +524,7 @@ export default {
             h('div.stat', h('span.hint', 'Falsche Taste'), h('strong', String(ev.wrong))),
             h('div.stat', h('span.hint', 'Zu langsam'), h('strong', String(ev.timeouts)))),
           h(`div.callout.${rate.tone === 'ok' ? 'ok' : rate.tone === 'warn' ? 'warn' : 'info'}`, icon(rate.tone === 'warn' ? 'warn' : 'check'),
-            h('div', h('strong', rate.label), h('p.hint', rate.text), tip ? h('p.hint', tip) : null)),
+            h('div', h('strong', rate.label), h('p.hint', [rate.text, tip].filter(Boolean).join(' ')))),
           h('div.table-wrap', h('table.table',
             h('thead', h('tr', h('th', 'Aktion'), h('th', 'Taste'), h('th', 'Ø Zeit'), h('th', 'Richtig'), h('th', 'Daneben'))),
             h('tbody', ev.perAction.map((p) => h('tr',
@@ -533,34 +533,35 @@ export default {
         try {
           const res = await env.call('reaktion.saveKeys', { avgMs: ev.avgMs, accuracy: ev.accuracy, count: ev.count });
           st = res.state;
-          ui.toast(ev.avgMs !== null ? `Gespeichert: Ø ${ev.avgMs} ms, ${String(ev.accuracy).replace('.', ',')} % richtig.` : 'Gespeichert. Diesmal war leider nichts richtig – probier es mit eingeblendeten Tasten.');
+          ui.toast(ev.avgMs !== null ? `Gespeichert: Ø ${ev.avgMs} ms, ${String(ev.accuracy).replace('.', ',')} % richtig.` : 'Gespeichert – probier es mal mit eingeblendeten Tasten.');
         } catch (e) { ui.showError(e, 'Ergebnis nicht gespeichert'); }
       }
 
       renderBinds();
       const keysToggle = ui.toggle({
         label: 'Taste beim Befehl mit anzeigen',
-        hint: 'Gut für den Anfang. Ohne Anzeige trainierst du, die Tasten blind zu finden.',
         checked: showKeys,
         onChange: (v) => { showKeys = v; writePref(v); ui.toast(v ? 'Tasten werden angezeigt.' : 'Tasten werden ausgeblendet.', 'info', { timeout: 2000 }); },
       });
 
       return [
-        ui.section('Deine Tasten', 'Trag hier die Tasten ein, die du in Fortnite benutzt: Klick auf die Taste und drück dann die neue. Rechte und mittlere Maustaste, die Seitentasten (Maus 4 und 5) und das Mausrad gehen auch. Esc bricht ab.',
+        ui.section('Deine Tasten', 'Klick auf eine Taste und drück dann deine Taste aus Fortnite.',
           grid,
           h('div.row',
             ui.button('Fortnite-Standard laden', {
               iconName: 'refresh', small: true, variant: 'ghost',
               onClick: async () => {
-                const ok = await ui.confirmDialog({ title: 'Fortnite-Standard laden?', text: 'Alle Tasten hier werden auf den Fortnite-Standard zurückgesetzt (Wand F1, Boden F2, Treppe F3, Dach F4, Bearbeiten G). In Fortnite selbst ändert sich nichts.', confirmLabel: 'Zurücksetzen' });
+                const ok = await ui.confirmDialog({ title: 'Fortnite-Standard laden?', text: 'Alle Tasten hier gehen zurück auf den Fortnite-Standard. In Fortnite selbst ändert sich nichts.', confirmLabel: 'Zurücksetzen' });
                 if (!ok) return;
                 binds = defaultBinds();
                 renderBinds();
                 await saveBinds('Fortnite-Standard geladen.');
               },
-            }),
-            h('span.hint', 'HELIX speichert nur hier, welche Tasten du üben willst. In Fortnite wird nichts geändert.'))),
-        ui.section('Training', `HELIX zeigt ${PROMPTS} zufällige Befehle wie „Wand!“. Drück jeweils so schnell wie möglich die passende Taste.`,
+            })),
+          ui.more('So funktioniert es',
+            'Auch rechte und mittlere Maustaste, Maus 4 und 5 und das Mausrad gehen. Esc bricht ab.',
+            'HELIX merkt sich nur hier, was du üben willst. In Fortnite ändert sich nichts.')),
+        ui.section('Training', `${PROMPTS} Befehle wie „Wand!“ – drück so schnell wie möglich die passende Taste.`,
           keysToggle,
           area,
           h('div.row', startBtn, abortBtn, blockerLine),
@@ -586,7 +587,7 @@ export default {
     }
 
     async function clear(which, title) {
-      const ok = await ui.confirmDialog({ title: `${title} löschen?`, text: 'Alle gespeicherten Ergebnisse dieses Tests werden gelöscht. Deine Tasten bleiben gespeichert.', confirmLabel: 'Löschen', danger: true });
+      const ok = await ui.confirmDialog({ title: `${title} löschen?`, text: 'Alle Ergebnisse dieses Tests werden gelöscht. Deine Tasten bleiben.', confirmLabel: 'Löschen', danger: true });
       if (!ok) return;
       try {
         st = await env.call('reaktion.clearHistory', { which });
@@ -608,25 +609,25 @@ export default {
       const rs = st.stats.reaction;
       const ks = st.stats.keys;
       const reactionBlock = r.length
-        ? ui.section('Reaktionstest', 'Kürzere Balken heißt schneller. Gezeigt werden die letzten 20 Tests.',
+        ? ui.section('Reaktionstest', 'Kürzere Balken heißt schneller.',
           h('div.stat-row',
             h('div.stat', h('span.hint', 'Bester Klick'), h('strong', `${rs.bestMs} ms`)),
             h('div.stat', h('span.hint', 'Bester Durchschnitt'), h('strong', `${rs.bestAvgMs} ms`)),
             h('div.stat', h('span.hint', 'Ø der letzten 5'), h('strong', `${rs.last5AvgMs} ms`)),
             h('div.stat', h('span.hint', 'Tests'), h('strong', String(rs.count)))),
           chart(r, 'avgMs', 'ms', 'Reaktionstest'),
-          trendText(r) ? h('p.hint', trendText(r)) : null,
+          trendText(r) ? h('p.trend-line', trendText(r)) : null,
           h('ul.list.compact.hist-list', r.slice(-6).reverse().map((e) => h('li',
             h('div.grow', h('span', `Ø ${e.avgMs} ms · bester Klick ${e.bestMs} ms`), h('span.hint', `${ui.fmtDate(e.at)} · ${e.rounds} Runden · ${e.falseStarts === 1 ? '1 Fehlstart' : `${e.falseStarts} Fehlstarts`}`)),
             ui.badge(rateReaction(e.avgMs).label, rateReaction(e.avgMs).tone === 'ok' ? 'ok' : rateReaction(e.avgMs).tone === 'warn' ? 'warn' : 'accent')))),
           h('div.row', ui.button('Verlauf löschen', { iconName: 'trash', small: true, variant: 'ghost', onClick: () => clear('reaction', 'Verlauf des Reaktionstests') })))
         : ui.section('Reaktionstest', null, ui.emptyState({
           title: 'Noch kein Reaktionstest',
-          text: 'Mach deinen ersten Test. Er dauert keine Minute – danach siehst du hier, wie du dich entwickelst.',
+          text: 'Dauert keine Minute.',
           action: ui.button('Zum Reaktionstest', { variant: 'primary', iconName: 'play', onClick: () => { tab = 'reaction'; renderTabs(); render(); } }),
         }));
       const keysBlock = k.length
-        ? ui.section('Tasten-Trainer', 'Zeit bis zur richtigen Taste und wie oft du richtig lagst.',
+        ? ui.section('Tasten-Trainer', null,
           h('div.stat-row',
             h('div.stat', h('span.hint', 'Bester Durchschnitt'), h('strong', ks.bestAvgMs !== null ? `${ks.bestAvgMs} ms` : '–')),
             h('div.stat', h('span.hint', 'Ø der letzten 5'), h('strong', ks.last5AvgMs !== null ? `${ks.last5AvgMs} ms` : '–')),
@@ -639,7 +640,7 @@ export default {
           h('div.row', ui.button('Verlauf löschen', { iconName: 'trash', small: true, variant: 'ghost', onClick: () => clear('keys', 'Verlauf des Tasten-Trainers') })))
         : ui.section('Tasten-Trainer', null, ui.emptyState({
           title: 'Noch kein Training',
-          text: 'Trag deine Tasten ein und starte ein Training mit 20 Befehlen.',
+          text: 'Trag deine Tasten ein und starte ein Training.',
           action: ui.button('Zum Tasten-Trainer', { variant: 'primary', iconName: 'play', onClick: () => { tab = 'keys'; renderTabs(); render(); } }),
         }));
       return [reactionBlock, keysBlock];

@@ -143,22 +143,17 @@ export default {
         }, label)));
       const hasData = !!data?.hasAnyData;
       ui.mount(top,
-        h('div.stats-range',
-          h('span.stats-label', 'Zeitraum'),
-          seg,
-          h('p.hint', 'Gilt für Spielzeit und Aim-Tests. Reaktionszeit und Ping zeigen immer deine letzten Messungen.')),
+        h('div.stats-range', seg, h('span.hint', 'Gilt für Spielzeit und Aim-Tests.')),
         h('span.grow'),
         h('div.stats-export',
-          ui.button('Als Tabelle speichern', { iconName: 'download', onClick: exportCsv, disabled: !hasData }),
-          h('p.hint', hasData
-            ? 'Speichert alle Sitzungen, Tests und Messungen als CSV-Datei – eine Tabelle, die Excel öffnen kann.'
-            : 'Das geht, sobald es die ersten Werte gibt.')));
+          hasData ? null : h('span.hint', 'Geht, sobald es erste Werte gibt.'),
+          ui.button('Als Tabelle speichern', { iconName: 'download', onClick: exportCsv, disabled: !hasData, title: 'Alle Sitzungen, Tests und Messungen als CSV-Datei – öffnet sich in Excel.' })));
     }
 
     async function exportCsv() {
       try {
         const r = await env.call('stats.exportCsv');
-        if (!r || r.canceled) { ui.toast('Speichern abgebrochen. Es wurde nichts gespeichert.', 'info'); return; }
+        if (!r || r.canceled) { ui.toast('Abgebrochen – nichts gespeichert.', 'info'); return; }
         const parts = exportParts(r);
         ui.toast(`Tabelle gespeichert: ${r.fileName || baseName(r.file)}${parts ? ` (${parts})` : ''}.`);
       } catch (e) {
@@ -175,12 +170,12 @@ export default {
       if (!d.trackingSupported) {
         out.push(h('div.callout.info', icon('info'), h('div',
           h('strong', 'Spielzeit wird nur unter Windows gezählt'),
-          h('p.hint', 'HELIX erkennt Fortnite über die Liste der laufenden Windows-Programme. Auf diesem System geht das nicht. Aim-Tests und andere Werte siehst du trotzdem.'))));
+          h('p.hint', 'Aim-Tests und andere Werte siehst du trotzdem.'))));
       }
       if (d.play.running && d.play.current) {
         out.push(h('div.callout.ok.stats-live', icon('play'), h('div.grow',
           h('strong', 'Fortnite läuft gerade'),
-          h('p.hint', `Diese Sitzung zählt schon mit: ${fmtDur(d.play.current.seconds)} mit Profil „${d.play.current.profileName}“. Die Werte aktualisieren sich jede Minute.`)),
+          h('p.hint', `${fmtDur(d.play.current.seconds)} mit Profil „${d.play.current.profileName}“ – aktualisiert jede Minute.`)),
           ui.badge('zählt mit', 'ok')));
       }
       if (d.hasSessions) {
@@ -212,17 +207,17 @@ export default {
       const fav = p.favourite;
       return h('div.stats-kpis',
         kpi('Spielzeit gesamt', fmtDur(p.totalSeconds),
-          p.totalSeconds ? `in den letzten ${d.days} Tagen · an ${p.activeDays} ${p.activeDays === 1 ? 'Tag' : 'Tagen'} gespielt` : `In den letzten ${d.days} Tagen nicht gespielt.`),
+          p.totalSeconds ? `an ${p.activeDays} von ${d.days} Tagen gespielt` : 'Nicht gespielt.'),
         kpi('Diese Woche', fmtDur(wk.thisSeconds),
           `Vorwoche bis ${wk.weekdayName}: ${fmtDurNb(wk.lastSameTimeSeconds)}`, wb,
           `Die ganze Vorwoche: ${fmtDur(wk.lastSeconds)}. Die Woche beginnt am Montag.`),
         kpi('Sitzungen', String(p.sessionCount),
-          p.sessionCount ? `im Schnitt ${fmtDurNb(p.avgSessionSeconds)} pro Sitzung` : 'Keine Sitzung in diesem Zeitraum.', null,
+          p.sessionCount ? `im Schnitt ${fmtDurNb(p.avgSessionSeconds)} pro Sitzung` : 'Keine im Zeitraum.', null,
           'Eine Sitzung ist die Zeit von „Fortnite startet“ bis „Fortnite ist wieder zu“.'),
         kpi('Längste Sitzung', p.longest ? fmtDur(p.longest.seconds) : '–',
-          p.longest ? `${fmtDay(p.longest.start, 'weekday')} · ${p.longest.profileName}` : 'Keine Sitzung in diesem Zeitraum.'),
+          p.longest ? `${fmtDay(p.longest.start, 'weekday')} · ${p.longest.profileName}` : 'Keine im Zeitraum.'),
         kpi('Lieblingsprofil', fav ? fav.name : '–',
-          fav ? `${fav.sharePct}\u00a0% deiner Spielzeit · ${fmtDurNb(fav.seconds)}` : 'Wende ein Profil an, dann zählt HELIX die Zeit pro Profil.'));
+          fav ? `${fav.sharePct}\u00a0% deiner Spielzeit` : 'Zählt, sobald ein Profil aktiv ist.'));
     }
 
     // ---------- Spielzeit pro Tag ----------
@@ -230,9 +225,9 @@ export default {
       const p = d.play;
       const host = chartHost((w, tip) => drawDaily(w, tip, host, p.daily, d.days));
       const foot = p.bestDay
-        ? h('p.hint.stats-foot', `Bester Tag: ${fmtDay(p.bestDay.start, 'weekday')} mit ${fmtDurNb(p.bestDay.seconds)} · im Schnitt ${fmtDurNb(p.avgActiveDaySeconds)} an Tagen, an denen du gespielt hast.`)
-        : h('p.hint.stats-foot', `In den letzten ${d.days} Tagen hast du nicht gespielt.`);
-      return ui.section('Spielzeit pro Tag', 'Fahre mit der Maus über einen Balken, dann siehst du die genaue Zeit.', host, foot);
+        ? h('p.hint.stats-foot', `Bester Tag: ${fmtDay(p.bestDay.start, 'weekday')} (${fmtDurNb(p.bestDay.seconds)}) · pro Spieltag im Schnitt ${fmtDurNb(p.avgActiveDaySeconds)}`)
+        : h('p.hint.stats-foot', `In den letzten ${d.days} Tagen nicht gespielt.`);
+      return ui.section('Spielzeit pro Tag', null, host, foot);
     }
 
     function drawDaily(width, tip, host, daily, rangeDays) {
@@ -295,11 +290,9 @@ export default {
             h('span.prof-time', fmtDur(p.seconds)),
             h('span.prof-share', `${p.sharePct} %`)),
           h('div.prof-bar', { role: 'img', 'aria-label': `${p.name}: ${p.sharePct} Prozent` }, h('span', { style: { width: `${Math.max(p.sharePct, p.seconds ? 1 : 0)}%`, opacity: String(Math.max(0.45, 1 - i * 0.18)) } })),
-          h('span.hint', p.profileId
-            ? `${p.sessions} ${p.sessions === 1 ? 'Sitzung' : 'Sitzungen'}`
-            : `${p.sessions} ${p.sessions === 1 ? 'Sitzung' : 'Sitzungen'} – in dieser Zeit war kein HELIX-Profil aktiv`))))
-        : h('p.hint.stats-none', `In den letzten ${d.days} Tagen gibt es keine Spielzeit.`);
-      return ui.section('Spielzeit pro Profil', 'Welches Profil aktiv war, während du gespielt hast. Die Prozente zeigen den Anteil an deiner Spielzeit.', body);
+          h('span.hint', `${p.sessions} ${p.sessions === 1 ? 'Sitzung' : 'Sitzungen'}`))))
+        : h('p.hint.stats-none', `In den letzten ${d.days} Tagen keine Spielzeit.`);
+      return ui.section('Spielzeit pro Profil', 'Welches Profil beim Spielen aktiv war.', body);
     }
 
     // ---------- letzte Sitzungen ----------
@@ -313,25 +306,29 @@ export default {
           x.live ? ui.badge('läuft gerade', 'accent') : null,
           h('span.recent-dur', fmtDur(x.seconds)))))
         : h('p.hint.stats-none', 'Noch keine Sitzung.');
-      return ui.section('Letzte Sitzungen', 'Wann Fortnite zuletzt offen war – unabhängig vom gewählten Zeitraum. „Ende geschätzt“ heißt: HELIX wurde geschlossen, während Fortnite noch lief. Darum kennt HELIX das genaue Ende nicht.', body);
+      const why = list.some((x) => x.recovered)
+        ? ui.more('Was heißt „Ende geschätzt“?', 'HELIX wurde geschlossen, während Fortnite noch lief. Darum kennt HELIX das genaue Ende nicht.')
+        : null;
+      return ui.section('Letzte Sitzungen', 'Die neuesten, unabhängig vom Zeitraum.', body, why);
     }
 
     function noSessionsBlock() {
       return h('section.block.stats-empty-play', ui.emptyState({
         title: 'Noch keine Spielzeit gezählt',
-        text: 'Spiele eine Runde Fortnite, während HELIX läuft. HELIX zählt die Zeit dann automatisch mit – pro Profil. Dafür schaut HELIX nur, ob Fortnite geöffnet ist.',
+        text: 'Spiel Fortnite, während HELIX läuft – die Zeit zählt von selbst mit.',
         action: ui.button('Zu den Profilen', { iconName: 'sparkle', onClick: () => env.nav.go('profiles') }),
-      }), h('p.hint.stats-center', 'Tipp: Wende vorher ein Profil an. Dann siehst du hier, wie lange du mit welchem Profil gespielt hast.'));
+      }), h('div.stats-center', ui.more('So funktioniert es',
+        'HELIX schaut nur, ob Fortnite geöffnet ist. Mit einem aktiven Profil siehst du, wie lange du mit welchem Profil gespielt hast.')));
     }
 
     // ---------- Aim-Test-Verlauf ----------
     function aimBlock(d) {
       const a = d.aim;
-      const hintText = 'Punkte (0 bis 100) und Trefferquote aus der Sensi-Kalibrierung. Die kleine Zahl über einem Punkt ist die Sensi, die HELIX nach dem Test empfohlen hat.';
+      const hintText = 'Aus der Sensi-Kalibrierung.';
       if (!a.total) {
         return ui.section('Aim-Test-Verlauf', hintText, ui.emptyState({
           title: 'Noch kein Aim-Test',
-          text: 'Mach einen Aim-Test in der Sensi-Kalibrierung. Danach siehst du hier, wie sich Punkte und Trefferquote entwickeln.',
+          text: 'Nach deinem ersten Test siehst du hier deinen Verlauf.',
           action: ui.button('Zur Sensi-Kalibrierung', { variant: 'primary', iconName: 'play', onClick: () => env.nav.go('sensi') }),
         }));
       }
@@ -341,29 +338,29 @@ export default {
       const last = a.latest;
       const mini = h('div.stats-mini-kpis',
         miniKpi('Fortschritt', prog ? prog.value : '–',
-          prog ? prog.text : 'Ab zwei Tests siehst du hier deinen Fortschritt.', tb),
+          prog ? prog.text : 'Ab zwei Tests.', tb),
         miniKpi('Beste Trefferquote', best ? `${fmtNum(best.accuracy, 0)} %` : '–',
-          best ? `Test vom ${fmtDay(best.at, 'date')}${best.recommendedSens != null ? ` · Empfehlung damals: Sensi ${recSensText(best)}` : ''}` : 'Noch kein Wert.'),
+          best ? `am ${fmtDay(best.at, 'date')}${best.recommendedSens != null ? ` · damals Sensi ${recSensText(best)}` : ''}` : 'Noch kein Wert.'),
         miniKpi('Aktuelle Empfehlung', last?.recommendedSens != null ? `Sensi ${fmtSens(last.recommendedSens)}` : '–',
-          last ? recHint(last) : ''));
+          last ? recHint(last) : '', null, 'eDPI = DPI mal Sensi in Prozent – zum Vergleichen mit Profis.'));
       const legend = h('div.stats-legend',
         h('span', h('i.swatch'), 'Punkte'),
         h('span', h('i.swatch.dashed'), 'Trefferquote in %'),
         h('span', h('b.swatch-num', '6,5'), 'empfohlene Sensi'));
       const parts = [mini];
       if (a.outOfRange) {
-        parts.push(h('div.callout.info', icon('info'), h('div', h('strong', `Kein Aim-Test in den letzten ${d.days} Tagen`), h('p.hint', 'Darum siehst du hier deine letzten Tests von früher.'))));
+        parts.push(h('div.callout.info', icon('info'), h('div', h('strong', `Kein Aim-Test in den letzten ${d.days} Tagen`), h('p.hint', 'Hier sind deine letzten Tests von früher.'))));
       }
       const host = chartHost((w, tip) => drawAim(w, tip, host, a.points));
       parts.push(legend, host);
-      if (a.points.length === 1) parts.push(h('p.hint.stats-foot', 'Ab zwei Tests wird daraus eine Linie. Mach den Test ab und zu, dann siehst du deinen Fortschritt.'));
+      if (a.points.length === 1) parts.push(h('p.hint.stats-foot', 'Ab zwei Tests wird daraus eine Linie.'));
       parts.push(h('div.row', ui.button('Neuen Aim-Test machen', { small: true, iconName: 'play', onClick: () => env.nav.go('sensi') }),
         h('span.hint', `${a.total} ${a.total === 1 ? 'Test' : 'Tests'} gespeichert${a.inRange && a.inRange !== a.total ? `, ${a.inRange} davon im Zeitraum` : ''}.`)));
       return ui.section('Aim-Test-Verlauf', hintText, parts);
     }
 
-    function miniKpi(label, value, hint, badge) {
-      return h('div.stats-mini',
+    function miniKpi(label, value, hint, badge, title) {
+      return h('div.stats-mini', { title },
         h('span.kpi-label', label),
         h('div.mini-line', h('strong', value), badge ? ui.badge(badge.text, badge.type) : null),
         hint ? h('span.hint', hint) : null);
@@ -483,22 +480,22 @@ export default {
 
     function reactionBlock(d) {
       const r = d.reaction;
-      const hint = 'Aus dem Reaktions-Labor. Gemessen in Millisekunden (ms, also Tausendstelsekunden) – weniger ist schneller. Zeigt immer deine letzten Tests, unabhängig vom gewählten Zeitraum.';
+      const hint = 'Deine letzten Tests, unabhängig vom Zeitraum. Weniger ist schneller.';
       if (!r.count && !r.keys.count) {
-        return ui.section('Reaktionszeit', hint, miniEmpty('Noch kein Reaktionstest gespeichert. Mach einen Test im Reaktions-Labor, dann siehst du hier deinen Verlauf.', 'Zum Reaktions-Labor', 'reaktion'));
+        return ui.section('Reaktionszeit', hint, miniEmpty('Noch kein Reaktionstest.', 'Zum Reaktions-Labor', 'reaktion'));
       }
       const parts = [];
       if (r.count) {
         const tb = trendBadge(r.trend, { betterText: 'schneller geworden', worseText: 'langsamer geworden', sameText: 'gleich schnell' });
         parts.push(h('div.stats-mini-kpis',
-          miniKpi('Zuletzt', `${r.latest.avgMs} ms`, `Durchschnitt am ${fmtDay(r.latest.at, 'date')}`, tb),
-          miniKpi('Bester Schnitt', `${r.best.avgMs} ms`, r.bestSingleMs != null ? `Schnellste einzelne Reaktion: ${r.bestSingleMs} ms` : `am ${fmtDay(r.best.at, 'date')}`)));
+          miniKpi('Zuletzt', `${r.latest.avgMs} ms`, `Schnitt am ${fmtDay(r.latest.at, 'date')}`, tb),
+          miniKpi('Bester Schnitt', `${r.best.avgMs} ms`, r.bestSingleMs != null ? `schnellste Reaktion: ${r.bestSingleMs} ms` : `am ${fmtDay(r.best.at, 'date')}`)));
         const host = chartHost((w, tip) => drawMini(w, tip, host, r.points, {
           value: (p) => p.avgMs, fmt: (v) => `${Math.round(v)} ms`, title: `Reaktionszeit, ${r.points.length} Tests`, unit: 10, minSpan: 40,
         }), 'mini');
         parts.push(host);
       } else {
-        parts.push(h('p.hint', 'Noch kein Reaktionstest – nur Ergebnisse aus dem Tasten-Trainer.'));
+        parts.push(h('p.hint', 'Noch kein Reaktionstest, nur Tasten-Trainer.'));
       }
       if (r.keys.count) parts.push(h('p.hint.stats-foot', keysText(r.keys.latest)));
       return ui.section('Reaktionszeit', hint, parts);
@@ -506,9 +503,9 @@ export default {
 
     function pingBlock(d) {
       const p = d.ping;
-      const hint = 'Aus dem Ping-Tester: so lange braucht ein Signal zum Server und zurück, in ms. Weniger ist besser. Zeigt immer deine letzten Messungen, unabhängig vom gewählten Zeitraum.';
+      const hint = 'Deine letzten Messungen, unabhängig vom Zeitraum. Weniger ist besser.';
       if (!p.count) {
-        return ui.section('Ping', hint, miniEmpty('Noch keine Ping-Messung gespeichert. Miss deine Verbindung im Ping-Tester, dann siehst du hier den Verlauf.', 'Zum Ping-Tester', 'ping'));
+        return ui.section('Ping', hint, miniEmpty('Noch keine Ping-Messung.', 'Zum Ping-Tester', 'ping'));
       }
       const tb = trendBadge(p.trend, { betterText: 'besser geworden', worseText: 'schlechter geworden', sameText: 'gleich' });
       const host = chartHost((w, tip) => drawMini(w, tip, host, p.points, {

@@ -227,8 +227,8 @@ export function recHint(e) {
   const bits = [];
   const d = recDpi(e);
   if (d != null) bits.push(isNum(e.dpi) && d !== e.dpi ? `bei ${fmtNum(d, 0)} DPI (statt bisher ${fmtNum(e.dpi, 0)} DPI)` : `bei ${fmtNum(d, 0)} DPI`);
-  if (isNum(e.edpi)) bits.push(`eDPI ${fmtNum(e.edpi, 1)} (DPI mal Sensi in Prozent – zum Vergleichen mit Profis)`);
-  if (isNum(e.cm360)) bits.push(`${fmtNum(e.cm360, 1)} cm Mausweg für eine ganze Drehung`);
+  if (isNum(e.edpi)) bits.push(`eDPI ${fmtNum(e.edpi, 1)}`);
+  if (isNum(e.cm360)) bits.push(`${fmtNum(e.cm360, 1)} cm pro Drehung`);
   return bits.join(' · ') || `Test vom ${fmtDay(e.at, 'date')}`;
 }
 
@@ -242,8 +242,8 @@ export function progressInfo(tr) {
   const last = Math.round(tr.last);
   const diff = last - first;
   const text = tr.groupSize === 1
-    ? `Erster Test: ${fmtNum(first, 0)} Punkte · neuester Test: ${fmtNum(last, 0)} Punkte`
-    : `Schnitt deiner ersten ${tr.groupSize} Tests: ${fmtNum(first, 0)} · deiner letzten ${tr.groupSize}: ${fmtNum(last, 0)}`;
+    ? `Erster Test: ${fmtNum(first, 0)} · neuester: ${fmtNum(last, 0)}`
+    : `Erste ${tr.groupSize} Tests: ${fmtNum(first, 0)} · letzte ${tr.groupSize}: ${fmtNum(last, 0)}`;
   return { value: signed(diff, Math.abs(diff) === 1 ? 'Punkt' : 'Punkte'), text };
 }
 
@@ -251,8 +251,8 @@ export function progressInfo(tr) {
 export function keysText(k) {
   if (!k) return '';
   const acc = isNum(k.accuracy) ? `${fmtNum(k.accuracy, 0)} % richtig` : '';
-  if (!isNum(k.avgMs)) return `Tasten-Trainer (Bau- und Edit-Tasten): zuletzt keine richtige Taste${acc ? ` (${acc})` : ''}.`;
-  return `Tasten-Trainer (Bau- und Edit-Tasten): zuletzt im Schnitt ${k.avgMs} ms${acc ? `, ${acc}` : ''}.`;
+  if (!isNum(k.avgMs)) return `Tasten-Trainer: zuletzt keine richtige Taste${acc ? ` (${acc})` : ''}.`;
+  return `Tasten-Trainer: zuletzt im Schnitt ${k.avgMs} ms${acc ? `, ${acc}` : ''}.`;
 }
 
 /** Was in der gespeicherten Tabelle steht, z. B. "3 Sitzungen, 1 Aim-Test, 2 Ping-Messungen". Leere Teile fallen weg. */

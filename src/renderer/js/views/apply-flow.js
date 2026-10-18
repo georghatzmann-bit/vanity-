@@ -12,8 +12,8 @@ const ACTION_TEXT = {
 
 export const RO_OPTIONS = [
   ['none', 'Aus', 'Fortnite darf die Dateien wie gewohnt ändern. Empfohlen.'],
-  ['video', 'Nur Grafik-Datei', 'Schützt GameUserSettings.ini (Auflösung, FPS, Grafik). Änderungen im Spiel an der Grafik werden dann nicht gespeichert.'],
-  ['all', 'Alle Config-Dateien', 'Nichts im Config-Ordner kann sich ändern. Die Tasten-/Sensi-Datei aus der Cloud bleibt ausgenommen.'],
+  ['video', 'Nur Grafik-Datei', 'Auflösung, FPS und Grafik bleiben fest – Änderungen im Spiel gehen verloren.'],
+  ['all', 'Alle Config-Dateien', 'Der ganze Config-Ordner bleibt fest. Tasten und Sensi sind ausgenommen.'],
 ];
 
 export function roKey(ro) {
@@ -81,12 +81,12 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
     ui.clear(fnBox);
     fnBox.className = `callout ${fortnite.running ? 'warn' : 'ok'}`;
     if (!fortnite.running) {
-      fnBox.append(icon('check'), h('div', h('strong', 'Fortnite ist geschlossen'), h('p.hint', 'Die Dateien können sicher ersetzt werden.')));
+      fnBox.append(icon('check'), h('div', h('strong', 'Fortnite ist geschlossen')));
     } else {
       const names = (fortnite.processes || []).map((x) => x.name).join(', ');
       fnBox.append(icon('warn'), h('div',
-        h('strong', 'Fortnite läuft noch'),
-        h('p.hint', `Solange Fortnite offen ist, würde es deine Dateien gleich wieder überschreiben. (${names})`),
+        h('strong', { title: names || null }, 'Fortnite läuft noch'),
+        h('p.hint', 'Schließ es zuerst, sonst überschreibt es deine Dateien gleich wieder.'),
         h('div.row',
           ui.button('Fortnite schließen', {
             variant: 'primary', iconName: 'power', small: true,
@@ -138,10 +138,12 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
   const roHint = h('p.hint', RO_OPTIONS.find((o) => o[0] === roSel)[2]);
 
   const content = [
-    h('div.callout.info', icon('info'), h('div', h('strong', 'Richtiges Konto?'), h('p.hint', 'Logge dich vorher im Epic Games Launcher selbst in das Konto ein, zu dem dieses Profil gehört. HELIX fasst keine Login-Daten an.'))),
-    preview.items.some((i) => i.kind === 'controls')
-      ? h('p.hint', 'Hinweis: Tastenbelegung und Sensi speichert Fortnite pro Konto in der Epic-Cloud. HELIX legt die gesicherte Kopie zurück – unterscheidet sie sich von der Cloud, holt Fortnite beim Einloggen die Cloud-Version. HELIX sagt dir dann Bescheid.')
-      : null,
+    h('div.callout.info', icon('info'), h('div',
+      h('strong', 'Richtiges Konto?'),
+      h('p.hint', 'Logg dich vorher im Epic Games Launcher in das Konto dieses Profils ein.'),
+      preview.items.some((i) => i.kind === 'controls')
+        ? ui.more('Was ist mit Tasten und Sensi?', 'Tastenbelegung und Sensi speichert Fortnite pro Konto in der Epic-Cloud. HELIX legt die gesicherte Kopie zurück – unterscheidet sie sich von der Cloud, holt Fortnite beim Einloggen die Cloud-Version. HELIX sagt dir dann Bescheid.')
+        : null)),
     fnBox,
     h('h4', 'Was passiert'),
     previewBox,
@@ -150,14 +152,14 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
     roHint,
     ui.toggle({
       label: 'Dateien entfernen, die nicht im Profil sind',
-      hint: 'Empfohlen: So entspricht der Ordner genau dem Profil. Entfernte Dateien liegen in der Sicherung.',
+      hint: 'Empfohlen – so passt der Ordner genau zum Profil.',
       checked: removeExtra,
       onChange: async (v) => {
         removeExtra = v;
         try { renderPreview(await env.call('profiles.preview', { id: profileId, removeExtra: v })); } catch (e) { ui.showError(e); }
       },
     }),
-    h('p.hint', 'Vorher wird automatisch eine Sicherung des jetzigen Zustands angelegt.'),
+    h('p.hint', 'Vorher legt HELIX automatisch eine Sicherung an.'),
   ];
   renderFortnite();
 
@@ -215,9 +217,9 @@ export async function showResult(env, p, result) {
     await ui.modal({
       title: 'Das Anwenden hat nicht geklappt',
       content: [
-        h('p', 'Einige Dateien konnten nicht geschrieben werden. HELIX hat den vorherigen Zustand automatisch wiederhergestellt. Schließe Programme, die Fortnite-Dateien geöffnet haben könnten, und versuche es noch einmal.'),
+        h('p', 'Einige Dateien ließen sich nicht schreiben. Schließ Programme, die Fortnite-Dateien offen haben könnten, und versuch es nochmal.'),
         h('ul.list.compact', result.failed.map((f) => h('li', icon('x', 16), h('span', ui.displayPath(f.rel)), h('span.hint', f.message)))),
-        h('p.hint', result.rollback?.ok ? 'Wiederherstellung: erfolgreich.' : 'Wiederherstellung: bitte in den Sicherungen prüfen.'),
+        h('p.hint', result.rollback?.ok ? 'Der vorherige Zustand ist wiederhergestellt.' : 'Zurückholen hat nicht geklappt – bitte in der Zeitmaschine prüfen.'),
       ],
       actions: [{ label: 'OK', variant: 'primary' }],
     });
@@ -238,9 +240,9 @@ export async function showResult(env, p, result) {
     wide: true,
     content: [
       h('ul.list.files', rows),
-      h('div.callout.info', icon('shield'), h('div', h('strong', 'Sicherung angelegt'), h('p.hint', 'Der vorherige Zustand liegt in der Zeitmaschine. Du kannst alles mit einem Klick zurückholen.'))),
+      h('div.callout.info', icon('shield'), h('div', h('strong', 'Sicherung angelegt'), h('p.hint', 'Der alte Stand liegt in der Zeitmaschine.'))),
       h('p.hint', ro),
-      h('div.callout.ok', icon('eye'), h('div', h('strong', 'Jetzt Fortnite starten'), h('p.hint', 'HELIX passt auf: Holt Fortnite nach dem Start Einstellungen aus der Cloud zurück, bekommst du sofort eine Warnung.'))),
+      h('div.callout.ok', icon('eye'), h('div', h('strong', 'Jetzt Fortnite starten'), h('p.hint', 'HELIX warnt dich, falls Fortnite Einstellungen aus der Cloud zurückholt.'))),
     ],
     actions: [
       { label: 'Rückgängig machen', value: 'undo', icon: 'refresh' },

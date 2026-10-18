@@ -5,9 +5,17 @@ import { buildTiles, sessionRow, sourceText, HISTORY_SECONDS } from '../lib/hard
 const HISTORY_MAX = 60; // 2 Minuten bei einer Messung alle 2 Sekunden
 let cleanup = [];
 
-function accentColor() {
-  const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-  return v || '#4fd8ff';
+/** Farbe des Tools (--accent am Tool-Panel) als [r, g, b] – die Leinwand kann keine CSS-Variablen. */
+function accentRgb(canvas, c) {
+  let v = '';
+  try { v = getComputedStyle(canvas).getPropertyValue('--accent').trim(); } catch { /* egal */ }
+  c.fillStyle = '#000';
+  if (v) c.fillStyle = v; // ungültige Farben lässt die Leinwand einfach weg
+  const norm = String(c.fillStyle);
+  if (/^#[0-9a-f]{6}$/i.test(norm)) return [1, 3, 5].map((i) => parseInt(norm.slice(i, i + 2), 16));
+  const m = norm.match(/rgba?\(([^)]+)\)/);
+  if (m) return m[1].split(',').slice(0, 3).map((x) => Math.round(Number(x)));
+  return [160, 160, 170];
 }
 
 /** Kleiner Verlauf (letzte 2 Minuten) als Linie mit Fläche darunter. */
@@ -39,7 +47,8 @@ function drawSpark(canvas, spark) {
   const pts = vals.map((v, i) => (typeof v === 'number' && Number.isFinite(v)
     ? [(off + i) * step, ht - 2 - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo) * (ht - 6)]
     : null));
-  const color = accentColor();
+  const [r, g, b] = accentRgb(canvas, c);
+  const color = `rgb(${r}, ${g}, ${b})`;
   // zusammenhängende Stücke zeichnen, Lücken bleiben frei
   const runs = [];
   let cur = [];
@@ -57,8 +66,8 @@ function drawSpark(canvas, spark) {
       continue;
     }
     const grad = c.createLinearGradient(0, 0, 0, ht);
-    grad.addColorStop(0, 'rgba(79,216,255,0.22)');
-    grad.addColorStop(1, 'rgba(79,216,255,0)');
+    grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.22)`);
+    grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
     c.beginPath();
     c.moveTo(run[0][0], ht);
     for (const [x, y] of run) c.lineTo(x, y);
@@ -101,13 +110,14 @@ export default {
       h('div.hw-top', liveLine, toggleSlot),
       callouts,
       grid,
-      ui.section('Aufgezeichnete Runden', 'Pro Fortnite-Runde: Durchschnitt (Ø) und Höchstwert (max). Wird nur gespeichert, wenn „Auch im Hintergrund aufzeichnen“ an ist.', sessionsTools, sessionsBody),
-      ui.section('So misst HELIX', 'Alles nur lesend – HELIX ändert nichts an deinem PC oder am Spiel.',
-        h('ul.list.compact',
-          h('li', icon('info', 16), h('span', 'Prozessor und Grafikkarte: Leistungsdaten von Windows – dieselben wie im Task-Manager.')),
-          h('li', icon('info', 16), h('span', 'NVIDIA: Temperatur, Strom und Takt kommen von „nvidia-smi“, einem kleinen Programm des Grafiktreibers.')),
-          h('li', icon('info', 16), h('span', 'Mainboard-Sensor: Wärmezonen (ACPI) des Mainboards – oft nicht die echte Prozessor-Temperatur.')),
-          h('li', icon('shield', 16), h('span', 'Fortnite: nur Arbeitsspeicher und Prozessor-Anteil, wie im Task-Manager. Kein Overlay, nichts wird aus dem Spiel gelesen oder daran verändert.')))));
+      ui.section('Aufgezeichnete Runden', 'Pro Runde: Durchschnitt (Ø) und Höchstwert (max).', sessionsTools, sessionsBody),
+      h('div.hw-foot', ui.more('So misst HELIX',
+        h('ul.hw-how',
+          h('li', 'Prozessor, Grafikkarte, Speicher: Leistungsdaten von Windows, wie im Task-Manager.'),
+          h('li', 'NVIDIA: Temperatur, Strom und Takt über „nvidia-smi“ vom Grafiktreiber.'),
+          h('li', 'Mainboard-Sensor: Wärmezone (ACPI) des Mainboards – oft nicht die Prozessor-Temperatur.'),
+          h('li', 'Fortnite: nur Speicher und Prozessor-Anteil. Kein Overlay, nichts wird aus dem Spiel gelesen oder verändert.')),
+        'Gespeichert werden höchstens die letzten 100 Runden.')));
 
     // ---------- Kopfzeile ----------
     function renderLive() {
@@ -115,18 +125,16 @@ export default {
       const ok = st.windows !== false && st.stream === 'ok';
       ui.mount(liveLine,
         ok ? ui.badge('live', 'ok') : st.stream === 'starting' ? ui.badge('startet …', '') : st.windows === false ? ui.badge('Grundwerte', '') : st.stream === 'failed' ? ui.badge('eingeschränkt', 'warn') : ui.badge('live', 'ok'),
-        h('span.hint', sourceText(st)),
-        h('span.hint', `Verlauf: letzte ${HISTORY_SECONDS / 60} Minuten`));
+        sourceText(st) ? h('span.hint', sourceText(st)) : null,
+        ok ? h('span.hint', `Verlauf: ${HISTORY_SECONDS / 60} Minuten`) : null);
     }
 
     function renderToggle() {
       const on = !!status?.settings?.background;
       const disabled = status?.windows === false;
       const t = ui.toggle({
-        label: 'Auch im Hintergrund aufzeichnen, solange Fortnite läuft',
-        hint: disabled
-          ? 'Geht nur unter Windows.'
-          : 'HELIX merkt sich pro Runde nur Durchschnitt und Höchstwerte. Kein Overlay, das Spiel wird nicht berührt.',
+        label: 'Fortnite-Runden im Hintergrund aufzeichnen',
+        hint: disabled ? 'Geht nur unter Windows.' : 'Nur Ø und Höchstwerte pro Runde. Kein Overlay.',
         checked: on,
         disabled,
         onChange: async (val) => {
@@ -135,8 +143,8 @@ export default {
             if (!alive) return;
             status = { ...status, settings: r.settings, recording: r.recording };
             ui.toast(val
-              ? 'Aufzeichnung an: Nach jeder Fortnite-Runde steht unten, wie warm und ausgelastet dein PC war.'
-              : 'Aufzeichnung aus: HELIX misst nur noch, solange diese Seite offen ist.');
+              ? 'Aufzeichnung an – nach jeder Runde stehen die Werte unten.'
+              : 'Aufzeichnung aus – HELIX misst nur, solange diese Seite offen ist.');
             renderCallouts();
             loadSessions();
           } catch (e) {
@@ -154,17 +162,17 @@ export default {
       if (status?.windows === false) {
         list.push(h('div.callout.info', icon('info'), h('div',
           h('strong', 'Hier gibt es nur Grundwerte'),
-          h('p.hint', 'Temperaturen, Grafikkarte und Fortnite liest HELIX über Windows. Auf diesem System siehst du nur Prozessor und Arbeitsspeicher.'))));
+          h('p.hint', 'Temperaturen, Grafikkarte und Fortnite gibt es nur unter Windows.'))));
       } else if ((last?.stream || status?.stream) === 'failed') {
         list.push(h('div.callout.warn', icon('warn'), h('div',
           h('strong', 'Windows liefert gerade keine Messwerte'),
-          h('p.hint', 'Zu sehen sind nur Prozessor und Arbeitsspeicher. Öffne die Seite später noch einmal – oder starte den PC neu, falls das so bleibt.'),
+          h('p.hint', 'Versuch es erneut. Bleibt es so, starte den PC neu.'),
           h('div.row', ui.button('Erneut versuchen', { small: true, iconName: 'refresh', onClick: restart })))));
       }
       if (status?.recording) {
         list.push(h('div.callout.ok', icon('clock'), h('div',
           h('strong', 'Aufzeichnung läuft'),
-          h('p.hint', 'Fortnite ist offen. HELIX merkt sich Durchschnitt und Höchstwerte dieser Runde.'))));
+          h('p.hint', 'HELIX merkt sich Ø und Höchstwerte dieser Runde.'))));
       }
       ui.mount(callouts, list);
     }
@@ -175,7 +183,7 @@ export default {
         status = await env.call('hardware.start');
         if (!alive) return;
         caps = status.caps || caps;
-        ui.toast('Messung wird neu gestartet.', 'info');
+        ui.toast('Messung startet neu.', 'info');
         renderAll();
       } catch (e) { ui.showError(e); }
     }
@@ -249,11 +257,11 @@ export default {
       if (!alive) return;
       const list = r.sessions || [];
       ui.mount(sessionsTools,
-        h('span.hint.grow', list.length ? `${list.length} ${list.length === 1 ? 'Runde' : 'Runden'} gespeichert (höchstens 100).` : ''),
+        h('span.grow'),
         list.length ? ui.button('Liste leeren', {
           small: true, variant: 'ghost', iconName: 'trash',
           onClick: async () => {
-            const ok = await ui.confirmDialog({ title: 'Alle Runden löschen?', text: 'Die gespeicherten Durchschnitts- und Höchstwerte werden gelöscht. Die Live-Anzeige bleibt.', confirmLabel: 'Löschen', danger: true });
+            const ok = await ui.confirmDialog({ title: 'Alle Runden löschen?', text: 'Alle gespeicherten Rundenwerte werden gelöscht. Die Live-Anzeige bleibt.', confirmLabel: 'Löschen', danger: true });
             if (!ok) return;
             try {
               const c = await env.call('hardware.clearSessions');
@@ -266,8 +274,8 @@ export default {
         ui.mount(sessionsBody, ui.emptyState({
           title: 'Noch keine Runde aufgezeichnet',
           text: r.settings?.background
-            ? 'Die Aufzeichnung ist an. Nach deiner nächsten Fortnite-Runde (ab 1 Minute) steht hier, wie warm und ausgelastet dein PC war.'
-            : 'Schalte oben „Auch im Hintergrund aufzeichnen“ ein. Nach deiner nächsten Fortnite-Runde steht hier, wie warm und ausgelastet dein PC war.',
+            ? 'Nach deiner nächsten Runde (ab 1 Minute) stehen die Werte hier.'
+            : 'Schalte oben „Fortnite-Runden im Hintergrund aufzeichnen“ ein.',
         }));
         return;
       }

@@ -45,7 +45,7 @@ export default {
     // ---------- Aktionen ----------
     async function boost() {
       if (!info.list.length && !info.options.powerPlan) {
-        ui.toast('Deine Liste ist noch leer. Füge zuerst Programme hinzu.', 'warn');
+        ui.toast('Deine Liste ist leer – füge zuerst Programme hinzu.', 'warn');
         return;
       }
       try {
@@ -55,7 +55,7 @@ export default {
         const closed = rep.closed.length + (rep.forced?.length || 0);
         if (rep.stillOpen.length) ui.toast(`${closed} geschlossen, ${rep.stillOpen.length} noch offen: ${rep.stillOpen.join(', ')}.`, 'warn', { timeout: 6500 });
         else if (closed) ui.toast(`Boost aktiv: ${closed} ${closed === 1 ? 'Programm' : 'Programme'} geschlossen.`);
-        else ui.toast(rep.powerPlan?.changed ? 'Boost aktiv: Energieplan umgestellt. Keines deiner Programme lief gerade.' : 'Keines deiner Programme lief gerade – es gab nichts zu schließen.', 'info');
+        else ui.toast(rep.powerPlan?.changed ? 'Boost aktiv: nur der Energieplan wurde umgestellt.' : 'Keines deiner Programme lief gerade.', 'info');
         env.refreshStatus?.();
       } catch (e) {
         if (e.code === 'NOT_WINDOWS') ui.toast(e.message, 'warn'); else ui.showError(e, 'Boost nicht möglich');
@@ -69,8 +69,8 @@ export default {
         await refresh();
         if (r.nothing) { ui.toast('Es war kein Boost aktiv.', 'info'); return; }
         const rep = r.report;
-        if (rep.failed.length) ui.toast(`${rep.restarted.length} wieder gestartet. Nicht geklappt: ${rep.failed.map((f) => f.display).join(', ')}.`, 'warn', { timeout: 7000 });
-        else ui.toast(rep.restarted.length ? `Wiederhergestellt: ${rep.restarted.join(', ')}.` : 'Wiederhergestellt. Es musste nichts neu gestartet werden.');
+        if (rep.failed.length) ui.toast(`${rep.restarted.length} wieder gestartet, nicht geklappt: ${rep.failed.map((f) => f.display).join(', ')}.`, 'warn', { timeout: 7000 });
+        else ui.toast(rep.restarted.length ? `Wiederhergestellt: ${rep.restarted.join(', ')}.` : 'Wiederhergestellt – nichts musste neu starten.');
       } catch (e) {
         if (e.code === 'NOT_WINDOWS') ui.toast(e.message, 'warn'); else ui.showError(e, 'Wiederherstellen nicht möglich');
         refresh();
@@ -80,7 +80,7 @@ export default {
     async function forceClose(names) {
       const ok = await ui.confirmDialog({
         title: 'Sofort beenden?',
-        text: `Das beendet ${names.join(', ')} sofort – wie „Task beenden“ im Task-Manager. Was darin nicht gespeichert ist, geht dabei verloren. Nach dem Spielen startet „Wiederherstellen“ alles wieder.`,
+        text: `Das beendet ${names.join(', ')} sofort, wie „Task beenden“. Was darin nicht gespeichert ist, geht verloren.`,
         confirmLabel: 'Sofort beenden',
         danger: true,
       });
@@ -88,7 +88,7 @@ export default {
       try {
         const r = await env.call('booster.forceClose', { names: info.active.apps.filter((a) => a.status === 'open').map((a) => a.name), confirm: true });
         await refresh();
-        if (r.report.stillOpen.length) ui.toast(`Weiter offen: ${r.report.stillOpen.join(', ')}. Vielleicht braucht das Programm Administrator-Rechte.`, 'warn', { timeout: 7000 });
+        if (r.report.stillOpen.length) ui.toast(`Weiter offen: ${r.report.stillOpen.join(', ')} – braucht vielleicht Administrator-Rechte.`, 'warn', { timeout: 7000 });
         else ui.toast(r.report.forced.length ? `Sofort beendet: ${r.report.forced.join(', ')}.` : 'Es war nichts mehr offen.');
       } catch (e) { ui.showError(e); }
     }
@@ -124,7 +124,7 @@ export default {
       const name = await ui.promptDialog({
         title: 'Programm von Hand eintragen',
         label: 'Name der Programmdatei',
-        hint: 'So wie im Task-Manager unter „Details“ – zum Beispiel „Discord.exe“ oder „Spotify.exe“. Groß- und Kleinschreibung ist egal.',
+        hint: 'Wie im Task-Manager unter „Details“, zum Beispiel „Discord.exe“.',
         confirmLabel: 'Aufnehmen',
         maxLength: 100,
       });
@@ -156,14 +156,12 @@ export default {
       let procs = [];
       const search = h('input.input', { type: 'search', placeholder: 'Suchen, z. B. Discord', 'aria-label': 'Programme durchsuchen' });
       const listEl = h('ul.boost-picker-list');
-      const body = h('div.boost-picker', { dataset: { tool: 'booster' } },
-        h('p.hint', 'Das sind die Programme, die gerade auf deinem PC laufen. Teile von Windows werden gar nicht angezeigt. Geschützte Programme kannst du nicht auswählen.'),
-        search, listEl);
+      const body = h('div.boost-picker', { dataset: { tool: 'booster' } }, search, listEl);
 
       const renderList = () => {
         const shown = filterProcesses(procs, search.value);
         if (!procs.length) { ui.mount(listEl, h('li.boost-picker-empty', ui.spinner(), h('span.hint', 'Programme werden gelesen …'))); return; }
-        if (!shown.length) { ui.mount(listEl, h('li.boost-picker-empty', h('span.hint', 'Kein laufendes Programm passt zu deiner Suche. Du kannst es auch von Hand eintragen.'))); return; }
+        if (!shown.length) { ui.mount(listEl, h('li.boost-picker-empty', h('span.hint', 'Nichts gefunden. Du kannst es auch von Hand eintragen.'))); return; }
         ui.mount(listEl, shown.map((p) => {
           const blocked = p.protect?.level === 'block';
           const warn = p.protect?.level === 'warn';
@@ -182,7 +180,7 @@ export default {
             h('div.grow',
               h('span.boost-pname', p.description || p.display),
               h('span.hint', processHint(p)),
-              blocked || warn ? h('span.hint.boost-reason', icon(blocked ? 'lock' : 'warn', 14), ' ', p.protect.reason) : null),
+              blocked || warn ? ui.more(blocked ? 'Warum geschützt?' : 'Worauf achten?', p.protect.reason) : null),
             warn ? ui.badge('Treiber-Helfer', 'warn') : null,
             btn);
         }));
@@ -192,10 +190,10 @@ export default {
       const loading = env.call('booster.running').then((r) => {
         if (r.unsupported) { ui.mount(listEl, h('li.boost-picker-empty', h('span.hint', 'Die Programmliste gibt es nur unter Windows.'))); return; }
         procs = r.processes;
-        if (!procs.length) { ui.mount(listEl, h('li.boost-picker-empty', h('span.hint', 'Es wurden keine passenden Programme gefunden.'))); return; }
+        if (!procs.length) { ui.mount(listEl, h('li.boost-picker-empty', h('span.hint', 'Keine passenden Programme gefunden.'))); return; }
         renderList();
       }).catch((e) => { ui.mount(listEl, h('li.boost-picker-empty', h('span.hint', `Die Programme konnten nicht gelesen werden: ${e.message}`))); });
-      await ui.modal({ title: 'Aus laufenden Programmen wählen', subtitle: 'Größte Programme mit offenem Fenster stehen oben.', content: body, wide: true, actions: [{ label: 'Fertig', variant: 'primary' }] });
+      await ui.modal({ title: 'Aus laufenden Programmen wählen', subtitle: 'Läuft gerade auf deinem PC – die größten stehen oben.', content: body, wide: true, actions: [{ label: 'Fertig', variant: 'primary' }] });
       await loading.catch(() => {});
       if (alive) refresh();
     }
@@ -206,7 +204,7 @@ export default {
       if (info.supported) return;
       platformBox.append(h('div.callout.info', icon('info'), h('div',
         h('strong', 'Der Booster arbeitet nur unter Windows'),
-        h('p.hint', 'Programme schließen und wieder starten geht nur auf deinem Windows-PC. Deine Liste kannst du hier trotzdem schon vorbereiten.'))));
+        h('p.hint', 'Deine Liste kannst du hier schon vorbereiten.'))));
     }
 
     function renderHero() {
@@ -221,25 +219,25 @@ export default {
             h('div.boost-state', h('h3', act ? 'Boost aktiv' : 'Boost aus'), ui.badge(act ? 'aktiv' : 'aus', act ? 'accent' : '')),
             h('p.hint', act
               ? `${sinceText(act.startedAt)} · ${triggerText(act.trigger)} · ${closed} ${closed === 1 ? 'Programm' : 'Programme'} geschlossen${act.powerPlan ? ` · Energieplan „${act.powerPlan.setName}“` : ''}`
-              : 'Schließt die Programme aus deiner Liste ganz normal – wie mit dem X am Fenster. Nach dem Spielen startet „Wiederherstellen“ sie wieder.')),
+              : 'Schließt deine Programme wie mit dem X. „Wiederherstellen“ holt sie zurück.')),
           h('div.boost-actions',
             ui.button(act ? 'Erneut boosten' : 'Boost starten', { variant: act ? '' : 'primary', iconName: 'play', disabled: !info.supported || busyNow, onClick: boost }),
             ui.button('Wiederherstellen', { variant: act ? 'primary' : '', iconName: 'refresh', disabled: !info.supported || !act || busyNow, onClick: restore }))),
         open.length ? h('div.callout.warn', icon('warn'), h('div.grow',
           h('strong', `Noch offen: ${open.map((a) => a.display).join(', ')}`),
-          h('p.hint', 'Manche Programme verstecken sich beim Schließen nur im Infobereich (unten rechts neben der Uhr). Du kannst sie dort selbst beenden – oder hier sofort beenden.'),
+          h('p.hint', 'Beende es im Infobereich neben der Uhr – oder hier sofort.'),
           h('div.row', ui.button('Sofort beenden …', { variant: 'danger', small: true, iconName: 'stop', onClick: () => forceClose(open.map((a) => a.display)) })))) : null);
     }
 
     function renderList() {
       const head = h('div.toolbar',
-        h('div.grow', h('h3', 'Deine Liste'), h('p.hint', 'Diese Programme schließt der Boost. Windows, Virenschutz, Anti-Cheat, Fortnite, der Epic Games Launcher und HELIX selbst sind geschützt und werden nie geschlossen.')),
+        h('div.grow', h('h3', 'Deine Liste'), h('p.hint', 'Windows, Virenschutz, Anti-Cheat, Fortnite und Epic bleiben immer offen.')),
         ui.button('Aus laufenden Programmen wählen', { iconName: 'plus', variant: info.list.length ? '' : 'primary', disabled: !info.supported, onClick: openPicker }),
         ui.button('Von Hand eintragen', { iconName: 'edit', variant: 'ghost', onClick: addManual }));
       if (!info.list.length) {
         ui.mount(listBox, h('section.block', head, ui.emptyState({
-          title: 'Noch keine Programme in deiner Liste',
-          text: 'Typisch sind Programme, die nebenbei Leistung oder Internet brauchen: Browser, Discord, Spotify, Steam, OneDrive oder Updater. Wähle sie aus den laufenden Programmen aus.',
+          title: 'Deine Liste ist leer',
+          text: 'Zum Beispiel Browser, Discord, Spotify, Steam oder OneDrive.',
           action: info.supported ? ui.button('Aus laufenden Programmen wählen', { variant: 'primary', iconName: 'plus', onClick: openPicker }) : null,
         })));
         return;
@@ -251,7 +249,8 @@ export default {
             h('span.boost-dot', { dataset: { s: s.type || 'none' }, 'aria-hidden': 'true' }),
             h('div.grow',
               h('span.boost-pname', e.display),
-              h('span.hint', e.protect?.level === 'warn' ? `${e.name}.exe · Achtung: ${e.protect.reason}` : `${e.name}.exe`)),
+              h('span.hint', `${e.name}.exe`),
+              e.protect?.level === 'warn' ? ui.more('Worauf achten?', e.protect.reason) : null),
             e.protect?.level === 'warn' ? ui.badge('Treiber-Helfer', 'warn') : null,
             ui.badge(s.label, s.type),
             ui.button('', { iconName: 'trash', small: true, variant: 'ghost', title: `${e.display} aus der Liste nehmen`, onClick: () => removeProgram(e) }));
@@ -262,19 +261,22 @@ export default {
       const p = info.power;
       const planHint = !info.supported ? 'Gibt es nur unter Windows.'
         : !p ? 'Der aktuelle Energieplan konnte nicht gelesen werden.'
-          : p.highAvailable ? `Gerade aktiv: „${p.active}“.`
-            : `„Höchstleistung“ gibt es auf diesem PC nicht (bei vielen Laptops ausgeblendet). Dann ändert der Schalter nichts. Gerade aktiv: „${p.active}“.`;
+          : p.highAvailable ? 'Danach zurück auf deinen Plan. Am Laptop leert sich der Akku schneller.'
+            : '„Höchstleistung“ gibt es auf diesem PC nicht – der Schalter ändert nichts.';
       ui.mount(optionsBox, h('section.block',
-        h('div.block-head', h('h3', 'Optionen'), h('p.hint', 'Gelten für jeden Boost – egal ob per Klick oder automatisch.')),
+        h('div.block-head', h('h3', 'Optionen')),
         ui.toggle({
           label: 'Energieplan „Höchstleistung“ während des Boosts',
-          hint: `Der Energieplan sagt Windows, ob es Strom sparen oder volle Leistung geben soll. HELIX stellt auf „Höchstleistung“ und danach zurück auf deinen alten Plan. Am Laptop leert sich der Akku schneller. ${planHint}`,
+          hint: planHint,
           checked: info.options.powerPlan,
           onChange: (v) => setOption('powerPlan', v),
         }),
+        ui.more('Warum?',
+          'Der Energieplan sagt Windows, ob es Strom sparen oder volle Leistung geben soll. HELIX stellt beim Boost auf „Höchstleistung“ und danach zurück auf deinen alten Plan.',
+          p ? `Gerade aktiv: „${p.active}“.${p.highAvailable ? '' : ' Bei vielen Laptops ist „Höchstleistung“ ausgeblendet.'}` : null),
         ui.toggle({
           label: 'Automatisch boosten, wenn Fortnite startet',
-          hint: 'Sobald Fortnite läuft, schließt HELIX deine Liste von selbst. Wenn du Fortnite beendest, startet HELIX die Programme wieder. HELIX muss dafür geöffnet sein (es darf im Hintergrund laufen). Ab Werk aus.',
+          hint: 'Nach dem Spielen startet HELIX alles wieder. HELIX muss dafür offen sein.',
           checked: info.options.auto,
           onChange: (v) => setOption('auto', v),
         })));
@@ -283,7 +285,7 @@ export default {
     function renderReport() {
       const r = info.lastReport;
       if (!r) {
-        ui.mount(reportBox, h('section.block', h('div.block-head', h('h3', 'Letzter Boost')), h('p.hint', 'Noch kein Boost. Nach dem ersten Boost siehst du hier, was geschlossen und wieder gestartet wurde.')));
+        ui.mount(reportBox, h('section.block', h('div.block-head', h('h3', 'Letzter Boost'), h('p.hint', 'Noch kein Boost.'))));
         return;
       }
       const secs = reportSections(r);

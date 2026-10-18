@@ -708,8 +708,8 @@ test('Reaktions-Labor: der neueste Tasten-Trainer-Lauf ohne richtige Taste zähl
   assert.equal(r.keys.latest.avgMs, null);
   assert.equal(r.keys.latest.accuracy, 0);
   assert.equal(r.keys.best.avgMs, 410, 'Bestwert nur aus Läufen mit Zeit');
-  assert.equal(c.keysText(r.keys.latest), 'Tasten-Trainer (Bau- und Edit-Tasten): zuletzt keine richtige Taste (0 % richtig).');
-  assert.equal(c.keysText(r.keys.points[0]), 'Tasten-Trainer (Bau- und Edit-Tasten): zuletzt im Schnitt 410 ms, 92 % richtig.');
+  assert.equal(c.keysText(r.keys.latest), 'Tasten-Trainer: zuletzt keine richtige Taste (0 % richtig).');
+  assert.equal(c.keysText(r.keys.points[0]), 'Tasten-Trainer: zuletzt im Schnitt 410 ms, 92 % richtig.');
 
   const only = logic.buildOverview({ reaktion: { keys: [keys[1]] }, now: NOW });
   assert.equal(only.reaction.keys.count, 1, 'auch als einziger Lauf');
@@ -723,11 +723,11 @@ test('Aim-Tests: Fortschritt-Kachel und Hinweis rechnen mit denselben gerundeten
   const a = logic.aimSummary(logic.normalizeAim({ history: [aimEntry(T(10, 15), 59.6, 60), aimEntry(T(10, 17), 64.4, 60)] }), { days: 7, now: NOW });
   const p = c.progressInfo(a.trend);
   assert.equal(p.value, '+4 Punkte', '60 -> 64 sind 4 Punkte, nicht 5');
-  assert.equal(p.text, 'Erster Test: 60 Punkte · neuester Test: 64 Punkte');
+  assert.equal(p.text, 'Erster Test: 60 · neuester: 64');
   const sign = { '+': 1, '−': -1, '±': 0 };
   for (const [first, last] of [[59.6, 64.4], [70.5, 61.4], [50.4, 50.6], [44.5, 46.4], [33.3, 33.3]]) {
     const info = c.progressInfo({ first, last, groupSize: 5 });
-    const [, f, l] = info.text.match(/Tests: (\d+) · deiner letzten 5: (\d+)$/);
+    const [, f, l] = info.text.match(/^Erste 5 Tests: (\d+) · letzte 5: (\d+)$/);
     const [, sg, n] = info.value.match(/^([+−±])(\d+) Punkte?$/);
     assert.equal(sign[sg] * Number(n), Number(l) - Number(f), `${first} -> ${last}: ${info.value} / ${info.text}`);
   }
@@ -749,8 +749,9 @@ test('Texte: Zeitraum-Hinweis verspricht nichts Falsches, „Ende geschätzt“ 
   assert.deepEqual(o7.reaction, o90.reaction);
   assert.deepEqual(o7.ping, o90.ping);
   assert.doesNotMatch(view, /Gilt für Spielzeit, Diagramme/);
-  assert.match(view, /Reaktionszeit und Ping zeigen immer deine letzten Messungen/);
-  assert.ok((view.match(/unabhängig vom gewählten Zeitraum/g) || []).length >= 3, 'Letzte Sitzungen, Reaktionszeit und Ping sagen es selbst');
+  assert.match(view, /'Gilt für Spielzeit und Aim-Tests\.'/);
+  assert.doesNotMatch(view, /Gilt für [^']*(Reaktion|Ping|Sitzungen)/, 'der Zeitraum gilt nicht für Reaktion, Ping und letzte Sitzungen');
+  assert.ok((view.match(/unabhängig vom Zeitraum/g) || []).length >= 3, 'Letzte Sitzungen, Reaktionszeit und Ping sagen es selbst');
 });
 
 // ---------------------------------------------------------------- Simulator hat dieselbe Form

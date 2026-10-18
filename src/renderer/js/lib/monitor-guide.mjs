@@ -24,18 +24,19 @@ export const VENDORS = [
 
 /**
  * Die fünf Schritte. Jeder Punkt in "checks" ist ein Haken, den man setzen kann.
+ * hint: eine kurze Zeile. how/why (optional): Details, die erst auf Klick aufgehen („So geht’s“ / „Warum?“).
  * action: Knopf in der Ansicht (windows = Einstellungsseite öffnen, pattern = Testbild öffnen, …).
  */
 export const STEPS = [
   {
     id: 'osd',
     title: 'Monitor-Menü',
-    intro: 'Nimm die Knöpfe an deinem Monitor (meist unten oder hinten). Dort stellst du das Bild direkt im Monitor ein.',
+    intro: 'Mit den Knöpfen am Monitor – meist unten oder hinten.',
     checks: [
-      { id: 'mode', label: 'Bildmodus „Standard“, „FPS“ oder „Benutzer“ wählen', hint: 'Modi wie „Kino“, „Lesen“ oder „Augenschutz“ machen das Bild gelb oder dunkel.' },
-      { id: 'dcr', label: 'Dynamischen Kontrast (DCR) ausschalten', hint: 'Er ändert die Helligkeit ständig von selbst. Dunkle Szenen werden dann noch dunkler.' },
+      { id: 'mode', label: 'Bildmodus „Standard“, „FPS“ oder „Benutzer“ wählen', hint: 'Modi wie „Kino“ oder „Augenschutz“ machen das Bild gelb oder dunkel.' },
+      { id: 'dcr', label: 'Dynamischen Kontrast (DCR) ausschalten', hint: 'Er ändert die Helligkeit ständig. Dunkle Szenen werden noch dunkler.' },
       { id: 'eco', label: 'Eco-Modus und Lichtsensor ausschalten', hint: 'Beide dimmen das Bild, um Strom zu sparen.' },
-      { id: 'black', label: 'Schwarz-Stabilisator auf eine mittlere Stufe', hint: 'Hebt nur die dunklen Töne an. Zu hoch macht das ganze Bild grau. Der Name hängt von der Marke ab (Liste unten).' },
+      { id: 'black', label: 'Schwarz-Stabilisator auf eine mittlere Stufe', hint: 'Hebt dunkle Töne an. Zu hoch wirkt alles grau. Name je Marke: unten.' },
       { id: 'brightness', label: 'Helligkeit passend zum Raum', hint: 'Heller Raum: eher hoch. Dunkler Raum: eher niedrig, sonst blendet es.' },
       { id: 'contrast', label: 'Kontrast auf Werkseinstellung lassen', hint: 'Meist 50 oder 70 bis 80. Prüfe es mit dem Weißwert-Bild.' },
     ],
@@ -44,34 +45,34 @@ export const STEPS = [
   {
     id: 'windows',
     title: 'Windows',
-    intro: 'Windows kann das Bild zusätzlich verändern. Diese Punkte prüfst du in den Windows-Einstellungen.',
+    intro: 'Diese Punkte prüfst du in den Windows-Einstellungen.',
     checks: [
-      { id: 'hdr', label: 'HDR nur bei echtem HDR-Monitor einschalten', hint: 'HDR = mehr Helligkeitsumfang. Bei einfachen Monitoren (HDR400) wirkt das Bild damit blass und Schwarz grau. Bei OLED oder HDR600 und mehr darf es an sein.', action: { type: 'settings', uri: 'ms-settings:display', label: 'Anzeige-Einstellungen öffnen' } },
-      { id: 'hdrcal', label: 'Bei HDR: einmal die App „Windows HDR Calibration“ nutzen', hint: 'Die kostenlose App von Microsoft stellt ein, wie hell und dunkel HDR sein darf. Ohne HDR kannst du das überspringen.', action: { type: 'hdrStore', label: 'App im Microsoft Store öffnen' } },
-      { id: 'nightlight', label: 'Nachtlicht beim Spielen ausschalten', hint: 'Das Nachtlicht färbt das Bild gelb. Gegner im Sturm sind dann schwerer zu sehen.', action: { type: 'settings', uri: 'ms-settings:nightlight', label: 'Nachtlicht öffnen' } },
-      { id: 'autobright', label: 'Laptop: automatische Helligkeit ausschalten', hint: '„Helligkeit automatisch ändern“ und „Inhaltsabhängige Helligkeit“ dimmen dunkle Szenen. Am Desktop-PC gibt es das meist nicht.', action: { type: 'settings', uri: 'ms-settings:display', label: 'Anzeige-Einstellungen öffnen' } },
-      { id: 'dccw', label: 'Optional: Windows-Farbkalibrierung durchgehen', hint: 'Ein Windows-Programm führt dich durch Gamma, Helligkeit und Kontrast. Am Ende kannst du „Vorherige Kalibrierung“ wählen, wenn es dir nicht gefällt.', action: { type: 'calibration', label: 'Farbkalibrierung starten' } },
+      { id: 'hdr', label: 'HDR nur bei echtem HDR-Monitor einschalten', hint: 'Bei einfachen Monitoren (HDR400) wirkt das Bild sonst blass.', why: 'HDR = mehr Helligkeitsumfang. Bei einfachen Monitoren wirkt das Bild damit blass und Schwarz grau. Bei OLED oder HDR600 und mehr darf es an sein.', action: { type: 'settings', uri: 'ms-settings:display', label: 'Anzeige-Einstellungen öffnen' } },
+      { id: 'hdrcal', label: 'Bei HDR: einmal die App „Windows HDR Calibration“ nutzen', hint: 'Stellt ein, wie hell HDR sein darf. Ohne HDR: überspringen.', action: { type: 'hdrStore', label: 'App im Microsoft Store öffnen' } },
+      { id: 'nightlight', label: 'Nachtlicht beim Spielen ausschalten', hint: 'Es färbt das Bild gelb. Gegner im Sturm sind dann schwerer zu sehen.', action: { type: 'settings', uri: 'ms-settings:nightlight', label: 'Nachtlicht öffnen' } },
+      { id: 'autobright', label: 'Laptop: automatische Helligkeit ausschalten', hint: 'Dimmt dunkle Szenen. Am Desktop-PC gibt es das meist nicht.', how: 'Schalte „Helligkeit automatisch ändern“ und „Inhaltsabhängige Helligkeit“ aus.', action: { type: 'settings', uri: 'ms-settings:display', label: 'Anzeige-Einstellungen öffnen' } },
+      { id: 'dccw', label: 'Optional: Windows-Farbkalibrierung durchgehen', hint: 'Gefällt es dir nicht, wähle am Ende „Vorherige Kalibrierung“.', action: { type: 'calibration', label: 'Farbkalibrierung starten' } },
     ],
     patterns: ['gamma'],
   },
   {
     id: 'treiber',
     title: 'Grafiktreiber',
-    intro: 'Der Grafiktreiber ist das Programm deiner Grafikkarte. Dort stellst du Farbe und Schwarzwert ein.',
+    intro: 'Im Programm deiner Grafikkarte stellst du Farbe und Schwarzwert ein.',
     vendors: {
       nvidia: [
-        { id: 'nv-range', label: 'Ausgabe-Dynamikbereich auf „Voll“', hint: 'NVIDIA-Systemsteuerung → Auflösung ändern → „NVIDIA-Farbeinstellungen verwenden“ → Ausgabe-Farbformat RGB, Ausgabe-Dynamikbereich „Voll“ (Full). Über HDMI steht er oft auf „Begrenzt“ – dann ist Schwarz nur grau. Nach Treiber-Updates noch einmal prüfen.' },
-        { id: 'nv-vibrance', label: 'Digitale Schwingung (Digital Vibrance) 60 bis 80 %', hint: 'NVIDIA-Systemsteuerung → Anzeige → Desktop-Farbeinstellungen anpassen. Standard ist 50 %. Kräftigere Farben lassen Gegner vor Wiese und Sturm mehr auffallen. Das ist Geschmackssache.' },
-        { id: 'nv-app', label: 'Alternative: RTX Dynamic Vibrance in der NVIDIA App', hint: 'Nur ab RTX-20-Serie. Ein Filter nur für das Spiel – nutze entweder diesen oder die Digitale Schwingung, nicht beides stark.' },
+        { id: 'nv-range', label: 'Ausgabe-Dynamikbereich auf „Voll“', hint: 'Über HDMI steht er oft auf „Begrenzt“ – dann ist Schwarz nur grau.', how: 'NVIDIA-Systemsteuerung → Auflösung ändern → „NVIDIA-Farbeinstellungen verwenden“ → Ausgabe-Farbformat RGB, Ausgabe-Dynamikbereich „Voll“ (Full). Nach Treiber-Updates noch einmal prüfen.' },
+        { id: 'nv-vibrance', label: 'Digitale Schwingung (Digital Vibrance) 60 bis 80 %', hint: 'Standard ist 50 %. Gegner fallen vor Wiese und Sturm mehr auf.', how: 'NVIDIA-Systemsteuerung → Anzeige → Desktop-Farbeinstellungen anpassen. Wie kräftig, ist Geschmackssache.' },
+        { id: 'nv-app', label: 'Alternative: RTX Dynamic Vibrance in der NVIDIA App', hint: 'Ab RTX 20. Entweder das oder Digitale Schwingung – nicht beides stark.' },
       ],
       amd: [
-        { id: 'amd-range', label: 'Pixelformat „RGB 4:4:4 PC-Standard (Full RGB)“', hint: 'AMD Software → Einstellungen (Zahnrad) → Anzeige → Pixelformat. So wird Schwarz wirklich schwarz.' },
-        { id: 'amd-sat', label: 'Sättigung etwas erhöhen (110 bis 130)', hint: 'AMD Software → Einstellungen → Anzeige → „Benutzerdefinierte Farbe“ einschalten → Sättigung. Standard ist 100. Sättigung = wie kräftig die Farben sind.' },
-        { id: 'amd-temp', label: 'Farbtemperatur auf 6500 K oder Steuerung aus', hint: 'Bei „Benutzerdefinierte Farbe“. 6500 K ist neutrales Weiß ohne Blau- oder Gelbstich.' },
+        { id: 'amd-range', label: 'Pixelformat „RGB 4:4:4 PC-Standard (Full RGB)“', hint: 'So wird Schwarz wirklich schwarz.', how: 'AMD Software → Einstellungen (Zahnrad) → Anzeige → Pixelformat.' },
+        { id: 'amd-sat', label: 'Sättigung etwas erhöhen (110 bis 130)', hint: 'Standard ist 100. Sättigung = wie kräftig die Farben sind.', how: 'AMD Software → Einstellungen → Anzeige → „Benutzerdefinierte Farbe“ einschalten → Sättigung.' },
+        { id: 'amd-temp', label: 'Farbtemperatur auf 6500 K oder Steuerung aus', hint: 'Bei „Benutzerdefinierte Farbe“. 6500 K ist neutrales Weiß.' },
       ],
       intel: [
-        { id: 'intel-range', label: 'Quantisierungsbereich „Voll“, falls angeboten', hint: 'Intel Graphics Software (früher Arc Control) → Anzeige. „Voll“ sorgt für echtes Schwarz.' },
-        { id: 'intel-sat', label: 'Sättigung leicht erhöhen', hint: 'Intel Graphics Software → Anzeige → Farbe → Sättigung. Bei HDMI mit YCbCr-Ausgabe wirkt das nicht – dann RGB wählen.' },
+        { id: 'intel-range', label: 'Quantisierungsbereich „Voll“, falls angeboten', hint: '„Voll“ sorgt für echtes Schwarz.', how: 'Intel Graphics Software (früher Arc Control) → Anzeige.' },
+        { id: 'intel-sat', label: 'Sättigung leicht erhöhen', hint: 'Wirkt nicht bei HDMI mit YCbCr-Ausgabe – dann RGB wählen.', how: 'Intel Graphics Software → Anzeige → Farbe → Sättigung.' },
       ],
     },
     patterns: ['farben', 'verlauf'],
@@ -79,10 +80,10 @@ export const STEPS = [
   {
     id: 'fortnite',
     title: 'Fortnite',
-    intro: 'Erst wenn Monitor, Windows und Treiber passen, stellst du Fortnite ein. Sonst gleichst du einen Fehler mit einem anderen aus.',
+    intro: 'Erst wenn Monitor, Windows und Treiber passen, kommt Fortnite dran.',
     checks: [
-      { id: 'fn-bright', label: 'Helligkeit in Fortnite: 100 bis 130 %', hint: 'Das ist der Wert „DisplayGamma“ in der Fortnite-Datei. 100 % ist Standard. HELIX stellt ihn in den Sicht-Presets für dich ein.', action: { type: 'nav', to: 'sicht', label: 'Zu den Sicht-Presets' } },
-      { id: 'fn-cb', label: 'Für den Sturm: Farbenblind-Modus Tritanopie, Stärke 5 bis 7', hint: 'Fortnite: Einstellungen → Barrierefreiheit (bei älteren Versionen: Video). Der Sturm wirkt weniger lila. Den Wert speichert Fortnite in der Epic-Cloud – deshalb stellst du ihn im Spiel ein.' },
+      { id: 'fn-bright', label: 'Helligkeit in Fortnite: 100 bis 130 %', hint: '100 % ist Standard. HELIX stellt das in den Sicht-Presets ein.', action: { type: 'nav', to: 'sicht', label: 'Zu den Sicht-Presets' } },
+      { id: 'fn-cb', label: 'Für den Sturm: Farbenblind-Modus Tritanopie, Stärke 5 bis 7', hint: 'Der Sturm wirkt weniger lila. Das stellst du im Spiel ein.', how: 'Fortnite: Einstellungen → Barrierefreiheit (bei älteren Versionen: Video). Fortnite speichert den Wert in der Epic-Cloud – deshalb geht es nur im Spiel.' },
       { id: 'fn-ui', label: 'Anzeige-Kontrast 1,0 bis 1,3', hint: 'Macht Leben, Munition und Karte kontrastreicher – nicht die Spielwelt.' },
     ],
     patterns: [],
@@ -90,7 +91,7 @@ export const STEPS = [
   {
     id: 'kontrolle',
     title: 'Kontrolle',
-    intro: 'Jetzt der Test: Wie viele Figuren erkennst du im Sturm? So siehst du, ob sich die Einstellungen gelohnt haben.',
+    intro: 'Wie viele Figuren erkennst du im Sturm? So siehst du, ob es sich gelohnt hat.',
     checks: [],
     patterns: ['sturm'],
   },

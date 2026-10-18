@@ -15,9 +15,9 @@ const TABS = [
 ];
 
 const CONF = {
-  hoch: ['Ergebnis klar', 'ok', 'Die Werte lagen deutlich auseinander. Die Empfehlung ist ziemlich sicher.'],
-  mittel: ['Ergebnis brauchbar', 'accent', 'Gute Richtung. Ein zweiter Test macht das Ergebnis sicherer.'],
-  niedrig: ['Ergebnis unsicher', 'warn', 'Die Werte lagen nah beieinander. Mach den Test am besten noch einmal, gern in „Gründlich“.'],
+  hoch: ['Ergebnis klar', 'ok', 'Die Empfehlung ist ziemlich sicher.'],
+  mittel: ['Ergebnis brauchbar', 'accent', 'Ein zweiter Test macht es sicherer.'],
+  niedrig: ['Ergebnis unsicher', 'warn', 'Mach den Test am besten noch einmal, gern „Gründlich“.'],
 };
 
 let active = null;
@@ -140,10 +140,10 @@ function createView(root, env) {
   function renderWerte() {
     const s = data.settings;
     const FIELDS = [
-      ['dpi', 'Maus-DPI', 'So empfindlich ist die Maus selbst. Steht in der Software deiner Maus – oft 400, 800 oder 1600.', 'z. B. 800'],
-      ['sens', 'Sensi X-Achse (%)', 'Deine normale Fortnite-Sensi für links und rechts, zum Beispiel 6,5.', 'z. B. 6,5'],
-      ['targeting', 'Zielen (%)', 'Sensi beim Zielen mit der rechten Maustaste. Prozent deiner normalen Sensi.', 'z. B. 45'],
-      ['scope', 'Zielfernrohr (%)', 'Sensi beim Blick durchs Zielfernrohr, zum Beispiel beim Scharfschützengewehr.', 'z. B. 45'],
+      ['dpi', 'Maus-DPI', 'z. B. 800'],
+      ['sens', 'Sensi X-Achse (%)', 'z. B. 6,5'],
+      ['targeting', 'Zielen (%)', 'z. B. 45'],
+      ['scope', 'Zielfernrohr (%)', 'z. B. 45'],
     ];
     const inputs = {};
     const errs = {};
@@ -181,19 +181,24 @@ function createView(root, env) {
       if (ok && first) { intro?.remove(); saveRow?.remove(); }
     };
 
-    const form = h('div.sensi-form', FIELDS.map(([k, label, hint, ph]) => {
+    const form = h('div.sensi-form', FIELDS.map(([k, label, ph]) => {
       const id = `sensi-${k}`;
       inputs[k] = h('input.input', { id, type: 'text', inputmode: k === 'dpi' ? 'numeric' : 'decimal', value: numText(s[k]), placeholder: ph, autocomplete: 'off', spellcheck: 'false' });
       inputs[k].addEventListener('input', refresh);
       inputs[k].addEventListener('change', save);
       inputs[k].addEventListener('keydown', (e) => { if (e.key === 'Enter') inputs[k].blur(); });
       errs[k] = h('span.sensi-err', { role: 'alert' });
-      return h('div.field', h('label', { for: id }, label), inputs[k], h('p.hint', hint), errs[k]);
+      return h('div.field', h('label', { for: id }, label), inputs[k], errs[k]);
     }));
+    const where = ui.more('Wo finde ich das?',
+      'Maus-DPI: in der Software deiner Maus, oft 400, 800 oder 1600.',
+      'Sensi X-Achse: deine normale Sensi für links und rechts.',
+      'Zielen: mit der rechten Maustaste. Zielfernrohr: z. B. beim Scharfschützengewehr. Beides in Prozent deiner Sensi.',
+      'Gespeichert wird, sobald du ein Feld verlässt. Komma oder Punkt ist egal.');
 
     intro = data.saved ? null : h('div.callout.info', icon('info'), h('div',
       h('strong', 'Trag zuerst deine eigenen Werte ein'),
-      h('p.hint', 'Du findest sie in Fortnite unter Einstellungen > Maus und Tastatur. Bis dahin rechnet HELIX mit Beispielwerten (800 DPI, 6,5 %). Gespeichert wird, sobald du ein Feld verlässt – oder mit „Diese Werte speichern“, wenn die Werte schon stimmen.')));
+      h('p.hint', 'Bis dahin rechnet HELIX mit Beispielwerten (800 DPI, 6,5 %).')));
     // Spielt jemand genau mit den Beispielwerten, ändert sich kein Feld – dann speichert dieser Knopf.
     saveRow = data.saved ? null : h('div.row.sensi-gap',
       ui.button('Diese Werte speichern', { variant: 'primary', iconName: 'check', onClick: save }),
@@ -203,7 +208,7 @@ function createView(root, env) {
     return [
       intro,
       h('div.sensi-grid.sensi-werte',
-        h('div.sensi-a-form', ui.section('Deine Werte', 'Trag ein, was in Fortnite und in deiner Maus-Software steht. Komma oder Punkt ist egal.', form, saveRow)),
+        h('div.sensi-a-form', ui.section('Deine Werte', 'Aus Fortnite („Maus und Tastatur“) und deiner Maus-Software.', form, saveRow, where)),
         h('div.sensi-a-live', liveBox),
         h('div.sensi-a-howto', howTo)),
     ];
@@ -211,27 +216,28 @@ function createView(root, env) {
 
   function liveValues(v) {
     if (!v) {
-      return ui.section('So schnell ist deine Maus', null, h('p.hint', 'Bitte erst gültige Werte eintragen. Dann siehst du hier deine eDPI.'));
+      return ui.section('So schnell ist deine Maus', null, h('p.hint', 'Trag erst gültige Werte ein.'));
     }
     const lv = SM.liveValues(v);
-    const stat = (value, label, hint) => h('div.stat', h('strong', value), h('span', label), h('span.hint', hint));
+    const stat = (value, label, hint) => h('div.stat', h('strong', value), h('span', label), hint ? h('span.hint', hint) : null);
     return [
-      ui.section('So schnell ist deine Maus', 'Rechnet live mit, während du tippst.',
+      ui.section('So schnell ist deine Maus', null,
         h('div.stat-row.sensi-stats',
-          stat(SM.fmtNum(lv.edpi, lv.edpi % 1 ? 1 : 0), 'eDPI', 'DPI mal Sensi geteilt durch 100'),
-          stat(`${SM.fmtNum(lv.cm360, 1)} cm`, 'pro Umdrehung', 'Mausweg für eine ganze Drehung (360°)'),
-          stat(`${SM.fmtNum(lv.inch360, 1)} Zoll`, 'pro Umdrehung', 'dasselbe in Zoll (1 Zoll = 2,54 cm)')),
+          stat(SM.fmtNum(lv.edpi, lv.edpi % 1 ? 1 : 0), 'eDPI', 'DPI × Sensi ÷ 100'),
+          stat(`${SM.fmtNum(lv.cm360, 1)} cm`, 'pro Umdrehung', `${SM.fmtNum(lv.inch360, 1)} Zoll`)),
         h('div.stat-row.sensi-stats',
-          stat(`${SM.fmtNum(lv.adsCm360, 1)} cm`, 'beim Zielen', `mit ${numText(v.targeting)} % Zielen`),
-          stat(`${SM.fmtNum(lv.scopeCm360, 1)} cm`, 'mit Zielfernrohr', `mit ${numText(v.scope)} %, Zoom nicht eingerechnet`)),
-        h('div.callout.info', icon('info'), h('div',
-          h('strong', 'Was ist eDPI?'),
-          h('p.hint', 'eDPI ist deine echte Maus-Geschwindigkeit: DPI mal Sensi geteilt durch 100. So kannst du dich mit anderen vergleichen, auch wenn sie eine andere DPI haben. Beispiel: 800 DPI und 6,5 % ergeben eDPI 52 – genau wie 1600 DPI und 3,25 %.')))),
-      ui.section('Vergleich mit Profis', 'Werte von 259 Fortnite-Profis (senslab.pro). Kein Muss – nur zur Orientierung.',
+          stat(`${SM.fmtNum(lv.adsCm360, 1)} cm`, 'beim Zielen', `mit ${numText(v.targeting)} %`),
+          stat(`${SM.fmtNum(lv.scopeCm360, 1)} cm`, 'mit Zielfernrohr', `mit ${numText(v.scope)} %, ohne Zoom`)),
+        ui.more('Was ist eDPI?',
+          'eDPI ist deine echte Maus-Geschwindigkeit: DPI mal Sensi geteilt durch 100. So vergleichst du dich mit anderen, auch bei anderer DPI.',
+          'Beispiel: 800 DPI und 6,5 % ergeben eDPI 52 – genau wie 1600 DPI und 3,25 %. „Pro Umdrehung“ ist der Mausweg für eine ganze Drehung (360°).')),
+      ui.section('Vergleich mit Profis', null,
         proScale(lv.edpi),
         h('div.row', ui.badge(`Deine eDPI ${fmt0(lv.edpi)}: ${lv.pro.label}`, lv.pro.type || 'accent')),
         h('p.hint.sensi-gap', lv.pro.text),
-        h('p.hint', 'Die meisten Profis spielen mit 800 DPI. Ihre Mitte liegt bei eDPI 52, also etwa 32 cm für eine Umdrehung.')),
+        ui.more('Mehr dazu',
+          'Werte von 259 Fortnite-Profis (senslab.pro). Kein Muss – nur zur Orientierung.',
+          'Die meisten Profis spielen mit 800 DPI. Ihre Mitte liegt bei eDPI 52, also etwa 32 cm für eine Umdrehung.')),
     ];
   }
 
@@ -253,17 +259,18 @@ function createView(root, env) {
   /** dpiStep: DPI, auf die der Spieler die Maus erst umstellen muss (nur nach einem DPI-Vergleich). */
   function howToBox(s, { compact = false, dpiStep = null } = {}) {
     const sens = SM.fmtSens(s.sens);
-    return ui.section('So stellst du es in Fortnite ein', 'HELIX ändert deine Fortnite-Sensi nicht selbst. Fortnite speichert sie in der Epic-Cloud deines Kontos – so geht nichts verloren.',
+    return ui.section('So stellst du es in Fortnite ein', 'HELIX ändert deine Fortnite-Sensi nicht – das machst du im Spiel.',
       h('ol.sensi-steps',
-        dpiStep ? h('li', `Stell deine Maus auf ${dpiStep} DPI um – mit der DPI-Taste unter dem Mausrad oder in der Software deiner Maus.`) : null,
-        h('li', 'Starte Fortnite und öffne die Einstellungen (Menü oben rechts, dann das Zahnrad).'),
+        dpiStep ? h('li', `Stell deine Maus auf ${dpiStep} DPI um (DPI-Taste oder Maus-Software).`) : null,
+        h('li', 'Öffne in Fortnite die Einstellungen (Menü oben rechts, Zahnrad).'),
         h('li', 'Wähle den Reiter „Maus und Tastatur“.'),
-        h('li', `Stell die Sensi für die X-Achse und die Y-Achse auf ${sens} %.`),
-        h('li', `Zielen auf ${numText(s.targeting)} % und Zielfernrohr auf ${numText(s.scope)} %. Dann übernehmen.`)),
-      h('p.hint', 'Die Namen im Menü können je nach Fortnite-Version etwas anders heißen.'),
-      compact ? null : h('div.row',
-        ui.button('Maus-Check öffnen', { small: true, iconName: 'chevron', onClick: () => env.nav.go('maus') }),
-        h('span.hint', 'Prüft, ob die Mausbeschleunigung von Windows aus ist.')));
+        h('li', `Stell X-Achse und Y-Achse auf ${sens} %.`),
+        h('li', `Zielen auf ${numText(s.targeting)} %, Zielfernrohr auf ${numText(s.scope)} %. Dann übernehmen.`)),
+      ui.more('Warum nicht automatisch?',
+        'Fortnite speichert die Sensi in der Epic-Cloud deines Kontos. Deshalb stellst du sie im Spiel ein – so geht nichts verloren.',
+        'Die Namen im Menü können je nach Fortnite-Version etwas anders heißen.'),
+      compact ? null : h('div.row.sensi-gap',
+        ui.button('Mausbeschleunigung prüfen', { small: true, iconName: 'chevron', onClick: () => env.nav.go('maus') })));
   }
 
   // ---------------------------------------------------------------- Aim-Test
@@ -327,42 +334,40 @@ function createView(root, env) {
         h('p.hint', abortNote))) : null,
       pointerOk ? null : h('div.callout.warn', icon('warn'), h('div',
         h('strong', 'Der Aim-Test geht hier leider nicht'),
-        h('p.hint', 'Für den Test muss HELIX die Maus einfangen können. Das klappt in der Windows-App von HELIX. Umrechner und eDPI kannst du trotzdem nutzen.'))),
-      h('div.callout.info', icon('info'), h('div',
-        h('strong', 'So läuft der Test'),
-        h('p.hint', 'Du spielst mehrere kurze Durchgänge. Jeder hat drei Teile: Flicks (schnell auf Ziele springen), Tracking (einem Ziel folgen) und bewegte Ziele.'),
-        h('p.hint', cfg.mode === 'dpi'
-          ? 'Im DPI-Vergleich stellst du zwischendurch die DPI an der Maus um. HELIX passt die Sensi so an, dass deine eDPI gleich bleibt.'
-          : 'In jedem Durchgang ist die Sensi ein bisschen anders. Welche gerade dran ist, verrät HELIX erst am Ende – so zielst du ehrlich.'))),
+        h('p.hint', 'Das klappt nur in der Windows-App. Umrechner und eDPI gehen trotzdem.'))),
       h('div.sensi-grid',
         h('div',
           ui.section('Was willst du testen?', null,
             seg([['sens', 'Beste Sensi finden'], ['dpi', 'DPI vergleichen']], cfg.mode, (v) => { cfg.mode = v; rerender(); }, 'Was willst du testen?'),
             h('p.hint.sensi-gap', cfg.mode === 'dpi'
-              ? 'Vergleicht zwei DPI-Einstellungen deiner Maus bei gleicher eDPI. Gut, wenn du überlegst, z. B. von 800 auf 1600 DPI zu wechseln.'
-              : 'Testet fünf Werte rund um deine Sensi und sagt dir, mit welchem du am besten triffst.'),
+              ? 'Vergleicht zwei DPI-Werte deiner Maus bei gleicher eDPI.'
+              : 'Testet fünf Werte rund um deine Sensi und zeigt den besten.'),
             cfg.mode === 'dpi' ? h('div.field.sensi-gap',
-              h('label', { for: 'sensi-dpi2' }, 'Welche DPI willst du vergleichen?'),
+              h('label', { for: 'sensi-dpi2' }, `Zweite DPI (jetzt: ${s.dpi} DPI)`),
               dpiInput,
-              h('p.hint', `Jetzt: ${s.dpi} DPI. Die zweite DPI stellst du im Test an der Maus um – meist mit der DPI-Taste oder in der Maus-Software.`),
-              dpiErr) : null),
+              dpiErr) : null,
+            ui.more('So funktioniert es',
+              'Du spielst mehrere kurze Durchgänge mit je drei Teilen: Flicks (schnell auf Ziele springen), Tracking (einem Ziel folgen) und bewegte Ziele.',
+              cfg.mode === 'dpi'
+                ? 'Zwischendurch stellst du die DPI an der Maus um (DPI-Taste oder Maus-Software). HELIX passt die Sensi so an, dass deine eDPI gleich bleibt.'
+                : 'In jedem Durchgang ist die Sensi ein bisschen anders. Welche gerade dran ist, verrät HELIX erst am Ende – so zielst du ehrlich.')),
           ui.section('Wie lange?', null,
             seg([['short', `Kurz (${durText('short')})`], ['normal', `Gründlich (${durText('normal')})`]], cfg.length, (v) => { cfg.length = v; rerender(); }, 'Wie lange?'),
-            h('p.hint.sensi-gap', 'Kurz: etwa 15 Sekunden pro Wert. Gründlich: etwa 30 Sekunden pro Wert – das Ergebnis wird genauer.')),
-          cfg.mode === 'sens' ? ui.section('Wie weit sollen die Werte auseinanderliegen?', null,
+            h('p.hint.sensi-gap', 'Gründlich dauert länger, das Ergebnis wird genauer.')),
+          cfg.mode === 'sens' ? ui.section('Wie weit auseinander?', null,
             seg([[0.1, 'Eng (± 10 %)'], [0.2, 'Normal (± 20 %)'], [0.3, 'Weit (± 30 %)']], cfg.spread, (v) => { cfg.spread = v; rerender(); }, 'Spanne'),
-            h('p.hint.sensi-gap', `Getestet wird von ${SM.fmtSens(SM.roundSens(s.sens * (1 - cfg.spread)))} % bis ${SM.fmtSens(SM.roundSens(s.sens * (1 + cfg.spread)))} %. „Weit“ hilft, wenn du noch gar nicht weißt, was dir liegt. „Eng“ ist für den Feinschliff.`)) : null),
+            h('p.hint.sensi-gap', `Von ${SM.fmtSens(SM.roundSens(s.sens * (1 - cfg.spread)))} % bis ${SM.fmtSens(SM.roundSens(s.sens * (1 + cfg.spread)))} %. Weit zum Suchen, eng zum Feinschliff.`)) : null),
         h('div',
           ui.section('Bereit?', null,
             h('dl.kv',
               h('dt', 'Deine Sensi'), h('dd', `${SM.fmtSens(s.sens)} % bei ${s.dpi} DPI`),
               h('dt', 'eDPI'), h('dd', fmt0(SM.edpi(s.dpi, s.sens))),
               h('dt', 'Ablauf'), h('dd', cfg.mode === 'dpi' ? '4 Durchgänge (A, B, B, A)' : '5 Durchgänge in zufälliger Reihenfolge')),
-            data.saved ? null : h('p.hint', 'Achtung: Das sind noch Beispielwerte. Trag vorher unter „Deine Sensi“ deine eigenen Werte ein.'),
+            data.saved ? null : h('div.row', ui.badge('Noch Beispielwerte – trag erst deine eigenen ein', 'warn')),
             h('ul.sensi-tips',
-              h('li', 'Setz dich hin wie beim Spielen und nimm dein normales Mauspad.'),
-              h('li', 'Ziel so, wie du in Fortnite zielst – nicht extra vorsichtig.'),
-              h('li', 'Esc pausiert. Noch einmal Esc bricht ab.')),
+              h('li', 'Sitz wie beim Spielen, mit deinem normalen Mauspad.'),
+              h('li', 'Ziel ganz normal – nicht extra vorsichtig.'),
+              h('li', 'Esc pausiert, noch einmal Esc bricht ab.')),
             h('div.row', startBtn, ui.button('Werte ändern', { variant: 'ghost', iconName: 'edit', onClick: () => setTab('werte') }))))),
     ];
   }
@@ -386,9 +391,11 @@ function createView(root, env) {
       onMode: (m) => {
         lastMode = m;
         ui.mount(modeBadge, ui.badge(`Mausmodus: ${MODE_TEXT[m]}`, m === 'raw' ? 'ok' : 'warn'));
-        modeHint.textContent = m === 'raw'
-          ? 'Die Maus läuft wie in Fortnite ohne Windows-Beschleunigung.'
-          : `Rohdaten gehen hier nicht. Die Mausbeschleunigung von Windows kann mitwirken.${(window.devicePixelRatio || 1) !== 1 ? ' Auch die Windows-Skalierung kann die Drehung etwas verändern.' : ''}`;
+        // Rohdaten: das Abzeichen sagt schon alles. Sonst kurz sagen, was mitwirken kann.
+        modeHint.textContent = m === 'raw' ? ''
+          : (window.devicePixelRatio || 1) !== 1
+            ? 'Mausbeschleunigung und Skalierung von Windows können mitwirken.'
+            : 'Die Mausbeschleunigung von Windows kann mitwirken.';
       },
       onAbort: () => {
         abortNote = cancelTest();
@@ -424,8 +431,8 @@ function createView(root, env) {
   function cancelTest() {
     const note = dpiBackNote();
     stopArena();
-    if (note) ui.toast(`Test abgebrochen. Es wurde nichts gespeichert. ${note}`, 'warn', { timeout: 10000 });
-    else ui.toast('Test abgebrochen. Es wurde nichts gespeichert.', 'info');
+    if (note) ui.toast(`Test abgebrochen, nichts gespeichert. ${note}`, 'warn', { timeout: 10000 });
+    else ui.toast('Test abgebrochen, nichts gespeichert.', 'info');
     return note;
   }
 
@@ -442,7 +449,7 @@ function createView(root, env) {
       if (destroyed) return;
       data.history = [...data.history.filter((e) => e.at !== r.entry.at), r.entry].slice(-200);
       renderTabs();
-      ui.toast('Fertig! Dein Ergebnis ist im Verlauf gespeichert.');
+      ui.toast('Fertig – Ergebnis im Verlauf gespeichert.');
     } catch (e) {
       ui.showError(e, 'Ergebnis nicht gespeichert');
     }
@@ -453,7 +460,7 @@ function createView(root, env) {
     const s = data.settings;
     if (!rec) {
       return [
-        ui.emptyState({ title: 'Kein Ergebnis', text: 'Es kamen keine verwertbaren Durchgänge zustande. Versuch es noch einmal.', action: ui.button('Neuer Test', { variant: 'primary', iconName: 'play', onClick: () => { outcome = null; renderBody(); } }) }),
+        ui.emptyState({ title: 'Kein Ergebnis', text: 'Kein Durchgang war verwertbar. Versuch es noch einmal.', action: ui.button('Neuer Test', { variant: 'primary', iconName: 'play', onClick: () => { outcome = null; renderBody(); } }) }),
       ];
     }
     const dpiMode = plan.mode === 'dpi';
@@ -466,8 +473,9 @@ function createView(root, env) {
           h('div.sensi-big', 'Zu wenige Treffer'),
           h('div.row', ui.badge('nicht gespeichert', 'warn'))),
         h('div.sensi-result-text',
-          rec.lines.map((l) => h('p', l)),
-          h('p.hint', 'Tipp: Klick die Ziele direkt an, sobald dein Fadenkreuz darauf liegt. Beim Tracking hältst du das Fadenkreuz einfach auf dem Ziel.'),
+          // Die erste Zeile („zu wenige Treffer“) steht schon groß links.
+          rec.lines.filter((l, i) => i > 0 || !/zu wenige Treffer/i.test(l)).map((l) => h('p', l)),
+          h('p.hint', 'Tipp: Klick, sobald dein Fadenkreuz auf dem Ziel liegt.'),
           dpiHint,
           h('div.row',
             ui.button('Nochmal testen', { variant: 'primary', iconName: 'refresh', onClick: () => { outcome = null; renderBody(); } }))));
@@ -478,7 +486,7 @@ function createView(root, env) {
       variant: 'primary', iconName: 'check', disabled: adopted,
       onClick: async () => {
         const ok = await saveSettings({ ...data.settings, sens: rec.sens, dpi: rec.dpi },
-          `Übernommen. Stell jetzt in Fortnite ${SM.fmtSens(rec.sens)} % ein${dpiMode && rec.dpi !== mouseDpi ? ` und deine Maus auf ${rec.dpi} DPI` : ''}.`);
+          `Übernommen – stell jetzt in Fortnite ${SM.fmtSens(rec.sens)} % ein${dpiMode && rec.dpi !== mouseDpi ? ` und deine Maus auf ${rec.dpi} DPI` : ''}.`);
         if (ok) renderBody();
       },
     });
@@ -496,9 +504,9 @@ function createView(root, env) {
           h('div.row', adoptBtn,
             ui.button('Nochmal testen', { iconName: 'refresh', onClick: () => { outcome = null; renderBody(); } }),
             ui.button('Verlauf ansehen', { variant: 'ghost', iconName: 'clock', onClick: () => setTab('verlauf') })))),
-      ui.section(dpiMode ? 'Punkte pro DPI' : 'Punkte pro getesteter Sensi', 'Punkte aus Treffern, Genauigkeit, Tempo, Tracking und wie oft du übers Ziel geschossen bist (0 bis 100).',
-        barChart(entry.rounds, rec, plan)),
-      ui.section('Alle Werte im Detail', null, roundsTable(entry.rounds, dpiMode)),
+      ui.section(dpiMode ? 'Punkte pro DPI' : 'Punkte pro getesteter Sensi', 'Aus Treffern, Genauigkeit, Tempo und Tracking (0 bis 100).',
+        barChart(entry.rounds, rec, plan),
+        ui.more('Alle Werte im Detail', roundsTable(entry.rounds, dpiMode))),
       howToBox({ ...s, sens: rec.sens }, { compact: true, dpiStep: dpiMode && rec.dpi !== mouseDpi ? rec.dpi : null }),
     ];
   }
@@ -535,7 +543,9 @@ function createView(root, env) {
         h('td.num', Number.isFinite(r.avgTtkMs) ? `${r.avgTtkMs} ms` : '–'),
         h('td.num', ratio(r.overshoot)),
         h('td.num', ratio(r.undershoot))))))),
-    h('p.hint.sensi-gap', 'Zeit bis Treffer: vom Erscheinen des Ziels bis zum Treffer. „Übers Ziel“ und „Zu kurz“: Anteil der Flicks, bei denen du über das Ziel hinaus oder zu kurz gezielt hast.')];
+    ui.more('Was bedeuten die Spalten?',
+      'Zeit bis Treffer: vom Erscheinen des Ziels bis zum Treffer.',
+      '„Übers Ziel“ und „Zu kurz“: Anteil der Flicks, bei denen du über das Ziel hinaus oder zu kurz gezielt hast.')];
   }
 
   // ---------------------------------------------------------------- Umrechner
@@ -544,7 +554,7 @@ function createView(root, env) {
     for (const [k, fill] of Object.entries(CONV_FROM_SETTINGS)) if (!convEdited.has(k)) conv[k] = fill(data.settings);
     const out = h('div.sensi-conv-out');
 
-    const field = (key, label, hint, mode = 'decimal') => {
+    const field = (key, label, hint = null, mode = 'decimal') => {
       const id = `sensi-conv-${key}`;
       const input = h('input.input', { id, type: 'text', inputmode: mode, value: conv[key], autocomplete: 'off' });
       input.addEventListener('input', () => {
@@ -552,26 +562,26 @@ function createView(root, env) {
         if (key in CONV_FROM_SETTINGS) { if (input.value.trim()) convEdited.add(key); else convEdited.delete(key); }
         update();
       });
-      return h('div.field', h('label', { for: id }, label), input, h('p.hint', hint));
+      return h('div.field', h('label', { for: id }, label), input, hint ? h('p.hint', hint) : null);
     };
 
     let form;
     if (conv.dir === 'from') {
       form = [
-        field('sens', 'Fortnite-Sensi (%)', 'Dein Wert für die X-Achse in Fortnite.'),
-        field('dpi', 'Deine DPI in Fortnite', 'Die DPI deiner Maus, wenn du Fortnite spielst.', 'numeric'),
-        field('targetDpi', 'DPI im anderen Spiel', 'Spielst du dort mit einer anderen DPI? Sonst gleich lassen.', 'numeric'),
-        field('fov', 'Sichtfeld in PUBG', 'Nur für PUBG wichtig. In der Third-Person-Sicht ist es 80, in First-Person stellst du es selbst ein (Standard 90).', 'numeric'),
+        field('sens', 'Fortnite-Sensi X-Achse (%)'),
+        field('dpi', 'Deine DPI in Fortnite', null, 'numeric'),
+        field('targetDpi', 'DPI im anderen Spiel', 'Nur ändern, wenn du dort eine andere DPI nutzt.', 'numeric'),
+        field('fov', 'Sichtfeld in PUBG', 'Nur für PUBG: Third-Person 80, First-Person dein Wert (Standard 90).', 'numeric'),
       ];
     } else {
       const select = h('select.input', { id: 'sensi-conv-game', 'aria-label': 'Spiel' }, SM.GAMES.map((g) => h('option', { value: g.id, selected: g.id === conv.game }, g.name)));
       select.addEventListener('change', () => { conv.game = select.value; renderBody(); });
       form = [
-        h('div.field', h('label', { for: 'sensi-conv-game' }, 'Spiel'), select, h('p.hint', 'Aus welchem Spiel kommt deine Sensi?')),
-        field('value', 'Sensi im Spiel', 'Der Wert aus den Einstellungen des Spiels, zum Beispiel 0,4 in Valorant.'),
-        field('gameDpi', 'DPI in diesem Spiel', 'Mit welcher DPI spielst du dort?', 'numeric'),
-        field('fnDpi', 'DPI in Fortnite', 'Willst du in Fortnite eine andere DPI nehmen? Sonst gleich lassen.', 'numeric'),
-        conv.game === 'pubg' ? field('fov', 'Sichtfeld in PUBG', 'In der Third-Person-Sicht 80, in First-Person dein eigener Wert (Standard 90).', 'numeric') : null,
+        h('div.field', h('label', { for: 'sensi-conv-game' }, 'Aus welchem Spiel?'), select),
+        field('value', 'Sensi in diesem Spiel'),
+        field('gameDpi', 'DPI in diesem Spiel', null, 'numeric'),
+        field('fnDpi', 'DPI in Fortnite', 'Nur ändern, wenn du in Fortnite eine andere DPI willst.', 'numeric'),
+        conv.game === 'pubg' ? field('fov', 'Sichtfeld in PUBG', 'Third-Person 80, First-Person dein Wert (Standard 90).', 'numeric') : null,
       ];
     }
 
@@ -598,7 +608,7 @@ function createView(root, env) {
             return h('tr', h('td', g.name), h('td.num.sensi-conv-val', SM.fmtGameValue(g, v)),
               h('td.hint', g.kind === 'pubg' && !fovOk ? 'Sichtfeld zwischen 60 und 120 eintragen.' : (g.note || '')));
           })))),
-        h('p.hint.sensi-gap', 'Umgerechnet wird das normale Umschauen. Das Zielen mit Visier rechnet jedes Spiel anders – das stellst du dort selbst ein.'),
+        h('p.hint.sensi-gap', 'Gilt fürs normale Umschauen. Zielen mit Visier stellst du im Spiel selbst ein.'),
       ];
     }
 
@@ -617,8 +627,8 @@ function createView(root, env) {
         h('div.sensi-conv-result',
           h('span.hint', 'In Fortnite einstellen'),
           h('div.sensi-big', `${SM.fmtSens(fn)} %`),
-          h('p.hint', `genau ${SM.fmtNum(exact, 2)} % · Fortnite kann nur 0,1-%-Schritte · bei ${Math.round(fdpi)} DPI`),
-          h('p.hint', `eDPI ${SM.fmtNum(SM.edpi(fdpi, fn), 1)} · ${SM.fmtNum(SM.cm360(fdpi, fn), 1)} cm für eine Umdrehung`)),
+          h('p.hint', `bei ${Math.round(fdpi)} DPI · eDPI ${SM.fmtNum(SM.edpi(fdpi, fn), 1)} · ${SM.fmtNum(SM.cm360(fdpi, fn), 1)} cm pro Umdrehung`),
+          h('p.hint', `genau ${SM.fmtNum(exact, 2)} % – Fortnite kann nur 0,1-%-Schritte`)),
         g.note ? h('p.hint', g.note) : null,
         h('div.row', ui.button(adopted ? 'Ist schon deine Sensi' : 'Als meine Sensi übernehmen', {
           variant: 'primary', iconName: 'check', disabled: adopted,
@@ -629,18 +639,17 @@ function createView(root, env) {
             convEdited.add('gameDpi');
             renderBody({ keepScroll: true });
           },
-        }), h('span.hint', 'Speichert den Wert hier in HELIX. In Fortnite stellst du ihn selbst ein.')),
+        }), h('span.hint', 'Speichert nur in HELIX. In Fortnite stellst du ihn selbst ein.')),
       ];
     }
 
     update();
     return [
       h('div.toolbar',
-        seg([['from', 'Fortnite → anderes Spiel'], ['to', 'Anderes Spiel → Fortnite']], conv.dir, (v) => { conv.dir = v; renderBody(); }, 'Richtung'),
-        h('p.hint', conv.dir === 'from' ? 'Zeigt, welche Sensi sich in anderen Spielen genauso anfühlt.' : 'Holt deine Sensi aus einem anderen Spiel nach Fortnite.')),
+        seg([['from', 'Fortnite → anderes Spiel'], ['to', 'Anderes Spiel → Fortnite']], conv.dir, (v) => { conv.dir = v; renderBody(); }, 'Richtung')),
       h('div.sensi-grid',
         ui.section('Deine Angaben', 'Komma oder Punkt ist egal.', form),
-        ui.section('Ergebnis', 'Rechnet live mit. Gleich weit schieben = gleich weit drehen.', out)),
+        ui.section('Ergebnis', null, out)),
     ];
   }
 
@@ -651,16 +660,16 @@ function createView(root, env) {
     if (!list.length) {
       return ui.emptyState({
         title: 'Noch keine Tests',
-        text: 'Hier erscheinen deine Aim-Test-Ergebnisse mit Datum, Empfehlung und Punkten. Mach deinen ersten Test – er dauert nur etwa zwei Minuten.',
+        text: 'Mach deinen ersten Aim-Test – er dauert etwa zwei Minuten.',
         action: ui.button('Zum Aim-Test', { variant: 'primary', iconName: 'play', onClick: () => setTab('test') }),
       });
     }
     const recent = data.history.slice(-10);
     return [
       h('div.toolbar',
-        h('p.hint.grow', `${data.history.length} ${data.history.length === 1 ? 'Test' : 'Tests'} gespeichert. Höchstens 200 werden aufgehoben – die ältesten fallen dann weg.`),
+        h('p.hint.grow', `${data.history.length} ${data.history.length === 1 ? 'Test' : 'Tests'} gespeichert · höchstens 200, ältere fallen dann weg`),
         ui.button('Verlauf löschen', { variant: 'danger', small: true, iconName: 'trash', onClick: clearHistory })),
-      recent.length >= 2 ? ui.section('Empfehlung im Verlauf', 'Deine letzten Tests von alt nach neu. So siehst du, ob sich deine beste Sensi einpendelt.', trendStrip(recent)) : null,
+      recent.length >= 2 ? ui.section('Empfehlung im Verlauf', 'Deine letzten Tests, von alt nach neu.', trendStrip(recent)) : null,
       h('ul.list.sensi-history', list.map((e) => historyItem(e))),
     ];
   }
@@ -682,9 +691,9 @@ function createView(root, env) {
     const head = h('div.grow',
       h('span', h('strong', dpiMode ? `${recDpi} DPI · ${SM.fmtSens(e.recommendedSens)} %` : `${SM.fmtSens(e.recommendedSens)} %`),
         ` empfohlen · eDPI ${SM.fmtNum(e.edpi, 0)}`),
-      h('span.hint', `${ui.fmtDate(e.at)} · ${dpiMode ? 'DPI-Vergleich' : 'Sensi-Test'} · ${e.length === 'normal' ? 'gründlich' : 'kurz'} · vorher ${SM.fmtSens(e.sens)} % bei ${e.dpi} DPI`),
-      h('span.hint', `Punkte ${fmt0(e.score)} · Genauigkeit ${pct(e.accuracy)} · Tracking ${pct(e.trackingPct)} · Zeit bis Treffer ${Number.isFinite(e.avgTtkMs) ? `${e.avgTtkMs} ms` : '–'}`));
+      h('span.hint', `${ui.fmtDate(e.at)} · ${dpiMode ? 'DPI-Vergleich' : 'Sensi-Test'} · ${e.length === 'normal' ? 'gründlich' : 'kurz'} · vorher ${SM.fmtSens(e.sens)} % bei ${e.dpi} DPI`));
     const details = open ? h('div.sensi-history-details',
+      h('p.sensi-history-stats', `Punkte ${fmt0(e.score)} · Genauigkeit ${pct(e.accuracy)} · Tracking ${pct(e.trackingPct)} · Zeit bis Treffer ${Number.isFinite(e.avgTtkMs) ? `${e.avgTtkMs} ms` : '–'}`),
       (e.lines || []).map((l) => h('p.hint', l)),
       e.rounds?.length ? roundsTable(e.rounds, dpiMode) : null) : null;
     return h('li.sensi-history-item',

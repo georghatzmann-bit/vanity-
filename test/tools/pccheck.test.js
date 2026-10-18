@@ -668,6 +668,8 @@ test('Ansicht: Bildzeit, FPS-Erklärung und Zeitleiste', async () => {
   const tooHigh = v.fpsExplain({ cap: 240, hz: 144, est: { low: 150, typical: 200 } });
   assert.equal(tooHigh.tone, 'warn');
   assert.match(tooHigh.lines.at(-1), /150 FPS/);
+  assert.equal(tooHigh.warning, tooHigh.lines.at(-1), 'Warnung steht extra, damit sie nicht hinter „Warum?“ verschwindet');
+  assert.equal(same.warning, null);
   const below = v.fpsExplain({ cap: 60, hz: 144, est: { low: 70, typical: 90 } });
   assert.match(below.title, /gleichmäßig/);
   assert.equal(v.timelineTicks(100, 50).length, 5);
@@ -689,6 +691,17 @@ test('Ansicht: Gruppen, Zähler und Anzeigestufen', async () => {
   assert.equal(v.meterLevel('display', {}, { hz: 165 }), 3);
   assert.equal(v.estText({ typical: 270, low: 200 }), 'ca. 270 FPS');
   assert.equal(v.estFightText({ low: 200 }), 'in großen Kämpfen ca. 200 FPS');
+  assert.equal(v.estLowText({ low: 200 }), 'ca. 200 FPS');
+  assert.equal(v.estLowText({}), '');
+});
+
+test('Ansicht: Erklärtexte werden nach dem ersten Satz geteilt (Rest hinter „Mehr“)', async () => {
+  const v = await import(require('node:url').pathToFileURL(VIEW_LIB).href);
+  assert.deepEqual(v.splitFirst('Schatten aus: mehr FPS. Gegner sind leichter zu sehen.'), { head: 'Schatten aus: mehr FPS.', rest: 'Gegner sind leichter zu sehen.' });
+  assert.deepEqual(v.splitFirst('Filter über dem Bild (z. B. Leuchten). „Hoch“ ist schöner.'), { head: 'Filter über dem Bild (z. B. Leuchten).', rest: '„Hoch“ ist schöner.' });
+  assert.equal(v.splitFirst('Dein Treiber ist vom 21.08.2025. Ein neuer bringt FPS.').head, 'Dein Treiber ist vom 21.08.2025.');
+  assert.deepEqual(v.splitFirst('Nur ein Satz.'), { head: 'Nur ein Satz.', rest: '' });
+  assert.deepEqual(v.splitFirst(null), { head: '', rest: '' });
 });
 
 test('Ansicht: mount wartet nicht auf den Hardware-Scan – „Cockpit“ und Esc gehen sofort', async () => {

@@ -5,9 +5,9 @@ import { fmtMs, fmtPct, quality, noValueInfo, liveStats, scaleMax, barPct, group
 let cleanup = [];
 
 const METHODS = [
-  ['auto', 'Automatisch', 'Nimmt den normalen Ping (ICMP, die klassische Ping-Anfrage) und weicht auf TCP aus, wenn ein Server nicht antwortet. Empfohlen.'],
-  ['icmp', 'Nur Ping', 'Der klassische Ping, so wie ihn auch Epic empfiehlt. Gibt es nur unter Windows.'],
-  ['tcp', 'TCP-Verbindung', 'Misst, wie lange ein Verbindungsaufbau (wie beim Öffnen einer Webseite) zu einem Rechenzentrum in derselben Stadt dauert. Für Iowa und Texas gibt es so ein Ziel nicht.'],
+  ['auto', 'Automatisch', 'Ping, bei Bedarf TCP. Empfohlen.'],
+  ['icmp', 'Nur Ping', 'Der klassische Ping. Nur unter Windows.'],
+  ['tcp', 'TCP-Verbindung', 'Misst den Verbindungsaufbau. Ohne Iowa und Texas.'],
 ];
 const SAMPLES = [
   [5, 'Schnell'],
@@ -103,21 +103,21 @@ export default {
       progress = null;
       live = new Map();
       if (!alive) {
-        if (mine && rep.best && !rep.cancelled) ui.toast(`Ping-Messung fertig. Bester Server: ${rep.best.name}, ${fmtMs(rep.best.ms)}.`);
+        if (mine && rep.best && !rep.cancelled) ui.toast(`Ping-Messung fertig: ${rep.best.name}, ${fmtMs(rep.best.ms)}.`);
         return;
       }
       if (rep.cancelled) {
         renderAll();
-        if (mine) ui.toast('Messung abgebrochen. Der Verlauf bleibt unverändert.', 'info');
+        if (mine) ui.toast('Messung abgebrochen.', 'info');
         return;
       }
       report = rep;
       try { info = await env.call('ping.info'); } catch { /* Verlauf bleibt wie er war */ }
       renderAll();
       if (!mine) return;
-      if (!rep.best) ui.toast('Kein Server hat geantwortet. Prüfe deine Internetverbindung.', 'err', { timeout: 7000 });
+      if (!rep.best) ui.toast('Kein Server hat geantwortet – prüfe dein Internet.', 'err', { timeout: 7000 });
       else if (rep.proxy?.suspect) ui.toast(`Messung fertig – aber: ${rep.proxy.message}.`, 'warn', { timeout: 7000 });
-      else ui.toast(`Messung fertig. Bester Server: ${rep.best.name}, ${fmtMs(rep.best.ms)}.`);
+      else ui.toast(`Bester Server: ${rep.best.name}, ${fmtMs(rep.best.ms)}.`);
       env.refreshStatus?.();
     }
 
@@ -134,7 +134,7 @@ export default {
       if (info.platform?.icmp) return;
       platformBox.append(h('div.callout.info', icon('info'), h('div',
         h('strong', 'Hier misst HELIX über TCP'),
-        h('p.hint', 'Den klassischen Ping (ICMP) nutzt HELIX nur unter Windows. Auf diesem System wird stattdessen gemessen, wie lange ein Verbindungsaufbau zu einem Rechenzentrum in derselben Stadt dauert. Die Werte sind ähnlich, Iowa und Texas fehlen dabei.'))));
+        h('p.hint', 'Ping gibt es nur unter Windows. Iowa und Texas fehlen dann.'))));
     }
 
     function segmented(options, value, onPick, { disabledIds = [] } = {}) {
@@ -156,14 +156,14 @@ export default {
       const pick = (key) => (v) => {
         settings = { ...settings, [key]: v };
         renderControls();
-        const label = key === 'method' ? (METHODS.find((x) => x[0] === v) || [])[1] : `${(SAMPLES.find((x) => x[0] === v) || [])[1]} (${v} Messungen je Server)`;
-        ui.toast(`${key === 'method' ? 'Messart' : 'Genauigkeit'}: ${label}. Gilt ab der nächsten Messung.`, 'info', { timeout: 2600 });
+        const label = key === 'method' ? (METHODS.find((x) => x[0] === v) || [])[1] : `${(SAMPLES.find((x) => x[0] === v) || [])[1]} (${v} je Server)`;
+        ui.toast(`${key === 'method' ? 'Messart' : 'Genauigkeit'} ${label} – gilt ab der nächsten Messung.`, 'info', { timeout: 2600 });
       };
       ui.mount(controls,
         h('div.ping-hero',
           h('div.grow',
-            h('h3', 'Welcher Fortnite-Server ist für dich am schnellsten?'),
-            h('p.hint', 'HELIX misst die Antwortzeit (Ping, in Millisekunden – tausendstel Sekunden) zu allen 16 Fortnite-Standorten. Kleiner ist besser. Dauert etwa 10 bis 20 Sekunden.')),
+            h('h3', 'Welcher Server ist für dich am schnellsten?'),
+            h('p.hint', 'Misst alle 16 Fortnite-Standorte in etwa 20 Sekunden.')),
           h('div.ping-actions', startBtn, cancelBtn)),
         h('div.ping-options',
           h('div.field',
@@ -172,8 +172,7 @@ export default {
             h('p.hint', m[2])),
           h('div.field',
             h('label', 'Genauigkeit'),
-            segmented(SAMPLES, settings.samples, pick('samples')),
-            h('p.hint', 'Wie oft jeder Server gemessen wird. Mehr Messungen sind verlässlicher, dauern aber länger.'))),
+            segmented(SAMPLES, settings.samples, pick('samples')))),
         h('div.ping-progress-wrap', { hidden: !running }));
       renderProgress();
     }
@@ -198,7 +197,7 @@ export default {
       if (!report.best) {
         bestBox.append(h('div.callout.err', icon('warn'), h('div',
           h('strong', 'Kein Server hat geantwortet'),
-          h('p.hint', 'Prüfe, ob du mit dem Internet verbunden bist. Manche Router oder Firewalls (Schutzprogramme für das Netzwerk) blockieren Pings – wähle dann oben „TCP-Verbindung“.'))));
+          h('p.hint', 'Prüfe dein Internet. Blockiert der Router Pings, wähle „TCP-Verbindung“.'))));
         return;
       }
       const rec = recommendation(info.regions, report.results, report.best);
@@ -214,13 +213,13 @@ export default {
           report.proxy?.suspect ? ui.badge('unsicher', 'warn') : null),
         report.proxy?.suspect ? h('div.callout.warn', icon('warn'), h('div',
           h('strong', `${report.proxy.message}.`),
-          h('p.hint', 'Einige Werte sind schneller, als es physikalisch möglich ist. Meist läuft dein Internet über einen Proxy oder ein VPN (ein Umweg über einen fremden Server). Schalte es ab und miss noch einmal.'))) : null,
+          h('p.hint', 'Schalte Proxy oder VPN ab und miss noch einmal.'),
+          ui.more('Warum?', 'Einige Werte sind schneller, als es physikalisch möglich ist. Meist läuft dein Internet dann über einen Proxy oder ein VPN – einen Umweg über einen fremden Server.'))) : null,
         rec ? h('div.callout.info', icon('sparkle'), h('div',
           h('strong', 'So stellst du es ein'),
           h('p', rec.text),
           rec.alt ? h('p.hint', rec.alt) : null,
-          rec.competitive ? h('p.hint', rec.competitive) : null,
-          h('p.hint', rec.auto))) : null,
+          ui.more('Mehr dazu', rec.auto, rec.competitive))) : null,
         tr ? h('p.hint.ping-trend', icon(tr.type === 'ok' ? 'check' : 'info', 14), ' ', tr.text) : null));
     }
 
@@ -239,7 +238,7 @@ export default {
       if (proxyIds.has(r.id)) badges.push(ui.badge('unmöglich schnell', 'warn'));
       if (measured && r.lossPct > 5) badges.push(ui.badge(`${fmtPct(r.lossPct)} Verlust`, r.lossPct > 20 ? 'err' : 'warn'));
       const nb = (label, value) => `${label}\u00a0${value}`;
-      const stats = [nb('bester Wert', fmtMs(r.minMs)), nb('Schwankung', fmtMs(r.jitterMs)), nb('Verlust', fmtPct(r.lossPct))].join(' · ');
+      const stats = [nb('Schwankung', fmtMs(r.jitterMs)), nb('Verlust', fmtPct(r.lossPct))].join(' · ');
       const detail = measured
         ? (running ? `${r.sent} von ${settings.samples} · ${stats}` : stats)
         : running ? (r.sent ? `${r.sent} gesendet, noch keine Antwort` : 'noch nicht gemessen')
@@ -268,7 +267,7 @@ export default {
       if (!results) {
         ui.mount(resultsBox, ui.emptyState({
           title: 'Noch keine Messung',
-          text: 'Starte die Messung oben. HELIX zeigt dir danach alle Regionen mit ihrer Antwortzeit und sagt dir, welche du in Fortnite einstellen solltest.',
+          text: 'Starte sie – dann siehst du, welche Region du wählen solltest.',
           action: ui.button('Messung starten', { variant: 'primary', iconName: 'play', onClick: start }),
         }));
         return;
@@ -281,17 +280,20 @@ export default {
         h('div.ping-groups', groups.map((g) => h('section.block.ping-group',
           h('div.block-head.ping-group-head',
             h('h3', g.label),
-            h('span.hint', g.items.length > 1 ? `${g.items.length} Unterregionen` : '1 Standort'),
             h('span.grow'),
             typeof g.bestMs === 'number' ? h('span.hint', `bestes Ergebnis ${fmtMs(g.bestMs)}`) : null),
           h('ul.ping-list', g.items.map((r) => resultRow(r, max, bestId, proxyIds)))))),
-        h('p.hint.ping-legend', 'Gezeigt wird der Median (der mittlere Wert aller Messungen). Schwankung (Jitter) heißt: so stark springt der Wert von Messung zu Messung. Verlust heißt: so viele Anfragen kamen nicht zurück. „Schätzung“: gemessen bei einem Rechenzentrum in der Nähe, nicht bei Epic selbst. Bis 30 ms ist sehr gut, bis 60 ms gut, bis 100 ms spielbar.'));
+        h('div.ping-legend', ui.more('Was bedeuten die Werte?', h('ul',
+          h('li', 'Antwortzeit in Millisekunden (ms, tausendstel Sekunden) – kleiner ist besser. Gezeigt wird der Median, der mittlere Wert aller Messungen.'),
+          h('li', 'Bis 30 ms sehr gut, bis 60 ms gut, bis 100 ms spielbar.'),
+          h('li', 'Schwankung: so stark springt der Wert. Verlust: so viele Anfragen kamen nicht zurück.'),
+          h('li', '„Schätzung“: gemessen bei einem Rechenzentrum in der Nähe, nicht bei Epic selbst.')))));
     }
 
     function renderHistory() {
       const rows = historyRows(info.history, 10);
       const head = h('div.toolbar',
-        h('div.grow', h('h3', 'Verlauf'), h('p.hint', 'Die letzten 10 Messungen. So siehst du, ob dein Internet zu bestimmten Zeiten langsamer ist.')),
+        h('div.grow', h('h3', 'Verlauf'), rows.length ? null : h('p.hint', 'Nach jeder Messung erscheint hier eine Zeile.')),
         rows.length ? ui.button('Verlauf löschen', {
           small: true, variant: 'ghost', iconName: 'trash',
           onClick: async () => {
@@ -307,7 +309,7 @@ export default {
           },
         }) : null);
       if (!rows.length) {
-        ui.mount(historyBox, h('section.block', head, h('p.hint', 'Noch kein Verlauf. Nach jeder Messung erscheint hier eine Zeile.')));
+        ui.mount(historyBox, h('section.block', head));
         return;
       }
       const max = Math.max(60, ...rows.map((r) => (r.best && typeof r.best.ms === 'number' ? r.best.ms : 0)));

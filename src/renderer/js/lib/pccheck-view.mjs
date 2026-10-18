@@ -26,7 +26,8 @@ export function fpsLabel(cap) {
 /**
  * Erklärt die gewählte FPS-Grenze im Vergleich zum Monitor.
  * cap: 0 = unbegrenzt; hz: Bildwiederholrate des Monitors; est: { low, typical } grobe Schätzung.
- * Rückgabe: { tone: 'ok'|'info'|'warn', title, lines: [Text], gameMs, monitorMs, gameRate }
+ * Rückgabe: { tone: 'ok'|'info'|'warn', title, lines: [kurze Zeile, Erklärung, (Warnung)], warning,
+ *   gameMs, monitorMs, gameRate }. warning ist die Warnzeile (sonst null) und steht auch als letzte Zeile in lines.
  */
 export function fpsExplain({ cap, hz, est } = {}) {
   hz = Number(hz) > 0 ? Math.round(Number(hz)) : 60;
@@ -40,34 +41,55 @@ export function fpsExplain({ cap, hz, est } = {}) {
   const lines = [];
   let tone = 'ok';
   let title;
+  let warning = null;
 
   if (cap === 0) {
     title = 'Unbegrenzt: so viele Bilder, wie der PC schafft';
     lines.push(typical
-      ? `Dein PC macht grob ${typical} Bilder pro Sekunde – also alle ${fmtMs(gameMs)} ein neues Bild.`
+      ? `Dein PC macht grob ${typical} Bilder pro Sekunde (alle ${fmtMs(gameMs)} eins).`
       : 'Dein PC macht so viele Bilder pro Sekunde, wie er schafft.');
-    lines.push(`Dein Monitor zeigt davon nur ${hz} pro Sekunde (alle ${fmtMs(monitorMs)} eins). Die Extra-Bilder machen die Maus minimal direkter, der PC wird dafür wärmer und lauter.`);
+    lines.push(`Dein Monitor zeigt davon nur ${hz} pro Sekunde. Die Extra-Bilder machen die Maus minimal direkter, der PC wird dafür wärmer und lauter.`);
     tone = 'info';
   } else if (cap === hz) {
     title = 'Passt genau zu deinem Monitor';
-    lines.push(`Fortnite macht höchstens ${cap} Bilder pro Sekunde – alle ${fmtMs(frameTimeMs(cap))} eins. Dein Monitor zeigt genauso alle ${fmtMs(monitorMs)} ein Bild (${hz} Hz).`);
-    lines.push('Kein Bild ist umsonst berechnet. Das läuft gleichmäßig und hält den PC kühler.');
+    lines.push(`Fortnite macht genau so oft ein Bild, wie dein Monitor zeigt: alle ${fmtMs(frameTimeMs(cap))}.`);
+    lines.push('Kein Bild wird umsonst berechnet. Das läuft gleichmäßig und hält den PC kühler.');
   } else if (cap > hz) {
     title = 'Mehr Bilder, als der Monitor zeigt';
-    lines.push(`Fortnite macht bis zu ${cap} Bilder pro Sekunde – alle ${fmtMs(frameTimeMs(cap))} eins. Dein Monitor zeigt nur alle ${fmtMs(monitorMs)} ein Bild (${hz} Hz).`);
-    lines.push('Das gezeigte Bild ist dadurch etwas frischer, die Maus fühlt sich minimal direkter an. Der PC arbeitet dafür mehr.');
+    lines.push(`Fortnite macht alle ${fmtMs(frameTimeMs(cap))} ein Bild, dein Monitor zeigt nur alle ${fmtMs(monitorMs)} eins.`);
+    lines.push('Das gezeigte Bild ist dadurch etwas frischer, die Maus minimal direkter. Der PC arbeitet dafür mehr.');
     tone = 'info';
   } else {
     title = 'Weniger Bilder, dafür gleichmäßig';
-    lines.push(`Fortnite macht höchstens ${cap} Bilder pro Sekunde – alle ${fmtMs(frameTimeMs(cap))} eins. Dein Monitor könnte alle ${fmtMs(monitorMs)} ein Bild zeigen (${hz} Hz).`);
+    lines.push(`Fortnite macht alle ${fmtMs(frameTimeMs(cap))} ein Bild, dein Monitor könnte alle ${fmtMs(monitorMs)} eins zeigen.`);
     lines.push('Eine Grenze, die dein PC sicher schafft, fühlt sich ruhiger an als stark schwankende FPS.');
     tone = 'info';
   }
   if (cap > 0 && low && low < cap * 0.9) {
-    lines.push(`Achtung: In großen Kämpfen schafft dein PC mit diesem Vorschlag grob ${low} FPS. Die Grenze von ${cap} wird dann nicht erreicht – das Bild kann schwanken.`);
+    warning = `Achtung: In großen Kämpfen schafft dein PC nur grob ${low} FPS. Das Bild kann dann schwanken.`;
+    lines.push(warning);
     tone = 'warn';
   }
-  return { tone, title, lines, gameMs, monitorMs, gameRate };
+  return { tone, title, lines, warning, gameMs, monitorMs, gameRate };
+}
+
+// Abkürzungen, nach denen kein Satz endet („z. B.“, „ca.“ …)
+const ABBR = /(?:^|[\s(])(?:z|B|u|a|d|h|ca|bzw|ggf|evtl|usw|inkl|Nr|vgl)\.$/;
+
+/**
+ * Teilt einen Erklärtext in den ersten Satz (sichtbar) und den Rest (hinter „Mehr“).
+ * "Schatten aus: mehr FPS. Gegner sind leichter zu sehen." -> { head: "Schatten aus: mehr FPS.", rest: "Gegner …" }
+ */
+export function splitFirst(text) {
+  const t = String(text ?? '').trim();
+  const re = /[.!?](?=\s+[A-ZÄÖÜ„"(0-9])/g;
+  let m;
+  while ((m = re.exec(t))) {
+    const head = t.slice(0, m.index + 1);
+    if (ABBR.test(head)) continue;
+    return { head, rest: t.slice(m.index + 1).trim() };
+  }
+  return { head: t, rest: '' };
 }
 
 /**
@@ -128,4 +150,10 @@ export function estText(est) {
 export function estFightText(est) {
   if (!est || !(est.low > 0)) return '';
   return `in großen Kämpfen ca. ${est.low} FPS`;
+}
+
+/** Kurzform für die Vorschlags-Karten: "ca. 200 FPS" (in großen Kämpfen), '' wenn unbekannt. */
+export function estLowText(est) {
+  if (!est || !(est.low > 0)) return '';
+  return `ca. ${est.low} FPS`;
 }

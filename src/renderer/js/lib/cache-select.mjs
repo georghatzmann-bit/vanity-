@@ -4,14 +4,33 @@ export const GROUPS = [
   {
     id: 'shader',
     title: 'Grafik-Zwischenspeicher',
-    hint: 'Shader sind kleine Grafik-Bausteine. Windows und der Grafiktreiber speichern sie fertig übersetzt, damit Spiele schneller laden.',
+    hint: 'Fertige Grafik-Bausteine (Shader). Das erste Match danach kann kurz ruckeln.',
   },
   {
     id: 'fortnite',
     title: 'Fortnite',
-    hint: 'Protokolle, Absturzberichte und Reste im Temp-Ordner. Deine Einstellungen, Replays und Spieldateien bleiben unberührt.',
+    hint: 'Deine Einstellungen, Replays und Spieldateien bleiben unberührt.',
   },
 ];
+
+/**
+ * Kurze Zeilen für die Bereiche (die ausführlichen Texte kommen vom Hauptprozess und bleiben der Ersatz,
+ * falls ein Bereich hier fehlt). hint = graue Zeile, privacy = Datenschutz-Zeile.
+ */
+const SHORT = {
+  directx: { hint: 'Von Windows. Wird beim nächsten Spielstart neu aufgebaut.' },
+  nvidia: { hint: 'Vom NVIDIA-Treiber. Wird neu aufgebaut.' },
+  amd: { hint: 'Vom AMD-Treiber. Wird neu aufgebaut.' },
+  intel: { hint: 'Vom Intel-Treiber. Wird neu aufgebaut.' },
+  logs: { hint: 'Fortnite legt beim nächsten Start neue an.', privacy: 'Entfernt auch alte Anmelde-Codes.' },
+  crashes: { hint: 'Nur für die Fehlersuche nötig.', privacy: 'Entfernt auch Kopien alter Anmelde-Codes.' },
+  temp: { hint: 'Nur Einträge, die mit UE, Unreal, Fortnite oder CrashReport beginnen.' },
+};
+
+/** Kurze graue Zeile (oder Datenschutz-Zeile) für einen Bereich. */
+export function rowHint(c, field = 'hint') {
+  return SHORT[c?.id]?.[field] || c?.[field] || '';
+}
 
 /** Standard-Auswahl: alles, was nicht leer ist. */
 export function defaultSelection(categories) {
@@ -59,6 +78,6 @@ export function resultText(r, fmtBytes) {
   if (!r.deleted && !r.skipped) return 'Es war nichts zu löschen.';
   const freed = `${fmtBytes(r.freedBytes)} frei geworden`;
   if (!r.skipped) return `${freed}.`;
-  const sk = r.skipped === 1 ? '1 Datei war gerade in Benutzung und wurde übersprungen' : `${r.skipped.toLocaleString('de-DE')} Dateien waren gerade in Benutzung und wurden übersprungen`;
-  return `${freed}. ${sk}.`;
+  const sk = r.skipped === 1 ? '1 Datei übersprungen' : `${r.skipped.toLocaleString('de-DE')} Dateien übersprungen`;
+  return `${freed}, ${sk} (gerade in Benutzung).`;
 }
