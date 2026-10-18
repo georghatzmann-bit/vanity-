@@ -367,12 +367,12 @@ test('CSV: deutsches Excel – BOM, Semikolon, Komma, Windows-Zeilenenden, deuts
   assert.doesNotMatch(csv.replace(/\r\n/g, ''), /\n/, 'nur Windows-Zeilenenden');
   const lines = csv.slice(1).split('\r\n');
   assert.ok(lines.includes('Beginn;Ende;Dauer (Minuten);Dauer;Profil;Hinweis'));
-  assert.ok(lines.includes('Datum;Punkte (0-100);Trefferquote (%);Treffer;Fehlschüsse;Tracking (%);Zeit bis Treffer (ms);Getestete Sensi;Empfohlene Sensi;DPI;eDPI;cm pro 360°'));
+  assert.ok(lines.includes('Datum;Punkte (0-100);Trefferquote (%);Treffer;Fehlschüsse;Tracking (%);Zeit bis Treffer (ms);Getestete Sensi;DPI beim Test;Empfohlene Sensi;Empfohlene DPI;eDPI (Empfehlung);cm pro 360° (Empfehlung)'));
   assert.ok(lines.includes('Datum;Durchschnitt (ms);Bester Wert (ms);Runden;Frühstarts'));
-  assert.ok(lines.includes('16.10.2026 18:00;16.10.2026 19:00;60;1 Std.;"\'=HYPERLINK(""http://x"")";Ende geschätzt (HELIX wurde unerwartet beendet)'),
+  assert.ok(lines.includes('16.10.2026 18:00;16.10.2026 19:00;60;1 Std.;"\'=HYPERLINK(""http://x"")";Ende geschätzt (HELIX wurde geschlossen, während Fortnite noch lief)'),
     'Formeln werden entschärft und Anführungszeichen verdoppelt');
   assert.ok(lines.includes('17.10.2026 18:00;17.10.2026 20:05;125;2 Std. 5 Min.;"Main; ""Pro""";'));
-  assert.ok(lines.includes('15.10.2026 17:30;62,3;71,5;50;20;55;600;7;6,5;800;52;31,7'), 'Dezimalkomma');
+  assert.ok(lines.includes('15.10.2026 17:30;62,3;71,5;50;20;55;600;7;800;6,5;800;52;31,7'), 'Dezimalkomma');
   assert.ok(lines.includes('14.10.2026 12:00;231;205;5;1'));
   assert.ok(lines.indexOf('Spielzeiten') < lines.indexOf('Aim-Tests'));
 });
@@ -632,6 +632,125 @@ test('Diagramm: Plaketten für Wochenvergleich und Trend', async () => {
   assert.deepEqual(c.trendBadge({ direction: 'besser' }), { text: 'besser', type: 'ok' });
   assert.deepEqual(c.trendBadge({ direction: 'schlechter' }, { worseText: 'langsamer' }), { text: 'langsamer', type: 'warn' });
   assert.equal(c.trendBadge(null), null);
+});
+
+// ---------------------------------------------------------------- Rückfälle aus der Prüfung
+
+// Ein DPI-Vergleich, wie ihn sensi-logic.sanitizeEntry speichert: getestet mit 800 DPI / 6,5 %, 1600 DPI hat gewonnen.
+// eDPI und cm360 gehören zur Empfehlung (1600 DPI · 3,3 %), dpi ist die DPI beim Test.
+const DPI_TEST = {
+  at: T(10, 16, 18), mode: 'dpi', dpi: 800, sens: 6.5, recommendedDpi: 1600, recommendedSens: 3.3, edpi: 52.8, cm360: 31.2,
+  score: 60, accuracy: 80, hits: 160, misses: 40, trackingPct: 50, avgTtkMs: 500, rounds: [{}, {}],
+};
+
+test('Aim-Tests: nach einem DPI-Vergleich steht die Empfehlung bei der empfohlenen DPI (Kachel, Tooltip, CSV)', async () => {
+  const c = await chartLib();
+  const list = logic.normalizeAim({ history: [DPI_TEST, aimEntry(T(10, 10), 55, 70)] });
+  const last = logic.aimSummary(list, { days: 30, now: NOW }).latest;
+  assert.equal(last.dpi, 800);
+  assert.equal(last.recommendedDpi, 1600);
+  assert.ok(Math.abs((c.recDpi(last) * last.recommendedSens) / 100 - last.edpi) < 0.05, 'die gezeigte eDPI passt zur gezeigten DPI');
+  assert.match(c.recHint(last), /^bei 1600 DPI \(statt bisher 800 DPI\) · eDPI 52,8 /);
+  assert.equal(c.recSensText(last), '3,3 bei 1600 DPI');
+
+  const normal = list[0]; // ohne recommendedDpi (ältere Einträge): gilt die DPI beim Test
+  assert.equal(normal.recommendedDpi, 800);
+  assert.equal(c.recSensText(normal), '6,5', 'gleiche DPI: keine doppelte Angabe');
+  assert.match(c.recHint(normal), /^bei 800 DPI · eDPI 52 /);
+  assert.equal(c.recHint(null), '');
+
+  const lines = logic.buildCsv({ aim: list, now: NOW }).slice(1).split('\r\n');
+  assert.ok(lines.includes('16.10.2026 18:00;60;80;160;40;50;500;6,5;800;3,3;1600;52,8;31,2'), 'Empfohlene DPI steht neben der empfohlenen Sensi');
+});
+
+test('Modul: Speichern-Knopf und Export passen zusammen – auch nur mit Tasten-Trainer oder nur mit Ping', async () => {
+  const dir = tmpDir();
+  const cases = [
+    ['nur-tasten', { sessions: { list: [] }, 'tool-reaktion': { reaction: [], keys: [{ at: T(10, 17, 9), avgMs: 410, accuracy: 92, count: 30 }], binds: {} } },
+      'Tasten-Trainer', '17.10.2026 09:00;410;92;30;'],
+    ['nur-ping', { sessions: { list: [] }, 'tool-ping': STATES['tool-ping'] }, 'Ping-Messungen', '14.10.2026 00:00;Europa;EU;19'],
+    ['leer', { sessions: { list: [] } }, null, null],
+  ];
+  for (const [name, states, block, row] of cases) {
+    const { ctx, dialogCalls } = fakeCtx({ states, docs: dir, dialogResult: { canceled: false, filePath: path.join(dir, name) } });
+    const o = await mod._test.overview({ days: 30 }, ctx, NOW);
+    if (!block) {
+      assert.equal(o.hasAnyData, false, `${name}: Knopf aus`);
+      await assert.rejects(mod._test.exportCsv({}, ctx, NOW), (e) => e.code === 'NO_DATA');
+      assert.equal(dialogCalls.length, 0);
+      continue;
+    }
+    assert.equal(o.hasAnyData, true, `${name}: Knopf an`);
+    const r = await mod._test.exportCsv({}, ctx, NOW);
+    assert.equal(r.canceled, false, `${name}: Speichern klappt`);
+    const lines = fs.readFileSync(r.file, 'utf8').slice(1).split('\r\n');
+    assert.ok(lines.includes(block), `${name}: eigener Block in der Tabelle`);
+    assert.ok(lines.includes(row), `${name}: Messwert in der Tabelle`);
+  }
+  const c = await chartLib();
+  assert.equal(c.exportParts({ sessions: 0, aimTests: 0, reactionTests: 0, keyTests: 1, pingTests: 0 }), '1 Tasten-Training', 'Meldung ohne „0 Sitzungen, 0 Aim-Tests“');
+  assert.equal(c.exportParts({ sessions: 3, aimTests: 1, reactionTests: 0, keyTests: 0, pingTests: 2 }), '3 Sitzungen, 1 Aim-Test, 2 Ping-Messungen');
+  assert.equal(c.exportParts({}), '');
+});
+
+test('Reaktions-Labor: der neueste Tasten-Trainer-Lauf ohne richtige Taste zählt mit', async () => {
+  const c = await chartLib();
+  const keys = [
+    { at: T(10, 16), avgMs: 410, accuracy: 92, count: 30 },
+    { at: T(10, 18, 12), avgMs: null, accuracy: 0, count: 30 }, // so speichert reaktion-logic.sanitizeKeys „nichts getroffen“
+    { at: T(10, 17), avgMs: 'x', accuracy: 50, count: 30 }, // kaputt
+    { at: T(10, 15), avgMs: null }, // ohne Trefferquote
+    { at: T(10, 14), avgMs: null, accuracy: 40, count: 30 }, // widersprüchlich: ohne Zeit, aber Treffer
+  ];
+  const r = logic.reactionSummary({ reaction: [], keys });
+  assert.equal(r.keys.count, 2);
+  assert.equal(r.keys.latest.at, T(10, 18, 12), '„zuletzt“ ist wirklich der letzte Lauf');
+  assert.equal(r.keys.latest.avgMs, null);
+  assert.equal(r.keys.latest.accuracy, 0);
+  assert.equal(r.keys.best.avgMs, 410, 'Bestwert nur aus Läufen mit Zeit');
+  assert.equal(c.keysText(r.keys.latest), 'Tasten-Trainer (Bau- und Edit-Tasten): zuletzt keine richtige Taste (0 % richtig).');
+  assert.equal(c.keysText(r.keys.points[0]), 'Tasten-Trainer (Bau- und Edit-Tasten): zuletzt im Schnitt 410 ms, 92 % richtig.');
+
+  const only = logic.buildOverview({ reaktion: { keys: [keys[1]] }, now: NOW });
+  assert.equal(only.reaction.keys.count, 1, 'auch als einziger Lauf');
+  assert.equal(only.hasAnyData, true);
+  const lines = logic.buildCsv({ keys: logic.normalizeReaction({ keys }).keys, now: NOW }).slice(1).split('\r\n');
+  assert.ok(lines.includes('18.10.2026 12:00;;0;30;keine richtige Taste'));
+});
+
+test('Aim-Tests: Fortschritt-Kachel und Hinweis rechnen mit denselben gerundeten Werten', async () => {
+  const c = await chartLib();
+  const a = logic.aimSummary(logic.normalizeAim({ history: [aimEntry(T(10, 15), 59.6, 60), aimEntry(T(10, 17), 64.4, 60)] }), { days: 7, now: NOW });
+  const p = c.progressInfo(a.trend);
+  assert.equal(p.value, '+4 Punkte', '60 -> 64 sind 4 Punkte, nicht 5');
+  assert.equal(p.text, 'Erster Test: 60 Punkte · neuester Test: 64 Punkte');
+  const sign = { '+': 1, '−': -1, '±': 0 };
+  for (const [first, last] of [[59.6, 64.4], [70.5, 61.4], [50.4, 50.6], [44.5, 46.4], [33.3, 33.3]]) {
+    const info = c.progressInfo({ first, last, groupSize: 5 });
+    const [, f, l] = info.text.match(/Tests: (\d+) · deiner letzten 5: (\d+)$/);
+    const [, sg, n] = info.value.match(/^([+−±])(\d+) Punkte?$/);
+    assert.equal(sign[sg] * Number(n), Number(l) - Number(f), `${first} -> ${last}: ${info.value} / ${info.text}`);
+  }
+  assert.equal(c.progressInfo({ first: 50, last: 51, groupSize: 1 }).value, '+1 Punkt');
+  assert.equal(c.progressInfo(null), null);
+});
+
+test('Texte: Zeitraum-Hinweis verspricht nichts Falsches, „Ende geschätzt“ klingt nicht nach Absturz', () => {
+  const view = fs.readFileSync(path.join(ROOT, 'src/renderer/js/views/stats.js'), 'utf8');
+  const csvSrc = fs.readFileSync(path.join(ROOT, 'src/main/tools/stats-logic.js'), 'utf8');
+  assert.doesNotMatch(view + csvSrc, /unerwartet/, 'auch nach normalem Beenden von HELIX ist das Ende nur geschätzt');
+  const csv = logic.buildCsv({ sessions: logic.normalizeSessions({ list: [{ start: T(10, 16, 18), end: T(10, 16, 19), recovered: true }] }, { now: NOW }), now: NOW });
+  assert.match(csv, /;Ende geschätzt \(HELIX wurde geschlossen, während Fortnite noch lief\)\r\n/);
+
+  // Reaktion und Ping hängen nicht vom Zeitraum ab – dann darf der Hinweis das auch nicht versprechen
+  const reaktion = { reaction: [{ at: T(8, 1), avgMs: 250, bestMs: 220, rounds: 5, falseStarts: 0 }, { at: T(10, 17), avgMs: 240, bestMs: 210, rounds: 5, falseStarts: 0 }] };
+  const o7 = logic.buildOverview({ reaktion, ping: STATES['tool-ping'], days: 7, now: NOW });
+  const o90 = logic.buildOverview({ reaktion, ping: STATES['tool-ping'], days: 90, now: NOW });
+  assert.deepEqual(o7.reaction, o90.reaction);
+  assert.deepEqual(o7.ping, o90.ping);
+  assert.doesNotMatch(view, /Gilt für Spielzeit, Diagramme/);
+  assert.match(view, /Reaktionszeit und Ping zeigen immer deine letzten Messungen/);
+  assert.ok((view.match(/unabhängig vom gewählten Zeitraum/g) || []).length >= 3, 'Letzte Sitzungen, Reaktionszeit und Ping sagen es selbst');
 });
 
 // ---------------------------------------------------------------- Simulator hat dieselbe Form

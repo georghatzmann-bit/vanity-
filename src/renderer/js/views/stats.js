@@ -3,7 +3,8 @@
 
 import {
   fmtNum, fmtSens, fmtDur, fmtDurNb, fmtAxisDuration, niceDurationTicks, valueRange, scaleLinear, linePath,
-  labelStep, labelIndices, pickLabelIndices, fmtDay, fmtSpan, weekBadge, trendBadge, signed, baseName,
+  labelStep, labelIndices, pickLabelIndices, fmtDay, fmtSpan, weekBadge, trendBadge, baseName,
+  recSensText, recHint, progressInfo, keysText, exportParts,
 } from '../lib/stats-chart.mjs';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -145,12 +146,12 @@ export default {
         h('div.stats-range',
           h('span.stats-label', 'Zeitraum'),
           seg,
-          h('p.hint', 'Gilt für Spielzeit, Diagramme und Aim-Tests auf dieser Seite.')),
+          h('p.hint', 'Gilt für Spielzeit und Aim-Tests. Reaktionszeit und Ping zeigen immer deine letzten Messungen.')),
         h('span.grow'),
         h('div.stats-export',
           ui.button('Als Tabelle speichern', { iconName: 'download', onClick: exportCsv, disabled: !hasData }),
           h('p.hint', hasData
-            ? 'Speichert alle Sitzungen und Aim-Tests als CSV-Datei – eine Tabelle, die Excel öffnen kann.'
+            ? 'Speichert alle Sitzungen, Tests und Messungen als CSV-Datei – eine Tabelle, die Excel öffnen kann.'
             : 'Das geht, sobald es die ersten Werte gibt.')));
     }
 
@@ -158,8 +159,8 @@ export default {
       try {
         const r = await env.call('stats.exportCsv');
         if (!r || r.canceled) { ui.toast('Speichern abgebrochen. Es wurde nichts gespeichert.', 'info'); return; }
-        const parts = [`${r.sessions} ${r.sessions === 1 ? 'Sitzung' : 'Sitzungen'}`, `${r.aimTests} Aim-${r.aimTests === 1 ? 'Test' : 'Tests'}`];
-        ui.toast(`Tabelle gespeichert: ${r.fileName || baseName(r.file)} (${parts.join(', ')}).`);
+        const parts = exportParts(r);
+        ui.toast(`Tabelle gespeichert: ${r.fileName || baseName(r.file)}${parts ? ` (${parts})` : ''}.`);
       } catch (e) {
         ui.showError(e, 'Speichern nicht möglich');
       }
@@ -312,7 +313,7 @@ export default {
           x.live ? ui.badge('läuft gerade', 'accent') : null,
           h('span.recent-dur', fmtDur(x.seconds)))))
         : h('p.hint.stats-none', 'Noch keine Sitzung.');
-      return ui.section('Letzte Sitzungen', 'Wann Fortnite zuletzt offen war – unabhängig vom gewählten Zeitraum. „Ende geschätzt“ heißt: HELIX wurde zwischendurch unerwartet beendet.', body);
+      return ui.section('Letzte Sitzungen', 'Wann Fortnite zuletzt offen war – unabhängig vom gewählten Zeitraum. „Ende geschätzt“ heißt: HELIX wurde geschlossen, während Fortnite noch lief. Darum kennt HELIX das genaue Ende nicht.', body);
     }
 
     function noSessionsBlock() {
@@ -334,17 +335,17 @@ export default {
           action: ui.button('Zur Sensi-Kalibrierung', { variant: 'primary', iconName: 'play', onClick: () => env.nav.go('sensi') }),
         }));
       }
-      const tr = a.trend;
-      const tb = trendBadge(tr);
+      const tb = trendBadge(a.trend);
+      const prog = progressInfo(a.trend);
       const best = a.bestAccuracy;
       const last = a.latest;
       const mini = h('div.stats-mini-kpis',
-        miniKpi('Fortschritt', tr ? signed(tr.delta, 'Punkte') : '–',
-          tr ? progressText(tr) : 'Ab zwei Tests siehst du hier deinen Fortschritt.', tb),
+        miniKpi('Fortschritt', prog ? prog.value : '–',
+          prog ? prog.text : 'Ab zwei Tests siehst du hier deinen Fortschritt.', tb),
         miniKpi('Beste Trefferquote', best ? `${fmtNum(best.accuracy, 0)} %` : '–',
-          best ? `Test vom ${fmtDay(best.at, 'date')}${best.recommendedSens != null ? ` · Empfehlung damals: Sensi ${fmtSens(best.recommendedSens)}` : ''}` : 'Noch kein Wert.'),
+          best ? `Test vom ${fmtDay(best.at, 'date')}${best.recommendedSens != null ? ` · Empfehlung damals: Sensi ${recSensText(best)}` : ''}` : 'Noch kein Wert.'),
         miniKpi('Aktuelle Empfehlung', last?.recommendedSens != null ? `Sensi ${fmtSens(last.recommendedSens)}` : '–',
-          last ? recText(last) : ''));
+          last ? recHint(last) : ''));
       const legend = h('div.stats-legend',
         h('span', h('i.swatch'), 'Punkte'),
         h('span', h('i.swatch.dashed'), 'Trefferquote in %'),
@@ -359,19 +360,6 @@ export default {
       parts.push(h('div.row', ui.button('Neuen Aim-Test machen', { small: true, iconName: 'play', onClick: () => env.nav.go('sensi') }),
         h('span.hint', `${a.total} ${a.total === 1 ? 'Test' : 'Tests'} gespeichert${a.inRange && a.inRange !== a.total ? `, ${a.inRange} davon im Zeitraum` : ''}.`)));
       return ui.section('Aim-Test-Verlauf', hintText, parts);
-    }
-
-    function progressText(tr) {
-      if (tr.groupSize === 1) return `Erster Test: ${fmtNum(tr.first, 0)} Punkte · neuester Test: ${fmtNum(tr.last, 0)} Punkte`;
-      return `Schnitt deiner ersten ${tr.groupSize} Tests: ${fmtNum(tr.first, 0)} · deiner letzten ${tr.groupSize}: ${fmtNum(tr.last, 0)}`;
-    }
-
-    function recText(e) {
-      const bits = [];
-      if (e.dpi != null) bits.push(`bei ${fmtNum(e.dpi, 0)} DPI`);
-      if (e.edpi != null) bits.push(`eDPI ${fmtNum(e.edpi, 1)} (DPI mal Sensi in Prozent – zum Vergleichen mit Profis)`);
-      if (e.cm360 != null) bits.push(`${fmtNum(e.cm360, 1)} cm Mausweg für eine ganze Drehung`);
-      return bits.join(' · ') || `Test vom ${fmtDay(e.at, 'date')}`;
     }
 
     function miniKpi(label, value, hint, badge) {
@@ -433,7 +421,7 @@ export default {
           accDots[i]?.classList.add('hover');
           const lines = [
             `Punkte: ${p.score == null ? '–' : fmtNum(p.score, 0)} · Trefferquote: ${p.accuracy == null ? '–' : `${fmtNum(p.accuracy, 0)} %`}`,
-            p.recommendedSens != null ? `Empfohlene Sensi: ${fmtSens(p.recommendedSens)}${p.edpi != null ? ` (eDPI ${fmtNum(p.edpi, 1)})` : ''}` : null,
+            p.recommendedSens != null ? `Empfohlene Sensi: ${recSensText(p)}${p.edpi != null ? ` (eDPI ${fmtNum(p.edpi, 1)})` : ''}` : null,
             p.sens != null ? `Getestet rund um Sensi ${fmtSens(p.sens)}${p.dpi != null ? ` bei ${fmtNum(p.dpi, 0)} DPI` : ''}` : null,
           ];
           const ty = Math.min(scorePts[i]?.y ?? padT + innerH, accPts[i]?.y ?? padT + innerH) - 12;
@@ -495,7 +483,7 @@ export default {
 
     function reactionBlock(d) {
       const r = d.reaction;
-      const hint = 'Aus dem Reaktions-Labor. Gemessen in Millisekunden (ms, also Tausendstelsekunden) – weniger ist schneller.';
+      const hint = 'Aus dem Reaktions-Labor. Gemessen in Millisekunden (ms, also Tausendstelsekunden) – weniger ist schneller. Zeigt immer deine letzten Tests, unabhängig vom gewählten Zeitraum.';
       if (!r.count && !r.keys.count) {
         return ui.section('Reaktionszeit', hint, miniEmpty('Noch kein Reaktionstest gespeichert. Mach einen Test im Reaktions-Labor, dann siehst du hier deinen Verlauf.', 'Zum Reaktions-Labor', 'reaktion'));
       }
@@ -512,16 +500,13 @@ export default {
       } else {
         parts.push(h('p.hint', 'Noch kein Reaktionstest – nur Ergebnisse aus dem Tasten-Trainer.'));
       }
-      if (r.keys.count) {
-        const k = r.keys.latest;
-        parts.push(h('p.hint.stats-foot', `Tasten-Trainer (Bau- und Edit-Tasten): zuletzt im Schnitt ${k.avgMs} ms${k.accuracy != null ? `, ${fmtNum(k.accuracy, 0)} % richtig` : ''}.`));
-      }
+      if (r.keys.count) parts.push(h('p.hint.stats-foot', keysText(r.keys.latest)));
       return ui.section('Reaktionszeit', hint, parts);
     }
 
     function pingBlock(d) {
       const p = d.ping;
-      const hint = 'Aus dem Ping-Tester: so lange braucht ein Signal zum Server und zurück, in ms. Weniger ist besser.';
+      const hint = 'Aus dem Ping-Tester: so lange braucht ein Signal zum Server und zurück, in ms. Weniger ist besser. Zeigt immer deine letzten Messungen, unabhängig vom gewählten Zeitraum.';
       if (!p.count) {
         return ui.section('Ping', hint, miniEmpty('Noch keine Ping-Messung gespeichert. Miss deine Verbindung im Ping-Tester, dann siehst du hier den Verlauf.', 'Zum Ping-Tester', 'ping'));
       }

@@ -301,13 +301,17 @@ function normalizeAim(state) {
     const score = num(e.score);
     const accuracy = num(e.accuracy);
     if (score == null && accuracy == null) continue;
+    const dpi = num(e.dpi);
+    const recDpi = num(e.recommendedDpi);
     out.push({
       at,
       score: score == null ? null : round(clamp(score, 0, 100), 1),
       accuracy: accuracy == null ? null : round(clamp(accuracy, 0, 100), 1),
       recommendedSens: num(e.recommendedSens),
       sens: num(e.sens),
-      dpi: num(e.dpi),
+      dpi,
+      // Beim DPI-Vergleich gilt die empfohlene Sensi für eine andere DPI als beim Test (eDPI und cm360 auch).
+      recommendedDpi: recDpi != null && recDpi > 0 ? recDpi : dpi,
       edpi: num(e.edpi),
       cm360: num(e.cm360),
       hits: num(e.hits),
@@ -367,10 +371,13 @@ function normalizeReaction(state) {
   const keys = [];
   for (const e of Array.isArray(state?.keys) ? state.keys : []) {
     const at = num(e?.at);
-    const avgMs = num(e?.avgMs);
-    if (!at || avgMs == null || avgMs <= 0 || avgMs > 10000) continue;
+    if (!at) continue;
+    const avgMs = num(e.avgMs);
     const accuracy = num(e.accuracy);
-    keys.push({ at, avgMs: Math.round(avgMs), accuracy: accuracy == null ? null : round(clamp(accuracy, 0, 100), 1), count: num(e.count) });
+    // avgMs null mit 0 % heißt: diesmal keine richtige Taste (so speichert es das Reaktions-Labor). Der Lauf zählt trotzdem.
+    const noHit = e.avgMs === null && accuracy === 0;
+    if (!noHit && (avgMs == null || avgMs <= 0 || avgMs > 10000)) continue;
+    keys.push({ at, avgMs: noHit ? null : Math.round(avgMs), accuracy: accuracy == null ? null : round(clamp(accuracy, 0, 100), 1), count: num(e.count) });
   }
   reaction.sort((a, b) => a.at - b.at);
   keys.sort((a, b) => a.at - b.at);
@@ -434,6 +441,14 @@ function summaryLine({ sessions = [], aim = [], now = Date.now() } = {}) {
   return null;
 }
 
+/**
+ * Gibt es etwas, das in der CSV-Tabelle landet? Dieselbe Bedingung gilt für den Speichern-Knopf
+ * (buildOverview -> hasAnyData) und für exportCsv. Erwartet die Anzahlen der Einträge.
+ */
+function hasExportData({ sessions = 0, aim = 0, reaction = 0, keys = 0, ping = 0 } = {}) {
+  return [sessions, aim, reaction, keys, ping].some((n) => Number(n) > 0);
+}
+
 function buildOverview({ sessionsRaw, names = {}, sensi, reaktion, ping, days = 30, now = Date.now(), trackingSupported = true } = {}) {
   const d = normDays(days);
   const sessions = normalizeSessions(sessionsRaw, { now, names });
@@ -445,7 +460,7 @@ function buildOverview({ sessionsRaw, names = {}, sensi, reaktion, ping, days = 
     days: d,
     trackingSupported: !!trackingSupported,
     hasSessions: sessions.length > 0,
-    hasAnyData: sessions.length > 0 || aimList.length > 0 || reaction.count > 0 || reaction.keys.count > 0,
+    hasAnyData: hasExportData({ sessions: sessions.length, aim: aimList.length, reaction: reaction.count, keys: reaction.keys.count, ping: pingS.count }),
     play: aggregateSessions(sessions, { days: d, now }),
     aim: aimSummary(aimList, { days: d, now }),
     reaction,
@@ -476,9 +491,9 @@ const csvRow = (cells) => cells.join(';');
 
 /**
  * Baut die CSV-Datei: UTF-8 mit BOM (damit Excel Umlaute richtig zeigt), Semikolon, Windows-Zeilenenden.
- * Inhalt: alle Sitzungen, alle Aim-Tests und – falls vorhanden – die Reaktionstests.
+ * Inhalt: alle Sitzungen, alle Aim-Tests und – falls vorhanden – Reaktionstests, Tasten-Trainer und Ping-Messungen.
  */
-function buildCsv({ sessions = [], aim = [], reaction = [], now = Date.now() } = {}) {
+function buildCsv({ sessions = [], aim = [], reaction = [], keys = [], ping = [], now = Date.now() } = {}) {
   const lines = [];
   const t = (v) => csvCell(v, { isText: true });
   lines.push(csvRow([t('HELIX Session-Statistik'), t(`erstellt am ${fmtDateTime(now)}`)]));
@@ -493,17 +508,21 @@ function buildCsv({ sessions = [], aim = [], reaction = [], now = Date.now() } =
       deNum(s.seconds / 60, 0),
       t(fmtDuration(s.seconds)),
       t(s.profileName),
-      t(s.live ? 'läuft noch' : s.recovered ? 'Ende geschätzt (HELIX wurde unerwartet beendet)' : ''),
+      t(s.live ? 'läuft noch' : s.recovered ? 'Ende geschätzt (HELIX wurde geschlossen, während Fortnite noch lief)' : ''),
     ]));
   }
   lines.push('');
   lines.push(t('Aim-Tests'));
-  lines.push(csvRow(['Datum', 'Punkte (0-100)', 'Trefferquote (%)', 'Treffer', 'Fehlschüsse', 'Tracking (%)', 'Zeit bis Treffer (ms)', 'Getestete Sensi', 'Empfohlene Sensi', 'DPI', 'eDPI', 'cm pro 360°']));
+  lines.push(csvRow([
+    'Datum', 'Punkte (0-100)', 'Trefferquote (%)', 'Treffer', 'Fehlschüsse', 'Tracking (%)', 'Zeit bis Treffer (ms)',
+    'Getestete Sensi', 'DPI beim Test', 'Empfohlene Sensi', 'Empfohlene DPI', 'eDPI (Empfehlung)', 'cm pro 360° (Empfehlung)',
+  ]));
   if (!aim.length) lines.push(t('Noch keine Aim-Tests'));
   for (const e of aim) {
     lines.push(csvRow([
       fmtDateTime(e.at), deNum(e.score, 1), deNum(e.accuracy, 1), deNum(e.hits, 0), deNum(e.misses, 0),
-      deNum(e.trackingPct, 1), deNum(e.avgTtkMs, 0), deNum(e.sens, 2), deNum(e.recommendedSens, 2), deNum(e.dpi, 0), deNum(e.edpi, 1), deNum(e.cm360, 1),
+      deNum(e.trackingPct, 1), deNum(e.avgTtkMs, 0), deNum(e.sens, 2), deNum(e.dpi, 0),
+      deNum(e.recommendedSens, 2), deNum(e.recommendedDpi ?? e.dpi, 0), deNum(e.edpi, 1), deNum(e.cm360, 1),
     ]));
   }
   if (reaction.length) {
@@ -512,6 +531,22 @@ function buildCsv({ sessions = [], aim = [], reaction = [], now = Date.now() } =
     lines.push(csvRow(['Datum', 'Durchschnitt (ms)', 'Bester Wert (ms)', 'Runden', 'Frühstarts']));
     for (const e of reaction) {
       lines.push(csvRow([fmtDateTime(e.at), deNum(e.avgMs, 0), deNum(e.bestMs, 0), deNum(e.rounds, 0), deNum(e.falseStarts, 0)]));
+    }
+  }
+  if (keys.length) {
+    lines.push('');
+    lines.push(t('Tasten-Trainer'));
+    lines.push(csvRow(['Datum', 'Durchschnitt (ms)', 'Richtig (%)', 'Befehle', 'Hinweis']));
+    for (const e of keys) {
+      lines.push(csvRow([fmtDateTime(e.at), deNum(e.avgMs, 0), deNum(e.accuracy, 1), deNum(e.count, 0), t(e.avgMs == null ? 'keine richtige Taste' : '')]));
+    }
+  }
+  if (ping.length) {
+    lines.push('');
+    lines.push(t('Ping-Messungen'));
+    lines.push(csvRow(['Datum', 'Bester Server', 'Region', 'Ping (ms)']));
+    for (const e of ping) {
+      lines.push(csvRow([fmtDateTime(e.at), t(e.name), t(e.region), deNum(e.ms, 0)]));
     }
   }
   return `﻿${lines.join('\r\n')}\r\n`;
@@ -545,6 +580,7 @@ module.exports = {
   normalizePing,
   pingSummary,
   summaryLine,
+  hasExportData,
   buildOverview,
   csvCell,
   deNum,

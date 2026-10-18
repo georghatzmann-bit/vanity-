@@ -69,7 +69,7 @@ function makeAim(now) {
     const accuracy = Math.round((57 + i * 1.1 + (r() - 0.5) * 6) * 10) / 10;
     const dpi = 800;
     const e = {
-      at, dpi, sens, recommendedSens: rec, edpi: Math.round(dpi * rec / 10) / 10,
+      at, dpi, recommendedDpi: dpi, sens, recommendedSens: rec, edpi: Math.round(dpi * rec / 10) / 10,
       cm360: Math.round((2.54 * 360 / (rec * 0.005555 * dpi)) * 10) / 10,
       score, accuracy, hits: 60 + Math.floor(r() * 20), misses: 18 + Math.floor(r() * 10),
       trackingPct: Math.round((52 + i * 1.2 + (r() - 0.5) * 6) * 10) / 10, avgTtkMs: Math.round(640 - i * 9 + (r() - 0.5) * 40), rounds: 5,
@@ -178,7 +178,7 @@ function overview(days, now, running) {
     days,
     trackingSupported: true,
     hasSessions: sessions.length > 0,
-    hasAnyData: sessions.length > 0 || aimAll.length > 0 || re.reaction.length > 0 || re.keys.length > 0,
+    hasAnyData: sessions.length > 0 || aimAll.length > 0 || re.reaction.length > 0 || re.keys.length > 0 || ping.length > 0,
     play: {
       days, from, to: now, totalSeconds: total,
       allTimeSeconds: sessions.reduce((n, x) => n + x.seconds, 0), allTimeSessions: sessions.length,
@@ -220,7 +220,7 @@ export default {
     if (empty()) { const e = new Error('Es gibt noch keine Werte zum Speichern. Spiele zuerst eine Runde Fortnite, während HELIX läuft, oder mach einen Aim-Test.'); e.code = 'NO_DATA'; throw e; }
     const o = overview(90, Date.now(), false);
     const name = `HELIX-Statistik-${dayKey(Date.now())}.csv`;
-    return { canceled: false, file: `C:\\Users\\Spieler\\Documents\\${name}`, fileName: name, sessions: o.play.allTimeSessions, aimTests: o.aim.total, reactionTests: o.reaction.count };
+    return { canceled: false, file: `C:\\Users\\Spieler\\Documents\\${name}`, fileName: name, sessions: o.play.allTimeSessions, aimTests: o.aim.total, reactionTests: o.reaction.count, keyTests: o.reaction.keys.count, pingTests: o.ping.count };
   },
   async summary(_args, mctx) {
     if (empty()) return null;

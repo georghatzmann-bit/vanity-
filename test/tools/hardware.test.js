@@ -194,6 +194,9 @@ test('Mess-Skript liest nur – ändert nichts, fasst Anti-Cheat und Logs nicht 
     /PriorityClass/i, /ProcessorAffinity/i, /reg(\.exe)?\s+add/i, /EasyAntiCheat/i, /BattlEye/i, /_EAC/i, /_BE\b/i, /\\Logs/i, /ReadProcessMemory/i, /Add-Type/i];
   for (const re of forbidden) assert.doesNotMatch(PS_SAMPLER, re, String(re));
   assert.match(PS_SAMPLER, /Get-Process -Name 'FortniteClient-Win64-Shipping'/);
+  // Fortnite wird nie geöffnet: keine Eigenschaften, für die Windows den Prozess öffnen müsste
+  assert.doesNotMatch(PS_SAMPLER, /TotalProcessorTime|UserProcessorTime|\.Path\b|MainModule|\.Modules\b|\.Handle\b|StartTime/);
+  assert.match(PS_SAMPLER, /Win32_PerfRawData_PerfProc_Process/, 'Rechenzeit aus den Leistungsindikatoren');
   assert.match(PS_SAMPLER, /ConvertTo-Json -Compress/);
   // sprachneutrale CIM-Klassen statt Get-Counter (deutsche Zählernamen)
   assert.doesNotMatch(PS_SAMPLER, /Get-Counter/i);

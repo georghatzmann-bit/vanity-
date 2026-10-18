@@ -7,7 +7,8 @@
 // kein Speicherlesen, keine Priorität, keine Änderung am Prozess.
 // Prozessor und Arbeitsspeicher kommen zusätzlich aus Node (os) – das geht auf jedem System.
 //
-// Die Messung läuft nur, solange die Ansicht offen ist – oder (wenn eingeschaltet) solange Fortnite läuft.
+// Die Messung läuft nur, solange die Ansicht offen und das Fenster sichtbar ist (nicht im Infobereich oder
+// minimiert) – oder (wenn eingeschaltet) solange Fortnite läuft.
 
 const os = require('node:os');
 const logic = require('../../tools/hardware-logic');
@@ -59,13 +60,17 @@ while ($true) {
   }
   $o.fn = $null
   try {
+    # Arbeitsspeicher aus der Prozessliste, Rechenzeit aus den Leistungsindikatoren von Windows:
+    # der Fortnite-Prozess selbst wird dabei nie geöffnet (kein Zugriff auf Spiel oder Anti-Cheat).
     $fp = @(Get-Process -Name 'FortniteClient-Win64-Shipping' -ErrorAction SilentlyContinue)
     if ($fp.Count -gt 0) {
-      $ws = 0.0; $cs = 0.0
-      foreach ($p in $fp) {
-        $ws += [double]$p.WorkingSet64
-        try { $cs += [double]$p.TotalProcessorTime.TotalSeconds } catch { $cs = -1.0 }
-      }
+      $ws = 0.0
+      foreach ($p in $fp) { $ws += [double]$p.WorkingSet64 }
+      $cs = -1.0
+      try {
+        $pc = @(Get-CimInstance -ClassName Win32_PerfRawData_PerfProc_Process -Filter "Name = 'FortniteClient-Win64-Shipping' OR Name LIKE 'FortniteClient-Win64-Shipping#%'" -ErrorAction Stop)
+        if ($pc.Count -gt 0) { $cs = 0.0; foreach ($c in $pc) { $cs += [double]$c.PercentProcessorTime / 10000000 } }
+      } catch { }
       $o.fn = [pscustomobject]@{ ws = $ws; cpu = $cs; n = $fp.Count }
     }
   } catch { $o.fn = $null }

@@ -67,8 +67,10 @@ async function exportCsv(_args, ctx, now = Date.now()) {
   const input = await loadInputs(ctx);
   const sessions = logic.normalizeSessions(input.sessionsRaw, { now, names: input.names });
   const aim = logic.normalizeAim(input.sensi);
-  const { reaction } = logic.normalizeReaction(input.reaktion);
-  if (!sessions.length && !aim.length && !reaction.length) {
+  const { reaction, keys } = logic.normalizeReaction(input.reaktion);
+  const ping = logic.normalizePing(input.ping);
+  // dieselbe Bedingung wie beim Speichern-Knopf (buildOverview -> hasAnyData)
+  if (!logic.hasExportData({ sessions: sessions.length, aim: aim.length, reaction: reaction.length, keys: keys.length, ping: ping.length })) {
     throw new HelixError('NO_DATA', 'Es gibt noch keine Werte zum Speichern. Spiele zuerst eine Runde Fortnite, während HELIX läuft, oder mach einen Aim-Test.');
   }
   const el = ctx.electron || {};
@@ -89,7 +91,7 @@ async function exportCsv(_args, ctx, now = Date.now()) {
   if (!r || r.canceled || !r.filePath) return { canceled: true };
   let file = r.filePath;
   if (!/\.csv$/i.test(file)) file += '.csv';
-  const csv = logic.buildCsv({ sessions, aim, reaction, now });
+  const csv = logic.buildCsv({ sessions, aim, reaction, keys, ping, now });
   try {
     await fsp.writeFile(file, csv, 'utf8');
   } catch (e) {
@@ -98,7 +100,10 @@ async function exportCsv(_args, ctx, now = Date.now()) {
     }
     throw new HelixError('WRITE_FAILED', `Die Datei konnte nicht gespeichert werden (${e && e.code ? e.code : 'unbekannter Fehler'}).`);
   }
-  return { canceled: false, file, fileName: path.basename(file), sessions: sessions.length, aimTests: aim.length, reactionTests: reaction.length };
+  return {
+    canceled: false, file, fileName: path.basename(file),
+    sessions: sessions.length, aimTests: aim.length, reactionTests: reaction.length, keyTests: keys.length, pingTests: ping.length,
+  };
 }
 
 async function summary(_args, ctx, now = Date.now()) {

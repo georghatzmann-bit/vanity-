@@ -203,3 +203,66 @@ export function signed(v, unit = '', decimals = 0) {
 export function baseName(p) {
   return String(p || '').split(/[\\/]/).filter(Boolean).pop() || '';
 }
+
+// ---------------------------------------------------------------- Texte für die Ansicht
+
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
+/** DPI, für die die empfohlene Sensi gilt. Beim DPI-Vergleich ist das oft eine andere als beim Test. */
+export function recDpi(e) {
+  if (isNum(e?.recommendedDpi) && e.recommendedDpi > 0) return e.recommendedDpi;
+  return isNum(e?.dpi) ? e.dpi : null;
+}
+
+/** Empfohlene Sensi: "6,5" – oder "3,3 bei 1600 DPI", wenn die Empfehlung für eine andere DPI gilt als beim Test. */
+export function recSensText(e) {
+  const d = recDpi(e);
+  const other = d != null && isNum(e?.dpi) && d !== e.dpi;
+  return `${fmtSens(e?.recommendedSens)}${other ? ` bei ${fmtNum(d, 0)} DPI` : ''}`;
+}
+
+/** Hinweis zur aktuellen Empfehlung: DPI, eDPI und Mausweg – alles für die empfohlene Einstellung. */
+export function recHint(e) {
+  if (!e) return '';
+  const bits = [];
+  const d = recDpi(e);
+  if (d != null) bits.push(isNum(e.dpi) && d !== e.dpi ? `bei ${fmtNum(d, 0)} DPI (statt bisher ${fmtNum(e.dpi, 0)} DPI)` : `bei ${fmtNum(d, 0)} DPI`);
+  if (isNum(e.edpi)) bits.push(`eDPI ${fmtNum(e.edpi, 1)} (DPI mal Sensi in Prozent – zum Vergleichen mit Profis)`);
+  if (isNum(e.cm360)) bits.push(`${fmtNum(e.cm360, 1)} cm Mausweg für eine ganze Drehung`);
+  return bits.join(' · ') || `Test vom ${fmtDay(e.at, 'date')}`;
+}
+
+/**
+ * Kachel "Fortschritt" aus dem Trend der Aim-Punkte: { value: "+4 Punkte", text: "Erster Test: 60 Punkte · …" }.
+ * Der Unterschied kommt aus den gerundeten Werten, damit Kachel und Hinweis zusammenpassen (60 -> 64 ist +4).
+ */
+export function progressInfo(tr) {
+  if (!tr || !isNum(tr.first) || !isNum(tr.last)) return null;
+  const first = Math.round(tr.first);
+  const last = Math.round(tr.last);
+  const diff = last - first;
+  const text = tr.groupSize === 1
+    ? `Erster Test: ${fmtNum(first, 0)} Punkte · neuester Test: ${fmtNum(last, 0)} Punkte`
+    : `Schnitt deiner ersten ${tr.groupSize} Tests: ${fmtNum(first, 0)} · deiner letzten ${tr.groupSize}: ${fmtNum(last, 0)}`;
+  return { value: signed(diff, Math.abs(diff) === 1 ? 'Punkt' : 'Punkte'), text };
+}
+
+/** Zeile zum letzten Lauf im Tasten-Trainer. Ohne richtige Taste gibt es keine Zeit (avgMs null). */
+export function keysText(k) {
+  if (!k) return '';
+  const acc = isNum(k.accuracy) ? `${fmtNum(k.accuracy, 0)} % richtig` : '';
+  if (!isNum(k.avgMs)) return `Tasten-Trainer (Bau- und Edit-Tasten): zuletzt keine richtige Taste${acc ? ` (${acc})` : ''}.`;
+  return `Tasten-Trainer (Bau- und Edit-Tasten): zuletzt im Schnitt ${k.avgMs} ms${acc ? `, ${acc}` : ''}.`;
+}
+
+/** Was in der gespeicherten Tabelle steht, z. B. "3 Sitzungen, 1 Aim-Test, 2 Ping-Messungen". Leere Teile fallen weg. */
+export function exportParts(r) {
+  const count = (v) => (isNum(v) && v > 0 ? v : 0);
+  return [
+    [count(r?.sessions), 'Sitzung', 'Sitzungen'],
+    [count(r?.aimTests), 'Aim-Test', 'Aim-Tests'],
+    [count(r?.reactionTests), 'Reaktionstest', 'Reaktionstests'],
+    [count(r?.keyTests), 'Tasten-Training', 'Tasten-Trainings'],
+    [count(r?.pingTests), 'Ping-Messung', 'Ping-Messungen'],
+  ].filter(([n]) => n > 0).map(([n, one, many]) => `${n} ${n === 1 ? one : many}`).join(', ');
+}
