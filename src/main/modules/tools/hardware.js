@@ -154,7 +154,11 @@ class HardwareMonitor {
   }
 
   ensureRunning() {
-    if (this.timer) return;
+    if (this.timer) {
+      // Skript war ausgefallen: beim nächsten Start (z. B. "Erneut versuchen") neu probieren
+      if (this.isWin && !this.kill && this.stream === 'failed') { this.restarts = 0; this.startStream(); }
+      return;
+    }
     this.buildState = {};
     this.buildState.prevCpu = logic.cpuTimes(this.safeCpus());
     this.timer = this.setIntervalFn(() => this.onTimer(), this.intervalMs);

@@ -16,7 +16,7 @@ function items() {
   const u = (id, label) => (st.undo[id] ? { at: st.undo[id].at, label } : undefined);
   const list = [];
   list.push(st.gamemode
-    ? { id: 'gamemode', group: 'leistung', title: 'Spielmodus', status: 'good', value: 'An', text: 'Windows gibt Fortnite Vorrang und installiert beim Spielen keine Updates im Hintergrund.', fix: null, links: [link('gaming-gamemode', 'Windows-Einstellung')], undo: u('gamemode', 'Von HELIX eingeschaltet') }
+    ? { id: 'gamemode', group: 'leistung', title: 'Spielmodus', status: 'good', value: 'An', text: 'Windows gibt Fortnite Vorrang und hält Updates und Neustart-Hinweise beim Spielen zurück.', fix: null, links: [link('gaming-gamemode', 'Windows-Einstellung')], undo: u('gamemode', 'Von HELIX eingeschaltet') }
     : { id: 'gamemode', group: 'leistung', title: 'Spielmodus', status: 'change', value: 'Aus', text: 'Ohne Spielmodus können Updates und andere Aufgaben im Hintergrund das Spiel stören. Einschalten wird empfohlen.', fix: { label: 'Einschalten', safe: true }, links: [link('gaming-gamemode', 'Windows-Einstellung')] });
   const dvrFix = { label: 'Ausschalten', safe: true, note: 'Danach gehen Clips mit der Xbox Game Bar nicht mehr. Mit „Rückgängig“ holst du sie zurück.' };
   list.push(st.dvr === 'historical'

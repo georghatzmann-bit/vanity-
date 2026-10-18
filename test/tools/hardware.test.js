@@ -309,7 +309,15 @@ test('Monitor: Skript bricht ab -> neuer Versuch, nach 3 Fehlschlägen nur Grund
   assert.equal(streams.length, 4);
   streams[3].onExit(1);
   assert.equal(m.stream, 'failed');
+  // "Erneut versuchen", während die Hintergrund-Aufzeichnung die Messung offen hält
+  m.acquire('background');
   m.release('view');
+  m.acquire('view');
+  assert.equal(streams.length, 5);
+  assert.equal(m.stream, 'starting');
+  m.release('view');
+  m.release('background');
+  assert.equal(streams[4].killed, true);
 });
 
 test('Monitor: Ansicht, die sich nicht mehr meldet, stoppt die Messung', async () => {

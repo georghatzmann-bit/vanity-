@@ -50,7 +50,7 @@ export function gpuLoadStatus(p, fnRunning) {
   if (fnRunning) {
     if (p >= 95) return { type: 'accent', word: 'voll ausgelastet', text: 'Die Grafikkarte gibt alles. Sie bestimmt gerade, wie viele FPS du bekommst.' };
     if (p >= 60) return { type: 'ok', word: 'arbeitet', text: 'Die Grafikkarte arbeitet und hat noch etwas Reserve.' };
-    return { type: 'ok', word: 'Reserve', text: 'Die Grafikkarte langweilt sich. Oft bremst dann der Prozessor oder das FPS-Limit.' };
+    return { type: 'ok', word: 'Reserve', text: 'Die Grafikkarte hat viel Luft. Oft bremst dann der Prozessor oder das FPS-Limit.' };
   }
   if (p >= 80) return { type: 'warn', word: 'hohe Last', text: 'Die Grafikkarte ist stark belastet, obwohl Fortnite nicht läuft. Läuft ein anderes Spiel oder ein Video?' };
   return { type: 'ok', word: 'normal', text: 'Fortnite läuft nicht – die Grafikkarte hat wenig zu tun.' };

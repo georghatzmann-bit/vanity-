@@ -181,7 +181,7 @@ function item(id, group, title, status, value, text, extra = {}) {
 function evalGameMode(gameBar) {
   const on = effective(gameBar, 'AutoGameModeEnabled') !== 0;
   const links = [settingsLink('ms-settings:gaming-gamemode', 'Windows-Einstellung')];
-  if (on) return item('gamemode', 'leistung', 'Spielmodus', 'good', 'An', 'Windows gibt Fortnite Vorrang und installiert beim Spielen keine Updates im Hintergrund.', { links });
+  if (on) return item('gamemode', 'leistung', 'Spielmodus', 'good', 'An', 'Windows gibt Fortnite Vorrang und hält Updates und Neustart-Hinweise beim Spielen zurück.', { links });
   return item('gamemode', 'leistung', 'Spielmodus', 'change', 'Aus',
     'Ohne Spielmodus können Updates und andere Aufgaben im Hintergrund das Spiel stören. Einschalten wird empfohlen.',
     { links, fix: { label: 'Einschalten', safe: true } });
