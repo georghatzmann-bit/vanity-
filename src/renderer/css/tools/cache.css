@@ -1,0 +1,37 @@
+/* Cache-Cleaner – alle Regeln beginnen mit [data-tool="cache"] */
+
+[data-tool="cache"] .cache-list { display: flex; flex-direction: column; gap: 8px; }
+
+[data-tool="cache"] .cache-row {
+  display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px;
+  border-radius: var(--radius-s); border: 1px solid var(--line); background: rgba(255, 255, 255, 0.02);
+  cursor: pointer; transition: border-color var(--t), background var(--t);
+}
+[data-tool="cache"] .cache-row:hover { border-color: var(--line-2); }
+[data-tool="cache"] .cache-row.checked { border-color: rgba(79, 216, 255, 0.4); background: var(--accent-soft); }
+[data-tool="cache"] .cache-row.is-empty { cursor: default; opacity: 0.7; }
+[data-tool="cache"] .cache-row input[type="checkbox"] { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); flex: none; cursor: inherit; }
+
+[data-tool="cache"] .cache-text { display: flex; flex-direction: column; gap: 4px; }
+[data-tool="cache"] .cache-row-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+[data-tool="cache"] .cache-privacy { display: flex; align-items: flex-start; gap: 6px; color: var(--accent-2); }
+[data-tool="cache"] .cache-privacy .icon { flex: none; margin-top: 2px; }
+
+[data-tool="cache"] .cache-size { display: flex; flex-direction: column; align-items: flex-end; min-width: 96px; text-align: right; font-variant-numeric: tabular-nums; }
+[data-tool="cache"] .cache-size strong { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
+[data-tool="cache"] .cache-open { flex: none; margin-top: -4px; }
+
+[data-tool="cache"] .cache-loading { display: flex; align-items: center; gap: 12px; }
+
+[data-tool="cache"] .cache-bar {
+  position: sticky; bottom: -24px; z-index: 5; margin: 8px -24px -24px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 24px;
+  background: rgba(12, 15, 24, 0.96); border: 0; border-top: 1px solid var(--line-2); border-radius: 0;
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.35);
+}
+[data-tool="cache"] .cache-bar-stats { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
+[data-tool="cache"] .cache-gain { display: flex; flex-direction: column; }
+[data-tool="cache"] .cache-gain strong { font-family: var(--font-display); font-size: 24px; font-weight: 600; color: var(--accent-2); font-variant-numeric: tabular-nums; }
+[data-tool="cache"] .cache-bar-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+[data-tool="cache"] .cache-bar-actions { display: flex; align-items: center; gap: 8px; }
+[data-tool="cache"] .cache-progress { color: var(--accent-2); }

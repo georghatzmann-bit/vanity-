@@ -15,6 +15,7 @@ const FILE = 'GameUserSettings.ini';
 // Ein einziges PowerShell-Skript, Ausgabe als JSON (sprachneutral, auch auf deutschem Windows).
 // Nur Get-CimInstance / Get-ChildItem / Get-ItemProperty – es wird nichts verändert.
 // Der echte Grafikspeicher steht in der Registrierung (qwMemorySize, 64 Bit); AdapterRAM endet bei 4 GB.
+// Von den Geräte-Kennungen wird nur Hersteller- und Modellnummer (VEN/DEV) weitergegeben, keine Geräte-Instanz.
 const PS_SCAN = String.raw`
 $r = [ordered]@{}
 try {
@@ -25,10 +26,12 @@ try {
 try {
   $r.gpu = @(Get-CimInstance -ClassName Win32_VideoController | ForEach-Object {
     $d = $null
+    $pci = ''
+    if ([string]$_.PNPDeviceID -match 'VEN_([0-9A-Fa-f]{4})&DEV_([0-9A-Fa-f]{4})') { $pci = ($Matches[1] + ':' + $Matches[2]).ToLower() }
     try { if ($_.DriverDate) { $d = ([datetime]$_.DriverDate).ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture) } } catch { $d = $null }
     [pscustomobject]@{
       Name = [string]$_.Name; DriverVersion = [string]$_.DriverVersion; DriverDate = $d
-      AdapterCompatibility = [string]$_.AdapterCompatibility; AdapterRAM = [double]$_.AdapterRAM; PNPDeviceID = [string]$_.PNPDeviceID
+      AdapterCompatibility = [string]$_.AdapterCompatibility; AdapterRAM = [double]$_.AdapterRAM; PciId = $pci
       CurrentRefreshRate = [double]$_.CurrentRefreshRate; MaxRefreshRate = [double]$_.MaxRefreshRate
       CurrentHorizontalResolution = [double]$_.CurrentHorizontalResolution; CurrentVerticalResolution = [double]$_.CurrentVerticalResolution
     }
@@ -44,7 +47,9 @@ try {
       $q = $p.'HardwareInformation.qwMemorySize'
       if ($null -eq $q) { $q = $p.'HardwareInformation.MemorySize' }
       if ($q -is [byte[]]) { $b = New-Object byte[] 8; [Array]::Copy($q, $b, [Math]::Min(8, $q.Length)); $q = [BitConverter]::ToUInt64($b, 0) }
-      if ($q) { [void]$v.Add([pscustomobject]@{ Name = [string]$p.DriverDesc; MatchingDeviceId = [string]$p.MatchingDeviceId; Bytes = [double]$q }) }
+      $pci = ''
+      if ([string]$p.MatchingDeviceId -match 'VEN_([0-9A-Fa-f]{4})&DEV_([0-9A-Fa-f]{4})') { $pci = ($Matches[1] + ':' + $Matches[2]).ToLower() }
+      if ($q) { [void]$v.Add([pscustomobject]@{ Name = [string]$p.DriverDesc; PciId = $pci; Bytes = [double]$q }) }
     } catch { }
   }
 } catch { }
@@ -161,7 +166,7 @@ async function getHardware(ctx) {
   }
   const scan = await runScan(ctx);
   if (scan.unsupported) throw new HelixError('NOT_WINDOWS', scan.message);
-  cache = { at: scan.at, hw: scan.hw };
+  cache = { at: scan.at, hw: scan.hw, live: true };
   return scan.hw;
 }
 
@@ -186,11 +191,17 @@ async function presetFor(ctx, a) {
 module.exports = {
   id: ID,
   handlers: {
-    /** Hardware neu lesen und Vorschläge bauen. */
-    async scan(_a, ctx) {
+    /**
+     * Hardware lesen und Vorschläge bauen.
+     * Ohne fresh wird die Messung aus diesem Programmlauf wiederverwendet (die Hardware ändert sich nicht laufend).
+     */
+    async scan(a, ctx) {
+      if (!a?.fresh && cache?.live && isWindows(ctx)) {
+        return publicResult({ at: cache.at, hw: cache.hw }, logic.analyze(cache.hw));
+      }
       const scan = await runScan(ctx);
       if (scan.unsupported) return { unsupported: true, message: scan.message };
-      cache = { at: scan.at, hw: scan.hw };
+      cache = { at: scan.at, hw: scan.hw, live: true };
       const analysis = logic.analyze(scan.hw);
       await saveScanState(ctx, scan, analysis);
       return publicResult(scan, analysis);
@@ -224,14 +235,17 @@ module.exports = {
       const changes = logic.changesToWrite(preset.items, pv, skip);
       if (!changes.length) return { preset: preset.id, applied: 0, nothing: true };
       const res = await ctx.core.applyIniChanges(FILE, changes, { reason: 'tool', label: `PC-Check: Vorschlag „${preset.title}“` });
-      const count = res.applied.length;
+      // Gezählt werden Zeilen der Vorschau (z. B. "Auflösung"), nicht einzelne INI-Schlüssel
+      const done = new Set(res.applied.map((x) => `${x.section}|${x.key}`.toLowerCase()));
+      const count = logic.buildRows(preset.items, pv)
+        .filter((r) => !skip.includes(r.id) && r.raw.some((x) => done.has(`${x.section}|${x.key}`.toLowerCase()))).length;
       try {
         const st = await ctx.core.readState(STATE, {});
-        st.lastApplied = { at: Date.now(), preset: preset.id, fpsCap: preset.fps.cap, backupId: res.backupId, count };
+        st.lastApplied = { at: Date.now(), preset: preset.id, fpsCap: preset.fps.cap, backupId: res.backupId, count, keys: res.applied.length };
         await ctx.core.writeState(STATE, st);
       } catch { /* nicht kritisch */ }
       ctx.emit?.('pccheck.applied', { preset: preset.id, count });
-      return { preset: preset.id, title: preset.title, applied: count, backupId: res.backupId, rel: res.rel, skipped: skip };
+      return { preset: preset.id, title: preset.title, applied: count, keys: res.applied.length, backupId: res.backupId, rel: res.rel, skipped: skip };
     },
 
     async summary(_a, ctx) {

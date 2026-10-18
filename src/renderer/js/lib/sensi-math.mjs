@@ -289,6 +289,19 @@ export function multipliers(spread = 0.2, steps = 5) {
   return out;
 }
 
+/**
+ * Getestete Sensis: auf 0,1 % gerundet (so kann man sie in Fortnite auch einstellen).
+ * Ergibt das Runden doppelte Werte (sehr kleine Sensi), bleiben die genauen Werte.
+ */
+export function testedSens(baseSens, spread = 0.2, steps = 5) {
+  const mults = multipliers(spread, steps);
+  const rounded = mults.map((m) => roundSens(baseSens * m));
+  if (new Set(rounded).size === rounded.length && rounded.every((v) => v > 0)) {
+    return rounded.map((sens) => ({ mult: round(sens / baseSens, 4), sens }));
+  }
+  return mults.map((mult) => ({ mult, sens: baseSens * mult }));
+}
+
 /** DPI-Liste ohne Doppelte, aktuelle DPI zuerst. */
 export function uniqueDpis(baseDpi, extra = []) {
   const out = [];
@@ -322,8 +335,8 @@ export function buildPlan({ mode = 'sens', settings, length = 'short', spread = 
       needsSwitch: dpi !== (i ? seq[i - 1] : baseDpi), rounds: rounds(),
     }));
   } else {
-    blocks = shuffle(multipliers(spread), rng).map((mult, i) => ({
-      index: i, mult, dpi: baseDpi, sens: baseSens * mult, needsSwitch: false, rounds: rounds(),
+    blocks = shuffle(testedSens(baseSens, spread), rng).map(({ mult, sens }, i) => ({
+      index: i, mult, dpi: baseDpi, sens, needsSwitch: false, rounds: rounds(),
     }));
   }
   const first = blocks[0];
@@ -459,6 +472,43 @@ export function fitParabola(points) {
   return { a, b, c, r2, vertex, predict };
 }
 
+/**
+ * Scheitel einer Parabel durch drei Punkte (der mittlere ist der beste).
+ * Liegt immer zwischen den beiden äußeren Punkten.
+ */
+export function peak3(p0, p1, p2) {
+  const x0 = p0.mult ?? p0.x; const x1 = p1.mult ?? p1.x; const x2 = p2.mult ?? p2.x;
+  const y0 = p0.score ?? p0.y; const y1 = p1.score ?? p1.y; const y2 = p2.score ?? p2.y;
+  const d = (x0 - x1) * (x0 - x2) * (x1 - x2);
+  if (!Number.isFinite(d) || Math.abs(d) < 1e-12) return NaN;
+  const A = (x2 * (y1 - y0) + x1 * (y0 - y2) + x0 * (y2 - y1)) / d;
+  const B = (x2 * x2 * (y0 - y1) + x1 * x1 * (y2 - y0) + x0 * x0 * (y1 - y2)) / d;
+  if (!(A < 0)) return x1;
+  return clamp(-B / (2 * A), Math.min(x0, x2), Math.max(x0, x2));
+}
+
+/**
+ * Gleichgewichtspunkt von Überziehen und Zu-kurz-Zielen über die getesteten Faktoren.
+ * groups: [{ mult, overshoot, undershoot }] nach mult sortiert.
+ * Rückgabe { mult, trend } oder null. trend = wie stark das Überziehen mit der Sensi zunimmt (0 … 2).
+ */
+export function balancePoint(groups) {
+  const pts = groups.filter((g) => Number.isFinite(g.overshoot) && Number.isFinite(g.undershoot))
+    .map((g) => ({ x: g.mult, d: g.overshoot - g.undershoot }));
+  if (pts.length < 2) return null;
+  const trend = pts[pts.length - 1].d - pts[0].d;
+  if (!(trend > 0)) return null;
+  let found = null;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i]; const b = pts[i + 1];
+    if (a.d <= 0 && b.d > 0) {
+      const x = a.d === b.d ? a.x : a.x + ((b.x - a.x) * (0 - a.d)) / (b.d - a.d);
+      if (!found || Math.abs(x - 1) < Math.abs(found - 1)) found = x;
+    }
+  }
+  return found == null ? null : { mult: found, trend };
+}
+
 function groupBy(list, keyFn) {
   const map = new Map();
   for (const item of list) {
@@ -474,6 +524,12 @@ const avgOf = (items, key) => {
   return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
 };
 
+/** Unter diesen Punkten (bester Durchgang) ist das Ergebnis Zufall – dann keine Empfehlung. */
+export const MIN_USEFUL_SCORE = 20;
+const TOO_FEW = 'Es gab zu wenige Treffer für eine Empfehlung.';
+
+const RAW_HINT = 'Der Test lief im normalen Mausmodus. Dabei kann die Mausbeschleunigung von Windows mitwirken. Prüfe im Maus-Check, ob sie aus ist.';
+
 /**
  * Empfehlung im Sensi-Modus.
  * blocks: [{ mult, sens, score, overshoot, undershoot }]
@@ -484,18 +540,44 @@ export function recommend({ blocks = [], baseSens, dpi, rawInput = true } = {}) 
     .map(([mult, items]) => ({ mult, score: avgOf(items, 'score'), overshoot: avgOf(items, 'overshoot'), undershoot: avgOf(items, 'undershoot') }))
     .sort((x, y) => x.mult - y.mult);
   if (!groups.length || !Number.isFinite(baseSens)) return null;
+  if (Math.max(...groups.map((g) => g.score)) < MIN_USEFUL_SCORE) {
+    const keep = roundSens(baseSens);
+    return {
+      mode: 'sens', mult: 1, sens: keep, dpi,
+      edpi: Number.isFinite(dpi) ? edpi(dpi, keep) : null,
+      cm360: Number.isFinite(dpi) ? cm360(dpi, keep) : null,
+      method: 'zuwenig', edge: false, confidence: 'niedrig', r2: null, bestMult: null, balanceMult: null,
+      lines: [TOO_FEW, 'Bleib erst einmal bei deiner jetzigen Sensi und mach den Test noch einmal in Ruhe.', ...(rawInput ? [] : [RAW_HINT])],
+    };
+  }
   const lo = groups[0].mult; const hi = groups[groups.length - 1].mult;
-  const best = groups.reduce((m, g) => (g.score > m.score ? g : m), groups[0]);
+  const bi = groups.reduce((m, g, i) => (g.score > groups[m].score ? i : m), 0);
+  const best = groups[bi];
+  const interior = bi > 0 && bi < groups.length - 1;
+  // Das Optimum liegt zwischen den Nachbarn des besten gemessenen Werts – nie weiter weg.
+  const nLo = groups[Math.max(0, bi - 1)].mult;
+  const nHi = groups[Math.min(groups.length - 1, bi + 1)].mult;
   let mult = best.mult;
   let method = 'bester';
   let fit = null;
   if (groups.length >= 3) {
     fit = fitParabola(groups.map((g) => ({ x: g.mult, y: g.score })));
-    if (fit && fit.a < 0 && fit.r2 >= 0.25 && Number.isFinite(fit.vertex)) {
-      if (fit.vertex >= lo && fit.vertex <= hi) { mult = fit.vertex; method = 'parabel'; } else { mult = clamp(fit.vertex, lo, hi); method = 'rand'; }
+    if (fit && fit.a < 0 && fit.r2 >= 0.25 && Number.isFinite(fit.vertex) && fit.vertex >= nLo && fit.vertex <= nHi) {
+      mult = fit.vertex; method = 'parabel';
+    } else if (interior) {
+      const v = peak3(groups[bi - 1], best, groups[bi + 1]);
+      if (Number.isFinite(v)) { mult = v; method = 'nachbarn'; }
     }
   }
-  const edge = groups.length >= 3 && (method === 'rand' || (method === 'bester' && (best.mult === lo || best.mult === hi)));
+  // Zweites Signal aus den Flicks: Wo halten sich "drüber" und "zu kurz" die Waage?
+  // Viel Überziehen = zu schnell, viel zu kurz = zu langsam. Je klarer der Trend, desto mehr Gewicht.
+  const bal = balancePoint(groups);
+  if (bal) {
+    const w = 0.5 * clamp01((bal.trend - 0.2) / 0.8);
+    mult = clamp((1 - w) * mult + w * bal.mult, nLo, nHi);
+  }
+  mult = clamp(mult, lo, hi);
+  const edge = groups.length >= 3 && !interior;
   const sens = roundSens(baseSens * mult);
   const scores = groups.map((g) => g.score);
   const spread = Math.max(...scores) - Math.min(...scores);
@@ -523,13 +605,14 @@ export function recommend({ blocks = [], baseSens, dpi, rawInput = true } = {}) 
   }
   if (edge) lines.push(`Dein bester Wert lag am Rand des Tests. Mach den Test am besten noch einmal mit ${fmtSens(sens)} % als Startwert.`);
   if (confidence === 'niedrig') lines.push('Die Unterschiede zwischen den Werten waren klein. Du kommst mit allen ähnlich gut klar.');
-  if (!rawInput) lines.push('Der Test lief ohne Rohdaten der Maus. Prüfe im Maus-Check, ob die Windows-Beschleunigung aus ist.');
+  if (!rawInput) lines.push(RAW_HINT);
 
   return {
     mode: 'sens', mult: round(mult, 4), sens, dpi,
     edpi: Number.isFinite(dpi) ? edpi(dpi, sens) : null,
     cm360: Number.isFinite(dpi) ? cm360(dpi, sens) : null,
-    method, edge, confidence, r2: fit ? round(fit.r2, 3) : null, bestMult: best.mult, lines,
+    method, edge, confidence, r2: fit ? round(fit.r2, 3) : null, bestMult: best.mult,
+    balanceMult: bal ? round(bal.mult, 4) : null, lines,
   };
 }
 
@@ -544,6 +627,14 @@ export function recommendDpi({ blocks = [], baseDpi, baseSens, rawInput = true }
   const best = groups.reduce((m, g) => (g.score > m.score ? g : m), groups[0]);
   const base = groups.find((g) => g.dpi === baseDpi) || null;
   const baseEdpi = edpi(baseDpi, baseSens);
+  if (best.score < MIN_USEFUL_SCORE) {
+    const keep = round(baseSens, 2);
+    return {
+      mode: 'dpi', mult: 1, dpi: baseDpi, sens: keep, edpi: edpi(baseDpi, keep), cm360: cm360(baseDpi, keep),
+      method: 'zuwenig', edge: false, confidence: 'niedrig', r2: null, bestDpi: null,
+      lines: [TOO_FEW, `Bleib erst einmal bei ${baseDpi} DPI und mach den Vergleich noch einmal in Ruhe.`, ...(rawInput ? [] : [RAW_HINT])],
+    };
+  }
   const lines = [];
   let dpi = baseDpi;
   let sens = round(baseSens, 2);
@@ -566,7 +657,7 @@ export function recommendDpi({ blocks = [], baseDpi, baseSens, rawInput = true }
     lines.push(`Stell dann in Fortnite ${fmtSens(sens)} % ein. So bleibt eine Drehung gleich weit (eDPI ${fmtNum(e, 0)}).`);
     if (Math.abs(e - baseEdpi) >= 0.5) lines.push('Fortnite kann nur 0,1-%-Schritte. Deshalb ändert sich die eDPI ein kleines bisschen.');
   }
-  if (!rawInput) lines.push('Der Test lief ohne Rohdaten der Maus. Prüfe im Maus-Check, ob die Windows-Beschleunigung aus ist.');
+  if (!rawInput) lines.push(RAW_HINT);
   return { mode: 'dpi', mult: 1, dpi, sens, edpi: edpi(dpi, sens), cm360: cm360(dpi, sens), method: 'dpi', edge: false, confidence, r2: null, bestDpi: best.dpi, lines };
 }
 

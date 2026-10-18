@@ -1,0 +1,29 @@
+/* Windows-Gaming-Check: Checkliste mit Status, Erklärung und Knöpfen. */
+
+[data-tool="wincheck"] .wc-summary { margin-bottom: 24px; padding: 16px; }
+[data-tool="wincheck"] .wc-summary strong { font-size: 16px; font-family: var(--font-display); }
+[data-tool="wincheck"] .wc-summary .hint + .hint { margin-top: 4px; }
+
+[data-tool="wincheck"] .wc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+[data-tool="wincheck"] .wc-item {
+  display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 16px; align-items: start;
+  padding: 12px 16px; border-radius: var(--radius-s); background: rgba(255, 255, 255, 0.025); border: 1px solid var(--line);
+  transition: border-color var(--t);
+}
+[data-tool="wincheck"] .wc-item:hover { border-color: var(--line-2); }
+[data-tool="wincheck"] .wc-item.wc-s-change { border-color: rgba(255, 181, 71, 0.3); }
+[data-tool="wincheck"] .wc-status { padding-top: 1px; }
+[data-tool="wincheck"] .wc-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+[data-tool="wincheck"] .wc-title-row { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; }
+[data-tool="wincheck"] .wc-value { color: var(--accent-2); font-size: 13px; }
+[data-tool="wincheck"] .wc-note, [data-tool="wincheck"] .wc-undo { display: flex; gap: 6px; align-items: flex-start; color: var(--faint); }
+[data-tool="wincheck"] .wc-note .icon, [data-tool="wincheck"] .wc-undo .icon { flex: none; margin-top: 2px; }
+[data-tool="wincheck"] .wc-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 420px; }
+[data-tool="wincheck"] .wc-foot { display: flex; gap: 6px; align-items: flex-start; margin-top: -8px; }
+[data-tool="wincheck"] .wc-foot .icon { flex: none; margin-top: 2px; color: var(--accent); }
+[data-tool="wincheck"] .wc-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+@media (max-width: 1240px) {
+  [data-tool="wincheck"] .wc-item { grid-template-columns: 130px minmax(0, 1fr); }
+  [data-tool="wincheck"] .wc-actions { grid-column: 2; justify-content: flex-start; max-width: none; }
+}

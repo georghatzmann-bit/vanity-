@@ -22,7 +22,24 @@ const COMMON_HZ = [24, 30, 48, 50, 60, 72, 75, 85, 90, 100, 110, 120, 144, 160, 
 
 // ---------------------------------------------------------------- kleine Helfer
 
-const asArray = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
+/**
+ * ConvertTo-Json liefert bei einem Treffer ein Objekt, bei mehreren ein Array.
+ * Windows PowerShell 5.1 verpackt Arrays manchmal als { value: [...], Count: n } – auch das wird ausgepackt.
+ */
+function asArray(v) {
+  if (v == null) return [];
+  if (Array.isArray(v)) return v;
+  if (typeof v === 'object' && Array.isArray(v.value) && ('Count' in v || 'count' in v)) return v.value;
+  return [v];
+}
+
+/** "PCI\VEN_10DE&DEV_2786&SUBSYS_..." -> "10de:2786" (nur Hersteller- und Modellnummer, keine Geräte-Instanz). */
+function pciId(s) {
+  const t = str(s);
+  if (/^[0-9a-f]{4}:[0-9a-f]{4}$/i.test(t)) return t.toLowerCase();
+  const m = /ven_([0-9a-f]{4})&dev_([0-9a-f]{4})/i.exec(t);
+  return m ? `${m[1]}:${m[2]}`.toLowerCase() : '';
+}
 const str = (v) => (v == null ? '' : String(v)).trim();
 function num(v) {
   if (v == null || v === '') return null;
@@ -321,15 +338,15 @@ function parseHardware(ps, node = {}, disp = {}) {
 
   // Grafikkarten + echter Grafikspeicher aus der Registrierung
   const vramRows = asArray(ps.vram).map((v) => ({
-    name: str(v?.Name).toLowerCase(), id: str(v?.MatchingDeviceId).toLowerCase(), bytes: num(v?.Bytes),
+    name: str(v?.Name).toLowerCase(), id: pciId(v?.PciId ?? v?.MatchingDeviceId), bytes: num(v?.Bytes),
   })).filter((v) => v.bytes > 0);
   const gpus = [];
   for (const g of asArray(ps.gpu)) {
     const name = str(g?.Name);
     if (!name || VIRTUAL_GPU.test(name)) continue;
-    const pnp = str(g.PNPDeviceID).toLowerCase();
+    const pci = pciId(g.PciId ?? g.PNPDeviceID);
     let reg = 0;
-    for (const v of vramRows) if (v.id && pnp && pnp.startsWith(v.id)) reg = Math.max(reg, v.bytes);
+    for (const v of vramRows) if (v.id && pci && v.id === pci) reg = Math.max(reg, v.bytes);
     if (!reg) for (const v of vramRows) if (v.name && v.name === name.toLowerCase()) reg = Math.max(reg, v.bytes);
     const adapterRam = num(g.AdapterRAM);
     const vramBytes = reg || (adapterRam > 0 ? adapterRam : null);
@@ -586,7 +603,7 @@ const LEVELS = {
 
 const PRESET_META = {
   leistung: { title: 'Leistung', desc: 'Meiste FPS und klare Sicht. Schlichte Grafik – ideal für Ranked und Turniere.', mode: 'Leistungsmodus' },
-  ausgewogen: { title: 'Ausgewogen', desc: 'Gutes Bild und trotzdem flüssig. DirectX 12 mit mittleren Details.', mode: 'DirectX 12' },
+  ausgewogen: { title: 'Ausgewogen', desc: 'Gutes Bild und trotzdem flüssig. DirectX 12 mit so viel Details, wie dein PC locker schafft.', mode: 'DirectX 12' },
   qualitaet: { title: 'Qualität', desc: 'Das schönste Bild für deinen PC: Licht, Schatten und Details. Dafür weniger FPS.', mode: 'DirectX 12' },
 };
 
@@ -814,10 +831,10 @@ function analyze(hw, { now = Date.now(), fpsOverride = {} } = {}) {
   for (const p of presets) p.recommended = p.id === recommended;
   const r = byId[recommended];
   const reason = recommended === 'leistung'
-    ? `Empfohlen, weil dein PC damit die meisten Bilder pro Sekunde schafft${hz >= 120 ? ` – wichtig für deinen ${hz}-Hz-Monitor` : ''}.`
+    ? `Damit schafft dein PC die meisten Bilder pro Sekunde${hz >= 120 ? ` – wichtig für deinen ${hz}-Hz-Monitor` : ''}.`
     : recommended === 'ausgewogen'
-      ? `Empfohlen: Dein PC schafft damit auch in Kämpfen grob ${r.est.low} FPS – genug für deinen ${hz}-Hz-Monitor – und das Bild sieht deutlich besser aus.`
-      : `Empfohlen: Dein PC ist stark genug für hohe Grafik und schafft trotzdem die ${hz} Hz deines Monitors.`;
+      ? `Dein PC schafft damit auch in Kämpfen grob ${r.est.low} FPS – genug für deinen ${hz}-Hz-Monitor – und das Bild sieht deutlich besser aus.`
+      : `Dein PC ist stark genug für hohe Grafik und schafft trotzdem die ${hz} Hz deines Monitors.`;
   const [clsLabel, clsText] = CLASS_TEXT[cls];
   return {
     ratings: { cpu: cpuR, gpu: gpuR, ram: ramR, display: dispR },
@@ -948,7 +965,7 @@ function summaryText(state) {
 
 module.exports = {
   FGUS, SG, RHI, PERF, PRESET_IDS, PRESET_META, FPS_STEPS,
-  asArray, num, int, sameValue, normalizeHz, fmtFloat, fmtBool,
+  asArray, pciId, num, int, sameValue, normalizeHz, fmtFloat, fmtBool,
   normGpuName, shortGpuName, shortCpuName, classifyGpu, gpuTier, classifyCpu, cpuTier, nvidiaDriverVersion,
   parseHardware, rateGpu, rateCpu, rateRam, rateDisplay, performanceClass,
   estimateFps, fpsCapFor, fpsOptions, validFpsCap, buildItems, analyze,

@@ -1,0 +1,37 @@
+/* Sicht-Presets – alle Regeln beginnen mit [data-tool="sicht"]. */
+
+[data-tool="sicht"] .sicht-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+
+[data-tool="sicht"] .sicht-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+[data-tool="sicht"] .sicht-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); }
+[data-tool="sicht"] .sicht-tile strong { font-family: var(--font-display); font-size: 18px; font-weight: 600; }
+[data-tool="sicht"] .sicht-tile-hint { font-size: 11.5px; color: var(--faint); }
+
+[data-tool="sicht"] .sicht-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+[data-tool="sicht"] .sicht-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 10px; background: var(--glass-2); border: 1px solid var(--line); transition: border-color var(--t), box-shadow var(--t); }
+[data-tool="sicht"] .sicht-card:hover { border-color: var(--line-2); }
+[data-tool="sicht"] .sicht-card.active { border-color: rgba(79, 216, 255, 0.5); box-shadow: 0 0 24px rgba(79, 216, 255, 0.1); }
+[data-tool="sicht"] .sicht-card-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+[data-tool="sicht"] .sicht-wofuer { color: var(--text); margin: 0; }
+[data-tool="sicht"] .sicht-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+[data-tool="sicht"] .sicht-chips li { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); color: var(--muted); }
+[data-tool="sicht"] .sicht-ingame-note { display: inline-flex; align-items: center; gap: 4px; }
+[data-tool="sicht"] .sicht-card-actions { margin-top: auto; padding-top: 8px; display: flex; gap: 8px; }
+
+[data-tool="sicht"] .sicht-slider { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; max-width: 520px; }
+[data-tool="sicht"] .sicht-slider-top { display: flex; align-items: baseline; justify-content: space-between; }
+[data-tool="sicht"] .sicht-slider-top label { font-weight: 500; }
+[data-tool="sicht"] .sicht-slider-value { font-family: var(--font-display); font-size: 18px; color: var(--accent-2); font-variant-numeric: tabular-nums; }
+[data-tool="sicht"] .sicht-range { width: 100%; }
+
+[data-tool="sicht"] .sicht-result:empty, [data-tool="sicht"] .sicht-status:empty { display: none; }
+
+/* Vorschau-Dialog: der Inhalt steckt in einem eigenen [data-tool="sicht"]-Rahmen. */
+[data-tool="sicht"] .sicht-diff tr.same td { color: var(--faint); }
+[data-tool="sicht"] .table-wrap { margin-bottom: 12px; }
+[data-tool="sicht"] .sicht-ingame { margin: 16px 0 12px; }
+[data-tool="sicht"] .sicht-ingame h4 { margin-top: 0; }
+[data-tool="sicht"] .sicht-steps { margin: 8px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+[data-tool="sicht"] .sicht-steps li { padding-left: 4px; }
+[data-tool="sicht"] .sicht-steps li > * { display: block; }
+[data-tool="sicht"] .sicht-steps li strong { margin-bottom: 2px; }
