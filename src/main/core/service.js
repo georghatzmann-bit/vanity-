@@ -14,6 +14,7 @@ const archive = require('./archive');
 const fortnite = require('./fortnite');
 const { summarizeGameUserSettings } = require('./summary');
 const { watchedValues, diffValues } = require('./drift');
+const { sanitizeIniText } = require('./sensitive');
 const {
   readJson, writeJson, sha256, safeJoin, normRel, exists, isReadOnly, setReadOnly, writeFileSafe, walk,
 } = require('./fsutil');
@@ -27,6 +28,15 @@ function cleanName(name) {
   if (!n) throw new HelixError('BAD_NAME', 'Bitte gib einen Namen ein.');
   if (n.length > NAME_MAX) throw new HelixError('BAD_NAME', `Der Name darf höchstens ${NAME_MAX} Zeichen haben.`);
   return n;
+}
+
+/** Fingerabdruck einer Abweichung: was sich geändert hat (nicht wann). */
+function driftSignature(changed) {
+  return changed.map((c) => {
+    if (c.missing) return `${c.rel}:fehlt`;
+    if (c.settings && c.settings.length) return `${c.rel}:${c.settings.map((x) => `${x.section}|${x.key}=${x.to}`).sort().join(',')}`;
+    return `${c.rel}:${c.sha256 || ''}`;
+  }).sort().join('|');
 }
 
 function publicProfile(meta, activeId) {
@@ -106,19 +116,35 @@ class CoreService {
     await this.backups.cleanup();
     await this.locate();
     await this.purgeTrash();
-    // Beim allerersten Start den Originalzustand sichern (bleibt immer erhalten)
-    const first = await this.readState('first-run', null);
-    if (!first && this.location?.found) {
-      try {
-        const b = await this.createBackup('original', 'Originalzustand beim ersten Start von HELIX', { pinned: true });
-        await this.writeState('first-run', { at: Date.now(), backupId: b.id });
-      } catch { /* nicht kritisch */ }
+  }
+
+  /**
+   * Sichert den Originalzustand eines Fortnite-Ordners, bevor HELIX dort zum ersten Mal etwas ändert
+   * (angeheftet, wird nie automatisch gelöscht). Merkt sich das pro Ordner.
+   */
+  async ensureOriginalBackup() {
+    if (!this.location?.found) return null;
+    const key = String(this.location.configDir).toLowerCase();
+    const state = await this.readState('first-run', {});
+    const done = state.folders || {};
+    if (state.backupId && !Object.keys(done).length && state.configDir === undefined) {
+      // älteres Format (ein Eintrag ohne Ordner): gilt für den damals gefundenen Ordner
+      done[key] = { at: state.at, backupId: state.backupId };
     }
+    if (done[key]) return done[key];
+    try {
+      const sc = await scan({ configDir: this.location.configDir, savedDir: this.location.savedDir });
+      const b = await this.backupFromScan(sc, 'original', 'Originalzustand vor der ersten Änderung durch HELIX', { pinned: true });
+      done[key] = { at: Date.now(), backupId: b.id };
+      await this.writeState('first-run', { folders: done });
+      return done[key];
+    } catch { return null; }
   }
 
   async locate() {
     const s = await this.settings();
     this.location = await locateFortnite({ env: this.env, override: s.fortniteOverride });
+    if (this.location.found) await this.ensureOriginalBackup();
     return this.location;
   }
 
@@ -268,67 +294,79 @@ class CoreService {
   }
 
   async renameProfile(id, name) {
-    const clean = cleanName(name);
-    await this.assertNameFree(clean, id);
-    const meta = await this.profiles.get(id);
-    meta.name = clean;
-    await this.profiles.saveMeta(meta);
-    const applied = await this.readState('applied', null);
-    if (applied?.profileId === id) await this.writeState('applied', { ...applied, profileName: clean });
-    return publicProfile(meta, await this.activeProfileId());
+    return this.withLock(async () => {
+      const clean = cleanName(name);
+      await this.assertNameFree(clean, id);
+      const meta = await this.profiles.get(id);
+      meta.name = clean;
+      await this.profiles.saveMeta(meta);
+      const applied = await this.readState('applied', null);
+      if (applied?.profileId === id) await this.writeState('applied', { ...applied, profileName: clean });
+      return publicProfile(meta, await this.activeProfileId());
+    });
   }
 
   async setProfileNotes(id, notes) {
-    const meta = await this.profiles.get(id);
-    meta.notes = String(notes ?? '').slice(0, 500);
-    await this.profiles.saveMeta(meta);
-    return publicProfile(meta, await this.activeProfileId());
+    return this.withLock(async () => {
+      const meta = await this.profiles.get(id);
+      meta.notes = String(notes ?? '').slice(0, 500);
+      await this.profiles.saveMeta(meta);
+      return publicProfile(meta, await this.activeProfileId());
+    });
   }
 
   async duplicateProfile(id, name) {
-    const src = await this.profiles.get(id);
-    const clean = name ? cleanName(name) : await this.uniqueName(`${src.name} Kopie`.slice(0, NAME_MAX));
-    await this.assertNameFree(clean);
-    const copy = await this.profiles.duplicate(id, {
-      name: clean, order: Date.now(), stats: { appliedCount: 0, lastAppliedAt: null }, color: ((src.color ?? 200) + 40) % 360,
+    return this.withLock(async () => {
+      const src = await this.profiles.get(id);
+      const clean = name ? cleanName(name) : await this.uniqueName(`${src.name} Kopie`.slice(0, NAME_MAX));
+      await this.assertNameFree(clean);
+      const copy = await this.profiles.duplicate(id, {
+        name: clean, order: Date.now(), stats: { appliedCount: 0, lastAppliedAt: null }, color: ((src.color ?? 200) + 40) % 360,
+      });
+      return publicProfile(copy, await this.activeProfileId());
     });
-    return publicProfile(copy, await this.activeProfileId());
   }
 
   async removeProfile(id) {
-    await this.profiles.get(id); // existiert?
-    await this.profiles.remove(id, this.trashDir);
-    const applied = await this.readState('applied', null);
-    if (applied?.profileId === id) await this.writeState('applied', { ...applied, profileId: null, removed: true });
-    return { removed: true };
+    return this.withLock(async () => {
+      await this.profiles.get(id); // existiert?
+      await this.profiles.remove(id, this.trashDir);
+      const applied = await this.readState('applied', null);
+      if (applied?.profileId === id) await this.writeState('applied', { ...applied, profileId: null, removed: true });
+      return { removed: true };
+    });
   }
 
   async setProfileOptions(id, options = {}) {
-    const meta = await this.profiles.get(id);
-    const cur = meta.options || { readOnly: 'none', removeExtra: true };
-    const next = { ...cur };
-    if ('readOnly' in options) {
-      const ro = options.readOnly;
-      if (ro === 'none' || ro === 'all') next.readOnly = ro;
-      else if (Array.isArray(ro)) next.readOnly = ro.filter((k) => typeof k === 'string').slice(0, 20);
-      else throw new HelixError('BAD_OPTION', 'Ungültige Schreibschutz-Einstellung.');
-    }
-    if ('removeExtra' in options) next.removeExtra = !!options.removeExtra;
-    meta.options = next;
-    await this.profiles.saveMeta(meta);
-    return publicProfile(meta, await this.activeProfileId());
+    return this.withLock(async () => {
+      const meta = await this.profiles.get(id);
+      const cur = meta.options || { readOnly: 'none', removeExtra: true };
+      const next = { ...cur };
+      if ('readOnly' in options) {
+        const ro = options.readOnly;
+        if (ro === 'none' || ro === 'all') next.readOnly = ro;
+        else if (Array.isArray(ro)) next.readOnly = ro.filter((k) => typeof k === 'string').slice(0, 20);
+        else throw new HelixError('BAD_OPTION', 'Ungültige Schreibschutz-Einstellung.');
+      }
+      if ('removeExtra' in options) next.removeExtra = !!options.removeExtra;
+      meta.options = next;
+      await this.profiles.saveMeta(meta);
+      return publicProfile(meta, await this.activeProfileId());
+    });
   }
 
   async reorderProfiles(ids) {
-    const list = await this.profiles.list();
-    let i = 0;
-    for (const id of ids) {
-      const meta = list.find((m) => m.id === id);
-      if (!meta) continue;
-      meta.order = ++i;
-      await this.profiles.saveMeta(meta);
-    }
-    return this.listProfiles();
+    return this.withLock(async () => {
+      const list = await this.profiles.list();
+      let i = 0;
+      for (const id of ids) {
+        const meta = list.find((m) => m.id === id);
+        if (!meta) continue;
+        meta.order = ++i;
+        await this.profiles.saveMeta(meta);
+      }
+      return this.listProfiles();
+    });
   }
 
   // ---------- Vorschau & Anwenden ----------
@@ -361,6 +399,7 @@ class CoreService {
       const ro = readOnly ?? opts.readOnly ?? 'none';
       const rm = removeExtra ?? opts.removeExtra ?? true;
       const sc = await this.scanNow();
+      await this.ensureOriginalBackup();
       const backup = await this.backupFromScan(sc, 'vor-anwenden', `Vor dem Anwenden von „${meta.name}“`, { profileId: id });
       this.ownWriteUntil = Date.now() + 4000;
       const res = await engine.apply(this.profiles.dir(id), meta, this.roots(), sc, { removeExtra: rm, readOnly: ro });
@@ -400,7 +439,9 @@ class CoreService {
   /** Merkt sich, welcher Stand nach dem Anwenden erwartet wird (für den Cloud-Wächter). */
   async recordApplied(meta, sc) {
     const files = [];
-    for (const f of meta.files) {
+    for (const original of meta.files) {
+      const rel = original.root === 'saved' ? (engine.resolveAccount(original.rel, sc) || original.rel) : original.rel;
+      const f = { ...original, rel };
       const cur = sc.files.find((x) => engine.keyOf(x.root, x.rel) === engine.keyOf(f.root, f.rel));
       let values = null;
       if (cur?.abs) {
@@ -442,7 +483,7 @@ class CoreService {
         try { settings = diffValues(f.values, watchedValues(f.rel, buf)); } catch { settings = []; }
         if (settings.length) changed.push({ rel: f.rel, label: f.label, kind: f.kind, missing: false, mtimeMs, settings: settings.slice(0, 20) });
       } else if (sha256(buf) !== f.sha256) {
-        changed.push({ rel: f.rel, label: f.label, kind: f.kind, missing: false, mtimeMs, settings: [] });
+        changed.push({ rel: f.rel, label: f.label, kind: f.kind, missing: false, mtimeMs, settings: [], sha256: sha256(buf) });
       }
     }
     const sessions = await this.readState('sessions', { list: [] });
@@ -455,7 +496,7 @@ class CoreService {
       likelyCloud = changed.some((c) => c.mtimeMs && starts.some((s) => c.mtimeMs >= s && c.mtimeMs - s < 5 * 60 * 1000));
     }
     const ack = applied.acknowledged;
-    const sig = changed.map((c) => `${c.rel}:${c.mtimeMs}`).join('|');
+    const sig = driftSignature(changed);
     const result = {
       status: changed.length ? 'drift' : 'ok',
       profileId: applied.profileId,
@@ -480,7 +521,7 @@ class CoreService {
     const applied = await this.readState('applied', null);
     if (!applied) return { ok: true };
     const d = await this.checkDrift(false);
-    applied.acknowledged = d.changed.map((c) => `${c.rel}:${c.mtimeMs}`).join('|');
+    applied.acknowledged = driftSignature(d.changed || []);
     await this.writeState('applied', applied);
     return { ok: true };
   }
@@ -512,7 +553,7 @@ class CoreService {
   // ---------- Backups ----------
 
   async backupFromScan(sc, reason, label, extra = {}) {
-    const meta = await this.backups.createFromScan(sc, { reason, label, pinned: false, ...extra });
+    const meta = await this.backups.createFromScan(sc, { reason, label, pinned: false, ...extra }, { allAccounts: true });
     return publicBackup(meta);
   }
 
@@ -525,7 +566,8 @@ class CoreService {
 
   async listBackups() {
     const list = await this.backups.list();
-    list.sort((a, b) => b.createdAt - a.createdAt);
+    // neueste zuerst; bei gleicher Zeit steht der Originalzustand hinten (er ist immer der älteste Stand)
+    list.sort((a, b) => (b.createdAt - a.createdAt) || ((a.reason === 'original') - (b.reason === 'original')));
     return list.map(publicBackup);
   }
 
@@ -535,6 +577,7 @@ class CoreService {
       await this.requireLocation();
       await this.ensureFortniteClosed();
       const sc = await this.scanNow();
+      await this.ensureOriginalBackup();
       const before = await this.backupFromScan(sc, 'vor-wiederherstellen', `Vor dem Wiederherstellen von „${meta.label}“`);
       this.ownWriteUntil = Date.now() + 4000;
       const res = await engine.apply(this.backups.dir(id), meta, this.roots(), sc, { removeExtra: true, restoreReadOnly: true });
@@ -577,8 +620,10 @@ class CoreService {
     for (const ent of entries) {
       const p = path.join(this.trashDir, ent.name);
       try {
-        const st = await fsp.stat(p);
-        if (st.mtimeMs < limit) await fsp.rm(p, { recursive: true, force: true });
+        // Löschdatum steht im Namen: <id>-JJJJMMTT-hhmmss
+        const m = /-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(ent.name);
+        const deletedAt = m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() : (await fsp.stat(p)).mtimeMs;
+        if (deletedAt < limit) await fsp.rm(p, { recursive: true, force: true });
       } catch { /* egal */ }
     }
   }
@@ -590,19 +635,26 @@ class CoreService {
     const store = kind === 'backup' ? this.backups : this.profiles;
     const meta = await store.get(id);
     const loc = await this.requireLocation();
+    const sc = await this.scanNow().catch(() => ({ files: [] }));
     const out = [];
     for (const f of meta.files) {
       let target;
-      try { target = safeJoin(f.root === 'saved' ? loc.savedDir : loc.configDir, f.rel); } catch { continue; }
+      const rel = f.root === 'saved' ? engine.resolveAccount(f.rel, sc) : f.rel;
+      if (!rel) continue;
+      try { target = safeJoin(f.root === 'saved' ? loc.savedDir : loc.configDir, rel); } catch { continue; }
       const stored = await engine.readStored(store.dir(id), f);
       let current = null;
       try { current = await fsp.readFile(target); } catch { /* fehlt */ }
       const entry = { root: f.root, rel: f.rel, label: f.label, kind: f.kind, status: 'same', changes: [] };
+      const isIniFile = /\.ini$/i.test(f.rel);
+      // INI: Login- und Konto-Daten auf beiden Seiten entfernen, bevor verglichen wird
+      const curText = current && isIniFile ? sanitizeIniText(ini.decode(current).text).text : null;
+      const savText = isIniFile ? sanitizeIniText(ini.decode(stored).text).text : null;
       if (!current) entry.status = 'missing';
-      else if (sha256(current) !== sha256(stored)) entry.status = 'different';
-      if (entry.status === 'different' && /\.ini$/i.test(f.rel)) {
-        const a = ini.toObject(ini.parse(ini.decode(current).text));
-        const b = ini.toObject(ini.parse(ini.decode(stored).text));
+      else if (isIniFile ? curText !== savText : sha256(current) !== sha256(stored)) entry.status = 'different';
+      if (entry.status === 'different' && isIniFile) {
+        const a = ini.toObject(ini.parse(curText));
+        const b = ini.toObject(ini.parse(savText));
         for (const sec of new Set([...Object.keys(a), ...Object.keys(b)])) {
           for (const k of new Set([...Object.keys(a[sec] || {}), ...Object.keys(b[sec] || {})])) {
             const now = a[sec]?.[k];
@@ -638,8 +690,10 @@ class CoreService {
   async clearAllReadOnly() {
     const loc = await this.requireLocation();
     const { files } = await walk(loc.configDir, { maxDepth: 10, maxFiles: 5000 });
+    const sc = await this.scanNow().catch(() => ({ files: [] }));
+    const all = [...files, ...sc.files.filter((f) => f.root === 'saved')];
     const cleared = [];
-    for (const f of files) {
+    for (const f of all) {
       if (f.readOnly) {
         try { await setReadOnly(f.abs, false); cleared.push(f.rel); } catch { /* weiter */ }
       }
@@ -648,6 +702,9 @@ class CoreService {
   }
 
   async setFileReadOnly(root, rel, on) {
+    if (root === 'saved' && on) {
+      throw new HelixError('NOT_ALLOWED', 'Die Tasten-/Sensi-Datei ist eine Kopie aus der Epic-Cloud. Ein Schreibschutz würde Fortnite nur beim Aktualisieren stören.');
+    }
     const loc = await this.requireLocation();
     const p = safeJoin(root === 'saved' ? loc.savedDir : loc.configDir, rel);
     if (!(await exists(p))) throw new HelixError('NOT_FOUND', 'Datei nicht gefunden.');
@@ -707,6 +764,7 @@ class CoreService {
         }
       }
       const sc = await this.scanNow();
+      await this.ensureOriginalBackup();
       const backup = await this.backupFromScan(sc, reason, label);
       const buf = await fsp.readFile(f.abs);
       const dec = ini.decode(buf);

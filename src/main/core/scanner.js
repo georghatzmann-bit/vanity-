@@ -5,7 +5,8 @@
 const path = require('node:path');
 const fsp = require('node:fs/promises');
 const { walk, sha256 } = require('./fsutil');
-const { isBlockedPath, findSensitive } = require('./sensitive');
+const { isBlockedPath, isBlockedRoot, findSensitive } = require('./sensitive');
+const { HelixError } = require('../sys/exec');
 const ini = require('./ini');
 
 const MAX_FILE = 25 * 1024 * 1024;
@@ -86,6 +87,10 @@ async function describe(root, f) {
  * Rückgabe: { configDir, savedDir, files: [...], errors: [...], totals }
  */
 async function scan({ configDir, savedDir }) {
+  // Nie im Ordner des Epic Games Launchers o. Ä. arbeiten
+  if (isBlockedRoot(configDir) || (savedDir && isBlockedRoot(savedDir))) {
+    throw new HelixError('BAD_FOLDER', 'Dieser Ordner gehört nicht zu Fortnite (z. B. Epic Games Launcher) und wird nicht angefasst.');
+  }
   const files = [];
   const errors = [];
 
@@ -105,6 +110,7 @@ async function scan({ configDir, savedDir }) {
       entry.account = accountFolder(f.rel);
       if (i > 0 && entry.included) {
         entry.included = false;
+        entry.otherAccount = true; // kommt nicht ins Profil, aber in jede Sicherung
         entry.reason = 'Gehört zu einem anderen, früher benutzten Konto';
       }
       files.push(entry);
@@ -129,4 +135,7 @@ async function scan({ configDir, savedDir }) {
   };
 }
 
-module.exports = { scan, classify };
+/** Darf eine Datei aus dem Saved-Ordner (außerhalb von Config) überhaupt in ein Profil? */
+const SAVED_ALLOWED = /^Cloud\/[^/]+\/ClientSettings[^/]*\.sav$/i;
+
+module.exports = { scan, classify, SAVED_ALLOWED };

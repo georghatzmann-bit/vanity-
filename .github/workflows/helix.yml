@@ -180,6 +180,7 @@ jobs:
           path: shots
       - name: Bilder ausgeben
         run: |
+          command -v convert >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends imagemagick >/dev/null; }
           shopt -s nullglob globstar
           for f in shots/**/*.png; do
             n=$(basename "$f" .png)

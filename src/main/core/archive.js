@@ -9,20 +9,26 @@ const ini = require('./ini');
 const { sanitizeIniText, isBlockedPath } = require('./sensitive');
 const { safeJoin, normRel, sha256, writeJson, retry } = require('./fsutil');
 const { readStored, ROOTS } = require('./engine');
-const { classify } = require('./scanner');
+const { classify, SAVED_ALLOWED } = require('./scanner');
 const { HelixError } = require('../sys/exec');
 
 const MANIFEST = 'helix-profil.json';
-const MAX_ARCHIVE = 60 * 1024 * 1024;
-const MAX_ENTRY = 25 * 1024 * 1024;
-const MAX_FILES = 2000;
+// Echte Einstellungsdateien sind klein (GameUserSettings.ini wenige KB, ClientSettings.Sav < 1 MB).
+const MAX_ARCHIVE = 20 * 1024 * 1024;
+const MAX_ENTRY = 8 * 1024 * 1024;
+const MAX_TOTAL = 64 * 1024 * 1024; // Summe entpackt – schützt vor "ZIP-Bomben"
+const MAX_FILES = 300;
+const ACCOUNT_RE = /^Cloud\/[0-9a-f]{16,64}\//i;
+const PLACEHOLDER = 'Cloud/_konto_/';
 
 async function exportProfile(store, id, outFile) {
   const meta = await store.get(id);
   const dir = store.dir(id);
   const entries = {};
+  // Die Konto-ID steckt im Ordnernamen der Cloud-Kopie – im Export wird sie durch einen Platzhalter ersetzt
+  const exportRel = (f) => (f.root === 'saved' ? normRel(f.rel).replace(ACCOUNT_RE, PLACEHOLDER) : normRel(f.rel));
   for (const f of meta.files) {
-    entries[`files/${f.root}/${normRel(f.rel)}`] = new Uint8Array(await readStored(dir, f));
+    entries[`files/${f.root}/${exportRel(f)}`] = new Uint8Array(await readStored(dir, f));
   }
   const manifest = {
     format: 'helix-profil',
@@ -30,7 +36,7 @@ async function exportProfile(store, id, outFile) {
     exportedAt: Date.now(),
     profile: {
       name: meta.name, notes: meta.notes || '', color: meta.color, options: meta.options, summary: meta.summary,
-      files: meta.files.map(({ root, rel, size, sha256: h, kind, label, sanitized }) => ({ root, rel, size, sha256: h, kind, label, sanitized })),
+      files: meta.files.map(({ root, rel, size, sha256: h, kind, label, sanitized }) => ({ root, rel: exportRel({ root, rel }), size, sha256: h, kind, label, sanitized })),
     },
   };
   entries[MANIFEST] = strToU8(JSON.stringify(manifest, null, 2));
@@ -48,15 +54,21 @@ async function importProfile(store, inFile, uniqueName) {
   if (st.size > MAX_ARCHIVE) throw new HelixError('IMPORT_TOO_BIG', 'Die Datei ist zu groß für ein Einstellungsprofil.');
   const data = new Uint8Array(await fsp.readFile(inFile));
   let count = 0;
+  let total = 0;
   let entries;
   try {
     entries = unzipSync(data, {
       filter: (f) => {
         count++;
-        return count <= MAX_FILES + 1 && f.originalSize <= MAX_ENTRY;
+        total += Math.max(0, f.originalSize || 0);
+        if (count > MAX_FILES + 1 || total > MAX_TOTAL) {
+          throw new HelixError('IMPORT_TOO_BIG', 'Die Datei enthält viel zu viele oder zu große Daten für ein Einstellungsprofil.');
+        }
+        return f.originalSize <= MAX_ENTRY;
       },
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof HelixError) throw e;
     throw new HelixError('IMPORT_BROKEN', 'Die Datei ist beschädigt oder kein HELIX-Profil.');
   }
   if (!entries[MANIFEST]) throw new HelixError('IMPORT_BROKEN', 'Das ist kein HELIX-Profil (Inhaltsverzeichnis fehlt).');
@@ -69,8 +81,8 @@ async function importProfile(store, inFile, uniqueName) {
   }
 
   await fsp.mkdir(store.root, { recursive: true });
-  const name = await uniqueName(String(manifest.profile.name || 'Importiert').slice(0, 40).trim() || 'Importiert');
-  const id = store.newId(name);
+  const name = await uniqueName(String(manifest.profile.name || 'Importiert').replace(/[\u0000-\u001f<>:"/\\|?*]/g, '').slice(0, 40).trim() || 'Importiert');
+  const id = await store.freeId(name);
   const tmp = path.join(store.root, `.tmp-${id}`);
   await fsp.rm(tmp, { recursive: true, force: true });
   const files = [];
@@ -83,6 +95,8 @@ async function importProfile(store, inFile, uniqueName) {
       const root = m[1];
       const rel = normRel(m[2]);
       if (isBlockedPath(rel)) { rejected.push(rel); continue; }
+      // außerhalb von Config ist nur die Tasten-/Sensi-Datei (Cloud-Kopie) erlaubt
+      if (root === 'saved' && !SAVED_ALLOWED.test(rel)) { rejected.push(rel); continue; }
       let target;
       try { target = safeJoin(path.join(tmp, 'files', root), rel); } catch { rejected.push(rel); continue; }
       let buf = Buffer.from(content);

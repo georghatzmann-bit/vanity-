@@ -384,3 +384,143 @@ test('Sicherheit: safeJoin lässt keine Pfade aus dem Ordner heraus', () => {
   assert.throws(() => safeJoin(root, 'a/b:c'));
   assert.equal(safeJoin(root, 'a/b.ini'), path.join(root, 'a', 'b.ini'));
 });
+
+// ---------------------------------------------------------------- Regressionen aus der Prüfung
+test('Prüfung: unterbrochener Profil-Tausch wird beim nächsten Start zurückgeholt', async () => {
+  const fx = makeLocalAppData();
+  const c = core({ LOCALAPPDATA: fx.local });
+  await c.init();
+  const p = await c.createProfile({ name: 'Main' });
+  // Absturz zwischen den beiden Umbenennungen nachstellen
+  fs.renameSync(c.profiles.dir(p.id), path.join(c.profiles.root, `.old-${p.id}-abcd`));
+  await c.profiles.cleanup();
+  assert.deepEqual((await c.listProfiles()).map((x) => x.name), ['Main']);
+});
+
+test('Prüfung: Sicherung vor dem Anwenden enthält auch die Cloud-Kopie anderer Konten', async () => {
+  const fx = makeLocalAppData({ clientSettings: 'A-PROFIL' });
+  const c = core({ LOCALAPPDATA: fx.local });
+  await c.init();
+  const p = await c.createProfile({ name: 'Main' });
+  fs.writeFileSync(fx.cs, 'A-NEUER');
+  const old = new Date(Date.now() - 3600 * 1000);
+  fs.utimesSync(fx.cs, old, old);
+  const other = path.join(fx.cloudRoot, ACCOUNT_B);
+  fs.mkdirSync(other, { recursive: true });
+  fs.writeFileSync(path.join(other, 'ClientSettings.Sav'), 'B');
+  const r = await c.applyProfile(p.id);
+  assert.equal(r.ok, true);
+  const b = (await c.listBackups()).find((x) => x.id === r.backupId);
+  assert.ok(b.files.some((f) => f.rel.includes(ACCOUNT_B)), 'Konto B gesichert');
+  assert.ok(b.files.some((f) => f.rel.includes('0123456789abcdef')), 'Konto A (wird überschrieben) gesichert');
+  await c.restoreBackup(r.backupId);
+  assert.equal(fs.readFileSync(fx.cs, 'utf8'), 'A-NEUER');
+});
+
+test('Prüfung: Import nimmt außerhalb von Config nur die Cloud-Kopie und stoppt ZIP-Bomben', async () => {
+  const { zipSync, strToU8 } = require('fflate');
+  const fx = makeLocalAppData();
+  const c = core({ LOCALAPPDATA: fx.local });
+  await c.init();
+  const f = path.join(tmpDir(), 'x.helixprofil');
+  fs.writeFileSync(f, zipSync({
+    'helix-profil.json': strToU8(JSON.stringify({ format: 'helix-profil', version: 1, profile: { name: 'X' } })),
+    'files/saved/Config/WindowsClient/GameUserSettings.ini': strToU8('[A]\r\nx=1\r\n'),
+    'files/saved/Demos/a.replay': strToU8('x'),
+    'files/saved/Cloud/_konto_/ClientSettings.Sav': strToU8('CS'),
+    'files/config/WindowsClient/GameUserSettings.ini': strToU8('[/Script/FortniteGame.FortGameUserSettings]\r\nFrameRateLimit=60.000000\r\n'),
+  }));
+  const r = await c.importProfile(f);
+  assert.deepEqual(r.profile.files.map((x) => `${x.root}:${x.rel}`).sort(), ['config:WindowsClient/GameUserSettings.ini', 'saved:Cloud/_konto_/ClientSettings.Sav']);
+  // Platzhalter wird beim Anwenden auf das Konto auf diesem PC abgebildet
+  const ap = await c.applyProfile(r.profile.id);
+  assert.equal(ap.ok, true, JSON.stringify(ap.failed));
+  assert.equal(fs.readFileSync(fx.cs, 'utf8'), 'CS');
+  assert.ok(fs.existsSync(path.join(fx.wc, 'GameUserSettings.ini')));
+
+  const big = {};
+  big['helix-profil.json'] = strToU8(JSON.stringify({ format: 'helix-profil', version: 1, profile: { name: 'B' } }));
+  for (let i = 0; i < 12; i++) big[`files/config/f${i}.ini`] = new Uint8Array(7 * 1024 * 1024);
+  fs.writeFileSync(f, zipSync(big, { level: 9 }));
+  await assert.rejects(() => c.importProfile(f), (e) => e.code === 'IMPORT_TOO_BIG');
+});
+
+test('Prüfung: Export enthält keine Konto-ID', async () => {
+  const { unzipSync, strFromU8 } = require('fflate');
+  const fx = makeLocalAppData();
+  const c = core({ LOCALAPPDATA: fx.local });
+  await c.init();
+  const p = await c.createProfile({ name: 'Main' });
+  const f = path.join(tmpDir(), 'm.helixprofil');
+  await c.exportProfile(p.id, f);
+  const z = unzipSync(new Uint8Array(fs.readFileSync(f)));
+  assert.ok(!Object.keys(z).some((k) => k.includes('0123456789abcdef')));
+  assert.doesNotMatch(strFromU8(z['helix-profil.json']), /0123456789abcdef/);
+});
+
+test('Prüfung: Papierkorb hält 30 Tage ab dem Löschen, nicht ab der letzten Änderung', async () => {
+  const fx = makeLocalAppData();
+  const c = core({ LOCALAPPDATA: fx.local });
+  await c.init();
+  const p = await c.createProfile({ name: 'Alt' });
+  const old = new Date(Date.now() - 40 * 24 * 3600 * 1000);
+  fs.utimesSync(c.profiles.dir(p.id), old, old);
+  await c.removeProfile(p.id);
+  await c.purgeTrash();
+  assert.equal(fs.readdirSync(c.trashDir).length, 1);
+});
+
+test('Prüfung: Standardordner hat Vorrang vor einer Kopie, Epic Launcher wird abgelehnt', async () => {
+  const fx = makeLocalAppData();
+  fs.cpSync(path.join(fx.local, 'FortniteGame'), path.join(fx.local, 'FortniteGame - Kopie'), { recursive: true });
+  fs.writeFileSync(path.join(fx.local, 'FortniteGame - Kopie', 'Saved', 'Config', 'WindowsClient', 'Extra.ini'), '[A]\r\nx=1\r\n');
+  fs.rmSync(path.join(fx.wc, 'Engine.ini'));
+  const loc = await locateFortnite({ env: { LOCALAPPDATA: fx.local } });
+  assert.equal(loc.configDir, fx.config);
+  const egl = path.join(fx.local, 'EpicGamesLauncher', 'Saved');
+  fs.mkdirSync(path.join(egl, 'Config', 'Windows'), { recursive: true });
+  fs.writeFileSync(path.join(egl, 'Config', 'Windows', 'GameUserSettings.ini'), '[RememberMe]\r\nData=x\r\n');
+  const manual = await locateFortnite({ env: {}, override: egl });
+  assert.equal(manual.found, false);
+});
+
+test('Prüfung: Originalzustand wird auch gesichert, wenn der Ordner erst später gewählt wird', async () => {
+  const fx = makeLocalAppData();
+  const c = core({ LOCALAPPDATA: tmpDir() });
+  await c.init();
+  assert.equal(c.location.found, false);
+  await c.setOverride(fx.saved);
+  const backups = await c.listBackups();
+  assert.ok(backups.some((b) => b.reason === 'original' && b.pinned));
+});
+
+test('Prüfung: Vergleich zeigt nie Login- oder Konto-Daten', async () => {
+  const fx = makeLocalAppData({ withRememberMe: true });
+  fs.appendFileSync(path.join(fx.wc, 'GameUserSettings.ini'), '');
+  const gus = path.join(fx.wc, 'GameUserSettings.ini');
+  fs.writeFileSync(gus, fs.readFileSync(gus, 'utf8').replace('bShowGrass=False', 'bShowGrass=False\r\nEulaAcceptedUserId=0123456789abcdef0123456789abcdef'));
+  const c = core({ LOCALAPPDATA: fx.local });
+  await c.init();
+  const p = await c.createProfile({ name: 'Main' });
+  const d = await c.diff('profile', p.id);
+  const g = d.files.find((f) => f.kind === 'video');
+  assert.notEqual(g.status, 'different', 'direkt nach dem Speichern ist nichts anders');
+  // (der Ordnername der Cloud-Kopie wird in der Oberfläche gekürzt angezeigt)
+  assert.doesNotMatch(JSON.stringify(d.files.map((f) => f.changes)), /RememberMe|AAAAAAAAAA|0123456789abcdef0123/);
+});
+
+test('Prüfung: „Ignorieren“ bleibt, auch wenn Fortnite die Datei mit gleichen Werten neu schreibt', async () => {
+  const fx = makeLocalAppData();
+  const c = core({ LOCALAPPDATA: fx.local });
+  await c.init();
+  const p = await c.createProfile({ name: 'Main' });
+  await c.applyProfile(p.id);
+  const gus = path.join(fx.wc, 'GameUserSettings.ini');
+  fs.writeFileSync(gus, fs.readFileSync(gus, 'utf8').replace('FrameRateLimit=240.000000', 'FrameRateLimit=144.000000'));
+  assert.equal((await c.checkDrift()).status, 'drift');
+  await c.acknowledgeDrift();
+  const later = new Date(Date.now() + 60000);
+  fs.utimesSync(gus, later, later);
+  const d = await c.checkDrift();
+  assert.equal(d.acknowledged, true);
+});

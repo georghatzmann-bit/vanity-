@@ -12,6 +12,11 @@ const ini = require('./ini');
 const BLOCKED_SEGMENT = /^(webcache.*|cef.*|epicgameslauncher|epiconlineservices.*|eos.*cache.*|cookies?|local storage|session storage|indexeddb|network|gpucache|code cache|service worker|blob_storage|login data.*|web data.*|logs?|crashes|demos|persistentdownloaddir|cloudstorage)$/i;
 const BLOCKED_FILE = /(token|credential|cookie|password|passwd|oauth|secret|login\s*data|\.ldb$|\.log$|\.dmp$|\.tmp$|\.helix-tmp$|^lock$|^lockfile$)/i;
 
+/** true, wenn ein absoluter Ordner zum Epic Games Launcher o. Ä. gehört (nie Fortnite-Einstellungen). */
+function isBlockedRoot(abs) {
+  return String(abs || '').split(/[\\/]+/).some((seg) => /^(epicgameslauncher|epic games|epic online services|eosoverlay|unrealenginelauncher)$/i.test(seg));
+}
+
 /** true, wenn ein relativer Pfad (Ordner/Datei) nie gesichert werden darf. */
 function isBlockedPath(rel) {
   const parts = String(rel).split(/[\\/]+/).filter(Boolean);
@@ -146,5 +151,6 @@ function mergeKeepTargetSensitive(profileText, currentText) {
 }
 
 module.exports = {
+  isBlockedRoot,
   isBlockedPath, isSensitiveSection, isSensitiveKey, findSensitive, sanitizeIniText, mergeKeepTargetSensitive,
 };

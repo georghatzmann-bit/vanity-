@@ -28,6 +28,37 @@ export function roValue(key) {
   return 'none';
 }
 
+/**
+ * Führt eine Aktion aus, die Fortnite geschlossen braucht (Wiederherstellen, Rückgängig).
+ * Läuft Fortnite, wird angeboten, es zu schließen, und die Aktion danach wiederholt.
+ */
+export async function withFortniteClosed(env, fn) {
+  const ui = env.ui;
+  try {
+    return await fn();
+  } catch (e) {
+    if (e.code !== 'FORTNITE_RUNNING') throw e;
+    const ok = await ui.confirmDialog({
+      title: 'Fortnite läuft noch',
+      text: 'Fortnite muss geschlossen sein, sonst überschreibt es die Dateien gleich wieder. Soll HELIX Fortnite jetzt schließen?',
+      confirmLabel: 'Fortnite schließen',
+    });
+    if (!ok) return null;
+    let r = await env.call('core.fortniteClose', { force: false });
+    if (!r.closed) {
+      const force = await ui.confirmDialog({
+        title: 'Fortnite reagiert nicht',
+        text: 'Fortnite hat sich nicht normal beendet. Sofort beenden? Nicht gespeicherte Dinge im Spiel gehen dabei verloren.',
+        confirmLabel: 'Sofort beenden', danger: true,
+      });
+      if (!force) return null;
+      r = await env.call('core.fortniteClose', { force: true });
+      if (!r.closed) throw new Error('Fortnite konnte nicht geschlossen werden.');
+    }
+    return fn();
+  }
+}
+
 export async function applyFlow(env, profileId, { onDone } = {}) {
   const ui = env.ui;
   const { h, icon } = ui;
@@ -81,15 +112,19 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
     if (applyBtnHolder.el) applyBtnHolder.el.disabled = !!fortnite.running;
   }
 
-  const counts = preview.counts;
-  const listItems = preview.items.filter((i) => i.action !== 'same' || preview.items.length < 12);
-  const fileList = h('ul.list.files', listItems.map((i) => {
-    const [txt, cls] = ACTION_TEXT[i.action] || [i.action, ''];
-    return h('li', icon(i.action === 'remove' ? 'trash' : 'file', 16), h('div.grow', h('span', i.label || i.rel), h('span.hint.mono', ui.displayPath(i.rel))), ui.badge(txt, cls));
-  }));
-  const summary = h('div.stat-row',
-    stat(counts.change, 'werden ersetzt'), stat(counts.new, 'kommen neu'), stat(counts.remove, 'werden entfernt'), stat(counts.same, 'schon gleich'));
+  const previewBox = h('div.preview-box');
   function stat(n, label) { return h('div.stat', h('strong', String(n)), h('span.hint', label)); }
+  function renderPreview(pv) {
+    const counts = pv.counts;
+    const listItems = pv.items.filter((i) => i.action !== 'same' || pv.items.length < 12);
+    ui.mount(previewBox,
+      h('div.stat-row', stat(counts.change, 'werden ersetzt'), stat(counts.new, 'kommen neu'), stat(counts.remove, 'werden entfernt'), stat(counts.same, 'schon gleich')),
+      h('ul.list.files', listItems.map((i) => {
+        const [txt, cls] = ACTION_TEXT[i.action] || [i.action, ''];
+        return h('li', icon(i.action === 'remove' ? 'trash' : 'file', 16), h('div.grow', h('span', i.label || i.rel), h('span.hint.mono', ui.displayPath(i.rel))), ui.badge(txt, cls));
+      })));
+  }
+  renderPreview(preview);
 
   const roGroup = h('div.segmented', { role: 'radiogroup', 'aria-label': 'Schreibschutz' }, RO_OPTIONS.map(([key, label, hint]) => {
     const b = h(`button.seg${roSel === key ? '.active' : ''}`, { type: 'button', role: 'radio', 'aria-checked': String(roSel === key), title: hint }, label);
@@ -109,8 +144,7 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
       : null,
     fnBox,
     h('h4', 'Was passiert'),
-    summary,
-    fileList,
+    previewBox,
     h('h4', 'Schreibschutz nach dem Anwenden'),
     roGroup,
     roHint,
@@ -118,7 +152,10 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
       label: 'Dateien entfernen, die nicht im Profil sind',
       hint: 'Empfohlen: So entspricht der Ordner genau dem Profil. Entfernte Dateien liegen in der Sicherung.',
       checked: removeExtra,
-      onChange: (v) => { removeExtra = v; },
+      onChange: async (v) => {
+        removeExtra = v;
+        try { renderPreview(await env.call('profiles.preview', { id: profileId, removeExtra: v })); } catch (e) { ui.showError(e); }
+      },
     }),
     h('p.hint', 'Vorher wird automatisch eine Sicherung des jetzigen Zustands angelegt.'),
   ];
@@ -178,7 +215,7 @@ export async function showResult(env, p, result) {
     await ui.modal({
       title: 'Das Anwenden hat nicht geklappt',
       content: [
-        h('p', 'Einige Dateien konnten nicht geschrieben werden. HELIX hat den vorherigen Zustand automatisch wiederhergestellt.'),
+        h('p', 'Einige Dateien konnten nicht geschrieben werden. HELIX hat den vorherigen Zustand automatisch wiederhergestellt. Schließe Programme, die Fortnite-Dateien geöffnet haben könnten, und versuche es noch einmal.'),
         h('ul.list.compact', result.failed.map((f) => h('li', icon('x', 16), h('span', ui.displayPath(f.rel)), h('span.hint', f.message)))),
         h('p.hint', result.rollback?.ok ? 'Wiederherstellung: erfolgreich.' : 'Wiederherstellung: bitte in den Sicherungen prüfen.'),
       ],
@@ -212,9 +249,9 @@ export async function showResult(env, p, result) {
   });
   if (r === 'undo') {
     try {
-      const u = await env.call('backups.restore', { id: result.backupId });
-      if (u.ok) ui.toast('Vorheriger Zustand wiederhergestellt.');
-      else ui.toast('Wiederherstellen nicht vollständig – bitte Zeitmaschine prüfen.', 'warn');
+      const u = await withFortniteClosed(env, () => env.call('backups.restore', { id: result.backupId }));
+      if (u?.ok) ui.toast('Vorheriger Zustand wiederhergestellt.');
+      else if (u) ui.toast('Wiederherstellen nicht vollständig – bitte Zeitmaschine prüfen.', 'warn');
     } catch (e) { ui.showError(e); }
     env.refreshStatus?.();
   }

@@ -6,6 +6,7 @@
 const path = require('node:path');
 const fsp = require('node:fs/promises');
 const { isDir, walk } = require('./fsutil');
+const { isBlockedRoot } = require('./sensitive');
 
 function baseDirs(env) {
   const bases = [];
@@ -39,6 +40,19 @@ async function rateSavedDir(savedDir) {
   };
 }
 
+/** Prüft, ob die GameUserSettings.ini wirklich von Fortnite stammt. */
+async function looksLikeFortnite(configDir) {
+  const { files } = await walk(configDir, { maxDepth: 4, maxFiles: 400 });
+  for (const f of files) {
+    if (!/(^|\/)GameUserSettings\.ini$/i.test(f.rel)) continue;
+    try {
+      const text = await fsp.readFile(f.abs, 'utf8');
+      if (/\[\/Script\/FortniteGame\./i.test(text) || /\0\[\0\/\0S\0c\0r\0i\0p\0t\0\/\0F\0o\0r\0t\0n\0i\0t\0e/i.test(text)) return true;
+    } catch { /* weiter */ }
+  }
+  return false;
+}
+
 /**
  * Findet den Fortnite-"Saved"-Ordner.
  * Rückgabe: { found, savedDir, configDir, candidates, searched, source }
@@ -50,8 +64,13 @@ async function locateFortnite({ env = process.env, override = null } = {}) {
   if (override) {
     const dir = path.basename(override).toLowerCase() === 'config' ? path.dirname(override) : override;
     searched.push(dir);
-    const r = await rateSavedDir(dir);
-    if (r) return { found: true, ...r, candidates: [r], searched, source: 'manual' };
+    // Nur echte Fortnite-Ordner: nie den Epic Games Launcher o. Ä., und es muss Fortnite-Grafikeinstellungen geben
+    if (!isBlockedRoot(dir)) {
+      const r = await rateSavedDir(dir);
+      if (r && r.hasGameUserSettings && await looksLikeFortnite(r.configDir)) {
+        return { found: true, ...r, candidates: [r], searched, source: 'manual' };
+      }
+    }
   }
 
   for (const base of baseDirs(env)) {
@@ -64,7 +83,7 @@ async function locateFortnite({ env = process.env, override = null } = {}) {
     let entries = [];
     try { entries = await fsp.readdir(base, { withFileTypes: true }); } catch { /* fehlt */ }
     for (const ent of entries) {
-      if (!ent.isDirectory() || !/fortnite/i.test(ent.name) || ent.name === 'FortniteGame') continue;
+      if (!ent.isDirectory() || !/fortnite/i.test(ent.name) || ent.name === 'FortniteGame' || isBlockedRoot(ent.name)) continue;
       const saved = path.join(base, ent.name, 'Saved');
       searched.push(saved);
       const r2 = await rateSavedDir(saved);
@@ -72,7 +91,9 @@ async function locateFortnite({ env = process.env, override = null } = {}) {
     }
   }
 
-  candidates.sort((a, b) => b.score - a.score);
+  // Der Standardordner hat immer Vorrang – eine Kopie wie "FortniteGame - Kopie" wird nur genommen,
+  // wenn es den Standardordner nicht gibt.
+  candidates.sort((a, b) => ((b.source === 'standard') - (a.source === 'standard')) || (b.score - a.score));
   const best = candidates.find((c) => c.score > 0) || candidates[0];
   if (!best) return { found: false, candidates, searched, source: null };
   return { found: true, ...best, candidates, searched };

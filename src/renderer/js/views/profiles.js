@@ -1,6 +1,6 @@
 // Hauptfunktion: Settings-Profile verwalten, gefundene Dateien, Zeitmaschine (Backups).
 
-import { applyFlow, RO_OPTIONS, roKey, roValue } from './apply-flow.js';
+import { applyFlow, withFortniteClosed, RO_OPTIONS, roKey, roValue } from './apply-flow.js';
 
 let cleanup = [];
 
@@ -234,7 +234,7 @@ export default {
         h('td', ui.fmtDate(f.mtimeMs)),
         h('td', f.included ? ui.badge('wird gesichert', 'ok') : ui.badge(f.reason || 'ausgeschlossen', '')),
         h('td', f.protectedParts ? ui.badge(`${f.protectedParts} geschützte Einträge`, 'accent') : null),
-        h('td', h('button.lock-btn', {
+        h('td', f.root === 'saved' ? ui.badge('Cloud-Kopie', '') : h('button.lock-btn', {
           type: 'button',
           title: f.readOnly ? 'Schreibschutz aufheben' : 'Schreibschutz setzen',
           'aria-label': f.readOnly ? 'Schreibschutz aufheben' : 'Schreibschutz setzen',
@@ -275,7 +275,8 @@ export default {
             const ok = await ui.confirmDialog({ title: 'Sicherung wiederherstellen?', text: `Der Fortnite-Ordner wird auf den Stand „${b.label}“ vom ${ui.fmtDate(b.createdAt)} zurückgesetzt. Der jetzige Stand wird vorher gesichert.`, confirmLabel: 'Wiederherstellen' });
             if (!ok) return;
             try {
-              const r = await env.call('backups.restore', { id: b.id });
+              const r = await withFortniteClosed(env, () => env.call('backups.restore', { id: b.id }));
+              if (!r) return;
               if (r.ok) ui.toast(`Wiederhergestellt: ${r.written.length} Dateien zurückgeholt.`);
               else ui.toast('Wiederherstellen nicht vollständig.', 'warn');
               env.refreshStatus(); renderAll();

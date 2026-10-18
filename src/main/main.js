@@ -3,7 +3,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, ipcMain, dialog, shell, screen, session, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, screen, session, Tray, Menu, nativeImage, Notification } = require('electron');
 const { Router } = require('./router');
 const { CoreService } = require('./core/service');
 const { SessionTracker } = require('./core/sessions');
@@ -34,9 +34,28 @@ function start() {
   }
 
   let win = null;
+  let showWindowRef = () => {};
   const emit = (name, payload) => {
     if (win && !win.isDestroyed()) win.webContents.send('helix:event', name, payload);
+    // Cloud-Warnung auch dann zeigen, wenn HELIX im Hintergrund ist (Infobereich, minimiert, anderes Fenster vorn)
+    if (name === 'drift' && (!win || !win.isVisible() || win.isMinimized() || !win.isFocused())) notifyDrift(payload);
   };
+
+  function notifyDrift(d) {
+    try {
+      const files = (d?.changed || []).map((c) => c.label || c.rel).slice(0, 2).join(', ');
+      if (Notification.isSupported()) {
+        const n = new Notification({
+          title: 'HELIX: Einstellungen wurden verändert',
+          body: `Fortnite hat nach dem Anwenden von „${d?.profileName || 'Profil'}“ etwas geändert${files ? `: ${files}` : ''}. Klicke hier für Details.`,
+          icon: path.join(__dirname, '..', 'renderer', 'assets', 'img', 'icon.png'),
+        });
+        n.on('click', () => showWindowRef());
+        n.show();
+      }
+      if (win && !win.isDestroyed() && win.isVisible()) win.flashFrame(true);
+    } catch (e) { log('error', 'notify', e.message); }
+  }
 
   const core = new CoreService({ dataDir, env: process.env, emit });
   const sessions = new SessionTracker(core);
@@ -85,10 +104,13 @@ function start() {
 
   function showWindow() {
     if (!win) { createWindow(); return; }
+    win.flashFrame(false);
     if (win.isMinimized()) win.restore();
     win.show();
     win.focus();
   }
+
+  showWindowRef = () => showWindow();
 
   function ensureTray() {
     if (tray) return tray;
@@ -143,7 +165,13 @@ function start() {
       e.preventDefault();
       closeToTrayWanted().then(async (toTray) => {
         if (!win) return;
-        if (!toTray) { trayDecided = true; win.close(); return; }
+        if (!toTray) {
+          // Infobereich wurde ausgeschaltet: Symbol entfernen, damit HELIX wirklich beendet wird
+          if (tray) { tray.destroy(); tray = null; }
+          trayDecided = true;
+          win.close();
+          return;
+        }
         win.hide();
         ensureTray();
         const st = await core.readState('app', {}).catch(() => ({}));

@@ -10,6 +10,7 @@ const path = require('node:path');
 const fsp = require('node:fs/promises');
 const ini = require('./ini');
 const { sanitizeIniText, mergeKeepTargetSensitive, isBlockedPath } = require('./sensitive');
+const { SAVED_ALLOWED } = require('./scanner');
 const {
   sha256, safeJoin, normRel, exists, isReadOnly, setReadOnly, writeFileSafe, removeFileSafe,
 } = require('./fsutil');
@@ -30,10 +31,10 @@ function rootDir(roots, root) {
  * INI-Dateien werden dabei von Login-Daten befreit.
  * Rückgabe: Liste der gespeicherten Dateien für meta.json
  */
-async function capture(scanResult, destDir) {
+async function capture(scanResult, destDir, { allAccounts = false } = {}) {
   const out = [];
   for (const f of scanResult.files) {
-    if (!f.included) continue;
+    if (!f.included && !(allAccounts && f.otherAccount)) continue;
     if (!ROOTS.includes(f.root)) continue;
     let buf = await fsp.readFile(f.abs);
     let sanitized = null;
@@ -64,7 +65,7 @@ async function capture(scanResult, destDir) {
 
 /** Liest den Inhalt einer gespeicherten Datei aus einem Profil/Backup. */
 async function readStored(snapDir, file) {
-  const p = safeJoin(path.join(snapDir, 'files', file.root), file.rel);
+  const p = safeJoin(path.join(snapDir, 'files', file.root), file.storedRel || file.rel);
   return fsp.readFile(p);
 }
 
@@ -85,14 +86,30 @@ async function contentToWrite(stored, file, targetPath) {
  * Plant das Anwenden: welche Dateien sind neu, geändert, gleich oder werden entfernt?
  * currentScan: Ergebnis von scanner.scan() für das Ziel.
  */
+/** Konto-Platzhalter aus Exporten ("Cloud/_konto_/...") auf das zuletzt benutzte Konto abbilden. */
+function resolveAccount(rel, currentScan) {
+  if (!/^Cloud\/_konto_\//i.test(rel)) return rel;
+  const newest = (currentScan?.files || []).find((f) => f.root === 'saved' && f.kind === 'controls' && f.included);
+  if (!newest) return null;
+  const folder = newest.rel.split('/')[1];
+  return rel.replace(/^Cloud\/_konto_\//i, `Cloud/${folder}/`);
+}
+
 async function plan(snapDir, meta, roots, currentScan, { removeExtra = true } = {}) {
   const items = [];
   const inSnap = new Set();
-  for (const file of meta.files) {
-    if (!ROOTS.includes(file.root) || isBlockedPath(file.rel)) {
-      items.push({ ...file, action: 'skip', reason: 'Schutzfilter' });
+  for (const original of meta.files) {
+    if (!ROOTS.includes(original.root) || isBlockedPath(original.rel)
+      || (original.root === 'saved' && !SAVED_ALLOWED.test(original.rel))) {
+      items.push({ ...original, action: 'skip', reason: 'Schutzfilter' });
       continue;
     }
+    const rel = original.root === 'saved' ? resolveAccount(original.rel, currentScan) : original.rel;
+    if (!rel) {
+      items.push({ ...original, action: 'skip', reason: 'Kein Fortnite-Konto auf diesem PC gefunden' });
+      continue;
+    }
+    const file = { ...original, rel, storedRel: original.rel };
     inSnap.add(keyOf(file.root, file.rel));
     const target = safeJoin(rootDir(roots, file.root), file.rel);
     const stored = await readStored(snapDir, file);
@@ -140,7 +157,11 @@ async function apply(snapDir, meta, roots, currentScan, options = {}) {
   const readOnlyCleared = [];
 
   for (const item of p.items) {
-    if (item.action === 'skip' || item.action === 'locked') continue;
+    if (item.action === 'skip') continue;
+    if (item.action === 'locked') {
+      failed.push({ root: item.root, rel: item.rel, label: item.label, code: 'LOCKED', message: 'Die Datei ist gerade von einem anderen Programm geöffnet (z. B. Virenscanner).' });
+      continue;
+    }
     try {
       if (item.action === 'remove') {
         await removeFileSafe(item.target);
@@ -170,7 +191,7 @@ async function apply(snapDir, meta, roots, currentScan, options = {}) {
   const applied = [...written, ...same];
   for (const f of applied) {
     const target = safeJoin(rootDir(roots, f.root), f.rel);
-    const fileMeta = meta.files.find((m) => keyOf(m.root, m.rel) === keyOf(f.root, f.rel)) || {};
+    const fileMeta = p.items.find((m) => keyOf(m.root, m.rel) === keyOf(f.root, f.rel)) || {};
     let want;
     if (restoreReadOnly) want = !!fileMeta.readOnly;
     // ClientSettings (Cloud-Kopie) wird nie schreibgeschützt: Fortnite holt sie ohnehin aus der Cloud
@@ -190,4 +211,4 @@ async function apply(snapDir, meta, roots, currentScan, options = {}) {
   return { ok: failed.length === 0, plan: p.counts, written, removed, same, failed, readOnlySet, readOnlyCleared };
 }
 
-module.exports = { capture, plan, apply, readStored, contentToWrite, keyOf, ROOTS };
+module.exports = { capture, plan, apply, readStored, contentToWrite, keyOf, resolveAccount, ROOTS };
