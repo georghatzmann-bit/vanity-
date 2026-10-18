@@ -450,3 +450,180 @@ test('Ansicht: NVIDIA-Kacheln mit Strom und Takt, Runden-Zeile', async () => {
   assert.equal(row.fnRam, 'max 4,6 GB');
   assert.equal(row.hot, true);
 });
+
+// ---------------------------------------------------------------- Regressionen
+test('Monitor: langsame Skript-Zeile (3–6 s) wird nicht verworfen – keine Lücke ohne Grafikkarte/Fortnite', async () => {
+  const lib = await import(libUrl);
+  const { ctx, emitted, streams } = fakeCtx();
+  const f = fakeDeps();
+  const m = new HardwareMonitor(ctx, { ...f.deps, isWin: true });
+  await m.load();
+  m.acquire('view');
+  f.advance(2000);
+  streams[0].onObj(JSON.parse(LINE_NVIDIA));
+  assert.equal(emitted.length, 1);
+  // Zeitgeber 3,1 s nach der Zeile (Windows-Abfrage unter Last langsam): Zeile ist noch frisch -> kein Ersatz-Wert
+  f.advance(3100);
+  f.timers[0].fn();
+  assert.equal(emitted.length, 1, 'keine Messung ohne Grafikkarte dazwischen');
+  // bleibt die Zeile länger als 6 s aus, springt der Zeitgeber ein – die Kacheln sagen dann "misst …"
+  f.advance(3000);
+  f.timers[0].fn();
+  assert.equal(emitted.length, 2);
+  const s = emitted[1][1];
+  assert.equal(s.stream, 'ok');
+  assert.equal(s.psFresh, false);
+  const t = Object.fromEntries(lib.buildTiles(s, [s], { windows: true, caps: s.caps }).map((x) => [x.id, x]));
+  for (const id of ['gpu', 'gpuTemp', 'vram', 'fortnite']) {
+    assert.equal(t[id].badge.text, 'misst …', id);
+    assert.doesNotMatch(t[id].text, /Treiber|Starte Fortnite/, id);
+  }
+  m.release('view');
+});
+
+test('Ansicht: ohne Messwerte von Windows ist Fortnite "unbekannt", nicht "läuft nicht"', async () => {
+  const lib = await import(libUrl);
+  const s = logic.buildSample({ ps: null, node: { cpus: cpus(1, 1), totalmem: 16 * GB, freemem: 8 * GB }, now: 1, state: {} });
+  s.stream = 'failed';
+  const fn = lib.buildTiles(s, [s], { windows: true, stream: 'failed' }).find((x) => x.id === 'fortnite');
+  assert.equal(fn.badge.text, 'unbekannt');
+  assert.doesNotMatch(fn.text, /Starte Fortnite/);
+  // Skript liefert und Fortnite fehlt wirklich -> "läuft nicht"
+  const ps = JSON.parse(LINE_AMD);
+  const s2 = logic.buildSample({ ps, node: { cpus: cpus(1, 1), totalmem: 16 * GB, freemem: 8 * GB }, now: 1, state: {} });
+  s2.stream = 'ok';
+  assert.equal(lib.buildTiles(s2, [s2], { windows: true }).find((x) => x.id === 'fortnite').badge.text, 'läuft nicht');
+});
+
+test('Monitor: nach erneutem Öffnen kein alter Verlauf und kein alter Wert als "live"', async () => {
+  const { ctx, streams } = fakeCtx();
+  const f = fakeDeps();
+  const m = new HardwareMonitor(ctx, { ...f.deps, isWin: true });
+  await m.load();
+  m.acquire('view');
+  for (let i = 0; i < 30; i++) { f.advance(2000); streams[0].onObj(JSON.parse(LINE_NVIDIA)); }
+  assert.equal(m.publicStatus().history.length, 30);
+  m.release('view');
+  f.advance(3600 * 1000); // eine Stunde später
+  m.acquire('view');
+  const st = m.publicStatus();
+  assert.equal(st.stream, 'starting');
+  assert.deepEqual(st.history, [], 'Verlauf beginnt neu');
+  f.advance(2000);
+  streams[1].onObj(JSON.parse(LINE_NVIDIA));
+  assert.equal(m.publicStatus().history.length, 1);
+  m.release('view');
+});
+
+test('Ansicht: Texte zu Grafikkarten-Last ohne Fortnite und AMD-Temperatur', async () => {
+  const lib = await import(libUrl);
+  assert.match(lib.gpuLoadStatus(10, false).text, /wenig zu tun/);
+  const mid = lib.gpuLoadStatus(75, false);
+  assert.doesNotMatch(mid.text, /wenig zu tun/, '75 % ist nicht "wenig"');
+  assert.match(mid.text, /anderes Programm/);
+  assert.equal(mid.type, 'ok');
+  assert.equal(lib.gpuLoadStatus(85, false).type, 'warn');
+  const amd = lib.gpuTempMissing({ vendor: 'amd', nvidiaSmi: false });
+  assert.match(amd, /Task-Manager/);
+  assert.match(amd, /AMD-Software/);
+  assert.doesNotMatch(amd, /nur an die AMD-Software/);
+});
+
+// ---------------------------------------------------------------- Ansicht im nachgemachten Fenster
+class El {
+  constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.attrs = {}; this.dataset = {}; this.hidden = false; this.cls = new Set(); this.text = ''; }
+  get classList() { const s = this.cls; return { add: (c) => s.add(c), remove: (c) => s.delete(c), toggle: (c, on = !s.has(c)) => { if (on) s.add(c); else s.delete(c); return on; } }; }
+  get textContent() { return this.text + this.children.map((c) => c.textContent).join(''); }
+  set textContent(v) { this.children = []; this.text = v == null ? '' : String(v); }
+  append(...cs) { for (const c of cs.flat(Infinity)) if (c != null && c !== false) this.children.push(c instanceof El ? c : Object.assign(new El('#text'), { text: String(c) })); }
+  setAttribute(k, v) { this.attrs[k] = String(v); }
+  addEventListener() {}
+  querySelector() { return null; }
+  getContext() { return null; }
+}
+
+async function loadHardwareView() {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'helix-hw-view-'));
+  fs.mkdirSync(path.join(dir, 'views'));
+  fs.mkdirSync(path.join(dir, 'lib'));
+  const js = path.join(__dirname, '..', '..', 'src', 'renderer', 'js');
+  fs.copyFileSync(path.join(js, 'lib', 'hardware-status.mjs'), path.join(dir, 'lib', 'hardware-status.mjs'));
+  fs.copyFileSync(path.join(js, 'views', 'hardware.js'), path.join(dir, 'views', 'hardware.mjs'));
+  return (await import(require('node:url').pathToFileURL(path.join(dir, 'views', 'hardware.mjs')).href)).default;
+}
+
+test('Ansicht: Fenster im Infobereich/minimiert stoppt die Messung, wieder sichtbar startet sie neu', async (t) => {
+  const view = await loadHardwareView();
+  const listeners = {};
+  const doc = {
+    hidden: false,
+    addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
+    removeEventListener(type, fn) { listeners[type] = (listeners[type] || []).filter((x) => x !== fn); },
+  };
+  const fire = async () => { for (const fn of [...(listeners.visibilitychange || [])]) await fn(); };
+  const intervals = new Set();
+  const globals = {
+    document: doc,
+    window: { devicePixelRatio: 1 },
+    setInterval: (fn, ms) => { const id = { fn, ms }; intervals.add(id); return id; },
+    clearInterval: (id) => { intervals.delete(id); },
+  };
+  const saved = {};
+  for (const [k, v] of Object.entries(globals)) {
+    saved[k] = Object.getOwnPropertyDescriptor(globalThis, k);
+    Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true });
+  }
+  t.after(() => { for (const [k, d] of Object.entries(saved)) { if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k]; } });
+
+  const h = (spec, attrs, ...children) => {
+    if (attrs == null || typeof attrs !== 'object' || attrs instanceof El || Array.isArray(attrs)) { if (attrs != null) children.unshift(attrs); attrs = {}; }
+    const [tag, ...classes] = String(spec).split('.');
+    const el = new El(tag || 'div');
+    classes.forEach((c) => el.cls.add(c));
+    for (const [k, v] of Object.entries(attrs)) if (k === 'dataset') Object.assign(el.dataset, v); else if (v != null) el.setAttribute(k, v);
+    el.append(children);
+    return el;
+  };
+  const mount = (el, ...c) => { el.children = []; el.text = ''; el.append(c); return el; };
+  const ui = {
+    h, mount, icon: () => new El('svg'), badge: (text) => h('span.badge', text), spinner: () => new El('div'),
+    section: (title, hint, ...c) => h('section', h('h2', title), c), toggle: () => new El('label'), button: (label) => h('button', label),
+    emptyState: ({ title }) => h('div.empty', title), toast() {}, showError(e) { throw e; }, fmtDate: () => 'heute', fmtDuration: () => '1 Min.',
+  };
+  const calls = [];
+  const env = {
+    ui,
+    on: () => () => {},
+    async call(name) {
+      calls.push(name);
+      if (name === 'hardware.start') return { windows: true, running: true, stream: 'starting', caps: {}, settings: { background: false }, recording: false, history: [] };
+      if (name === 'hardware.sessions') return { sessions: [], settings: { background: false } };
+      return { running: false };
+    },
+  };
+  const root = new El('div');
+  await view.mount(root, env);
+  assert.deepEqual(calls.filter((c) => c.startsWith('hardware.st')), ['hardware.start']);
+  assert.equal([...intervals].filter((i) => i.ms === 30000).length, 1, 'Ansicht meldet sich alle 30 s');
+
+  // Fenster schließen (Infobereich) oder minimieren -> Seite ist versteckt
+  doc.hidden = true;
+  await fire();
+  assert.equal(calls[calls.length - 1], 'hardware.stop', 'Messung gestoppt');
+  assert.equal(intervals.size, 0, 'kein "Ich bin noch offen" mehr, solange versteckt');
+  await fire(); // doppeltes Ereignis: nicht noch einmal stoppen
+  assert.equal(calls.filter((c) => c === 'hardware.stop').length, 1);
+
+  // wieder sichtbar -> Messung läuft wieder
+  doc.hidden = false;
+  await fire();
+  assert.equal(calls.filter((c) => c === 'hardware.start').length, 2);
+  assert.equal([...intervals].filter((i) => i.ms === 30000).length, 1);
+
+  view.unmount();
+  assert.equal(calls[calls.length - 1], 'hardware.stop');
+  assert.equal(intervals.size, 0);
+  assert.equal((listeners.visibilitychange || []).length, 0, 'Ereignis wieder abgemeldet');
+});

@@ -366,13 +366,15 @@ export default {
     cleanup.push(
       offSample,
       offFn,
-      () => clearInterval(ping),
+      stopPing,
+      () => document.removeEventListener('visibilitychange', onVisibility),
       () => { for (const t of timers) clearTimeout(t); },
       () => ro && ro.disconnect(),
     );
 
     renderAll();
     loadSessions();
+    if (document.hidden) onVisibility(); // schon versteckt, während die Messung startete
   },
   unmount() {
     for (const f of cleanup) { try { f(); } catch { /* egal */ } }
