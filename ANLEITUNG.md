@@ -6,7 +6,8 @@ kopiert keine Login-Daten und blendet nichts im Spiel ein.
 
 ## Installieren
 
-1. Auf der Release-Seite die Datei `HELIX-Setup-<Version>.exe` herunterladen und starten.
+1. Auf der Release-Seite (https://github.com/georghatzmann-bit/vanity-/releases – Eintrag „HELIX …“)
+   die Datei `HELIX-Setup-<Version>.exe` herunterladen und starten.
    Wenn Windows „Der Computer wurde durch Windows geschützt“ zeigt: **Weitere Informationen** → **Trotzdem ausführen**.
    (Das kommt, weil das Setup nicht gegen Geld signiert ist.)
 2. Nach dem Intro auf **Installieren** klicken. Das Setup lädt die neueste HELIX-Version von GitHub,
@@ -61,6 +62,21 @@ Wichtig zu wissen:
 | Replays | Replay-Tresor: sichert deine besten Fortnite-Replays, bevor Fortnite sie löscht |
 | Reaktion | Reaktionstest und Trainer für deine Bau- und Edit-Tasten |
 | Windows | Prüft Spielmodus, Aufnahme im Hintergrund, GPU-Planung und Energieplan |
+
+Gut zu wissen:
+
+- **Sensi**: HELIX empfiehlt einen Wert, stellt ihn aber nicht selbst ein. Die Sensi speichert Fortnite in
+  deinem Konto in der Cloud. Du stellst sie im Spiel unter Einstellungen → Maus und Tastatur ein.
+- **PC-Check, Sicht, Maus**: Bevor HELIX etwas in Fortnite ändert, zeigt es dir genau, was sich ändert, und
+  legt eine Sicherung an. Fortnite muss dabei geschlossen sein. Zurück geht es jederzeit über die Zeitmaschine.
+- **Booster**: Windows, Virenschutz, Anti-Cheat, Fortnite, der Epic Games Launcher und HELIX selbst werden nie
+  geschlossen. Programme schließt HELIX normal (wie mit dem X am Fenster) und startet sie danach wieder.
+- **Hardware**: Die Grafikkarten-Temperatur gibt es bei NVIDIA direkt. Eine echte Prozessor-Temperatur bräuchte
+  einen extra Treiber – den installiert HELIX absichtlich nicht.
+- **Windows-Check und Maus**: HELIX ändert nur Einstellungen deines eigenen Benutzerkontos und den Energieplan.
+  Alles, was Administrator-Rechte braucht, erklärt es nur und öffnet die passende Windows-Seite.
+- **Windows-Check**: Um den freien Platz auf dem Laufwerk mit Fortnite zu prüfen, liest HELIX aus der
+  Installationsliste des Epic Launchers nur den Ordner, in dem Fortnite liegt. Es wird nichts kopiert.
 
 ## Wo liegen meine Daten?
 
