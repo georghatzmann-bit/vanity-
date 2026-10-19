@@ -119,6 +119,46 @@ test.describe('Navigation', () => {
     await expect(navigation(page).getByRole('link', { name: 'Über AEGIS' })).toBeFocused();
   });
 
+  test('Seitenwechsel außerhalb der Seitenleiste: Fokus auf die Überschrift, keine alte Ansage', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await waitForHome(page);
+    const announcement = page.getByTestId('route-announcement');
+    const reports = navigation(page).getByRole('link', { name: /^Berichte/ });
+    await reports.click();
+    await expect(heading(page)).toHaveText('Berichte');
+    await expect(reports).toBeFocused();
+    await expect(announcement).toHaveText('Seite: Berichte');
+
+    // Strg+, aus der Navigation heraus.
+    await page.keyboard.press('Control+,');
+    await expect(page).toHaveURL(/#\/settings$/);
+    await expect(heading(page)).toHaveText('Einstellungen');
+    await expect(heading(page)).toBeFocused();
+    await expect(announcement).toHaveText('');
+
+    // Befehlspalette aus der Navigation heraus (sie gibt den Fokus erst zurück, dann navigiert sie).
+    await navigation(page).getByRole('link', { name: 'Dashboard' }).focus();
+    await page.keyboard.press('Control+k');
+    await page.keyboard.type('Labor');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/#\/lab$/);
+    await expect(heading(page)).toHaveText('Labor');
+    await expect(heading(page)).toBeFocused();
+
+    // Zurück im Verlauf mit Fokus in der Navigation.
+    await navigation(page)
+      .getByRole('link', { name: /^Tresor/ })
+      .click();
+    await expect(heading(page)).toHaveText('Tresor');
+    await expect(announcement).toHaveText('Seite: Tresor');
+    await page.goBack();
+    await expect(heading(page)).toHaveText('Labor');
+    await expect(heading(page)).toBeFocused();
+    await expect(announcement).toHaveText('');
+  });
+
   test('Zurück und Vor im Verlauf wechseln die Seite', async ({ page }) => {
     await page.goto('/#/scan');
     await waitForHome(page);

@@ -5,19 +5,22 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
 } from 'react';
 import { useNow } from '../../hooks/useNow.ts';
 import { IconClock, IconDanger, IconUndo, IconWarning } from '../../icons/icons.tsx';
 import { cx } from '../../utils/cx.ts';
-import { formatCountdown, toEpochMs } from '../../utils/time.ts';
+import { MAX_TIMEOUT_MS, formatCountdown, toEpochMs } from '../../utils/time.ts';
 import { Button } from '../Button/Button.tsx';
 import { Dialog, type DialogTone } from '../Dialog/Dialog.tsx';
 import { RiskBadge } from '../RiskBadge/RiskBadge.tsx';
 import { SafeText } from '../SafeText/SafeText.tsx';
+import { useConsentAttention, useConsentSession } from './attention.ts';
 import { ConsentTargetList } from './ConsentTargetList.tsx';
 import { consentDialogLabelsDe, type ConsentDialogLabels } from './labels.ts';
-import type { ConsentDecision, ConsentPlan } from './types.ts';
+import { TextSafetyHints } from './TextSafetyHints.tsx';
+import type { ConsentDecision, ConsentDecisionMeta, ConsentPlan } from './types.ts';
 
 /** Sperrzeit für „Ja, ausführen“ nach dem Öffnen (gegen Durchklicken und Doppelklick). */
 export const CONSENT_GUARD_MS = 600;
@@ -28,16 +31,21 @@ export interface ConsentDialogProps {
   readonly open: boolean;
   readonly plan: ConsentPlan;
   /**
-   * Die Antwort des Nutzers – höchstens **einmal** je Öffnen und Plan, nie nach Ablauf der
-   * Frist. Escape bedeutet „Nein“ (`decline`). Die Freigabe selbst erteilt nur der Dienst.
+   * Die Antwort des Nutzers – höchstens **einmal** je Öffnen und angezeigter Fassung des Plans,
+   * nie nach Ablauf der Frist. Escape bedeutet „Nein“ (`decline`). `meta` nennt genau die
+   * Fassung, die beim Klick sichtbar war (ID, Digest, Plan). Die Freigabe selbst erteilt nur
+   * der Dienst.
    */
-  readonly onDecision: (decision: ConsentDecision) => void;
+  readonly onDecision: (decision: ConsentDecision, meta: ConsentDecisionMeta) => void;
   /**
    * Schließen nach Ablauf der Frist (Button „Schließen“ oder Escape). Bedeutet: es wurde
    * nichts getan – nichts an den Dienst senden, der Plan ist dort bereits verfallen.
    */
   readonly onDismiss: () => void;
-  /** Wird einmal gemeldet, sobald die Frist abgelaufen ist (z. B. fürs Protokoll). */
+  /**
+   * Wird einmal gemeldet, sobald die Frist ohne Antwort abgelaufen ist (z. B. fürs
+   * Protokoll). Nach einer Antwort nie.
+   */
   readonly onExpire?: (() => void) | undefined;
   /** „Ignorieren“ anbieten (Standard: an). */
   readonly allowIgnore?: boolean | undefined;
@@ -63,16 +71,48 @@ function dialogTone(plan: ConsentPlan): DialogTone {
   return 'accent';
 }
 
+/**
+ * Fingerabdruck alles Angezeigten. Ändert sich irgendetwas davon (auch bei gleicher ID),
+ * ist es für den Nutzer ein anderer Plan: neue Sperrzeit, neue Antwort.
+ */
+function planFingerprint(plan: ConsentPlan): string {
+  return JSON.stringify([
+    plan.id,
+    plan.digest ?? null,
+    plan.kindLabel,
+    plan.severity,
+    plan.targets,
+    plan.what,
+    plan.why,
+    plan.consequence,
+    plan.undo,
+    String(toEpochMs(plan.expiresAt)),
+    plan.parameters ?? [],
+  ]);
+}
+
+function isSameLocalDay(first: number, second: number): boolean {
+  const a = new Date(first);
+  const b = new Date(second);
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 interface CalloutProps {
+  readonly id?: string | undefined;
   readonly tone: 'danger' | 'warn';
   readonly title: string;
   readonly children: ReactNode;
 }
 
-function Callout({ tone, title, children }: CalloutProps) {
+function Callout({ id, tone, title, children }: CalloutProps) {
   const Icon = tone === 'danger' ? IconDanger : IconWarning;
   return (
     <div
+      id={id}
       className={cx(
         'flex items-start gap-3 rounded-lg border px-3.5 py-3',
         tone === 'danger'
@@ -99,10 +139,16 @@ function Callout({ tone, title, children }: CalloutProps) {
         >
           {title}
         </p>
-        <p className="mt-0.5 text-sm text-text">{children}</p>
+        <div className="mt-0.5 text-sm text-text">{children}</div>
       </div>
     </div>
   );
+}
+
+/** Wo der letzte Zeiger-Druck im Fuß begann – nur ein Druck nach der Sperrzeit zählt. */
+interface PressStart {
+  readonly key: string;
+  readonly armed: boolean;
 }
 
 /**
@@ -112,18 +158,26 @@ function Callout({ tone, title, children }: CalloutProps) {
  *
  * Sicherheitsregeln (alle getestet):
  * - Der Startfokus liegt auf „Nein“, nie auf „Ja, ausführen“.
- * - „Ja, ausführen“ ist nach dem Öffnen (und nach einem Planwechsel) `guardMs` gesperrt und
- *   reagiert nur auf einen bewussten Klick bzw. Tastendruck genau auf diesem Button –
- *   gehaltene Enter-Taste (Wiederholung) zählt nicht. Dieselbe Sperrzeit gilt für
- *   „Vertrauen“ und „Ignorieren“ (bleibende Folgen); nur „Nein“ ist sofort möglich.
- * - Escape = „Nein“. Ein Klick neben den Dialog tut nichts.
+ * - „Ja, ausführen“ ist nach dem Öffnen `guardMs` gesperrt – und erneut nach jeder Änderung
+ *   am angezeigten Plan (auch bei gleicher ID), sobald ein darüberliegender Dialog schließt
+ *   und sobald das Fenster wieder sichtbar bzw. im Vordergrund ist. Die Sperrzeit läuft nur,
+ *   solange der Dialog wirklich vorn liegt. Ein Mausklick zählt nur, wenn auch der Druck erst
+ *   nach der Sperrzeit begann; gehaltene Tasten (Autorepeat) zählen auf keinem Knopf.
+ *   Dieselbe Sperrzeit gilt für „Vertrauen“ und „Ignorieren“ (bleibende Folgen); nur „Nein“
+ *   ist sofort möglich.
+ * - Escape = „Nein“ (auch wenn der Fokus auf `body` gefallen ist). Ein Klick neben den Dialog
+ *   tut nichts.
  * - Enter im Dialog löst nie „Ja“ aus (kein Formular, kein Standard-Button).
- * - Es wird höchstens eine Antwort je Öffnen gemeldet; danach sind alle Knöpfe gesperrt.
- * - Ist die Frist abgelaufen (oder ungültig), zeigt der Dialog „Abgelaufen – es wurde nichts
- *   getan“, alle Antworten sind gesperrt; selbst ein Klick im selben Moment wird verworfen.
- * - Nicht umkehrbare Pläne und die Stufe „Gefährlich“ zeigen eine deutliche Warnung;
- *   „Ja, ausführen“ ist dann rot.
- * - Fremde Texte (Pfade, Namen) erscheinen nur über `SafeText` (⟨U+202E⟩-Marken).
+ * - Es wird höchstens eine Antwort je Sitzung gemeldet; danach sind alle Knöpfe gesperrt und
+ *   der Dialog zeigt „Antwort gesendet“ – nie mehr „Abgelaufen“.
+ * - Ist die Frist ohne Antwort abgelaufen (oder ungültig), zeigt der Dialog „Abgelaufen – es
+ *   wurde nichts getan“, alle Antworten sind gesperrt; selbst ein Klick im selben Moment wird
+ *   verworfen.
+ * - Nicht umkehrbare Pläne und die Stufe „Gefährlich“ zeigen oben eine deutliche Warnung, auf
+ *   die auch „Ja, ausführen“ verweist (`aria-describedby`); rot ist „Ja, ausführen“ nur bei
+ *   nicht umkehrbaren Plänen.
+ * - Fremde Texte (Pfade, Namen – auch in „Was genau?“ usw.) erscheinen nur über `SafeText`
+ *   (⟨U+202E⟩-Marken, Bidi-Isolation) mit Hinweis auf unsichtbare Zeichen.
  */
 export function ConsentDialog({
   open,
@@ -138,49 +192,58 @@ export function ConsentDialog({
   locale = 'de-DE',
 }: ConsentDialogProps) {
   const labels: ConsentDialogLabels = { ...consentDialogLabelsDe, ...labelOverrides };
-  const guard = Math.max(MIN_GUARD_MS, Number.isFinite(guardMs) ? guardMs : CONSENT_GUARD_MS);
+  // Begrenzt auf das, was setTimeout zuverlässig kann (sonst feuerte ein riesiger Wert sofort).
+  const guard = Math.min(
+    MAX_TIMEOUT_MS,
+    Math.max(MIN_GUARD_MS, Number.isFinite(guardMs) ? guardMs : CONSENT_GUARD_MS),
+  );
   const noRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const hintId = useId();
+  const warningId = `${hintId}-warning`;
+  const whatId = `${hintId}-what`;
+  const armingId = `${hintId}-arming`;
 
-  // Jede Öffnung und jeder Plan ist eine eigene „Sitzung“: Sperrzeit und Antwort beginnen neu.
-  const [generation, setGeneration] = useState(open ? 1 : 0);
-  const [wasOpen, setWasOpen] = useState(open);
-  if (wasOpen !== open) {
-    setWasOpen(open);
-    if (open) {
-      setGeneration(generation + 1);
-    }
-  }
-  const session = `${plan.id}#${generation}`;
+  // Sitzung = eine Öffnung mit genau diesem Inhalt: Sperrzeit und Antwort beginnen je neu.
+  const { session, changedWhileOpen } = useConsentSession(open, planFingerprint(plan));
+  // Nur wenn der Dialog wirklich vorn liegt, läuft die Sperrzeit; jede Rückkehr beginnt neu.
+  const [onTop, setOnTop] = useState(false);
+  const { active, activation } = useConsentAttention(open, onTop);
+  const armKey = `${session}@${activation}`;
 
-  const [armedSession, setArmedSession] = useState<string | null>(null);
-  const [decidedSession, setDecidedSession] = useState<string | null>(null);
-  const decidedRef = useRef<string | null>(null);
-  const armed = armedSession === session;
-  const decided = decidedSession === session;
+  const [armedKey, setArmedKey] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<{
+    readonly session: string;
+    readonly decision: ConsentDecision;
+  } | null>(null);
+  const answeredRef = useRef<string | null>(null);
+  const pressRef = useRef<PressStart | null>(null);
+  const armed = active && armedKey === armKey;
+  const decided = answer !== null && answer.session === session;
 
   const expiresAtMs = toEpochMs(plan.expiresAt);
   const validDeadline = Number.isFinite(expiresAtMs);
-  const now = useNow(open ? 1000 : null, open && validDeadline ? expiresAtMs : undefined);
-  // Ungültige Frist = abgelaufen (im Zweifel nichts tun).
-  const expired = !validDeadline || now >= expiresAtMs;
+  const running = open && !decided;
+  const now = useNow(running ? 1000 : null, running && validDeadline ? expiresAtMs : undefined);
+  // Ungültige Frist = abgelaufen (im Zweifel nichts tun). Nach einer Antwort zählt die Frist
+  // nicht mehr – „es wurde nichts getan“ wäre dann falsch.
+  const expired = !decided && (!validDeadline || now >= expiresAtMs);
   const remaining = validDeadline ? expiresAtMs - now : 0;
 
   useEffect(() => {
-    if (!open) {
+    if (!active) {
       return undefined;
     }
-    const id = setTimeout(() => setArmedSession(session), guard);
+    const id = setTimeout(() => setArmedKey(armKey), guard);
     return () => clearTimeout(id);
-  }, [open, session, guard]);
+  }, [active, armKey, guard]);
 
-  // Planwechsel bei offenem Dialog: Fokus wieder auf „Nein“.
+  // Neuer Plan oder wieder vorn (Dialog darüber geschlossen, Fenster zurück): Fokus auf „Nein“.
   useEffect(() => {
-    if (open) {
+    if (active) {
       noRef.current?.focus({ preventScroll: true });
     }
-  }, [open, session]);
+  }, [active, armKey]);
 
   const reportExpiry = useEffectEvent(() => {
     onExpire?.();
@@ -192,8 +255,8 @@ export function ConsentDialog({
     }
   }, [open, expired, session]);
 
-  const decide = (decision: ConsentDecision): void => {
-    if (!open || decidedRef.current === session) {
+  const decide = (decision: ConsentDecision, event?: MouseEvent<HTMLButtonElement>): void => {
+    if (!open || answeredRef.current === session) {
       return;
     }
     // Harte Prüfung im Moment des Klicks – unabhängig vom letzten Takt der Anzeige.
@@ -202,12 +265,22 @@ export function ConsentDialog({
     }
     // Alles außer „Nein“ hat bleibende Folgen (Ausführen, Vertrauensliste, nicht mehr
     // melden) und ist deshalb erst nach der Sperrzeit möglich.
-    if (decision !== 'decline' && !armed) {
-      return;
+    if (decision !== 'decline') {
+      if (!armed) {
+        return;
+      }
+      // Mausklick (`detail` > 0): Der Druck muss ebenfalls nach der Sperrzeit begonnen haben.
+      // Sonst zählte ein Druck auf den noch gesperrten Knopf, der erst danach losgelassen wird.
+      if (event !== undefined && event.detail > 0) {
+        const press = pressRef.current;
+        if (press === null || press.key !== armKey || !press.armed) {
+          return;
+        }
+      }
     }
-    decidedRef.current = session;
-    setDecidedSession(session);
-    onDecision(decision);
+    answeredRef.current = session;
+    setAnswer({ session, decision });
+    onDecision(decision, { planId: plan.id, digest: plan.digest, plan });
   };
 
   // Schließen (Escape) heißt „Nein“ – nach Ablauf nur noch „Schließen, nichts getan“.
@@ -226,16 +299,58 @@ export function ConsentDialog({
     }
   };
 
+  // Gehaltene Taste (Autorepeat) ist auf keinem Antwort-Knopf eine bewusste Antwort – etwa
+  // wenn Enter auf dem Auslöser gehalten wird und der Fokus danach auf „Nein“ springt.
+  const onFooterKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.repeat && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+    }
+  };
+  const onFooterPointerDownCapture = (): void => {
+    pressRef.current = { key: armKey, armed };
+  };
+
   const irreversible = plan.undo.type === 'irreversible';
+  const hasWarning = irreversible || plan.severity === 'dangerous';
   const locked = expired || decided;
   const deadlineTime = validDeadline
     ? new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(expiresAtMs)
     : '';
+  const deadlineDate =
+    validDeadline && !isSameLocalDay(expiresAtMs, now)
+      ? new Intl.DateTimeFormat(locale, {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }).format(expiresAtMs)
+      : undefined;
+  const decisionLabels: Readonly<Record<ConsentDecision, string>> = {
+    execute: labels.execute,
+    decline: labels.decline,
+    ignore: labels.ignore,
+    trust: labels.trust,
+  };
+  const executeDescription =
+    [!armed && !locked ? armingId : undefined, hasWarning ? warningId : undefined]
+      .filter((id) => id !== undefined)
+      .join(' ') || undefined;
+
+  const prose = (value: string): ReactNode => (
+    <>
+      <SafeText
+        value={value}
+        mono={false}
+        breakAll={false}
+        describeInvisible={labels.targets.describeInvisible}
+      />
+      <TextSafetyHints values={[value]} labels={labels.targets} />
+    </>
+  );
 
   const headerAside = (
     <>
       <RiskBadge level={plan.severity} size="sm" />
-      {!expired && (
+      {!expired && !decided && (
         <span
           className={cx(
             'inline-flex h-5 items-center gap-1 rounded-full border px-2 font-mono text-2xs font-medium tabular-nums [&_svg]:size-3',
@@ -250,14 +365,18 @@ export function ConsentDialog({
           <time dateTime={new Date(expiresAtMs).toISOString()} aria-hidden="true">
             {labels.deadline(formatCountdown(remaining))}
           </time>
-          <span className="sr-only">{labels.deadlineAccessible(deadlineTime)}</span>
+          <span className="sr-only">{labels.deadlineAccessible(deadlineTime, deadlineDate)}</span>
         </span>
       )}
     </>
   );
 
   const footer = (
-    <div className="flex flex-col gap-3">
+    <div
+      className="flex flex-col gap-3"
+      onKeyDownCapture={onFooterKeyDownCapture}
+      onPointerDownCapture={onFooterPointerDownCapture}
+    >
       {expired && (
         <div
           role="alert"
@@ -276,6 +395,13 @@ export function ConsentDialog({
           </div>
         </div>
       )}
+      <div role="status">
+        {decided && answer !== null && (
+          <p className="text-sm text-text-muted" data-part="answered">
+            {labels.answered(decisionLabels[answer.decision])}
+          </p>
+        )}
+      </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
         <div className="flex gap-1">
           {allowTrust && (
@@ -283,7 +409,7 @@ export function ConsentDialog({
               variant="ghost"
               disabled={locked || !armed}
               aria-describedby={`${hintId}-trust`}
-              onClick={() => decide('trust')}
+              onClick={(event) => decide('trust', event)}
             >
               {labels.trust}
             </Button>
@@ -293,7 +419,7 @@ export function ConsentDialog({
               variant="ghost"
               disabled={locked || !armed}
               aria-describedby={`${hintId}-ignore`}
-              onClick={() => decide('ignore')}
+              onClick={(event) => decide('ignore', event)}
             >
               {labels.ignore}
             </Button>
@@ -310,7 +436,7 @@ export function ConsentDialog({
               ref={noRef}
               variant="secondary"
               disabled={decided}
-              onClick={() => decide('decline')}
+              onClick={(event) => decide('decline', event)}
             >
               {labels.decline}
             </Button>
@@ -318,21 +444,15 @@ export function ConsentDialog({
           <Button
             variant={irreversible ? 'danger' : 'primary'}
             disabled={locked || !armed}
-            aria-describedby={!armed && !locked ? `${hintId}-arming` : undefined}
-            onKeyDown={(event) => {
-              // Gehaltene Taste (Autorepeat) ist keine bewusste Bestätigung.
-              if (event.repeat && (event.key === 'Enter' || event.key === ' ')) {
-                event.preventDefault();
-              }
-            }}
-            onClick={() => decide('execute')}
+            aria-describedby={executeDescription}
+            onClick={(event) => decide('execute', event)}
             data-consent="execute"
             className="overflow-hidden"
           >
             {labels.execute}
             {!armed && !locked && (
               <span
-                key={session}
+                key={armKey}
                 aria-hidden="true"
                 className="absolute inset-x-2 bottom-1 h-px origin-left animate-aegis-fill bg-current opacity-60 motion-reduce:hidden"
                 style={{ animationDuration: `${guard}ms` }}
@@ -356,7 +476,7 @@ export function ConsentDialog({
             <span id={`${hintId}-trust`}>{labels.trustHint}</span>
           </>
         )}
-        <span id={`${hintId}-arming`} className="sr-only">
+        <span id={armingId} className="sr-only">
           {labels.armingHint}
         </span>
       </p>
@@ -371,23 +491,32 @@ export function ConsentDialog({
       title={plan.kindLabel}
       eyebrow={labels.eyebrow}
       headerAside={headerAside}
+      describedBy={hasWarning ? `${warningId} ${whatId}` : whatId}
       tone={dialogTone(plan)}
       size="lg"
       initialFocusRef={expired ? closeRef : noRef}
       closeOnBackdrop={false}
       showCloseButton={false}
+      onStackTopChange={setOnTop}
       footer={footer}
       data-testid="consent-dialog"
     >
       {/* Inhalt ohne interaktive Standard-Aktion; Enter wird hier verworfen. */}
       <div className="flex flex-col gap-5" onKeyDown={onContentKeyDown} data-plan-id={plan.id}>
-        {irreversible && plan.undo.type === 'irreversible' && (
-          <Callout tone="danger" title={labels.irreversibleTitle}>
-            {plan.undo.warning}
+        <div role="status">
+          {changedWhileOpen && (
+            <Callout tone="warn" title={labels.planChangedTitle}>
+              {labels.planChangedText}
+            </Callout>
+          )}
+        </div>
+        {plan.undo.type === 'irreversible' && (
+          <Callout id={warningId} tone="danger" title={labels.irreversibleTitle}>
+            {prose(plan.undo.warning)}
           </Callout>
         )}
         {!irreversible && plan.severity === 'dangerous' && (
-          <Callout tone="danger" title={labels.dangerousTitle}>
+          <Callout id={warningId} tone="danger" title={labels.dangerousTitle}>
             {labels.dangerousText}
           </Callout>
         )}
@@ -404,29 +533,35 @@ export function ConsentDialog({
 
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[10rem_minmax(0,1fr)]">
           <dt className="text-xs font-medium text-text-muted sm:pt-0.5">{labels.what}</dt>
-          <dd className="text-sm text-text">{plan.what}</dd>
+          <dd id={whatId} className="text-sm text-text" data-part="what">
+            {prose(plan.what)}
+          </dd>
           <dt className="text-xs font-medium text-text-muted sm:pt-0.5">{labels.why}</dt>
-          <dd className="text-sm text-text">{plan.why}</dd>
+          <dd className="text-sm text-text" data-part="why">
+            {prose(plan.why)}
+          </dd>
           <dt className="text-xs font-medium text-text-muted sm:pt-0.5">{labels.consequence}</dt>
-          <dd className="text-sm text-text">{plan.consequence}</dd>
+          <dd className="text-sm text-text" data-part="consequence">
+            {prose(plan.consequence)}
+          </dd>
           <dt className="text-xs font-medium text-text-muted sm:pt-0.5">{labels.undo}</dt>
           <dd className="text-sm text-text" data-undo={plan.undo.type}>
             {plan.undo.type === 'reversible' ? (
-              <span className="flex flex-col items-start gap-1.5">
+              <div className="flex flex-col items-start gap-1.5">
                 <span className="inline-flex h-5 items-center gap-1 rounded-full border border-risk-clean/35 bg-risk-clean-subtle px-2 text-2xs font-semibold text-risk-clean [&_svg]:size-3">
                   <IconUndo strokeWidth={2.25} />
                   {labels.reversible}
                 </span>
-                <span>{plan.undo.how}</span>
-              </span>
+                <div>{prose(plan.undo.how)}</div>
+              </div>
             ) : (
-              <span className="flex flex-col items-start gap-1.5">
+              <div className="flex flex-col items-start gap-1.5">
                 <span className="inline-flex h-5 items-center gap-1 rounded-full border border-risk-dangerous/45 bg-risk-dangerous-subtle px-2 text-2xs font-semibold text-risk-dangerous [&_svg]:size-3">
                   <IconDanger strokeWidth={2.25} />
                   {labels.irreversible}
                 </span>
-                <span className="font-medium">{plan.undo.warning}</span>
-              </span>
+                <div className="font-medium">{prose(plan.undo.warning)}</div>
+              </div>
             )}
           </dd>
         </dl>
@@ -440,13 +575,24 @@ export function ConsentDialog({
               {labels.parametersHeading}
             </h3>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-2 rounded-lg border border-border bg-surface-2 px-3 py-2.5 sm:grid-cols-[10rem_minmax(0,1fr)]">
-              {plan.parameters.map((parameter) => (
-                <div key={parameter.label} className="contents">
-                  <dt className="text-xs text-text-muted">{parameter.label}</dt>
+              {plan.parameters.map((parameter, index) => (
+                <div key={`${index}-${parameter.label}`} className="contents">
+                  <dt className="text-xs text-text-muted">
+                    <SafeText
+                      value={parameter.label}
+                      mono={false}
+                      breakAll={false}
+                      describeInvisible={labels.targets.describeInvisible}
+                    />
+                  </dt>
                   <dd className="text-sm text-text">
                     <SafeText
                       value={parameter.value}
                       describeInvisible={labels.targets.describeInvisible}
+                    />
+                    <TextSafetyHints
+                      values={[parameter.label, parameter.value]}
+                      labels={labels.targets}
                     />
                   </dd>
                 </div>

@@ -84,6 +84,26 @@ describe('Toggle', () => {
   });
 });
 
+describe('Toggle – Kontrastdesigns (UX-02)', () => {
+  it('zeigt „an“/„aus“ auch bei forced-colors: eigener Knopf in Systemfarben', async () => {
+    const user = userEvent.setup();
+    render(<Toggle aria-label="Klang" />);
+    const toggle = screen.getByRole('switch', { name: 'Klang' });
+    const knob = toggle.querySelector('[data-part="knob"]');
+    // Das System entfernt Hintergründe – der Knopf behält seine Farbe (Systemfarbe).
+    expect(knob).toHaveClass(
+      'forced-colors:forced-color-adjust-none',
+      'forced-colors:bg-[ButtonText]',
+    );
+    expect(knob).not.toHaveClass('forced-colors:bg-[Highlight]');
+    expect(toggle).toHaveClass('forced-colors:border-[ButtonText]');
+    await user.click(toggle);
+    expect(knob).toHaveClass('forced-colors:bg-[Highlight]');
+    expect(knob).not.toHaveClass('forced-colors:bg-[ButtonText]');
+    expect(toggle).toHaveClass('forced-colors:border-[Highlight]');
+  });
+});
+
 describe('SegmentedControl', () => {
   const options = [
     { value: 'dark', label: 'Dunkel', icon: <IconMoon /> },

@@ -193,6 +193,29 @@ describe('Toast', () => {
     return { ...utils, show, api: () => api as unknown as ToastApi };
   }
 
+  it('UX-11: lässt sich über einer Statusleiste platzieren (bottomOffset)', () => {
+    const { rerender } = render(
+      <ToastProvider bottomOffset={44}>
+        <span>App</span>
+      </ToastProvider>,
+    );
+    const region = screen.getByRole('region', { name: 'Benachrichtigungen' });
+    expect(region).toHaveStyle({ bottom: '44px' });
+    rerender(
+      <ToastProvider bottomOffset="calc(28px + 1rem)">
+        <span>App</span>
+      </ToastProvider>,
+    );
+    expect(region.style.bottom).toBe('calc(28px + 1rem)');
+    rerender(
+      <ToastProvider>
+        <span>App</span>
+      </ToastProvider>,
+    );
+    expect(region.style.bottom).toBe('');
+    expect(region).toHaveClass('bottom-4');
+  });
+
   it('regelt die Dauer nach den Sicherheitsregeln', () => {
     expect(resolveToastDuration({ title: 'a' }, 6000)).toBe(6000);
     expect(resolveToastDuration({ title: 'a', tone: 'danger' }, 6000)).toBeNull();

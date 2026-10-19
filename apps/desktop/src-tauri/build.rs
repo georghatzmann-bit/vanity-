@@ -6,7 +6,7 @@
 //! werden hier eingetragen und in `capabilities/default.json` einzeln freigegeben.
 
 /// App-eigene Tauri-Befehle (Namen wie in `generate_handler!`).
-const APP_COMMANDS: &[&str] = &["app_info"];
+const APP_COMMANDS: &[&str] = &["app_info", "hide_to_tray"];
 
 fn main() {
     let attributes = tauri_build::Attributes::new()

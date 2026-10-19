@@ -18,6 +18,11 @@ export interface SafeTextProps {
   /** Monospace (Standard: an – Pfade, Hashes). */
   readonly mono?: boolean | undefined;
   /**
+   * Umbruch an beliebiger Stelle (Standard: an – Pfade ohne Leerzeichen). Für Fließtext aus:
+   * dann wird nur dort umgebrochen, wo ein Wort sonst überliefe.
+   */
+  readonly breakAll?: boolean | undefined;
+  /**
    * Beschreibung einer Marke für Screenreader. Standard: „Steuerzeichen U+202E (RLO)“.
    */
   readonly describeInvisible?:
@@ -73,13 +78,15 @@ function spokenText(
 /**
  * Sichere Anzeige fremder Texte: unsichtbare und Bidi-Steuerzeichen erscheinen als
  * hervorgehobene Marke `⟨U+202E⟩` (der Text kann sich so nicht umdrehen oder etwas
- * verstecken), die Leserichtung ist isoliert links-nach-rechts, lange Werte werden in der
- * Mitte gekürzt – der volle Text bleibt für Screenreader lesbar.
+ * verstecken), die Leserichtung ist isoliert links-nach-rechts, Leerzeichenfolgen bleiben
+ * erhalten, lange Werte werden in der Mitte gekürzt – der volle Text bleibt für Screenreader
+ * lesbar.
  */
 export function SafeText({
   value,
   maxLength,
   mono = true,
+  breakAll = true,
   describeInvisible = defaultDescribe,
   className,
 }: SafeTextProps) {
@@ -90,7 +97,14 @@ export function SafeText({
       ? { head: units, tail: [], truncated: false }
       : middleTruncateUnits(units, maxLength);
 
-  const classes = cx('[unicode-bidi:isolate] break-all', mono && 'font-mono', className);
+  // `whitespace-pre-wrap`: Leerzeichenfolgen bleiben sichtbar (genau der Name, auf den später
+  // zugegriffen wird – „bericht.pdf␠␠␠…␠.exe“ schrumpft nicht zu „bericht.pdf .exe“).
+  const classes = cx(
+    '[unicode-bidi:isolate] whitespace-pre-wrap',
+    breakAll ? 'break-all' : 'wrap-anywhere',
+    mono && 'font-mono',
+    className,
+  );
 
   if (!hasMarkers && !truncation.truncated) {
     return (

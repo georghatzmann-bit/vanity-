@@ -8,8 +8,15 @@ export {
   PERMANENT_DELETE_DELAY_MS,
   PermanentDeleteConfirmDialog,
   type PermanentDeleteConfirmDialogProps,
+  type PermanentDeleteConfirmMeta,
 } from './PermanentDeleteConfirmDialog.tsx';
-export { ConsentTargetList, TARGET_MAX_LENGTH, targetPrimaryText } from './ConsentTargetList.tsx';
+export {
+  ConsentTargetList,
+  TARGET_MAX_LENGTH,
+  targetDisplayParts,
+  targetPrimaryText,
+} from './ConsentTargetList.tsx';
+export { TextSafetyHints } from './TextSafetyHints.tsx';
 export {
   consentDialogLabelsDe,
   consentDialogLabelsEn,
@@ -24,6 +31,7 @@ export {
 export {
   consentDecisions,
   type ConsentDecision,
+  type ConsentDecisionMeta,
   type ConsentParameter,
   type ConsentPlan,
   type ConsentTarget,

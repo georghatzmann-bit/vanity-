@@ -42,37 +42,74 @@ fn main() {
             window::reveal_main(app);
         }))
         .plugin(navigation::guard(policy))
-        .invoke_handler(tauri::generate_handler![app_info::app_info])
+        .invoke_handler(tauri::generate_handler![
+            app_info::app_info,
+            window::hide_to_tray
+        ])
         .on_window_event(window::on_window_event)
         .setup(move |app| {
             // Zuerst, vor dem ersten Zeichnen: kein dunkles Aufblitzen bei hellem System.
             window::match_system_background(app.handle());
-            app.manage(app_info::AppInfo::detect(
-                app.package_info().version.to_string(),
-            ));
-            // Ohne Tray läuft AEGIS weiter; ein zweiter Start holt das Fenster dann zurück,
-            // falls die Oberfläche es versteckt hat.
+            // Ohne Tray läuft AEGIS weiter, verspricht aber kein Weiterlaufen im Infobereich:
+            // „Schließen“ versteckt das Fenster dann nicht (`hide_to_tray`), sondern beendet.
             if let Err(error) = tray::create(app.handle()) {
                 startup_error::log_notice(
                     &setup_version,
                     &format!("Symbol im Infobereich nicht verfügbar: {error}"),
                 );
             }
+            let tray_available =
+                window::close_to_tray_available(app.tray_by_id(tray::TRAY_ID).is_some());
+            app.manage(app_info::AppInfo::detect(
+                app.package_info().version.to_string(),
+                tray_available,
+            ));
             Ok(())
         })
         .build(context);
 
     match built {
-        Ok(app) => app.run(|_app, event| {
-            if let RunEvent::Ready = event {
-                // Setup und Fenster stehen: ab hier ist eine Panic kein Startfehler mehr.
-                startup_error::startup_finished();
-            }
-        }),
+        Ok(app) => app.run(|_app, event| on_run_event(&event)),
         Err(error) => {
             startup_error::report_failure(&version, &error.to_string());
             std::process::exit(1);
         }
+    }
+}
+
+/// Ereignisse der laufenden App: Sobald sie bereit ist (Setup und Fenster stehen), ist eine
+/// Panic kein Startfehler mehr.
+fn on_run_event(event: &RunEvent) {
+    if let RunEvent::Ready = event {
+        startup_error::startup_finished();
+    }
+}
+
+/// Test-Hilfen: die App mit Tauris Test-Laufzeit, denselben Befehlen und der echten ACL.
+#[cfg(test)]
+mod test_support {
+    use tauri::test::{MockRuntime, mock_builder};
+    use tauri::{App, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+
+    use crate::app_info::AppInfo;
+
+    /// App wie in `main` (App-Befehle, `AppInfo`), aber ohne Fenster, Tray und Plugins.
+    pub fn app() -> App<MockRuntime> {
+        let app = mock_builder()
+            .invoke_handler(tauri::generate_handler![
+                crate::app_info::app_info,
+                crate::window::hide_to_tray
+            ])
+            .build(tauri::generate_context!(test = true))
+            .unwrap();
+        app.manage(AppInfo::new("0.1.0", None, false));
+        app
+    }
+
+    pub fn window(app: &App<MockRuntime>, label: &str) -> WebviewWindow<MockRuntime> {
+        WebviewWindowBuilder::new(app, label, WebviewUrl::default())
+            .build()
+            .unwrap()
     }
 }
 
@@ -82,17 +119,19 @@ mod tests {
     /// `apps/desktop/README.md`. Eine Änderung hier ist eine bewusste Sicherheitsentscheidung.
     /// `show`/`set_focus` fehlen bewusst: Das Fenster holt nur Rust nach vorn (Tray, zweiter
     /// Start); die Oberfläche ruft sie nie auf.
+    /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
+    /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
     const EXPECTED_PERMISSIONS: [&str; 10] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
         "core:window:allow-is-maximized",
         "core:window:allow-start-dragging",
-        "core:window:allow-hide",
         "core:window:allow-close",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
         "allow-app-info",
+        "allow-hide-to-tray",
     ];
 
     fn capability() -> serde_json::Value {
@@ -161,32 +200,36 @@ mod tests {
         }
     }
 
+    #[test]
+    fn startphase_endet_erst_wenn_die_app_bereit_ist() {
+        // Ohne diesen Schritt bliebe jede spätere Panic ein „Startfehler“ (Meldungsfenster).
+        crate::startup_error::begin_startup_without_hook();
+        crate::on_run_event(&tauri::RunEvent::MainEventsCleared);
+        assert!(crate::startup_error::is_starting());
+        crate::on_run_event(&tauri::RunEvent::Ready);
+        assert!(!crate::startup_error::is_starting());
+    }
+
+    #[test]
+    fn main_registriert_die_fenster_ereignisse() {
+        // `on_window_event` beendet die App beim Schließen des Hauptfensters (window.rs).
+        let main = include_str!("main.rs");
+        let production = &main[..main.find("#[cfg(test)]").unwrap()];
+        assert!(production.contains(".on_window_event(window::on_window_event)"));
+        assert!(production.contains("app.run(|_app, event| on_run_event(&event))"));
+    }
+
     /// Laufzeit-Prüfung der Rechte mit Tauris Test-Laufzeit und der echten, beim Build
     /// aufgelösten ACL (Capability + App-Manifest aus `build.rs`).
     mod ipc {
         use serde_json::{Value, json};
         use tauri::ipc::{CallbackFn, InvokeBody};
-        use tauri::test::{INVOKE_KEY, MockRuntime, get_ipc_response, mock_builder};
+        use tauri::test::{INVOKE_KEY, MockRuntime, get_ipc_response};
         use tauri::webview::InvokeRequest;
-        use tauri::{App, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+        use tauri::{Manager, WebviewWindow};
 
-        use crate::app_info::AppInfo;
+        use crate::test_support::{app, window};
         use crate::window::MAIN_WINDOW_LABEL;
-
-        fn app() -> App<MockRuntime> {
-            let app = mock_builder()
-                .invoke_handler(tauri::generate_handler![crate::app_info::app_info])
-                .build(tauri::generate_context!(test = true))
-                .unwrap();
-            app.manage(AppInfo::new("0.1.0", None));
-            app
-        }
-
-        fn window(app: &App<MockRuntime>, label: &str) -> WebviewWindow<MockRuntime> {
-            WebviewWindowBuilder::new(app, label, WebviewUrl::default())
-                .build()
-                .unwrap()
-        }
 
         /// Abgelehnt von der ACL (nicht etwa wegen falscher Argumente).
         fn assert_denied(response: Result<Value, Value>, cmd: &str) {
@@ -240,6 +283,31 @@ mod tests {
             assert_denied(invoke(&other, "app_info", json!({})), "app_info");
         }
 
+        /// Ohne Symbol im Infobereich versteckt `hide_to_tray` nichts – sonst liefe AEGIS
+        /// unsichtbar weiter, ohne Rückweg.
+        #[test]
+        fn hide_to_tray_ohne_symbol_versteckt_nichts() {
+            let app = app();
+            let main = window(&app, MAIN_WINDOW_LABEL);
+            assert!(app.tray_by_id(crate::tray::TRAY_ID).is_none());
+            assert_eq!(
+                invoke(&main, "hide_to_tray", json!({})).unwrap(),
+                json!("noTray")
+            );
+            let other = window(&app, "fremd");
+            assert_denied(invoke(&other, "hide_to_tray", json!({})), "hide_to_tray");
+        }
+
+        #[test]
+        fn app_info_meldet_ob_es_einen_infobereich_gibt() {
+            let app = app();
+            let main = window(&app, MAIN_WINDOW_LABEL);
+            assert_eq!(
+                invoke(&main, "app_info", json!({})).unwrap()["trayAvailable"],
+                json!(false)
+            );
+        }
+
         #[test]
         fn gewaehrte_fensterbefehle_laufen() {
             let app = app();
@@ -262,7 +330,7 @@ mod tests {
                 ("plugin:window|internal_toggle_maximize", json!({})),
                 ("plugin:window|is_maximized", json!({})),
                 ("plugin:window|start_dragging", json!({})),
-                ("plugin:window|hide", json!({})),
+                ("hide_to_tray", json!({})),
                 (
                     "plugin:event|listen",
                     json!({
@@ -300,6 +368,8 @@ mod tests {
                 ("plugin:window|set_always_on_top", json!({ "value": true })),
                 // Nach vorn holen macht nur Rust (Tray, zweiter Start), nie die Oberfläche.
                 ("plugin:window|show", json!({})),
+                // Verstecken nur über `hide_to_tray` (prüft, ob es ein Tray-Symbol gibt).
+                ("plugin:window|hide", json!({})),
                 ("plugin:window|set_focus", json!({})),
                 ("plugin:window|unminimize", json!({})),
                 (

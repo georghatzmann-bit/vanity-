@@ -55,6 +55,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('PermanentDeleteConfirmDialog', () => {
@@ -221,5 +222,94 @@ describe('PermanentDeleteConfirmDialog', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(onConfirm).not.toHaveBeenCalled();
     expect(onCancel).not.toHaveBeenCalled();
+  });
+});
+
+describe('PermanentDeleteConfirmDialog – Härtung (Review P1)', () => {
+  const otherTargets: readonly ConsentTarget[] = [
+    { type: 'file', path: 'C:\\Users\\Beispiel\\Dokumente\\Steuer2025.pdf' },
+    { type: 'file', path: 'C:\\Users\\Beispiel\\Dokumente\\Vertrag.pdf' },
+  ];
+
+  it('F8: ein Druck während der Wartezeit, der erst danach losgelassen wird, bestätigt nicht', () => {
+    const { onConfirm } = setup({ challengeId: 'challenge-1' });
+    advance(0);
+    advance(1300);
+    fireEvent.pointerDown(confirm());
+    advance(400);
+    expect(confirm()).toBeEnabled();
+    fireEvent.click(confirm(), { detail: 1 });
+    expect(onConfirm).not.toHaveBeenCalled();
+    // Ein neuer Druck nach der Wartezeit zählt – mit Kennung und Zielen der Rückfrage.
+    fireEvent.pointerDown(confirm());
+    fireEvent.click(confirm(), { detail: 1 });
+    expect(onConfirm).toHaveBeenCalledWith({ challengeId: 'challenge-1', targets });
+  });
+
+  it('F8: geänderte Ziele im offenen Dialog starten die Wartezeit neu und werden gemeldet', () => {
+    const { onConfirm, rerenderWith } = setup({ challengeId: 'challenge-1' });
+    advance(PERMANENT_DELETE_DELAY_MS);
+    expect(confirm()).toBeEnabled();
+    rerenderWith({ challengeId: 'challenge-1', targets: otherTargets });
+    expect(confirm()).toBeDisabled();
+    expect(document.querySelector('[data-part="changed"]')).toHaveTextContent(
+      'Die Liste hat sich geändert',
+    );
+    expect(cancel()).toHaveFocus();
+    fireEvent.click(confirm());
+    expect(onConfirm).not.toHaveBeenCalled();
+    advance(PERMANENT_DELETE_DELAY_MS);
+    fireEvent.click(confirm());
+    expect(onConfirm).toHaveBeenCalledWith({ challengeId: 'challenge-1', targets: otherTargets });
+  });
+
+  it('F8: eine neue Kennung startet die Wartezeit ebenfalls neu', () => {
+    const { rerenderWith } = setup({ challengeId: 'challenge-1' });
+    advance(PERMANENT_DELETE_DELAY_MS);
+    expect(confirm()).toBeEnabled();
+    rerenderWith({ challengeId: 'challenge-2' });
+    expect(confirm()).toBeDisabled();
+  });
+
+  it('F6: nach der Bestätigung nie „Abgelaufen – es wurde nichts gelöscht“', () => {
+    const { onConfirm } = setup({ expiresAt: START + 3000 });
+    advance(PERMANENT_DELETE_DELAY_MS);
+    fireEvent.click(confirm());
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    advance(5000);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Abgelaufen – es wurde nichts gelöscht')).toBeNull();
+    expect(document.querySelector('[data-part="answered"]')).toHaveTextContent('Antwort gesendet.');
+    expect(confirm()).toBeDisabled();
+    expect(cancel()).toBeDisabled();
+  });
+
+  it('F7: die Wartezeit verstreicht nicht, solange das Fenster im Hintergrund ist', () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    setup();
+    advance(5000);
+    expect(confirm()).toBeDisabled();
+    hasFocus.mockReturnValue(true);
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    advance(PERMANENT_DELETE_DELAY_MS - 1);
+    expect(confirm()).toBeDisabled();
+    advance(1);
+    expect(confirm()).toBeEnabled();
+  });
+
+  it('F9: verwirft gehaltene Tasten auch auf „Abbrechen“', () => {
+    setup();
+    expect(fireEvent.keyDown(cancel(), { key: 'Enter', repeat: true })).toBe(false);
+    expect(fireEvent.keyDown(cancel(), { key: 'Enter' })).toBe(true);
+  });
+
+  it('F17: die Beschreibung passt auch zu mehreren Dateien', () => {
+    setup({ targets: otherTargets });
+    expect(screen.getByRole('alertdialog')).toHaveAccessibleDescription(
+      /^Alles Aufgeführte wird unwiderruflich gelöscht/,
+    );
+    expect(screen.getByText('Wird gelöscht (2)')).toBeInTheDocument();
   });
 });

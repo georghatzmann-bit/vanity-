@@ -9,7 +9,13 @@ import { App } from '../App.tsx';
 import { createAppServices } from '../app/createServices.ts';
 import type { AppServices } from '../app/services.tsx';
 import { previewAppInfo, type AppInfo } from '../platform/appInfo.ts';
-import type { NavigateTarget, Platform, Unlisten, WindowApi } from '../platform/platform.ts';
+import type {
+  HideOutcome,
+  NavigateTarget,
+  Platform,
+  Unlisten,
+  WindowApi,
+} from '../platform/platform.ts';
 import { SETTINGS_STORAGE_KEY, SETTINGS_VERSION, type Settings } from '../settings/schema.ts';
 import type { StorageLike } from '../settings/store.ts';
 
@@ -17,7 +23,7 @@ export interface FakeWindowApi extends WindowApi {
   readonly minimize: Mock<() => Promise<void>>;
   readonly toggleMaximize: Mock<() => Promise<void>>;
   readonly isMaximized: Mock<() => Promise<boolean>>;
-  readonly hide: Mock<() => Promise<void>>;
+  readonly hideToTray: Mock<() => Promise<HideOutcome>>;
   readonly close: Mock<() => Promise<void>>;
 }
 
@@ -39,6 +45,7 @@ export const desktopInfo: AppInfo = {
   osVersion: '10.0.22631.4317',
   arch: 'x86_64',
   tauriVersion: '2.12.4',
+  trayAvailable: true,
 };
 
 /** Nachgebildete Plattform: Desktop (mit Fensterknöpfen) oder Browser-Vorschau. */
@@ -55,7 +62,7 @@ export function fakePlatform(kind: 'tauri' | 'browser', info?: AppInfo): FakePla
             return Promise.resolve();
           }),
           isMaximized: vi.fn(() => Promise.resolve(maximized)),
-          hide: vi.fn(() => Promise.resolve()),
+          hideToTray: vi.fn(() => Promise.resolve<HideOutcome>('hidden')),
           close: vi.fn(() => Promise.resolve()),
           onResized: (handler) => {
             resizeHandlers.add(handler);

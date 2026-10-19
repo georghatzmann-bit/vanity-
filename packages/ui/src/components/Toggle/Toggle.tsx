@@ -80,19 +80,30 @@ export function Toggle({
         'group relative inline-flex shrink-0 items-center rounded-full border p-[2px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45',
         trackSize[size],
         on
-          ? 'border-accent bg-accent'
-          : 'border-border-strong bg-surface-3 enabled:hover:border-text-subtle',
+          ? 'border-accent bg-accent forced-colors:border-[Highlight]'
+          : 'border-border-strong bg-surface-3 enabled:hover:border-text-subtle forced-colors:border-[ButtonText]',
+        'forced-colors:disabled:border-[GrayText]',
       )}
       data-state={on ? 'on' : 'off'}
       {...rest}
     >
+      {/*
+        Kontrastdesigns (Windows, `forced-colors`): Hintergründe entfernt das System – ohne
+        eigene Systemfarbe wären Knopf und Spur gleich und „an“/„aus“ nicht zu erkennen.
+        Der Knopf behält daher seine Farbe (`forced-color-adjust: none`) in Systemfarben:
+        „an“ = Highlight, „aus“ = ButtonText, gesperrt = GrayText.
+      */}
       <motion.span
         aria-hidden="true"
         className={cx(
-          'block rounded-full shadow-sm',
+          'block rounded-full shadow-sm forced-colors:forced-color-adjust-none',
           knobSize[size],
-          on ? 'bg-on-accent' : 'bg-text-muted',
+          on
+            ? 'bg-on-accent forced-colors:bg-[Highlight]'
+            : 'bg-text-muted forced-colors:bg-[ButtonText]',
+          'forced-colors:group-disabled:bg-[GrayText]',
         )}
+        data-part="knob"
         initial={false}
         animate={{ x: on ? knobTravel[size] : 0 }}
         transition={reduced ? { duration: 0 } : springs.snappy}

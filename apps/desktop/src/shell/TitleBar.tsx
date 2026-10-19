@@ -13,7 +13,7 @@ import {
 import type { ReactNode } from 'react';
 import { useServices, useSettingsSnapshot } from '../app/services.tsx';
 import { useT } from '../i18n/I18nProvider.tsx';
-import { useWindowMaximized } from '../platform/PlatformContext.tsx';
+import { useAppInfo, useWindowMaximized } from '../platform/PlatformContext.tsx';
 import { reportPlatformError, type WindowApi } from '../platform/platform.ts';
 import { modifierKeys } from './shortcuts.ts';
 
@@ -84,10 +84,22 @@ function PreviewBadge() {
 function WindowControls({ windowApi }: { readonly windowApi: WindowApi }) {
   const { t } = useT();
   const { settings } = useSettingsSnapshot();
+  const appInfo = useAppInfo();
   const maximized = useWindowMaximized(windowApi);
+  // Den Infobereich nur versprechen, wenn Rust ein Symbol dort bestätigt hat (sonst – auch
+  // solange das noch nicht feststeht – beendet „Schließen“ AEGIS ehrlich).
+  const toTray =
+    settings.closeToTray && appInfo.status === 'ready' && appInfo.info.trayAvailable;
 
   const run = (action: string, command: () => Promise<void>) => () => {
     command().catch((error: unknown) => reportPlatformError(action, error));
+  };
+
+  /** Rust versteckt nur mit Symbol im Infobereich; ohne Symbol wird AEGIS beendet. */
+  const hideOrClose = async (): Promise<void> => {
+    if ((await windowApi.hideToTray()) === 'noTray') {
+      await windowApi.close();
+    }
   };
 
   return (
@@ -107,12 +119,8 @@ function WindowControls({ windowApi }: { readonly windowApi: WindowApi }) {
         {maximized ? <IconRestore size={16} /> : <IconMaximize size={16} />}
       </WindowButton>
       <WindowButton
-        label={settings.closeToTray ? t('titlebar.closeToTray') : t('titlebar.close')}
-        onClick={
-          settings.closeToTray
-            ? run('hide', () => windowApi.hide())
-            : run('close', () => windowApi.close())
-        }
+        label={toTray ? t('titlebar.closeToTray') : t('titlebar.close')}
+        onClick={toTray ? run('hideToTray', hideOrClose) : run('close', () => windowApi.close())}
         tone="danger"
         testId="window-close"
       >

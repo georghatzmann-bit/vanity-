@@ -1,17 +1,11 @@
-import { useId, useState, type ReactNode } from 'react';
-import {
-  IconFile,
-  IconInfo,
-  IconProcess,
-  IconSliders,
-  IconTree,
-  IconWarning,
-} from '../../icons/icons.tsx';
+import { useId, useState } from 'react';
+import { IconFile, IconInfo, IconProcess, IconSliders, IconTree } from '../../icons/icons.tsx';
 import type { IconComponent } from '../../icons/createIcon.tsx';
 import { cx } from '../../utils/cx.ts';
-import { containsRightToLeft, hasInvisibleCharacters, toSafeTextUnits } from '../../utils/text.ts';
+import { toSafeTextUnits } from '../../utils/text.ts';
 import { SafeText } from '../SafeText/SafeText.tsx';
 import type { ConsentTargetLabels } from './labels.ts';
+import { TextSafetyHints } from './TextSafetyHints.tsx';
 import type { ConsentTarget, ConsentTargetType } from './types.ts';
 
 const targetIcons: Readonly<Record<ConsentTargetType, IconComponent>> = {
@@ -22,7 +16,11 @@ const targetIcons: Readonly<Record<ConsentTargetType, IconComponent>> = {
   other: IconInfo,
 };
 
-/** Sichtbarer Hauptwert eines Ziels (Rohtext – wird nur über SafeText dargestellt). */
+/**
+ * Ziel als ein Text (Rohtext, z. B. für Suche oder Protokoll – nur über SafeText anzeigen).
+ * Achtung: Bei Registrierungswerten ist `Schlüssel\Name` mehrdeutig (Wertnamen dürfen `\`
+ * enthalten); die Liste zeigt Schlüssel und Wertname deshalb getrennt (`targetDisplayParts`).
+ */
 export function targetPrimaryText(target: ConsentTarget): string {
   switch (target.type) {
     case 'file':
@@ -36,6 +34,21 @@ export function targetPrimaryText(target: ConsentTarget): string {
     case 'other':
       return target.description;
   }
+}
+
+/**
+ * Angezeigte Teile eines Ziels: Hauptwert und – nur bei Registrierungswerten mit Namen – der
+ * Wertname als eigene Zeile. So sehen `…\CurrentVersion` + Name `Run\OneDrive` und
+ * `…\CurrentVersion\Run` + Name `OneDrive` verschieden aus.
+ */
+export function targetDisplayParts(target: ConsentTarget): {
+  readonly primary: string;
+  readonly valueName: string | undefined;
+} {
+  if (target.type === 'registry_value') {
+    return { primary: target.key, valueName: target.name === '' ? undefined : target.name };
+  }
+  return { primary: targetPrimaryText(target), valueName: undefined };
 }
 
 function targetMeta(target: ConsentTarget, labels: ConsentTargetLabels): string {
@@ -84,35 +97,13 @@ export function ConsentTargetList({
     <ul className="flex flex-col gap-2">
       {targets.map((target, index) => {
         const Icon = targetIcons[target.type];
-        const raw = targetPrimaryText(target);
-        const long = toSafeTextUnits(raw).length > maxLength;
+        const { primary, valueName } = targetDisplayParts(target);
+        const long =
+          toSafeTextUnits(primary).length > maxLength ||
+          (valueName !== undefined && toSafeTextUnits(valueName).length > maxLength);
         const isExpanded = expanded.has(index);
         const valueId = `${listId}-${index}`;
-        const hints: ReactNode[] = [];
-        if (hasInvisibleCharacters(raw)) {
-          hints.push(
-            <p
-              key="invisible"
-              className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-risk-risky [&_svg]:mt-px [&_svg]:size-3.5 [&_svg]:shrink-0"
-              data-hint="invisible"
-            >
-              <IconWarning strokeWidth={2.25} />
-              {labels.invisibleHint}
-            </p>,
-          );
-        }
-        if (containsRightToLeft(raw)) {
-          hints.push(
-            <p
-              key="rtl"
-              className="mt-1.5 flex items-start gap-1.5 text-xs text-text-muted [&_svg]:mt-px [&_svg]:size-3.5 [&_svg]:shrink-0"
-              data-hint="rtl"
-            >
-              <IconInfo strokeWidth={2.25} />
-              {labels.rtlHint}
-            </p>,
-          );
-        }
+        const truncateTo = long && !isExpanded ? maxLength : undefined;
         return (
           <li
             key={`${target.type}-${index}`}
@@ -130,15 +121,30 @@ export function ConsentTargetList({
                 <p className="font-mono text-2xs tracking-caps text-text-subtle uppercase">
                   {targetMeta(target, labels)}
                 </p>
-                <p id={valueId} className="mt-0.5 text-sm leading-relaxed text-text">
-                  <SafeText
-                    value={raw}
-                    mono={target.type !== 'other'}
-                    maxLength={long && !isExpanded ? maxLength : undefined}
-                    describeInvisible={labels.describeInvisible}
-                  />
-                </p>
-                {hints}
+                <div id={valueId}>
+                  <p className="mt-0.5 text-sm leading-relaxed text-text">
+                    <SafeText
+                      value={primary}
+                      mono={target.type !== 'other'}
+                      maxLength={truncateTo}
+                      describeInvisible={labels.describeInvisible}
+                    />
+                  </p>
+                  {valueName !== undefined && (
+                    <p className="mt-0.5 text-sm leading-relaxed text-text" data-part="value-name">
+                      <span className="text-xs text-text-muted">{labels.registryValueName}: </span>
+                      <SafeText
+                        value={valueName}
+                        maxLength={truncateTo}
+                        describeInvisible={labels.describeInvisible}
+                      />
+                    </p>
+                  )}
+                </div>
+                <TextSafetyHints
+                  values={valueName === undefined ? [primary] : [primary, valueName]}
+                  labels={labels}
+                />
               </div>
               {long && (
                 <button

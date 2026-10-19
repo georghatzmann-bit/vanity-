@@ -46,24 +46,32 @@ export function Shell({ ready, bootCount, preferences, onReplayBoot }: ShellProp
   const headingRef = useRef<HTMLHeadingElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+  /** Ziel des letzten Klicks in der Seitenleiste (nur dieser Wechsel lässt den Fokus dort). */
+  const sidebarTarget = useRef<RouteId | null>(null);
 
   const shell = useMemo<ShellActions>(
     () => ({ openPalette: () => setPaletteOpen(true), replayBoot: onReplayBoot, headingRef }),
     [onReplayBoot],
   );
 
-  // Seitenwechsel und Start: Inhalt nach oben, Fokus auf die Überschrift der Seite – außer
-  // der Wechsel kam aus der Seitenleiste (dann bleibt der Fokus dort, die Seite wird angesagt).
+  // Seitenwechsel und Start: Inhalt nach oben, Fokus auf die Überschrift der Seite (Screenreader
+  // lesen sie vor). Nur ein Wechsel per Seitenleiste lässt den Fokus dort – dann sagt die
+  // Statusregion die Seite an. Alle anderen Wege (Strg+, Befehlspalette, Verlauf, Tray, Knöpfe
+  // auf der Seite) führen zur Überschrift, auch wenn der Fokus gerade in der Navigation stand.
   useEffect(() => {
+    const fromSidebar = sidebarTarget.current === route;
+    sidebarTarget.current = null;
     if (!ready) {
       return;
     }
     if (mainRef.current !== null) {
       mainRef.current.scrollTop = 0;
     }
-    if (navRef.current?.contains(document.activeElement) === true) {
+    if (fromSidebar && navRef.current?.contains(document.activeElement) === true) {
       return;
     }
+    // Eine ältere Ansage der Seitenleiste gilt nicht mehr.
+    setAnnouncement('');
     headingRef.current?.focus({ preventScroll: true });
   }, [route, ready, bootCount]);
 
@@ -122,7 +130,17 @@ export function Shell({ ready, bootCount, preferences, onReplayBoot }: ShellProp
     [t, settings, preferences, router, update, onReplayBoot],
   );
 
+  // Dieselbe Suchaufforderung wie der Suchknopf der Titelleiste.
+  const paletteLabels = useMemo(
+    () => ({
+      ...(language === 'de' ? commandPaletteLabelsDe : commandPaletteLabelsEn),
+      placeholder: t('titlebar.search'),
+    }),
+    [language, t],
+  );
+
   const navigateFromSidebar = (target: RouteId): void => {
+    sidebarTarget.current = target;
     setAnnouncement(t('app.pageAnnouncement', { page: t(titleKey(target)) }));
   };
 
@@ -138,7 +156,8 @@ export function Shell({ ready, bootCount, preferences, onReplayBoot }: ShellProp
         <button
           type="button"
           onClick={() => headingRef.current?.focus()}
-          className="sr-only z-50 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-on-accent focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+          // `focus:not-sr-only` setzt padding: 0 – der Innenabstand muss daher ebenfalls am Fokus hängen.
+          className="sr-only z-50 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-on-accent focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:px-3 focus:py-2"
         >
           {t('app.skipToContent')}
         </button>
@@ -174,7 +193,7 @@ export function Shell({ ready, bootCount, preferences, onReplayBoot }: ShellProp
         open={paletteOpen && ready}
         onClose={() => setPaletteOpen(false)}
         items={commands}
-        labels={language === 'de' ? commandPaletteLabelsDe : commandPaletteLabelsEn}
+        labels={paletteLabels}
       />
     </ShellContext>
   );

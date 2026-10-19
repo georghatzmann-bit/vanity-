@@ -1,8 +1,9 @@
 /**
  * Plattform-Adapter: die einzige Stelle, an der die Oberfläche mit Tauri spricht.
  *
- * - In der Desktop-App (`isTauri()`) gehen die Aufrufe an die Fenster-API und den App-Befehl
- *   `app_info` – genau die Rechte aus `src-tauri/capabilities/default.json`, nicht mehr.
+ * - In der Desktop-App (`isTauri()`) gehen die Aufrufe an die Fenster-API und die App-Befehle
+ *   `app_info` und `hide_to_tray` – genau die Rechte aus `src-tauri/capabilities/default.json`,
+ *   nicht mehr.
  * - In einem normalen Browser (Vite-Vorschau, Playwright) gibt es keinen Rust-Teil: Fenster-
  *   steuerung fehlt (`window: null`), `app_info` liefert gekennzeichnete Vorschau-Werte und
  *   Tray-Ereignisse kommen nie. So läuft die Oberfläche überall, ohne etwas vorzutäuschen.
@@ -24,6 +25,20 @@ export type NavigateTarget = 'dashboard' | 'settings';
 /** Ereignis Rust → Oberfläche aus dem Tray-Menü. */
 export const NAVIGATE_EVENT = 'aegis://navigate';
 
+/**
+ * Ergebnis von `hide_to_tray`: `hidden` – Fenster versteckt, AEGIS über das Symbol im
+ * Infobereich erreichbar; `noTray` – kein Symbol, nichts versteckt.
+ */
+export type HideOutcome = 'hidden' | 'noTray';
+
+/** Prüft die Antwort von `hide_to_tray`; alles andere ist ein Fehler. */
+export function parseHideOutcome(value: unknown): HideOutcome {
+  if (value === 'hidden' || value === 'noTray') {
+    return value;
+  }
+  throw new TypeError('hide_to_tray: unerwartete Antwort.');
+}
+
 /** Fenstersteuerung der eigenen Titelleiste (rahmenloses Fenster). */
 export interface WindowApi {
   minimize(): Promise<void>;
@@ -32,8 +47,11 @@ export interface WindowApi {
   isMaximized(): Promise<boolean>;
   /** Größenänderung des Fensters (auch nach Maximieren, Andocken …). */
   onResized(handler: () => void): Promise<Unlisten>;
-  /** Fenster verstecken – AEGIS läuft im Infobereich weiter. */
-  hide(): Promise<void>;
+  /**
+   * Fenster in den Infobereich verstecken. Rust versteckt nur, wenn es dort ein Symbol gibt
+   * (sonst bliebe AEGIS unsichtbar ohne Rückweg) und meldet sonst `noTray`.
+   */
+  hideToTray(): Promise<HideOutcome>;
   /** Fenster schließen – beendet AEGIS vollständig (Rust: jede Schließ-Anforderung = Ende). */
   close(): Promise<void>;
 }
@@ -79,7 +97,7 @@ export function createTauriPlatform(): Platform {
       toggleMaximize: () => current.toggleMaximize(),
       isMaximized: () => current.isMaximized(),
       onResized: (handler) => current.onResized(() => handler()),
-      hide: () => current.hide(),
+      hideToTray: async () => parseHideOutcome(await invoke<unknown>('hide_to_tray')),
       close: () => current.close(),
     },
     appInfo: memoize(async () => parseAppInfo(await invoke<unknown>('app_info'))),

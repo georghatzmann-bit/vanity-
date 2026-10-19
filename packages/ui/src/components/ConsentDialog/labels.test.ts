@@ -31,7 +31,7 @@ describe('Beschriftungen der Freigabe-Dialoge', () => {
     expect(consentDialogLabelsDe.targetsHeading(3)).toBe('Betroffen (3)');
     expect(consentDialogLabelsEn.targetsHeading(1)).toBe('Affected');
     expect(consentDialogLabelsEn.targetsHeading(2)).toBe('Affected (2)');
-    expect(consentDialogLabelsEn.deadline('9:41')).toBe('Expires 9:41');
+    expect(consentDialogLabelsEn.deadline('9:41')).toBe('Expires in 9:41');
     expect(consentDialogLabelsEn.deadlineAccessible('14:05')).toBe(
       'Without an answer, the request expires at 14:05.',
     );
@@ -59,5 +59,40 @@ describe('Beschriftungen der Freigabe-Dialoge', () => {
     );
     expect(consentDialogLabelsDe.expiredTitle).toBe('Abgelaufen – es wurde nichts getan');
     expect(permanentDeleteLabelsDe.expiredTitle).toBe('Abgelaufen – es wurde nichts gelöscht');
+  });
+
+  it('UX-09: die Restzeit liest sich nicht als Uhrzeit', () => {
+    expect(consentDialogLabelsDe.deadline('10:00')).toBe('Verfällt in 10:00');
+    expect(consentDialogLabelsEn.deadline('10:00')).toBe('Expires in 10:00');
+  });
+
+  it('F17: nennt bei Bedarf das Datum der Frist und setzt beim Löschen keine Einzahl voraus', () => {
+    expect(consentDialogLabelsDe.deadlineAccessible('14:05')).toBe(
+      'Ohne Antwort verfällt die Anfrage um 14:05 Uhr.',
+    );
+    expect(consentDialogLabelsDe.deadlineAccessible('14:05', '20.10.2026')).toBe(
+      'Ohne Antwort verfällt die Anfrage am 20.10.2026 um 14:05 Uhr.',
+    );
+    expect(consentDialogLabelsEn.deadlineAccessible('2:05 PM', '10/20/2026')).toBe(
+      'Without an answer, the request expires on 10/20/2026 at 2:05 PM.',
+    );
+    for (const labels of [permanentDeleteLabelsDe, permanentDeleteLabelsEn]) {
+      expect(labels.description).not.toMatch(/Die Datei|The file/);
+      expect(labels.expiredText).not.toMatch(/Die Datei|The file/);
+    }
+  });
+
+  it('haben für jeden deutschen Text eine englische Entsprechung', () => {
+    expect(Object.keys(consentDialogLabelsEn).sort()).toEqual(
+      Object.keys(consentDialogLabelsDe).sort(),
+    );
+    expect(Object.keys(permanentDeleteLabelsEn).sort()).toEqual(
+      Object.keys(permanentDeleteLabelsDe).sort(),
+    );
+    expect(Object.keys(consentTargetLabelsEn).sort()).toEqual(
+      Object.keys(consentTargetLabelsDe).sort(),
+    );
+    expect(consentDialogLabelsEn.answered('Yes, execute')).toBe('Answer “Yes, execute” sent.');
+    expect(consentDialogLabelsDe.answered('Nein')).toBe('Antwort „Nein“ gesendet.');
   });
 });

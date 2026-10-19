@@ -1,17 +1,23 @@
 //! Hauptfenster: nach vorn holen und Verhalten beim Schließen.
 //!
 //! Das Fenster ist rahmenlos; Titelleiste und Fensterknöpfe zeichnet die Oberfläche selbst.
-//! **Schließen entscheidet die Oberfläche:** Mit der Einstellung „Beim Schließen in den
-//! Infobereich“ (Standard: an) ruft sie `hide()` auf – AEGIS läuft im Infobereich weiter.
-//! Ruft sie `close()` auf, endet die App vollständig.
+//! **Schließen entscheidet die Oberfläche, Verstecken Rust:** Mit der Einstellung „Beim
+//! Schließen in den Infobereich“ (Standard: an) ruft sie den App-Befehl `hide_to_tray` auf.
+//! Der versteckt das Fenster nur, wenn es ein Symbol im Infobereich gibt
+//! ([`close_to_tray_available`]) – sonst bliebe ein unsichtbarer Prozess ohne Rückweg. Ohne
+//! Symbol meldet er `noTray`, und die Oberfläche beendet AEGIS mit `close()`. Das Recht, das
+//! Fenster direkt zu verstecken (`core:window:allow-hide`), hat die Oberfläche nicht.
 //!
 //! Damit kein unsichtbarer Prozess übrig bleibt, beendet jede Schließ-Anforderung des
 //! Hauptfensters die ganze App – auch das Tray-Symbol hält sie dann nicht am Leben. Das gilt
 //! ebenso für Alt+F4 und „Fenster schließen“ in der Taskleiste: Diese Wege laufen am
 //! Frontend vorbei und beenden AEGIS deshalb immer.
 
+use serde::Serialize;
 use tauri::window::Color;
-use tauri::{AppHandle, Manager, Runtime, Theme, Window, WindowEvent};
+use tauri::{AppHandle, Manager, Runtime, Theme, WebviewWindow, Window, WindowEvent};
+
+use crate::tray;
 
 /// Kennung des Hauptfensters (wie in `tauri.conf.json` und `capabilities/default.json`).
 pub const MAIN_WINDOW_LABEL: &str = "main";
@@ -67,6 +73,55 @@ pub fn close_action(label: &str) -> CloseAction {
     }
 }
 
+/// Lässt sich das Fenster ehrlich „in den Infobereich“ verstecken? Nur, wenn das Symbol
+/// angelegt wurde – und nur unter Windows (und macOS), wo es eine Taskleiste bzw. Menüleiste
+/// gibt, die es anzeigt. Unter Linux lässt sich nicht feststellen, ob überhaupt ein
+/// Infobereich das Symbol zeigt (GNOME etwa hat ohne Erweiterung keinen; angelegt wird es
+/// trotzdem fehlerfrei) – dort verspricht AEGIS das Weiterlaufen im Infobereich nicht.
+/// Grenze: Unter Windows meldet `tray-icon` ein gescheitertes `Shell_NotifyIcon` nicht; das
+/// Symbol erscheint aber, sobald Explorer (wieder) läuft (`TaskbarCreated`).
+pub fn close_to_tray_available(tray_created: bool) -> bool {
+    tray_created && cfg!(any(windows, target_os = "macos"))
+}
+
+/// Ergebnis des Befehls `hide_to_tray` (JSON: `"hidden"` / `"noTray"`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HideOutcome {
+    /// Fenster versteckt – AEGIS bleibt über das Symbol im Infobereich erreichbar.
+    Hidden,
+    /// Kein (verlässliches) Symbol im Infobereich: nichts versteckt.
+    NoTray,
+}
+
+/// Versteckt das Fenster (`hide`) nur, wenn es in den Infobereich gehen kann.
+///
+/// # Errors
+/// Wenn das Verstecken selbst scheitert.
+pub fn hide_if_tray<E>(
+    available: bool,
+    hide: impl FnOnce() -> Result<(), E>,
+) -> Result<HideOutcome, E> {
+    if !available {
+        return Ok(HideOutcome::NoTray);
+    }
+    hide()?;
+    Ok(HideOutcome::Hidden)
+}
+
+/// App-Befehl `hide_to_tray`: Schließen-Knopf mit „Beim Schließen in den Infobereich“.
+/// Versteckt das aufrufende Fenster nur, wenn es ein Symbol im Infobereich gibt; sonst
+/// `noTray` (die Oberfläche beendet AEGIS dann). Verändert nichts außer der Sichtbarkeit.
+///
+/// # Errors
+/// Wenn das Fenster sich nicht verstecken lässt (Meldung als Text).
+#[tauri::command]
+pub fn hide_to_tray<R: Runtime>(window: WebviewWindow<R>) -> Result<HideOutcome, String> {
+    let available =
+        close_to_tray_available(window.app_handle().tray_by_id(tray::TRAY_ID).is_some());
+    hide_if_tray(available, || window.hide()).map_err(|error| error.to_string())
+}
+
 /// Fenster-Ereignisse aller Fenster (`Builder::on_window_event`).
 pub fn on_window_event<R: Runtime>(window: &Window<R>, event: &WindowEvent) {
     if let WindowEvent::CloseRequested { .. } = event
@@ -82,11 +137,13 @@ pub fn on_window_event<R: Runtime>(window: &Window<R>, event: &WindowEvent) {
 ///
 /// Aufgerufen vom Tray-Menü, vom Linksklick auf das Tray-Symbol und beim zweiten Start.
 /// Fehler sind nicht fatal (das Fenster bleibt dann, wo es ist) und werden nur gemeldet.
-pub fn reveal_main<R: Runtime>(app: &AppHandle<R>) {
+/// `true`, wenn das Fenster gefunden wurde und jeder Schritt gelang.
+pub fn reveal_main<R: Runtime>(app: &AppHandle<R>) -> bool {
     let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
         eprintln!("AEGIS: Hauptfenster nicht gefunden – nichts zu zeigen");
-        return;
+        return false;
     };
+    let mut revealed = true;
     for (step, result) in [
         ("zeigen", window.show()),
         ("wiederherstellen", window.unminimize()),
@@ -94,13 +151,115 @@ pub fn reveal_main<R: Runtime>(app: &AppHandle<R>) {
     ] {
         if let Err(error) = result {
             eprintln!("AEGIS: Hauptfenster {step} fehlgeschlagen: {error}");
+            revealed = false;
         }
     }
+    revealed
 }
 
 #[cfg(test)]
 mod tests {
+    use tauri::RunEvent;
+    use tauri::test::MockRuntime;
+
     use super::*;
+    use crate::test_support;
+
+    /// Lässt die Test-Laufzeit laufen und schließt nach dem Start das Fenster `label` („main“
+    /// legt Tauri dabei selbst aus `tauri.conf.json` an). Dessen Schließ-Ereignis geht an
+    /// [`on_window_event`] (die Test-Laufzeit meldet es nur an die Ereignisschleife, nicht an
+    /// `Builder::on_window_event`); danach schließt der Test die übrigen Fenster ungeprüft,
+    /// damit die Schleife endet. `AppHandle::exit` ist in der Test-Laufzeit nicht umgesetzt und
+    /// endet in einer Panic „not implemented“ – so wird sichtbar, ob die App beendet würde.
+    fn close_and_run(label: &'static str) -> i32 {
+        let app = test_support::app();
+        if label != MAIN_WINDOW_LABEL {
+            test_support::window(&app, label);
+        }
+        app.run_return(move |handle: &AppHandle<MockRuntime>, event| match event {
+            RunEvent::Ready => handle.get_webview_window(label).unwrap().close().unwrap(),
+            RunEvent::WindowEvent {
+                label: closed,
+                event,
+                ..
+            } if closed == label => {
+                if let Some(window) = handle.get_webview_window(&closed) {
+                    on_window_event(&window.as_ref().window(), &event);
+                }
+                for (other, window) in handle.webview_windows() {
+                    if other != label {
+                        window.close().unwrap();
+                    }
+                }
+            }
+            _ => {}
+        })
+    }
+
+    #[test]
+    #[should_panic(expected = "not implemented")]
+    fn schliessen_des_hauptfensters_beendet_die_app() {
+        close_and_run(MAIN_WINDOW_LABEL);
+    }
+
+    #[test]
+    fn schliessen_eines_anderen_fensters_beendet_die_app_nicht() {
+        assert_eq!(close_and_run("fremd"), 0);
+    }
+
+    #[test]
+    fn verstecken_nur_mit_symbol_im_infobereich() {
+        let mut hidden = 0;
+        assert_eq!(
+            hide_if_tray::<()>(false, || {
+                hidden += 1;
+                Ok(())
+            }),
+            Ok(HideOutcome::NoTray)
+        );
+        assert_eq!(hidden, 0, "ohne Symbol wird nichts versteckt");
+        assert_eq!(
+            hide_if_tray::<()>(true, || {
+                hidden += 1;
+                Ok(())
+            }),
+            Ok(HideOutcome::Hidden)
+        );
+        assert_eq!(hidden, 1);
+        assert_eq!(hide_if_tray(true, || Err("kaputt")), Err("kaputt"));
+    }
+
+    #[test]
+    fn infobereich_nur_mit_symbol_und_nicht_unter_linux() {
+        assert!(!close_to_tray_available(false));
+        assert_eq!(
+            close_to_tray_available(true),
+            cfg!(any(windows, target_os = "macos"))
+        );
+        if cfg!(target_os = "linux") {
+            assert!(!close_to_tray_available(true), "Linux: Anzeige nicht feststellbar");
+        }
+    }
+
+    #[test]
+    fn ergebnis_von_hide_to_tray_als_json() {
+        assert_eq!(
+            serde_json::to_value(HideOutcome::Hidden).unwrap(),
+            serde_json::json!("hidden")
+        );
+        assert_eq!(
+            serde_json::to_value(HideOutcome::NoTray).unwrap(),
+            serde_json::json!("noTray")
+        );
+    }
+
+    #[test]
+    fn hauptfenster_nach_vorn_holen() {
+        let app = test_support::app();
+        assert!(!reveal_main(app.handle()), "ohne Hauptfenster nichts zu zeigen");
+        test_support::window(&app, MAIN_WINDOW_LABEL);
+        assert!(reveal_main(app.handle()));
+    }
 
     #[test]
     fn hauptfenster_schliessen_beendet_die_app() {

@@ -175,7 +175,7 @@ describe('Einstellungen', () => {
     await user.click(screen.getByRole('switch', { name: 'Start-Animation beim Start zeigen' }));
     expect(memory.settings()?.bootAnimation).toBe(true);
     expect(screen.getByRole('switch', { name: 'Klang' })).toHaveAccessibleDescription(
-      'Dezente Töne, zum Beispiel beim Start.',
+      'Dezente Töne, etwa beim Einschalten des Klangs und beim erneuten Abspielen der Start-Animation. Beim Öffnen von AEGIS bleibt es still.',
     );
   });
 
@@ -192,6 +192,42 @@ describe('Einstellungen', () => {
     expect(toggle).toHaveAccessibleDescription(/Alt\+F4 beendet AEGIS vollständig/);
     await user.click(toggle);
     expect(memory.settings()?.closeToTray).toBe(false);
+  });
+
+  it('Erklärungen der Auswahlgruppen sind mit der Gruppe verknüpft (auch der aufgelöste Wert)', () => {
+    stubMatchMedia({ '(prefers-reduced-motion: reduce)': true });
+    renderApp({ hash: '#/settings', settings: { language: 'system', motion: 'system' } });
+    expect(screen.getByRole('radiogroup', { name: 'Sprache' })).toHaveAccessibleDescription(
+      '„System“ folgt der Sprache von Windows. Gerade: Deutsch',
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Darstellung' })).toHaveAccessibleDescription(
+      /^„System“ folgt der Windows-Einstellung für helle oder dunkle Apps\. Gerade: /,
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Bewegung' })).toHaveAccessibleDescription(
+      '„Reduziert“ schaltet Animationen in der ganzen App ab – auch die Start-Animation. System: reduziert',
+    );
+  });
+
+  it('Sprachnamen tragen ihre eigene Sprache (lang), auch in der anderen Oberflächensprache', () => {
+    renderApp({ hash: '#/settings', settings: { language: 'en' } });
+    expect(document.documentElement).toHaveAttribute('lang', 'en');
+    const german = screen.getByRole('radio', { name: 'Deutsch' });
+    expect(german.querySelector('[lang]')).toHaveAttribute('lang', 'de');
+    expect(german.querySelector('[lang]')).toHaveTextContent('Deutsch');
+    const english = screen.getByRole('radio', { name: 'English' });
+    expect(english.querySelector('[lang]')).toHaveAttribute('lang', 'en');
+  });
+
+  it('ohne Symbol im Infobereich: Schalter gesperrt, aus, mit ehrlicher Erklärung', async () => {
+    renderApp({
+      hash: '#/settings',
+      platform: fakePlatform('tauri', { ...desktopInfo, trayAvailable: false }),
+    });
+    const toggle = screen.getByRole('switch', { name: 'Beim Schließen in den Infobereich' });
+    await waitFor(() => expect(toggle).toBeDisabled());
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(toggle).toHaveAccessibleDescription(/kein Symbol im Infobereich/);
+    expect(toggle).toHaveAccessibleDescription(/beendet AEGIS deshalb vollständig/);
   });
 
   it('Speichern scheitert: Änderung wirkt trotzdem, einmalige Meldung, Hinweis auf der Seite', async () => {

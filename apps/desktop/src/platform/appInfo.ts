@@ -23,6 +23,12 @@ export interface AppInfo {
   readonly arch: string | null;
   /** z. B. `2.12.4`; in der Vorschau `null`. */
   readonly tauriVersion: string | null;
+  /**
+   * Gibt es ein Symbol im Infobereich, über das ein verstecktes Fenster zurückkommt? Nur dann
+   * versteckt „Schließen“ das Fenster (Einstellung „Beim Schließen in den Infobereich“).
+   * In der Vorschau `false`.
+   */
+  readonly trayAvailable: boolean;
 }
 
 /** Obergrenze für einzelne Textwerte – schützt die Anzeige vor absurd langen Antworten. */
@@ -55,6 +61,10 @@ export function parseAppInfo(value: unknown): AppInfo {
   if (!('osVersion' in value)) {
     throw new TypeError('app_info: „osVersion“ fehlt.');
   }
+  const trayAvailable = value['trayAvailable'];
+  if (typeof trayAvailable !== 'boolean') {
+    throw new TypeError('app_info: „trayAvailable“ ist kein Wahrheitswert.');
+  }
   const osVersion = value['osVersion'];
   if (
     osVersion !== null &&
@@ -70,6 +80,7 @@ export function parseAppInfo(value: unknown): AppInfo {
     osVersion: osVersion === null || osVersion.trim() === '' ? null : osVersion,
     arch: text(value, 'arch'),
     tauriVersion: text(value, 'tauriVersion'),
+    trayAvailable,
   };
 }
 
@@ -86,5 +97,6 @@ export function previewAppInfo(version: string, dev: boolean): AppInfo {
     osVersion: null,
     arch: null,
     tauriVersion: null,
+    trayAvailable: false,
   };
 }

@@ -25,7 +25,7 @@ export const en: Messages<typeof de> = {
   },
   titlebar: {
     label: 'Title bar',
-    search: 'Search pages or commands …',
+    search: 'Search commands or pages…',
     windowControls: 'Window',
     minimize: 'Minimize',
     maximize: 'Maximize',
@@ -65,7 +65,7 @@ export const en: Messages<typeof de> = {
       title: 'Dashboard',
       eyebrow: 'Overview',
       description:
-        'The state of your protection – honestly: anything not built yet is shown as “coming in …”.',
+        'The state of your protection – honestly: anything not built yet is shown as “Coming in…”.',
     },
     scan: {
       nav: 'Scan',
@@ -118,7 +118,7 @@ export const en: Messages<typeof de> = {
     tools: {
       nav: 'Tools',
       title: 'Tools',
-      eyebrow: 'Tools',
+      eyebrow: 'Privacy & tools',
       tagline: 'Helpers for Windows tasks, following your rules',
       summary:
         'Tools for Windows tasks such as cleaning up and sorting. They only act on rules you create and switch on – always with preview, log and undo.',
@@ -190,7 +190,7 @@ export const en: Messages<typeof de> = {
         'These modules are not built yet. Once they exist, the rings will show their real state.',
     },
     build: {
-      eyebrow: 'Build-up',
+      eyebrow: 'Under construction',
       title: 'AEGIS is taking shape',
       summary: 'Phase {current} of {last}: {name}',
       lead: 'The foundation is in place. The protection modules follow step by step – each one only once it really works.',
@@ -268,7 +268,8 @@ export const en: Messages<typeof de> = {
     },
     sound: {
       label: 'Sound',
-      description: 'Subtle sounds, for example at start-up.',
+      description:
+        'Subtle sounds, for example when you turn sound on or replay the start animation. AEGIS stays silent when it opens.',
     },
     motion: {
       label: 'Motion',
@@ -287,6 +288,8 @@ export const en: Messages<typeof de> = {
       label: 'Close to the notification area',
       description:
         'The close button hides the window and AEGIS keeps running in the notification area. Alt+F4 quits AEGIS completely.',
+      unavailable:
+        'Not available here: there is no notification area icon to bring AEGIS back. The close button therefore quits AEGIS completely.',
     },
     persistence: {
       memoryOnly: 'Settings cannot be saved right now. They apply until AEGIS quits.',
@@ -303,7 +306,7 @@ export const en: Messages<typeof de> = {
   about: {
     infoTitle: 'Version & platform',
     previewNote: 'Browser preview: these values do not come from the desktop app.',
-    loading: 'Loading …',
+    loading: 'Loading…',
     error: 'The app information could not be read.',
     unknown: 'unknown',
     fields: {
@@ -326,7 +329,7 @@ export const en: Messages<typeof de> = {
     },
     principlesTitle: 'Principles',
     principles: {
-      golden: 'Golden rule: AEGIS changes, moves, ends or deletes nothing without your yes.',
+      golden: 'Golden rule: AEGIS changes, moves, terminates or deletes nothing without your yes.',
       defensive: 'Purely defensive: no attack techniques, no reading other people’s passwords.',
       kernel:
         'No kernel driver: AEGIS detects, warns and isolates on request – it does not block programs before they start.',
@@ -341,11 +344,11 @@ export const en: Messages<typeof de> = {
     },
     themeToLight: 'Light appearance',
     themeToDark: 'Dark appearance',
-    languageSwitch: 'Sprache: Deutsch',
+    languageSwitch: 'Language: Deutsch',
     soundOn: 'Turn sound on',
     soundOff: 'Turn sound off',
     motionReduce: 'Reduce motion',
-    motionSystem: 'Motion as in the system',
+    motionSystem: 'Follow system motion setting',
     replayBoot: 'Play start animation',
     emergency: 'Emergency scan',
   },

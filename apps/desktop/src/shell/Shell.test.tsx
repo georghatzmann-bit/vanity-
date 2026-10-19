@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTauriPlatform } from '../platform/platform.ts';
 import { routeIds, routePhases } from '../router/routes.ts';
 import {
+  desktopInfo,
   disposeApps,
   fakePlatform,
   renderApp,
@@ -152,6 +153,41 @@ describe('Seiten', () => {
     expect(heading()).toHaveFocus();
   });
 
+  it('Strg+, mit Fokus in der Navigation: Fokus auf die Überschrift, alte Ansage weg', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    const reports = within(nav()).getByRole('link', { name: /^Berichte/ });
+    await user.click(reports);
+    await waitFor(() => expect(heading()).toHaveTextContent('Berichte'));
+    expect(reports).toHaveFocus();
+    expect(screen.getByTestId('route-announcement')).toHaveTextContent('Seite: Berichte');
+
+    fireEvent.keyDown(reports, { key: ',', ctrlKey: true });
+    await waitFor(() => expect(heading()).toHaveTextContent('Einstellungen'));
+    expect(heading()).toHaveFocus();
+    expect(screen.getByTestId('route-announcement')).toHaveTextContent('');
+  });
+
+  it('Befehlspalette aus der Navigation heraus: Fokus auf die Überschrift der neuen Seite', async () => {
+    renderApp();
+    const dashboard = within(nav()).getByRole('link', { name: 'Dashboard' });
+    dashboard.focus();
+    await runCommand('Labor');
+    await waitFor(() => expect(heading()).toHaveTextContent('Labor'));
+    expect(heading()).toHaveFocus();
+    expect(dashboard).not.toHaveFocus();
+  });
+
+  it('Tray-Seitenwechsel mit Fokus in der Navigation: Fokus auf die Überschrift', async () => {
+    const platform = fakePlatform('tauri');
+    renderApp({ platform });
+    await waitFor(() => expect(platform.listenerCount()).toBeGreaterThan(0));
+    within(nav()).getByRole('link', { name: 'Dashboard' }).focus();
+    act(() => platform.emitNavigate('settings'));
+    await waitFor(() => expect(heading()).toHaveTextContent('Einstellungen'));
+    expect(heading()).toHaveFocus();
+  });
+
   it('„Zum Inhalt springen“ führt zur Überschrift', async () => {
     const user = userEvent.setup();
     renderApp();
@@ -197,14 +233,14 @@ describe('Titelleiste', () => {
     expect(platform.windowMock?.toggleMaximize).not.toHaveBeenCalled();
   });
 
-  it('Schließen: mit „In den Infobereich“ (Standard) hide(), sonst close()', async () => {
+  it('Schließen: mit „In den Infobereich“ (Standard) hideToTray(), sonst close()', async () => {
     const user = userEvent.setup();
     const platform = fakePlatform('tauri');
     const { services } = renderApp({ platform });
     await user.click(
-      screen.getByRole('button', { name: 'Schließen – AEGIS läuft im Infobereich weiter' }),
+      await screen.findByRole('button', { name: 'Schließen – AEGIS läuft im Infobereich weiter' }),
     );
-    expect(platform.windowMock?.hide).toHaveBeenCalledTimes(1);
+    expect(platform.windowMock?.hideToTray).toHaveBeenCalledTimes(1);
     expect(platform.windowMock?.close).not.toHaveBeenCalled();
 
     act(() => {
@@ -212,7 +248,34 @@ describe('Titelleiste', () => {
     });
     await user.click(screen.getByRole('button', { name: 'AEGIS beenden' }));
     expect(platform.windowMock?.close).toHaveBeenCalledTimes(1);
-    expect(platform.windowMock?.hide).toHaveBeenCalledTimes(1);
+    expect(platform.windowMock?.hideToTray).toHaveBeenCalledTimes(1);
+  });
+
+  it('ohne Symbol im Infobereich verspricht „Schließen“ ihn nicht und beendet AEGIS', async () => {
+    const user = userEvent.setup();
+    const platform = fakePlatform('tauri', { ...desktopInfo, trayAvailable: false });
+    renderApp({ platform });
+    // Auch nach dem Laden von app_info: kein Versprechen, kein Verstecken.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'AEGIS beenden' })).toBeInTheDocument(),
+    );
+    await act(() => platform.appInfo());
+    expect(screen.queryByRole('button', { name: /Infobereich/ })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'AEGIS beenden' }));
+    expect(platform.windowMock?.close).toHaveBeenCalledTimes(1);
+    expect(platform.windowMock?.hideToTray).not.toHaveBeenCalled();
+  });
+
+  it('meldet Rust trotzdem „kein Symbol“, wird AEGIS beendet statt versteckt', async () => {
+    const user = userEvent.setup();
+    const platform = fakePlatform('tauri');
+    platform.windowMock?.hideToTray.mockResolvedValueOnce('noTray');
+    renderApp({ platform });
+    await user.click(
+      await screen.findByRole('button', { name: 'Schließen – AEGIS läuft im Infobereich weiter' }),
+    );
+    await waitFor(() => expect(platform.windowMock?.close).toHaveBeenCalledTimes(1));
+    expect(platform.windowMock?.hideToTray).toHaveBeenCalledTimes(1);
   });
 
   it('Fehler eines Fensterbefehls werden gemeldet, nicht geworfen', async () => {
@@ -226,11 +289,15 @@ describe('Titelleiste', () => {
     );
   });
 
-  it('der Suchknopf öffnet die Befehlspalette', async () => {
+  it('der Suchknopf öffnet die Befehlspalette (gleicher Suchtext wie in der Palette)', async () => {
     const user = userEvent.setup();
     renderApp();
-    await user.click(screen.getByRole('button', { name: /Seite oder Befehl suchen/ }));
-    expect(await screen.findByRole('dialog', { name: 'Befehlspalette' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Befehl oder Seite suchen …/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Befehlspalette' });
+    expect(within(dialog).getByRole('combobox')).toHaveAttribute(
+      'placeholder',
+      'Befehl oder Seite suchen …',
+    );
   });
 });
 

@@ -15,7 +15,6 @@ path = "src/main.rs"
 tauri-build = { workspace = true }
 
 [dependencies]
-aegis-core = { workspace = true }
 # tray-icon: Symbol im Infobereich (wird im Code angelegt, nicht über tauri.conf.json).
 tauri = { workspace = true, features = ["tray-icon"] }
 tauri-plugin-single-instance = { workspace = true }
@@ -28,6 +27,8 @@ rfd = { workspace = true }
 windows-version = { workspace = true }
 
 [dev-dependencies]
+# Nur Testcode nutzt aegis-core (Fixtures über aegis_core::testing). Der Produktivcode braucht
+# es erst, wenn er Aktionspläne/Freigaben verarbeitet – dann gehört es unter [dependencies].
 aegis-core = { workspace = true, features = ["testing"] }
 # Nur für Tests: Tauris Test-Laufzeit (prüft die echten IPC-Rechte ohne Fenster).
 tauri = { workspace = true, features = ["tray-icon", "test"] }

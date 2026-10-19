@@ -7,6 +7,8 @@ export interface ConsentTargetLabels {
   readonly pid: (pid: number) => string;
   /** Standardwert eines Registrierungsschlüssels (leerer Name). */
   readonly registryDefault: string;
+  /** Beschriftung des Wertnamens unter dem Schlüssel, z. B. „Wertname“. */
+  readonly registryValueName: string;
   readonly showFull: string;
   readonly showShort: string;
   readonly invisibleHint: string;
@@ -35,15 +37,23 @@ export interface ConsentDialogLabels {
   readonly noResponseHint: string;
   readonly ignoreHint: string;
   readonly trustHint: string;
-  /** Sichtbare Frist, z. B. „Frist 9:41“. */
+  /** Sichtbare Restzeit, z. B. „Verfällt in 9:41“ (keine Uhrzeit!). */
   readonly deadline: (remaining: string) => string;
-  /** Zugängliche Frist mit Uhrzeit, z. B. „Ohne Antwort verfällt die Anfrage um 14:05 Uhr.“ */
-  readonly deadlineAccessible: (time: string) => string;
+  /**
+   * Zugängliche Frist mit Uhrzeit, z. B. „Ohne Antwort verfällt die Anfrage um 14:05 Uhr.“ –
+   * liegt sie nicht mehr am selben Tag, kommt das Datum dazu (`date`).
+   */
+  readonly deadlineAccessible: (time: string, date?: string) => string;
   readonly expiredTitle: string;
   readonly expiredText: string;
   readonly close: string;
   /** Hinweis, solange „Ja, ausführen“ kurz gesperrt ist (nur für Screenreader). */
   readonly armingHint: string;
+  /** Zustand nach der Antwort (Dialog bleibt z. B. offen, bis der Dienst antwortet). */
+  readonly answered: (answer: string) => string;
+  /** Hinweis, wenn sich der Plan im offenen Dialog geändert hat (Sperrzeit beginnt neu). */
+  readonly planChangedTitle: string;
+  readonly planChangedText: string;
   readonly targets: ConsentTargetLabels;
 }
 
@@ -57,6 +67,7 @@ export const consentTargetLabelsDe: ConsentTargetLabels = {
   },
   pid: (pid) => `PID ${pid}`,
   registryDefault: '(Standard)',
+  registryValueName: 'Wertname',
   showFull: 'Ganz anzeigen',
   showShort: 'Kürzen',
   invisibleHint: 'Enthält unsichtbare Steuerzeichen – sie sind als ⟨U+…⟩ markiert.',
@@ -75,6 +86,7 @@ export const consentTargetLabelsEn: ConsentTargetLabels = {
   },
   pid: (pid) => `PID ${pid}`,
   registryDefault: '(Default)',
+  registryValueName: 'Value name',
   showFull: 'Show full',
   showShort: 'Shorten',
   invisibleHint: 'Contains invisible control characters – shown as ⟨U+…⟩.',
@@ -106,12 +118,19 @@ export const consentDialogLabelsDe: ConsentDialogLabels = {
   noResponseHint: 'Ohne Antwort passiert nichts.',
   ignoreHint: 'Ignorieren: nichts tun und nicht erneut melden.',
   trustHint: 'Vertrauen: nichts tun und als vertrauenswürdig merken.',
-  deadline: (remaining) => `Frist ${remaining}`,
-  deadlineAccessible: (time) => `Ohne Antwort verfällt die Anfrage um ${time} Uhr.`,
+  deadline: (remaining) => `Verfällt in ${remaining}`,
+  deadlineAccessible: (time, date) =>
+    date === undefined
+      ? `Ohne Antwort verfällt die Anfrage um ${time} Uhr.`
+      : `Ohne Antwort verfällt die Anfrage am ${date} um ${time} Uhr.`,
   expiredTitle: 'Abgelaufen – es wurde nichts getan',
   expiredText: 'Die Frist ist verstrichen. AEGIS hat nichts verändert; die Anfrage ist verfallen.',
   close: 'Schließen',
   armingHint: 'Bestätigen ist gleich möglich.',
+  answered: (answer) => `Antwort „${answer}“ gesendet.`,
+  planChangedTitle: 'Plan geändert',
+  planChangedText:
+    'Der Inhalt hat sich geändert. Bitte prüfe ihn erneut – Bestätigen ist gleich wieder möglich.',
   targets: consentTargetLabelsDe,
 };
 
@@ -136,12 +155,19 @@ export const consentDialogLabelsEn: ConsentDialogLabels = {
   noResponseHint: 'Without an answer, nothing happens.',
   ignoreHint: 'Ignore: do nothing and do not report again.',
   trustHint: 'Trust: do nothing and remember as trusted.',
-  deadline: (remaining) => `Expires ${remaining}`,
-  deadlineAccessible: (time) => `Without an answer, the request expires at ${time}.`,
+  deadline: (remaining) => `Expires in ${remaining}`,
+  deadlineAccessible: (time, date) =>
+    date === undefined
+      ? `Without an answer, the request expires at ${time}.`
+      : `Without an answer, the request expires on ${date} at ${time}.`,
   expiredTitle: 'Expired – nothing was done',
   expiredText: 'The deadline has passed. AEGIS changed nothing; the request has lapsed.',
   close: 'Close',
   armingHint: 'Confirming will be possible in a moment.',
+  answered: (answer) => `Answer “${answer}” sent.`,
+  planChangedTitle: 'Plan changed',
+  planChangedText:
+    'The content has changed. Please review it again – confirming will be possible in a moment.',
   targets: consentTargetLabelsEn,
 };
 
@@ -158,6 +184,10 @@ export interface PermanentDeleteLabels {
   readonly expiredTitle: string;
   readonly expiredText: string;
   readonly close: string;
+  /** Zustand nach der Antwort (Dialog bleibt z. B. offen, bis der Dienst antwortet). */
+  readonly answered: string;
+  /** Hinweis, wenn sich die Liste im offenen Dialog geändert hat (Wartezeit beginnt neu). */
+  readonly changed: string;
   readonly targets: ConsentTargetLabels;
 }
 
@@ -165,15 +195,17 @@ export const permanentDeleteLabelsDe: PermanentDeleteLabels = {
   eyebrow: 'Zweite Bestätigung',
   title: 'Endgültig löschen – kann nicht rückgängig gemacht werden',
   description:
-    'Die Datei wird unwiderruflich gelöscht – auch über die Quarantäne lässt sie sich danach nicht wiederherstellen.',
+    'Alles Aufgeführte wird unwiderruflich gelöscht – auch über die Quarantäne lässt sich danach nichts wiederherstellen.',
   targetsHeading: (count) => (count === 1 ? 'Wird gelöscht' : `Wird gelöscht (${count})`),
   confirm: 'Endgültig löschen',
   cancel: 'Abbrechen',
   waiting: (seconds) => `Bestätigen möglich in ${seconds}`,
   ready: 'Bestätigen jetzt möglich. Abbrechen lässt alles, wie es ist.',
   expiredTitle: 'Abgelaufen – es wurde nichts gelöscht',
-  expiredText: 'Die Frist für die zweite Bestätigung ist verstrichen. Die Datei ist unverändert.',
+  expiredText: 'Die Frist für die zweite Bestätigung ist verstrichen. Alles ist unverändert.',
   close: 'Schließen',
+  answered: 'Antwort gesendet.',
+  changed: 'Die Liste hat sich geändert. Bitte prüfe sie erneut – die Wartezeit beginnt neu.',
   targets: consentTargetLabelsDe,
 };
 
@@ -181,14 +213,16 @@ export const permanentDeleteLabelsEn: PermanentDeleteLabels = {
   eyebrow: 'Second confirmation',
   title: 'Delete permanently – cannot be undone',
   description:
-    'The file will be deleted irrevocably – it cannot be restored afterwards, not even from quarantine.',
+    'Everything listed will be deleted irrevocably – nothing can be restored afterwards, not even from quarantine.',
   targetsHeading: (count) => (count === 1 ? 'Will be deleted' : `Will be deleted (${count})`),
   confirm: 'Delete permanently',
   cancel: 'Cancel',
   waiting: (seconds) => `Confirming possible in ${seconds}`,
   ready: 'Confirming is possible now. Cancel leaves everything as it is.',
   expiredTitle: 'Expired – nothing was deleted',
-  expiredText: 'The deadline for the second confirmation has passed. The file is unchanged.',
+  expiredText: 'The deadline for the second confirmation has passed. Everything is unchanged.',
   close: 'Close',
+  answered: 'Answer sent.',
+  changed: 'The list has changed. Please review it again – the waiting time starts over.',
   targets: consentTargetLabelsEn,
 };

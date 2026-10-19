@@ -39,6 +39,11 @@ export interface DialogProps {
   readonly eyebrow?: ReactNode;
   /** Beschreibung (`aria-describedby`). */
   readonly description?: ReactNode;
+  /**
+   * Weitere IDs für `aria-describedby` (z. B. Warnhinweis und Kernaussage im Inhalt) –
+   * zusätzlich zu `description`.
+   */
+  readonly describedBy?: string | undefined;
   /** Inhalt rechts neben der Überschrift (Plaketten, Frist). */
   readonly headerAside?: ReactNode;
   readonly children?: ReactNode;
@@ -61,6 +66,12 @@ export interface DialogProps {
   readonly glass?: boolean | undefined;
   /** Innenabstand des Inhalts (Standard: an). */
   readonly padded?: boolean | undefined;
+  /**
+   * Meldet, ob dieser Dialog gerade der oberste offene ist – nur der oberste ist bedienbar.
+   * `true` nach dem Öffnen bzw. sobald ein darüberliegender Dialog schließt, `false`, sobald
+   * ein anderer Dialog darüber öffnet oder dieser schließt.
+   */
+  readonly onStackTopChange?: ((top: boolean) => void) | undefined;
   readonly className?: string | undefined;
   readonly bodyClassName?: string | undefined;
   readonly 'data-testid'?: string | undefined;
@@ -80,12 +91,75 @@ const toneClasses: Readonly<Record<DialogTone, string>> = {
   danger: 'bg-danger',
 };
 
-/** Offene Dialoge, oberster zuletzt – nur der oberste fängt Fokus ein. */
+/** Offene Dialoge, oberster zuletzt – nur der oberste fängt Fokus ein und ist bedienbar. */
 const dialogStack: HTMLElement[] = [];
+/** Wird bei jeder Änderung des Stapels aufgerufen (Meldung „oberster Dialog“). */
+const stackListeners = new Set<() => void>();
+/** Elemente, die der Stapel selbst `inert` gesetzt hat – nur diese werden wieder freigegeben. */
+const managedInert = new Set<Element>();
 /** Wohin der Fokus nach dem Schließen eines Dialogs zurückkehrt. */
 const returnTargets = new WeakMap<HTMLElement, HTMLElement | null>();
 let scrollLocks = 0;
 let savedOverflow = '';
+
+/** Ausblendender Dialog: React hält ihn selbst `inert` (Prop), der Stapel fasst ihn nicht an. */
+function isClosingDialogRoot(element: Element): boolean {
+  return (
+    element.hasAttribute('data-aegis-dialog-root') &&
+    element.getAttribute('data-state') === 'closed'
+  );
+}
+
+/**
+ * Berechnet `inert` zentral aus dem Stapel: Bedienbar bleibt nur der oberste Dialog, alles
+ * andere unter `body` (App-Inhalt, verdeckte Dialoge) ist inert. Zentral statt je Dialog,
+ * damit zwei im selben Durchgang geöffnete Dialoge sich nicht gegenseitig sperren und das
+ * Schließen in anderer Reihenfolge den Hintergrund nicht vorzeitig freigibt.
+ */
+function syncBackgroundInert(): void {
+  for (const element of managedInert) {
+    if (!element.isConnected) {
+      managedInert.delete(element);
+    }
+  }
+  const top = dialogStack.at(-1);
+  if (top === undefined) {
+    for (const element of managedInert) {
+      if (!isClosingDialogRoot(element)) {
+        element.removeAttribute('inert');
+      }
+    }
+    managedInert.clear();
+    return;
+  }
+  for (const element of document.body.children) {
+    if (element.tagName === 'SCRIPT' || element.tagName === 'STYLE') {
+      continue;
+    }
+    if (element === top || element.contains(top)) {
+      if (managedInert.has(element)) {
+        element.removeAttribute('inert');
+        managedInert.delete(element);
+      }
+      continue;
+    }
+    // Schon inert (z. B. App-Inhalt während der Start-Animation): nicht übernehmen.
+    if (!element.hasAttribute('inert')) {
+      element.setAttribute('inert', '');
+      managedInert.add(element);
+    }
+  }
+}
+
+function notifyStackListeners(): void {
+  for (const listener of [...stackListeners]) {
+    listener();
+  }
+}
+
+function isFocusable(element: HTMLElement): boolean {
+  return element.isConnected && !(element as HTMLButtonElement).disabled;
+}
 
 /**
  * Element, zu dem der Fokus später zurückkehren soll. Liegt der Fokus noch in einem Dialog,
@@ -105,8 +179,11 @@ function captureReturnTarget(): HTMLElement | null {
 
 /**
  * Modaler Dialog: Portal in `document.body`, Fokusfalle (Tab/Umschalt+Tab), Escape meldet
- * `onClose('escape')`, der übrige Seiteninhalt ist `inert`, beim Schließen kehrt der Fokus
- * zum auslösenden Element zurück. Verschachtelte Dialoge stapeln sich korrekt.
+ * `onClose('escape')` (auch wenn der Fokus auf `body` gefallen ist), der übrige Seiteninhalt
+ * ist `inert`, beim Schließen kehrt der Fokus zum auslösenden Element zurück. Dialoge stapeln
+ * sich: Bedienbar ist nur der oberste, alle anderen sind `inert` – berechnet zentral aus dem
+ * Stapel, daher auch korrekt, wenn zwei Dialoge im selben Durchgang öffnen oder in anderer
+ * Reihenfolge schließen. `onStackTopChange` meldet, ob ein Dialog gerade oben liegt.
  */
 export function Dialog({
   open,
@@ -115,6 +192,7 @@ export function Dialog({
   hideTitle = false,
   eyebrow,
   description,
+  describedBy,
   headerAside,
   children,
   footer,
@@ -128,6 +206,7 @@ export function Dialog({
   closeLabel = 'Schließen',
   glass = false,
   padded = true,
+  onStackTopChange,
   className,
   bodyClassName,
   'data-testid': testId,
@@ -142,8 +221,12 @@ export function Dialog({
   // Neuester Startfokus – ein Wechsel (z. B. nach Ablauf einer Frist) darf das Öffnen nicht
   // wiederholen (sonst gingen Rückgabeziel und Fokus verloren).
   const initialFocusLatest = useRef(initialFocusRef);
+  const onCloseLatest = useRef(onClose);
+  const onStackTopChangeLatest = useRef(onStackTopChange);
   useLayoutEffect(() => {
     initialFocusLatest.current = initialFocusRef;
+    onCloseLatest.current = onClose;
+    onStackTopChangeLatest.current = onStackTopChange;
   });
   const [rootNode, setRootNode] = useState<HTMLDivElement | null>(null);
   const attachRoot = useCallback((node: HTMLDivElement | null) => {
@@ -161,33 +244,42 @@ export function Dialog({
     returnFocusRef.current = previous;
     returnTargets.set(root, previous);
 
-    // Hintergrund inert machen (nur Elemente, die wir selbst umstellen, werden zurückgesetzt).
-    const madeInert: Element[] = [];
-    for (const element of document.body.children) {
-      if (element === root || element.contains(root) || element.hasAttribute('inert')) {
-        continue;
-      }
-      if (element.tagName === 'SCRIPT' || element.tagName === 'STYLE') {
-        continue;
-      }
-      element.setAttribute('inert', '');
-      madeInert.push(element);
-    }
     dialogStack.push(root);
+    syncBackgroundInert();
     if (scrollLocks === 0) {
       savedOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
     }
     scrollLocks += 1;
 
-    const initial =
-      initialFocusLatest.current?.current ??
-      panel.querySelector<HTMLElement>('[data-autofocus]') ??
-      getTabbableElements(panel)[0] ??
-      panel;
-    focusElement(initial);
+    // Startfokus: `initialFocusRef`, sonst `[data-autofocus]`, sonst das erste Element.
+    const resolveInitialFocus = (): HTMLElement => {
+      const preferred = initialFocusLatest.current?.current;
+      if (preferred && panel.contains(preferred) && isFocusable(preferred)) {
+        return preferred;
+      }
+      return (
+        panel.querySelector<HTMLElement>('[data-autofocus]') ??
+        getTabbableElements(panel)[0] ??
+        panel
+      );
+    };
+    focusElement(resolveInitialFocus());
 
-    // Fokus, der dennoch hinausgelangt (z. B. per Skript), zurückholen.
+    // Wer oben liegt, meldet das (z. B. damit ein verdeckter Freigabe-Dialog neu sperrt).
+    let reportedTop: boolean | null = null;
+    const reportStackTop = (): void => {
+      const top = dialogStack.at(-1) === root;
+      if (reportedTop !== top) {
+        reportedTop = top;
+        onStackTopChangeLatest.current?.(top);
+      }
+    };
+    stackListeners.add(reportStackTop);
+    notifyStackListeners();
+
+    // Fokus, der dennoch hinausgelangt (z. B. per Skript), zurückholen – auf den Startfokus
+    // (bei Rückfragen die sichere Antwort), nicht auf das erstbeste Element.
     const onFocusIn = (event: FocusEvent): void => {
       if (dialogStack.at(-1) !== root) {
         return;
@@ -195,19 +287,37 @@ export function Dialog({
       if (event.target instanceof Node && root.contains(event.target)) {
         return;
       }
-      focusElement(getTabbableElements(panel)[0] ?? panel);
+      focusElement(resolveInitialFocus());
     };
     document.addEventListener('focusin', onFocusIn);
 
+    // Escape, während der Fokus auf `body` gefallen ist (z. B. nach einem Klick auf einen
+    // gesperrten Knopf): Das Ereignis erreicht die Dialog-Wurzel nicht, gilt aber trotzdem.
+    const onDocumentKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented || dialogStack.at(-1) !== root) {
+        return;
+      }
+      if (event.target instanceof Node && root.contains(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      onCloseLatest.current('escape');
+    };
+    document.addEventListener('keydown', onDocumentKeyDown);
+
     return () => {
       document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('keydown', onDocumentKeyDown);
+      stackListeners.delete(reportStackTop);
       const index = dialogStack.lastIndexOf(root);
       if (index !== -1) {
         dialogStack.splice(index, 1);
       }
-      for (const element of madeInert) {
-        element.removeAttribute('inert');
+      syncBackgroundInert();
+      if (reportedTop === true) {
+        onStackTopChangeLatest.current?.(false);
       }
+      notifyStackListeners();
       scrollLocks -= 1;
       if (scrollLocks === 0) {
         document.body.style.overflow = savedOverflow;
@@ -304,6 +414,9 @@ export function Dialog({
         initial={{ opacity: 0 }}
         animate={{ opacity: open ? 1 : 0 }}
         transition={{ duration: reduced ? 0 : durations.fast / 1000, ease: easings.standard }}
+        // Ein Klick auf den Hintergrund nimmt dem Dialog nicht den Fokus (sonst landet er auf
+        // `body`, und Tastatur-Kürzel wie Escape erreichen den Dialog nicht mehr).
+        onMouseDown={(event) => event.preventDefault()}
         onClick={() => {
           if (open && closeOnBackdrop) {
             onClose('backdrop');
@@ -322,7 +435,11 @@ export function Dialog({
           role={role}
           aria-modal="true"
           aria-labelledby={titleId}
-          aria-describedby={description === undefined ? undefined : descriptionId}
+          aria-describedby={
+            [description === undefined ? undefined : descriptionId, describedBy]
+              .filter((id) => id !== undefined && id !== '')
+              .join(' ') || undefined
+          }
           tabIndex={-1}
           className={cx(
             'pointer-events-auto relative flex max-h-full w-full flex-col overflow-hidden rounded-xl border border-border shadow-lg outline-none',
