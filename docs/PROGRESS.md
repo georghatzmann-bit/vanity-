@@ -26,8 +26,8 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 | P1 | Shell, Dashboard, Design-System | **erledigt** |
 | P2 | Dienst + Pipe + Engine-Kern (ClamAV, Hashes, YARA-X, statische Analyse), Quarantäne | **erledigt** |
 | P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | **erledigt** |
-| P4 | Sandbox Stufe 1+2 + Verhaltensbericht | in Arbeit |
-| P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | offen |
+| P4 | Sandbox Stufe 1+2 + Verhaltensbericht | **erledigt** (Windows-CI wird bestätigt) |
+| P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | in Arbeit (Review) |
 | P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | offen |
 | P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | offen |
 | P8 | Defender-Schalter | offen |
@@ -100,6 +100,23 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
   deinen eigenen Schlüssel und senden Hashes ins Netz – nur abschaltbar und erst nach deinem
   Ja. Bis dahin: lokale Hash-Listen (eigene Dateien).
 - Hinweis: Das Repo ist öffentlich → GitHub Actions (auch `windows-latest`) ist kostenlos.
+
+## P5 – Schutz-Werkzeuge
+
+1. [x] P5.1 Quarantäne-Schlüssel per DPAPI (Maschine) gebunden, alter Schlüssel geprüft umgestellt.
+2. [x] P5.2 Prozess-Aktionen: Beenden/Anhalten/Fortsetzen eigener Prozesse nur per Plan (ID +
+       Programm am Handle geprüft, nie kritische Prozesse), Knöpfe im Wächter.
+3. [x] P5.3 Ransomware-Schutz: Köderdateien per Plan, Erkennung von Köder-Zugriffen und
+       Massenänderungen je Profil, Warnung im Wächter, Dashboard-Modul live.
+4. [x] P5.4 Panic-Button: Netz trennen/wieder verbinden per Firewall-Plan, Leiste solange getrennt.
+5. [x] P5.5 Speicher-Scan: eigene Programme, Module, ausführbarer privater Speicher – geprüft im
+       Prüfprozess, nur Meldung.
+6. [x] P5.6 Datei-Safe: Argon2id + AES-256-GCM, Anlegen/Hineinlegen/Herausholen nur per Plan,
+       Passwort nie gespeichert, Sperre nach 10 min bzw. Fehlversuchen; eigene Seite.
+7. [ ] P5.7 Sicherheits-Review (separater Agent), Korrekturen, Doku, DoD.
+
+**Nächster Schritt:** Review-Funde beheben, dann P6 (Härtung, Persistenz, Treiber-Check,
+Kamera/Mikro/Zwischenablage/USB-Wächter).
 
 ## P1 – erledigt
 

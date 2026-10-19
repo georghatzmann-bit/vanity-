@@ -150,6 +150,39 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   (hängende Fenster übersprungen); Bilder werden auf ein Canvas gezeichnet (CSP unverändert).
   Grenzen: 2 gleichzeitige Läufe, 1 je Konto; DISM (Windows Sandbox einschalten, nur Admin)
   einmal gleichzeitig, höchstens 30 Minuten.
+- **Prozess-Aktionen (P5.2):** Beenden, Anhalten und Fortsetzen sind Pläne mit den Prozessen
+  (ID + Programmpfad) als Ziel; der Dienst nennt nur Prozesse, die dem anfragenden Konto
+  gehören. Vor jeder Aktion wird am geöffneten Prozess erneut geprüft, ob ID und Programm noch
+  passen (keine wiederverwendete ID) und ob er kritisch ist (`IsProcessCritical`) – kritische
+  Systemprozesse und AEGIS selbst werden nie angefasst. Geöffnet wird im Identitätswechsel,
+  also nur mit den Rechten des Nutzers.
+- **Ransomware-Schutz (P5.3):** Köderdateien sind ein eigener Plan (Dateien als Ziele), werden
+  mit den Rechten des Nutzers und ohne Links nur **neu** angelegt und nur entfernt, solange
+  sie noch genau den AEGIS-Inhalt haben. Erkannt werden Änderungen an Ködern sowie viele
+  Änderungen/Umbenennungen/Löschungen in kurzer Zeit im eigenen Profil (je Profil gezählt,
+  laute Ordner wie Browser-Caches ausgenommen, Pause nach einer Warnung). Ehrlich: ohne
+  Treiber erst, wenn der Angriff läuft; Gegenmaßnahmen (Panic-Button, Beenden, Isolieren) nur
+  nach „Ja“.
+- **Panic-Button (P5.4):** „Netz trennen“ legt zwei feste Sperrregeln der Windows-Firewall an
+  (`netsh` vom festen Systempfad, feste Argumente, Zeitlimit 30 s); „Wieder verbinden“ ist ein
+  eigener Plan und löscht genau diese Regeln. Der Plan nennt die rechnerweite Wirkung
+  (alle Konten, Firewall bleibt an).
+- **Speicher-Scan (P5.5):** liest nur Prozesse des anfragenden Kontos, im Identitätswechsel
+  (Module und ausführbarer privater Speicher, je Bereich und Anfrage begrenzt – 10 MiB je
+  Anfrage an den Prüfprozess). Geprüft wird ausschließlich im eingeschränkten Prüfprozess
+  (YARA/EICAR); gemeldet wird nur.
+- **Datei-Safe (P5.6):** Ordner im Profil des Nutzers; alle Zugriffe im Identitätswechsel und
+  ohne Links (der Safe-Ordner muss ohne Umweg über Verknüpfungen erreichbar sein). Zufälliger
+  256-Bit-Datenschlüssel, verpackt mit Argon2id (64 MiB, 3 Durchläufe) + AES-256-GCM; Inhalte
+  im Quarantäne-Containerformat, Name/Herkunft verschlüsselt je Eintrag. Das Passwort kommt
+  nur über die Pipe (`Password`: nie in `Debug`, beim Verwerfen überschrieben), wird nie
+  gespeichert – nicht im Plan, Protokoll oder Verlauf (Test prüft das Prüfprotokoll). Der
+  entsperrte Schlüssel liegt nur im Speicher des Dienstes je Konto und verfällt nach 10 min
+  ohne Nutzung, beim Sperren und beim Neustart. 5 Fehlversuche → 60 s Pause. Hineinlegen:
+  Original erst nach geprüfter Kopie entfernt; Herausholen: nie überschreiben, SHA-256
+  geprüft, erst danach aus dem Safe entfernt. Ehrlich: Wer das Konto oder den Dienst
+  kontrolliert, während der Safe entsperrt ist, kann mitlesen; ein vergessenes Passwort kann
+  niemand ersetzen.
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.

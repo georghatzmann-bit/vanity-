@@ -165,6 +165,27 @@ braucht einen eigenen Plan („Im Labor ausführen“, Stufe/Sekunden/Netz im Pl
 Original wird nur gelesen (Kopie mit SHA-256 im Labor-Ordner). Einschalten der Windows Sandbox
 ist ein eigener Plan (nur Administratoren, DISM ohne Neustart).
 
+## D-035 – Prozess-Aktionen nur für eigene Prozesse
+Der Dienst schlägt Beenden/Anhalten/Fortsetzen nur für Prozesse des anfragenden Kontos vor und
+führt sie im Identitätswechsel aus. So kann ein Nutzer über den SYSTEM-Dienst nichts beenden,
+was er nicht ohnehin beenden dürfte; kritische Systemprozesse sind ausgeschlossen.
+
+## D-036 – Panic-Button über die Windows-Firewall
+Netz trennen per zwei eigene Sperrregeln (ein-/ausgehend, alle Profile) statt Adapter
+abschalten: wirkt sofort, ist genau rückgängig zu machen (nur die AEGIS-Regeln) und braucht
+keinen Treiber. Laufende Programme werden nicht automatisch beendet (Goldene Regel) – das geht
+einzeln über „Beenden …“.
+
+## D-037 – Datei-Safe im Profil, Schlüssel nur aus dem Passwort
+Der Safe liegt im Profil des Nutzers (nicht im Datenordner des Dienstes), damit Rechte und
+Sicherungen des Kontos gelten. Der Schlüssel entsteht nur aus dem Passwort (Argon2id) – kein
+Wiederherstellungsweg, auch nicht für AEGIS; das steht im Plan und auf der Seite. Der Dienst
+hält den entsperrten Schlüssel höchstens 10 min ohne Nutzung im Speicher.
+
+## D-038 – Eigene Seite „Datei-Safe“ unter „Schutz“
+Der Safe ist kein Passwort-Tresor (P9) und keine Quarantäne – er bekommt eine eigene Seite in
+der Gruppe „Schutz“ mit eigenem Symbol.
+
 ## D-034 – Bildschirmfotos ohne Lockerung der CSP
 Bilder kommen als PNG-Bytes über IPC und werden per `createImageBitmap` auf ein Canvas
 gezeichnet – `img-src` bleibt `'self'` (kein `data:`/`blob:`). Fotos der Mini-Sandbox macht
