@@ -717,7 +717,13 @@ fn koederdateien_nur_per_plan_und_nur_unveraendert_entfernt() {
     }
     let mut h = harness();
     let home = tempfile::tempdir().unwrap();
-    let home_path = std::fs::canonicalize(home.path()).unwrap();
+    // Langer, tatsächlicher Pfad ohne `\\?\` (wie ein echtes Profil).
+    let home_path = {
+        let c = std::fs::canonicalize(home.path()).unwrap();
+        let text = c.to_string_lossy().into_owned();
+        text.strip_prefix(r"\\?\")
+            .map_or(c.clone(), std::path::PathBuf::from)
+    };
     aegis_core::testing::create_fixture_dir(&home_path, "Documents").unwrap();
     aegis_core::testing::create_fixture_dir(&home_path, "Desktop").unwrap();
     let before = DirSnapshot::capture(&home_path).unwrap();
