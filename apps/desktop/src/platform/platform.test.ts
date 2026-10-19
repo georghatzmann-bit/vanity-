@@ -258,3 +258,35 @@ describe('listenWhileMounted', () => {
     ]);
   });
 });
+
+describe('Scan-Antwort des Dienstes', () => {
+  it('liest Funde samt auffälliger Inhalte und ignoriert Unbekanntes', async () => {
+    const { parseScan } = await import('./service.ts');
+    const result = parseScan({
+      type: 'scan_report',
+      report: {
+        findings: [
+          {
+            path: '/a.zip',
+            risk: 'dangerous',
+            confidence: 95,
+            category: 'test_file',
+            recommendation: 'quarantine',
+            reasons: [{ code: 'container.member', de: 'Enthält …', en: 'Contains …', extra: 1 }],
+            not_scannable: null,
+            contained: [
+              { name: 'b/eicar.com', risk: 'dangerous', summary_de: 'EICAR', summary_en: 'EICAR' },
+              'kaputt',
+            ],
+          },
+        ],
+        skipped: [],
+        truncated: false,
+      },
+    });
+    expect(result.findings[0]?.contained).toEqual([
+      { name: 'b/eicar.com', risk: 'dangerous', summaryDe: 'EICAR', summaryEn: 'EICAR' },
+    ]);
+    expect(result.findings[0]?.reasons[0]?.code).toBe('container.member');
+  });
+});

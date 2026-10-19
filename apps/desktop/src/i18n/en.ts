@@ -381,6 +381,7 @@ export const en: Messages<typeof de> = {
     partial: 'Only partly checked',
     confidence: 'Confidence {value} %',
     truncated: 'Stopped: too many files in one run.',
+    contained: 'Notable contents',
   },
   vault: {
     intro:

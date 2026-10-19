@@ -19,6 +19,14 @@ const finding = {
   recommendation: 'quarantine' as const,
   reasons: [{ code: 'eicar', de: 'Enthält die EICAR-Prüfzeichenkette.', en: 'Contains EICAR.' }],
   notScannable: null,
+  contained: [
+    {
+      name: 'paket.zip/eicar.com',
+      risk: 'dangerous' as const,
+      summaryDe: 'Das ist die EICAR-Testdatei.',
+      summaryEn: 'This is the EICAR test file.',
+    },
+  ],
 };
 
 function proposal(kind = 'In die Quarantäne verschieben'): Proposal {
@@ -78,6 +86,9 @@ describe('Scan-Seite', () => {
     const row = screen.getByTestId('finding');
     fireEvent.click(within(row).getByRole('button', { name: 'Warum?' }));
     expect(within(row).getByText('Enthält die EICAR-Prüfzeichenkette.')).toBeInTheDocument();
+    const contained = within(row).getByTestId('contained');
+    expect(contained).toHaveTextContent('Auffällige Inhalte');
+    expect(contained).toHaveTextContent('paket.zip/eicar.com');
 
     fireEvent.click(within(row).getByRole('button', { name: /Isolieren/ }));
     const dialog = await screen.findByRole('alertdialog');

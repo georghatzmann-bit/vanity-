@@ -37,12 +37,12 @@ function FindingRow({
           <p className="mt-1 text-sm text-text-muted">{summary}</p>
           {finding.notScannable !== null && (
             <p className="mt-1 text-xs text-warn">
-              {t('scanner.partial')}: {finding.notScannable}
+              {t('scanner.partial')}: <SafeText value={finding.notScannable} />
             </p>
           )}
         </div>
         <div className="flex shrink-0 gap-2">
-          {finding.reasons.length > 0 && (
+          {(finding.reasons.length > 0 || finding.contained.length > 0) && (
             <Button
               size="sm"
               variant="ghost"
@@ -65,10 +65,33 @@ function FindingRow({
       </div>
       {open && (
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-text-muted">
-          {finding.reasons.map((r) => (
-            <li key={r.code}>{language === 'en' ? r.en : r.de}</li>
+          {finding.reasons.map((r, i) => (
+            <li key={`${r.code}-${String(i)}`}>
+              <SafeText value={language === 'en' ? r.en : r.de} />
+            </li>
           ))}
         </ul>
+      )}
+      {open && finding.contained.length > 0 && (
+        <div className="mt-3" data-testid="contained">
+          <p className="text-xs font-medium text-text-subtle">{t('scanner.contained')}</p>
+          <ul className="mt-1 space-y-2">
+            {finding.contained.map((c, i) => (
+              <li
+                key={`${c.name}-${String(i)}`}
+                className="flex flex-wrap items-start gap-2 text-sm"
+              >
+                <RiskBadge level={c.risk} />
+                <span className="min-w-0 flex-1">
+                  <SafeText value={c.name} mono breakAll />
+                  <span className="block text-text-muted">
+                    {language === 'en' ? c.summaryEn : c.summaryDe}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </li>
   );

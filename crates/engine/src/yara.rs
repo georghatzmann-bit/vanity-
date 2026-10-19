@@ -7,8 +7,35 @@ use aegis_core::risk::RiskLevel;
 
 use crate::finding::{Reason, Source, Weight};
 
-/// Die eingebauten AEGIS-Regeln.
-pub const BUILTIN_RULES: &str = include_str!("../../../rules/yara/aegis-builtin.yar");
+/// Die eingebauten AEGIS-Regeln im Klartext – nur zur Übersetzungszeit verwendet.
+const PLAIN: &[u8] = include_bytes!("../../../rules/yara/aegis-builtin.yar");
+const KEY: &[u8] = b"AEGIS-rules-v1";
+
+/// Die eingebauten Regeln **verschleiert** (zur Übersetzungszeit): Im Klartext stünden
+/// Prüfmarke und Merkmals-Zeichenketten im Programm selbst – AEGIS und andere Scanner würden
+/// dann die eigene Programmdatei melden. Kein Schutz, nur Abstand.
+static ENCODED: [u8; PLAIN.len()] = xor(PLAIN);
+
+const fn xor<const N: usize>(input: &[u8]) -> [u8; N] {
+    let mut out = [0u8; N];
+    let mut i = 0;
+    while i < N {
+        out[i] = input[i] ^ KEY[i % KEY.len()];
+        i += 1;
+    }
+    out
+}
+
+/// Die eingebauten AEGIS-Regeln (entschlüsselt zur Laufzeit).
+#[must_use]
+pub fn builtin_source() -> String {
+    let plain: Vec<u8> = ENCODED
+        .iter()
+        .enumerate()
+        .map(|(i, b)| b ^ KEY[i % KEY.len()])
+        .collect();
+    String::from_utf8_lossy(&plain).into_owned()
+}
 
 /// Kompilierte Regeln.
 pub struct YaraRules {
@@ -32,6 +59,8 @@ pub struct YaraHit {
     pub de: String,
     /// Begründung Englisch.
     pub en: String,
+    /// Malware-Merkmal (Metadatum `trait`), sonst leer.
+    pub trait_name: String,
 }
 
 impl YaraRules {
@@ -58,7 +87,7 @@ impl YaraRules {
     /// # Errors
     /// Sollte nicht vorkommen (Regeln sind getestet).
     pub fn builtin() -> Result<Self, String> {
-        Self::compile([("aegis-builtin.yar", BUILTIN_RULES)])
+        Self::compile([("aegis-builtin.yar", builtin_source().as_str())])
     }
 
     /// Durchsucht Bytes.
@@ -85,6 +114,7 @@ impl YaraRules {
                     severity: meta("severity"),
                     de: meta("de"),
                     en: meta("en"),
+                    trait_name: meta("trait"),
                 }
             })
             .collect())
@@ -99,6 +129,8 @@ pub fn reason(hit: &YaraHit) -> Reason {
         "risky" => Weight::Definite(RiskLevel::RiskyTool),
         "game" => Weight::Definite(RiskLevel::GameTool),
         "suspicious" => Weight::Score(45),
+        // Einzelnes Malware-Merkmal: nur Punkte; Kombinationen bewertet `traits`.
+        "trait" => Weight::Score(30),
         _ => Weight::Score(10),
     };
     let de = if hit.de.is_empty() {

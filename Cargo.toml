@@ -49,12 +49,21 @@ rfd = { version = "0.17.2", default-features = false }
 windows-version = "0.1.7"
 # Engine (P2): PE-Parser ohne Standard-Features (nur PE), YARA-X für Regeln.
 goblin = { version = "0.10.7", default-features = false, features = ["std", "pe32", "pe64"] }
-# Nur benötigte Module (ohne zip/crx/vt/Test-Module): weniger Angriffsfläche, kein `zip`-Crate.
+# Nur benötigte Module (ohne crx/vt/Test-Module). Ab P3 zusätzlich vba/olecf/zip für
+# Office-Makros (VBA-Quelltext aus OLE- und OOXML-Dateien).
 yara-x = { version = "1.21.0", default-features = false, features = [
   "constant-folding", "exact-atoms", "fast-regexp", "generate-proto-code",
   "pe-module", "dotnet-module", "elf-module", "lnk-module", "macho-module",
   "math-module", "hash-module", "string-module", "time-module", "console-module",
+  "vba-module", "olecf-module", "zip-module",
 ] }
+# Archive (P3): nur Lesen/Entpacken in den Speicher, mit Grenzen gegen Zip-Bomben.
+# Ohne Verschlüsselung → passwortgeschützte Archive werden als „nicht prüfbar“ gemeldet.
+zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2", "deflate64"] }
+sevenz-rust2 = { version = "0.24.1", default-features = false }
+cab = "0.6.0"
+flate2 = "1.1.10"
+tar = { version = "0.4.46", default-features = false }
 # Quarantäne (P2): AES-256-GCM, Zufall aus dem Betriebssystem.
 aes-gcm = "0.11.1"
 getrandom = "0.4.3"

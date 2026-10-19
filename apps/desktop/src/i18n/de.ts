@@ -384,6 +384,7 @@ export const de = {
     partial: 'Nur teilweise geprüft',
     confidence: 'Sicherheit {value} %',
     truncated: 'Abgebrochen: zu viele Dateien in einem Lauf.',
+    contained: 'Auffällige Inhalte',
   },
   vault: {
     intro:

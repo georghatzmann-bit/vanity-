@@ -23,8 +23,25 @@ export interface ScanFinding {
   readonly summaryDe: string;
   readonly summaryEn: string;
   readonly recommendation: 'none' | 'review' | 'quarantine';
-  readonly reasons: readonly { readonly code: string; readonly de: string; readonly en: string }[];
+  readonly reasons: readonly FindingReason[];
   readonly notScannable: string | null;
+  /** Auffällige Inhalte von Archiven/Abbildern/Dokumenten. */
+  readonly contained: readonly ContainedItem[];
+}
+
+/** Eine Begründung („Warum?“). */
+export interface FindingReason {
+  readonly code: string;
+  readonly de: string;
+  readonly en: string;
+}
+
+/** Auffälliger Inhalt eines Containers. */
+export interface ContainedItem {
+  readonly name: string;
+  readonly risk: RiskLevel;
+  readonly summaryDe: string;
+  readonly summaryEn: string;
 }
 
 /** Ergebnis eines Scans. */
@@ -141,6 +158,14 @@ export function parseFinding(value: unknown): ScanFinding {
       .filter(isObject)
       .map((r) => ({ code: str(r['code']), de: str(r['de']), en: str(r['en']) })),
     notScannable: typeof f['not_scannable'] === 'string' ? f['not_scannable'] : null,
+    contained: arr(f['contained'])
+      .filter(isObject)
+      .map((c) => ({
+        name: str(c['name']),
+        risk: riskLevelFromCoreId(str(c['risk'])) ?? 'info',
+        summaryDe: str(c['summary_de']),
+        summaryEn: str(c['summary_en']),
+      })),
   };
 }
 

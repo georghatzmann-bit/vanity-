@@ -4,9 +4,10 @@ use std::path::Path;
 
 use crate::finding::{Reason, Source, Weight};
 
-/// Endungen, die Windows direkt ausführt.
-const EXECUTABLE: [&str; 14] = [
-    "exe", "scr", "com", "pif", "bat", "cmd", "js", "jse", "vbs", "vbe", "wsf", "hta", "ps1", "msi",
+/// Endungen, die Windows direkt ausführt (oder per Doppelklick startet).
+const EXECUTABLE: [&str; 17] = [
+    "exe", "scr", "com", "pif", "bat", "cmd", "js", "jse", "vbs", "vbe", "wsf", "hta", "ps1",
+    "msi", "lnk", "cpl", "dll",
 ];
 /// Endungen, die Nutzer für harmlose Dokumente halten.
 const DOCUMENT: [&str; 12] = [
@@ -33,17 +34,42 @@ pub fn has_deceptive_chars(name: &str) -> bool {
     })
 }
 
-/// Begründungen aus dem Dateinamen und dem Ort.
+/// Begründungen aus dem Dateinamen und dem Ort einer Datei auf der Platte.
 #[must_use]
 pub fn reasons(path: &Path) -> Vec<Reason> {
-    let mut out = Vec::new();
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let executable = is_executable_name(&name);
+    let mut out = name_reasons(&name);
+    if is_executable_name(&name) {
+        if in_risky_location(path) {
+            out.push(Reason::new(
+                "location.temp_or_appdata",
+                Source::Heuristic,
+                Weight::Score(10),
+                "Liegt in einem Temp- oder AppData-Ordner – dort legen sich auch Schadprogramme gern ab.",
+                "Located in a Temp or AppData folder – malware likes to hide there too.",
+            ));
+        }
+        if downloaded_from_internet(path) {
+            out.push(Reason::new(
+                "origin.internet",
+                Source::Heuristic,
+                Weight::Score(5),
+                "Aus dem Internet heruntergeladen (Mark-of-the-Web).",
+                "Downloaded from the internet (Mark-of-the-Web).",
+            ));
+        }
+    }
+    out
+}
 
-    if has_deceptive_chars(&name) {
+/// Begründungen nur aus dem Namen (auch für Einträge in Archiven).
+#[must_use]
+pub fn name_reasons(name: &str) -> Vec<Reason> {
+    let mut out = Vec::new();
+    if has_deceptive_chars(name) {
         out.push(Reason::new(
             "name.deceptive_chars",
             Source::Heuristic,
@@ -52,7 +78,7 @@ pub fn reasons(path: &Path) -> Vec<Reason> {
             "The file name contains invisible control characters – used to disguise extensions.",
         ));
     }
-    if executable {
+    if is_executable_name(name) {
         let stem = name.rsplit_once('.').map_or("", |(s, _)| s);
         let inner = ext_of(stem.trim_end());
         if inner.as_deref().is_some_and(|e| DOCUMENT.contains(&e)) {
@@ -71,24 +97,6 @@ pub fn reasons(path: &Path) -> Vec<Reason> {
                 Weight::Score(25),
                 "Viele Leerzeichen vor der Endung – damit wird die echte Endung versteckt.",
                 "Many spaces before the extension – used to hide the real extension.",
-            ));
-        }
-        if in_risky_location(path) {
-            out.push(Reason::new(
-                "location.temp_or_appdata",
-                Source::Heuristic,
-                Weight::Score(10),
-                "Liegt in einem Temp- oder AppData-Ordner – dort legen sich auch Schadprogramme gern ab.",
-                "Located in a Temp or AppData folder – malware likes to hide there too.",
-            ));
-        }
-        if downloaded_from_internet(path) {
-            out.push(Reason::new(
-                "origin.internet",
-                Source::Heuristic,
-                Weight::Score(5),
-                "Aus dem Internet heruntergeladen (Mark-of-the-Web).",
-                "Downloaded from the internet (Mark-of-the-Web).",
             ));
         }
     }

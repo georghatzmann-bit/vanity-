@@ -25,6 +25,26 @@ pub struct SectionInfo {
     pub writable: bool,
 }
 
+/// Digitale Signatur eines Programms.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SignatureInfo {
+    /// Inhaber des Zertifikats.
+    pub subject: String,
+    /// Prüfsumme und Signatur passen zur Datei (nicht verändert nach dem Signieren).
+    pub verified: bool,
+}
+
+/// Liest die erste Authenticode-Signatur (nur lesen, keine Netzabfrage).
+#[must_use]
+pub fn signature(bytes: &[u8]) -> Option<SignatureInfo> {
+    let pe = yara_x::mods::invoke::<yara_x::mods::PE>(bytes)?;
+    let first = pe.signatures.first()?;
+    Some(SignatureInfo {
+        subject: first.subject().to_owned(),
+        verified: first.verified(),
+    })
+}
+
 /// Ergebnis der PE-Analyse.
 #[derive(Debug, Clone, Serialize)]
 pub struct PeInfo {
@@ -32,8 +52,11 @@ pub struct PeInfo {
     pub is_64: bool,
     /// DLL?
     pub is_dll: bool,
-    /// Enthält ein Authenticode-Zertifikat (ob gültig, prüft Windows – ab P3).
+    /// Enthält ein Authenticode-Zertifikat.
     pub has_signature: bool,
+    /// Erste Signatur: Inhaber und ob sie rechnerisch zur Datei passt (YARA-X `pe`). Ob der
+    /// Herausgeber vertrauenswürdig ist (Zertifikatskette), prüft erst Windows.
+    pub signature: Option<SignatureInfo>,
     /// Abschnitte.
     pub sections: Vec<SectionInfo>,
     /// Anzahl importierter Funktionen.
@@ -108,6 +131,11 @@ pub fn analyze(bytes: &[u8]) -> Result<PeInfo, String> {
         is_64: pe.is_64,
         is_dll: pe.is_lib,
         has_signature: !pe.certificates.is_empty(),
+        signature: if pe.certificates.is_empty() {
+            None
+        } else {
+            signature(bytes)
+        },
         sections,
         import_count: pe.imports.len(),
         notable_imports: notable,
@@ -181,14 +209,34 @@ pub fn reasons(info: &PeInfo) -> Vec<Reason> {
             ),
         ));
     }
-    if !info.has_signature {
-        out.push(Reason::new(
+    match (&info.signature, info.has_signature) {
+        (_, false) => out.push(Reason::new(
             "pe.unsigned",
             Source::Static,
             Weight::Score(10),
             "Ohne digitale Signatur – der Hersteller ist nicht nachweisbar.",
             "Not digitally signed – the publisher cannot be verified.",
-        ));
+        )),
+        (Some(sig), true) if sig.verified => out.push(Reason::new(
+            "pe.signed",
+            Source::Static,
+            Weight::Relief(20),
+            &format!(
+                "Digital signiert von „{}“ – die Datei wurde nach dem Signieren nicht verändert. Ob der Herausgeber vertrauenswürdig ist, prüft Windows.",
+                sig.subject
+            ),
+            &format!(
+                "Digitally signed by \"{}\" – the file was not modified after signing. Windows checks whether the publisher is trusted.",
+                sig.subject
+            ),
+        )),
+        (_, true) => out.push(Reason::new(
+            "pe.signature_invalid",
+            Source::Static,
+            Weight::Score(30),
+            "Die digitale Signatur passt nicht zur Datei – sie wurde nach dem Signieren verändert oder die Signatur ist gefälscht.",
+            "The digital signature does not match the file – it was modified after signing or the signature is forged.",
+        )),
     }
     out
 }
@@ -224,6 +272,7 @@ mod tests {
             is_64: true,
             is_dll: false,
             has_signature: false,
+            signature: None,
             sections: vec![SectionInfo {
                 name: "UPX1".into(),
                 entropy: 7.9,
@@ -247,11 +296,25 @@ mod tests {
         );
         let signed = PeInfo {
             has_signature: true,
+            signature: Some(SignatureInfo {
+                subject: "Beispiel GmbH".into(),
+                verified: true,
+            }),
             sections: vec![],
             import_count: 50,
             notable_imports: vec![],
             ..info
         };
-        assert!(reasons(&signed).is_empty());
+        let codes: Vec<String> = reasons(&signed).into_iter().map(|r| r.code).collect();
+        assert_eq!(codes, ["pe.signed"]);
+        let broken = PeInfo {
+            signature: Some(SignatureInfo {
+                subject: "X".into(),
+                verified: false,
+            }),
+            ..signed.clone()
+        };
+        assert_eq!(reasons(&broken)[0].code, "pe.signature_invalid");
+        assert!(signature(b"MZ kaputt").is_none());
     }
 }

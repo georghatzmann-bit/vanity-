@@ -25,6 +25,12 @@ pub enum Source {
     Static,
     /// Heuristik (Name, Ort, Herkunft).
     Heuristic,
+    /// Dokument- oder Skript-Prüfung (Makros, PDF, Verknüpfung, Skript).
+    Content,
+    /// Inhalt eines Archivs oder Abbilds.
+    Container,
+    /// Kombination von Malware-Merkmalen.
+    Traits,
 }
 
 /// Grobe Einordnung des Fundes.
@@ -67,6 +73,9 @@ pub enum Weight {
     Definite(RiskLevel),
     /// Punkte für die Heuristik (0–100).
     Score(u8),
+    /// Entlastung: zieht Punkte der Heuristik ab (z. B. gültige Signatur). Wirkt nie auf
+    /// eindeutige Treffer.
+    Relief(u8),
 }
 
 /// Eine einzelne Begründung („Warum?“-Ansicht).
@@ -123,7 +132,29 @@ pub struct Finding {
     pub reasons: Vec<Reason>,
     /// Gesetzt, wenn die Datei (teilweise) nicht prüfbar war – mit Grund.
     pub not_scannable: Option<String>,
+    /// Auffällige Inhalte von Archiven/Abbildern/Dokumenten (höchstens [`MAX_CONTAINED`]).
+    pub contained: Vec<Contained>,
 }
+
+/// Auffälliger Inhalt eines Containers (Archiv, Abbild, Office-Datei).
+#[derive(Debug, Clone, Serialize)]
+pub struct Contained {
+    /// Pfad im Container, verschachtelt mit `/` (z. B. `a.zip/b.7z/c.exe`).
+    pub name: String,
+    /// Risikostufe des Inhalts.
+    pub risk: RiskLevel,
+    /// Einordnung.
+    pub category: Category,
+    /// Kurztext Deutsch.
+    pub summary_de: String,
+    /// Kurztext Englisch.
+    pub summary_en: String,
+    /// Begründungen.
+    pub reasons: Vec<Reason>,
+}
+
+/// Höchstzahl gemeldeter Inhalte je Datei.
+pub const MAX_CONTAINED: usize = 200;
 
 /// Ab dieser Punktzahl gilt eine Datei heuristisch als „Verdächtig“.
 pub const SUSPICIOUS_SCORE: u32 = 60;
@@ -137,16 +168,17 @@ pub fn assess(reasons: &[Reason]) -> (RiskLevel, Confidence, Category) {
         .iter()
         .filter_map(|r| match r.weight {
             Weight::Definite(level) => Some((level, r)),
-            Weight::Score(_) => None,
+            Weight::Score(_) | Weight::Relief(_) => None,
         })
         .max_by_key(|(level, _)| *level);
-    let score: u32 = reasons
+    let (plus, minus) = reasons
         .iter()
-        .map(|r| match r.weight {
-            Weight::Score(s) => u32::from(s),
-            Weight::Definite(_) => 0,
-        })
-        .sum();
+        .fold((0u32, 0u32), |(plus, minus), r| match r.weight {
+            Weight::Score(s) => (plus + u32::from(s), minus),
+            Weight::Relief(s) => (plus, minus + u32::from(s)),
+            Weight::Definite(_) => (plus, minus),
+        });
+    let score = plus.saturating_sub(minus);
     let heuristic_level = if score >= SUSPICIOUS_SCORE {
         RiskLevel::Suspicious
     } else if score >= INFO_SCORE {
@@ -165,7 +197,13 @@ pub fn assess(reasons: &[Reason]) -> (RiskLevel, Confidence, Category) {
                 (_, RiskLevel::Info) => Category::Info,
                 (_, RiskLevel::Clean) => Category::Clean,
             };
-            (level, confidence(95), category)
+            // Merkmals-Kombinationen sind keine Signatur: Sicherheit bewusst niedriger.
+            let conf = if reason.source == Source::Traits {
+                70
+            } else {
+                95
+            };
+            (level, confidence(conf), category)
         }
         _ => {
             let category = match heuristic_level {
@@ -225,12 +263,28 @@ pub fn summarize(risk: RiskLevel, category: Category, reasons: &[Reason]) -> (St
             "Du kannst sie gefahrlos isolieren oder löschen.",
             "You can safely isolate or delete it.",
         ),
-        (RiskLevel::Dangerous, _) => (
-            "Diese Datei ist als Schadsoftware bekannt.",
-            "This file is known malware.",
-            "Empfehlung: in die Quarantäne verschieben – erst nach deiner Bestätigung.",
-            "Recommendation: move it to quarantine – only after you confirm.",
-        ),
+        (RiskLevel::Dangerous, _) => {
+            let (de, en) = match dangerous_basis(reasons) {
+                Basis::Known => (
+                    "Diese Datei ist als Schadsoftware bekannt.",
+                    "This file is known malware.",
+                ),
+                Basis::Contains => (
+                    "Diese Datei enthält eine als Schadsoftware bekannte Datei.",
+                    "This file contains a file known as malware.",
+                ),
+                Basis::Traits => (
+                    "Diese Datei zeigt mehrere typische Merkmale von Schadsoftware.",
+                    "This file shows several typical traits of malware.",
+                ),
+            };
+            (
+                de,
+                en,
+                "Empfehlung: in die Quarantäne verschieben – erst nach deiner Bestätigung.",
+                "Recommendation: move it to quarantine – only after you confirm.",
+            )
+        }
         (RiskLevel::Suspicious, _) => (
             "Diese Datei zeigt mehrere auffällige Merkmale, ist aber nicht eindeutig schädlich.",
             "This file shows several suspicious traits but is not clearly malicious.",
@@ -276,10 +330,37 @@ pub fn summarize(risk: RiskLevel, category: Category, reasons: &[Reason]) -> (St
     )
 }
 
+enum Basis {
+    Known,
+    Contains,
+    Traits,
+}
+
+/// Worauf beruht „Gefährlich“? Eigene Signatur schlägt Inhalt schlägt Merkmale.
+fn dangerous_basis(reasons: &[Reason]) -> Basis {
+    let dangerous = |r: &&Reason| r.weight == Weight::Definite(RiskLevel::Dangerous);
+    if reasons
+        .iter()
+        .filter(dangerous)
+        .any(|r| !matches!(r.source, Source::Traits | Source::Container))
+    {
+        Basis::Known
+    } else if reasons
+        .iter()
+        .filter(dangerous)
+        .any(|r| r.source == Source::Container)
+    {
+        Basis::Contains
+    } else {
+        Basis::Traits
+    }
+}
+
 fn rank(reason: &Reason) -> u32 {
     match reason.weight {
         Weight::Definite(level) => 1000 + level as u32,
         Weight::Score(s) => u32::from(s),
+        Weight::Relief(_) => 0,
     }
 }
 

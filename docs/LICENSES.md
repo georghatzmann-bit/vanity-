@@ -16,7 +16,12 @@ wird hier **vor** der Nutzung eingetragen (Name, Herkunft, Lizenz, Nutzungsart, 
 | YARA-X 1.21 (nur ausgewählte Module) | VirusTotal/yara-x | BSD-3-Clause | Regel-Engine (P2) | 2026-10-19 |
 | goblin 0.10 (nur PE) | m4b/goblin | MIT | PE-Analyse (P2) | 2026-10-19 |
 | wasmtime 45 / cranelift (über yara-x) | Bytecode Alliance | Apache-2.0 WITH LLVM-exception | Regel-Ausführung in YARA-X | 2026-10-19 |
-| AEGIS-eigene YARA-Regeln `rules/yara/aegis-builtin.yar` | AEGIS | wie das Projekt | eingebaute Regeln | 2026-10-19 |
+| AEGIS-eigene YARA-Regeln `rules/yara/aegis-builtin.yar` | AEGIS | wie das Projekt | eingebaute Regeln (inkl. Spiel-Tool- und Merkmals-Regeln, P3) | 2026-10-19 |
+| YARA-X-Module vba/olecf/zip (codepage, encoding_rs, tinyzip) | VirusTotal/yara-x u. a. | BSD-3-Clause; MIT/Apache-2.0; encoding_rs zusätzlich BSD-3-Clause (WHATWG-Daten) | Office-Makros lesen (P3) | 2026-10-19 |
+| zip 9.0 (nur Deflate/Deflate64) | zip-rs | MIT | Archive prüfen (P3) | 2026-10-19 |
+| sevenz-rust2 0.24 (ohne Verschlüsselung/Packen) + lzma-rust2 | hasenbanck | Apache-2.0 | 7z prüfen (P3) | 2026-10-19 |
+| cab 0.6 + lzxd | mdsteele / jbit | MIT; MIT/Apache-2.0 | CAB prüfen (P3) | 2026-10-19 |
+| flate2, miniz_oxide, tar | rust-lang / Frommi / alexcrichton | MIT/Apache-2.0 (miniz_oxide auch Zlib) | GZIP/TAR, PDF-Datenströme (P3) | 2026-10-19 |
 | axe-core / @axe-core/playwright 4.14 | Deque | MPL-2.0 | nur Tests, nicht ausgeliefert | 2026-10-19 |
 
 Rust- und npm-Abhängigkeiten werden ab P13 automatisch inventarisiert (`cargo about` /
