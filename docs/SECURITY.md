@@ -76,7 +76,12 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   (`CRYPTPROTECT_LOCAL_MACHINE`, eigene Entropie); ein alter, roher Schlüssel wird beim Start
   geprüft umgeschrieben. Die Verschlüsselung verhindert, dass Funde versehentlich ausgeführt,
   von anderen Scannern gemeldet oder auf einem anderen Rechner gelesen werden – nicht, dass ein
-  Admin dieses Rechners sie liest.
+  Admin dieses Rechners sie liest. Genauer: Ein `CRYPTPROTECT_LOCAL_MACHINE`-Blob ist für
+  jeden Prozess dieses Rechners entschlüsselbar, der ihn lesen kann – die eigentliche Sperre ist
+  die Zugriffsliste des Ordners; aus einem vollständigen Abbild samt SYSTEM/SECURITY-Hives ist er
+  auch offline entschlüsselbar. Ein alter, roher Schlüssel kann in freien Sektoren bzw.
+  Schattenkopien weiterleben. Scheitert die Umstellung, bleibt der alte Schlüssel in Gebrauch
+  (Hinweis im Dienstprotokoll) – die Quarantäne bleibt erreichbar.
 - **Parser im Kindprozess (P3.2):** Fremde Dateien parst nur `aegis-scanworker` – unter Windows
   mit eingeschränktem Token des anfragenden Nutzers (keine Privilegien, Admin-Gruppen nur
   „deny“), **niedriger Integrität**, in einem Job-Objekt (2 GiB Speicher, höchstens 2 Prozesse,
@@ -151,38 +156,59 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Grenzen: 2 gleichzeitige Läufe, 1 je Konto; DISM (Windows Sandbox einschalten, nur Admin)
   einmal gleichzeitig, höchstens 30 Minuten.
 - **Prozess-Aktionen (P5.2):** Beenden, Anhalten und Fortsetzen sind Pläne mit den Prozessen
-  (ID + Programmpfad) als Ziel; der Dienst nennt nur Prozesse, die dem anfragenden Konto
-  gehören. Vor jeder Aktion wird am geöffneten Prozess erneut geprüft, ob ID und Programm noch
-  passen (keine wiederverwendete ID) und ob er kritisch ist (`IsProcessCritical`) – kritische
-  Systemprozesse und AEGIS selbst werden nie angefasst. Geöffnet wird im Identitätswechsel,
-  also nur mit den Rechten des Nutzers.
+  (ID + Programmpfad) als Ziel; der Dienst nennt nur Prozesse des anfragenden Kontos – auch für
+  Administratoren. Vor jeder Aktion wird am geöffneten Prozess erneut geprüft, ob ID und
+  Programm noch passen (keine wiederverwendete ID) und ob er kritisch ist
+  (`IsProcessCritical`) – kritische Systemprozesse und AEGIS selbst (alle Programme im
+  AEGIS-Programmordner) werden nie angefasst. Geöffnet wird im Identitätswechsel. Anhalten
+  prüft je Thread, dass er noch zum Prozess gehört (Thread-IDs werden wiederverwendet), und
+  sucht mehrmals nach neu gestarteten Threads; startet ein Programm laufend neue, meldet AEGIS
+  „nur teilweise angehalten“.
 - **Ransomware-Schutz (P5.3):** Köderdateien sind ein eigener Plan (Dateien als Ziele), werden
   mit den Rechten des Nutzers und ohne Links nur **neu** angelegt und nur entfernt, solange
   sie noch genau den AEGIS-Inhalt haben. Erkannt werden Änderungen an Ködern sowie viele
   Änderungen/Umbenennungen/Löschungen in kurzer Zeit im eigenen Profil (je Profil gezählt,
-  laute Ordner wie Browser-Caches ausgenommen, Pause nach einer Warnung). Ehrlich: ohne
-  Treiber erst, wenn der Angriff läuft; Gegenmaßnahmen (Panic-Button, Beenden, Isolieren) nur
-  nach „Ja“.
-- **Panic-Button (P5.4):** „Netz trennen“ legt zwei feste Sperrregeln der Windows-Firewall an
-  (`netsh` vom festen Systempfad, feste Argumente, Zeitlimit 30 s); „Wieder verbinden“ ist ein
-  eigener Plan und löscht genau diese Regeln. Der Plan nennt die rechnerweite Wirkung
-  (alle Konten, Firewall bleibt an).
+  laute Ordner wie Temp/AppData unterhalb des Profils ausgenommen). Pausen getrennt:
+  Massenänderungen je Profil 10 min, Köder je Datei – ein anderer Köder warnt sofort; neue
+  Köder machen bekannte nicht unscharf. Ehrlich: ohne Treiber erst, wenn der Angriff läuft;
+  Gegenmaßnahmen (Netz trennen, Beenden, Isolieren) nur nach „Ja“.
+- **Notfall „Netz trennen“ (P5.4):** legt zwei feste Sperrregeln der Windows-Firewall an
+  (`netsh` vom festen Systempfad, feste Argumente, Zeitlimit 30 s); scheitert ein Schritt,
+  werden angelegte Regeln sofort wieder entfernt. „Wieder verbinden“ ist ein eigener Plan,
+  löscht genau diese Regeln und ist immer möglich (räumt auch Reste auf). Trennen darf jedes
+  angemeldete Konto (Schutz im Ernstfall, siehe D-036); wieder verbinden nur das trennende
+  Konto und Administratoren. Der Plan nennt die rechnerweite Wirkung (alle Konten,
+  Fernzugriffe, Firewall bleibt an). `netsh` läuft unter der Dienst-Sperre (meist unter 1 s).
+- **Notfall-Scan / Panic-Button (P5.8):** nur lesend – Autostarts (Run-Schlüssel,
+  Autostart-Ordner), Downloads, Desktop, Temp (vollständig), AppData (nur ausführbare Dateien,
+  Skripte, Verknüpfungen; ohne Caches, höchstens 20 000), eigene Programme samt Speicher; alles
+  mit den Rechten des Nutzers, geprüft im Prüfprozess, außerhalb der Dienst-Sperre. Ein
+  Signatur-Update wird angestoßen (nicht, wenn ein Administrator es abgeschaltet hat). Isolieren
+  aller gewählten Funde ist **ein** Plan; „Alles rückgängig“ ebenso (je Ziel genau eine
+  Eintrags-Kennung, alle vorab geprüft).
 - **Speicher-Scan (P5.5):** liest nur Prozesse des anfragenden Kontos, im Identitätswechsel
   (Module und ausführbarer privater Speicher, je Bereich und Anfrage begrenzt – 10 MiB je
-  Anfrage an den Prüfprozess). Geprüft wird ausschließlich im eingeschränkten Prüfprozess
-  (YARA/EICAR); gemeldet wird nur.
+  Anfrage an den Prüfprozess, insgesamt höchstens 128 MiB). Speicher wird paketweise geprüft,
+  sobald ein Paket voll ist – der Dienst hält nie mehr als etwa eine Anfrage im Speicher.
+  Geprüft wird ausschließlich im eingeschränkten Prüfprozess (YARA/EICAR); gemeldet wird nur.
 - **Datei-Safe (P5.6):** Ordner im Profil des Nutzers; alle Zugriffe im Identitätswechsel und
   ohne Links (der Safe-Ordner muss ohne Umweg über Verknüpfungen erreichbar sein). Zufälliger
   256-Bit-Datenschlüssel, verpackt mit Argon2id (64 MiB, 3 Durchläufe) + AES-256-GCM; Inhalte
   im Quarantäne-Containerformat, Name/Herkunft verschlüsselt je Eintrag. Das Passwort kommt
-  nur über die Pipe (`Password`: nie in `Debug`, beim Verwerfen überschrieben), wird nie
-  gespeichert – nicht im Plan, Protokoll oder Verlauf (Test prüft das Prüfprotokoll). Der
-  entsperrte Schlüssel liegt nur im Speicher des Dienstes je Konto und verfällt nach 10 min
-  ohne Nutzung, beim Sperren und beim Neustart. 5 Fehlversuche → 60 s Pause. Hineinlegen:
-  Original erst nach geprüfter Kopie entfernt; Herausholen: nie überschreiben, SHA-256
-  geprüft, erst danach aus dem Safe entfernt. Ehrlich: Wer das Konto oder den Dienst
-  kontrolliert, während der Safe entsperrt ist, kann mitlesen; ein vergessenes Passwort kann
-  niemand ersetzen.
+  nur über die Pipe (`Password`: nie in `Debug`, beim Verwerfen überschrieben; der Rahmen der
+  Anfrage wird nach dem Lesen überschrieben), wird nie gespeichert – nicht im Plan, Protokoll
+  oder Verlauf (Test prüft das Prüfprotokoll). Die Ableitung läuft **außerhalb** der
+  Dienst-Sperre (höchstens 2 gleichzeitig, je Konto eine); Parameter aus einem Safe-Kopf über
+  denen, mit denen AEGIS anlegt, werden abgelehnt (der Kopf liegt im Profil und könnte sonst den
+  Dienst Speicher und Zeit kosten). Der entsperrte Schlüssel liegt nur im Speicher des Dienstes
+  je Konto und verfällt nach 10 min ohne Nutzung, beim Sperren und beim Neustart. 5 falsche
+  Passwörter → 60 s Pause. Dateien des Safes selbst lassen sich nicht hineinlegen. Hineinlegen:
+  Original erst nach geprüfter Kopie entfernt; Herausholen: nie überschreiben, SHA-256 geprüft,
+  erst danach aus dem Safe entfernt (beides unter der Dienst-Sperre, wie die Quarantäne).
+  Ehrlich: Pfade der hineingelegten bzw. herausgeholten Dateien stehen im **Plan** und damit im
+  Prüfprotokoll (die Freigabe ist an sie gebunden); der Verlauf nennt nur Anzahlen. Wer das
+  Konto oder den Dienst kontrolliert, während der Safe entsperrt ist, kann mitlesen; ein
+  vergessenes Passwort kann niemand ersetzen.
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.
@@ -231,6 +257,7 @@ Prüfung „kein Code-Pfad ändert etwas ohne Freigabe“ ist fester Bestandteil
 
 | Datum | Umfang | Ergebnis |
 | --- | --- | --- |
+| 2026-10-19 | P5.1–P5.6: DPAPI-Schlüssel, Prozess-Aktionen, Ransomware-Schutz, Netz trennen, Speicher-Scan, Datei-Safe. 1 Prüfer | 0 kritisch/hoch. 3 mittel: P5-R1 Argon2-Parameter aus dem Safe-Kopf (bis 1 GiB) unter der Dienst-Sperre → nur AEGIS-Parameter, Ableitung außerhalb der Sperre, je Konto eine, Grenzen vor der Ableitung; P5-R2 Netz trennen/verbinden ohne Rechteregel → Wieder verbinden nur trennendes Konto/Admins, Entscheidung D-036; P5-R3 halbe Sperre ohne Zustand → Zurücknehmen bei Fehler, Wieder verbinden immer möglich. 6 niedrig: Thread-ID-Wiederverwendung/neue Threads beim Anhalten → Thread-Prüfung, mehrere Runden; Speicher-Scan Spitzenbedarf → paketweise, 128 MiB; Safe-Ordner-Prüfung Groß/Klein → gefalteter Vergleich + Test; Klartext-Pfade in Protokoll/Verlauf → Verlauf nur Anzahlen, Protokoll ehrlich dokumentiert; Ransomware-Pausen/Scharfschalten/Profilname → getrennte Pausen, Köder einzeln scharf, laute Ordner relativ zum Profil + Tests; Admin-Prozessliste → nur eigene, AEGIS-Programme ausgenommen. 3 Kleinigkeiten (DPAPI-Doku + Start bei fehlgeschlagener Umstellung, Rahmen überschreiben/Fehlversuche nur bei falschem Passwort, Köder bei Speicherfehler bewacht) – alle behoben |
 | 2026-10-19 | P4: Labor (Dienst, winffi-Sandbox, Sonde, App-Befehle, Labor-Seite). 1 Prüfer | 1 hoch: P4-1 Absturz des Dienstes über einen Bildnamen mit Mehrbyte-Zeichen (Byte-Slicing, `panic = abort`) → reine ASCII-/Byteprüfung vor allem anderen, Test. 6 mittel: P4-2 Ausgabe der Stufe 1 als SYSTEM unter der Dienst-Sperre gelesen → Identitätswechsel, Hardlink-Prüfung, außerhalb der Sperre; P4-3 VM nicht kontrolliert, erster Bericht vertraut → Prozess gehalten, Frist/Größengrenze, Lesen erst nach Ende, Hinweise vom Dienst; P4-4 gemeinsames, bleibendes AppContainer-Profil → Profil je Lauf, danach gelöscht, kein SYSTEM-Rückfall; P4-5 Erlaubnis vor der Arbeit als „erfolgreich“ protokolliert → Erlaubnis im Lauf, echtes Ergebnis; P4-6 „Vertrauen“ auf Labor-Vorschläge → abgelehnt (Dienst + UI); P4-7 Berichtsgrößen → 1 MiB, Textgrenzen, Bericht nur je Lauf. 8 niedrig/Kleinigkeiten (stiller Token-Rückfall, Ordnerrechte Stufe 2, Zählung aktiver Läufe, Dateiname der Kopie, Sonde per Umgebungsvariable, Fensterfotos ohne AppContainer-/Hänger-Prüfung, PNG ungeprüft, Prüfsumme nicht verglichen, DISM ohne Frist, Netz-Text) – alle behoben, Tests ergänzt |
 | 2026-10-19 | P3: Prüfprozess/Token, Vertrauensliste, Wächter, Verlauf/Zeitpläne/Updates, HTML-Export. 2 Durchgänge (der erste brach nach dem ersten Fund ab) | 2 hoch: P3-1 Hintergrundprüfungen mit SYSTEM-abgeleitetem Token (→ Profil-Besitzer bzw. LocalService, Öffnen mit Prüfung am Handle), P3-2 Verlauf/Vertrauensliste konnten den Dienststart blockieren (→ Größen- und Längengrenzen, Quoten, Beiseitelegen). 8 mittel (Aushungern/Warteschlange, Abstürze verstecken Dateien, rechnerweite Schalter für jeden Nutzer → Gaming je Konto + Admin-Pflicht, gemeinsame Grenzen → Quoten, Dateizugriffe unter der Sperre, freshclam als SYSTEM ohne Job, Zuordnung „gemeinsam“ nach Pfad → SID/Profil-Wurzel, LocalService statt eingeschränktem SYSTEM). 6 niedrig (Rückfall auf Dienst-Token, gemeinsame „unbekannt“-Kennung, Pfadvergleich, Termine, USB/ETW, Export überschreibt). Alle behoben bzw. Grenzen dokumentiert, Tests ergänzt (Windows-Test „nur Nutzer“-Token) |
 | 2026-10-19 | P2.5-Nachprüfung (separater Agent): Korrekturen + neue Fehler im FFI | Alte Funde geschlossen bzw. teilweise; neu: 1 hoch (Server-Prüfung für Standardnutzer kaputt → Pipe-Besitzer), 6 mittel (Namenslücke, Leerlauf/Grenzen je Konto, Einträge ohne Konto, schreibgeschützt, Analysepunkte, ClamAV als SYSTEM → P3.2), 5 niedrig. Behoben (außer ClamAV-Token → P3.2, Pfad-Textvergleich nur dokumentiert), Tests ergänzt |

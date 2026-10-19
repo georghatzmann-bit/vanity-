@@ -170,11 +170,22 @@ Der Dienst schlägt Beenden/Anhalten/Fortsetzen nur für Prozesse des anfragende
 führt sie im Identitätswechsel aus. So kann ein Nutzer über den SYSTEM-Dienst nichts beenden,
 was er nicht ohnehin beenden dürfte; kritische Systemprozesse sind ausgeschlossen.
 
-## D-036 – Panic-Button über die Windows-Firewall
+## D-036 – Notfall „Netz trennen“ über die Windows-Firewall
 Netz trennen per zwei eigene Sperrregeln (ein-/ausgehend, alle Profile) statt Adapter
 abschalten: wirkt sofort, ist genau rückgängig zu machen (nur die AEGIS-Regeln) und braucht
 keinen Treiber. Laufende Programme werden nicht automatisch beendet (Goldene Regel) – das geht
-einzeln über „Beenden …“.
+einzeln über „Beenden …“. **Wer darf:** Trennen darf jedes angemeldete Konto – im Ernstfall
+(Ransomware im eigenen Konto) zählt Schutz mehr als die Gefahr, dass jemand den Rechner kurz
+vom Netz nimmt; der Plan nennt die Wirkung für alle Konten. Wieder verbinden dürfen nur das
+trennende Konto und Administratoren, damit Schadsoftware in einem anderen Konto die Trennung
+nicht aufheben kann. Der eigentliche **Panic-Button** der Spezifikation ist der Notfall-Scan
+(D-039).
+
+## D-039 – Panic-Button = Notfall-Scan
+Laut Spezifikation (Modul G) ist der Panic-Button ein sofortiger, nur lesender Notfall-Scan mit
+anschließendem Sammel-Isolieren (vorausgewählt nur „Gefährlich“) und „Alles rückgängig“. Er
+liegt auf der Scan-Seite und ist über Dashboard und Befehlspalette erreichbar. „Netz trennen“
+bleibt als zusätzliche Notfall-Maßnahme beim Ransomware-Schutz.
 
 ## D-037 – Datei-Safe im Profil, Schlüssel nur aus dem Passwort
 Der Safe liegt im Profil des Nutzers (nicht im Datenordner des Dienstes), damit Rechte und
