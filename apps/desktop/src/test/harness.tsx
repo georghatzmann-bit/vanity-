@@ -120,6 +120,8 @@ export function fakePlatform(
     pickPaths: kind === 'tauri' ? vi.fn(() => Promise.resolve(picked)) : null,
     openWindowsSecurity: kind === 'tauri' ? vi.fn(() => Promise.resolve()) : null,
     openWindowsSettings: kind === 'tauri' ? vi.fn(() => Promise.resolve()) : null,
+    clipboardGuard: kind === 'tauri' ? vi.fn(() => Promise.resolve(true)) : null,
+    onClipboardSwap: () => Promise.resolve(() => undefined),
   };
 }
 

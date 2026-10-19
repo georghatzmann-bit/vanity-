@@ -106,6 +106,9 @@ pub struct ServiceSettings {
     /// Gemerkte Stände vor dem Beheben (für „Rückgängig“, höchstens 50).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hardening_undo: Vec<crate::handler::harden::FixRecord>,
+    /// Bekannte Tastaturen (Geräte-Kennungen; `None` = noch keine Grundlinie).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub known_keyboards: Option<Vec<String>>,
 }
 
 /// Sicherheits-Score eines Tages (Härtung, P6).
@@ -178,6 +181,7 @@ impl Default for ServiceSettings {
             backup: Vec::new(),
             hardening: Vec::new(),
             hardening_undo: Vec::new(),
+            known_keyboards: None,
         }
     }
 }

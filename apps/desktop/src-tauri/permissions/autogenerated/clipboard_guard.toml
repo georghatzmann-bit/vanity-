@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-clipboard-guard"
+description = "Enables the clipboard_guard command without any pre-configured scope."
+commands.allow = ["clipboard_guard"]
+
+[[permission]]
+identifier = "deny-clipboard-guard"
+description = "Denies the clipboard_guard command without any pre-configured scope."
+commands.deny = ["clipboard_guard"]

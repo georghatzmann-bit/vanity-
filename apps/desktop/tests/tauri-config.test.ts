@@ -23,11 +23,14 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'core:window:allow-is-maximized': 'Symbol des Maximieren-Knopfs passend zum Zustand (lesend)',
   'core:window:allow-start-dragging': 'Fenster an der Titelleiste verschieben',
   'core:window:allow-close': 'Schließen-Knopf ohne Infobereich: beendet AEGIS',
-  'core:event:allow-listen': 'tauri://resize und aegis://navigate empfangen (nie senden)',
+  'core:event:allow-listen':
+    'tauri://resize, aegis://navigate und aegis://clipboard-swap empfangen (nie senden)',
   'core:event:allow-unlisten': 'Empfänger wieder abmelden',
   'allow-app-info': 'App-Befehl app_info (Version, Build-Profil, Plattform, Infobereich; lesend)',
   'allow-hide-to-tray':
     'App-Befehl hide_to_tray: Schließen-Knopf mit „Beim Schließen in den Infobereich“ – versteckt nur mit Tray-Symbol',
+  'allow-clipboard-guard':
+    'App-Befehl clipboard_guard: Zwischenablage-Wächter ein/aus (opt-in, liest nur, verändert nie)',
   'allow-service-scan': 'Dienst: Dateien/Ordner prüfen (nur lesend)',
   'allow-service-list-quarantine': 'Dienst: Quarantäne anzeigen (nur lesend)',
   'allow-service-propose-quarantine': 'Dienst: Isolieren vorschlagen (ausgeführt erst nach Ja)',
@@ -65,6 +68,8 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-persistence-status': 'Dienst: Autostart-Einträge lesen und bewerten (nur lesend)',
   'allow-service-propose-autorun-disable':
     'Dienst: Autostart-Eintrag deaktivieren vorschlagen (erst nach „Ja“, mit Rückgängig)',
+  'allow-service-devices-status':
+    'Dienst: Kamera-/Mikrofon-Nutzung, Tastaturen und USB-Laufwerke lesen (nur lesend)',
   'allow-service-software-updates':
     'Dienst: winget nach neueren Programmversionen fragen (nur lesend, auf Knopfdruck)',
   'allow-service-propose-software-update':

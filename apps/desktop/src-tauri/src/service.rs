@@ -569,6 +569,13 @@ fn check_package_id(value: &str) -> Result<(), String> {
     }
 }
 
+/// Geräte & Privatsphäre: Kamera-/Mikrofon-Nutzung des Kontos, Tastaturen, USB-Laufwerke
+/// (nur lesend).
+#[tauri::command]
+pub async fn service_devices_status() -> Result<Value, String> {
+    send(json!({ "type": "devices_status" })).await
+}
+
 /// Software-Updates: winget nach neueren Versionen fragen (nur lesend, braucht Netz).
 #[tauri::command]
 pub async fn service_software_updates() -> Result<Value, String> {

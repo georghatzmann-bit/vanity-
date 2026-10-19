@@ -9,6 +9,7 @@
 const APP_COMMANDS: &[&str] = &[
     "app_info",
     "hide_to_tray",
+    "clipboard_guard",
     "service_scan",
     "service_list_quarantine",
     "service_propose_quarantine",
@@ -39,6 +40,7 @@ const APP_COMMANDS: &[&str] = &[
     "service_propose_hardening_undo",
     "service_persistence_status",
     "service_propose_autorun_disable",
+    "service_devices_status",
     "service_software_updates",
     "service_propose_software_update",
     "service_propose_backup",

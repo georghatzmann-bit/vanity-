@@ -297,6 +297,13 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Rückgängig); Boot/System nie. Sperrliste einschalten ist ein Härtungs-Plan (Admin, Neustart);
   Device-Guard-Richtlinien werden nicht geändert. Grenze: Ein Angreifer mit Kernel-Rechten kann
   die Anzeige fälschen – der Check findet bekannte Fälle, er beweist keine Sauberkeit.
+- **Geräte & Privatsphäre (P6.6):** nur lesend (Registrierung `ConsentStore` je Profil, WMI
+  `Win32_PnPEntity`/`Win32_DiskDrive`). Meldungen über den Wächter-Feed: Kamera/Mikrofon nur an
+  das betroffene Konto, neue Tastaturen an alle. Zwischenablage-Wächter in der App (opt-in):
+  `OpenClipboard` nur zum Lesen, nie `EmptyClipboard`/`SetClipboardData`; Text höchstens
+  200 Zeichen, nichts gespeichert oder gesendet; im Ereignis nur gekürzte Adressen. Grenze:
+  Schadsoftware mit Treiber oder direktem Gerätezugriff kann Kamera/Mikrofon an Windows vorbei
+  nutzen – dann zeigt auch diese Liste nichts.
 - **Software-Updates (P6.5):** Netz nur auf Knopfdruck (winget-Paketquelle). winget wird nur
   aus `%ProgramFiles%\WindowsApps\Microsoft.DesktopAppInstaller_*` gestartet (geschützt,
   kein Link), ohne Fenster, mit festen Argumenten; Kennung und Version stammen aus dem Plan und

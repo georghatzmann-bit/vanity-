@@ -180,7 +180,8 @@ pub fn connections_without_proxy(blob: &[u8]) -> Option<Vec<u8>> {
 
 #[cfg(windows)]
 pub use self::windows::{
-    collect, fix_state, machine_autoruns, machine_autoruns_of, proxy_of, user_registry_autoruns,
+    capability_uses, collect, devices, fix_state, machine_autoruns, machine_autoruns_of,
+    profile_sids, proxy_of, user_registry_autoruns,
 };
 
 #[cfg(windows)]
@@ -1157,6 +1158,101 @@ mod windows {
             }
         }
         out.truncate(MAX_AUTORUNS);
+        out
+    }
+
+    // -----------------------------------------------------------------------------------
+    // Geräte & Privatsphäre (P6.6, nur lesend)
+    // -----------------------------------------------------------------------------------
+
+    /// Kamera-/Mikrofon-Nutzung eines Kontos laut Windows (`ConsentStore`, nur lesend).
+    #[must_use]
+    pub fn capability_uses(sid: &str) -> Vec<crate::devices::CapabilityUse> {
+        use crate::devices::{Capability, CapabilityUse, nonpackaged_path};
+        let hive = Hive::User(sid.to_owned());
+        let base =
+            r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
+        let times = |key: &str| {
+            let values = read_values(&hive, key);
+            let get = |n: &str| {
+                values
+                    .iter()
+                    .find(|v| v.name.eq_ignore_ascii_case(n))
+                    .and_then(|v| v.data.trim().parse::<u64>().ok())
+            };
+            (get("LastUsedTimeStart"), get("LastUsedTimeStop"))
+        };
+        let mut out = Vec::new();
+        for capability in [Capability::Webcam, Capability::Microphone] {
+            let store = format!(r"{base}\{}", capability.store_key());
+            for app in read_subkeys(&hive, &store).into_iter().take(500) {
+                if app.eq_ignore_ascii_case("NonPackaged") {
+                    let np = format!(r"{store}\NonPackaged");
+                    for program in read_subkeys(&hive, &np).into_iter().take(500) {
+                        let (start, stop) = times(&format!(r"{np}\{program}"));
+                        if start.is_some() {
+                            out.push(CapabilityUse::new(
+                                capability,
+                                nonpackaged_path(&program),
+                                false,
+                                start,
+                                stop,
+                            ));
+                        }
+                    }
+                } else {
+                    let (start, stop) = times(&format!(r"{store}\{app}"));
+                    if start.is_some() {
+                        out.push(CapabilityUse::new(capability, app, true, start, stop));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// SIDs der Benutzerprofile (`ProfileList`, nur echte Konten `S-1-5-21-…`).
+    #[must_use]
+    pub fn profile_sids() -> Vec<String> {
+        read_subkeys(
+            &Hive::LocalMachine,
+            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList",
+        )
+        .into_iter()
+        .filter(|s| s.starts_with("S-1-5-21-"))
+        .take(200)
+        .collect()
+    }
+
+    /// Angeschlossene Tastaturen und USB-Laufwerke (WMI, nur lesend).
+    #[must_use]
+    pub fn devices() -> Vec<crate::devices::Device> {
+        use crate::devices::{Device, DeviceKind};
+        let mut out = Vec::new();
+        if let Ok(rows) = query(
+            r"ROOT\CIMV2",
+            "SELECT Name, PNPDeviceID FROM Win32_PnPEntity WHERE PNPClass = 'Keyboard' AND Present = TRUE",
+            false,
+        ) {
+            for row in rows.iter().take(100) {
+                if let Some(id) = v_string(row, "PNPDeviceID") {
+                    let name = v_string(row, "Name").unwrap_or_default();
+                    out.push(Device::new(DeviceKind::Keyboard, &name, &id));
+                }
+            }
+        }
+        if let Ok(rows) = query(
+            r"ROOT\CIMV2",
+            "SELECT Model, PNPDeviceID FROM Win32_DiskDrive WHERE InterfaceType = 'USB'",
+            false,
+        ) {
+            for row in rows.iter().take(100) {
+                if let Some(id) = v_string(row, "PNPDeviceID") {
+                    let name = v_string(row, "Model").unwrap_or_default();
+                    out.push(Device::new(DeviceKind::Storage, &name, &id));
+                }
+            }
+        }
         out
     }
 

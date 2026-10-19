@@ -291,3 +291,18 @@ bündelt nichts. Rückgängig gibt es nicht automatisch – der Plan sagt das un
 winget-Befehl für die alte Version. Nur für ein Konto installierte Programme meldet winget als
 SYSTEM oft nicht; die UI sagt das.
 
+## D-048 – Geräte & Privatsphäre: melden statt blockieren, Zwischenablage nur in der App
+
+Status: angenommen (P6.6). Ohne Treiber kann AEGIS Kamera, Mikrofon oder USB nicht sperren – es
+meldet. Kamera/Mikrofon: Windows protokolliert jede Nutzung im `ConsentStore` des Kontos
+(`LastUsedTimeStart/Stop`); der Dienst liest das je Profil (nur lesend) und meldet alle
+10 Sekunden neu beginnende Nutzung an genau dieses Konto (Programme aus Download-/Temp-Ordnern als
+„verdächtig“). Laufende Nutzung beim Dienststart wird nicht gemeldet. USB: Tastaturen und
+USB-Laufwerke per WMI; eine neue externe Tastatur wird an alle Konten gemeldet (BadUSB-Hinweis),
+die erste Abfrage legt nur die Grundlinie fest (in den Dienst-Einstellungen). Zwischenablage: Der
+Dienst (SYSTEM, Sitzung 0) sieht die Zwischenablage des Nutzers nicht – der Wächter läuft in der
+App, nur nach Einschalten (Standard aus), liest nach jeder Änderung höchstens 200 Zeichen, hält
+nur die letzte Krypto-Adresse 3 Sekunden im Speicher und meldet einen Austausch gegen eine andere
+Adresse desselben Typs (BTC, ETH, LTC, DOGE, TRX, XMR) samt Programm, dem die Zwischenablage danach
+gehört. Er verändert die Zwischenablage nie.
+

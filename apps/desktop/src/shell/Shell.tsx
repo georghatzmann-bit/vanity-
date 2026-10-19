@@ -20,6 +20,7 @@ import { PanicBar } from './PanicBar.tsx';
 import { Sidebar } from './Sidebar.tsx';
 import { StatusBar } from './StatusBar.tsx';
 import { TitleBar } from './TitleBar.tsx';
+import { useClipboardGuard } from './useClipboardGuard.ts';
 import { useWatchNotifier } from './useWatchNotifier.ts';
 
 export interface ShellProps {
@@ -52,6 +53,7 @@ export function Shell({ ready, bootCount, preferences, onReplayBoot }: ShellProp
   const sidebarTarget = useRef<RouteId | null>(null);
 
   useWatchNotifier(ready, route);
+  useClipboardGuard(ready);
 
   const shell = useMemo<ShellActions>(
     () => ({ openPalette: () => setPaletteOpen(true), replayBoot: onReplayBoot, headingRef }),

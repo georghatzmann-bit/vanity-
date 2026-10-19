@@ -10,6 +10,7 @@ export const settingLabelKeys: Readonly<Record<SettingKey, TextKey>> = {
   bootAnimation: 'settings.boot.label',
   closeToTray: 'settings.closeToTray.label',
   sidebarCollapsed: 'nav.collapse',
+  clipboardGuard: 'devices.clipboard.label',
 };
 
 /** Wert einer Einstellung als Text der aktiven Sprache, z. B. „Hell“ oder „an“. */

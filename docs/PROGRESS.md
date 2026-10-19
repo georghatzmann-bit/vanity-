@@ -124,10 +124,13 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 5. [x] P6.5 Software-Updates über winget: Liste auf Knopfdruck, je Paket ein Plan (neue
        Aktionsart `update_software`, genau Kennung + Version), Installieren nur nach „Ja“ als
        Administrator, außerhalb der Dienst-Sperre, kein automatisches Rückgängig (D-047).
-6. [ ] P6.6 Kamera/Mikrofon-Wächter, Zwischenablage (Krypto-Adressen, opt-in), USB-Geräte.
+6. [x] P6.6 Geräte & Privatsphäre: Kamera-/Mikrofon-Nutzung je Konto (Windows-Protokoll) mit
+       Wächter-Meldung bei Beginn, Tastaturen/USB-Laufwerke mit BadUSB-Hinweis bei neuer
+       Tastatur, Zwischenablage-Wächter für Krypto-Adressen in der App (opt-in, nur lesend)
+       (D-048).
 7. [ ] P6.7 Sicherheits-Review (separater Agent), Doku, DoD.
 
-**Nächster Schritt:** P6.6 Kamera/Mikrofon, Zwischenablage, USB.
+**Nächster Schritt:** P6.7 Sicherheits-Review P6 (separater Agent), Doku, DoD.
 
 ## P5 – Schutz-Werkzeuge
 

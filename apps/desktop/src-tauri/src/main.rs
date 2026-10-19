@@ -3,6 +3,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_info;
+// Die Erkennung nutzt nur der Windows-Wächter; anderswo bleibt nur der Befehl (liefert „nicht
+// verfügbar“).
+#[cfg_attr(not(windows), allow(dead_code))]
+mod clipboard_guard;
 mod navigation;
 mod report;
 mod service;
@@ -49,6 +53,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             app_info::app_info,
             window::hide_to_tray,
+            clipboard_guard::clipboard_guard,
             service::service_scan,
             service::service_list_quarantine,
             service::service_propose_quarantine,
@@ -79,6 +84,7 @@ fn main() {
             service::service_propose_hardening_undo,
             service::service_persistence_status,
             service::service_propose_autorun_disable,
+            service::service_devices_status,
             service::service_software_updates,
             service::service_propose_software_update,
             service::service_propose_backup,
@@ -154,6 +160,7 @@ mod test_support {
             .invoke_handler(tauri::generate_handler![
                 crate::app_info::app_info,
                 crate::window::hide_to_tray,
+                crate::clipboard_guard::clipboard_guard,
                 crate::service::service_scan,
                 crate::service::service_list_quarantine,
                 crate::service::service_propose_quarantine,
@@ -184,6 +191,7 @@ mod test_support {
                 crate::service::service_propose_hardening_undo,
                 crate::service::service_persistence_status,
                 crate::service::service_propose_autorun_disable,
+                crate::service::service_devices_status,
                 crate::service::service_software_updates,
                 crate::service::service_propose_software_update,
                 crate::service::service_propose_backup,
@@ -227,7 +235,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 62] = [
+    const EXPECTED_PERMISSIONS: [&str; 64] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -238,6 +246,7 @@ mod tests {
         "core:event:allow-unlisten",
         "allow-app-info",
         "allow-hide-to-tray",
+        "allow-clipboard-guard",
         "allow-service-scan",
         "allow-service-list-quarantine",
         "allow-service-propose-quarantine",
@@ -268,6 +277,7 @@ mod tests {
         "allow-service-propose-hardening-undo",
         "allow-service-persistence-status",
         "allow-service-propose-autorun-disable",
+        "allow-service-devices-status",
         "allow-service-software-updates",
         "allow-service-propose-software-update",
         "allow-service-propose-backup",
@@ -489,6 +499,7 @@ mod tests {
                 ("plugin:window|is_maximized", json!({})),
                 ("plugin:window|start_dragging", json!({})),
                 ("hide_to_tray", json!({})),
+                ("clipboard_guard", json!({ "enabled": false })),
                 (
                     "plugin:event|listen",
                     json!({
@@ -566,6 +577,7 @@ mod tests {
                 ("service_propose_hardening_undo", json!({ "id": "x" })),
                 ("service_persistence_status", json!({})),
                 ("service_propose_autorun_disable", json!({ "id": "x" })),
+                ("service_devices_status", json!({})),
                 ("service_software_updates", json!({})),
                 ("service_propose_software_update", json!({ "id": "x" })),
                 (

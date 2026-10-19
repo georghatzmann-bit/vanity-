@@ -28,6 +28,7 @@ use aegis_quarantine::{Entry, UserAccess, Vault};
 use crate::protocol::{PROTOCOL_VERSION, Proposal, Request, Response};
 
 pub mod backup;
+pub mod devices;
 pub mod harden;
 pub mod hardening;
 pub mod persistence;
@@ -1662,6 +1663,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 self.updates_finish(list, user)
             }
             Request::ProposeSoftwareUpdate { id } => self.propose_software_update(&id, user),
+            // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
+            Request::DevicesStatus {} => devices::devices_response(devices::collect(user)),
             // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
             Request::HardeningStatus { fresh } => match self.hardening_cached(user) {
                 Some(cached) if !fresh => cached,

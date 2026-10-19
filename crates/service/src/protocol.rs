@@ -98,6 +98,8 @@ pub enum Request {
     ProposeAutorunDisable { id: String },
     /// Software-Updates: winget nach neueren Versionen fragen (nur lesend, braucht Netz).
     SoftwareUpdates {},
+    /// Geräte & Privatsphäre: Kamera-/Mikrofon-Nutzung des Kontos, Tastaturen, USB-Laufwerke.
+    DevicesStatus {},
     /// Ein Paket aus der letzten Abfrage aktualisieren vorschlagen – nur nach „Ja“.
     ProposeSoftwareUpdate { id: String },
     /// Rückfall-Kopien ein- (`on`, Grenze in MiB) bzw. ausschalten vorschlagen.
@@ -295,6 +297,10 @@ pub enum Response {
     /// Härtung & Sicherheits-Score.
     Hardening {
         state: Box<crate::handler::hardening::HardeningState>,
+    },
+    /// Geräte & Privatsphäre.
+    Devices {
+        state: Box<crate::handler::devices::DevicesState>,
     },
     /// Software-Updates.
     Updates {

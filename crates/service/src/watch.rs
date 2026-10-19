@@ -59,6 +59,10 @@ pub enum WatchKind {
     Schedule,
     /// Ransomware-Verdacht (Köderdatei oder Massenänderungen).
     Ransomware,
+    /// Neues Gerät (z. B. Tastatur – BadUSB-Hinweis).
+    Device,
+    /// Kamera bzw. Mikrofon wird benutzt.
+    Privacy,
 }
 
 /// Ein Fund des Wächters.

@@ -197,6 +197,8 @@ pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
     let service = Arc::new(Mutex::new(service));
     spawn_scheduler(Arc::clone(&service), Arc::clone(stop));
     spawn_backups(Arc::clone(&service), Arc::clone(stop));
+    #[cfg(windows)]
+    spawn_devices(Arc::clone(&service), Arc::clone(stop));
     let result = serve(&config.endpoint, &service, stop);
     save_history(&history);
     result
@@ -296,6 +298,43 @@ fn spawn_backups(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
             }
             for _ in 0..60 {
                 if cancel() {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+    });
+}
+
+/// Geräte-Wächter (nur lesend): alle 10 Sekunden Tastaturen (BadUSB-Hinweis) und aktive
+/// Kamera-/Mikrofon-Nutzung je Konto prüfen und neue Fälle als Wächter-Meldung ausgeben.
+#[cfg(windows)]
+fn spawn_devices(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
+    std::thread::spawn(move || {
+        let lock = || {
+            service
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+        let watch = lock().watch();
+        let mut state = crate::handler::devices::DeviceWatch::default();
+        while !stop.load(Ordering::SeqCst) {
+            let devices = aegis_hardening::collect::devices();
+            let uses: Vec<_> = aegis_hardening::collect::profile_sids()
+                .into_iter()
+                .map(|sid| {
+                    let list = aegis_hardening::collect::capability_uses(&sid);
+                    (sid, list)
+                })
+                .collect();
+            let known = lock().known_keyboards();
+            let (alerts, known) = state.poll(&devices, &uses, known);
+            lock().remember_keyboards(known);
+            for alert in alerts {
+                watch.report(alert.kind, alert.path, None, alert.owner, alert.finding);
+            }
+            for _ in 0..10 {
+                if stop.load(Ordering::SeqCst) {
                     return;
                 }
                 std::thread::sleep(std::time::Duration::from_secs(1));

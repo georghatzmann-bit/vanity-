@@ -11,6 +11,7 @@
 
 pub mod checks;
 pub mod collect;
+pub mod devices;
 pub mod drivers;
 pub mod facts;
 pub mod persistence;

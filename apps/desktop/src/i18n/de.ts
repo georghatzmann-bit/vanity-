@@ -476,6 +476,8 @@ export const de = {
     kindFile: 'Neue oder geänderte Datei',
     kindProcess: 'Programmstart',
     kindRansomware: 'Ransomware-Verdacht',
+    kindDevice: 'Neues Gerät',
+    kindPrivacy: 'Kamera/Mikrofon',
     processNote: 'Das Programm läuft bereits – AEGIS kann es nicht vorab stoppen.',
     isolate: 'Isolieren …',
     trust: 'Vertrauen …',
@@ -664,6 +666,41 @@ export const de = {
       com_object: 'COM-Eintrag',
       browser_extension: 'Browser-Erweiterung',
       driver: 'Treiber',
+    },
+  },
+  devices: {
+    title: 'Geräte & Privatsphäre',
+    intro:
+      'Wer hat Kamera und Mikrofon benutzt (laut Windows) und welche Tastaturen und USB-Laufwerke sind angeschlossen? Neue Tastaturen und beginnende Kamera-/Mikrofon-Nutzung meldet der Wächter von selbst. AEGIS liest nur – es blockiert und trennt nichts.',
+    check: 'Geräte prüfen',
+    recheck: 'Neu prüfen',
+    notYet: 'Noch nicht geprüft.',
+    windowsOnly: 'Geräte und Kamera-/Mikrofon-Nutzung gibt es nur unter Windows.',
+    usesTitle: 'Kamera & Mikrofon',
+    usesNone: 'Windows hat keine Nutzung durch dein Konto aufgezeichnet.',
+    active: 'gerade aktiv',
+    lastUsed: 'Zuletzt: {start} bis {stop}',
+    capability: {
+      webcam: 'Kamera',
+      microphone: 'Mikrofon',
+    },
+    devicesTitle: 'Tastaturen & USB-Laufwerke',
+    devicesNone: 'Keine gefunden.',
+    builtIn: 'eingebaut',
+    kind: {
+      keyboard: 'Tastatur',
+      storage: 'USB-Laufwerk',
+    },
+    badUsbHint:
+      'BadUSB: Manche manipulierte USB-Sticks melden sich als Tastatur und tippen in Sekunden Befehle. Erscheint eine neue Tastatur, obwohl du nur einen Stick angesteckt hast, zieh ihn sofort ab.',
+    clipboard: {
+      label: 'Zwischenablage-Wächter (Krypto-Adressen)',
+      description:
+        'Warnt, wenn eine kopierte Krypto-Adresse innerhalb von 3 Sekunden gegen eine andere getauscht wird – typisch für „Clipboard-Hijacker“. Liest dafür nach jedem Kopieren den Text der Zwischenablage; nichts wird gespeichert, gesendet oder verändert. Standard: aus.',
+      alertTitle: 'Krypto-Adresse in der Zwischenablage ausgetauscht',
+      alert:
+        'Kopiert: {before} – jetzt in der Zwischenablage: {after}. Danach gehörte die Zwischenablage: {owner}. Füge die Adresse nicht ein, bevor du sie Zeichen für Zeichen geprüft hast, und lass einen vollständigen Scan laufen.',
+      unknownOwner: 'unbekanntes Programm',
     },
   },
   updates: {

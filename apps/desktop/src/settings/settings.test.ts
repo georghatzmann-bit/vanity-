@@ -32,7 +32,7 @@ function stored(settings: Partial<Settings> | Record<string, unknown>, version =
 }
 
 describe('Einstellungen – Schema', () => {
-  it('Standard: System-Sprache/-Darstellung/-Bewegung, Klang an, Start-Animation an, Infobereich an', () => {
+  it('Standard: System-Sprache/-Darstellung/-Bewegung, Klang an, Start-Animation an, Infobereich an, Zwischenablage-Wächter aus', () => {
     expect(defaultSettings).toEqual({
       language: 'system',
       theme: 'system',
@@ -41,6 +41,7 @@ describe('Einstellungen – Schema', () => {
       bootAnimation: true,
       closeToTray: true,
       sidebarCollapsed: false,
+      clipboardGuard: false,
     });
   });
 

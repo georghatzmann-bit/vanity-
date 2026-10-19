@@ -469,6 +469,8 @@ export const en: Messages<typeof de> = {
     kindFile: 'New or changed file',
     kindProcess: 'Program start',
     kindRansomware: 'Ransomware suspected',
+    kindDevice: 'New device',
+    kindPrivacy: 'Camera/microphone',
     processNote: 'The program is already running – AEGIS cannot stop it beforehand.',
     isolate: 'Isolate…',
     trust: 'Trust…',
@@ -656,6 +658,41 @@ export const en: Messages<typeof de> = {
       com_object: 'COM entry',
       browser_extension: 'Browser extension',
       driver: 'Driver',
+    },
+  },
+  devices: {
+    title: 'Devices & privacy',
+    intro:
+      'Who used the camera and microphone (according to Windows), and which keyboards and USB drives are connected? The watcher reports new keyboards and camera/microphone use as it starts. AEGIS only reads – it does not block or disconnect anything.',
+    check: 'Check devices',
+    recheck: 'Check again',
+    notYet: 'Not checked yet.',
+    windowsOnly: 'Devices and camera/microphone use are only available on Windows.',
+    usesTitle: 'Camera & microphone',
+    usesNone: 'Windows has not recorded any use by your account.',
+    active: 'active now',
+    lastUsed: 'Last: {start} to {stop}',
+    capability: {
+      webcam: 'Camera',
+      microphone: 'Microphone',
+    },
+    devicesTitle: 'Keyboards & USB drives',
+    devicesNone: 'None found.',
+    builtIn: 'built-in',
+    kind: {
+      keyboard: 'Keyboard',
+      storage: 'USB drive',
+    },
+    badUsbHint:
+      'BadUSB: some manipulated USB sticks pose as a keyboard and type commands within seconds. If a new keyboard appears although you only plugged in a stick, unplug it right away.',
+    clipboard: {
+      label: 'Clipboard watcher (crypto addresses)',
+      description:
+        'Warns when a copied crypto address is replaced by a different one within 3 seconds – typical for “clipboard hijackers”. To do so it reads the clipboard text after each copy; nothing is stored, sent or changed. Default: off.',
+      alertTitle: 'Crypto address in the clipboard was replaced',
+      alert:
+        'Copied: {before} – now in the clipboard: {after}. Afterwards the clipboard belonged to: {owner}. Do not paste the address before checking it character by character, and run a full scan.',
+      unknownOwner: 'unknown program',
     },
   },
   updates: {

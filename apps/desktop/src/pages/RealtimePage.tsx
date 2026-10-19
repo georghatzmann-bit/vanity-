@@ -21,6 +21,15 @@ export const WATCH_POLL_MS = 3000;
 /** In dieser Sitzung ignorierte Meldungen (nur Anzeige – der Dienst merkt sich nichts). */
 const ignored = new Set<number>();
 
+/** Bezeichnung je Art der Meldung. */
+const kindLabel = {
+  file: 'realtime.kindFile',
+  process: 'realtime.kindProcess',
+  ransomware: 'realtime.kindRansomware',
+  device: 'realtime.kindDevice',
+  privacy: 'realtime.kindPrivacy',
+} as const satisfies Record<WatchEvent['kind'], string>;
+
 function EventRow({
   event,
   onIsolate,
@@ -47,11 +56,7 @@ function EventRow({
       <div className="flex flex-wrap items-center gap-2">
         <RiskBadge level={f.risk} />
         <span className="text-xs text-text-subtle">
-          {event.kind === 'process'
-            ? t('realtime.kindProcess')
-            : event.kind === 'ransomware'
-              ? t('realtime.kindRansomware')
-              : t('realtime.kindFile')}
+          {t(kindLabel[event.kind])}
           {' · '}
           {Number.isNaN(when.getTime()) ? event.at : when.toLocaleString(locale)}
         </span>
@@ -67,7 +72,7 @@ function EventRow({
       )}
       {event.kind === 'ransomware' && <RansomAlarm recent={recent} onFreeze={onFreeze} />}
       <div className="mt-3 flex flex-wrap gap-2">
-        {event.kind !== 'ransomware' && (
+        {(event.kind === 'file' || event.kind === 'process' || event.kind === 'privacy') && (
           <>
             <Button
               size="sm"

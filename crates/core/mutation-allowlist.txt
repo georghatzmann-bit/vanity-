@@ -236,6 +236,16 @@ crates/winffi/src/inspect.rs :: winffi-udp-size :: Windows-FFI (Härtung, nur le
 crates/winffi/src/inspect.rs :: winffi-udp-table :: Windows-FFI (Härtung, nur lesend): Tabelle der gebundenen UDP-Ports in eigenen Speicher lesen – verändert nichts am System.
 crates/winffi/src/inspect.rs :: winffi-drivers-enum :: Windows-FFI (Treiber-Check, nur lesend): Basisadressen der geladenen Treiber in eigenen Speicher lesen – verändert nichts am System.
 crates/winffi/src/inspect.rs :: winffi-drivers-name :: Windows-FFI (Treiber-Check, nur lesend): Dateipfad eines geladenen Treibers in eigenen Puffer lesen – verändert nichts am System.
+crates/winffi/src/clipboard.rs :: winffi-clipboard-sequence :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Änderungszähler der Zwischenablage lesen.
+crates/winffi/src/clipboard.rs :: winffi-clipboard-owner :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Fenster lesen, dem die Zwischenablage gehört.
+crates/winffi/src/clipboard.rs :: winffi-clipboard-owner-pid :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Prozess-ID dieses Fensters lesen.
+crates/winffi/src/clipboard.rs :: winffi-clipboard-close :: Windows-FFI (Zwischenablage-Wächter, nur lesend): eigenes Öffnen der Zwischenablage beenden.
+crates/winffi/src/clipboard.rs :: winffi-clipboard-format :: Windows-FFI (Zwischenablage-Wächter, nur lesend): prüfen, ob Text in der Zwischenablage liegt.
+crates/winffi/src/clipboard.rs :: winffi-clipboard-open :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Zwischenablage zum Lesen öffnen (nie leeren oder schreiben).
+crates/winffi/src/clipboard.rs :: winffi-clipboard-data :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Handle des Textes lesen.
+crates/winffi/src/clipboard.rs :: winffi-clipboard-lock :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Text zum Lesen sperren.
+crates/winffi/src/clipboard.rs :: winffi-clipboard-read :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Text in eigenen Speicher kopieren (gekürzt).
+crates/winffi/src/clipboard.rs :: winffi-clipboard-unlock :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Sperre wieder lösen.
 crates/winffi/src/registry.rs :: winffi-registry-close :: Windows-FFI (Härtung): schließt einen selbst geöffneten Registrierungsschlüssel.
 crates/winffi/src/registry.rs :: winffi-registry-open-read :: Windows-FFI (Härtung): öffnet einen Schlüssel nur zum Lesen (Stand für „Rückgängig“ merken).
 crates/winffi/src/registry.rs :: winffi-registry-query :: Windows-FFI (Härtung): liest einen Wert roh in eigenen Speicher (nur lesend).

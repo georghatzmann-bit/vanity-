@@ -32,6 +32,7 @@ import {
   parseHardening,
   parsePersistence,
   parseUpdates,
+  parseDevices,
   parseSafe,
   parseEmergency,
   parseLabScreenshot,
@@ -106,6 +107,38 @@ export interface Platform {
   readonly openWindowsSecurity: (() => Promise<void>) | null;
   /** Windows-Einstellungsseite aus fester Liste öffnen (ändert nichts). `null` in der Vorschau. */
   readonly openWindowsSettings: ((page: WindowsSettingsPage) => Promise<void>) | null;
+  /**
+   * Zwischenablage-Wächter ein-/ausschalten (opt-in). Liefert, ob er auf diesem System läuft
+   * (nur Windows). `null` in der Vorschau.
+   */
+  readonly clipboardGuard: ((enabled: boolean) => Promise<boolean>) | null;
+  /** Meldung des Zwischenablage-Wächters (ausgetauschte Krypto-Adresse). */
+  onClipboardSwap(handler: (swap: ClipboardSwap) => void): Promise<Unlisten>;
+}
+
+/** Ausgetauschte Krypto-Adresse (gekürzt). */
+export interface ClipboardSwap {
+  readonly kind: string;
+  readonly before: string;
+  readonly after: string;
+  readonly owner: string | null;
+}
+
+export const CLIPBOARD_SWAP_EVENT = 'aegis://clipboard-swap';
+
+/** Wandelt das Ereignis des Zwischenablage-Wächters um (unbekannte Form → `null`). */
+export function parseClipboardSwap(payload: unknown): ClipboardSwap | null {
+  if (typeof payload !== 'object' || payload === null) {
+    return null;
+  }
+  const p = payload as Record<string, unknown>;
+  const text = (v: unknown) => (typeof v === 'string' ? v.slice(0, 200) : null);
+  const kind = text(p['kind']);
+  const before = text(p['before']);
+  const after = text(p['after']);
+  return kind !== null && before !== null && after !== null
+    ? { kind, before, after, owner: text(p['owner']) }
+    : null;
 }
 
 /** Einstellungsseiten, die AEGIS öffnen darf. */
@@ -184,6 +217,14 @@ export function createTauriPlatform(): Platform {
       }),
     openWindowsSecurity: () => invoke<undefined>('open_windows_security'),
     openWindowsSettings: (page) => invoke<undefined>('open_windows_settings', { page }),
+    clipboardGuard: (enabled) => invoke<boolean>('clipboard_guard', { enabled }),
+    onClipboardSwap: (handler) =>
+      current.listen<unknown>(CLIPBOARD_SWAP_EVENT, (event) => {
+        const swap = parseClipboardSwap(event.payload);
+        if (swap !== null) {
+          handler(swap);
+        }
+      }),
   };
 }
 
@@ -270,6 +311,7 @@ function createTauriService(): ServiceApi {
     softwareUpdates: async () => parseUpdates(await invoke<unknown>('service_software_updates')),
     proposeSoftwareUpdate: async (id) =>
       parseProposal(await invoke<unknown>('service_propose_software_update', { id })),
+    devicesStatus: async () => parseDevices(await invoke<unknown>('service_devices_status')),
     proposeBackup: async (on, quotaMb) =>
       parseProposal(await invoke<unknown>('service_propose_backup', { on, quotaMb })),
     proposeBackupRestore: async (id) =>
@@ -311,6 +353,8 @@ export function createBrowserPlatform(info: AppInfo): Platform {
     onFileDrop: () => Promise.resolve(() => undefined),
     openWindowsSecurity: null,
     openWindowsSettings: null,
+    clipboardGuard: null,
+    onClipboardSwap: () => Promise.resolve(() => undefined),
   };
 }
 

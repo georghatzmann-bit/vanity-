@@ -286,6 +286,17 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                     }
                 }
             }
+            // Geräte (WMI) außerhalb der Dienst-Sperre.
+            Ok(Request::DevicesStatus {}) => {
+                match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {
+                    None => busy(),
+                    Some(slot) => {
+                        let state = crate::handler::devices::collect(user);
+                        drop(slot);
+                        crate::handler::devices::devices_response(state)
+                    }
+                }
+            }
             // winget-Abfrage (Netz) außerhalb der Dienst-Sperre.
             Ok(Request::SoftwareUpdates {}) => {
                 let packages = lock()?.package_manager();

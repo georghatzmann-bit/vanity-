@@ -28,6 +28,7 @@ import {
 } from '../platform/service.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 import { PersistencePanel } from './PersistencePanel.tsx';
+import { DevicesPanel } from './DevicesPanel.tsx';
 import { UpdatesPanel } from './UpdatesPanel.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
 import { useConsentFlow } from './useConsentFlow.tsx';
@@ -310,6 +311,7 @@ export function HardeningPage() {
               version={version}
             />
           )}
+          {service !== null && <DevicesPanel service={service} />}
           {service !== null && (
             <UpdatesPanel
               service={service}

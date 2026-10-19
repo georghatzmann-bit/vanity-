@@ -21,6 +21,9 @@ mod util;
 pub mod accounts;
 
 #[cfg(windows)]
+pub mod clipboard;
+
+#[cfg(windows)]
 pub mod pipe;
 
 #[cfg(windows)]

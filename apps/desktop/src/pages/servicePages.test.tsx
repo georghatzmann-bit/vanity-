@@ -143,6 +143,31 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
       }),
     ),
     proposeSoftwareUpdate: vi.fn(() => Promise.resolve(proposal('Software aktualisieren'))),
+    devicesStatus: vi.fn(() =>
+      Promise.resolve({
+        available: true,
+        uses: [
+          {
+            capability: 'microphone' as const,
+            app: 'C:\\Users\\a\\Downloads\\rec.exe',
+            packaged: false,
+            lastStart: 1_760_000_000,
+            lastStop: null,
+            active: true,
+            risk: 'suspicious' as const,
+            reasons: [{ de: 'Programm aus einem Download-Ordner.', en: 'Program from downloads.' }],
+          },
+        ],
+        devices: [
+          {
+            kind: 'keyboard' as const,
+            name: 'USB-Tastatur',
+            id: 'HID\\VID_1\\1',
+            external: true,
+          },
+        ],
+      }),
+    ),
     proposeBackup: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBackupRestore: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopie zurückholen'))),
     proposeBackupExport: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopien exportieren'))),
@@ -1334,5 +1359,21 @@ describe('Härtung', () => {
       'execute',
       expect.anything(),
     );
+  });
+
+  it('Geräte & Privatsphäre: nur lesend, Zwischenablage-Wächter nur per Schalter', async () => {
+    const service = fakeService();
+    const platform = fakePlatform('tauri', undefined, service);
+    renderApp({ platform, hash: '#/hardening' });
+    const panel = await screen.findByTestId('devices-panel');
+    expect(service.devicesStatus).not.toHaveBeenCalled();
+    await waitFor(() => expect(platform.clipboardGuard).toHaveBeenCalledWith(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Geräte prüfen' }));
+    const uses = await within(panel).findByTestId('devices-uses');
+    expect(uses).toHaveTextContent('Mikrofon · gerade aktiv');
+    expect(uses).toHaveTextContent('Programm aus einem Download-Ordner.');
+    expect(within(panel).getByTestId('devices-list')).toHaveTextContent('USB-Tastatur');
+    fireEvent.click(within(panel).getByTestId('setting-clipboard-guard'));
+    await waitFor(() => expect(platform.clipboardGuard).toHaveBeenCalledWith(true));
   });
 });

@@ -106,7 +106,7 @@ export type DecisionResult =
 export interface WatchEvent {
   readonly seq: number;
   readonly at: string;
-  readonly kind: 'file' | 'process' | 'ransomware';
+  readonly kind: 'file' | 'process' | 'ransomware' | 'device' | 'privacy';
   readonly path: string;
   readonly finding: ScanFinding;
 }
@@ -472,6 +472,34 @@ export interface PersistenceState {
   };
 }
 
+/** Kamera-/Mikrofon-Nutzung laut Windows. */
+export interface CapabilityUse {
+  readonly capability: 'webcam' | 'microphone';
+  readonly app: string;
+  readonly packaged: boolean;
+  /** Unix-Sekunden. */
+  readonly lastStart: number | null;
+  readonly lastStop: number | null;
+  readonly active: boolean;
+  readonly risk: RiskLevel;
+  readonly reasons: readonly { readonly de: string; readonly en: string }[];
+}
+
+/** Angeschlossenes Gerät. */
+export interface ConnectedDevice {
+  readonly kind: 'keyboard' | 'storage';
+  readonly name: string;
+  readonly id: string;
+  readonly external: boolean;
+}
+
+/** Geräte & Privatsphäre. */
+export interface DevicesState {
+  readonly available: boolean;
+  readonly uses: readonly CapabilityUse[];
+  readonly devices: readonly ConnectedDevice[];
+}
+
 /** Paket mit neuerer Version (winget). */
 export interface SoftwareUpdate {
   readonly name: string;
@@ -596,6 +624,8 @@ export interface ServiceApi {
   softwareUpdates(): Promise<UpdatesState>;
   /** Ein Paket aus der letzten Abfrage aktualisieren vorschlagen. */
   proposeSoftwareUpdate(id: string): Promise<Proposal>;
+  /** Geräte & Privatsphäre: Kamera-/Mikrofon-Nutzung, Tastaturen, USB-Laufwerke (nur lesend). */
+  devicesStatus(): Promise<DevicesState>;
   /** Rückfall-Kopien ein- (`true`, Grenze in MiB) bzw. ausschalten vorschlagen. */
   proposeBackup(on: boolean, quotaMb: number): Promise<Proposal>;
   /** Version zurückholen vorschlagen. */
@@ -736,12 +766,7 @@ export function parseWatch(response: unknown): WatchState {
       .map((e) => ({
         seq: num(e['seq']),
         at: str(e['at']),
-        kind:
-          e['kind'] === 'process'
-            ? ('process' as const)
-            : e['kind'] === 'ransomware'
-              ? ('ransomware' as const)
-              : ('file' as const),
+        kind: watchKind(e['kind']),
         path: str(e['path']),
         finding: parseFinding(e['finding']),
       })),
@@ -1141,6 +1166,50 @@ export function parsePersistence(response: unknown): PersistenceState {
     undo: arr(r['undo'])
       .filter(isObject)
       .map((u) => ({ id: str(u['id']), fix: str(u['fix']), at: str(u['at']) })),
+  };
+}
+
+function watchKind(kind: unknown): WatchEvent['kind'] {
+  return kind === 'process' || kind === 'ransomware' || kind === 'device' || kind === 'privacy'
+    ? kind
+    : 'file';
+}
+
+export function parseDevices(response: unknown): DevicesState {
+  const r = expectType(response, 'devices');
+  const st = isObject(r['state']) ? r['state'] : {};
+  const time = (v: unknown) => (typeof v === 'number' ? v : null);
+  return {
+    available: st['available'] === true,
+    uses: arr(st['uses'])
+      .filter(isObject)
+      .flatMap((u) => {
+        const capability = u['capability'];
+        return capability === 'webcam' || capability === 'microphone'
+          ? [
+              {
+                capability,
+                app: str(u['app']),
+                packaged: u['packaged'] === true,
+                lastStart: time(u['last_start']),
+                lastStop: time(u['last_stop']),
+                active: u['active'] === true,
+                risk: riskLevelFromCoreId(str(u['risk'])) ?? 'info',
+                reasons: arr(u['reasons'])
+                  .filter(isObject)
+                  .map((x) => ({ de: str(x['de']), en: str(x['en']) })),
+              },
+            ]
+          : [];
+      }),
+    devices: arr(st['devices'])
+      .filter(isObject)
+      .flatMap((d) => {
+        const kind = d['kind'];
+        return kind === 'keyboard' || kind === 'storage'
+          ? [{ kind, name: str(d['name']), id: str(d['id']), external: d['external'] === true }]
+          : [];
+      }),
   };
 }
 

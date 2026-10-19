@@ -17,9 +17,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseAppInfo } from '../src/platform/appInfo.ts';
 import {
+  CLIPBOARD_SWAP_EVENT,
   NAVIGATE_EVENT,
   parseHideOutcome,
   parseNavigatePayload,
+  parseClipboardSwap,
 } from '../src/platform/platform.ts';
 
 const root = new URL('../', import.meta.url);
@@ -190,14 +192,30 @@ describe('Ereignis aegis://navigate (Rust → Oberfläche)', () => {
     expect(NAVIGATE_EVENT).toBe('aegis://navigate');
   });
 
-  it('Rust sendet nur dieses Ereignis und nur an das Hauptfenster', () => {
+  it('Rust sendet nur diese Ereignisse und nur an das Hauptfenster', () => {
     const rustFiles = readdirSync(new URL('src-tauri/src/', root)).filter((f) => f.endsWith('.rs'));
     const emits = rustFiles.flatMap((file) =>
       [
         ...rustWithoutTests(`src-tauri/src/${file}`).matchAll(/\.emit(?:_to|_filter)?\(([^)]*)/g),
       ].map(([, args]) => `${file}: ${(args ?? '').replace(/\s+/g, ' ').trim()}`),
     );
-    expect(emits).toEqual(['tray.rs: MAIN_WINDOW_LABEL, NAVIGATE_EVENT, NavigatePayload { page }']);
+    expect(emits.sort()).toEqual([
+      'clipboard_guard.rs: crate::window::MAIN_WINDOW_LABEL, SWAP_EVENT, swap',
+      'tray.rs: MAIN_WINDOW_LABEL, NAVIGATE_EVENT, NavigatePayload { page }',
+    ]);
+  });
+
+  it('Zwischenablage-Wächter: gleicher Ereignisname auf beiden Seiten', () => {
+    const guard = rustWithoutTests('src-tauri/src/clipboard_guard.rs');
+    const rust = /pub const SWAP_EVENT: &str = "([^"]+)";/.exec(guard)?.[1];
+    expect(rust).toBe(CLIPBOARD_SWAP_EVENT);
+    expect(parseClipboardSwap({ kind: 'bitcoin', before: 'a', after: 'b', owner: null })).toEqual({
+      kind: 'bitcoin',
+      before: 'a',
+      after: 'b',
+      owner: null,
+    });
+    expect(parseClipboardSwap({ kind: 'bitcoin' })).toBeNull();
   });
 
   it('jede Seite, die Rust sendet, versteht die Oberfläche', () => {

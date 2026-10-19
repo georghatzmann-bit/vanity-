@@ -31,6 +31,8 @@ export interface Settings {
   readonly closeToTray: boolean;
   /** Seitenleiste nur mit Symbolen. */
   readonly sidebarCollapsed: boolean;
+  /** Zwischenablage-Wächter für Krypto-Adressen (opt-in, nur Desktop-App unter Windows). */
+  readonly clipboardGuard: boolean;
 }
 
 export const defaultSettings: Settings = {
@@ -41,6 +43,7 @@ export const defaultSettings: Settings = {
   bootAnimation: true,
   closeToTray: true,
   sidebarCollapsed: false,
+  clipboardGuard: false,
 };
 
 export type SettingKey = keyof Settings;
@@ -65,6 +68,7 @@ export const settingValidators: {
   bootAnimation: isBoolean,
   closeToTray: isBoolean,
   sidebarCollapsed: isBoolean,
+  clipboardGuard: isBoolean,
 };
 
 export const settingKeys = Object.keys(defaultSettings) as readonly SettingKey[];
@@ -89,6 +93,7 @@ export function sanitizeSettings(value: unknown, base: Settings = defaultSetting
     bootAnimation: pick('bootAnimation'),
     closeToTray: pick('closeToTray'),
     sidebarCollapsed: pick('sidebarCollapsed'),
+    clipboardGuard: pick('clipboardGuard'),
   };
 }
 
