@@ -47,3 +47,48 @@ export {
   prefersReducedMotion,
   useReducedMotionPreference,
 } from './hooks/useReducedMotionPreference.ts';
+export {
+  useControllableState,
+  type ControllableStateOptions,
+} from './hooks/useControllableState.ts';
+export { useNow } from './hooks/useNow.ts';
+export { usePresence } from './hooks/usePresence.ts';
+
+export * from './icons/index.ts';
+export * from './components/index.ts';
+
+export { cx, type ClassValue } from './utils/cx.ts';
+export { mergeRefs } from './utils/refs.ts';
+export { focusElement, getTabbableElements } from './utils/focus.ts';
+export {
+  MAX_TIMEOUT_MS,
+  formatCountdown,
+  formatSecondsShort,
+  toEpochMs,
+  type TimeInput,
+} from './utils/time.ts';
+export {
+  containsRightToLeft,
+  formatCodePoint,
+  hasInvisibleCharacters,
+  invisibleCharacterName,
+  invisibleMarker,
+  middleTruncateUnits,
+  revealInvisibleCharacters,
+  splitInvisibleCharacters,
+  toSafeTextUnits,
+  type MiddleTruncation,
+  type SafeTextSegment,
+  type SafeTextUnit,
+} from './utils/text.ts';
+export {
+  foldForSearch,
+  foldWithMap,
+  scoreSearchable,
+  tokenizeQuery,
+  type FoldedText,
+  type SearchResult,
+  type SearchableText,
+  type TextMatch,
+  type TextRange,
+} from './utils/search.ts';

@@ -12,6 +12,51 @@
 /* Komponenten des Pakets liegen außerhalb des App-Quellbaums – explizit scannen. */
 @source '../';
 
+/*
+ * Eigene Animationen der Komponenten – ausschließlich transform (60 fps, keine Layout-Arbeit).
+ * Bei „Bewegung reduzieren“ greift die globale Regel unten (Animationen praktisch aus);
+ * Komponenten blenden Schimmer/Restzeit-Balken dann zusätzlich aus (motion-reduce:hidden).
+ */
+@theme {
+  --animate-aegis-orbit: aegis-orbit 1.6s linear infinite;
+  --animate-aegis-shimmer: aegis-shimmer 1.8s var(--aegis-ease-standard) infinite;
+  --animate-aegis-drain: aegis-drain linear forwards;
+  --animate-aegis-fill: aegis-fill linear forwards;
+
+  @keyframes aegis-orbit {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes aegis-shimmer {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes aegis-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes aegis-drain {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+}
+
 @layer base {
   html {
     background-color: var(--aegis-bg);

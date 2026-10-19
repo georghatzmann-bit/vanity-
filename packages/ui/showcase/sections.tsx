@@ -4,13 +4,15 @@ import appIconUrl from '../assets/logo-mark.svg';
 import {
   AegisLogo,
   AegisWordmark,
+  Button,
+  RiskBadge,
+  Toggle,
   contrastRatio,
   durations,
   easings,
   formatContrastRatio,
   getUiSound,
   riskDescriptions,
-  riskLabels,
   riskLevels,
   springs,
   themes,
@@ -18,11 +20,10 @@ import {
   useSoundEnabled,
   type ColorToken,
   type EasingToken,
-  type RiskLevel,
   type ThemeName,
   type TypeScaleToken,
 } from '../src/index.ts';
-import { Button, Card, Pass, Section, Switch, cx } from './primitives.tsx';
+import { Card, Pass, Section, cx } from './primitives.tsx';
 
 /* ------------------------------------------------------------------- Farben */
 
@@ -223,38 +224,6 @@ export function ColorSection({ theme }: { readonly theme: ThemeName }) {
 }
 
 /* ------------------------------------------------------------- Risikostufen */
-
-const riskBadgeClasses: Readonly<Record<RiskLevel, string>> = {
-  clean: 'text-risk-clean bg-risk-clean-subtle border-risk-clean/35',
-  info: 'text-risk-info bg-risk-info-subtle border-risk-info/35',
-  game: 'text-risk-game bg-risk-game-subtle border-risk-game/35',
-  risky: 'text-risk-risky bg-risk-risky-subtle border-risk-risky/35',
-  suspicious: 'text-risk-suspicious bg-risk-suspicious-subtle border-risk-suspicious/35',
-  dangerous: 'text-risk-dangerous bg-risk-dangerous-subtle border-risk-dangerous/35',
-};
-
-const riskDotClasses: Readonly<Record<RiskLevel, string>> = {
-  clean: 'bg-risk-clean',
-  info: 'bg-risk-info',
-  game: 'bg-risk-game',
-  risky: 'bg-risk-risky',
-  suspicious: 'bg-risk-suspicious',
-  dangerous: 'bg-risk-dangerous',
-};
-
-function RiskBadge({ level }: { readonly level: RiskLevel }) {
-  return (
-    <span
-      className={cx(
-        'inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold',
-        riskBadgeClasses[level],
-      )}
-    >
-      <span aria-hidden="true" className={cx('size-1.5 rounded-full', riskDotClasses[level])} />
-      {riskLabels[level]}
-    </span>
-  );
-}
 
 export function RiskSection({ theme }: { readonly theme: ThemeName }) {
   const colors = themes[theme].colors;
@@ -553,7 +522,7 @@ export function SoundSection() {
       description="Winziger WebAudio-Synthesizer ohne Audiodateien. Sehr leise, abschaltbar, die Wahl wird lokal gespeichert."
     >
       <Card className="flex flex-wrap items-center gap-4 p-5">
-        <Switch checked={enabled} onChange={setEnabled} label="UI-Klänge" />
+        <Toggle checked={enabled} onCheckedChange={setEnabled} label="UI-Klänge" />
         <span aria-hidden="true" className="h-6 w-px bg-border" />
         <Button onClick={() => sound.bootChime()} disabled={!enabled}>
           Start-Klang

@@ -6,7 +6,19 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: 'showcase',
   plugins: [react(), tailwindcss()],
-  build: { outDir: '../dist-showcase', emptyOutDir: true },
+  build: {
+    outDir: '../dist-showcase',
+    emptyOutDir: true,
+    rolldownOptions: {
+      output: {
+        // Fremdbibliotheken (React, Motion) getrennt vom Design-System – kleinere Pakete,
+        // besseres Caching und keine Warnung zur Paketgröße.
+        codeSplitting: {
+          groups: [{ name: 'vendor', test: /[\\/]node_modules[\\/]/ }],
+        },
+      },
+    },
+  },
   test: {
     root: '.',
     environment: 'jsdom',
@@ -19,8 +31,21 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/**/*.test.*', 'src/test/**'],
-      // Untergrenze für das Design-System; Ziel laut Projekt ≥ 80 %.
-      thresholds: { statements: 80, branches: 80, functions: 80, lines: 80 },
+      // Untergrenzen: Paket ≥ 80 % (Projektziel), Komponenten ≥ 85 %, der Freigabe-Dialog
+      // (Oberfläche der Goldenen Regel) ≥ 95 %.
+      thresholds: {
+        statements: 80,
+        branches: 80,
+        functions: 80,
+        lines: 80,
+        'src/components/**': { statements: 85, branches: 85, functions: 85, lines: 85 },
+        'src/components/ConsentDialog/**': {
+          statements: 95,
+          branches: 95,
+          functions: 95,
+          lines: 95,
+        },
+      },
     },
   },
 });
