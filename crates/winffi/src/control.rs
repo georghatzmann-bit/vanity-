@@ -11,9 +11,13 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
 };
 use windows_sys::Win32::System::Threading::{
-    IsProcessCritical, OpenProcess, OpenThread, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROCESS_SUSPEND_RESUME, PROCESS_TERMINATE, ResumeThread, SuspendThread, THREAD_SUSPEND_RESUME,
+    GetProcessIdOfThread, IsProcessCritical, OpenProcess, OpenThread,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SUSPEND_RESUME, PROCESS_TERMINATE, ResumeThread,
+    SuspendThread, THREAD_QUERY_LIMITED_INFORMATION, THREAD_SUSPEND_RESUME,
 };
+
+/// Wie oft „Anhalten“ nach neu entstandenen Threads sucht.
+const SUSPEND_ROUNDS: usize = 5;
 
 use crate::util::own;
 
@@ -83,42 +87,83 @@ pub fn control_process(pid: u32, expected_image: &Path, action: ProcessAction) -
             Ok(())
         }
         ProcessAction::Suspend | ProcessAction::Resume => {
-            // Rechte am Prozess prüfen (auch wenn die Threads einzeln geöffnet werden).
+            // Rechte am Prozess prüfen; das offene Handle hält die Prozess-ID fest.
             let _process = open_checked(pid, expected_image, PROCESS_SUSPEND_RESUME)?;
+            let suspend = action == ProcessAction::Suspend;
+            let mut handled: Vec<u32> = Vec::new();
             let mut done = 0usize;
-            for tid in threads_of(pid)? {
-                // SAFETY: OpenThread mit festem Recht; Handle sofort übernommen.
-                // aegis-unsafe: winffi-control-open-thread
-                #[allow(unsafe_code)]
-                let Ok(thread) = own(unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, tid) }) else {
-                    continue;
-                };
-                let result = if action == ProcessAction::Suspend {
-                    // SAFETY: gültiges Thread-Handle mit THREAD_SUSPEND_RESUME.
-                    // aegis-unsafe: winffi-control-suspend
-                    #[allow(unsafe_code)]
-                    // Hält einen Thread des Prozesses aus dem freigegebenen Plan an.
-                    // aegis-mutation: winffi-control-suspend-call
-                    #[allow(clippy::disallowed_methods)]
-                    let r = unsafe { SuspendThread(thread.as_raw_handle()) };
-                    r
-                } else {
-                    // SAFETY: gültiges Thread-Handle mit THREAD_SUSPEND_RESUME.
-                    // aegis-unsafe: winffi-control-resume
-                    #[allow(unsafe_code)]
-                    let r = unsafe { ResumeThread(thread.as_raw_handle()) };
-                    r
-                };
-                if result != u32::MAX {
-                    done += 1;
+            // Anhalten: mehrere Runden, damit auch zwischenzeitlich gestartete Threads
+            // erfasst werden. Fortsetzen: eine Runde genügt.
+            let rounds = if suspend { SUSPEND_ROUNDS } else { 1 };
+            let mut settled = false;
+            for _ in 0..rounds {
+                let fresh: Vec<u32> = threads_of(pid)?
+                    .into_iter()
+                    .filter(|t| !handled.contains(t))
+                    .collect();
+                if fresh.is_empty() {
+                    settled = true;
+                    break;
+                }
+                for tid in fresh {
+                    handled.push(tid);
+                    if thread_action(pid, tid, suspend) {
+                        done += 1;
+                    }
                 }
             }
             if done == 0 {
                 return Err(io::Error::other("Kein Thread erreichbar"));
             }
+            if suspend && !settled && threads_of(pid)?.iter().any(|t| !handled.contains(t)) {
+                return Err(io::Error::other(
+                    "Das Programm startet laufend neue Threads – nur teilweise angehalten",
+                ));
+            }
             Ok(())
         }
     }
+}
+
+/// Hält einen Thread an bzw. setzt ihn fort – nur, wenn er (noch) zum Prozess gehört
+/// (Thread-IDs werden wiederverwendet).
+fn thread_action(pid: u32, tid: u32, suspend: bool) -> bool {
+    // SAFETY: OpenThread mit festen Rechten; Handle sofort übernommen.
+    // aegis-unsafe: winffi-control-open-thread
+    #[allow(unsafe_code)]
+    let Ok(thread) = own(unsafe {
+        OpenThread(
+            THREAD_SUSPEND_RESUME | THREAD_QUERY_LIMITED_INFORMATION,
+            0,
+            tid,
+        )
+    }) else {
+        return false;
+    };
+    // SAFETY: gültiges Thread-Handle mit Abfrage-Recht.
+    // aegis-unsafe: winffi-control-thread-owner
+    #[allow(unsafe_code)]
+    let owner = unsafe { GetProcessIdOfThread(thread.as_raw_handle()) };
+    if owner != pid {
+        return false;
+    }
+    let result = if suspend {
+        // SAFETY: gültiges Thread-Handle mit THREAD_SUSPEND_RESUME.
+        // aegis-unsafe: winffi-control-suspend
+        #[allow(unsafe_code)]
+        // Hält einen Thread des Prozesses aus dem freigegebenen Plan an.
+        // aegis-mutation: winffi-control-suspend-call
+        #[allow(clippy::disallowed_methods)]
+        let r = unsafe { SuspendThread(thread.as_raw_handle()) };
+        r
+    } else {
+        // SAFETY: gültiges Thread-Handle mit THREAD_SUSPEND_RESUME.
+        // aegis-unsafe: winffi-control-resume
+        #[allow(unsafe_code)]
+        let r = unsafe { ResumeThread(thread.as_raw_handle()) };
+        r
+    };
+    result != u32::MAX
 }
 
 /// Threads eines Prozesses.

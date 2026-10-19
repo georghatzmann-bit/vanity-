@@ -121,6 +121,7 @@ pub struct Outcome {
 pub struct Vault {
     dir: PathBuf,
     key: Key,
+    warning: Option<String>,
 }
 
 impl std::fmt::Debug for Vault {
@@ -139,13 +140,20 @@ impl Vault {
     pub fn open(dir: &Path) -> Result<Self, QuarantineError> {
         create_vault_dir(dir)?;
         let key_path = dir.join(KEY_FILE);
+        let mut warning = None;
         let key = match std::fs::read(&key_path) {
             Ok(bytes) => {
                 let bytes = zeroize::Zeroizing::new(bytes);
                 let (key, legacy) = decode_key(&bytes)?;
                 if legacy && cfg!(windows) {
                     // Alter, ungeschützter Schlüssel: geschützt neu schreiben (Rechner-Bindung).
-                    upgrade_key_file(dir, &key_path, &key)?;
+                    // Gelingt das nicht, bleibt der alte Schlüssel in Gebrauch – die Quarantäne
+                    // muss erreichbar bleiben; der Dienst meldet den Hinweis.
+                    if let Err(e) = upgrade_key_file(dir, &key_path, &key) {
+                        warning = Some(format!(
+                            "Quarantäne-Schlüssel nicht an den Rechner gebunden ({e}) – alter Schlüssel bleibt in Gebrauch"
+                        ));
+                    }
                 }
                 key
             }
@@ -159,7 +167,14 @@ impl Vault {
         Ok(Self {
             dir: dir.to_owned(),
             key,
+            warning,
         })
+    }
+
+    /// Hinweis vom Öffnen (z. B. Schlüssel nicht umgestellt).
+    #[must_use]
+    pub fn warning(&self) -> Option<&str> {
+        self.warning.as_deref()
     }
 
     /// Ordner des Tresors.

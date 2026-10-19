@@ -91,6 +91,9 @@ pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
     let audit = open_audit(&audit_path)?;
 
     let vault = Vault::open(&data_dir.join("quarantine")).map_err(io::Error::other)?;
+    if let Some(warning) = vault.warning() {
+        eprintln!("AEGIS-Dienst: {warning}");
+    }
     // Fremde Dateien parst nur der eingeschränkte Prüfprozess – ohne ihn startet der Dienst
     // nicht (kein stiller Rückfall auf das Parsen im Dienst).
     let worker = Scanner::locate_worker().ok_or_else(|| {

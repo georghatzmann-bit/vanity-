@@ -44,6 +44,8 @@ pub(super) struct SafeState {
     /// Vorbereitete Safes je Vorschlag („Datei-Safe anlegen“) – nie im Plan.
     pending: HashMap<PlanId, (Option<String>, Prepared)>,
     failures: HashMap<Option<String>, (u32, OffsetDateTime)>,
+    /// Konten, für die gerade eine Schlüssel-Ableitung läuft.
+    deriving: HashMap<Option<String>, OffsetDateTime>,
 }
 
 impl SafeState {
@@ -54,6 +56,9 @@ impl SafeState {
         self.pending.retain(|id, _| open(id));
         self.failures
             .retain(|_, (_, at)| now - *at < Duration::seconds(LOCKOUT_SECONDS * 10));
+        // Eine abgebrochene Verbindung darf das Konto nicht dauerhaft sperren.
+        self.deriving
+            .retain(|_, started| now - *started < Duration::minutes(2));
     }
 
     fn key(&mut self, owner: &Option<String>, now: OffsetDateTime) -> Option<Key> {
@@ -157,19 +162,34 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
-    /// Schlägt vor, den Safe anzulegen. Der Schlüssel wird jetzt abgeleitet und bis zur Antwort
-    /// nur im Speicher gehalten.
-    pub fn propose_safe_create(&mut self, password: &Password, user: &dyn UserAccess) -> Response {
-        let dir = match safe_dir_of(user) {
-            Ok(d) => d,
-            Err(e) => return e,
-        };
-        match exists_as_user(user, &dir) {
-            Ok(false) => {}
-            Ok(true) => return Response::error("safe", "Es gibt schon einen Datei-Safe"),
-            Err(e) => return e,
+    /// Schritt 1 von „Datei-Safe anlegen“ (unter der Dienst-Sperre, schnell): Ort, „gibt es
+    /// schon“, Grenzen für Vorschläge, keine zweite Ableitung desselben Kontos gleichzeitig.
+    /// Die teure Schlüssel-Ableitung läuft danach **ohne** Sperre ([`safe::prepare`]).
+    ///
+    /// # Errors
+    /// Antwort an die Oberfläche, wenn nichts abzuleiten ist.
+    pub fn safe_setup_begin(&mut self, user: &dyn UserAccess) -> Result<PathBuf, Response> {
+        let dir = safe_dir_of(user)?;
+        if exists_as_user(user, &dir)? {
+            return Err(Response::error("safe", "Es gibt schon einen Datei-Safe"));
         }
-        let prepared = match safe::prepare(password.expose()) {
+        if let Some(busy) = self.proposal_limit(&user.identity()) {
+            return Err(busy);
+        }
+        self.safe_kdf_begin(user)?;
+        Ok(dir)
+    }
+
+    /// Schritt 2 von „Datei-Safe anlegen“: Plan vorschlagen; der vorbereitete Schlüssel
+    /// bleibt bis zur Antwort nur im Speicher.
+    pub fn safe_setup_finish(
+        &mut self,
+        user: &dyn UserAccess,
+        dir: &Path,
+        prepared: safe::SafeResult<Prepared>,
+    ) -> Response {
+        self.safe.deriving.remove(&user.identity());
+        let prepared = match prepared {
             Ok(p) => p,
             Err(e) => return Response::error("password", e),
         };
@@ -201,33 +221,73 @@ impl<C: Clock, W: Durable> Service<C, W> {
         response
     }
 
-    /// Entsperrt den eigenen Safe.
-    pub fn safe_unlock(&mut self, password: &Password, user: &dyn UserAccess) -> Response {
+    /// Schlägt vor, den Safe anzulegen (alle Schritte nacheinander – ohne Pipe, z. B. Tests).
+    pub fn propose_safe_create(&mut self, password: &Password, user: &dyn UserAccess) -> Response {
+        match self.safe_setup_begin(user) {
+            Ok(dir) => {
+                let prepared = safe::prepare(password.expose());
+                self.safe_setup_finish(user, &dir, prepared)
+            }
+            Err(e) => e,
+        }
+    }
+
+    /// Je Konto höchstens eine Ableitung gleichzeitig (sonst umgingen parallele Versuche die
+    /// Pause nach Fehlversuchen).
+    fn safe_kdf_begin(&mut self, user: &dyn UserAccess) -> Result<(), Response> {
+        let now = self.now();
+        if let std::collections::hash_map::Entry::Vacant(slot) =
+            self.safe.deriving.entry(user.identity())
+        {
+            slot.insert(now);
+            Ok(())
+        } else {
+            Err(Response::error(
+                "wait",
+                "Es läuft schon eine Prüfung des Passworts – bitte kurz warten",
+            ))
+        }
+    }
+
+    /// Schritt 1 von „Entsperren“ (unter der Sperre, schnell): Pause nach Fehlversuchen,
+    /// Safe vorhanden. Die Ableitung läuft danach ohne Sperre ([`safe::unlock`]).
+    ///
+    /// # Errors
+    /// Antwort an die Oberfläche, wenn nichts abzuleiten ist.
+    pub fn safe_unlock_begin(&mut self, user: &dyn UserAccess) -> Result<PathBuf, Response> {
         let owner = user.identity();
         let now = self.now();
         if let Some((count, at)) = self.safe.failures.get(&owner) {
             let wait = Duration::seconds(LOCKOUT_SECONDS) - (now - *at);
             if *count >= MAX_FAILURES && wait > Duration::ZERO {
-                return Response::error(
+                return Err(Response::error(
                     "wait",
                     format!(
                         "Zu viele Fehlversuche – bitte {} s warten",
                         wait.whole_seconds().max(1)
                     ),
-                );
+                ));
             }
         }
-        let dir = match safe_dir_of(user) {
-            Ok(d) => d,
-            Err(e) => return e,
-        };
-        // Nur falsche Passwörter zählen als Fehlversuch.
-        match exists_as_user(user, &dir) {
-            Ok(true) => {}
-            Ok(false) => return Response::error("safe", "Es gibt noch keinen Datei-Safe"),
-            Err(e) => return e,
+        let dir = safe_dir_of(user)?;
+        if !exists_as_user(user, &dir)? {
+            return Err(Response::error("safe", "Es gibt noch keinen Datei-Safe"));
         }
-        match safe::unlock(user, &dir, password.expose()) {
+        self.safe_kdf_begin(user)?;
+        Ok(dir)
+    }
+
+    /// Schritt 2 von „Entsperren“: Schlüssel merken bzw. Fehlversuch zählen (nur ein falsches
+    /// Passwort zählt).
+    pub fn safe_unlock_finish(
+        &mut self,
+        user: &dyn UserAccess,
+        result: safe::SafeResult<Key>,
+    ) -> Response {
+        let owner = user.identity();
+        let now = self.now();
+        self.safe.deriving.remove(&owner);
+        match result {
             Ok(key) => {
                 self.safe.failures.remove(&owner);
                 self.safe.keys.insert(
@@ -239,7 +299,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 );
                 self.safe_status(user)
             }
-            Err(e) => {
+            Err(e) if e == safe::WRONG_PASSWORD => {
                 let entry = self.safe.failures.entry(owner).or_insert((0, now));
                 entry.0 = if entry.0 >= MAX_FAILURES {
                     1
@@ -249,6 +309,18 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 entry.1 = now;
                 Response::error("password", e)
             }
+            Err(e) => Response::error("safe", e),
+        }
+    }
+
+    /// Entsperrt den eigenen Safe (alle Schritte nacheinander – ohne Pipe, z. B. Tests).
+    pub fn safe_unlock(&mut self, password: &Password, user: &dyn UserAccess) -> Response {
+        match self.safe_unlock_begin(user) {
+            Ok(dir) => {
+                let result = safe::unlock(user, &dir, password.expose());
+                self.safe_unlock_finish(user, result)
+            }
+            Err(e) => e,
         }
     }
 
@@ -270,7 +342,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Ok(d) => d,
             Err(e) => return e,
         };
-        if paths.iter().any(|p| p.starts_with(&dir)) {
+        if paths.iter().any(|p| crate::paths::is_within(p, &dir)) {
             return Response::error("input", "Diese Datei liegt schon im Datei-Safe");
         }
         let owner = user.identity();
@@ -447,12 +519,14 @@ impl<C: Clock, W: Durable> Service<C, W> {
             .filter_map(|(p, r)| r.err().map(|e| (p, e)))
             .collect();
         let result = summarize(ok.len(), &failures);
-        let detail = failures
-            .iter()
-            .map(|(p, e)| format!("{}: {e}", p.display()))
-            .collect::<Vec<_>>()
-            .join("; ");
-        self.finish(permit, &result, owner, user, ok, Some(detail));
+        // Im Verlauf nur Anzahlen – Namen gehören in den Safe (das Prüfprotokoll enthält den
+        // Plan, siehe SECURITY.md).
+        let detail = format!(
+            "{} hineingelegt, {} nicht möglich",
+            ok.len(),
+            failures.len()
+        );
+        self.finish(permit, &result, owner, user, Vec::new(), Some(detail));
         Response::Executed {
             kind: ActionKind::SafeStore,
             result,
@@ -497,12 +571,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                     .collect(),
             ),
         };
-        let paths = if outcome.is_ok() {
-            target.into_iter().collect()
-        } else {
-            Vec::new()
-        };
-        self.finish(permit, &result, owner, user, paths, outcome.err());
+        self.finish(permit, &result, owner, user, Vec::new(), outcome.err());
         Response::Executed {
             kind: ActionKind::SafeRetrieve,
             result,

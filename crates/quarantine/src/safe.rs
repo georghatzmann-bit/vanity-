@@ -37,6 +37,14 @@ const META_EXT: &str = "meta";
 const FORMAT: &str = "AEGIS-SAFE-1";
 /// Mindestlänge des Passworts.
 pub const MIN_PASSWORD: usize = 10;
+/// Argon2id-Speicher (KiB) und Durchläufe, mit denen AEGIS Safes anlegt. Größere Werte aus
+/// einem Safe-Kopf werden abgelehnt: Der Kopf liegt im Profil des Nutzers, und die
+/// Ableitung läuft im Dienst – sonst könnte ein Kopf den Dienst Speicher und Zeit kosten.
+pub const KDF_MEMORY_KIB: u32 = 64 * 1024;
+/// Durchläufe (siehe [`KDF_MEMORY_KIB`]).
+pub const KDF_PASSES: u32 = 3;
+/// Fehlermeldung bei falschem Passwort (nur diese zählt als Fehlversuch).
+pub const WRONG_PASSWORD: &str = "Falsches Passwort";
 /// Höchstzahl Einträge, die beim Auflisten gelesen werden.
 const MAX_ENTRIES: usize = 10_000;
 
@@ -156,7 +164,7 @@ fn open_sealed(key: &Key, blob: &[u8]) -> SafeResult<Zeroizing<Vec<u8>>> {
 /// # Errors
 /// Passwort zu kurz oder Ableitung nicht möglich.
 pub fn prepare(password: &str) -> SafeResult<Prepared> {
-    prepare_with(password, 64 * 1024, 3)
+    prepare_with(password, KDF_MEMORY_KIB, KDF_PASSES)
 }
 
 fn prepare_with(password: &str, m_kib: u32, t: u32) -> SafeResult<Prepared> {
@@ -189,14 +197,20 @@ fn prepare_with(password: &str, m_kib: u32, t: u32) -> SafeResult<Prepared> {
 fn unlock_header(bytes: &[u8], password: &str) -> SafeResult<Key> {
     let header: Header =
         serde_json::from_slice(bytes).map_err(|_| "Safe-Kopf beschädigt".to_owned())?;
-    if header.format != FORMAT || header.m_kib > 1024 * 1024 || header.t > 16 || header.p != 1 {
+    if header.format != FORMAT
+        || header.m_kib > KDF_MEMORY_KIB
+        || header.m_kib < 8
+        || header.t > KDF_PASSES
+        || header.t == 0
+        || header.p != 1
+    {
         return Err("Unbekanntes Safe-Format".into());
     }
     let salt = unhex(&header.salt).ok_or("Safe-Kopf beschädigt")?;
     let mut blob = unhex(&header.nonce).ok_or("Safe-Kopf beschädigt")?;
     blob.extend(unhex(&header.wrapped).ok_or("Safe-Kopf beschädigt")?);
     let kek = derive(password, &salt, header.m_kib, header.t, header.p)?;
-    let raw = open_sealed(&kek, &blob).map_err(|_| "Falsches Passwort".to_owned())?;
+    let raw = open_sealed(&kek, &blob).map_err(|_| WRONG_PASSWORD.to_owned())?;
     let arr: [u8; 32] = raw
         .as_slice()
         .try_into()
@@ -520,6 +534,18 @@ mod tests {
         assert_eq!(key.as_ref(), p.key.as_ref());
         assert!(unlock_header(&p.header, "falsches-passwort!").is_err());
         assert!(prepare_with("kurz", 64, 1).is_err());
+        // Zu teure Ableitung aus einem fremden Kopf wird abgelehnt (nicht ausgeführt).
+        let costly = String::from_utf8(p.header.clone())
+            .unwrap()
+            .replace("\"m_kib\": 64", "\"m_kib\": 1048576");
+        assert_eq!(
+            unlock_header(costly.as_bytes(), "richtig-langes-passwort").unwrap_err(),
+            "Unbekanntes Safe-Format"
+        );
+        assert_eq!(
+            unlock_header(&p.header, "falsches-passwort!").unwrap_err(),
+            WRONG_PASSWORD
+        );
         let text = String::from_utf8(p.header.clone()).unwrap();
         assert!(!text.contains("richtig"), "Passwort steht nirgends");
     }

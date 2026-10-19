@@ -737,20 +737,24 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
-    /// Panic-Button: Netz trennen (`on`) bzw. wieder verbinden vorschlagen.
+    /// Notfall „Netz trennen“ (`on`) bzw. „Wieder verbinden“ vorschlagen.
+    ///
+    /// Trennen darf jedes angemeldete Konto (Schutz im Ernstfall geht vor – die rechnerweite
+    /// Wirkung steht im Plan). Wieder verbinden dürfen nur Administratoren und das Konto, das
+    /// getrennt hat; es ist immer möglich (räumt auch halb angelegte Regeln auf).
     pub fn propose_panic(&mut self, on: bool, user: &dyn UserAccess) -> Response {
-        let active = self.settings.get().panic_since.is_some();
+        let settings = self.settings.get();
+        let active = settings.panic_since.is_some();
         if !cfg!(windows) {
-            return Response::error("panic", "Den Panic-Button gibt es nur unter Windows");
+            return Response::error("panic", "„Netz trennen“ gibt es nur unter Windows");
         }
-        if on == active {
+        if on && active {
+            return Response::error("panic", "Das Netz ist bereits getrennt");
+        }
+        if !on && active && !user.is_admin() && settings.panic_by != user.identity() {
             return Response::error(
-                "panic",
-                if on {
-                    "Das Netz ist bereits getrennt"
-                } else {
-                    "Das Netz ist nicht getrennt"
-                },
+                "admin",
+                "Ein anderes Konto hat das Netz getrennt – wieder verbinden dürfen nur dieses Konto und Administratoren.",
             );
         }
         let builder = ActionPlan::builder(ActionKind::ChangeSetting)
@@ -758,17 +762,17 @@ impl<C: Clock, W: Durable> Service<C, W> {
             .parameter(param::VALUE, if on { "on" } else { "off" });
         let builder = if on {
             builder
-                .what("Panic-Button: Rechner vom Netz trennen")
+                .what("Notfall: Rechner vom Netz trennen")
                 .why("Zum Beispiel bei einem Ransomware-Verdacht: Ohne Netz kann Schadsoftware keine Daten hinaus schicken, keine Befehle holen und andere Geräte nicht erreichen.")
-                .consequence("Die Windows-Firewall sperrt jede ein- und ausgehende Verbindung (zwei AEGIS-Regeln; ist die Firewall aus, wird sie eingeschaltet und bleibt an). Internet, Heimnetz und Updates sind getrennt – für alle Konten dieses Rechners. Laufende Programme werden NICHT beendet.")
+                .consequence("Die Windows-Firewall sperrt jede ein- und ausgehende Verbindung (zwei AEGIS-Regeln; ist die Firewall aus, wird sie eingeschaltet und bleibt an). Internet, Heimnetz, Updates und Fernzugriffe (z. B. Remotedesktop) sind getrennt – für alle Konten dieses Rechners. Laufende Programme werden NICHT beendet. Wieder verbinden können du und Administratoren.")
                 .undo(UndoHint::reversible("„Wieder verbinden“ entfernt genau diese beiden Regeln."))
                 .severity(RiskLevel::Suspicious)
         } else {
             builder
-                .what("Panic-Button aufheben: Rechner wieder verbinden")
+                .what("Rechner wieder verbinden")
                 .why("Von dir gewählt – z. B. nachdem das verdächtige Programm beendet bzw. isoliert ist.")
-                .consequence("Die beiden AEGIS-Sperrregeln werden gelöscht; Verbindungen sind wieder wie vorher erlaubt. Die Firewall bleibt eingeschaltet.")
-                .undo(UndoHint::reversible("Panic-Button erneut auslösen."))
+                .consequence("Die beiden AEGIS-Sperrregeln werden gelöscht (falls vorhanden); Verbindungen sind wieder wie vorher erlaubt. Die Firewall bleibt eingeschaltet.")
+                .undo(UndoHint::reversible("„Netz trennen“ erneut auslösen."))
                 .severity(RiskLevel::Info)
         };
         match builder.build(self.gate.clock().now()) {
@@ -790,7 +794,19 @@ impl<C: Clock, W: Durable> Service<C, W> {
         } else {
             crate::panic::restore_commands()
         };
-        let outcome = crate::panic::run(&permit, &commands);
+        let mut outcome = crate::panic::run(&permit, &commands);
+        if on && let Err(message) = &outcome {
+            // Halb angelegte Sperre zurücknehmen: kein Zustand „getrennt, aber AEGIS weiß
+            // es nicht“.
+            let rollback = crate::panic::run(&permit, &crate::panic::restore_commands());
+            outcome = Err(match rollback {
+                Ok(()) => format!("{message} – angelegte Regeln wurden wieder entfernt"),
+                Err(e) => format!(
+                    "{message} – Aufräumen ebenfalls fehlgeschlagen ({e}); bitte „Wieder verbinden“"
+                ),
+            });
+        }
+        let owner = user.identity();
         let result = match &outcome {
             Ok(()) => {
                 let since = on.then(|| {
@@ -800,7 +816,11 @@ impl<C: Clock, W: Durable> Service<C, W> {
                         .format(&aegis_core::time::format_description::well_known::Rfc3339)
                         .unwrap_or_default()
                 });
-                match self.settings.update(|s| s.panic_since = since) {
+                let by = on.then(|| owner.clone()).flatten();
+                match self.settings.update(|s| {
+                    s.panic_since = since;
+                    s.panic_by = by;
+                }) {
                     Ok(()) => aegis_core::audit::ExecutionResult::Succeeded,
                     Err(e) => aegis_core::audit::ExecutionResult::PartiallySucceeded {
                         message: format!("Zustand nicht gespeichert: {e}"),
@@ -915,6 +935,18 @@ impl<C: Clock, W: Durable> Service<C, W> {
             s.baits.retain(|b| !b.files.is_empty());
         });
         self.sync_baits();
+        if save.is_err() && on {
+            // Nicht gespeichert: Die angelegten Köder trotzdem bewachen (bis zum Neustart).
+            let mut all: Vec<PathBuf> = self
+                .settings
+                .get()
+                .baits
+                .iter()
+                .flat_map(|b| b.files.clone())
+                .collect();
+            all.extend(ok.iter().cloned());
+            self.watch.ransom().set_canaries(all);
+        }
         let result = if failures.is_empty() && save.is_ok() {
             aegis_core::audit::ExecutionResult::Succeeded
         } else if !ok.is_empty() {
@@ -1592,6 +1624,30 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
+    /// Grenzen je Konto für neue Vorschläge (offen, je Minute); `Some` = abgelehnt.
+    fn proposal_limit(&mut self, owner: &Option<String>) -> Option<Response> {
+        let now = self.gate.clock().now();
+        for times in self.recent_proposals.values_mut() {
+            times.retain(|t| now - *t < Duration::minutes(1));
+        }
+        self.recent_proposals.retain(|_, times| !times.is_empty());
+        let open_of_owner = self
+            .proposals
+            .values()
+            .filter(|p| p.owner == *owner)
+            .count();
+        let recent_of_owner = self.recent_proposals.get(owner).map_or(0, Vec::len);
+        // Grenzen je Konto: Ein Nutzer kann die Freigaben anderer nicht blockieren.
+        (open_of_owner >= MAX_OPEN_PROPOSALS || recent_of_owner >= MAX_PROPOSALS_PER_MINUTE).then(
+            || {
+                Response::error(
+                    "busy",
+                    "Zu viele offene Vorschläge – bitte zuerst die vorhandenen beantworten",
+                )
+            },
+        )
+    }
+
     fn register(
         &mut self,
         plan: ActionPlan,
@@ -1599,18 +1655,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
         hashes: HashMap<PathBuf, String>,
     ) -> Response {
         let now = self.gate.clock().now();
-        for times in self.recent_proposals.values_mut() {
-            times.retain(|t| now - *t < Duration::minutes(1));
-        }
-        self.recent_proposals.retain(|_, times| !times.is_empty());
-        let open_of_owner = self.proposals.values().filter(|p| p.owner == owner).count();
-        let recent_of_owner = self.recent_proposals.get(&owner).map_or(0, Vec::len);
-        // Grenzen je Konto: Ein Nutzer kann die Freigaben anderer nicht blockieren.
-        if open_of_owner >= MAX_OPEN_PROPOSALS || recent_of_owner >= MAX_PROPOSALS_PER_MINUTE {
-            return Response::error(
-                "busy",
-                "Zu viele offene Vorschläge – bitte zuerst die vorhandenen beantworten",
-            );
+        if let Some(busy) = self.proposal_limit(&owner) {
+            return busy;
         }
         match self.gate.propose(plan.clone()) {
             Ok(ticket) => match new_nonce() {
@@ -2350,7 +2396,7 @@ const MEMORY_MAX_MODULES: usize = 2000;
 #[cfg(windows)]
 const MEMORY_PER_PROCESS: usize = 16 * 1024 * 1024;
 #[cfg(windows)]
-const MEMORY_TOTAL: usize = 256 * 1024 * 1024;
+const MEMORY_TOTAL: usize = 128 * 1024 * 1024;
 
 /// Speicher-Scan: Programme, geladene Module und ausführbarer privater Speicher der eigenen
 /// laufenden Prozesse. Gelesen wird im Identitätswechsel des Nutzers, geprüft nur im
@@ -2371,70 +2417,13 @@ pub fn memory_scan(scanner: &crate::worker::Scanner, user: &dyn UserAccess) -> R
             .take(MEMORY_MAX_PROCESSES)
             .collect();
         let mut files: Vec<PathBuf> = Vec::new();
-        let mut blocks = Vec::new();
+        let mut findings = Vec::new();
         let mut skipped = Vec::new();
         let mut total = 0usize;
-        {
-            let _scope = match user.enter() {
-                Ok(s) => s,
-                Err(e) => return Response::error("identity", e.to_string()),
-            };
-            for pid in &own {
-                let image = aegis_winffi::system::process_image_path(*pid).ok();
-                if let Some(image) = &image
-                    && !files.iter().any(|f| crate::paths::same_path(f, image))
-                {
-                    files.push(image.clone());
-                }
-                if let Ok(mods) = aegis_winffi::memory::modules(*pid, 512) {
-                    for m in mods {
-                        if files.len() < MEMORY_MAX_MODULES
-                            && !files.iter().any(|f| crate::paths::same_path(f, &m))
-                        {
-                            files.push(m);
-                        }
-                    }
-                }
-                if total >= MEMORY_TOTAL {
-                    continue;
-                }
-                match aegis_winffi::memory::executable_private_regions(
-                    *pid,
-                    MEMORY_PER_PROCESS.min(MEMORY_TOTAL - total),
-                ) {
-                    Ok(regions) => {
-                        for r in regions {
-                            total += r.data.len();
-                            let name = image
-                                .as_ref()
-                                .map_or_else(|| format!("PID {pid}"), |i| i.display().to_string());
-                            blocks.push(crate::worker::MemoryBlock {
-                                label: format!("Speicher von {name} (PID {pid}) @ {:#x}", r.base),
-                                data: base64::engine::general_purpose::STANDARD.encode(&r.data),
-                            });
-                        }
-                    }
-                    Err(e) => skipped.push(aegis_engine::scan::Skipped {
-                        path: image.unwrap_or_else(|| PathBuf::from(format!("PID {pid}"))),
-                        reason: format!("Speicher nicht lesbar: {e}"),
-                    }),
-                }
-            }
-        }
-        let modules = files.len();
-        let regions = blocks.len();
-        let mut findings = Vec::new();
-        for chunk in files.chunks(200) {
-            match scanner.examine(chunk, user) {
-                Ok(found) => findings.extend(found),
-                Err(e) => skipped.push(aegis_engine::scan::Skipped {
-                    path: chunk.first().cloned().unwrap_or_default(),
-                    reason: e,
-                }),
-            }
-        }
-        // Speicher in Paketen bis zur Größe einer Anfrage.
-        let mut batch = Vec::new();
+        let mut regions = 0usize;
+        // Speicher wird paketweise geprüft, sobald ein Paket voll ist – der Dienst hält nie
+        // mehr als etwa eine Anfrage an den Prüfprozess im Speicher.
+        let mut batch: Vec<crate::worker::MemoryBlock> = Vec::new();
         let mut size = 0usize;
         let flush = |batch: &mut Vec<crate::worker::MemoryBlock>,
                      findings: &mut Vec<Finding>,
@@ -2450,16 +2439,72 @@ pub fn memory_scan(scanner: &crate::worker::Scanner, user: &dyn UserAccess) -> R
                 }),
             }
         };
-        for block in blocks {
-            let len = block.data.len() * 3 / 4;
-            if size + len > crate::worker::MAX_MEMORY_PER_REQUEST {
-                flush(&mut batch, &mut findings, &mut skipped);
-                size = 0;
+        for pid in &own {
+            // Lesen im Identitätswechsel – je Prozess, damit das Prüfen danach ohne ihn läuft.
+            let (image, mods, read) = {
+                let _scope = match user.enter() {
+                    Ok(s) => s,
+                    Err(e) => return Response::error("identity", e.to_string()),
+                };
+                let image = aegis_winffi::system::process_image_path(*pid).ok();
+                let mods = aegis_winffi::memory::modules(*pid, 512).unwrap_or_default();
+                let read = (total < MEMORY_TOTAL).then(|| {
+                    aegis_winffi::memory::executable_private_regions(
+                        *pid,
+                        MEMORY_PER_PROCESS.min(MEMORY_TOTAL - total),
+                    )
+                });
+                (image, mods, read)
+            };
+            if let Some(image) = &image
+                && !files.iter().any(|f| crate::paths::same_path(f, image))
+            {
+                files.push(image.clone());
             }
-            size += len;
-            batch.push(block);
+            for m in mods {
+                if files.len() < MEMORY_MAX_MODULES
+                    && !files.iter().any(|f| crate::paths::same_path(f, &m))
+                {
+                    files.push(m);
+                }
+            }
+            match read {
+                Some(Ok(found)) => {
+                    let name = image
+                        .as_ref()
+                        .map_or_else(|| format!("PID {pid}"), |i| i.display().to_string());
+                    for r in found {
+                        total += r.data.len();
+                        regions += 1;
+                        if size + r.data.len() > crate::worker::MAX_MEMORY_PER_REQUEST {
+                            flush(&mut batch, &mut findings, &mut skipped);
+                            size = 0;
+                        }
+                        size += r.data.len();
+                        batch.push(crate::worker::MemoryBlock {
+                            label: format!("Speicher von {name} (PID {pid}) @ {:#x}", r.base),
+                            data: base64::engine::general_purpose::STANDARD.encode(&r.data),
+                        });
+                    }
+                }
+                Some(Err(e)) => skipped.push(aegis_engine::scan::Skipped {
+                    path: image.unwrap_or_else(|| PathBuf::from(format!("PID {pid}"))),
+                    reason: format!("Speicher nicht lesbar: {e}"),
+                }),
+                None => {}
+            }
         }
         flush(&mut batch, &mut findings, &mut skipped);
+        let modules = files.len();
+        for chunk in files.chunks(200) {
+            match scanner.examine(chunk, user) {
+                Ok(found) => findings.extend(found),
+                Err(e) => skipped.push(aegis_engine::scan::Skipped {
+                    path: chunk.first().cloned().unwrap_or_default(),
+                    reason: e,
+                }),
+            }
+        }
         findings.retain(|f| f.risk > RiskLevel::Info || f.not_scannable.is_some());
         findings.truncate(1000);
         skipped.truncate(200);
@@ -2481,14 +2526,23 @@ pub fn memory_scan(scanner: &crate::worker::Scanner, user: &dyn UserAccess) -> R
     }
 }
 
-/// Laufende Prozesse eines Programms, die das Konto anfassen darf: eigene; Administratoren alle.
+/// Laufende Prozesse eines Programms, die das Konto anfassen darf: nur eigene.
 #[cfg(windows)]
 fn running_processes_of(
     program: &Path,
     user: &dyn UserAccess,
 ) -> Result<Vec<(u32, PathBuf)>, String> {
     let me = user.identity();
-    let admin = user.is_admin();
+    // AEGIS selbst (Dienst, App, Prüfprozess) liegt neben dem Dienstprogramm – nie anfassen.
+    let own_dir = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_path_buf));
+    if own_dir
+        .as_ref()
+        .is_some_and(|d| crate::paths::is_within(program, d))
+    {
+        return Err("Programme von AEGIS selbst werden nicht angefasst".into());
+    }
     let all = aegis_winffi::inspect::processes().map_err(|e| e.to_string())?;
     Ok(all
         .into_iter()
@@ -2498,8 +2552,9 @@ fn running_processes_of(
             if !crate::paths::same_path(&image, program) {
                 return None;
             }
+            // Nur Prozesse des anfragenden Kontos (auch für Administratoren – wie im Plan).
             let owner = aegis_winffi::system::process_user_sid(p.pid).ok();
-            (admin || (owner.is_some() && owner == me)).then_some((p.pid, image))
+            (owner.is_some() && owner == me).then_some((p.pid, image))
         })
         .take(32)
         .collect())

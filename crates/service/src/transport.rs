@@ -22,6 +22,9 @@ pub const MAX_CONNECTIONS: usize = 16;
 pub const MAX_PARALLEL_SCANS: usize = 2;
 
 static RUNNING_SCANS: AtomicUsize = AtomicUsize::new(0);
+/// Höchstzahl gleichzeitiger Passwort-Ableitungen (Argon2id, je 64 MiB) des Datei-Safes.
+pub const MAX_PARALLEL_KDF: usize = 2;
+static RUNNING_KDF: AtomicUsize = AtomicUsize::new(0);
 
 /// Zählt eine belegte Stelle, gibt sie beim Verwerfen frei.
 #[derive(Debug)]
@@ -72,12 +75,15 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
             .unwrap_or_else(std::sync::PoisonError::into_inner))
     };
     loop {
-        let payload = match read_frame(stream) {
+        let mut payload = match read_frame(stream) {
             Ok(p) => p,
             Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(()),
             Err(e) => return Err(e),
         };
-        let response = match serde_json::from_slice::<Request>(&payload) {
+        let request = serde_json::from_slice::<Request>(&payload);
+        // Rahmen sofort überschreiben (kann ein Passwort des Datei-Safes enthalten).
+        zeroize::Zeroize::zeroize(&mut payload);
+        let response = match request {
             Ok(Request::Scan { paths }) => {
                 let (scanner, checked) = {
                     let guard = lock()?;
@@ -159,6 +165,40 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                         drop(slot);
                         lock()?.mark_trusted_response(&mut response, user.identity().as_deref());
                         response
+                    }
+                }
+            }
+            // Datei-Safe: Passwort-Ableitung (Argon2id) außerhalb der Dienst-Sperre.
+            Ok(Request::SafeUnlock { password }) => {
+                match Slot::try_take(&RUNNING_KDF, MAX_PARALLEL_KDF) {
+                    None => busy(),
+                    Some(slot) => {
+                        let begun = lock()?.safe_unlock_begin(user);
+                        match begun {
+                            Err(response) => response,
+                            Ok(dir) => {
+                                let result =
+                                    aegis_quarantine::safe::unlock(user, &dir, password.expose());
+                                drop(slot);
+                                lock()?.safe_unlock_finish(user, result)
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(Request::ProposeSafeSetup { password }) => {
+                match Slot::try_take(&RUNNING_KDF, MAX_PARALLEL_KDF) {
+                    None => busy(),
+                    Some(slot) => {
+                        let begun = lock()?.safe_setup_begin(user);
+                        match begun {
+                            Err(response) => response,
+                            Ok(dir) => {
+                                let prepared = aegis_quarantine::safe::prepare(password.expose());
+                                drop(slot);
+                                lock()?.safe_setup_finish(user, &dir, prepared)
+                            }
+                        }
                     }
                 }
             }

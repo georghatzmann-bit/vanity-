@@ -823,7 +823,13 @@ fn panic_button_nur_als_vorschlag() {
     assert!(status["since"].is_null());
     assert_eq!(status["available"], cfg!(windows));
     let off = h.send(json!({"type": "propose_panic", "on": false}));
-    assert_eq!(off["code"], "panic", "nicht getrennt – nichts aufzuheben");
+    if cfg!(windows) {
+        // „Wieder verbinden“ ist immer möglich (räumt auch halbe Regeln auf) – nur mit „Ja“.
+        assert_eq!(off["type"], "proposal", "{off}");
+        assert_eq!(h.answer(&off, "decline")["type"], "nothing_done");
+    } else {
+        assert_eq!(off["code"], "panic");
+    }
     let on = h.send(json!({"type": "propose_panic", "on": true}));
     if cfg!(windows) {
         assert_eq!(on["type"], "proposal", "{on}");
@@ -932,6 +938,12 @@ fn datei_safe_nur_per_plan_und_passwort_nie_gespeichert() {
             (json!(true), json!(true))
         );
 
+        // Dateien des Safes selbst lassen sich nicht hineinlegen (Schlüssel ginge verloren).
+        let header = home_path.join("AppData/Local/AEGIS/Datei-Safe/safe.json");
+        assert_eq!(
+            send(json!({"type": "propose_safe_store", "paths": [header]}))["code"],
+            "input"
+        );
         // Hineinlegen nur mit „Ja“.
         let p = send(json!({"type": "propose_safe_store", "paths": [file]}));
         assert_eq!(p["proposal"]["plan"]["kind"], "safe_store", "{p}");

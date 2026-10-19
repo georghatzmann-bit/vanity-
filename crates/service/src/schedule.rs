@@ -91,6 +91,9 @@ pub struct ServiceSettings {
     /// Panic-Button aktiv seit (RFC 3339); `None` = Netz normal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panic_since: Option<String>,
+    /// Konto, das das Netz getrennt hat (darf es – neben Administratoren – wieder verbinden).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panic_by: Option<String>,
 }
 
 /// Köderdateien eines Kontos.
@@ -114,6 +117,7 @@ impl Default for ServiceSettings {
             last_update: None,
             baits: Vec::new(),
             panic_since: None,
+            panic_by: None,
         }
     }
 }

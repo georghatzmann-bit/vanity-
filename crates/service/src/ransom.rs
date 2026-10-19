@@ -11,7 +11,7 @@
 //! Ehrlich: Das ist eine Heuristik ohne Kernel-Treiber. Sie kann Fehlalarme geben (z. B. große
 //! Kopier- oder Synchronisationsvorgänge) und erkennt Angriffe erst, wenn sie schon laufen.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -60,22 +60,23 @@ pub const CHANGED_LIMIT: usize = 80;
 pub const RENAMED_LIMIT: usize = 20;
 /// Löschungen.
 pub const REMOVED_LIMIT: usize = 80;
-/// Höchstens eine Warnung je Profil in dieser Zeit.
+/// Pause zwischen zwei Warnungen derselben Art: Massenänderungen je Profil, Köder je Datei.
+/// Ein anderer Köder warnt auch während der Pause sofort.
 pub const ALERT_PAUSE: Duration = Duration::from_secs(10 * 60);
 
 #[derive(Debug, Default)]
 struct Window {
     events: VecDeque<(Instant, FileChange, Option<String>)>,
-    last_alert: Option<Instant>,
+    last_burst: Option<Instant>,
+    canary_alerts: HashMap<PathBuf, Instant>,
 }
 
 /// Zustand des Ransomware-Wächters.
 #[derive(Debug, Default)]
 pub struct RansomGuard {
     windows: Mutex<HashMap<Option<PathBuf>, Window>>,
-    canaries: Mutex<HashSet<PathBuf>>,
-    /// Köder melden erst ab hier (eigenes Anlegen löst nichts aus).
-    armed_at: Mutex<Option<Instant>>,
+    /// Köderdateien und ab wann sie melden (eigenes Anlegen löst nichts aus).
+    canaries: Mutex<HashMap<PathBuf, Instant>>,
 }
 
 /// Nach dem Setzen der Köder: so lange zählen ihre Ereignisse nicht (eigenes Anlegen).
@@ -86,9 +87,13 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 /// Orte mit viel normaler Bewegung (Temp, App-Daten) zählen nicht für Massenänderungen.
+/// Geprüft wird nur der Teil unterhalb des Profils (ein Profil namens „temp“ zählt also).
 #[must_use]
-pub fn is_noisy(path: &Path) -> bool {
-    path.components().any(|c| {
+pub fn is_noisy(path: &Path, scope: Option<&Path>) -> bool {
+    let relative = scope
+        .and_then(|s| path.strip_prefix(s).ok())
+        .unwrap_or(path);
+    relative.components().any(|c| {
         let s = c.as_os_str().to_string_lossy().to_ascii_lowercase();
         matches!(
             s.as_str(),
@@ -162,18 +167,33 @@ impl RansomGuard {
         Self::default()
     }
 
-    /// Köderdateien (alle Konten), die der Wächter kennt.
+    /// Köderdateien (alle Konten), die der Wächter kennt. Nur **neue** Köder warten
+    /// [`ARM_DELAY`]; bekannte bleiben scharf.
     pub fn set_canaries(&self, paths: impl IntoIterator<Item = PathBuf>) {
-        *lock(&self.canaries) = paths.into_iter().collect();
-        *lock(&self.armed_at) = Some(Instant::now() + ARM_DELAY);
+        let armed = Instant::now() + ARM_DELAY;
+        let mut canaries = lock(&self.canaries);
+        let next: HashMap<PathBuf, Instant> = paths
+            .into_iter()
+            .map(|p| {
+                let since = canaries.get(&p).copied().unwrap_or(armed);
+                (p, since)
+            })
+            .collect();
+        *canaries = next;
     }
 
     /// Ist das eine Köderdatei?
     #[must_use]
     pub fn is_canary(&self, path: &Path) -> bool {
         lock(&self.canaries)
-            .iter()
+            .keys()
             .any(|c| crate::paths::same_path(c, path))
+    }
+
+    fn armed_canary(&self, path: &Path, now: Instant) -> bool {
+        lock(&self.canaries)
+            .iter()
+            .any(|(c, since)| now >= *since && crate::paths::same_path(c, path))
     }
 
     /// Verarbeitet eine Dateiänderung; liefert ein Muster, wenn eines erkannt wurde (höchstens
@@ -185,15 +205,14 @@ impl RansomGuard {
         scope: Option<&Path>,
         now: Instant,
     ) -> Option<Signal> {
-        let armed = lock(&self.armed_at).is_none_or(|t| now >= t);
-        let canary = armed && self.is_canary(path);
+        let canary = self.armed_canary(path, now);
         let counts = match change {
             FileChange::Created | FileChange::RenamedFrom => false,
             // Umbenennen auf gängige Endungen (Fotos sortieren …) ist normal.
             FileChange::Renamed => !is_common_extension(path),
             FileChange::Modified | FileChange::Removed => true,
         };
-        if !canary && (!counts || is_noisy(path)) {
+        if !canary && (!counts || is_noisy(path, scope)) {
             return None;
         }
         let mut windows = lock(&self.windows);
@@ -201,18 +220,27 @@ impl RansomGuard {
             windows.clear();
         }
         let window = windows.entry(scope.map(Path::to_path_buf)).or_default();
-        let paused = window
-            .last_alert
-            .is_some_and(|t| now.duration_since(t) < ALERT_PAUSE);
         if canary {
-            if paused {
+            // Je Köder eine Warnung pro Pause – ein anderer Köder warnt sofort.
+            let key = path.to_path_buf();
+            if window
+                .canary_alerts
+                .get(&key)
+                .is_some_and(|t| now.duration_since(*t) < ALERT_PAUSE)
+            {
                 return None;
             }
-            window.last_alert = Some(now);
+            if window.canary_alerts.len() > 1000 {
+                window.canary_alerts.clear();
+            }
+            window.canary_alerts.insert(key, now);
             return Some(Signal::Canary {
                 path: path.to_path_buf(),
             });
         }
+        let paused = window
+            .last_burst
+            .is_some_and(|t| now.duration_since(t) < ALERT_PAUSE);
         window.events.push_back((now, change, extension(path)));
         while window
             .events
@@ -246,7 +274,7 @@ impl RansomGuard {
         }
         let renamed = by_ext.values().copied().max().unwrap_or(0);
         if changed >= CHANGED_LIMIT || renamed >= RENAMED_LIMIT || removed >= REMOVED_LIMIT {
-            window.last_alert = Some(now);
+            window.last_burst = Some(now);
             window.events.clear();
             return Some(Signal::Burst {
                 example: path.to_path_buf(),
@@ -334,6 +362,21 @@ mod tests {
             None,
             "Pause"
         );
+        // Ein zweiter Köder warnt auch in der Pause; neue Köder machen alte nicht unscharf.
+        let second = PathBuf::from("/home/a/Bilder/AEGIS-Koeder.xlsx");
+        g.set_canaries([bait.clone(), second.clone()]);
+        assert_eq!(
+            g.observe(FileChange::Modified, &second, Some(scope), t),
+            None,
+            "neu, noch nicht scharf"
+        );
+        let later = t + ARM_DELAY;
+        assert_eq!(
+            g.observe(FileChange::Modified, &second, Some(scope), later),
+            Some(Signal::Canary {
+                path: second.clone()
+            })
+        );
         assert!(
             g.observe(
                 FileChange::Removed,
@@ -398,6 +441,19 @@ mod tests {
             let p = PathBuf::from(format!("/home/a/Bilder/{i}.e{i}"));
             assert_eq!(g.observe(FileChange::Renamed, &p, Some(scope), t), None);
         }
+    }
+
+    #[test]
+    fn profilname_temp_schaltet_erkennung_nicht_ab() {
+        let g = RansomGuard::new();
+        let t = Instant::now();
+        let scope = Path::new("/home/temp");
+        let mut signal = None;
+        for i in 0..CHANGED_LIMIT {
+            let p = PathBuf::from(format!("/home/temp/Dokumente/{i}.docx"));
+            signal = g.observe(FileChange::Modified, &p, Some(scope), t);
+        }
+        assert!(matches!(signal, Some(Signal::Burst { .. })));
     }
 
     #[test]
