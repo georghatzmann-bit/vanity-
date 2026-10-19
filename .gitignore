@@ -28,4 +28,4 @@ Thumbs.db
 .env
 .env.*
 *.aegisvault
-quarantine/
+/quarantine/
