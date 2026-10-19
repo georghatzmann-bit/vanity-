@@ -31,6 +31,8 @@ wird hier **vor** der Nutzung eingetragen (Name, Herkunft, Lizenz, Nutzungsart, 
 | Block List Project – phishing, fraud (P7.3) | github.com/blocklistproject/Lists | Unlicense / MIT (wie oben) | von der Erweiterung zur Laufzeit geladen (abschaltbar) | 2026-10-19 |
 | Phishing.Database (P7.3) | github.com/Phishing-Database/Phishing.Database | MIT | `phishing-domains-ACTIVE.txt`, von der Erweiterung zur Laufzeit geladen (abschaltbar) | 2026-10-19 |
 | @types/chrome 0.3 | DefinitelyTyped | MIT | nur Typen beim Bau der Erweiterung | 2026-10-19 |
+| Have I Been Pwned – Pwned Passwords (P7.5) | haveibeenpwned.com (Troy Hunt) | CC BY 4.0 (Namensnennung in der App) | Range-API mit k-Anonymität, nur auf Knopfdruck, nichts gebündelt | 2026-10-19 |
+| Have I Been Pwned – API v3 breachedaccount (P7.5) | haveibeenpwned.com | API-Nutzungsbedingungen, eigener kostenpflichtiger Schlüssel des Nutzers, Namensnennung | E-Mail-Prüfung nur mit Nutzer-Schlüssel, nicht gespeichert | 2026-10-19 |
 
 Rust- und npm-Abhängigkeiten werden ab P13 automatisch inventarisiert (`cargo about` /
 Lizenz-Report) und hier zusammengefasst.
@@ -47,7 +49,6 @@ Lizenz-Report) und hier zusammengefasst.
 | LOLDrivers (P6.4) | Apache-2.0 (geprüft 2026-10-19, keine NOTICE-Datei) | Nur Prüfsummen + Kurzangaben aus `loldrivers.io/api/drivers.json` → `rules/drivers/loldrivers.tsv` (Skript `scripts/update-loldrivers.mjs`), Lizenztext in `rules/drivers/LICENSE-LOLDrivers.txt`; keine Treiberdateien |
 | EasyList / EasyPrivacy (P12) | GPL-3.0 / CC BY-SA 3.0 | Listen getrennt laden |
 | URLhaus (abuse.ch) für P7.3 | Konto + kommerzielle Bedingungen | **abgelehnt** (2026-10-19): Download nur mit Anmeldung, Bedingungen für Weitergabe unklar |
-| Have I Been Pwned Range-API (P7/P9) | API-Bedingungen | k-Anonymität, nur Hash-Präfix |
 | VirusTotal API (P2) | VT-Nutzungsbedingungen | eigener API-Key, 4/Min & 500/Tag |
 | ONNX-Modell (P14) | je Modell | nur öffentliche, lizenzierte Modelle |
 | Arti (Tor, P12) | MIT / Apache-2.0 | optional |

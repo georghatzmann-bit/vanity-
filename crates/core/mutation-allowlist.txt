@@ -361,3 +361,16 @@ crates/winffi/src/lan.rs :: winffi-wlan-attributes :: Windows-FFI (Heimnetz, nur
 crates/winffi/src/lan.rs :: winffi-wlan-free-data :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
 crates/winffi/src/lan.rs :: winffi-wlan-free-list :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
 crates/winffi/src/lan.rs :: winffi-wlan-close :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-close :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-open :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-timeouts :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-protocols :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-protocols-tls12 :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-connect :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-request :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-no-redirect :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-header :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-send :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-receive :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-status :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-read :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.

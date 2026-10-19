@@ -1496,4 +1496,31 @@ describe('Härtung', () => {
     await waitFor(() => expect(within(panel).getAllByText('Neu')).toHaveLength(1));
     expect(panel).toHaveTextContent('UPnP am Router: an');
   });
+
+  it('Leck-Check: nur Präfix an die App, Felder werden geleert, Schlüssel nicht gespeichert', async () => {
+    const platform = fakePlatform('tauri', undefined, fakeService());
+    renderApp({ platform, hash: '#/network' });
+    const form = await screen.findByTestId('leak-password');
+    const field = within(form).getByLabelText('Passwort');
+    fireEvent.change(field, { target: { value: 'password' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Prüfen' }));
+    expect(await within(form).findByText(/52.256.179-mal/)).toBeInTheDocument();
+    expect(platform.leakPasswordRange).toHaveBeenCalledWith('5BAA6');
+    expect(field).toHaveValue('');
+
+    const email = screen.getByTestId('leak-email');
+    fireEvent.change(within(email).getByLabelText('E-Mail-Adresse'), {
+      target: { value: 'anna@example.org' },
+    });
+    const key = within(email).getByLabelText('Eigener HIBP-API-Schlüssel');
+    fireEvent.change(key, { target: { value: '0123456789abcdef0123456789abcdef' } });
+    fireEvent.click(within(email).getByRole('button', { name: 'Prüfen' }));
+    expect(await within(email).findByTestId('leak-breaches')).toHaveTextContent('Beispiel-Shop');
+    expect(platform.leakEmailCheck).toHaveBeenCalledWith(
+      'anna@example.org',
+      '0123456789abcdef0123456789abcdef',
+    );
+    expect(key).toHaveValue('');
+    expect(JSON.stringify({ ...window.localStorage })).not.toContain('0123456789abcdef');
+  });
 });

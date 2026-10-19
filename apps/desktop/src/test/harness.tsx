@@ -124,6 +124,34 @@ export function fakePlatform(
     clipboardGuard: kind === 'tauri' ? vi.fn(() => Promise.resolve(true)) : null,
     onClipboardSwap: () => Promise.resolve(() => undefined),
     homeNetworkScan: kind === 'tauri' ? vi.fn(() => Promise.resolve(sampleLanReport)) : null,
+    // SHA-1("password") = 5BAA6 1E4C9B93F3F0682250B6CF8331B7EE68FD8
+    leakPasswordRange:
+      kind === 'tauri'
+        ? vi.fn(() =>
+            Promise.resolve([
+              { suffix: '1E4C9B93F3F0682250B6CF8331B7EE68FD8', count: 52256179 },
+              { suffix: '0018A45C4D1DEF81644B54AB7F969B88D65', count: 3 },
+            ]),
+          )
+        : null,
+    leakEmailCheck:
+      kind === 'tauri'
+        ? vi.fn(() =>
+            Promise.resolve({
+              status: 'found' as const,
+              breaches: [
+                {
+                  name: 'Beispiel',
+                  title: 'Beispiel-Shop',
+                  domain: 'shop.example',
+                  breachDate: '2021-03-04',
+                  dataClasses: ['Email addresses', 'Passwords'],
+                  verified: true,
+                },
+              ],
+            }),
+          )
+        : null,
   };
 }
 

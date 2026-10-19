@@ -12,14 +12,26 @@ document.documentElement.lang = navigator.language.toLowerCase().startsWith('de'
 const app = document.getElementById('app');
 const category = categoryFrom(location.search);
 
+/** Angehaltener Host; kurz nachfragen, falls der Hintergrund gerade erst aufwacht. */
+async function blockedHost(): Promise<string | null> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const answer: unknown = await chrome.runtime.sendMessage({ type: 'blocked-url' });
+    const url =
+      typeof answer === 'object' && answer !== null ? (answer as { url?: unknown }).url : null;
+    const host = typeof url === 'string' ? hostOf(url) : null;
+    if (host !== null) {
+      return host;
+    }
+    await new Promise((done) => setTimeout(done, 200));
+  }
+  return null;
+}
+
 async function render(): Promise<void> {
   if (app === null) {
     return;
   }
-  const answer: unknown = await chrome.runtime.sendMessage({ type: 'blocked-url' });
-  const url =
-    typeof answer === 'object' && answer !== null ? (answer as { url?: unknown }).url : null;
-  const host = typeof url === 'string' ? hostOf(url) : null;
+  const host = await blockedHost();
 
   const back = el('button', { className: 'primary' }, t.warnBack);
   back.type = 'button';

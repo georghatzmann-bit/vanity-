@@ -37,6 +37,13 @@ const NEXT_ALLOW = 'nextAllow';
 
 type DnrRule = chrome.declarativeNetRequest.Rule;
 
+/**
+ * Zuletzt aufgerufene Adresse je Tab: sofort im Speicher (die Warnseite fragt oft schneller,
+ * als der Sitzungsspeicher schreibt) und im Sitzungsspeicher (überlebt das Schlafen des
+ * Service Workers, nicht den Browser-Neustart).
+ */
+const lastUrl = new Map<number, string>();
+
 /** Unsere Regel-Objekte entsprechen dem DNR-Format (Zeichenketten statt Enum-Typen). */
 function toDnr(rules: readonly Rule[]): DnrRule[] {
   return rules as unknown as DnrRule[];
@@ -188,10 +195,9 @@ async function maybeUpdate(): Promise<void> {
 
 /** Einmalige Freigabe (nur diese Browser-Sitzung) für die Adresse, die im Tab angehalten wurde. */
 async function allowOnce(tabId: number): Promise<boolean> {
-  const key = `${NAV}${tabId}`;
-  const url = (await chrome.storage.session.get(key))[key];
-  const host = typeof url === 'string' ? hostOf(url) : null;
-  if (typeof url !== 'string' || host === null) {
+  const url = await blockedUrl(tabId);
+  const host = url === null ? null : hostOf(url);
+  if (url === null || host === null) {
     return false;
   }
   const stored = (await chrome.storage.session.get(NEXT_ALLOW))[NEXT_ALLOW];
@@ -203,6 +209,10 @@ async function allowOnce(tabId: number): Promise<boolean> {
 }
 
 async function blockedUrl(tabId: number): Promise<string | null> {
+  const known = lastUrl.get(tabId);
+  if (known !== undefined) {
+    return known;
+  }
   const key = `${NAV}${tabId}`;
   const url = (await chrome.storage.session.get(key))[key];
   return typeof url === 'string' ? url : null;
@@ -269,11 +279,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 chrome.webNavigation.onBeforeNavigate.addListener((details) => {
   if (details.frameId === 0 && hostOf(details.url) !== null) {
+    lastUrl.set(details.tabId, details.url);
     void chrome.storage.session.set({ [`${NAV}${details.tabId}`]: details.url });
   }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  lastUrl.delete(tabId);
   void chrome.storage.session.remove(`${NAV}${tabId}`);
 });
 

@@ -16,6 +16,8 @@
     "allow-hide-to-tray",
     "allow-clipboard-guard",
     "allow-home-network-scan",
+    "allow-leak-password-range",
+    "allow-leak-email-check",
     "allow-service-scan",
     "allow-service-list-quarantine",
     "allow-service-propose-quarantine",

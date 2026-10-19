@@ -161,10 +161,12 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
        (D-050).
 4. [x] P7.4 Heimnetz-Scanner in der App (nur eigenes privates Subnetz, Ping + ARP + zehn
        Dienste + UPnP + WLAN-Sicherheit), Hinweise zu Router/WLAN, neue Geräte (D-051).
-5. [ ] P7.5 Leck-Check (HIBP Range, k-Anonymität; E-Mail nur mit eigenem Schlüssel).
+5. [x] P7.5 Leck-Check: Passwort per HIBP-Range (nur 5 Zeichen des SHA-1-Werts verlassen das
+       WebView), E-Mail nur mit eigenem HIBP-Schlüssel (nicht gespeichert); HTTPS über WinHTTP
+       (D-052).
 6. [ ] P7.6 Sicherheits-Review, Doku, DoD.
 
-**Nächster Schritt:** P7.5 Leck-Check.
+**Nächster Schritt:** P7.6 Sicherheits-Review P7.
 
 ## P5 – Schutz-Werkzeuge
 

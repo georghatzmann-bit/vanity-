@@ -303,6 +303,12 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   nur als Plan mit „Ja“ (Administrator): fester Name `AEGIS-Block-…`, Programmpfad geprüft
   (Laufwerk, `.exe`, ohne `"`, `..`, `/`, `|`), Argumente einzeln an `netsh` aus dem
   Systemordner; die Prüfsumme bindet die Schritte. Entfernt werden nur AEGIS-Regeln.
+- **Leck-Check (P7.5):** k-Anonymität – an die App und an HIBP gehen nur fünf Hex-Zeichen des
+  SHA-1-Werts (Test prüft, dass das Passwort den Aufruf nicht erreicht), Antwort mit Füll-Einträgen.
+  E-Mail nur mit eigenem Schlüssel, nicht gespeichert, Feld nach der Abfrage geleert. Eingaben
+  werden in der App geprüft (Präfix-Format, E-Mail, Schlüssel nur Buchstaben/Ziffern), der Pfad
+  prozent-kodiert. WinHTTP: nur HTTPS/443, keine Weiterleitungen, TLS ≥ 1.2, Größen- und
+  Zeitgrenzen, Kopfzeilen ohne Steuerzeichen.
 - **Heimnetz-Scanner (P7.4):** in der App mit Nutzerrechten, nur auf Knopfdruck, nur das eigene
   private Subnetz (RFC 1918, höchstens /22, sonst /24 um die eigene Adresse) – nie fremde oder
   öffentliche Netze. Nur Ping, ARP-Tabelle, TCP-Verbindungsaufbau auf zehn feste Ports (ohne

@@ -48,6 +48,9 @@ pub mod inspect;
 pub mod lan;
 
 #[cfg(windows)]
+pub mod http;
+
+#[cfg(windows)]
 pub mod dpapi;
 
 #[cfg(windows)]

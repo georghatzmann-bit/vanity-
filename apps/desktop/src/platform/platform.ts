@@ -17,6 +17,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { version as configuredVersion } from '../../src-tauri/tauri.conf.json';
 import { parseAppInfo, previewAppInfo, type AppInfo } from './appInfo.ts';
 import { parseLanReport, type LanReport } from './lan.ts';
+import { parseEmailResult, parseRange, type EmailResult, type RangeEntry } from './leak.ts';
 import {
   expectType,
   parseDecision,
@@ -119,6 +120,10 @@ export interface Platform {
   onClipboardSwap(handler: (swap: ClipboardSwap) => void): Promise<Unlisten>;
   /** Heimnetz prüfen (nur eigenes privates Subnetz, nur lesend). `null` in der Vorschau. */
   readonly homeNetworkScan: (() => Promise<LanReport>) | null;
+  /** HIBP-Range-Abfrage mit fünf Zeichen des SHA-1-Werts. `null` in der Vorschau. */
+  readonly leakPasswordRange: ((prefix: string) => Promise<readonly RangeEntry[]>) | null;
+  /** HIBP-E-Mail-Abfrage mit eigenem Schlüssel. `null` in der Vorschau. */
+  readonly leakEmailCheck: ((email: string, apiKey: string) => Promise<EmailResult>) | null;
 }
 
 /** Ausgetauschte Krypto-Adresse (gekürzt). */
@@ -231,6 +236,10 @@ export function createTauriPlatform(): Platform {
         }
       }),
     homeNetworkScan: () => invoke<unknown>('home_network_scan').then(parseLanReport),
+    leakPasswordRange: (prefix) =>
+      invoke<unknown>('leak_password_range', { prefix }).then(parseRange),
+    leakEmailCheck: (email, apiKey) =>
+      invoke<unknown>('leak_email_check', { email, apiKey }).then(parseEmailResult),
   };
 }
 
@@ -366,6 +375,8 @@ export function createBrowserPlatform(info: AppInfo): Platform {
     clipboardGuard: null,
     onClipboardSwap: () => Promise.resolve(() => undefined),
     homeNetworkScan: null,
+    leakPasswordRange: null,
+    leakEmailCheck: null,
   };
 }
 

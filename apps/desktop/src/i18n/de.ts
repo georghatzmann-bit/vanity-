@@ -779,6 +779,39 @@ export const de = {
       honest:
         'Ehrlich: AEGIS sieht nur, was im Netz antwortet – Geräte mit eigener Firewall bleiben eventuell unsichtbar. Einstellungen am Router änderst du selbst in dessen Oberfläche; AEGIS meldet sich dort nie an.',
     },
+    leak: {
+      title: 'Leck-Check',
+      intro:
+        'Prüft, ob ein Passwort oder deine E-Mail-Adresse in bekannten Datenlecks auftaucht – mit dem Dienst „Have I Been Pwned“. Nur auf Knopfdruck; nichts wird gespeichert.',
+      preview: 'Den Leck-Check gibt es nur in der installierten App.',
+      passwordTitle: 'Passwort prüfen',
+      passwordIntro:
+        'Dein Passwort verlässt den PC nicht: AEGIS bildet einen Prüfwert (SHA-1) und schickt nur dessen erste fünf Zeichen. Der Dienst antwortet mit allen passenden Einträgen, verglichen wird hier.',
+      password: 'Passwort',
+      check: 'Prüfen',
+      passwordFound:
+        'Dieses Passwort kommt {count}-mal in Datenlecks vor. Nutze es nirgends mehr und ändere es überall, wo du es verwendest.',
+      passwordClean:
+        'Nicht in bekannten Lecks gefunden. Gut – trotzdem für jeden Dienst ein eigenes Passwort.',
+      emailTitle: 'E-Mail-Adresse prüfen',
+      emailIntro:
+        'Have I Been Pwned verlangt dafür einen eigenen API-Schlüssel (kostenpflichtig, auf haveibeenpwned.com/API/Key). AEGIS speichert den Schlüssel nicht; die Adresse geht nur an diesen Dienst.',
+      email: 'E-Mail-Adresse',
+      apiKey: 'Eigener HIBP-API-Schlüssel',
+      emailFound: 'Die Adresse steckt in {count} bekannten Datenlecks:',
+      emailClean: 'Die Adresse ist in keinem bekannten Datenleck.',
+      emailAdvice:
+        'Ändere die Passwörter dieser Dienste (und überall, wo du dasselbe nutzt), schalte die Zwei-Faktor-Anmeldung ein und rechne mit gezielten Phishing-Mails.',
+      error: {
+        invalid_input: 'Bitte eine gültige E-Mail-Adresse und einen gültigen Schlüssel eingeben.',
+        windows_only: 'Der Leck-Check läuft nur unter Windows.',
+        unavailable: 'Der Dienst ist gerade nicht erreichbar. Später noch einmal versuchen.',
+        invalid_key: 'Der API-Schlüssel wurde abgelehnt.',
+        rate_limited: 'Zu viele Anfragen – bitte kurz warten.',
+      },
+      attribution:
+        'Daten: Have I Been Pwned (haveibeenpwned.com) von Troy Hunt; Pwned Passwords unter CC BY 4.0.',
+    },
     web: {
       title: 'Web-Schutz (Browser-Erweiterung)',
       intro:

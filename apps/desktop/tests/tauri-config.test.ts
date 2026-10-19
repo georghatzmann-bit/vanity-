@@ -33,6 +33,10 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
     'App-Befehl clipboard_guard: Zwischenablage-Wächter ein/aus (opt-in, liest nur, verändert nie)',
   'allow-home-network-scan':
     'Heimnetz-Scanner (P7.4): nur eigenes privates Subnetz, nur lesend, auf Knopfdruck',
+  'allow-leak-password-range':
+    'Leck-Check (P7.5): nur 5 Zeichen des SHA-1-Werts an HIBP (k-Anonymität), auf Knopfdruck',
+  'allow-leak-email-check':
+    'Leck-Check (P7.5): E-Mail nur mit eigenem HIBP-Schlüssel, auf Knopfdruck',
   'allow-service-scan': 'Dienst: Dateien/Ordner prüfen (nur lesend)',
   'allow-service-list-quarantine': 'Dienst: Quarantäne anzeigen (nur lesend)',
   'allow-service-propose-quarantine': 'Dienst: Isolieren vorschlagen (ausgeführt erst nach Ja)',

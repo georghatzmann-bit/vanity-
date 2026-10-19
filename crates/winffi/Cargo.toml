@@ -16,6 +16,7 @@ windows-sys = { workspace = true, features = [
   "Win32_NetworkManagement_NetManagement",
   "Win32_NetworkManagement_Ndis",
   "Win32_NetworkManagement_WiFi",
+  "Win32_Networking_WinHttp",
   "Win32_Networking_WinSock",
   "Win32_Security",
   "Win32_Security_Authorization",

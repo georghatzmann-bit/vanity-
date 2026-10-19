@@ -15,6 +15,7 @@ import type {
   ServiceApi,
 } from '../platform/service.ts';
 import { HomeNetworkPanel } from './HomeNetworkPanel.tsx';
+import { LeakCheckPanel } from './LeakCheckPanel.tsx';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
 import { useConsentFlow } from './useConsentFlow.tsx';
@@ -515,6 +516,7 @@ export function NetworkPage() {
         </>
       )}
       <HomeNetworkPanel />
+      <LeakCheckPanel />
       <WebShieldPanel />
       {flow.dialogs}
     </PageBody>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-leak-email-check"
+description = "Enables the leak_email_check command without any pre-configured scope."
+commands.allow = ["leak_email_check"]
+
+[[permission]]
+identifier = "deny-leak-email-check"
+description = "Denies the leak_email_check command without any pre-configured scope."
+commands.deny = ["leak_email_check"]

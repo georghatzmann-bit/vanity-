@@ -8,6 +8,7 @@ mod app_info;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod clipboard_guard;
 mod home_network;
+mod leak;
 mod navigation;
 mod report;
 mod service;
@@ -56,6 +57,8 @@ fn main() {
             window::hide_to_tray,
             clipboard_guard::clipboard_guard,
             home_network::home_network_scan,
+            leak::leak_password_range,
+            leak::leak_email_check,
             service::service_scan,
             service::service_list_quarantine,
             service::service_propose_quarantine,
@@ -167,6 +170,8 @@ mod test_support {
                 crate::window::hide_to_tray,
                 crate::clipboard_guard::clipboard_guard,
                 crate::home_network::home_network_scan,
+                crate::leak::leak_password_range,
+                crate::leak::leak_email_check,
                 crate::service::service_scan,
                 crate::service::service_list_quarantine,
                 crate::service::service_propose_quarantine,
@@ -244,7 +249,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 68] = [
+    const EXPECTED_PERMISSIONS: [&str; 70] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -257,6 +262,8 @@ mod tests {
         "allow-hide-to-tray",
         "allow-clipboard-guard",
         "allow-home-network-scan",
+        "allow-leak-password-range",
+        "allow-leak-email-check",
         "allow-service-scan",
         "allow-service-list-quarantine",
         "allow-service-propose-quarantine",
@@ -514,6 +521,11 @@ mod tests {
                 ("hide_to_tray", json!({})),
                 ("clipboard_guard", json!({ "enabled": false })),
                 ("home_network_scan", json!({})),
+                ("leak_password_range", json!({ "prefix": "21BD1" })),
+                (
+                    "leak_email_check",
+                    json!({ "email": "a@example.org", "apiKey": "x" }),
+                ),
                 (
                     "plugin:event|listen",
                     json!({

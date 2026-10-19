@@ -770,6 +770,39 @@ export const en: Messages<typeof de> = {
       honest:
         'To be honest: AEGIS only sees what answers on the network – devices with their own firewall may stay invisible. You change router settings yourself in its interface; AEGIS never logs in there.',
     },
+    leak: {
+      title: 'Leak check',
+      intro:
+        'Checks whether a password or your e-mail address appears in known data breaches – using the “Have I Been Pwned” service. Only when you press the button; nothing is stored.',
+      preview: 'The leak check is only available in the installed app.',
+      passwordTitle: 'Check a password',
+      passwordIntro:
+        'Your password never leaves the PC: AEGIS computes a hash (SHA-1) and sends only its first five characters. The service answers with all matching entries; the comparison happens here.',
+      password: 'Password',
+      check: 'Check',
+      passwordFound:
+        'This password appears {count} times in data breaches. Stop using it and change it everywhere you use it.',
+      passwordClean:
+        'Not found in known breaches. Good – still use a separate password for every service.',
+      emailTitle: 'Check an e-mail address',
+      emailIntro:
+        'Have I Been Pwned requires your own API key for this (paid, at haveibeenpwned.com/API/Key). AEGIS does not store the key; the address only goes to this service.',
+      email: 'E-mail address',
+      apiKey: 'Your own HIBP API key',
+      emailFound: 'The address is in {count} known data breaches:',
+      emailClean: 'The address is not in any known data breach.',
+      emailAdvice:
+        'Change the passwords of these services (and everywhere you use the same one), turn on two-factor sign-in and expect targeted phishing e-mails.',
+      error: {
+        invalid_input: 'Please enter a valid e-mail address and a valid key.',
+        windows_only: 'The leak check only runs on Windows.',
+        unavailable: 'The service is unreachable right now. Please try again later.',
+        invalid_key: 'The API key was rejected.',
+        rate_limited: 'Too many requests – please wait a moment.',
+      },
+      attribution:
+        'Data: Have I Been Pwned (haveibeenpwned.com) by Troy Hunt; Pwned Passwords under CC BY 4.0.',
+    },
     web: {
       title: 'Web Shield (browser extension)',
       intro:

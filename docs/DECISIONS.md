@@ -355,3 +355,16 @@ Passwort-Probieren, keine Herstellerlisten (MAC-Hersteller würde eine Lizenzpr�
 Speicher der App (WebView), der erste Scan ist Grundlinie. Router-Einstellungen ändert der Nutzer
 selbst.
 
+## D-052 – Leck-Check mit k-Anonymität, HTTPS über WinHTTP
+
+Status: angenommen (P7.5). Passwörter: Die Oberfläche bildet den SHA-1-Wert (WebCrypto) und gibt
+nur die ersten fünf Hex-Zeichen an die App weiter; die App fragt `api.pwnedpasswords.com/range/`
+mit `Add-Padding: true` ab und liefert die Einträge zurück, verglichen wird in der Oberfläche –
+Passwort und vollständiger Hash verlassen das WebView nie. E-Mail-Adressen: nur mit dem eigenen
+HIBP-API-Schlüssel des Nutzers (HIBP verlangt ihn, kostenpflichtig); der Schlüssel wird nicht
+gespeichert und nach der Abfrage aus dem Feld gelöscht. Beides nur auf Knopfdruck. HTTPS läuft
+über einen kleinen WinHTTP-Wrapper in `winffi` (Windows-Zertifikate und System-Proxy, nur `GET`,
+nur Port 443, keine Weiterleitungen, TLS 1.2/1.3, Antwort höchstens 2 MiB) statt über eine
+zusätzliche TLS-Bibliothek; die CSP der App bleibt ohne fremde Ziele. Namensnennung (CC BY 4.0)
+steht in der App.
+
