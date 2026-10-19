@@ -134,8 +134,14 @@ impl<C: Clock, W: Durable> Service<C, W> {
     pub fn defender_finish(&mut self, status: DefenderStatus, user: &dyn UserAccess) -> Response {
         let now = self.now();
         self.defender_status = Some((now, status.clone()));
-        let owner = user.identity();
-        let profile = user.profile().map(crate::watch::long_name);
+        // Defender gilt für den ganzen PC: Administratoren sehen die Umschaltungen aller Konten.
+        let admin = user.is_admin();
+        let owner = if admin { None } else { user.identity() };
+        let profile = if admin {
+            None
+        } else {
+            user.profile().map(crate::watch::long_name)
+        };
         let log = super::lock_history(&self.history)
             .list(Reader {
                 owner: owner.as_deref(),
@@ -199,9 +205,9 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Err(e) => return Response::error("input", e),
         };
         let undo = if change.weakens() {
-            "Ein Klick auf „Wieder einschalten“ bzw. „Standard wiederherstellen“ (oder „Rückgängig“ auf der Seite „Härtung“) stellt den alten Stand wieder her."
+            "Ein Klick auf „Wieder einschalten“ bzw. „Standard wiederherstellen“ auf der Seite „Defender-Schalter“ stellt den Schutz wieder her."
         } else {
-            "Lässt sich jederzeit wieder umschalten."
+            "Lässt sich auf der Seite „Defender-Schalter“ jederzeit wieder umschalten."
         };
         let plan = self.fix_plan_public(
             DEFENDER_SETTING,

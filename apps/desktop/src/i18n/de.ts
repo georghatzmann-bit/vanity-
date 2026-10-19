@@ -97,7 +97,7 @@ export const de = {
       eyebrow: 'System',
       tagline: 'Microsoft Defender transparent ein- und ausschalten',
       summary:
-        'Zeigt Echtzeit-, Cloud- und Manipulationsschutz von Microsoft Defender und schaltet sie nur über dokumentierte Wege um – nach deinem Ja, nie heimlich.',
+        'Zeigt Echtzeit-, Cloud- und Manipulationsschutz von Microsoft Defender und schaltet den Echtzeitschutz bzw. die Standardaktionen nur über dokumentierte Wege um – nach deinem Ja, nie heimlich.',
     },
     network: {
       nav: 'Netzwerk',

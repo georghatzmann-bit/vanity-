@@ -380,7 +380,9 @@ verlangt der Dienst Administratorrechte des Anfragenden und ein ausdrückliches 
 entsteht nur aus einem höchstens 10 Minuten alten, gerade gelesenen Status, der danach verworfen
 wird. Nach jedem Befehl liest der Dienst den echten Stand; hat Windows ihn nicht übernommen, gilt
 der Schritt als fehlgeschlagen. „Wieder einschalten“ ist immer ein eigener Ein-Klick-Vorschlag
-(auch bei Manipulationsschutz), zusätzlich gibt es „Rückgängig“. Jede Umschaltung steht im
+(auch bei Manipulationsschutz); ein allgemeines „Rückgängig“ gibt es bewusst nicht, weil es die
+Defender-Prüfungen umginge. Vor dem Ausführen liest der Dienst den Stand erneut und prüft wie
+beim Vorschlag. Jede Umschaltung steht im
 Prüfprotokoll und im Verlauf (Protokoll auf der Seite). Passiver Defender (anderes Antivirus) und
 eine Richtlinie, die den Echtzeitschutz abschaltet, werden ehrlich gemeldet statt umgangen.
 

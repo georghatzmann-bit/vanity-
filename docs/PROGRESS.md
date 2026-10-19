@@ -30,8 +30,8 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 | P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | **erledigt** |
 | P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | erledigt |
 | P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | erledigt |
-| P8 | Defender-Schalter | in Arbeit |
-| P9 | Tresor + Erweiterung | offen |
+| P8 | Defender-Schalter | erledigt |
+| P9 | Tresor + Erweiterung | in Arbeit |
 | P10 | Tools 1–11 | offen |
 | P11 | Tools 12–22 + Animations-Feinschliff | offen |
 | P12 | Privacy-Browser | offen |
@@ -181,9 +181,24 @@ eigenen LAN/WLAN; Leck-Check mit k-Anonymität; alle Prüfungen grün.
        Protokoll aus dem Verlauf (D-053).
 3. [x] P8.3 App: Seite „Defender-Schalter“ (Stand, großer Schalter, „Wieder AN“ mit einem Klick,
        nur melden, Anleitung Manipulationsschutz + Windows-Sicherheit öffnen, Protokoll).
-4. [ ] P8.4 Sicherheits-Review, Doku, DoD.
+4. [x] P8.4 Sicherheits-Review (separater Prüfer): 2 mittel, 4 niedrig – behoben (siehe
+       Review-Protokoll).
 
-**Nächster Schritt:** P8.4 Sicherheits-Review.
+**DoD P8:** Stand vor/nach dem Umschalten kommt von Windows (WMI) und wird nach jedem Befehl
+nachgeprüft; „Wieder AN“ mit einem Klick; Manipulationsschutz nie umgangen (Anleitung +
+Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur Virenschutz.
+
+## P9 – Passwort-Tresor
+
+1. [x] P9.1 `crates/vault-core`: Format `AEGIS-VAULT-1` (Argon2id ≥ 64 MiB/3 Durchläufe,
+       Parameter + Salz in der Datei, AES-256-GCM, neue Nonce je Eintrag und Speichern, Kennung
+       als AAD), Zeroize, Generator, Stärke, Wiederverwendung, CSV-Import (Chrome/Edge, Firefox,
+       Bitwarden), Adressvergleich fürs Ausfüllen.
+2. [ ] P9.2 App: Tresor-Backend (Datei, Auto-Sperre, Zwischenablage 30 s) + Seite „Tresor“.
+3. [ ] P9.3 Browser-Erweiterung über Native Messaging (HKCU, nur unsere ID).
+4. [ ] P9.4 Sicherheits-Review, Doku, DoD.
+
+**Nächster Schritt:** P9.2.
 
 ## P5 – Schutz-Werkzeuge
 

@@ -577,6 +577,10 @@ pub trait HardenSystem: Send + Sync + std::fmt::Debug {
         step: &Step,
         user: &dyn UserAccess,
     ) -> Result<(), String>;
+    /// Aktueller Stand von Microsoft Defender (nur lesend, für die Prüfung vor dem Ausführen).
+    fn defender_status(&self) -> aegis_defender_switch::DefenderStatus {
+        super::defender::read_status()
+    }
 }
 
 /// Das echte System (Windows); anderswo ist nichts behebbar.
@@ -767,22 +771,27 @@ mod sys {
         })
     }
 
-    /// Befehl, der den jetzigen Stand von Defender wiederherstellt.
+    /// Befehl, der den jetzigen (echt gelesenen) Stand von Defender wiederherstellt.
     fn defender_before(
         command: &aegis_defender_switch::Command,
     ) -> Result<aegis_defender_switch::Command, String> {
-        use aegis_defender_switch::Command;
+        use aegis_defender_switch::{Command, action_name};
+        let status = aegis_hardening::collect::defender_status();
         Ok(match *command {
-            Command::Realtime { enabled } => Command::Realtime { enabled: !enabled },
+            Command::Realtime { .. } => Command::Realtime {
+                enabled: status
+                    .realtime
+                    .ok_or_else(|| "Echtzeitschutz-Stand nicht lesbar".to_owned())?,
+            },
             Command::ThreatAction { level, .. } => {
-                let status = aegis_hardening::collect::defender_status();
-                if !status.available {
+                if !status.preferences {
                     return Err("Defender-Einstellungen nicht lesbar".into());
                 }
-                Command::ThreatAction {
-                    level,
-                    action: status.actions.get(level),
+                let action = status.actions.get(level);
+                if action.is_some_and(|a| action_name(a).is_none()) {
+                    return Err("Unbekannte Standardaktion – nichts geändert".into());
                 }
+                Command::ThreatAction { level, action }
             }
         })
     }
@@ -804,10 +813,13 @@ mod sys {
         )?;
         let status = aegis_hardening::collect::defender_status();
         match aegis_defender_switch::verify(command, &status) {
+            Some(true) => Ok(()),
             Some(false) => Err(
-                "Windows hat die Änderung nicht übernommen (Manipulationsschutz, Richtlinie oder anderes Antivirenprogramm) – der echte Stand ist unverändert.".into(),
+                "Windows hat die Änderung nicht übernommen (Manipulationsschutz, Richtlinie oder anderes Antivirenprogramm) – der gewünschte Stand ist nicht erreicht.".into(),
             ),
-            _ => Ok(()),
+            None => Err(
+                "Windows meldet den Stand danach nicht – nicht nachprüfbar. Bitte den Status neu lesen.".into(),
+            ),
         }
     }
 
@@ -1231,7 +1243,21 @@ impl<C: Clock, W: Durable> Service<C, W> {
         let system = Arc::clone(&self.harden_system);
         // Schritte neu bestimmen – sie müssen genau denen im Plan entsprechen.
         let steps: Result<(Vec<Step>, Option<String>), String> = if defender {
-            super::defender::defender_steps(value).map(|s| (s, Some(format!("defender:{value}"))))
+            // Kein allgemeines „Rückgängig“: Zurückschalten geht über die Defender-Seite mit
+            // allen Prüfungen. Vor dem Ausführen den Stand frisch lesen und erneut prüfen –
+            // er kann sich seit dem Vorschlag geändert haben (z. B. Manipulationsschutz an).
+            aegis_defender_switch::Change::parse(value)
+                .ok_or_else(|| "Unbekannte Änderung".to_owned())
+                .and_then(|change| {
+                    aegis_defender_switch::check(change, &system.defender_status()).map_err(|b| {
+                        format!(
+                            "Der Stand hat sich seit dem Vorschlag geändert – nichts geändert. {}",
+                            super::defender::blocked_text(b).1
+                        )
+                    })
+                })
+                .and_then(|()| super::defender::defender_steps(value))
+                .map(|s| (s, None))
         } else if block {
             super::network::block_steps(value).map(|s| {
                 let program = value

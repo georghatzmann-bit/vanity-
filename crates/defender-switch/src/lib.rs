@@ -125,6 +125,10 @@ pub struct DefenderStatus {
     pub policy_realtime_off: bool,
     /// Standardaktionen für Funde.
     pub actions: ThreatActions,
+    /// Wurden die Einstellungen (`MSFT_MpPreference`) gelesen? Sonst sind `cloud` und
+    /// `actions` unbekannt.
+    #[serde(default)]
+    pub preferences: bool,
 }
 
 impl DefenderStatus {
@@ -207,10 +211,22 @@ pub fn check(change: Change, status: &DefenderStatus) -> Result<(), Blocked> {
     if !status.available {
         return Err(Blocked::Unavailable);
     }
-    if change.weakens() && status.tamper == Some(true) {
-        return Err(Blocked::Tamper);
+    // Schwächen nur, wenn sicher bekannt ist, dass der Manipulationsschutz aus ist.
+    if change.weakens() {
+        match status.tamper {
+            Some(true) => return Err(Blocked::Tamper),
+            None => return Err(Blocked::Unavailable),
+            Some(false) => {}
+        }
     }
-    if status.passive() && matches!(change, Change::RealtimeOff | Change::RealtimeOn) {
+    let realtime = matches!(change, Change::RealtimeOff | Change::RealtimeOn);
+    if realtime && status.realtime.is_none() {
+        return Err(Blocked::Unavailable);
+    }
+    if !realtime && !status.preferences {
+        return Err(Blocked::Unavailable);
+    }
+    if status.passive() && realtime {
         return Err(Blocked::Passive);
     }
     if status.policy_realtime_off && change == Change::RealtimeOn {
@@ -275,12 +291,12 @@ impl Command {
         }
     }
 
-    /// Beschreibung für Plan und Protokoll.
+    /// Beschreibung für Plan und Protokoll (mit dem genauen Befehl).
     #[must_use]
     pub fn describe(&self) -> String {
-        match *self {
+        let what = match *self {
             Self::Realtime { enabled } => format!(
-                "Microsoft Defender: Echtzeitschutz {} (Set-MpPreference)",
+                "Microsoft Defender: Echtzeitschutz {}",
                 if enabled {
                     "einschalten"
                 } else {
@@ -302,7 +318,8 @@ impl Command {
                 level.german(),
                 action_name(a).unwrap_or("?")
             ),
-        }
+        };
+        format!("{what} ({})", self.powershell().unwrap_or_default())
     }
 }
 
@@ -334,9 +351,9 @@ pub fn commands(change: Change) -> Vec<Command> {
 pub fn verify(command: &Command, status: &DefenderStatus) -> Option<bool> {
     match *command {
         Command::Realtime { enabled } => status.realtime.map(|r| r == enabled),
-        Command::ThreatAction { level, action } => {
-            Some(status.actions.get(level) == action.filter(|a| *a != 0))
-        }
+        Command::ThreatAction { level, action } => status
+            .preferences
+            .then(|| status.actions.get(level) == action.filter(|a| *a != 0)),
     }
 }
 
@@ -356,6 +373,7 @@ mod tests {
             signature_age_days: Some(0),
             policy_realtime_off: false,
             actions: ThreatActions::default(),
+            preferences: true,
         }
     }
 
@@ -384,6 +402,29 @@ mod tests {
         let mut passive = on();
         passive.running_mode = Some("Passive Mode".into());
         assert_eq!(check(Change::RealtimeOff, &passive), Err(Blocked::Passive));
+        // Unbekannter Manipulationsschutz oder ungelesene Einstellungen: nichts schwächen.
+        let mut unknown = on();
+        unknown.tamper = None;
+        assert_eq!(
+            check(Change::RealtimeOff, &unknown),
+            Err(Blocked::Unavailable)
+        );
+        let mut unread = on();
+        unread.preferences = false;
+        assert_eq!(
+            check(Change::ReportOnlyOff, &unread),
+            Err(Blocked::Unavailable)
+        );
+        assert_eq!(
+            verify(
+                &Command::ThreatAction {
+                    level: Level::Low,
+                    action: None
+                },
+                &unread
+            ),
+            None
+        );
         let mut policy = on();
         policy.realtime = Some(false);
         policy.policy_realtime_off = true;

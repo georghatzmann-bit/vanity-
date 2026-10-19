@@ -1381,9 +1381,14 @@ struct FakeSystem {
     state: std::sync::Mutex<aegis_hardening::collect::FixState>,
     applied: std::sync::Mutex<Vec<Step>>,
     reads: std::sync::atomic::AtomicUsize,
+    defender: std::sync::Mutex<aegis_defender_switch::DefenderStatus>,
 }
 
 impl HardenSystem for FakeSystem {
+    fn defender_status(&self) -> aegis_defender_switch::DefenderStatus {
+        self.defender.lock().unwrap().clone()
+    }
+
     fn fix_state(
         &self,
         _fix: aegis_hardening::FixKind,
@@ -1739,8 +1744,10 @@ fn defender_schalter_nur_nach_ja_admin_und_nie_gegen_manipulationsschutz() {
         cloud: Some(true),
         tamper: Some(false),
         running_mode: Some("Normal".into()),
+        preferences: true,
         ..DefenderStatus::default()
     };
+    *fake.defender.lock().unwrap() = on.clone();
     // Ohne frisch gelesenen Status gibt es keinen Vorschlag.
     let r = h.send(json!({"type": "propose_defender", "change": "realtime_off"}));
     assert_eq!(r["code"], "status", "{r}");
@@ -1783,10 +1790,15 @@ fn defender_schalter_nur_nach_ja_admin_und_nie_gegen_manipulationsschutz() {
     // Nach der Ausführung gilt der alte Status nicht mehr – erst neu lesen.
     let r = h.send(json!({"type": "propose_defender", "change": "realtime_on"}));
     assert_eq!(r["code"], "status", "{r}");
-    // Rückgängig ist gemerkt, Protokoll zeigt die Umschaltung.
+    // Kein allgemeines „Rückgängig“ (das umginge die Defender-Prüfungen); Protokoll zeigt die
+    // Umschaltung.
     let status = h.send(json!({"type": "hardening_status", "fresh": true}));
     let undo = status["state"]["undo"].as_array().unwrap().clone();
-    assert!(undo[0]["fix"].as_str().unwrap().starts_with("defender:"));
+    assert!(
+        undo.iter()
+            .all(|u| !u["fix"].as_str().unwrap_or("").starts_with("defender:")),
+        "{status}"
+    );
     let state = serde_json::to_value(h.service.defender_finish(on, &OwnProcess)).unwrap();
     let log = state["state"]["log"].as_array().unwrap();
     assert!(
@@ -1796,4 +1808,13 @@ fn defender_schalter_nur_nach_ja_admin_und_nie_gegen_manipulationsschutz() {
             .starts_with("Microsoft Defender: Echtzeitschutz ausschalten"),
         "{state}"
     );
+    // Zwischen Vorschlag und „Ja“ wird der Manipulationsschutz eingeschaltet → nichts geändert.
+    let before = fake.applied.lock().unwrap().len();
+    let p = h.send(json!({"type": "propose_defender", "change": "realtime_off"}));
+    assert_eq!(p["type"], "proposal", "{p}");
+    fake.defender.lock().unwrap().tamper = Some(true);
+    let done = h.answer(&p, "execute");
+    assert_eq!(done["result"]["status"], "failed", "{done}");
+    assert!(done.to_string().contains("Manipulationsschutz"), "{done}");
+    assert_eq!(fake.applied.lock().unwrap().len(), before);
 }

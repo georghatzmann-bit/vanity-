@@ -565,7 +565,8 @@ export interface DefenderStatus {
   readonly runningMode: string | null;
   readonly signatureAgeDays: number | null;
   readonly policyRealtimeOff: boolean;
-  readonly reportOnly: boolean;
+  /** `null`, wenn Windows die Einstellungen nicht gemeldet hat. */
+  readonly reportOnly: boolean | null;
 }
 
 /** Defender-Schalter: Status, mögliche Änderungen, Protokoll. */
@@ -1401,7 +1402,7 @@ export function parseDefender(response: unknown): DefenderState {
       signatureAgeDays:
         typeof s['signature_age_days'] === 'number' ? s['signature_age_days'] : null,
       policyRealtimeOff: s['policy_realtime_off'] === true,
-      reportOnly,
+      reportOnly: s['preferences'] === true ? reportOnly : null,
     },
     admin: st['admin'] === true,
     options,

@@ -97,7 +97,7 @@ export const en: Messages<typeof de> = {
       eyebrow: 'System',
       tagline: 'Turn Microsoft Defender on and off transparently',
       summary:
-        'Shows Microsoft Defender’s real-time, cloud and tamper protection and switches them only through documented ways – after your yes, never secretly.',
+        'Shows Microsoft Defender’s real-time, cloud and tamper protection and switches real-time protection or the default actions only through documented ways – after your yes, never secretly.',
     },
     network: {
       nav: 'Network',

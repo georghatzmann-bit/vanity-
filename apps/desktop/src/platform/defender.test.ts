@@ -14,6 +14,7 @@ describe('Defender-Antwort', () => {
           running_mode: 'Normal',
           signature_age_days: 2,
           actions: { low: 9, moderate: 9, high: 9, severe: 9 },
+          preferences: true,
         },
         admin: true,
         options: [
@@ -34,5 +35,7 @@ describe('Defender-Antwort', () => {
     expect(state.options.report_only_off).toBe('unavailable');
     expect(state.log).toHaveLength(1);
     expect(() => parseDefender({ type: 'firewall' })).toThrow();
+    const unread = parseDefender({ type: 'defender', state: { status: { available: true } } });
+    expect(unread.status.reportOnly).toBeNull();
   });
 });

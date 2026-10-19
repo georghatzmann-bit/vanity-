@@ -637,6 +637,7 @@ mod windows {
             false,
         ) && let Some(r) = rows.first()
         {
+            status.preferences = true;
             status.cloud = v_u32(r, "MAPSReporting").map(|v| v != 0);
             let action = |name: &str| v_u32(r, name).and_then(|v| u8::try_from(v).ok());
             status.actions = ThreatActions {

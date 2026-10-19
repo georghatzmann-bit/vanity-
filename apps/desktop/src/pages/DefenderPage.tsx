@@ -24,7 +24,7 @@ function applied(change: DefenderChange, s: DefenderStatus): boolean | null {
     case 'report_only_on':
       return s.reportOnly;
     case 'report_only_off':
-      return !s.reportOnly;
+      return s.reportOnly === null ? null : !s.reportOnly;
   }
 }
 
