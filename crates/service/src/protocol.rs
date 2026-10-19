@@ -78,6 +78,10 @@ pub enum Request {
     ProposeEnableSandbox {},
     /// Laufende Prozesse eines Programms beenden/anhalten/fortsetzen vorschlagen.
     ProposeProcessAction { program: PathBuf, action: String },
+    /// Ransomware-Schutz: eigene Köderdateien (nur lesend).
+    RansomStatus {},
+    /// Köderdateien anlegen (`on`) bzw. entfernen vorschlagen.
+    ProposeBaits { on: bool },
     /// Antwort des Nutzers im Freigabe-Dialog.
     Decide {
         plan_id: PlanId,
@@ -156,6 +160,8 @@ pub enum Response {
     },
     /// Bildschirmfoto (PNG, Base64).
     LabScreenshot { png_base64: String },
+    /// Ransomware-Schutz des Kontos.
+    Ransom { baits: Vec<PathBuf> },
     /// Verhaltensbericht eines Labor-Laufs.
     LabReport {
         report: Box<aegis_sandbox::report::BehaviorReport>,

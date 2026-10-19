@@ -649,6 +649,201 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
+    /// Köderdateien des Kontos (für die Anzeige).
+    #[must_use]
+    pub fn baits_of(&self, owner: Option<&str>) -> Vec<PathBuf> {
+        self.settings
+            .get()
+            .baits
+            .iter()
+            .filter(|b| b.owner.as_deref() == owner)
+            .flat_map(|b| b.files.clone())
+            .collect()
+    }
+
+    /// Alle Köderdateien an den Wächter geben.
+    pub fn sync_baits(&self) {
+        let all: Vec<PathBuf> = self
+            .settings
+            .get()
+            .baits
+            .iter()
+            .flat_map(|b| b.files.clone())
+            .collect();
+        self.watch.ransom().set_canaries(all);
+    }
+
+    /// Schlägt vor, Köderdateien anzulegen (`on`) bzw. zu entfernen.
+    pub fn propose_baits(&mut self, on: bool, user: &dyn UserAccess) -> Response {
+        use aegis_quarantine::bait::{BAIT_SETTING, bait_paths};
+        let owner = user.identity();
+        let existing = self.baits_of(owner.as_deref());
+        let paths = if on {
+            let Some(profile) = user.profile() else {
+                return Response::error("ransom", "Kein Benutzerprofil – Köder nicht möglich");
+            };
+            bait_paths(&profile)
+                .into_iter()
+                .filter(|p| !existing.iter().any(|e| crate::paths::same_path(e, p)))
+                .collect::<Vec<_>>()
+        } else {
+            existing
+        };
+        if paths.is_empty() {
+            return Response::error(
+                "ransom",
+                if on {
+                    "Köderdateien sind schon angelegt (oder es fehlen Dokumente/Desktop/Bilder)"
+                } else {
+                    "Es gibt keine Köderdateien zu entfernen"
+                },
+            );
+        }
+        let list = paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut builder = ActionPlan::builder(ActionKind::ChangeSetting)
+            .target(Target::setting(BAIT_SETTING))
+            .parameter(param::VALUE, if on { "on" } else { "off" })
+            .severity(RiskLevel::Info);
+        for p in &paths {
+            builder = builder.target(Target::other(p.display().to_string()));
+        }
+        let builder = if on {
+            builder
+                .what(format!("{} Köderdateien des Ransomware-Schutzes anlegen", paths.len()))
+                .why("Ransomware verschlüsselt wahllos Dateien – wird eine Köderdatei verändert, warnt AEGIS sofort.")
+                .consequence(format!("Neue, harmlose Dateien (Text) entstehen: {list}. Bitte nicht ändern; AEGIS meldet jede Änderung."))
+                .undo(UndoHint::reversible("„Köder entfernen“ löscht genau diese Dateien wieder (nur unverändert)."))
+        } else {
+            builder
+                .what(format!("{} Köderdateien entfernen", paths.len()))
+                .why("Von dir gewählt.")
+                .consequence(format!("Diese Dateien werden gelöscht, sofern sie unverändert sind: {list}. Danach warnt AEGIS nur noch bei Massenänderungen."))
+                .undo(UndoHint::reversible("„Köder anlegen“ legt sie neu an."))
+        };
+        match builder.build(self.gate.clock().now()) {
+            Ok(plan) => self.register(plan, owner, HashMap::new()),
+            Err(e) => Response::error("plan", e.to_string()),
+        }
+    }
+
+    /// Führt den freigegebenen Köder-Plan aus (Dateien aus dem Plan, Nutzerrechte).
+    fn apply_baits(
+        &mut self,
+        permit: aegis_core::consent::ExecutionPermit,
+        user: &dyn UserAccess,
+    ) -> Response {
+        let plan = permit.plan().clone();
+        let on = plan.parameter(param::VALUE) == Some("on");
+        let owner = user.identity();
+        if !on {
+            // Erst aus der Liste des Wächters nehmen, dann löschen (kein Fehlalarm).
+            let planned: Vec<PathBuf> = plan
+                .targets()
+                .iter()
+                .filter_map(|t| match t {
+                    Target::Other { description } => Some(PathBuf::from(description)),
+                    _ => None,
+                })
+                .collect();
+            let all: Vec<PathBuf> = self
+                .settings
+                .get()
+                .baits
+                .iter()
+                .flat_map(|b| b.files.clone())
+                .filter(|f| !planned.iter().any(|p| crate::paths::same_path(p, f)))
+                .collect();
+            self.watch.ransom().set_canaries(all);
+        }
+        let results = if on {
+            aegis_quarantine::bait::create_baits(&permit, user)
+        } else {
+            aegis_quarantine::bait::remove_baits(&permit, user)
+        };
+        let results = match results {
+            Ok(r) => r,
+            Err(message) => {
+                let event = permit.complete(aegis_core::audit::ExecutionResult::Failed {
+                    message: message.clone(),
+                });
+                self.record(event);
+                self.sync_baits();
+                return Response::error("ransom", format!("{message} – nichts geändert"));
+            }
+        };
+        let ok: Vec<PathBuf> = results
+            .iter()
+            .filter(|(_, r)| r.is_ok())
+            .map(|(p, _)| p.clone())
+            .collect();
+        let failures: Vec<(PathBuf, String)> = results
+            .into_iter()
+            .filter_map(|(p, r)| r.err().map(|e| (p, e)))
+            .collect();
+        let save = self.settings.update(|s| {
+            let set = if let Some(set) = s.baits.iter_mut().find(|b| b.owner == owner) {
+                set
+            } else {
+                s.baits.push(crate::schedule::BaitSet {
+                    owner: owner.clone(),
+                    files: Vec::new(),
+                });
+                let last = s.baits.len() - 1;
+                &mut s.baits[last]
+            };
+            if on {
+                set.files.extend(ok.iter().cloned());
+            } else {
+                set.files
+                    .retain(|f| !ok.iter().any(|p| crate::paths::same_path(p, f)));
+            }
+            s.baits.retain(|b| !b.files.is_empty());
+        });
+        self.sync_baits();
+        let result = if failures.is_empty() && save.is_ok() {
+            aegis_core::audit::ExecutionResult::Succeeded
+        } else if !ok.is_empty() {
+            aegis_core::audit::ExecutionResult::PartiallySucceeded {
+                message: format!("{} Datei(en) nicht möglich", failures.len()),
+            }
+        } else {
+            aegis_core::audit::ExecutionResult::Failed {
+                message: failures.first().map_or_else(
+                    || "Einstellung nicht gespeichert".to_owned(),
+                    |f| f.1.clone(),
+                ),
+            }
+        };
+        let event = permit.complete(result.clone());
+        self.record(event);
+        if self.audit.sync().is_err() {
+            self.audit_failed = true;
+        }
+        self.add_history(NewEntry {
+            kind: HistoryKind::Action,
+            risk: None,
+            title: format!("{} – {} erledigt", plan.what(), ok.len()),
+            detail: failures
+                .iter()
+                .map(|(p, e)| format!("{}: {e}", p.display()))
+                .collect::<Vec<_>>()
+                .join("; "),
+            paths: ok.clone(),
+            owner: owner.clone(),
+            scope: user.profile(),
+        });
+        Response::Executed {
+            kind: ActionKind::ChangeSetting,
+            result,
+            entries: Vec::new(),
+            failures,
+        }
+    }
+
     /// Der Verlauf (auch der Wächter schreibt hinein).
     #[must_use]
     pub fn history(&self) -> Arc<Mutex<History>> {
@@ -1050,6 +1245,10 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Request::ProposeProcessAction { program, action } => {
                 self.propose_process_action(&program, &action, user)
             }
+            Request::RansomStatus {} => Response::Ransom {
+                baits: self.baits_of(user.identity().as_deref()),
+            },
+            Request::ProposeBaits { on } => self.propose_baits(on, user),
             Request::ProposeLabRun {
                 path,
                 stage,
@@ -1541,7 +1740,16 @@ impl<C: Clock, W: Durable> Service<C, W> {
             | ActionKind::ResumeProcess => {
                 return self.control_processes(permit, user);
             }
-            ActionKind::ChangeSetting => return self.enable_sandbox_feature(permit, user),
+            ActionKind::ChangeSetting => {
+                let bait = plan.targets().iter().any(|t| {
+                    matches!(t, Target::Setting { id } if id == aegis_quarantine::bait::BAIT_SETTING)
+                });
+                return if bait {
+                    self.apply_baits(permit, user)
+                } else {
+                    self.enable_sandbox_feature(permit, user)
+                };
+            }
             other => {
                 // Andere Arten führt dieser Dienst (noch) nicht aus; die Erlaubnis verfällt.
                 let event = permit.complete(aegis_core::audit::ExecutionResult::Failed {

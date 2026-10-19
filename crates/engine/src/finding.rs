@@ -152,6 +152,42 @@ pub struct TrustMark {
 }
 
 impl Finding {
+    /// Warnung aus beobachtetem Verhalten (z. B. Ransomware-Verdacht des Wächters) – kein
+    /// Dateiinhalt, nur Beobachtung; Empfehlung „ansehen“.
+    #[must_use]
+    pub fn behavior_alert(
+        path: PathBuf,
+        risk: RiskLevel,
+        summary_de: String,
+        summary_en: String,
+        reasons: Vec<(String, String, String)>,
+    ) -> Self {
+        Self {
+            path,
+            sha256: None,
+            size: 0,
+            risk,
+            confidence: confidence(70),
+            category: Category::Suspicious,
+            summary_de,
+            summary_en,
+            recommendation: Recommendation::Review,
+            reasons: reasons
+                .into_iter()
+                .map(|(code, de, en)| Reason {
+                    code,
+                    source: Source::Heuristic,
+                    weight: Weight::Definite(risk),
+                    de,
+                    en,
+                })
+                .collect(),
+            not_scannable: None,
+            contained: Vec::new(),
+            trusted: None,
+        }
+    }
+
     /// Ergebnis für eine Datei, die nicht geprüft werden konnte (z. B. Prüfprozess
     /// abgestürzt). Stufe „Info“ mit Empfehlung „ansehen“ – nie „sauber“.
     #[must_use]

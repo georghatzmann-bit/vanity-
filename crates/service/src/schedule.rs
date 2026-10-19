@@ -85,6 +85,18 @@ pub struct ServiceSettings {
     /// Letztes Signatur-Update (Zeit, Erfolg, Meldung).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_update: Option<UpdateRecord>,
+    /// Angelegte Köderdateien des Ransomware-Schutzes (je Konto).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub baits: Vec<BaitSet>,
+}
+
+/// Köderdateien eines Kontos.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BaitSet {
+    /// Konto (SID).
+    pub owner: Option<String>,
+    /// Angelegte Dateien.
+    pub files: Vec<PathBuf>,
 }
 
 fn yes() -> bool {
@@ -97,6 +109,7 @@ impl Default for ServiceSettings {
             schedules: Vec::new(),
             clamav_update: true,
             last_update: None,
+            baits: Vec::new(),
         }
     }
 }

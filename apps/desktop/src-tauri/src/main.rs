@@ -69,6 +69,8 @@ fn main() {
             service::service_lab_report,
             service::service_propose_enable_sandbox,
             service::service_propose_process_action,
+            service::service_ransom_status,
+            service::service_propose_baits,
             service::lab_capture_windows,
             report::export_report
         ])
@@ -146,6 +148,8 @@ mod test_support {
                 crate::service::service_lab_report,
                 crate::service::service_propose_enable_sandbox,
                 crate::service::service_propose_process_action,
+                crate::service::service_ransom_status,
+                crate::service::service_propose_baits,
                 crate::service::lab_capture_windows,
                 crate::report::export_report
             ])
@@ -170,7 +174,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 34] = [
+    const EXPECTED_PERMISSIONS: [&str; 36] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -202,6 +206,8 @@ mod tests {
         "allow-service-lab-report",
         "allow-service-propose-enable-sandbox",
         "allow-service-propose-process-action",
+        "allow-service-ransom-status",
+        "allow-service-propose-baits",
         "allow-lab-capture-windows",
         "allow-export-report",
         "dialog:allow-open",
@@ -469,6 +475,8 @@ mod tests {
                 ),
                 ("service_lab_report", json!({ "runId": "r" })),
                 ("service_propose_enable_sandbox", json!({})),
+                ("service_ransom_status", json!({})),
+                ("service_propose_baits", json!({ "on": false })),
                 (
                     "service_propose_process_action",
                     json!({ "program": "/aegis-test/x", "action": "suspend" }),

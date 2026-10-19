@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-ransom-status"
+description = "Enables the service_ransom_status command without any pre-configured scope."
+commands.allow = ["service_ransom_status"]
+
+[[permission]]
+identifier = "deny-service-ransom-status"
+description = "Denies the service_ransom_status command without any pre-configured scope."
+commands.deny = ["service_ransom_status"]

@@ -700,3 +700,111 @@ fn prozess_aktionen_nur_als_vorschlag() {
     let own = h.send(json!({"type": "propose_process_action", "program": me, "action": "suspend"}));
     assert_eq!(own["code"], "process", "{own}");
 }
+
+#[test]
+fn koederdateien_nur_per_plan_und_nur_unveraendert_entfernt() {
+    struct Account(std::path::PathBuf);
+    impl aegis_quarantine::UserAccess for Account {
+        fn enter(&self) -> std::io::Result<aegis_quarantine::UserScope> {
+            Ok(aegis_quarantine::UserScope::unchanged())
+        }
+        fn identity(&self) -> Option<String> {
+            Some("S-1-K".into())
+        }
+        fn profile(&self) -> Option<std::path::PathBuf> {
+            Some(self.0.clone())
+        }
+    }
+    let mut h = harness();
+    let home = tempfile::tempdir().unwrap();
+    let home_path = std::fs::canonicalize(home.path()).unwrap();
+    aegis_core::testing::create_fixture_dir(&home_path, "Documents").unwrap();
+    aegis_core::testing::create_fixture_dir(&home_path, "Desktop").unwrap();
+    let before = DirSnapshot::capture(&home_path).unwrap();
+    let a = Account(home_path.clone());
+    let mut send = |v: Value| {
+        let req: Request = serde_json::from_value(v).unwrap();
+        serde_json::to_value(h.service.handle(req, &a)).unwrap()
+    };
+    assert!(
+        send(json!({"type": "ransom_status"}))["baits"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    let p = send(json!({"type": "propose_baits", "on": true}));
+    assert_eq!(p["type"], "proposal", "{p}");
+    assert_eq!(
+        p["proposal"]["plan"]["targets"].as_array().unwrap().len(),
+        5,
+        "Einstellung + 4 Dateien"
+    );
+    // Ohne „Ja“: nichts angelegt.
+    let no = send(json!({
+        "type": "decide", "plan_id": p["proposal"]["ticket"]["id"],
+        "digest": p["proposal"]["ticket"]["digest"], "nonce": p["proposal"]["nonce"],
+        "decision": "decline", "dialog_id": "d"
+    }));
+    assert_eq!(no["type"], "nothing_done");
+    assert_unchanged(&before, &DirSnapshot::capture(&home_path).unwrap());
+
+    // Eine gleichnamige eigene Datei des Nutzers wird nie überschrieben.
+    let own = aegis_core::testing::write_fixture(
+        &home_path,
+        &format!("Desktop/{}", aegis_quarantine::bait::BAIT_NAMES[0]),
+        b"meine Datei",
+    )
+    .unwrap();
+    let p = send(json!({"type": "propose_baits", "on": true}));
+    let yes = send(json!({
+        "type": "decide", "plan_id": p["proposal"]["ticket"]["id"],
+        "digest": p["proposal"]["ticket"]["digest"], "nonce": p["proposal"]["nonce"],
+        "decision": "execute", "dialog_id": "d"
+    }));
+    assert_eq!(yes["type"], "executed", "{yes}");
+    assert_eq!(yes["result"]["status"], "partially_succeeded", "{yes}");
+    assert_eq!(std::fs::read(&own).unwrap(), b"meine Datei");
+    let baits = send(json!({"type": "ransom_status"}))["baits"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(baits.len(), 3);
+    for b in &baits {
+        assert_eq!(
+            std::fs::read(b.as_str().unwrap()).unwrap(),
+            aegis_quarantine::bait::BAIT_CONTENT
+        );
+    }
+    // Einer wird „verändert“ (wie von Ransomware) – er bleibt beim Entfernen liegen.
+    let changed = std::path::PathBuf::from(baits[0].as_str().unwrap());
+    let rel = changed
+        .strip_prefix(&home_path)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
+    aegis_core::testing::remove_fixture(&home_path, &rel).unwrap();
+    aegis_core::testing::write_fixture(&home_path, &rel, b"verschluesselt").unwrap();
+    let p = send(json!({"type": "propose_baits", "on": false}));
+    let off = send(json!({
+        "type": "decide", "plan_id": p["proposal"]["ticket"]["id"],
+        "digest": p["proposal"]["ticket"]["digest"], "nonce": p["proposal"]["nonce"],
+        "decision": "execute", "dialog_id": "d"
+    }));
+    assert_eq!(off["type"], "executed", "{off}");
+    assert_eq!(off["result"]["status"], "partially_succeeded", "{off}");
+    assert_eq!(std::fs::read(&changed).unwrap(), b"verschluesselt");
+    for b in &baits[1..] {
+        assert!(!std::path::Path::new(b.as_str().unwrap()).exists());
+    }
+    let left = send(json!({"type": "ransom_status"}))["baits"]
+        .as_array()
+        .unwrap()
+        .len();
+    assert_eq!(left, 1, "veränderter Köder bleibt in der Liste");
+    assert_eq!(
+        std::fs::read(&own).unwrap(),
+        b"meine Datei",
+        "eigene Datei bleibt"
+    );
+}

@@ -35,6 +35,8 @@
     "allow-service-lab-report",
     "allow-service-propose-enable-sandbox",
     "allow-service-propose-process-action",
+    "allow-service-ransom-status",
+    "allow-service-propose-baits",
     "allow-lab-capture-windows",
     "allow-export-report",
     "dialog:allow-open"

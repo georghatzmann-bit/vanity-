@@ -19,6 +19,7 @@
 //! Ehrliche Grenze: Administratoren dieses Rechners können ihn auspacken.
 #![forbid(unsafe_code)]
 
+pub mod bait;
 pub mod crypto;
 pub mod userfs;
 

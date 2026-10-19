@@ -8,7 +8,7 @@ import { Button, Panel, RiskBadge, SafeText, Toggle } from '@aegis/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
-import type { WatchEvent, WatchState } from '../platform/service.ts';
+import type { RansomState, ServiceApi, WatchEvent, WatchState } from '../platform/service.ts';
 import { isLabCandidate, offerToLab } from './labCandidate.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
@@ -42,7 +42,11 @@ function EventRow({
       <div className="flex flex-wrap items-center gap-2">
         <RiskBadge level={f.risk} />
         <span className="text-xs text-text-subtle">
-          {event.kind === 'process' ? t('realtime.kindProcess') : t('realtime.kindFile')}
+          {event.kind === 'process'
+            ? t('realtime.kindProcess')
+            : event.kind === 'ransomware'
+              ? t('realtime.kindRansomware')
+              : t('realtime.kindFile')}
           {' · '}
           {Number.isNaN(when.getTime()) ? event.at : when.toLocaleString(locale)}
         </span>
@@ -117,6 +121,63 @@ function EventRow({
   );
 }
 
+/** Ransomware-Schutz: Köderdateien anlegen/entfernen (nur über den Freigabe-Dialog). */
+function RansomPanel({
+  service,
+  start,
+  version,
+}: {
+  readonly service: ServiceApi;
+  readonly start: (load: () => ReturnType<ServiceApi['proposeBaits']>) => void;
+  readonly version: number;
+}) {
+  const { t } = useT();
+  const [state, setState] = useState<RansomState | null>(null);
+  useEffect(() => {
+    let active = true;
+    service.ransomStatus().then(
+      (s) => {
+        if (active) {
+          setState(s);
+        }
+      },
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, [service, version]);
+  const count = state?.baits.length ?? 0;
+  return (
+    <Panel title={t('ransom.title')} description={t('ransom.honest')}>
+      <div className="space-y-3" data-testid="ransom-panel">
+        <p className="text-sm text-text">
+          {count > 0 ? t('ransom.baitsOn', { count: String(count) }) : t('ransom.baitsOff')}
+        </p>
+        <p className="text-sm text-text-muted">{t('ransom.burst')}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => start(() => service.proposeBaits(true))}
+          >
+            {t('ransom.addBaits')}
+          </Button>
+          {count > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => start(() => service.proposeBaits(false))}
+            >
+              {t('ransom.removeBaits')}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 export function RealtimePage() {
   const { t } = useT();
   const service = usePlatform().service;
@@ -164,7 +225,11 @@ export function RealtimePage() {
     };
   }, [service]);
 
-  const flow = useConsentFlow(service, () => void refresh());
+  const [ransomVersion, setRansomVersion] = useState(0);
+  const flow = useConsentFlow(service, () => {
+    void refresh();
+    setRansomVersion((v) => v + 1);
+  });
 
   const setGaming = (on: boolean) => {
     if (service === null) {
@@ -224,6 +289,11 @@ export function RealtimePage() {
               </div>
             )}
           </Panel>
+          <RansomPanel
+            service={service}
+            start={(load) => void flow.start(load)}
+            version={ransomVersion}
+          />
           <Panel title={t('realtime.events')} description={t('realtime.eventsHint')}>
             {state !== null && events.length === 0 && (
               <p className="text-sm text-text-muted" data-testid="watch-empty">

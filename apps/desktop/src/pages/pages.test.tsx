@@ -38,21 +38,19 @@ describe('Dashboard – ehrlich', () => {
     expect(within(panel).queryByText(/\d+\s*von 100/)).toBeNull();
   });
 
-  it('Module: Engine und Wächter nur mit Dienst, Ransomware P5, Netzwerk P7', () => {
+  it('Module: Engine, Wächter und Ransomware-Schutz nur mit Dienst, Netzwerk P7', () => {
     renderApp();
     for (const [id, label] of [
       ['signatures', 'Signaturen & Engine'],
       ['realtime', 'Echtzeit-Wächter'],
+      ['ransomware', 'Ransomware-Schutz'],
     ] as const) {
       const item = screen.getByTestId(`module-${id}`);
       expect(item).toHaveTextContent(label);
       expect(item).toHaveTextContent('Nur in der Windows-App mit Dienst');
       expect(item.querySelector('[data-state]')).toHaveAttribute('data-state', 'unavailable');
     }
-    const expected = [
-      ['ransomware', 'Ransomware-Schutz', 'P5'],
-      ['network', 'Netzwerk-Schutz', 'P7'],
-    ] as const;
+    const expected = [['network', 'Netzwerk-Schutz', 'P7']] as const;
     for (const [id, label, phase] of expected) {
       const item = screen.getByTestId(`module-${id}`);
       expect(item).toHaveTextContent(label);

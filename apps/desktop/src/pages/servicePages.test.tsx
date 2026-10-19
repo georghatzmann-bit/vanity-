@@ -103,6 +103,8 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     labScreenshot: vi.fn(() => Promise.resolve(new Uint8Array([137, 80, 78, 71]))),
     labCaptureWindows: vi.fn(() => Promise.resolve([])),
     proposeProcessAction: vi.fn(() => Promise.resolve(proposal('Prozess beenden'))),
+    ransomStatus: vi.fn(() => Promise.resolve({ baits: [] })),
+    proposeBaits: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     ...overrides,
   };
 }
@@ -612,6 +614,40 @@ describe('Prozess-Aktionen', () => {
       'terminate',
     );
     expect(within(dialog).queryByRole('button', { name: /Vertrauen/ })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Nein' }));
+    await waitFor(() => expect(vi.mocked(service.decide).mock.calls[0]?.[1]).toBe('decline'));
+  });
+});
+
+describe('Ransomware-Schutz', () => {
+  it('Köder anlegen nur über den Freigabe-Dialog; Verdacht wird deutlich gemeldet', async () => {
+    const service = fakeService({
+      watchPoll: vi.fn(() =>
+        Promise.resolve(
+          watchState([
+            {
+              seq: 5,
+              at: '2026-10-19T12:00:00Z',
+              kind: 'ransomware',
+              path: '/home/x/Dokumente/a.docx.locked',
+              finding: {
+                ...finding,
+                risk: 'suspicious',
+                summaryDe: 'Möglicher Ransomware-Angriff: … AEGIS hat nichts verändert.',
+              },
+            },
+          ]),
+        ),
+      ),
+    });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/realtime' });
+    const panel = await screen.findByTestId('ransom-panel');
+    expect(panel).toHaveTextContent('Keine Köderdateien');
+    const row = await screen.findByTestId('watch-event');
+    expect(row).toHaveTextContent('Ransomware-Verdacht');
+    fireEvent.click(within(panel).getByRole('button', { name: /Köder anlegen/ }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(service.proposeBaits).toHaveBeenCalledWith(true);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Nein' }));
     await waitFor(() => expect(vi.mocked(service.decide).mock.calls[0]?.[1]).toBe('decline'));
   });

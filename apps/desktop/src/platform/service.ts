@@ -100,7 +100,7 @@ export type DecisionResult =
 export interface WatchEvent {
   readonly seq: number;
   readonly at: string;
-  readonly kind: 'file' | 'process';
+  readonly kind: 'file' | 'process' | 'ransomware';
   readonly path: string;
   readonly finding: ScanFinding;
 }
@@ -251,6 +251,12 @@ export interface LabState {
   readonly runs: readonly LabRun[];
 }
 
+/** Ransomware-Schutz des Kontos. */
+export interface RansomState {
+  /** Angelegte Köderdateien. */
+  readonly baits: readonly string[];
+}
+
 /** Fehler des Dienstes (es wurde nichts ausgeführt, sofern nicht anders gesagt). */
 export class ServiceError extends Error {
   constructor(
@@ -298,6 +304,10 @@ export interface ServiceApi {
     seconds: number,
     network: boolean,
   ): Promise<Proposal>;
+  /** Ransomware-Schutz: eigene Köderdateien (nur lesend). */
+  ransomStatus(): Promise<RansomState>;
+  /** Köderdateien anlegen (`true`) bzw. entfernen vorschlagen. */
+  proposeBaits(on: boolean): Promise<Proposal>;
   /** Laufende Prozesse eines Programms beenden/anhalten/fortsetzen vorschlagen. */
   proposeProcessAction(
     program: string,
@@ -426,7 +436,12 @@ export function parseWatch(response: unknown): WatchState {
       .map((e) => ({
         seq: num(e['seq']),
         at: str(e['at']),
-        kind: e['kind'] === 'process' ? ('process' as const) : ('file' as const),
+        kind:
+          e['kind'] === 'process'
+            ? ('process' as const)
+            : e['kind'] === 'ransomware'
+              ? ('ransomware' as const)
+              : ('file' as const),
         path: str(e['path']),
         finding: parseFinding(e['finding']),
       })),
@@ -617,6 +632,14 @@ export function parseLab(response: unknown): LabState {
         state: parseLabRunState(run['state']),
         container: typeof run['container'] === 'string' ? run['container'] : null,
       })),
+  };
+}
+
+export function parseRansom(response: unknown): RansomState {
+  return {
+    baits: arr(expectType(response, 'ransom')['baits']).filter(
+      (b): b is string => typeof b === 'string',
+    ),
   };
 }
 

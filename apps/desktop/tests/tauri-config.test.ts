@@ -51,6 +51,9 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
     'Dienst: „Windows Sandbox einschalten“ vorschlagen (nur Admin, nur nach „Ja“)',
   'allow-service-propose-process-action':
     'Dienst: Programm beenden/anhalten/fortsetzen vorschlagen (nur nach „Ja“)',
+  'allow-service-ransom-status': 'Dienst: eigene Köderdateien des Ransomware-Schutzes (nur lesend)',
+  'allow-service-propose-baits':
+    'Dienst: Köderdateien anlegen/entfernen vorschlagen (nur nach „Ja“)',
   'allow-lab-capture-windows': 'Fensterfotos eines eigenen Mini-Sandbox-Laufs (nur lesend)',
   'allow-export-report':
     'Bericht als HTML speichern – Inhalt aus Rust, Ort nur über den Speichern-Dialog',

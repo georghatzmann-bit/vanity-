@@ -411,6 +411,18 @@ pub async fn service_propose_process_action(
     send(propose_process_request(&program, &action)?).await
 }
 
+/// Ransomware-Schutz: eigene Köderdateien (nur lesend).
+#[tauri::command]
+pub async fn service_ransom_status() -> Result<Value, String> {
+    send(json!({ "type": "ransom_status" })).await
+}
+
+/// Köderdateien anlegen bzw. entfernen vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_baits(on: bool) -> Result<Value, String> {
+    send(json!({ "type": "propose_baits", "on": on })).await
+}
+
 /// „Windows Sandbox einschalten“ vorschlagen (nur Administratoren, nur nach „Ja“).
 #[tauri::command]
 pub async fn service_propose_enable_sandbox() -> Result<Value, String> {

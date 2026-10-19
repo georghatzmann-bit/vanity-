@@ -115,6 +115,7 @@ pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
         .with_settings(settings)
         .with_lab(crate::lab::Lab::new(Some(lab_dir)));
     service.watch().attach_history(service.history());
+    service.sync_baits();
     Ok(service.with_scanner(Scanner::Worker {
         exe: worker,
         clamav: ClamAv::locate().is_some(),

@@ -58,7 +58,7 @@ const LAST_PHASE: BuildPhase = 'P13';
 const modules = [
   { id: 'signatures', phase: null },
   { id: 'realtime', phase: null },
-  { id: 'ransomware', phase: 'P5' },
+  { id: 'ransomware', phase: null },
   { id: 'network', phase: 'P7' },
 ] as const;
 
@@ -69,14 +69,15 @@ interface LiveModule {
 }
 
 /** Echte Zustände von Engine und Wächter (alle 10 s vom Dienst; in der Vorschau: keine). */
-function useLiveModules(): Readonly<Record<'signatures' | 'realtime', LiveModule>> {
+function useLiveModules(): Readonly<Record<'signatures' | 'realtime' | 'ransomware', LiveModule>> {
   const { t } = useT();
   const service = usePlatform().service;
   const [live, setLive] = useState<{
     readonly reachable: boolean | null;
     readonly clamav: boolean;
     readonly watch: WatchState | null;
-  }>({ reachable: null, clamav: false, watch: null });
+    readonly baits: number;
+  }>({ reachable: null, clamav: false, watch: null, baits: 0 });
 
   useEffect(() => {
     if (service === null) {
@@ -84,15 +85,24 @@ function useLiveModules(): Readonly<Record<'signatures' | 'realtime', LiveModule
     }
     let active = true;
     const tick = () => {
-      Promise.all([service.watchPoll(Number.MAX_SAFE_INTEGER), service.getSchedule()]).then(
-        ([watch, schedule]) => {
+      Promise.all([
+        service.watchPoll(Number.MAX_SAFE_INTEGER),
+        service.getSchedule(),
+        service.ransomStatus().catch(() => ({ baits: [] })),
+      ]).then(
+        ([watch, schedule, ransom]) => {
           if (active) {
-            setLive({ reachable: true, clamav: schedule.clamavAvailable, watch });
+            setLive({
+              reachable: true,
+              clamav: schedule.clamavAvailable,
+              watch,
+              baits: ransom.baits.length,
+            });
           }
         },
         () => {
           if (active) {
-            setLive({ reachable: false, clamav: false, watch: null });
+            setLive({ reachable: false, clamav: false, watch: null, baits: 0 });
           }
         },
       );
@@ -111,7 +121,7 @@ function useLiveModules(): Readonly<Record<'signatures' | 'realtime', LiveModule
       stateLabel: t('dashboard.modules.unavailable'),
       sublabel: t('dashboard.modules.previewOnly'),
     };
-    return { signatures: preview, realtime: preview };
+    return { signatures: preview, realtime: preview, ransomware: preview };
   }
   if (live.reachable !== true) {
     const unknown: LiveModule = {
@@ -120,7 +130,7 @@ function useLiveModules(): Readonly<Record<'signatures' | 'realtime', LiveModule
         live.reachable === false ? t('dashboard.modules.down') : t('dashboard.modules.checking'),
       sublabel: live.reachable === false ? t('dashboard.modules.downHint') : '',
     };
-    return { signatures: unknown, realtime: unknown };
+    return { signatures: unknown, realtime: unknown, ransomware: unknown };
   }
   const watch = live.watch;
   return {
@@ -143,6 +153,17 @@ function useLiveModules(): Readonly<Record<'signatures' | 'realtime', LiveModule
               stateLabel: t('dashboard.modules.active'),
               sublabel: t('realtime.folders', { count: String(watch.folders.length) }),
             },
+    ransomware:
+      watch === null || !watch.active
+        ? { state: 'off', stateLabel: t('dashboard.modules.off'), sublabel: '' }
+        : {
+            state: live.baits > 0 ? 'ok' : 'warn',
+            stateLabel: t('dashboard.modules.active'),
+            sublabel:
+              live.baits > 0
+                ? t('dashboard.modules.withBaits', { count: String(live.baits) })
+                : t('dashboard.modules.noBaits'),
+          },
   };
 }
 

@@ -197,7 +197,9 @@ export const en: Messages<typeof de> = {
       realtime: 'Real-time guard',
       ransomware: 'Ransomware protection',
       network: 'Network protection',
-      footer: 'Built modules show their real state; ransomware and network protection follow.',
+      withBaits: '{count} baits + mass changes',
+      noBaits: 'No baits – mass changes only',
+      footer: 'Built modules show their real state; network protection follows.',
     },
     build: {
       eyebrow: 'Under construction',
@@ -416,6 +418,7 @@ export const en: Messages<typeof de> = {
     none: 'No notices. All quiet.',
     kindFile: 'New or changed file',
     kindProcess: 'Program start',
+    kindRansomware: 'Ransomware suspected',
     processNote: 'The program is already running – AEGIS cannot stop it beforehand.',
     isolate: 'Isolate…',
     trust: 'Trust…',
@@ -427,6 +430,17 @@ export const en: Messages<typeof de> = {
     toastTitle: 'Real-time guard: {count} new notice(s)',
     toastHint: 'Nothing was changed. Look at the notice and decide yourself.',
     toastShow: 'Show',
+  },
+  ransom: {
+    title: 'Ransomware protection',
+    honest:
+      'Honest: without a kernel driver AEGIS detects encryption attacks only while they run – and then warns immediately. Countermeasures only after your yes.',
+    baitsOn: '{count} bait files active – if one changes, AEGIS warns immediately.',
+    baitsOff: 'No bait files created.',
+    burst:
+      'The guard also watches for many changes, deletions or renames to unusual extensions within a short time.',
+    addBaits: 'Create bait files…',
+    removeBaits: 'Remove bait files…',
   },
   lab: {
     intro:

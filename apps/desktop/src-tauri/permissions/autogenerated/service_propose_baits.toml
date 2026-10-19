@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-propose-baits"
+description = "Enables the service_propose_baits command without any pre-configured scope."
+commands.allow = ["service_propose_baits"]
+
+[[permission]]
+identifier = "deny-service-propose-baits"
+description = "Denies the service_propose_baits command without any pre-configured scope."
+commands.deny = ["service_propose_baits"]

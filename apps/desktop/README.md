@@ -62,6 +62,8 @@ ersetzen, Pfade des Nutzers auslesen, Events an das Backend senden) und auch kei
 | `allow-service-lab-report`                   | App-Befehl `service_lab_report`: vollständiger Verhaltensbericht eines eigenen, fertigen Laufs (auf Anfrage). Nur lesend.                                                                         |
 | `allow-service-propose-enable-sandbox`       | App-Befehl `service_propose_enable_sandbox`: „Windows Sandbox einschalten“ vorschlagen – nur Administratoren, nur nach „Ja“.                                                                      |
 | `allow-service-propose-process-action`       | App-Befehl `service_propose_process_action`: laufende Prozesse eines Programms beenden/anhalten/fortsetzen vorschlagen – nur eigene, nur nach „Ja“.                                               |
+| `allow-service-ransom-status`                | App-Befehl `service_ransom_status`: eigene Köderdateien des Ransomware-Schutzes anzeigen. Nur lesend.                                                                                             |
+| `allow-service-propose-baits`                | App-Befehl `service_propose_baits`: Köderdateien anlegen/entfernen vorschlagen – angelegt bzw. gelöscht wird nur nach „Ja“.                                                                       |
 | `allow-lab-capture-windows`                  | App-Befehl `lab_capture_windows`: Fensterfotos eines laufenden eigenen Mini-Sandbox-Laufs (Prozess-IDs nennt der Dienst). Nur lesend.                                                             |
 | `allow-export-report`                        | App-Befehl `export_report`: Verlauf als HTML-Bericht speichern. Inhalt erzeugt Rust (maskiert, ohne Skripte); den Ort wählt der Nutzer im Speichern-Dialog – die Oberfläche gibt keinen Pfad vor. |
 | `dialog:allow-open`                          | Datei- bzw. Ordnerauswahl für Scans („Datei wählen…“). Nur Auswahl; die App liest/schreibt dabei nichts. `save`, `message`, `ask` usw. bleiben gesperrt.                                          |
@@ -118,6 +120,8 @@ echten ACL: jeder Aufruf der Oberfläche läuft, alles andere wird abgelehnt).
 | `invoke('service_lab_report')`                                  | `service_lab_report`                      | `allow-service-lab-report`                   |
 | `invoke('service_propose_enable_sandbox')`                      | `service_propose_enable_sandbox`          | `allow-service-propose-enable-sandbox`       |
 | `invoke('service_propose_process_action')`                      | `service_propose_process_action`          | `allow-service-propose-process-action`       |
+| `invoke('service_ransom_status')`                               | `service_ransom_status`                   | `allow-service-ransom-status`                |
+| `invoke('service_propose_baits')`                               | `service_propose_baits`                   | `allow-service-propose-baits`                |
 | `invoke('lab_capture_windows')`                                 | `lab_capture_windows`                     | `allow-lab-capture-windows`                  |
 | `invoke('export_report')`                                       | `export_report`                           | `allow-export-report`                        |
 | `open()` aus `@tauri-apps/plugin-dialog`                        | `plugin:dialog\|open`                     | `dialog:allow-open`                          |

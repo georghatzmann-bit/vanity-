@@ -10,6 +10,7 @@ pub mod history;
 pub mod lab;
 pub mod paths;
 pub mod protocol;
+pub mod ransom;
 pub mod schedule;
 #[cfg(windows)]
 pub mod scm;

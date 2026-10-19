@@ -57,6 +57,8 @@ pub enum WatchKind {
     Process,
     /// Fund eines geplanten Scans.
     Schedule,
+    /// Ransomware-Verdacht (Köderdatei oder Massenänderungen).
+    Ransomware,
 }
 
 /// Ein Fund des Wächters.
@@ -137,6 +139,8 @@ pub struct WatchShared {
     history: Mutex<Option<Arc<Mutex<crate::history::History>>>>,
     /// Alle Profilordner, die der Wächter kennt (für die Anzeige gefiltert).
     profiles: Mutex<Vec<PathBuf>>,
+    /// Ransomware-Erkennung (nur Warnungen).
+    ransom: crate::ransom::RansomGuard,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -236,6 +240,34 @@ impl WatchShared {
         lock(&self.status).dropped += 1;
     }
 
+    /// Ransomware-Erkennung (Köderdateien setzen).
+    #[must_use]
+    pub fn ransom(&self) -> &crate::ransom::RansomGuard {
+        &self.ransom
+    }
+
+    /// Dateiänderung für die Ransomware-Erkennung; meldet ein erkanntes Muster (nur Warnung).
+    pub fn observe_change(
+        &self,
+        change: crate::ransom::FileChange,
+        path: &Path,
+        scope: Option<PathBuf>,
+    ) {
+        if let Some(signal) = self
+            .ransom
+            .observe(change, path, scope.as_deref(), Instant::now())
+        {
+            let finding = signal.finding();
+            self.push(
+                WatchKind::Ransomware,
+                path.to_path_buf(),
+                scope,
+                None,
+                finding,
+            );
+        }
+    }
+
     fn add_profiles(&self, profiles: impl IntoIterator<Item = PathBuf>) {
         let mut known = lock(&self.profiles);
         for p in profiles {
@@ -288,6 +320,7 @@ impl WatchShared {
         {
             let label = match kind {
                 WatchKind::Process => "Programmstart",
+                WatchKind::Ransomware => "Ransomware-Verdacht",
                 _ => "Neue Datei",
             };
             lock(history).add(
@@ -436,6 +469,41 @@ impl WatchConfig {
     }
 }
 
+/// Zuordnung Pfad → Profil (für den Rückruf der Dateiüberwachung).
+struct ScopeMap {
+    folders: Vec<(PathBuf, Option<PathBuf>)>,
+    profile_roots: Vec<PathBuf>,
+}
+
+impl ScopeMap {
+    fn scope_of(&self, path: &Path) -> Option<PathBuf> {
+        profile_of(path, &self.profile_roots).or_else(|| {
+            self.folders
+                .iter()
+                .filter_map(|(_, scope)| scope.as_ref())
+                .find(|profile| is_within(path, profile))
+                .cloned()
+        })
+    }
+}
+
+/// Art der Änderung für die Ransomware-Erkennung (Umbenennen: alter und neuer Name zählen als
+/// „umbenannt“; gezählt wird je Endung, also fällt der neue Name ins Gewicht).
+fn ransom_change(kind: &notify::EventKind) -> Option<crate::ransom::FileChange> {
+    use crate::ransom::FileChange;
+    use notify::EventKind;
+    use notify::event::{ModifyKind, RenameMode};
+    match kind {
+        EventKind::Create(_) => Some(FileChange::Created),
+        EventKind::Modify(ModifyKind::Name(RenameMode::From)) => Some(FileChange::RenamedFrom),
+        EventKind::Modify(ModifyKind::Name(_)) => Some(FileChange::Renamed),
+        EventKind::Modify(ModifyKind::Metadata(_)) => None,
+        EventKind::Modify(_) => Some(FileChange::Modified),
+        EventKind::Remove(_) => Some(FileChange::Removed),
+        _ => None,
+    }
+}
+
 /// Eine Beobachtung (Datei bzw. gestartetes Programm mit Konto).
 type Incoming = (PathBuf, WatchKind, Option<String>);
 
@@ -471,12 +539,29 @@ pub fn start(
     let (tx, rx) = mpsc::sync_channel::<Incoming>(QUEUE);
     let file_tx = tx.clone();
     let file_shared = Arc::clone(&shared);
+    let scopes = ScopeMap {
+        folders: config.folders.clone(),
+        profile_roots: config.profile_roots.clone(),
+    };
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
         let Ok(event) = result else { return };
         if event.need_rescan() {
             file_shared.note(
                 "Zu viele Dateiänderungen auf einmal – einige wurden nicht einzeln gemeldet. Bitte bei Bedarf einen Scan starten.".into(),
             );
+        }
+        if let Some(change) = ransom_change(&event.kind) {
+            // Umbenennen in einem Ereignis (alt, neu): der alte Name zählt nur für Köder.
+            let both = event.paths.len() == 2 && change == crate::ransom::FileChange::Renamed;
+            for (i, path) in event.paths.iter().enumerate() {
+                let change = if both && i == 0 {
+                    crate::ransom::FileChange::RenamedFrom
+                } else {
+                    change
+                };
+                let path = long_name(path.clone());
+                file_shared.observe_change(change, &path, scopes.scope_of(&path));
+            }
         }
         if !matches!(
             event.kind,
@@ -823,6 +908,37 @@ fn scan_group(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ransomware_verdacht_nur_fuer_das_profil() {
+        let shared = WatchShared::new();
+        let profile = PathBuf::from("/u/a");
+        for i in 0..crate::ransom::RENAMED_LIMIT {
+            shared.observe_change(
+                crate::ransom::FileChange::Renamed,
+                &PathBuf::from(format!("/u/a/Dokumente/{i}.docx.locked")),
+                Some(profile.clone()),
+            );
+        }
+        let own = shared.events_after(
+            0,
+            Viewer::Account {
+                sid: "S-A",
+                profile: Some(&profile),
+            },
+        );
+        assert_eq!(own.len(), 1);
+        assert_eq!(own[0].kind, WatchKind::Ransomware);
+        assert!(own[0].finding.summary_de.contains("nichts verändert"));
+        let other = shared.events_after(
+            0,
+            Viewer::Account {
+                sid: "S-B",
+                profile: Some(Path::new("/u/b")),
+            },
+        );
+        assert!(other.is_empty());
+    }
 
     #[test]
     fn ereignisse_nach_konto_profil_und_nummer() {

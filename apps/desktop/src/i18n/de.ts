@@ -197,7 +197,9 @@ export const de = {
       realtime: 'Echtzeit-Wächter',
       ransomware: 'Ransomware-Schutz',
       network: 'Netzwerk-Schutz',
-      footer: 'Gebaute Module zeigen ihren echten Zustand; Ransomware- und Netzwerk-Schutz folgen.',
+      withBaits: '{count} Köder + Massenänderungen',
+      noBaits: 'Ohne Köder – nur Massenänderungen',
+      footer: 'Gebaute Module zeigen ihren echten Zustand; der Netzwerk-Schutz folgt.',
     },
     build: {
       eyebrow: 'Aufbau',
@@ -420,6 +422,7 @@ export const de = {
     none: 'Keine Meldungen. Alles ruhig.',
     kindFile: 'Neue oder geänderte Datei',
     kindProcess: 'Programmstart',
+    kindRansomware: 'Ransomware-Verdacht',
     processNote: 'Das Programm läuft bereits – AEGIS kann es nicht vorab stoppen.',
     isolate: 'Isolieren …',
     trust: 'Vertrauen …',
@@ -431,6 +434,17 @@ export const de = {
     toastTitle: 'Echtzeit-Wächter: {count} neue Meldung(en)',
     toastHint: 'Nichts wurde verändert. Sieh dir die Meldung an und entscheide selbst.',
     toastShow: 'Anzeigen',
+  },
+  ransom: {
+    title: 'Ransomware-Schutz',
+    honest:
+      'Ehrlich: Ohne Kernel-Treiber erkennt AEGIS Verschlüsselungs-Angriffe erst, wenn sie laufen – und warnt dann sofort. Gegenmaßnahmen nur nach deinem Ja.',
+    baitsOn: '{count} Köderdateien aktiv – wird eine verändert, warnt AEGIS sofort.',
+    baitsOff: 'Keine Köderdateien angelegt.',
+    burst:
+      'Außerdem achtet der Wächter auf viele Änderungen, Löschungen oder Umbenennungen auf ungewöhnliche Endungen in kurzer Zeit.',
+    addBaits: 'Köder anlegen …',
+    removeBaits: 'Köder entfernen …',
   },
   lab: {
     intro:
