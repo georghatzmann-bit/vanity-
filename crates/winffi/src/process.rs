@@ -40,11 +40,11 @@ use windows_sys::Win32::System::JobObjects::{
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::SystemServices::{JOB_OBJECT_UILIMIT_ALL, SE_GROUP_INTEGRITY};
 use windows_sys::Win32::System::Threading::{
-    CREATE_SUSPENDED, CreateProcessAsUserW, DETACHED_PROCESS, DeleteProcThreadAttributeList,
-    EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess, GetCurrentThread, GetExitCodeProcess,
-    InitializeProcThreadAttributeList, OpenProcessToken, OpenThreadToken,
-    PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROCESS_INFORMATION, ResumeThread, STARTF_USESTDHANDLES,
-    STARTUPINFOEXW, UpdateProcThreadAttribute, WaitForSingleObject,
+    CREATE_NO_WINDOW, CREATE_SUSPENDED, CreateProcessAsUserW, DETACHED_PROCESS,
+    DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess,
+    GetCurrentThread, GetExitCodeProcess, InitializeProcThreadAttributeList, OpenProcessToken,
+    OpenThreadToken, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROCESS_INFORMATION, ResumeThread,
+    STARTF_USESTDHANDLES, STARTUPINFOEXW, UpdateProcThreadAttribute, WaitForSingleObject,
 };
 
 use crate::util::{own, wide};
@@ -446,32 +446,41 @@ pub fn spawn_restricted(
     let application = wide(exe);
     let mut line = command_line(exe, args);
     let mut process = PROCESS_INFORMATION::default();
-    // SAFETY: Alle Zeiger zeigen auf lebende, nullterminierte Puffer bzw. Strukturen; die
-    // Handle-Liste begrenzt die Vererbung auf die beiden Kind-Enden; der Prozess startet
-    // angehalten und läuft erst nach der Zuordnung zum Job an.
-    // aegis-unsafe: winffi-create-restricted-process
-    #[allow(unsafe_code)]
-    // Startet den eigenen, eingeschränkten Prüfprozess (bzw. ClamAV) – kein Nutzerprogramm.
-    // aegis-mutation: winffi-create-restricted-process-call
-    #[allow(clippy::disallowed_methods)]
-    let ok = unsafe {
-        CreateProcessAsUserW(
-            token.0.as_raw_handle(),
-            application.as_ptr(),
-            line.as_mut_ptr(),
-            ptr::null(),
-            ptr::null(),
-            1,
-            // Ohne Konsole (DETACHED_PROCESS): Ein- und Ausgabe laufen nur über die Pipes; so
-            // muss kein Konsolen-Host für das eingeschränkte Token entstehen (bei Tokens aus
-            // dem Identitätswechsel über die Pipe scheiterte das mit 0xC0000142).
-            CREATE_SUSPENDED | DETACHED_PROCESS | EXTENDED_STARTUPINFO_PRESENT,
-            ptr::null(),
-            ptr::null(),
-            &raw const info.StartupInfo,
-            &mut process,
-        )
-    };
+    // Ohne Konsole (DETACHED_PROCESS): Ein- und Ausgabe laufen nur über die Pipes; so muss kein
+    // Konsolen-Host für das eingeschränkte Token entstehen (bei Tokens aus dem
+    // Identitätswechsel über die Pipe scheiterte das mit 0xC0000142). Manche Tokens (das
+    // „nur Nutzer“-Token der Hintergrundprüfung) lehnt Windows damit ab (Fehler 87) – dann
+    // einmal mit unsichtbarer Konsole (CREATE_NO_WINDOW).
+    let mut ok = 0;
+    for console in [DETACHED_PROCESS, CREATE_NO_WINDOW] {
+        // SAFETY: Alle Zeiger zeigen auf lebende, nullterminierte Puffer bzw. Strukturen; die
+        // Handle-Liste begrenzt die Vererbung auf die beiden Kind-Enden; der Prozess startet
+        // angehalten und läuft erst nach der Zuordnung zum Job an.
+        // aegis-unsafe: winffi-create-restricted-process
+        #[allow(unsafe_code)]
+        // Startet den eigenen, eingeschränkten Prüfprozess (bzw. ClamAV) – kein Nutzerprogramm.
+        // aegis-mutation: winffi-create-restricted-process-call
+        #[allow(clippy::disallowed_methods)]
+        let started = unsafe {
+            CreateProcessAsUserW(
+                token.0.as_raw_handle(),
+                application.as_ptr(),
+                line.as_mut_ptr(),
+                ptr::null(),
+                ptr::null(),
+                1,
+                CREATE_SUSPENDED | console | EXTENDED_STARTUPINFO_PRESENT,
+                ptr::null(),
+                ptr::null(),
+                &raw const info.StartupInfo,
+                &mut process,
+            )
+        };
+        ok = started;
+        if ok != 0 || io::Error::last_os_error().raw_os_error() != Some(87) {
+            break;
+        }
+    }
     if ok == 0 {
         return Err(io::Error::last_os_error());
     }
