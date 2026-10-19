@@ -59,6 +59,11 @@ pub trait UserAccess {
     fn profile(&self) -> Option<std::path::PathBuf> {
         None
     }
+
+    /// Darf das Konto rechnerweite Einstellungen ändern (erhöhter Administrator)?
+    fn is_admin(&self) -> bool {
+        false
+    }
 }
 
 /// Ohne Identitätswechsel: der eigene Prozess ist der Nutzer (Tests, Werkzeuge).
@@ -68,6 +73,11 @@ pub struct OwnProcess;
 impl UserAccess for OwnProcess {
     fn enter(&self) -> io::Result<UserScope> {
         Ok(UserScope::unchanged())
+    }
+
+    /// Eigener Prozess (Konsole, Tests): ohne Kontotrennung, also auch ohne Rollen.
+    fn is_admin(&self) -> bool {
+        true
     }
 }
 

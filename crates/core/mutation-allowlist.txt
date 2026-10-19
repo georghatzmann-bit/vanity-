@@ -238,3 +238,9 @@ crates/winffi/src/sandbox.rs :: winffi-lab-create-process-own :: Windows-FFI: St
 crates/winffi/src/sandbox.rs :: winffi-lab-create-process-own-call :: Labor: startet die Probe ohne SYSTEM-Rechte mit dem eigenen Token im AppContainer – nur nach Freigabe, nur wenn kein Identitätswechsel aktiv ist.
 crates/sandbox/examples/lab_simulator.rs :: simulator-write :: Harmloser Test-Simulator: schreibt zwei Dummy-Dateien in seinen eigenen Arbeitsordner (Labor-Test).
 crates/sandbox/examples/lab_simulator.rs :: simulator-reg :: Harmloser Test-Simulator: harmloser Autostart-Versuch nur mit --autostart (für Läufe in der Sandbox).
+crates/winffi/src/system.rs :: winffi-open-process-sid :: Windows-FFI: öffnet einen Prozess nur zum Abfragen (Konto des Prozesses für die Zuordnung von Wächter-Meldungen).
+crates/winffi/src/system.rs :: winffi-process-token-query :: Windows-FFI: liest das Token eines Prozesses nur (TOKEN_QUERY).
+crates/winffi/src/identity.rs :: winffi-logon-local-service :: Windows-FFI: Token des eingebauten Kontos LocalService (ohne Kennwort) – Hintergrundprüfungen gemeinsamer Orte nie als SYSTEM.
+crates/winffi/src/process.rs :: winffi-assign-helper-job :: Windows-FFI: ordnet den eigenen Hilfsprozess freshclam einem Job zu (Ende mit dem Dienst bzw. beim Zeitlimit, Grenzen).
+crates/winffi/src/pipe.rs :: winffi-admins-sid :: Windows-FFI: SID der Administratoren-Gruppe (für die Rollenprüfung).
+crates/winffi/src/pipe.rs :: winffi-check-admin :: Windows-FFI: prüft, ob der Pipe-Client erhöhter Administrator ist (nur lesend).

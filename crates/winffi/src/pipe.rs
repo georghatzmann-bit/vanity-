@@ -320,7 +320,47 @@ pub fn client_profile_dir(pipe: &File) -> io::Result<std::path::PathBuf> {
     )))
 }
 
-fn sid_to_string(sid: PSID) -> io::Result<String> {
+/// Ist der Pipe-Client ein **erhöhter** Administrator (Administratoren-Gruppe im Token aktiv)?
+/// Für rechnerweite Einstellungen. Wie [`client_sid`] erst nach dem Lesen einer Nachricht.
+///
+/// # Errors
+/// Identitätswechsel oder Abfrage nicht möglich.
+pub fn client_is_admin(pipe: &File) -> io::Result<bool> {
+    use windows_sys::Win32::Security::{
+        CheckTokenMembership, CreateWellKnownSid, SECURITY_MAX_SID_SIZE,
+        WinBuiltinAdministratorsSid,
+    };
+    let mut admins = [0u8; SECURITY_MAX_SID_SIZE as usize];
+    let mut size = SECURITY_MAX_SID_SIZE;
+    // SAFETY: Puffer der angegebenen Größe; keine Domänen-SID.
+    // aegis-unsafe: winffi-admins-sid
+    #[allow(unsafe_code)]
+    let ok = unsafe {
+        CreateWellKnownSid(
+            WinBuiltinAdministratorsSid,
+            ptr::null_mut(),
+            admins.as_mut_ptr().cast(),
+            &mut size,
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let as_client = impersonate_client(pipe)?;
+    let mut member = 0;
+    // SAFETY: null = Token des (gewechselten) Threads; SID-Puffer gültig; Ausgabezeiger gültig.
+    // aegis-unsafe: winffi-check-admin
+    #[allow(unsafe_code)]
+    let ok =
+        unsafe { CheckTokenMembership(ptr::null_mut(), admins.as_mut_ptr().cast(), &mut member) };
+    drop(as_client);
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(member != 0)
+}
+
+pub(crate) fn sid_to_string(sid: PSID) -> io::Result<String> {
     let mut text: *mut u16 = ptr::null_mut();
     // SAFETY: `sid` ist eine gültige SID (lebt im Puffer des Aufrufers); `text` erhält einen
     // mit LocalAlloc angelegten, nullterminierten Text, der unten genau einmal freigegeben wird.

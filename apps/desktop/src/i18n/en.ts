@@ -472,6 +472,8 @@ export const en: Messages<typeof de> = {
     clamavMissing: 'ClamAV or freshclam is not installed.',
     updateOk: 'Last updated: {date}',
     updateFailed: 'Last attempt failed ({date}): {message}',
+    adminOnly:
+      'The signature update applies to the whole computer – only administrators can change it (start AEGIS as administrator).',
   },
   trust: {
     title: 'Trust list',

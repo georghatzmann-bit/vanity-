@@ -41,6 +41,29 @@ pub fn process_image_path(pid: u32) -> io::Result<PathBuf> {
     Ok(PathBuf::from(OsString::from_wide(&buffer)))
 }
 
+/// SID des Kontos, unter dem ein Prozess läuft (nur Abfrage).
+///
+/// # Errors
+/// Prozess beendet oder Token nicht lesbar.
+pub fn process_user_sid(pid: u32) -> io::Result<String> {
+    use windows_sys::Win32::Security::TOKEN_QUERY;
+    use windows_sys::Win32::System::Threading::OpenProcessToken;
+    // SAFETY: Nur Abfrage-Recht; das Handle wird sofort übernommen.
+    // aegis-unsafe: winffi-open-process-sid
+    #[allow(unsafe_code)]
+    let process = own(unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) })?;
+    let mut token = std::ptr::null_mut();
+    // SAFETY: gültiges Prozess-Handle; nur TOKEN_QUERY; Ausgabezeiger gültig.
+    // aegis-unsafe: winffi-process-token-query
+    #[allow(unsafe_code)]
+    let ok = unsafe { OpenProcessToken(process.as_raw_handle(), TOKEN_QUERY, &mut token) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let token = own(token)?;
+    crate::util::token_user(token.as_raw_handle(), crate::pipe::sid_to_string)?
+}
+
 /// Wurzeln aller Wechseldatenträger (`E:\` …).
 #[must_use]
 pub fn removable_drives() -> Vec<PathBuf> {

@@ -52,6 +52,9 @@ struct Pending {
     plan: ActionPlan,
     nonce: String,
     owner: Option<String>,
+    /// SHA-256 der Ziele aus der Prüfung beim Vorschlag (für „Vertrauen“ – so liest der Dienst
+    /// unter seiner Sperre keine Dateien mehr).
+    hashes: HashMap<PathBuf, String>,
 }
 
 /// Zustand des Dienstes.
@@ -216,11 +219,6 @@ impl<C: Clock, W: Durable> Service<C, W> {
         });
     }
 
-    /// Verlauf sichern (der Zeitplaner ruft das jede Minute auf).
-    pub fn flush_history(&self) {
-        lock_history(&self.history).flush();
-    }
-
     /// Fällige geplante Scans und Updates; geplante Scans werden sofort als gelaufen
     /// markiert (kein doppelter Start, auch wenn der Lauf scheitert).
     pub fn take_due_work(&mut self) -> DueWork {
@@ -260,6 +258,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                         crate::watch::WatchKind::Schedule,
                         f.path.clone(),
                         Some(schedule.profile.clone()),
+                        schedule.owner.clone(),
                         f.clone(),
                     );
                 }
@@ -322,6 +321,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 clamav_available: clam.is_some(),
                 clamav_update_available: clam.is_some_and(|c| c.updater().is_some()),
                 clamav_update: settings.clamav_update,
+                can_change_global: user.is_admin(),
                 last_update: settings.last_update.clone(),
             }),
         }
@@ -404,10 +404,12 @@ impl<C: Clock, W: Durable> Service<C, W> {
     fn watch_poll(&self, after: u64, user: &dyn UserAccess) -> Response {
         let owner = user.identity();
         let profile = user.profile().map(crate::watch::long_name);
-        let viewer = match (&owner, &profile) {
-            (None, _) => Viewer::All,
-            (Some(_), Some(p)) => Viewer::Profile(p),
-            (Some(_), None) => Viewer::SharedOnly,
+        let viewer = match &owner {
+            None => Viewer::All,
+            Some(sid) => Viewer::Account {
+                sid,
+                profile: profile.as_deref(),
+            },
         };
         let mut events = self.watch.events_after(after, viewer);
         for event in &mut events {
@@ -416,8 +418,11 @@ impl<C: Clock, W: Durable> Service<C, W> {
         events.retain(|e| e.finding.trusted.is_none());
         Response::Watch {
             events,
-            status: self.watch.status(),
-            gaming_left: self.watch.gaming_left(),
+            status: self.watch.status(viewer),
+            gaming_left: self.watch.gaming_left(match &owner {
+                None => None,
+                Some(_) => profile.as_deref(),
+            }),
         }
     }
 
@@ -511,6 +516,14 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 every_days,
                 hour_utc,
             } => self.set_schedule(enabled, every_days, hour_utc, user),
+            Request::SetClamavUpdate { on } if !user.is_admin() => Response::error(
+                "admin",
+                if on {
+                    "Nur Administratoren können das Signatur-Update für den ganzen Rechner ändern (AEGIS als Administrator starten)."
+                } else {
+                    "Nur Administratoren können das Signatur-Update für den ganzen Rechner abschalten (AEGIS als Administrator starten)."
+                },
+            ),
             Request::SetClamavUpdate { on } => {
                 match self.settings.update(|s| s.clamav_update = on) {
                     Ok(()) => self.schedule_response(user),
@@ -518,8 +531,22 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 }
             }
             Request::SetGaming { on } => {
-                self.watch.set_gaming(on);
-                self.watch_poll(u64::MAX, user)
+                // Gaming-Modus gilt nur für das eigene Profil – andere Konten werden weiter
+                // geprüft und benachrichtigt.
+                let profile = user.profile().map(crate::watch::long_name);
+                match (user.identity(), profile) {
+                    (None, _) => {
+                        self.watch.set_gaming(None, on);
+                        self.watch_poll(u64::MAX, user)
+                    }
+                    (Some(_), Some(p)) => {
+                        self.watch.set_gaming(Some(&p), on);
+                        self.watch_poll(u64::MAX, user)
+                    }
+                    (Some(_), None) => {
+                        Response::error("profile", "Profilordner des Kontos nicht ermittelbar")
+                    }
+                }
             }
             Request::ListQuarantine {} => match self.vault.list() {
                 Ok(entries) => {
@@ -601,7 +628,12 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
-    fn register(&mut self, plan: ActionPlan, owner: Option<String>) -> Response {
+    fn register(
+        &mut self,
+        plan: ActionPlan,
+        owner: Option<String>,
+        hashes: HashMap<PathBuf, String>,
+    ) -> Response {
         let now = self.gate.clock().now();
         for times in self.recent_proposals.values_mut() {
             times.retain(|t| now - *t < Duration::minutes(1));
@@ -629,6 +661,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                             plan: plan.clone(),
                             nonce: nonce.clone(),
                             owner,
+                            hashes,
                         },
                     );
                     Response::Proposal {
@@ -698,8 +731,12 @@ impl<C: Clock, W: Durable> Service<C, W> {
             .undo(UndoHint::reversible("Jederzeit über Quarantäne → Wiederherstellen an den ursprünglichen Ort."))
             .severity(severity)
             .build(self.gate.clock().now());
+        let hashes = findings
+            .iter()
+            .filter_map(|f| f.sha256.clone().map(|h| (f.path.clone(), h)))
+            .collect();
         match plan {
-            Ok(plan) => self.register(plan, owner),
+            Ok(plan) => self.register(plan, owner, hashes),
             Err(e) => Response::error("plan", e.to_string()),
         }
     }
@@ -739,7 +776,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 .undo(UndoHint::irreversible("Kann nicht rückgängig gemacht werden."))
         };
         match builder.build(self.gate.clock().now()) {
-            Ok(plan) => self.register(plan, owner),
+            Ok(plan) => self.register(plan, owner, HashMap::new()),
             Err(e) => Response::error("plan", e.to_string()),
         }
     }
@@ -767,6 +804,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
         let Pending {
             plan,
             nonce: expected,
+            hashes,
             ..
         } = pending;
         if !constant_time_eq(expected.as_bytes(), nonce.as_bytes()) {
@@ -798,7 +836,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Ok(Outcome::Ignored) => Response::NothingDone {
                 decision: Decision::Ignore,
             },
-            Ok(Outcome::Trusted(grant)) => self.trust_files(&grant, &plan, user),
+            Ok(Outcome::Trusted(grant)) => self.trust_files(&grant, &plan, &hashes, user),
             Err(e) => Response::error("consent", e.to_string()),
         }
     }
@@ -809,39 +847,31 @@ impl<C: Clock, W: Durable> Service<C, W> {
         &mut self,
         grant: &aegis_core::consent::TrustGrant,
         plan: &ActionPlan,
+        hashes: &HashMap<PathBuf, String>,
         user: &dyn UserAccess,
     ) -> Response {
         let owner = user.identity();
         let now = self.gate.clock().now();
         let mut entries = Vec::new();
         let mut skipped = Vec::new();
-        {
-            let scope = user.enter();
-            if scope.is_err() {
-                return Response::error(
-                    "identity",
-                    "Rechte des Nutzers nicht übernehmbar – nichts vertraut",
-                );
-            }
-            for target in grant.targets() {
-                let Target::File { path } = target else {
-                    continue;
-                };
-                let hashed = std::fs::File::open(path)
-                    .and_then(|f| aegis_engine::hash::sha256_reader(std::io::BufReader::new(f)));
-                match hashed {
-                    Ok((sha, _)) => entries.push(TrustEntry {
-                        id: aegis_core::uuid::Uuid::new_v4().hyphenated().to_string(),
-                        sha256: aegis_engine::hash::to_hex(&sha),
-                        path: path.clone(),
-                        reason: escape_text(plan.why()),
-                        created_at: now,
-                        owner: owner.clone(),
-                    }),
-                    Err(e) => {
-                        skipped.push(format!("{}: {e}", escape_text(&path.display().to_string())))
-                    }
-                }
+        for target in grant.targets() {
+            let Target::File { path } = target else {
+                continue;
+            };
+            // Hash aus der Prüfung beim Vorschlag (mit den Rechten des Nutzers gelesen).
+            match hashes.get(path) {
+                Some(sha) => entries.push(TrustEntry {
+                    id: aegis_core::uuid::Uuid::new_v4().hyphenated().to_string(),
+                    sha256: sha.clone(),
+                    path: path.clone(),
+                    reason: escape_text(plan.why()),
+                    created_at: now,
+                    owner: owner.clone(),
+                }),
+                None => skipped.push(format!(
+                    "{}: beim Vorschlag nicht lesbar",
+                    escape_text(&path.display().to_string())
+                )),
             }
         }
         if let Err(e) = self.trust.add(entries.clone()) {
@@ -1082,9 +1112,18 @@ fn scan_entry(
         kind,
         risk: notable.iter().map(|f| f.risk).max(),
         title: format!(
-            "{label}: {} Dateien geprüft, {} auffällig{}",
+            "{label}: {} Dateien geprüft, {} auffällig{}{}",
             report.findings.len(),
             notable.len(),
+            match report
+                .findings
+                .iter()
+                .filter(|f| f.not_scannable.is_some() && f.risk <= RiskLevel::Info)
+                .count()
+            {
+                0 => String::new(),
+                n => format!(", {n} nicht prüfbar"),
+            },
             if report.truncated {
                 " (abgebrochen: zu viele Dateien)"
             } else {

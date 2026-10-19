@@ -148,13 +148,47 @@ fn well_known(kind: WELL_KNOWN_SID_TYPE) -> io::Result<Vec<u8>> {
     Ok(sid)
 }
 
-/// Wechselt auf ein „nur Nutzer“-Token, abgeleitet vom eigenen Prozess (SYSTEM): SYSTEM und
+/// Wechselt auf das Konto „Lokaler Dienst“ (LocalService): darf lesen, was jeder angemeldete
+/// Nutzer lesen darf (Programme, Windows, USB), aber keine privaten Profile. Nur als SYSTEM
+/// möglich; sonst [`impersonate_restricted_self`].
+///
+/// # Errors
+/// Anmeldung oder Wechsel nicht möglich.
+pub fn impersonate_shared_reader() -> io::Result<Impersonation> {
+    use windows_sys::Win32::Security::{
+        LOGON32_LOGON_SERVICE, LOGON32_PROVIDER_DEFAULT, LogonUserW,
+    };
+    let user = crate::util::wide("LocalService");
+    let domain = crate::util::wide("NT AUTHORITY");
+    let mut token: HANDLE = ptr::null_mut();
+    // SAFETY: nullterminierte Texte; kein Kennwort (null) für das eingebaute Dienstkonto;
+    // Ausgabezeiger gültig; das Token wird sofort übernommen.
+    // aegis-unsafe: winffi-logon-local-service
+    #[allow(unsafe_code)]
+    let ok = unsafe {
+        LogonUserW(
+            user.as_ptr(),
+            domain.as_ptr(),
+            ptr::null(),
+            LOGON32_LOGON_SERVICE,
+            LOGON32_PROVIDER_DEFAULT,
+            &mut token,
+        )
+    };
+    if ok == 0 {
+        return impersonate_restricted_self();
+    }
+    let token = own(token)?;
+    impersonate(token.as_raw_handle())
+}
+
+/// Ersatz ohne SYSTEM (Konsole, Tests): eingeschränktes eigenes Token – SYSTEM und
 /// Administratoren nur „deny“, keine Privilegien, eingeschränkt auf Everyone,
 /// Authentifizierte Benutzer, Benutzer und RESTRICTED.
 ///
 /// # Errors
 /// Token nicht ableitbar oder Wechsel nicht möglich.
-pub fn impersonate_shared_reader() -> io::Result<Impersonation> {
+pub fn impersonate_restricted_self() -> io::Result<Impersonation> {
     let mut process: HANDLE = ptr::null_mut();
     // SAFETY: Pseudo-Handle des eigenen Prozesses; Ausgabezeiger gültig.
     // aegis-unsafe: winffi-shared-reader-process-token

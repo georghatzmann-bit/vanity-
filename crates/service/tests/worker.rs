@@ -76,7 +76,10 @@ fn hintergrund_liest_nur_was_alle_nutzer_lesen_duerfen() {
     use aegis_service::worker::BackgroundAccess;
     let home = tempfile::tempdir().unwrap();
     let private = write_fixture(home.path(), "eicar.com", &eicar()).unwrap();
-    let shared = BackgroundAccess { profile: None };
+    let shared = BackgroundAccess {
+        profile: None,
+        require_owner: false,
+    };
     let findings = worker()
         .examine(std::slice::from_ref(&private), &shared)
         .unwrap();

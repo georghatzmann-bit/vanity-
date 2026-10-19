@@ -12,15 +12,45 @@ use aegis_core::risk::RiskLevel;
 use aegis_core::time::OffsetDateTime;
 use serde::{Deserialize, Serialize};
 
-/// Höchstzahl gemerkter Einträge (älteste fallen heraus).
-pub const MAX_ENTRIES: usize = 2000;
+/// Höchstzahl gemerkter Einträge insgesamt (älteste fallen heraus).
+pub const MAX_ENTRIES: usize = 4000;
+/// Höchstzahl Einträge je Konto bzw. Profil – ein Konto kann die Berichte anderer nicht
+/// verdrängen.
+pub const MAX_PER_OWNER: usize = 500;
 /// Höchstzahl Pfade je Eintrag.
 pub const MAX_PATHS: usize = 20;
+/// Höchstlänge eines Pfads im Verlauf (Zeichen).
+pub const MAX_PATH_CHARS: usize = 1024;
+/// Höchstlänge von Titel bzw. Einzelheiten (Zeichen).
+const MAX_TITLE: usize = 400;
+const MAX_DETAIL: usize = 4000;
+/// Zielgröße der Datei; darüber fallen die ältesten Einträge heraus.
+const MAX_BYTES: usize = 16 * 1024 * 1024;
 /// Höchstzahl Einträge je Abfrage.
 pub const MAX_QUERY: usize = 500;
-/// Höchstens so oft wird die Datei geschrieben; dazwischen sammelt der Verlauf (der Dienst
-/// sichert spätestens jede Minute mit [`History::flush`]).
-const SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(5);
+/// Kürzt Text auf `max` Zeichen (mit „…“).
+fn clip(text: String, max: usize) -> String {
+    if text.chars().count() <= max {
+        text
+    } else {
+        let mut t: String = text.chars().take(max).collect();
+        t.push('…');
+        t
+    }
+}
+
+fn clip_path(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy();
+    if text.chars().count() <= MAX_PATH_CHARS {
+        path
+    } else {
+        PathBuf::from(clip(text.into_owned(), MAX_PATH_CHARS))
+    }
+}
+
+fn same_key(e: &HistoryEntry, owner: Option<&String>, scope: Option<&PathBuf>) -> bool {
+    e.owner.as_ref() == owner && e.scope.as_ref() == scope
+}
 
 /// Art eines Eintrags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,11 +144,7 @@ impl HistoryEntry {
 }
 
 fn same_dir(a: &Path, b: &Path) -> bool {
-    if cfg!(windows) {
-        a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
-    } else {
-        a == b
-    }
+    crate::paths::same_path(a, b)
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -137,7 +163,23 @@ pub struct History {
     save_failed: bool,
     /// Ungespeicherte Einträge vorhanden?
     dirty: bool,
-    last_save: Option<std::time::Instant>,
+}
+
+/// Ein vorbereitetes Speichern (Daten serialisiert; Schreiben außerhalb jeder Sperre).
+#[derive(Debug)]
+pub struct PendingSave {
+    path: PathBuf,
+    json: Vec<u8>,
+}
+
+impl PendingSave {
+    /// Schreibt die Datei.
+    ///
+    /// # Errors
+    /// Schreiben fehlgeschlagen.
+    pub fn write(&self) -> io::Result<()> {
+        crate::store::save_bytes(&self.path, &self.json)
+    }
 }
 
 impl History {
@@ -146,14 +188,29 @@ impl History {
     /// # Errors
     /// Datei beschädigt oder nicht lesbar.
     pub fn open(path: &Path) -> io::Result<Self> {
-        let data = crate::store::load(path, "Verlauf")?.unwrap_or_default();
-        Ok(Self {
+        let (data, set_aside) = crate::store::load_or_set_aside(path, "Verlauf")?;
+        let mut history = Self {
             path: Some(path.to_owned()),
-            data,
+            data: data.unwrap_or_default(),
             save_failed: false,
             dirty: false,
-            last_save: None,
-        })
+        };
+        if set_aside {
+            history.add(
+                OffsetDateTime::now_utc(),
+                NewEntry {
+                    kind: HistoryKind::Update,
+                    risk: None,
+                    title: "Verlauf war beschädigt und wurde beiseitegelegt (history.json.corrupt)"
+                        .into(),
+                    detail: String::new(),
+                    paths: Vec::new(),
+                    owner: None,
+                    scope: None,
+                },
+            );
+        }
+        Ok(history)
     }
 
     /// Nur im Speicher (Tests).
@@ -164,46 +221,84 @@ impl History {
             data: Stored::default(),
             save_failed: false,
             dirty: false,
-            last_save: None,
         }
     }
 
-    /// Fügt einen Eintrag hinzu und speichert. Ein Speicherfehler verhindert nichts – der
-    /// Verlauf ist ein Bericht, kein Prüfprotokoll (das ist `AuditLog`).
+    /// Fügt einen Eintrag hinzu (nur im Speicher; gesichert wird über
+    /// [`History::prepare_save`]). Texte und Pfade werden gekürzt; je Konto/Profil gilt eine
+    /// eigene Obergrenze. Der Verlauf ist ein Bericht, kein Prüfprotokoll (das ist `AuditLog`).
     pub fn add(&mut self, at: OffsetDateTime, entry: NewEntry) {
         self.data.next_seq += 1;
         let mut paths = entry.paths;
         paths.truncate(MAX_PATHS);
+        let paths = paths.into_iter().map(clip_path).collect();
+        let scope = entry.scope.map(clip_path);
+        let owner = entry.owner;
+        let count = self
+            .data
+            .entries
+            .iter()
+            .filter(|e| same_key(e, owner.as_ref(), scope.as_ref()))
+            .count();
+        if count >= MAX_PER_OWNER
+            && let Some(i) = self
+                .data
+                .entries
+                .iter()
+                .position(|e| same_key(e, owner.as_ref(), scope.as_ref()))
+        {
+            self.data.entries.remove(i);
+        }
         self.data.entries.push_back(HistoryEntry {
             seq: self.data.next_seq,
             at,
             kind: entry.kind,
             risk: entry.risk,
-            title: entry.title,
-            detail: entry.detail,
+            title: clip(entry.title, MAX_TITLE),
+            detail: clip(entry.detail, MAX_DETAIL),
             paths,
-            owner: entry.owner,
-            scope: entry.scope,
+            owner,
+            scope,
         });
         while self.data.entries.len() > MAX_ENTRIES {
             self.data.entries.pop_front();
         }
         self.dirty = true;
-        if self.last_save.is_none_or(|t| t.elapsed() >= SAVE_EVERY) {
-            self.flush();
+    }
+
+    /// Bereitet das Speichern vor (unter der Sperre: nur serialisieren); geschrieben wird mit
+    /// [`PendingSave::write`] außerhalb. Wird die Datei zu groß, fallen die ältesten Einträge
+    /// heraus.
+    pub fn prepare_save(&mut self) -> Option<PendingSave> {
+        if !self.dirty {
+            return None;
+        }
+        let path = self.path.clone()?;
+        loop {
+            let json = serde_json::to_vec(&self.data).ok()?;
+            if json.len() <= MAX_BYTES || self.data.entries.is_empty() {
+                self.dirty = false;
+                return Some(PendingSave { path, json });
+            }
+            let drop = (self.data.entries.len() / 10).max(1);
+            self.data.entries.drain(..drop);
         }
     }
 
-    /// Schreibt ungespeicherte Einträge in die Datei.
+    /// Ergebnis des Schreibens festhalten.
+    pub fn saved(&mut self, ok: bool) {
+        self.save_failed = !ok;
+        if !ok {
+            self.dirty = true;
+        }
+    }
+
+    /// Sichert sofort (Tests, Beenden).
     pub fn flush(&mut self) {
-        if !self.dirty {
-            return;
+        if let Some(save) = self.prepare_save() {
+            let ok = save.write().is_ok();
+            self.saved(ok);
         }
-        if let Some(path) = &self.path {
-            self.save_failed = crate::store::save(path, &self.data).is_err();
-            self.last_save = Some(std::time::Instant::now());
-        }
-        self.dirty = false;
     }
 
     /// Sichtbare Einträge, neueste zuerst (höchstens [`MAX_QUERY`]).
@@ -290,6 +385,39 @@ mod tests {
         });
         assert_eq!(all.len(), MAX_QUERY);
         assert_eq!(all[0].seq, 4 + MAX_ENTRIES as u64);
+        // Die Flut eines Schlüssels verdrängt die Einträge anderer Konten nicht.
+        assert!(h.data.entries.iter().any(|e| e.seq == 1));
+        assert_eq!(
+            h.data
+                .entries
+                .iter()
+                .filter(|e| e.owner.is_none() && e.scope.is_none())
+                .count(),
+            MAX_PER_OWNER
+        );
+    }
+
+    #[test]
+    fn lange_texte_und_pfade_werden_gekuerzt() {
+        let mut h = History::in_memory();
+        let long = "x".repeat(100_000);
+        h.add(
+            OffsetDateTime::UNIX_EPOCH,
+            NewEntry {
+                kind: HistoryKind::Scan,
+                risk: None,
+                title: long.clone(),
+                detail: long.clone(),
+                paths: vec![PathBuf::from(&long); 50],
+                owner: None,
+                scope: Some(PathBuf::from(&long)),
+            },
+        );
+        let e = &h.data.entries[0];
+        assert!(e.title.chars().count() <= MAX_TITLE + 1);
+        assert!(e.detail.chars().count() <= MAX_DETAIL + 1);
+        assert_eq!(e.paths.len(), MAX_PATHS);
+        assert!(e.paths[0].to_string_lossy().chars().count() <= MAX_PATH_CHARS + 1);
     }
 
     #[test]
@@ -297,6 +425,15 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file =
             aegis_core::testing::write_fixture(dir.path(), "history.json", b"[kaputt").unwrap();
-        assert!(History::open(&file).is_err());
+        // Beschädigt: beiseitegelegt, Dienst startet mit leerem Verlauf (+ Hinweis).
+        let h = History::open(&file).unwrap();
+        let all = h.list(Reader {
+            owner: None,
+            profile: None,
+        });
+        assert_eq!(all.len(), 1);
+        assert!(all[0].title.contains("beiseitegelegt"));
+        assert!(dir.path().join("history.json.corrupt").exists());
+        assert!(!file.exists());
     }
 }

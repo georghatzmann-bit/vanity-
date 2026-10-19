@@ -371,6 +371,23 @@ fn job(limits: JobLimits) -> io::Result<OwnedHandle> {
     Ok(job)
 }
 
+/// Ordnet einen bereits gestarteten, eigenen Hilfsprozess (z. B. `freshclam`) einem Job zu,
+/// der beim Schließen alles beendet (auch Kindprozesse) und Speicher/Prozesszahl begrenzt.
+///
+/// # Errors
+/// Job nicht anlegbar oder Zuordnung fehlgeschlagen.
+pub fn kill_on_close_job(process: &impl AsRawHandle, limits: JobLimits) -> io::Result<OwnedHandle> {
+    let job = job(limits)?;
+    // SAFETY: `job` und das Prozess-Handle sind gültig.
+    // aegis-unsafe: winffi-assign-helper-job
+    #[allow(unsafe_code)]
+    let ok = unsafe { AssignProcessToJobObject(job.as_raw_handle(), process.as_raw_handle()) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(job)
+}
+
 fn command_line(exe: &Path, args: &[&str]) -> Vec<u16> {
     // Nur feste, eigene Argumente (ohne Anführungszeichen/Backslash am Ende) – keine
     // Nutzereingaben in der Befehlszeile; Pfade gehen über die Standardeingabe.

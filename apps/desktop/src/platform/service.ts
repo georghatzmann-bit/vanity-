@@ -148,6 +148,8 @@ export interface ScheduleState {
   readonly clamavAvailable: boolean;
   readonly clamavUpdateAvailable: boolean;
   readonly clamavUpdate: boolean;
+  /** Darf das Konto rechnerweite Einstellungen ändern (Administrator)? */
+  readonly canChangeGlobal: boolean;
   readonly lastUpdate: {
     readonly at: string;
     readonly ok: boolean;
@@ -371,6 +373,7 @@ export function parseSchedule(response: unknown): ScheduleState {
     clamavAvailable: r['clamav_available'] === true,
     clamavUpdateAvailable: r['clamav_update_available'] === true,
     clamavUpdate: r['clamav_update'] === true,
+    canChangeGlobal: r['can_change_global'] === true,
     lastUpdate:
       u === null ? null : { at: str(u['at']), ok: u['ok'] === true, message: str(u['message']) },
   };

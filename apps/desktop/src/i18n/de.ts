@@ -475,6 +475,8 @@ export const de = {
     clamavMissing: 'ClamAV bzw. freshclam ist nicht installiert.',
     updateOk: 'Zuletzt aktualisiert: {date}',
     updateFailed: 'Letzter Versuch fehlgeschlagen ({date}): {message}',
+    adminOnly:
+      'Das Signatur-Update gilt für den ganzen Rechner – ändern können es nur Administratoren (AEGIS als Administrator starten).',
   },
   trust: {
     title: 'Vertrauensliste',

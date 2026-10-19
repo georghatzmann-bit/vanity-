@@ -426,6 +426,7 @@ fn waechter_meldungen_ueber_das_protokoll() {
     start(
         WatchConfig {
             folders: vec![(home.path().to_path_buf(), Some(home.path().to_path_buf()))],
+            profile_roots: Vec::new(),
             exclude: Vec::new(),
             removable: false,
             processes: false,
@@ -571,7 +572,16 @@ fn verlauf_zeitplan_und_update() {
     assert_eq!(s["type"], "schedule", "{s}");
     assert_eq!(s["schedule"]["every_days"], 7);
     assert!(send(&b, json!({"type": "get_schedule"}))["schedule"].is_null());
-    let off = send(&a, json!({"type": "set_clamav_update", "on": false}));
+    // Rechnerweit: nur Administratoren (Konto A ist keiner).
+    assert_eq!(
+        send(&a, json!({"type": "set_clamav_update", "on": false}))["code"],
+        "admin"
+    );
+    let off = {
+        let req: Request =
+            serde_json::from_value(json!({"type": "set_clamav_update", "on": false})).unwrap();
+        serde_json::to_value(h.service.handle(req, &OwnProcess)).unwrap()
+    };
     assert_eq!(off["clamav_update"], false);
 
     // Fällig (Stunde 0 UTC ist immer erreicht) → einmal, dann nicht mehr.

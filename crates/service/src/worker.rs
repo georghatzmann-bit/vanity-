@@ -128,15 +128,20 @@ impl Scanner {
 pub struct BackgroundAccess {
     /// Profilordner, zu dem die Dateien gehören (`None` = gemeinsamer Ort).
     pub profile: Option<PathBuf>,
+    /// Nur mit den Rechten des Profil-Besitzers prüfen (geplante Scans): Ist er nicht
+    /// angemeldet, wird nicht geprüft statt mit einem schwächeren Konto „nichts“ zu finden.
+    pub require_owner: bool,
 }
 
 impl UserAccess for BackgroundAccess {
     fn enter(&self) -> io::Result<aegis_quarantine::UserScope> {
         #[cfg(windows)]
         {
-            Ok(aegis_quarantine::UserScope::holding(
-                aegis_winffi::impersonate_for_background(self.profile.as_deref())?,
-            ))
+            let guard = match (&self.profile, self.require_owner) {
+                (Some(profile), true) => aegis_winffi::impersonate_profile_owner(profile)?,
+                (profile, _) => aegis_winffi::impersonate_for_background(profile.as_deref())?,
+            };
+            Ok(aegis_quarantine::UserScope::holding(guard))
         }
         #[cfg(not(windows))]
         {
@@ -247,8 +252,12 @@ fn spawn(exe: &Path, user: &dyn UserAccess) -> io::Result<Box<dyn Child>> {
     match spawn_restricted(&token, exe, &[], limits) {
         Ok(child) => Ok(Box::new(Win(child))),
         // Konsolenbetrieb ohne SYSTEM (Entwicklung, CI): Ein fremdes Token darf nur der
-        // Dienst zuweisen – dann das eigene, eingeschränkte Token verwenden.
-        Err(e) if e.raw_os_error() == Some(1314) => {
+        // Dienst zuweisen – dann das eigene, eingeschränkte Token verwenden. Als Dienst
+        // (SYSTEM) nie: Das wäre das Token des Dienstes selbst.
+        Err(e)
+            if e.raw_os_error() == Some(1314)
+                && !aegis_winffi::pipe::current_process_is_system().unwrap_or(true) =>
+        {
             let own = RestrictedToken::from_current_identity()?;
             Ok(Box::new(Win(spawn_restricted(&own, exe, &[], limits)?)))
         }

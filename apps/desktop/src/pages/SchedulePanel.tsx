@@ -120,7 +120,7 @@ export function SchedulePanel({ service }: { readonly service: ServiceApi }) {
           </div>
           <Toggle
             checked={state.clamavUpdate}
-            disabled={!state.clamavUpdateAvailable}
+            disabled={!state.clamavUpdateAvailable || !state.canChangeGlobal}
             onCheckedChange={(on) => apply(service.setClamavUpdate(on))}
             label={t('schedule.clamavUpdate')}
             description={
@@ -134,6 +134,11 @@ export function SchedulePanel({ service }: { readonly service: ServiceApi }) {
                     })
             }
           />
+          {state.clamavUpdateAvailable && !state.canChangeGlobal && (
+            <p className="text-xs text-text-subtle" data-testid="admin-only">
+              {t('schedule.adminOnly')}
+            </p>
+          )}
         </div>
       )}
     </Panel>

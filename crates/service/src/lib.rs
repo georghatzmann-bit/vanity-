@@ -7,6 +7,7 @@
 
 pub mod handler;
 pub mod history;
+pub mod paths;
 pub mod protocol;
 pub mod schedule;
 #[cfg(windows)]

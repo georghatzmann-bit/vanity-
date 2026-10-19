@@ -78,8 +78,10 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
 - **Parser im Kindprozess (P3.2):** Fremde Dateien parst nur `aegis-scanworker` – unter Windows
   mit eingeschränktem Token des anfragenden Nutzers (keine Privilegien, Admin-Gruppen nur
   „deny“), **niedriger Integrität**, in einem Job-Objekt (2 GiB Speicher, höchstens 2 Prozesse,
-  keine Zwischenablage/Desktop-Zugriffe, Ende mit dem Dienst) und mit Zeitlimit. ClamAV läuft
-  als Kind dieses Prozesses mit denselben Grenzen (nicht mehr als SYSTEM). Absturz oder
+  keine Zwischenablage/Desktop-Zugriffe, Ende mit dem Dienst) und mit Zeitlimit. `clamscan`
+  läuft als Kind dieses Prozesses mit denselben Grenzen (nicht mehr als SYSTEM). Ist ein
+  laufender `clamd` installiert (`clamdscan`), geht der Inhalt an diesen ClamAV-Dienst – der
+  läuft mit den Rechten, die seine Installation ihm gibt, nicht in AEGIS’ Grenzen. Absturz oder
   Zeitüberschreitung = „nicht prüfbar“, der Nutzer kann trotzdem isolieren. Ohne das
   Prüfprogramm startet der Dienst nicht. Grenze: Netzwerk sperrt erst die AppContainer-
   Sandbox (P4). Konsolenbetrieb ohne SYSTEM (Entwicklung/CI) nutzt das eigene, eingeschränkte
@@ -97,17 +99,32 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Wächter und geplante Scans lesen nie mit den Rechten des Dienstes: Dateien eines Profils mit
   dem Token der angemeldeten Sitzung des Profil-Besitzers, sonst (USB, Programme, Besitzer
   nicht angemeldet) mit einem „nur Nutzer“-Token (SYSTEM/Administratoren nur deny,
-  eingeschränkt auf Everyone/Authentifizierte/Benutzer/RESTRICTED). Ein Link in einem
+  eingeschränkt auf Everyone/Authentifizierte/Benutzer/RESTRICTED; als Dienst: Konto
+  LocalService). Ein Link in einem
   Nutzerordner führt damit nicht zu fremden Dateien. Zusätzlich öffnet die Engine Dateien
   so, dass ein Austausch gegen einen Link zwischen Prüfen und Öffnen erkannt wird
-  (Windows: tatsächlicher Pfad am Handle; Unix: Gerät + Inode). **Gaming-Modus** pausiert Prüfen
-  und Hinweise rechnerweit und endet spätestens nach 4 Stunden von selbst; danach wird
-  nachgeprüft. Grenze: Neue Profile werden erst nach einem Dienst-Neustart überwacht.
+  (Windows: tatsächlicher Pfad am Handle; Unix: Gerät + Inode). **Gaming-Modus** gilt je
+  Konto: pausiert Hinweise und Prüfungen des eigenen Profils (gemeinsame Orte und andere
+  Konten werden weiter geprüft), endet spätestens nach 4 Stunden; danach wird nachgeprüft.
+  Prozessstarts gehören dem Konto, das sie gestartet hat (SID aus dem Prozess-Token); Dateien
+  unter `C:\Users\<Name>` gehören immer diesem Profil – auch neu angelegte Profile werden
+  binnen einer Minute beobachtet. Begrenzt: Warteschlange 4096, wartende Dateien 10 000,
+  Meldungen 1000 (200 je Konto/Profil); Überlauf wird gezählt und angezeigt. Lässt eine Datei
+  den Prüfprozess abstürzen, wird sie einzeln als „nicht prüfbar“ gemeldet. ETW-Sitzung mit
+  eigenem Namen je Dienst-Start. Grenzen: externe USB-Festplatten (als „fest“ gemeldet) und
+  Netzlaufwerke (je Nutzersitzung) überwacht der Dienst nicht.
 - **Verlauf, Zeitpläne, Updates (P3.5):** Der Verlauf (Berichte) enthält nur Zusammenfassungen
   und Pfade, keine Inhalte; jedes Konto sieht nur eigene Einträge, Einträge seines Profils und
   gemeinsame (USB, Updates). Geplante Scans prüfen Downloads/Desktop/Dokumente des eigenen
-  Profils im eingeschränkten Prüfprozess und melden nur. `freshclam` startet nur vom festen
-  ClamAV-Ort (nicht `PATH`), mit Zeitlimit, täglich und abschaltbar. Der HTML-Export wird in
+  Profils im eingeschränkten Prüfprozess – nur mit den Rechten des angemeldeten Besitzers
+  (sonst „nicht möglich“ im Verlauf) – und melden nur. `freshclam` startet nur vom festen
+  ClamAV-Ort (nicht `PATH`), nur wenn Ordner, Programm, Konfiguration und Datenbank SYSTEM
+  bzw. den Administratoren gehören, mit expliziter Konfiguration/Datenbank, in einem Job
+  (Speicher, Prozesse, Ende samt Kindprozessen) und Zeitlimit; täglich, nach Fehlschlag nach
+  einer Stunde erneut; abschalten können es nur Administratoren (rechnerweit). Verlauf,
+  Vertrauensliste und Einstellungen: Größe beim Schreiben begrenzt (nie größer als beim
+  Lesen erlaubt), Quoten je Konto, beschädigte Dateien werden beiseitegelegt
+  (`*.json.corrupt`) statt den Start zu verhindern – AEGIS wird dadurch nur strenger. Der HTML-Export wird in
   Rust erzeugt (maskiert, CSP ohne Skripte) und nur an den im Speichern-Dialog gewählten Ort
   geschrieben – die Oberfläche hat keinen Schreibbefehl mit eigenem Pfad.
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
@@ -158,6 +175,7 @@ Prüfung „kein Code-Pfad ändert etwas ohne Freigabe“ ist fester Bestandteil
 
 | Datum | Umfang | Ergebnis |
 | --- | --- | --- |
+| 2026-10-19 | P3: Prüfprozess/Token, Vertrauensliste, Wächter, Verlauf/Zeitpläne/Updates, HTML-Export. 2 Durchgänge (der erste brach nach dem ersten Fund ab) | 2 hoch: P3-1 Hintergrundprüfungen mit SYSTEM-abgeleitetem Token (→ Profil-Besitzer bzw. LocalService, Öffnen mit Prüfung am Handle), P3-2 Verlauf/Vertrauensliste konnten den Dienststart blockieren (→ Größen- und Längengrenzen, Quoten, Beiseitelegen). 8 mittel (Aushungern/Warteschlange, Abstürze verstecken Dateien, rechnerweite Schalter für jeden Nutzer → Gaming je Konto + Admin-Pflicht, gemeinsame Grenzen → Quoten, Dateizugriffe unter der Sperre, freshclam als SYSTEM ohne Job, Zuordnung „gemeinsam“ nach Pfad → SID/Profil-Wurzel, LocalService statt eingeschränktem SYSTEM). 6 niedrig (Rückfall auf Dienst-Token, gemeinsame „unbekannt“-Kennung, Pfadvergleich, Termine, USB/ETW, Export überschreibt). Alle behoben bzw. Grenzen dokumentiert, Tests ergänzt (Windows-Test „nur Nutzer“-Token) |
 | 2026-10-19 | P2.5-Nachprüfung (separater Agent): Korrekturen + neue Fehler im FFI | Alte Funde geschlossen bzw. teilweise; neu: 1 hoch (Server-Prüfung für Standardnutzer kaputt → Pipe-Besitzer), 6 mittel (Namenslücke, Leerlauf/Grenzen je Konto, Einträge ohne Konto, schreibgeschützt, Analysepunkte, ClamAV als SYSTEM → P3.2), 5 niedrig. Behoben (außer ClamAV-Token → P3.2, Pfad-Textvergleich nur dokumentiert), Tests ergänzt |
 | 2026-10-19 | P2: Quarantäne, Dienst/Pipe, winffi, Engine-Anbindung, App-Client. 1 Prüfer, 4 Funde per Test nachgestellt | 1 kritisch (jeder Nutzer konnte über den SYSTEM-Dienst ohne UI isolieren/wiederherstellen → Identitätswechsel + Pfadregeln), 3 hoch (Links in Zwischenordnern/Überschreiben, Pipe-Instanzen durch Nutzer, vorab angelegter Datenordner), 3 mittel (Ausführung trotz Protokollausfall, Überlastung, ClamAV über PATH), 2 niedrig (Bidi in Plan-Texten, Unix-Rechte, fehlende Sperren). Alle behoben, Regressionstests in `crates/quarantine/tests`, `crates/service/tests`, Windows-Test für Identitätswechsel |
 | 2026-10-19 | P1: Freigabe-Dialog, Fenster-/Tray-Rechte, Startprotokoll, Einstellungen, Barrierefreiheit, CI. 4 Prüfer + Gegenprüfung (vor Abschluss der Desktop-Korrekturen abgebrochen, Rest selbst geprüft) | 2 hoch (Sperrzeit-Umgehung, gestapelte Dialoge), 7 mittel (u. a. Bidi in Plan-Texten, Fokus bei Seitenwechsel, Windows-CI-Zeitlimit) – behoben mit Tests |

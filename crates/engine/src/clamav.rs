@@ -134,14 +134,7 @@ impl ClamAv {
                 let _ = std::io::copy(&mut input, &mut stdin);
             }
         });
-        let stdout = child.stdout.take();
-        let collector = std::thread::spawn(move || {
-            let mut text = String::new();
-            if let Some(out) = stdout {
-                let _ = out.take(MAX_OUTPUT).read_to_string(&mut text);
-            }
-            text
-        });
+        let output = drain_capped(child.stdout.take());
         let deadline = Instant::now() + self.timeout;
         let status = loop {
             match child.try_wait() {
@@ -162,7 +155,10 @@ impl ClamAv {
         match status {
             Some(status) => {
                 let _ = feeder.join();
-                parse_output(&collector.join().unwrap_or_default(), status.code())
+                let text = output
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap_or_default();
+                parse_output(&text, status.code())
             }
             // Nicht auf die Hilfs-Threads warten: Ein Enkelprozess könnte die Pipes noch
             // offen halten. Sie enden, sobald die Pipes schließen.
@@ -172,6 +168,29 @@ impl ClamAv {
             )),
         }
     }
+}
+
+/// Liest die ganze Ausgabe (damit der Prozess nie am vollen Puffer hängt), behält aber
+/// höchstens [`MAX_OUTPUT`] Byte; das Ergebnis kommt über einen Kanal.
+fn drain_capped<R: Read + Send + 'static>(out: Option<R>) -> std::sync::mpsc::Receiver<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut kept = Vec::new();
+        if let Some(mut out) = out {
+            let mut buf = [0u8; 8192];
+            while let Ok(n) = out.read(&mut buf) {
+                if n == 0 {
+                    break;
+                }
+                let room = usize::try_from(MAX_OUTPUT)
+                    .unwrap_or(0)
+                    .saturating_sub(kept.len());
+                kept.extend_from_slice(&buf[..n.min(room)]);
+            }
+        }
+        let _ = tx.send(String::from_utf8_lossy(&kept).into_owned());
+    });
+    rx
 }
 
 /// Zeitlimit für ein Signatur-Update.
@@ -195,30 +214,60 @@ impl ClamAv {
         let program = self
             .updater()
             .ok_or_else(|| "freshclam ist nicht installiert".to_owned())?;
+        let dir = program
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or("freshclam ohne Ordner")?;
+        let config = dir.join("freshclam.conf");
+        let database = dir.join("database");
+        // Läuft als SYSTEM: nur, wenn Programm, Ordner, Konfiguration und Datenbank SYSTEM bzw.
+        // den Administratoren gehören (sonst könnte ein Nutzer Befehle unterschieben).
+        #[cfg(windows)]
+        for path in [&dir, &program, &config, &database] {
+            if path.exists() && !aegis_winffi::owner_is_trusted(path).unwrap_or(false) {
+                return Err(format!(
+                    "{} gehört weder SYSTEM noch den Administratoren – Update nicht gestartet",
+                    path.display()
+                ));
+            }
+        }
+        let mut args = vec!["--stdout".to_owned(), "--no-warnings".to_owned()];
+        if config.is_file() {
+            args.push(format!("--config-file={}", config.display()));
+        }
+        if database.is_dir() {
+            args.push(format!("--datadir={}", database.display()));
+        }
         // Startet das Signatur-Update von ClamAV (fester Installationsort, abschaltbar in den
         // Einstellungen); ändert nur die ClamAV-Datenbank.
         // aegis-mutation: engine-clamav-update
         #[allow(clippy::disallowed_methods)]
         let spawned = Command::new(&program)
-            .args(["--stdout", "--no-warnings"])
+            .args(&args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn();
         let mut child = spawned.map_err(|e| format!("freshclam startet nicht: {e}"))?;
-        let stdout = child.stdout.take();
-        let collector = std::thread::spawn(move || {
-            let mut text = String::new();
-            if let Some(out) = stdout {
-                let _ = out.take(MAX_OUTPUT).read_to_string(&mut text);
-            }
-            text
-        });
+        // Job: endet beim Zeitlimit samt Kindprozessen; Grenzen für Speicher und Prozesse.
+        #[cfg(windows)]
+        let _job = aegis_winffi::kill_on_close_job(
+            &child,
+            aegis_winffi::JobLimits {
+                memory_bytes: 1024 * 1024 * 1024,
+                processes: 4,
+            },
+        )
+        .map_err(|e| format!("freshclam nicht begrenzbar: {e}"))?;
+        let output = drain_capped(child.stdout.take());
         let deadline = Instant::now() + timeout;
         loop {
             match child.try_wait() {
                 Ok(Some(status)) => {
-                    let text = collector.join().unwrap_or_default();
+                    // Nicht unbegrenzt warten: Ein Enkelprozess könnte die Ausgabe offen halten.
+                    let text = output
+                        .recv_timeout(Duration::from_secs(5))
+                        .unwrap_or_default();
                     let last = text
                         .lines()
                         .rev()

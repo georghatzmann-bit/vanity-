@@ -41,7 +41,7 @@ pub mod inspect;
 #[cfg(windows)]
 pub use fs::{
     DATA_DIR_SDDL, create_new, create_secure_dir, delete_by_handle, ensure_file_at, final_path,
-    is_name_surrogate, long_path, open_exclusive, owner_is_trusted,
+    is_name_surrogate, long_path, open_exclusive, ordinal_eq_ignore_case, owner_is_trusted,
 };
 #[cfg(windows)]
 pub use identity::{
@@ -49,13 +49,16 @@ pub use identity::{
 };
 #[cfg(windows)]
 pub use pipe::{
-    Impersonation, PIPE_NAME, PIPE_SDDL, ServerIdentity, accept, client_profile_dir, client_sid,
-    create_instance, disconnect, impersonate_client, server_identity, thread_is_impersonating,
+    Impersonation, PIPE_NAME, PIPE_SDDL, ServerIdentity, accept, client_is_admin,
+    client_profile_dir, client_sid, create_instance, disconnect, impersonate_client,
+    server_identity, thread_is_impersonating,
 };
 #[cfg(windows)]
-pub use process::{JobLimits, RestrictedChild, RestrictedToken, spawn_restricted};
+pub use process::{
+    JobLimits, RestrictedChild, RestrictedToken, kill_on_close_job, spawn_restricted,
+};
 #[cfg(windows)]
-pub use system::{process_image_path, removable_drives};
+pub use system::{process_image_path, process_user_sid, removable_drives};
 
 /// Vergleicht den von Windows gelieferten tatsächlichen Pfad (`\\?\C:\…`, UTF-16) mit dem
 /// angefragten (`C:\…`). `equal_ignore_case` vergleicht zwei UTF-16-Folgen ohne

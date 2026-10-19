@@ -1,6 +1,6 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-19 · **P0–P2 abgeschlossen** · **P3 in Arbeit** (P3.1–P3.5 erledigt, Review offen)
+Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor (Sandbox)**
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
@@ -25,8 +25,8 @@ Stand: 2026-10-19 · **P0–P2 abgeschlossen** · **P3 in Arbeit** (P3.1–P3.5 
 | P0 | Fundament, Design-Tokens, Logo, Start-Animation | **erledigt** |
 | P1 | Shell, Dashboard, Design-System | **erledigt** |
 | P2 | Dienst + Pipe + Engine-Kern (ClamAV, Hashes, YARA-X, statische Analyse), Quarantäne | **erledigt** |
-| P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | in Arbeit (Review offen) |
-| P4 | Sandbox Stufe 1+2 + Verhaltensbericht | offen |
+| P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | **erledigt** |
+| P4 | Sandbox Stufe 1+2 + Verhaltensbericht | in Arbeit |
 | P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | offen |
 | P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | offen |
 | P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | offen |
@@ -88,7 +88,7 @@ Stand: 2026-10-19 · **P0–P2 abgeschlossen** · **P3 in Arbeit** (P3.1–P3.5 
 - Pipe: Identität des Client-Prozesses prüfen (Pfad + Signatur, braucht Code-Signing → P13).
   Bis dahin begrenzt der Identitätswechsel alles auf die Rechte des anfragenden Nutzers.
 - Sicherheits-Score bleibt „noch nicht bewertet“, bis die Systemprüfungen (P6) da sind.
-- Wächter: neue Nutzerprofile erst nach Dienst-Neustart überwacht.
+- Wächter: externe USB-Festplatten und Netzlaufwerke werden nicht überwacht (Dienst sieht sie nicht je Sitzung).
 - 16-px-Icon: Schild gut erkennbar, die A-Aussparung verschwimmt → eigene 16-px-Variante (P11).
 - Optional: Dependabot für Action-Pins (öffnet automatisch PRs – nur auf deinen Wunsch).
 
@@ -143,7 +143,7 @@ Stand: 2026-10-19 · **P0–P2 abgeschlossen** · **P3 in Arbeit** (P3.1–P3.5 
 | `pnpm check` + E2E grün | ✅ lokal; CI Linux + Windows |
 | Review dokumentiert | ✅ `docs/SECURITY.md` → Review-Protokoll |
 
-## P3 – in Arbeit
+## P3 – erledigt
 
 1. [x] P3.1 Engine: Skripte, Office-Makros, PDF, LNK, ISO, Archive (zip/7z/cab/gz/tar) rekursiv
        mit Budget gegen Zip-Bomben; Merkmals-Kombination („Gefährlich“ erst ab zwei
@@ -158,9 +158,23 @@ Stand: 2026-10-19 · **P0–P2 abgeschlossen** · **P3 in Arbeit** (P3.1–P3.5 
 5. [x] P3.5 Berichte & Zeitleiste (Verlauf je Konto, Filter, nach Tagen), Export als HTML
        (in Rust erzeugt, Speichern-Dialog) und Drucken/PDF; geplante Scans (1/7/30 Tage) und
        tägliches `freshclam` (abschaltbar); Dashboard zeigt echte Zustände von Engine und Wächter.
-6. [ ] P3.6 Sicherheits-Review P3 (separater Agent), Korrekturen, DoD.
+6. [x] P3.6 Sicherheits-Review P3 (separater Agent, 2 Durchgänge): 2 hoch, 8 mittel, 6 niedrig –
+       alle behoben (siehe SECURITY.md → Review-Protokoll).
+
+### Definition of Done – Stand P3
+
+| Kriterium | Status |
+| --- | --- |
+| Wächter meldet EICAR, verändert nichts; Kontotrennung; Gaming-Modus je Konto | ✅ `crates/service/src/watch.rs` (Tests), `crates/service/tests/flow.rs` |
+| Dokumente/Skripte/Archive/LNK/ISO/PDF, Cheat-Logik, Zip-Bomben-Grenzen | ✅ `crates/engine/tests/content_and_containers.rs` |
+| „Nichts ohne Ja“: Scan, Wächter, geplanter Scan, Vertrauen ändern nichts (Schnappschuss) | ✅ `flow.rs` (`waechter_meldungen_…`, `verlauf_zeitplan_und_update`, `vertrauen_widerrufen`) |
+| Prüfprozess eingeschränkt; Hintergrund nie mit Dienst-Rechten | ✅ `tests/worker.rs` (Windows: „nur Nutzer“-Token) |
+| Berichte: Zeitleiste, HTML-Export maskiert, Drucken/PDF | ✅ `report.rs`-Tests, Vitest `Berichte` |
+| Review dokumentiert, Funde behoben | ✅ `docs/SECURITY.md` → Review-Protokoll |
+| `pnpm check` + E2E grün; CI Linux + Windows | ✅ lokal; CI siehe GitHub Actions |
 
 ## Nächster Schritt
 
-P3.6: Sicherheits-Review P3 durch separaten Agenten (Prüfprozess/Token, Vertrauensliste, Wächter,
-Verlauf/Zeitpläne/Updates, HTML-Export), Korrekturen, Definition of Done P3. Danach P4 (Sandbox).
+P4: Labor – Stufe 1 (Windows Sandbox mit Sonde, Einschalten nach Bestätigung), Stufe 2
+(Mini-Sandbox im AppContainer), Verhaltensbericht mit Einschätzung, Labor-Seite (Drag & Drop,
+Angebot für unbekannte Downloads – nie automatisch). Grundlagen (P4.1) stehen bereits.

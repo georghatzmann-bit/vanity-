@@ -222,12 +222,22 @@ pub mod windows {
         }
 
         fn identity(&self) -> Option<String> {
-            // Ohne lesbare SID: eine Kennung, die zu keinem Eintrag passt (nichts sichtbar).
+            // Ohne lesbare SID: eine zufällige Kennung nur für diese Verbindung – sie passt zu
+            // keinem gespeicherten Eintrag und wird mit keinem anderen Client geteilt.
             self.sid
                 .get_or_init(|| {
-                    Some(client_sid(self.pipe).unwrap_or_else(|_| "unbekannt".to_owned()))
+                    Some(client_sid(self.pipe).unwrap_or_else(|_| {
+                        format!(
+                            "unbekannt-{}",
+                            aegis_core::uuid::Uuid::new_v4().hyphenated()
+                        )
+                    }))
                 })
                 .clone()
+        }
+
+        fn is_admin(&self) -> bool {
+            aegis_winffi::client_is_admin(self.pipe).unwrap_or(false)
         }
 
         fn profile(&self) -> Option<std::path::PathBuf> {

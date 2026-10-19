@@ -23,7 +23,13 @@ pub fn escape(text: &str) -> String {
             c if c.is_control() && c != '\n' => {
                 out.push_str(&format!("\\u{{{:04x}}}", u32::from(c)))
             }
-            '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}' | '\u{200e}' | '\u{200f}' => {
+            // Richtungs- und unsichtbare Formatzeichen (wie `escape_text` im Dienst).
+            '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{2069}'
+            | '\u{061c}'
+            | '\u{feff}' => {
                 out.push_str(&format!("\\u{{{:04x}}}", u32::from(c)));
             }
             c => out.push(c),
@@ -188,13 +194,22 @@ pub fn with_html_extension(path: PathBuf) -> PathBuf {
     }
 }
 
-/// Schreibt den Bericht an den vom Nutzer im Speichern-Dialog gewählten Ort.
-fn write_report(path: &Path, html: &str) -> std::io::Result<()> {
+/// Schreibt den Bericht an den vom Nutzer im Speichern-Dialog gewählten Ort. Hat AEGIS die
+/// Endung ergänzt, wurde dieser Name nicht bestätigt – dann nur neu anlegen, nie überschreiben.
+fn write_report(path: &Path, html: &str, confirmed: bool) -> std::io::Result<()> {
     // Der Nutzer hat Ort und Namen im Speichern-Dialog selbst gewählt (Windows fragt vor dem
     // Überschreiben nach); geschrieben wird nur die erzeugte Berichtsseite.
     // aegis-mutation: desktop-report-write
     #[allow(clippy::disallowed_methods)]
-    let mut file = std::fs::File::create(path)?;
+    let file = if confirmed {
+        std::fs::File::create(path)
+    } else {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+    };
+    let mut file = file?;
     file.write_all(html.as_bytes())?;
     file.sync_all()
 }
@@ -227,8 +242,18 @@ pub async fn export_report<R: tauri::Runtime>(
         else {
             return Ok(None);
         };
-        let path = with_html_extension(chosen.into_path().map_err(|e| e.to_string())?);
-        write_report(&path, &html).map_err(|e| format!("Bericht nicht gespeichert: {e}"))?;
+        let chosen = chosen.into_path().map_err(|e| e.to_string())?;
+        let path = with_html_extension(chosen.clone());
+        write_report(&path, &html, path == chosen).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                format!(
+                    "{} gibt es schon – bitte einen anderen Namen wählen",
+                    path.display()
+                )
+            } else {
+                format!("Bericht nicht gespeichert: {e}")
+            }
+        })?;
         Ok(Some(path.to_string_lossy().into_owned()))
     })
     .await
@@ -285,6 +310,15 @@ mod tests {
         assert!(html.contains("&lt;script&gt;"));
         assert!(html.contains("a &amp; b"));
         assert!(html.contains("\\u{202e}"), "Richtungszeichen sichtbar");
+        let hidden = render(
+            &json!({"type": "history", "entries": [{"title": "a\u{200b}b\u{feff}c\u{2061}d"}]}),
+            false,
+            "x",
+        );
+        assert!(
+            hidden.contains("a\\u{200b}b\\u{feff}c\\u{2061}d"),
+            "{hidden}"
+        );
         assert!(html.contains("Gefährlich"));
         assert!(html.contains("default-src 'none'"));
         assert!(!html.contains("http://") && !html.contains("https://"));

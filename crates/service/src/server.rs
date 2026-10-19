@@ -153,9 +153,26 @@ pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
             .watch()
             .note_failure(&format!("Echtzeit-Wächter nicht gestartet: {e}"));
     }
+    let history = service.history();
     let service = Arc::new(Mutex::new(service));
     spawn_scheduler(Arc::clone(&service), Arc::clone(stop));
-    serve(&config.endpoint, &service, stop)
+    let result = serve(&config.endpoint, &service, stop);
+    save_history(&history);
+    result
+}
+
+/// Sichert den Verlauf: unter der Sperre nur serialisieren, geschrieben wird außerhalb.
+fn save_history(history: &Mutex<crate::history::History>) {
+    let lock = || {
+        history
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    };
+    let save = lock().prepare_save();
+    if let Some(save) = save {
+        let ok = save.write().is_ok();
+        lock().saved(ok);
+    }
 }
 
 /// Zeitplaner: prüft jede Minute, ob geplante Scans oder ein Signatur-Update fällig sind.
@@ -168,11 +185,11 @@ fn spawn_scheduler(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
         };
         while !stop.load(Ordering::SeqCst) {
-            let (work, scanner) = {
+            let (work, scanner, history) = {
                 let mut guard = lock();
-                guard.flush_history();
-                (guard.take_due_work(), guard.scanner())
+                (guard.take_due_work(), guard.scanner(), guard.history())
             };
+            save_history(&history);
             for schedule in &work.schedules {
                 let folders: Vec<PathBuf> = crate::schedule::SCHEDULED_FOLDERS
                     .iter()
@@ -183,6 +200,7 @@ fn spawn_scheduler(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
                 // mit den Rechten des Dienstes.
                 let access = crate::worker::BackgroundAccess {
                     profile: Some(schedule.profile.clone()),
+                    require_owner: true,
                 };
                 let result = scanner.scan(&folders, &access);
                 lock().record_scheduled(schedule, result);

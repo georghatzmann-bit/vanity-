@@ -157,6 +157,8 @@ pub struct ScheduleInfo {
     pub clamav_update_available: bool,
     /// Tägliches Signatur-Update an?
     pub clamav_update: bool,
+    /// Darf das Konto rechnerweite Einstellungen ändern (erhöhter Administrator)?
+    pub can_change_global: bool,
     /// Letztes Update.
     pub last_update: Option<UpdateRecord>,
 }

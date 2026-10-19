@@ -165,6 +165,14 @@ pub fn long_path(path: &Path) -> io::Result<PathBuf> {
     }
 }
 
+/// Vergleicht zwei Texte ohne Groß-/Kleinschreibung wie NTFS (`CompareStringOrdinal`).
+#[must_use]
+pub fn ordinal_eq_ignore_case(a: &str, b: &str) -> bool {
+    let a: Vec<u16> = a.encode_utf16().collect();
+    let b: Vec<u16> = b.encode_utf16().collect();
+    ordinal_equal_ignore_case(&a, &b)
+}
+
 /// Vergleich ohne Groß-/Kleinschreibung wie im Dateisystem (ordinal, ohne Sonderfaltungen).
 fn ordinal_equal_ignore_case(a: &[u16], b: &[u16]) -> bool {
     let (Ok(la), Ok(lb)) = (i32::try_from(a.len()), i32::try_from(b.len())) else {

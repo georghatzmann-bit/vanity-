@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 pub const INTERVALS: [u16; 3] = [1, 7, 30];
 /// Abstand der Signatur-Updates.
 pub const UPDATE_EVERY: Duration = Duration::hours(24);
+/// Erneuter Versuch nach einem fehlgeschlagenen Update.
+pub const UPDATE_RETRY: Duration = Duration::hours(1);
 /// Ordner im Profil, die ein geplanter Scan prüft.
 pub const SCHEDULED_FOLDERS: [&str; 3] = ["Downloads", "Desktop", "Documents"];
 
@@ -43,12 +45,30 @@ impl Schedule {
     /// Lauf später am Tag nachgeholt.
     #[must_use]
     pub fn due(&self, now: OffsetDateTime) -> bool {
-        if !self.enabled || now.hour() < self.hour_utc {
+        if !self.enabled {
             return false;
         }
-        self.last_run.is_none_or(|last| {
-            now - last >= Duration::days(i64::from(self.every_days)) - Duration::hours(1)
-        })
+        match self.last_run {
+            // Erster Lauf: ab der eingestellten Stunde.
+            None => now.hour() >= self.hour_utc,
+            // Uhr zurückgestellt: nicht für immer blockieren.
+            Some(last) if last > now => true,
+            Some(last) => now >= self.next_after(last),
+        }
+    }
+
+    /// Nächster Termin nach `last`: `every_days` Tage später zur eingestellten Stunde. War der
+    /// Rechner zu dieser Zeit aus, wird beim nächsten Mal nachgeholt.
+    #[must_use]
+    pub fn next_after(&self, last: OffsetDateTime) -> OffsetDateTime {
+        let day = last.date() + Duration::days(i64::from(self.every_days));
+        let at = day
+            .with_hms(self.hour_utc.min(23), 0, 0)
+            .map_or(last + Duration::days(i64::from(self.every_days)), |t| {
+                t.assume_utc()
+            });
+        // Ein früher Lauf am Vortag soll nicht am Folgetag schon wieder kommen (bei 1 Tag).
+        at.max(last + Duration::hours(12))
     }
 }
 
@@ -99,10 +119,9 @@ impl ServiceSettings {
     #[must_use]
     pub fn update_due(&self, now: OffsetDateTime) -> bool {
         self.clamav_update
-            && self
-                .last_update
-                .as_ref()
-                .is_none_or(|u| now - u.at >= UPDATE_EVERY)
+            && self.last_update.as_ref().is_none_or(|u| {
+                u.at > now || now - u.at >= if u.ok { UPDATE_EVERY } else { UPDATE_RETRY }
+            })
     }
 
     /// Zeitplan eines Kontos.
@@ -127,7 +146,9 @@ impl SettingsStore {
     pub fn open(path: &Path) -> io::Result<Self> {
         Ok(Self {
             path: Some(path.to_owned()),
-            data: crate::store::load(path, "Dienst-Einstellungen")?.unwrap_or_default(),
+            data: crate::store::load_or_set_aside(path, "Dienst-Einstellungen")?
+                .0
+                .unwrap_or_default(),
         })
     }
 
@@ -204,12 +225,23 @@ mod tests {
     fn faelligkeit() {
         let mon_8 = at(19, 8, 0);
         let mon_10 = at(19, 10, 0);
-        assert!(!schedule(None).due(mon_8), "vor der Stunde nie");
-        assert!(schedule(None).due(mon_10), "erster Lauf nach der Stunde");
+        assert!(!schedule(None).due(mon_8), "erster Lauf erst ab der Stunde");
+        assert!(schedule(None).due(mon_10));
         let ran = Some(at(19, 9, 5));
         assert!(!schedule(ran).due(at(20, 10, 0)));
+        assert!(
+            !schedule(ran).due(at(26, 8, 59)),
+            "erst ab der Stunde des Termins"
+        );
         assert!(schedule(ran).due(at(26, 9, 0)));
-        assert!(schedule(ran).due(at(27, 15, 0)), "nachgeholt");
+        assert!(
+            schedule(ran).due(at(27, 3, 0)),
+            "verpasster Termin wird nachgeholt, auch früh"
+        );
+        assert!(
+            schedule(Some(at(28, 0, 0))).due(at(20, 0, 0)),
+            "Uhr zurückgestellt"
+        );
         let mut off = schedule(None);
         off.enabled = false;
         assert!(!off.due(mon_10));
@@ -227,6 +259,16 @@ mod tests {
         });
         assert!(!s.update_due(now + Duration::hours(23)));
         assert!(s.update_due(now + Duration::hours(24)));
+        s.last_update = Some(UpdateRecord {
+            at: now,
+            ok: false,
+            message: "kein Netz".into(),
+        });
+        assert!(!s.update_due(now + Duration::minutes(30)));
+        assert!(
+            s.update_due(now + Duration::hours(1)),
+            "Fehlschlag: nach einer Stunde erneut"
+        );
         s.clamav_update = false;
         assert!(!s.update_due(now + Duration::hours(48)));
     }

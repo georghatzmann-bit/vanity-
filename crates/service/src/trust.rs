@@ -9,8 +9,14 @@ use std::path::{Path, PathBuf};
 use aegis_core::time::OffsetDateTime;
 use serde::{Deserialize, Serialize};
 
-/// Höchstzahl Einträge (Schutz vor beliebigem Anwachsen).
-pub const MAX_ENTRIES: usize = 10_000;
+/// Höchstzahl Einträge insgesamt (Schutz vor beliebigem Anwachsen).
+pub const MAX_ENTRIES: usize = 5_000;
+/// Höchstzahl Einträge je Konto – ein Konto kann die Liste anderer nicht füllen.
+pub const MAX_PER_OWNER: usize = 2_000;
+/// Längster vertraubarer Pfad (Zeichen).
+pub const MAX_PATH_CHARS: usize = 4_096;
+/// Längster Grund (Zeichen).
+const MAX_REASON: usize = 500;
 
 /// Ein vertrauter Eintrag.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,12 +45,17 @@ pub struct TrustStore {
     entries: Vec<TrustEntry>,
 }
 
-fn same_path(a: &Path, b: &Path) -> bool {
-    if cfg!(windows) {
-        a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
-    } else {
-        a == b
+fn new_owner_over_quota(entries: &[TrustEntry]) -> bool {
+    let mut counts: std::collections::HashMap<Option<&str>, usize> =
+        std::collections::HashMap::new();
+    for e in entries {
+        *counts.entry(e.owner.as_deref()).or_default() += 1;
     }
+    counts.values().any(|&c| c > MAX_PER_OWNER)
+}
+
+fn same_path(a: &Path, b: &Path) -> bool {
+    crate::paths::same_path(a, b)
 }
 
 impl TrustStore {
@@ -54,7 +65,9 @@ impl TrustStore {
     /// Datei beschädigt oder nicht lesbar – dann startet der Dienst nicht (lieber sichtbar
     /// als still „alles vertraut“ oder „nichts vertraut“).
     pub fn open(path: &Path) -> io::Result<Self> {
-        let entries = crate::store::load(path, "Vertrauensliste")?.unwrap_or_default();
+        // Beschädigt: beiseitelegen und leer starten – AEGIS wird dadurch nur strenger.
+        let (entries, _) = crate::store::load_or_set_aside(path, "Vertrauensliste")?;
+        let entries = entries.unwrap_or_default();
         Ok(Self {
             path: Some(path.to_owned()),
             entries,
@@ -96,7 +109,14 @@ impl TrustStore {
     /// Zu viele Einträge oder Speichern fehlgeschlagen (dann bleibt die Liste unverändert).
     pub fn add(&mut self, new: Vec<TrustEntry>) -> io::Result<()> {
         let mut entries = self.entries.clone();
-        for entry in new {
+        for mut entry in new {
+            if entry.path.to_string_lossy().chars().count() > MAX_PATH_CHARS {
+                return Err(io::Error::other("Pfad zu lang für die Vertrauensliste"));
+            }
+            if entry.reason.chars().count() > MAX_REASON {
+                entry.reason = entry.reason.chars().take(MAX_REASON).collect();
+                entry.reason.push('…');
+            }
             entries.retain(|e| {
                 !(e.owner == entry.owner
                     && e.sha256.eq_ignore_ascii_case(&entry.sha256)
@@ -106,6 +126,11 @@ impl TrustStore {
         }
         if entries.len() > MAX_ENTRIES {
             return Err(io::Error::other("Vertrauensliste ist voll"));
+        }
+        if new_owner_over_quota(&entries) {
+            return Err(io::Error::other(
+                "Deine Vertrauensliste ist voll – bitte alte Einträge widerrufen",
+            ));
         }
         self.save(&entries)?;
         self.entries = entries;
@@ -190,6 +215,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file =
             aegis_core::testing::write_fixture(dir.path(), "trust.json", b"{kaputt").unwrap();
-        assert!(TrustStore::open(&file).is_err());
+        // Beiseitegelegt, leer gestartet (nur strenger).
+        assert!(TrustStore::open(&file).unwrap().list(None).is_empty());
+        assert!(dir.path().join("trust.json.corrupt").exists());
+        let mut store = TrustStore::in_memory();
+        let mut long = entry("x", Some("S-A"));
+        long.path = PathBuf::from("/".to_owned() + &"a".repeat(MAX_PATH_CHARS));
+        assert!(store.add(vec![long]).is_err());
     }
 }

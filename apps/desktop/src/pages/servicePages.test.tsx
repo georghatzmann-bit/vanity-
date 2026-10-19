@@ -102,6 +102,7 @@ function scheduleState(over: Partial<ScheduleState> = {}): ScheduleState {
     clamavAvailable: true,
     clamavUpdateAvailable: true,
     clamavUpdate: true,
+    canChangeGlobal: true,
     lastUpdate: null,
     ...over,
   };
