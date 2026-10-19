@@ -872,6 +872,17 @@ fn haertung_nur_lesend_mit_ehrlichem_score() {
     h.clock.advance(aegis_core::time::Duration::minutes(11));
     let later = h.send(json!({"type": "hardening_status"}));
     assert_ne!(later["state"]["checked_at"], state["checked_at"]);
+    // Beheben nur als Vorschlag; unbekannte Schritte und fremde Stände gibt es nicht.
+    let r = h.send(json!({"type": "propose_hardening_fix", "fix": "format_c"}));
+    assert_eq!(r["code"], "input", "{r}");
+    let r = h.send(json!({"type": "propose_hardening_undo", "id": "x"}));
+    assert_eq!(r["code"], "unknown", "{r}");
+    let r = h.send(json!({"type": "propose_hardening_fix", "fix": "disable_smb1"}));
+    if cfg!(windows) {
+        assert!(r["type"] == "proposal" || r["code"] == "admin", "{r}");
+    } else {
+        assert_eq!(r["code"], "hardening", "{r}");
+    }
 }
 
 #[test]

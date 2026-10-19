@@ -1,16 +1,44 @@
 /**
  * Härtung & Sicherheits-Score (P6): Der Dienst liest Windows-Einstellungen und bewertet sie.
- * Diese Seite zeigt nur an – Verbesserungen kommen als eigene Vorschläge mit „Ja“.
+ * Verbesserungen sind Vorschläge des Dienstes (Plan mit Vorschau) und passieren erst nach „Ja“;
+ * der alte Stand wird gemerkt und lässt sich per „Rückgängig“ (ebenfalls ein Plan) zurückholen.
  * „Unbekannt“ bleibt unbekannt und zählt nicht in den Score.
  */
-import { Button, IconRefresh, Panel, RiskBadge, SafeText, ScoreGauge } from '@aegis/ui';
+import {
+  Button,
+  IconRefresh,
+  IconUndo,
+  Panel,
+  RiskBadge,
+  SafeText,
+  ScoreGauge,
+  useToast,
+} from '@aegis/ui';
 import type { RiskLevel } from '@aegis/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
-import type { CheckStatus, HardeningState } from '../platform/service.ts';
+import type { WindowsSettingsPage } from '../platform/platform.ts';
+import {
+  fixKinds,
+  type CheckStatus,
+  type FixKind,
+  type HardeningCheckId,
+  type HardeningState,
+} from '../platform/service.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
+import { useConsentFlow } from './useConsentFlow.tsx';
+
+/** Was „In Windows öffnen“ je Prüfung zeigt. */
+const settingsPage: Readonly<Partial<Record<HardeningCheckId, WindowsSettingsPage>>> = {
+  updates: 'windows_update',
+  bit_locker: 'device_encryption',
+  antivirus: 'virus_protection',
+};
+
+/** Nur der Proxy betrifft allein das eigene Konto – alles andere den ganzen PC. */
+const ownAccountFixes: ReadonlySet<FixKind> = new Set(['disable_proxy']);
 
 const statusLevel: Readonly<Record<CheckStatus, RiskLevel>> = {
   pass: 'clean',
@@ -101,6 +129,18 @@ export function HardeningPage() {
     };
   }, [service, load]);
 
+  const toast = useToast();
+  const flow = useConsentFlow(service, () => void load(true));
+  const fail = (error: unknown) =>
+    toast.show({
+      tone: 'danger',
+      title: t('consentFlow.error'),
+      description: error instanceof Error ? error.message : String(error),
+    });
+  const openSettings = (page: WindowsSettingsPage) => {
+    platform.openWindowsSettings?.(page).catch(fail);
+  };
+
   const date = (iso: string) => {
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(locale);
@@ -174,7 +214,7 @@ export function HardeningPage() {
                 <History points={state?.history ?? []} />
               </div>
             </Panel>
-            <Panel title={t('hardening.checksTitle')} description={t('hardening.fixLater')}>
+            <Panel title={t('hardening.checksTitle')} description={t('hardening.fixHint')}>
               {state === null ? (
                 <p className="text-sm text-text-muted">{t('hardening.checking')}</p>
               ) : (
@@ -207,12 +247,82 @@ export function HardeningPage() {
                           {t(`hardening.fix.${c.fix}`)}
                         </p>
                       )}
+                      {c.fix !== null &&
+                        c.fix !== 'open_settings' &&
+                        service !== null &&
+                        (() => {
+                          const fix = c.fix;
+                          const allowed = state.admin || ownAccountFixes.has(fix);
+                          return (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <Button
+                                size="sm"
+                                disabled={!allowed}
+                                onClick={() =>
+                                  void flow.start(() => service.proposeHardeningFix(fix))
+                                }
+                              >
+                                {t('hardening.fixButton')}
+                              </Button>
+                              {!allowed && (
+                                <span className="text-xs text-text-subtle">
+                                  {t('hardening.adminOnly')}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      {c.fix === 'open_settings' &&
+                        settingsPage[c.id] !== undefined &&
+                        platform.openWindowsSettings !== null && (
+                          <div className="mt-3">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                const page = settingsPage[c.id];
+                                if (page !== undefined) {
+                                  openSettings(page);
+                                }
+                              }}
+                            >
+                              {t('hardening.openSettings')}
+                            </Button>
+                          </div>
+                        )}
                     </li>
                   ))}
                 </ul>
               )}
             </Panel>
           </div>
+          {state !== null && state.undo.length > 0 && (
+            <Panel title={t('hardening.undoTitle')} description={t('hardening.undoHint')}>
+              <ul className="space-y-2" data-testid="hardening-undo">
+                {state.undo.map((u) => (
+                  <li
+                    key={u.id}
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-2 p-2"
+                  >
+                    <span className="min-w-0 flex-1 text-sm text-text">
+                      {(fixKinds as readonly string[]).includes(u.fix)
+                        ? t(`hardening.fixDone.${u.fix as FixKind}`)
+                        : u.fix}
+                      <span className="block text-xs text-text-subtle">{date(u.at)}</span>
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      iconStart={<IconUndo />}
+                      onClick={() => void flow.start(() => service.proposeHardeningUndo(u.id))}
+                    >
+                      {t('hardening.undo')}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
           {state?.available === true && (
             <Panel title={t('hardening.detailsTitle')}>
               <div className="space-y-3 text-sm text-text-muted" data-testid="hardening-details">
@@ -250,6 +360,7 @@ export function HardeningPage() {
           )}
         </>
       )}
+      {flow.dialogs}
     </PageBody>
   );
 }

@@ -35,6 +35,10 @@ pub struct HardeningState {
     pub history: Vec<ScorePoint>,
     /// Zeitpunkt der Prüfung (RFC 3339).
     pub checked_at: String,
+    /// Darf das Konto rechnerweite Punkte beheben (Administrator)?
+    pub admin: bool,
+    /// Rückgängig machbare Schritte des Kontos (neueste zuerst).
+    pub undo: Vec<super::harden::UndoInfo>,
 }
 
 /// Liest die Fakten (nur lesend, ohne Dienst-Sperre aufrufen). Der Proxy wird für das
@@ -69,8 +73,13 @@ impl<C: Clock, W: Durable> Service<C, W> {
         self.hardening_cache
             .get(&user.identity())
             .filter(|(at, _)| now - *at < aegis_core::time::Duration::minutes(CACHE_MINUTES))
-            .map(|(_, state)| Response::Hardening {
-                state: Box::new(state.clone()),
+            .map(|(_, state)| {
+                let mut state = state.clone();
+                state.admin = user.is_admin();
+                state.undo = self.fix_undo_list(user);
+                Response::Hardening {
+                    state: Box::new(state),
+                }
             })
     }
 
@@ -106,6 +115,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
             checked_at: now
                 .format(&aegis_core::time::format_description::well_known::Rfc3339)
                 .unwrap_or_default(),
+            admin: user.is_admin(),
+            undo: self.fix_undo_list(user),
         };
         if self.hardening_cache.len() >= 32 {
             self.hardening_cache.clear();

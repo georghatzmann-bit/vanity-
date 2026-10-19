@@ -769,7 +769,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
         self.backup.clone()
     }
 
-    fn finish_plan(
+    pub(super) fn finish_plan(
         &mut self,
         permit: ExecutionPermit,
         result: &ExecutionResult,

@@ -88,6 +88,7 @@ crates/service/src/server.rs :: service-audit-truncate-torn-tail :: Dienst: schn
 crates/service/src/server.rs :: service-audit-truncate-set-len :: Dienst: kürzt das eigene Prüfprotokoll auf die geprüfte Länge (nur nach unvollständiger letzter Zeile).
 crates/winffi/src/fs.rs :: service-dacl-apply-acl :: Windows: setzt nur die Zugriffsliste des AEGIS-eigenen Datenordners (SYSTEM/Administratoren), nie die von Nutzerdateien.
 apps/desktop/src-tauri/src/winsec.rs :: desktop-open-windows-security :: Desktop-App: öffnet nur die Seite „Ransomware-Schutz“ der Windows-Sicherheit (explorer.exe vom festen Systempfad, feste Adresse) – ändert nichts.
+apps/desktop/src-tauri/src/winsec.rs :: desktop-open-windows-settings :: App: öffnet eine Windows-Einstellungsseite aus fester Liste über explorer.exe (fester Pfad) – verändert nichts.
 apps/desktop/src-tauri/src/service.rs :: desktop-service-pipe-open :: Desktop-App: öffnet die Named Pipe des Dienstes zum Senden einer Anfrage – keine Datei, keine Nutzerdaten.
 crates/quarantine/src/userfs.rs :: quarantine-remove-original :: Quarantäne (Unix/Entwicklung): entfernt das Original erst nach geprüfter verschlüsselter Kopie, nur wenn es noch dieselbe Datei ist; nur aus quarantine(ExecutionPermit).
 crates/quarantine/src/userfs.rs :: quarantine-restore-create :: Quarantäne (Unix/Entwicklung): legt das Wiederherstellungs-Ziel nur NEU an (create_new, nie überschreiben), mit den Rechten des Nutzers; nur aus restore(ExecutionPermit).
@@ -233,6 +234,15 @@ crates/winffi/src/inspect.rs :: winffi-tcp-size :: Windows-FFI (Labor-Bericht, n
 crates/winffi/src/inspect.rs :: winffi-tcp-table :: Windows-FFI (Labor-Bericht, nur lesend): Registrierung lesen, Prozesse/TCP-Verbindungen auflisten oder Bildschirmfotos der Labor-Fenster in eigenen Speicher kopieren – verändert nichts am System.
 crates/winffi/src/inspect.rs :: winffi-udp-size :: Windows-FFI (Härtung, nur lesend): Tabelle der gebundenen UDP-Ports in eigenen Speicher lesen – verändert nichts am System.
 crates/winffi/src/inspect.rs :: winffi-udp-table :: Windows-FFI (Härtung, nur lesend): Tabelle der gebundenen UDP-Ports in eigenen Speicher lesen – verändert nichts am System.
+crates/winffi/src/registry.rs :: winffi-registry-close :: Windows-FFI (Härtung): schließt einen selbst geöffneten Registrierungsschlüssel.
+crates/winffi/src/registry.rs :: winffi-registry-open-read :: Windows-FFI (Härtung): öffnet einen Schlüssel nur zum Lesen (Stand für „Rückgängig“ merken).
+crates/winffi/src/registry.rs :: winffi-registry-query :: Windows-FFI (Härtung): liest einen Wert roh in eigenen Speicher (nur lesend).
+crates/winffi/src/registry.rs :: winffi-registry-create :: Windows-FFI (Härtung): unsafe-Aufruf RegCreateKeyExW – nur aus einem freigegebenen Härtungs-Plan.
+crates/winffi/src/registry.rs :: winffi-registry-create-key :: Härtung: öffnet bzw. legt den Schlüssel eines freigegebenen Plans an (Benutzerkontensteuerung, SMBv1, Remotedesktop, Proxy) – nur nach „Ja“.
+crates/winffi/src/registry.rs :: winffi-registry-set :: Windows-FFI (Härtung): unsafe-Aufruf RegSetValueExW – nur aus einem freigegebenen Härtungs-Plan.
+crates/winffi/src/registry.rs :: winffi-registry-set-value :: Härtung: setzt genau den Wert aus dem freigegebenen Plan bzw. stellt beim „Rückgängig“-Plan den gemerkten Wert wieder her – nur nach „Ja“.
+crates/winffi/src/registry.rs :: winffi-registry-delete :: Windows-FFI (Härtung): unsafe-Aufruf RegDeleteValueW – nur aus einem freigegebenen „Rückgängig“-Plan.
+crates/winffi/src/registry.rs :: winffi-registry-delete-value :: Härtung: entfernt beim „Rückgängig“-Plan nur einen Wert, den der Härtungs-Plan selbst neu angelegt hatte – nur nach „Ja“.
 crates/winffi/src/inspect.rs :: winffi-toolhelp-first :: Windows-FFI (Labor-Bericht, nur lesend): Registrierung lesen, Prozesse/TCP-Verbindungen auflisten oder Bildschirmfotos der Labor-Fenster in eigenen Speicher kopieren – verändert nichts am System.
 crates/winffi/src/inspect.rs :: winffi-toolhelp-next :: Windows-FFI (Labor-Bericht, nur lesend): Registrierung lesen, Prozesse/TCP-Verbindungen auflisten oder Bildschirmfotos der Labor-Fenster in eigenen Speicher kopieren – verändert nichts am System.
 crates/winffi/src/inspect.rs :: winffi-toolhelp-snapshot :: Windows-FFI (Labor-Bericht, nur lesend): Registrierung lesen, Prozesse/TCP-Verbindungen auflisten oder Bildschirmfotos der Labor-Fenster in eigenen Speicher kopieren – verändert nichts am System.
@@ -296,6 +306,8 @@ crates/winffi/src/control.rs :: winffi-control-thread-first :: Windows-FFI: erst
 crates/winffi/src/control.rs :: winffi-control-thread-next :: Windows-FFI: nächster Thread des Schnappschusses.
 crates/service/src/panic.rs :: service-panic-netsh :: Panic-Button: setzt bzw. löscht nach Freigabe genau zwei AEGIS-Sperrregeln der Windows-Firewall (fester netsh-Pfad, feste Argumente).
 crates/service/src/panic.rs :: service-panic-netsh-timeout :: Panic-Button: beendet nur das selbst gestartete netsh nach 30 Sekunden.
+crates/service/src/handler/harden.rs :: service-harden-tool :: Härtung: startet netsh bzw. net vom festen Systemort mit den Argumenten eines freigegebenen Plans (Firewall-Profil einschalten, Gastkonto deaktivieren bzw. Rückgängig) – nur nach „Ja“.
+crates/service/src/handler/harden.rs :: service-harden-tool-timeout :: Härtung: beendet nur das selbst gestartete Werkzeug nach Ablauf der Frist.
 crates/winffi/src/memory.rs :: winffi-memory-module-snapshot :: Windows-FFI: Schnappschuss der Module eines Prozesses (nur lesen, Speicher-Scan).
 crates/winffi/src/memory.rs :: winffi-memory-module-first :: Windows-FFI: erstes Modul des Schnappschusses.
 crates/winffi/src/memory.rs :: winffi-memory-module-next :: Windows-FFI: nächstes Modul des Schnappschusses.

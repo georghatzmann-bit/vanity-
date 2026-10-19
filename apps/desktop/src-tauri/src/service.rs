@@ -511,6 +511,33 @@ pub async fn service_backup_status() -> Result<Value, String> {
     send(json!({ "type": "backup_status" })).await
 }
 
+/// Erlaubte Schritte der Härtung (wie im Dienst).
+const HARDENING_FIXES: [&str; 7] = [
+    "enable_uac",
+    "disable_smb1",
+    "disable_rdp",
+    "enable_rdp_nla",
+    "disable_guest",
+    "enable_firewall",
+    "disable_proxy",
+];
+
+/// Härtung: einen Punkt beheben vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_hardening_fix(fix: String) -> Result<Value, String> {
+    if !HARDENING_FIXES.contains(&fix.as_str()) {
+        return Err("Unbekannter Schritt.".into());
+    }
+    send(json!({ "type": "propose_hardening_fix", "fix": fix })).await
+}
+
+/// Härtung: ein Beheben rückgängig machen vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_hardening_undo(id: String) -> Result<Value, String> {
+    check_id(&id)?;
+    send(json!({ "type": "propose_hardening_undo", "id": id })).await
+}
+
 /// Härtung: Systemzustand lesen und bewerten (nur lesend). `fresh`: neu prüfen statt ein
 /// bis zu 10 Minuten altes Ergebnis.
 #[tauri::command]

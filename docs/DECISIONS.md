@@ -238,3 +238,15 @@ fällt aus der Rechnung – statt als gut oder schlecht geraten zu werden. Liege
 Gewichtspunkte vor, gibt es keinen Score („Kein Messwert“). Die Fakten liest der Dienst (SYSTEM,
 nur lesend), weil BitLocker/TPM ohne erhöhte Rechte nicht lesbar sind; die App bleibt ohne
 Admin-Rechte. Verlauf: ein Wert je Tag, 90 Tage, im Einstellungsspeicher des Dienstes.
+
+## D-044 – Härtung beheben: Schritte im Plan, Rückgängig gemerkt, keine Richtlinien
+
+Status: angenommen (P6.2). Ein „Beheben“ ist immer ein Plan „Einstellung ändern“, dessen Ziele
+jeden einzelnen Schritt im Klartext nennen (z. B. `HKLM\…\SMB1 = 0 (DWORD)`). Beim Ausführen
+werden die Schritte neu bestimmt und mit dem Plan verglichen – so bindet das „Ja“ genau diese
+Änderung. Der alte Stand wird roh gemerkt; „Rückgängig“ ist ein eigener Plan. Rechnerweite
+Schritte dürfen nur Administratoren vorschlagen und ausführen lassen; der Proxy gehört dem
+Konto. Gruppenrichtlinien ändert AEGIS nie (sie gehören der IT bzw. dem Besitzer des PCs).
+BitLocker, Updates und Virenschutz schaltet AEGIS nicht selbst – die App öffnet dafür nur die
+passende Windows-Seite aus einer festen Liste.
+

@@ -58,6 +58,10 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
     'Dienst: eigene Schutzordner der Ransomware-Erkennung setzen (nur Beobachtung)',
   'allow-service-backup-status': 'Dienst: Zustand der eigenen Rückfall-Kopien (nur lesend)',
   'allow-service-hardening-status': 'Dienst: Systemzustand und Sicherheits-Score (nur lesend)',
+  'allow-service-propose-hardening-fix':
+    'Dienst: Härtungs-Schritt vorschlagen (feste Liste; ausgeführt erst nach „Ja“, mit Rückgängig)',
+  'allow-service-propose-hardening-undo':
+    'Dienst: gemerkten Stand vor dem Beheben wiederherstellen vorschlagen (erst nach „Ja“)',
   'allow-service-propose-backup':
     'Dienst: Rückfall-Kopien ein-/ausschalten vorschlagen (nur nach „Ja“)',
   'allow-service-propose-backup-restore':
@@ -68,6 +72,8 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
     'Dienst: alte Rückfall-Kopien ausdünnen vorschlagen (nur nach „Ja“ + zweiter Bestätigung)',
   'allow-open-windows-security':
     'Windows-Sicherheit „Ransomware-Schutz“ öffnen (fester Aufruf, ändert nichts)',
+  'allow-open-windows-settings':
+    'Windows-Einstellungsseite aus fester Liste öffnen (Update, Verschlüsselung, Virenschutz)',
   'allow-service-memory-scan': 'Dienst: Speicher-Scan eigener Programme (nur lesend)',
   'allow-service-emergency-scan':
     'Dienst: Notfall-Scan (Autostarts, Downloads, Temp, AppData, Programme; nur lesend)',

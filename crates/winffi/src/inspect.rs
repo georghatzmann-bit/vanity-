@@ -52,7 +52,7 @@ pub enum Hive {
 }
 
 impl Hive {
-    fn root_and_prefix(&self, subkey: &str) -> (HKEY, String, String) {
+    pub(crate) fn root_and_prefix(&self, subkey: &str) -> (HKEY, String, String) {
         match self {
             Self::LocalMachine => (
                 HKEY_LOCAL_MACHINE,

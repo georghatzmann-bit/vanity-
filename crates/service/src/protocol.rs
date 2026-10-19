@@ -88,6 +88,10 @@ pub enum Request {
         #[serde(default)]
         fresh: bool,
     },
+    /// Einen Punkt der Härtung beheben vorschlagen (`fix`: z. B. `disable_smb1`) – nur nach „Ja“.
+    ProposeHardeningFix { fix: String },
+    /// Ein Beheben rückgängig machen vorschlagen – nur nach „Ja“.
+    ProposeHardeningUndo { id: String },
     /// Rückfall-Kopien ein- (`on`, Grenze in MiB) bzw. ausschalten vorschlagen.
     ProposeBackup { on: bool, quota_mb: u64 },
     /// Eine Version zurückholen vorschlagen.

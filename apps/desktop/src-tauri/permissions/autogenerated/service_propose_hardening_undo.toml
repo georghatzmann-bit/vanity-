@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-propose-hardening-undo"
+description = "Enables the service_propose_hardening_undo command without any pre-configured scope."
+commands.allow = ["service_propose_hardening_undo"]
+
+[[permission]]
+identifier = "deny-service-propose-hardening-undo"
+description = "Denies the service_propose_hardening_undo command without any pre-configured scope."
+commands.deny = ["service_propose_hardening_undo"]

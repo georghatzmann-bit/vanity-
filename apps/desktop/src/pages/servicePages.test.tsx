@@ -111,6 +111,8 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     ransomStatus: vi.fn(() => Promise.resolve(ransomState())),
     backupStatus: vi.fn(() => Promise.resolve(backupState())),
     hardeningStatus: vi.fn(() => Promise.resolve(hardeningState())),
+    proposeHardeningFix: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    proposeHardeningUndo: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBackup: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBackupRestore: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopie zurückholen'))),
     proposeBackupExport: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopien exportieren'))),
@@ -236,6 +238,8 @@ function hardeningState(over: Partial<HardeningState> = {}): HardeningState {
     osVersion: '10.0.22631.4317',
     dnsServers: [],
     listening: [{ port: 3389, protocol: 'tcp', allInterfaces: true, program: 'svchost.exe' }],
+    admin: true,
+    undo: [],
     ...over,
   };
 }
@@ -1104,5 +1108,56 @@ describe('Härtung', () => {
       ),
     );
     expect(service.hardeningStatus).toHaveBeenCalledWith(false);
+  });
+
+  it('Beheben und Rückgängig nur als Vorschlag; rechnerweit nur für Administratoren', async () => {
+    const service = fakeService({
+      hardeningStatus: vi.fn(() =>
+        Promise.resolve(
+          hardeningState({
+            admin: false,
+            checks: [
+              ...hardeningState().checks,
+              {
+                id: 'network',
+                status: 'warn',
+                weight: 5,
+                summaryDe: 'Ein Proxy ist eingerichtet.',
+                summaryEn: 'A proxy is configured.',
+                fix: 'disable_proxy',
+              },
+              {
+                id: 'antivirus',
+                status: 'fail',
+                weight: 12,
+                summaryDe: 'Kein aktiver Echtzeit-Virenschutz.',
+                summaryEn: 'No active real-time antivirus.',
+                fix: 'open_settings',
+              },
+            ],
+            undo: [{ id: 'u-1', fix: 'disable_smb1', at: '2026-10-19T12:00:00Z' }],
+          }),
+        ),
+      ),
+    });
+    const platform = fakePlatform('tauri', undefined, service);
+    renderApp({ platform, hash: '#/hardening' });
+    const checks = await screen.findByTestId('hardening-checks');
+    const smb = within(checks).getByTestId('hardening-check-smb1');
+    expect(within(smb).getByRole('button', { name: 'Beheben …' })).toBeDisabled();
+    expect(smb).toHaveTextContent('nur ein Administrator');
+    const proxy = within(checks).getByTestId('hardening-check-network');
+    fireEvent.click(within(proxy).getByRole('button', { name: 'Beheben …' }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeHardeningFix).toHaveBeenCalledWith('disable_proxy');
+    expect(service.decide).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Nein' }));
+    const av = within(checks).getByTestId('hardening-check-antivirus');
+    fireEvent.click(within(av).getByRole('button', { name: 'In Windows öffnen' }));
+    expect(platform.openWindowsSettings).toHaveBeenCalledWith('virus_protection');
+    const undo = screen.getByTestId('hardening-undo');
+    expect(undo).toHaveTextContent('SMBv1 abgeschaltet');
+    fireEvent.click(within(undo).getByRole('button', { name: /Rückgängig/ }));
+    await waitFor(() => expect(service.proposeHardeningUndo).toHaveBeenCalledWith('u-1'));
   });
 });

@@ -102,7 +102,12 @@ export interface Platform {
   onFileDrop(handler: (event: FileDropEvent) => void): Promise<Unlisten>;
   /** Windows-Sicherheit „Ransomware-Schutz“ öffnen (ändert nichts). `null` in der Vorschau. */
   readonly openWindowsSecurity: (() => Promise<void>) | null;
+  /** Windows-Einstellungsseite aus fester Liste öffnen (ändert nichts). `null` in der Vorschau. */
+  readonly openWindowsSettings: ((page: WindowsSettingsPage) => Promise<void>) | null;
 }
+
+/** Einstellungsseiten, die AEGIS öffnen darf. */
+export type WindowsSettingsPage = 'windows_update' | 'device_encryption' | 'virus_protection';
 
 /** Wandelt das Ergebnis des Auswahldialogs in eine Pfadliste. */
 export function toPathList(selection: unknown): readonly string[] {
@@ -175,6 +180,7 @@ export function createTauriPlatform(): Platform {
         }
       }),
     openWindowsSecurity: () => invoke<undefined>('open_windows_security'),
+    openWindowsSettings: (page) => invoke<undefined>('open_windows_settings', { page }),
   };
 }
 
@@ -250,6 +256,10 @@ function createTauriService(): ServiceApi {
     backupStatus: async () => parseBackup(await invoke<unknown>('service_backup_status')),
     hardeningStatus: async (fresh) =>
       parseHardening(await invoke<unknown>('service_hardening_status', { fresh })),
+    proposeHardeningFix: async (fix) =>
+      parseProposal(await invoke<unknown>('service_propose_hardening_fix', { fix })),
+    proposeHardeningUndo: async (id) =>
+      parseProposal(await invoke<unknown>('service_propose_hardening_undo', { id })),
     proposeBackup: async (on, quotaMb) =>
       parseProposal(await invoke<unknown>('service_propose_backup', { on, quotaMb })),
     proposeBackupRestore: async (id) =>
@@ -290,6 +300,7 @@ export function createBrowserPlatform(info: AppInfo): Platform {
     pickPaths: null,
     onFileDrop: () => Promise.resolve(() => undefined),
     openWindowsSecurity: null,
+    openWindowsSettings: null,
   };
 }
 

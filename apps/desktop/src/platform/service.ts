@@ -405,6 +405,10 @@ export interface HardeningState {
   readonly osVersion: string | null;
   readonly dnsServers: readonly string[];
   readonly listening: readonly ListeningPort[] | null;
+  /** Darf das Konto rechnerweite Punkte beheben (Administrator)? */
+  readonly admin: boolean;
+  /** Rückgängig machbare Schritte (neueste zuerst). */
+  readonly undo: readonly { readonly id: string; readonly fix: string; readonly at: string }[];
 }
 
 /** Ransomware-Schutz des Kontos. */
@@ -499,6 +503,10 @@ export interface ServiceApi {
    * `fresh` darf der Dienst ein bis zu 10 Minuten altes Ergebnis liefern.
    */
   hardeningStatus(fresh: boolean): Promise<HardeningState>;
+  /** Einen Punkt der Härtung beheben vorschlagen – ausgeführt erst nach „Ja“. */
+  proposeHardeningFix(fix: FixKind): Promise<Proposal>;
+  /** Ein Beheben rückgängig machen vorschlagen. */
+  proposeHardeningUndo(id: string): Promise<Proposal>;
   /** Rückfall-Kopien ein- (`true`, Grenze in MiB) bzw. ausschalten vorschlagen. */
   proposeBackup(on: boolean, quotaMb: number): Promise<Proposal>;
   /** Version zurückholen vorschlagen. */
@@ -981,6 +989,10 @@ export function parseHardening(response: unknown): HardeningState {
             program: typeof l['program'] === 'string' ? l['program'] : null,
           }))
       : null,
+    admin: st['admin'] === true,
+    undo: arr(st['undo'])
+      .filter(isObject)
+      .map((u) => ({ id: str(u['id']), fix: str(u['fix']), at: str(u['at']) })),
   };
 }
 

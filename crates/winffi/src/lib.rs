@@ -48,6 +48,9 @@ pub mod control;
 pub mod memory;
 
 #[cfg(windows)]
+pub mod registry;
+
+#[cfg(windows)]
 pub use fs::{
     DATA_DIR_SDDL, create_new, create_secure_dir, delete_by_handle, ensure_file_at, final_path,
     is_name_surrogate, long_path, open_exclusive, ordinal_eq_ignore_case, owner_is_trusted,

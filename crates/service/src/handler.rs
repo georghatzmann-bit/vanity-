@@ -28,6 +28,7 @@ use aegis_quarantine::{Entry, UserAccess, Vault};
 use crate::protocol::{PROTOCOL_VERSION, Proposal, Request, Response};
 
 pub mod backup;
+pub mod harden;
 pub mod hardening;
 mod safe;
 
@@ -1630,6 +1631,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Request::RansomStatus {} => self.ransom_status(user),
             Request::SetProtectedFolders { folders } => self.set_protected(folders, user),
             Request::BackupStatus {} => self.backup_status(user),
+            Request::ProposeHardeningFix { fix } => self.propose_fix(&fix, user),
+            Request::ProposeHardeningUndo { id } => self.propose_fix_undo(&id, user),
             // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
             Request::HardeningStatus { fresh } => match self.hardening_cached(user) {
                 Some(cached) if !fresh => cached,
@@ -2265,6 +2268,9 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 let backup = plan.targets().iter().any(|t| {
                     matches!(t, Target::Setting { id } if id == aegis_quarantine::backup::BACKUP_SETTING)
                 });
+                let harden = plan.targets().iter().any(|t| {
+                    matches!(t, Target::Setting { id } if id == harden::FIX_SETTING || id == harden::UNDO_SETTING)
+                });
                 return if bait {
                     self.apply_baits(permit, user)
                 } else if panic {
@@ -2273,6 +2279,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
                     self.apply_safe_create(permit, user)
                 } else if backup {
                     self.apply_backup_setting(permit, user)
+                } else if harden {
+                    self.apply_fix(permit, user)
                 } else {
                     self.enable_sandbox_feature(permit, user)
                 };

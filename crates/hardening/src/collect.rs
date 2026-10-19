@@ -125,8 +125,26 @@ pub fn expand_system_root(text: &str, system_root: &str) -> String {
     }
 }
 
+/// Was ein Plan zum Beheben vorher wissen muss (nur gelesen).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FixState {
+    /// Firewall-Profile, die aus sind (`netsh`-Namen: `domainprofile`, `privateprofile`,
+    /// `publicprofile`).
+    pub firewall_off: Vec<String>,
+    /// Schaltet eine Gruppenrichtlinie die Firewall ab? (AEGIS ändert keine Richtlinien.)
+    pub firewall_policy: bool,
+    /// Gastkonto: (Name, aktiviert?).
+    pub guest: Option<(String, bool)>,
+    /// Remotedesktop bzw. NLA per Gruppenrichtlinie festgelegt?
+    pub rdp_policy: bool,
+    /// NLA per Gruppenrichtlinie festgelegt?
+    pub nla_policy: bool,
+    /// Proxy-Skript (`AutoConfigURL`) des Kontos gesetzt?
+    pub auto_config: bool,
+}
+
 #[cfg(windows)]
-pub use self::windows::collect;
+pub use self::windows::{collect, fix_state};
 
 #[cfg(windows)]
 mod windows {
@@ -138,8 +156,8 @@ mod windows {
     use wmi::{AuthLevel, Variant, WMIConnection, WMIError};
 
     use super::{
-        av_product_active, bitlocker_state, days_since_latest, expand_system_root, is_defender,
-        parse_installed_on, parse_name_servers, tpm_state, uac_level,
+        FixState, av_product_active, bitlocker_state, days_since_latest, expand_system_root,
+        is_defender, parse_installed_on, parse_name_servers, tpm_state, uac_level,
     };
     use crate::facts::{
         AntivirusState, BitLockerState, FirewallState, ListeningPort, ProxyState, RdpState,
@@ -511,6 +529,54 @@ mod windows {
             .find(|r| v_string(r, "SID").is_some_and(|s| s.ends_with("-501")))
             .and_then(|r| v_bool(r, "Disabled"))
             .map(|disabled| !disabled)
+    }
+
+    fn guest_account() -> Option<(String, bool)> {
+        let rows = query(
+            r"ROOT\CIMV2",
+            "SELECT Name, SID, Disabled FROM Win32_UserAccount WHERE LocalAccount = TRUE",
+            false,
+        )
+        .ok()?;
+        rows.iter()
+            .find(|r| v_string(r, "SID").is_some_and(|s| s.ends_with("-501")))
+            .and_then(|r| Some((v_string(r, "Name")?, !v_bool(r, "Disabled")?)))
+    }
+
+    /// Liest, was ein Plan zum Beheben wissen muss (nur lesend). `user_sid`: Konto für den Proxy.
+    #[must_use]
+    pub fn fix_state(user_sid: Option<&str>) -> FixState {
+        let hklm = Hive::LocalMachine;
+        let fw = firewall();
+        let firewall_off = [
+            (fw.domain, "domainprofile"),
+            (fw.private, "privateprofile"),
+            (fw.public, "publicprofile"),
+        ]
+        .into_iter()
+        .filter(|(on, _)| *on == Some(false))
+        .map(|(_, name)| name.to_owned())
+        .collect();
+        let firewall_policy = ["DomainProfile", "PrivateProfile", "PublicProfile"]
+            .iter()
+            .any(|p| {
+                dword(
+                    &hklm,
+                    &format!(r"SOFTWARE\Policies\Microsoft\WindowsFirewall\{p}"),
+                    "EnableFirewall",
+                ) == Some(0)
+            });
+        let policy = r"SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services";
+        FixState {
+            firewall_off,
+            firewall_policy,
+            guest: guest_account(),
+            rdp_policy: dword(&hklm, policy, "fDenyTSConnections").is_some(),
+            nla_policy: dword(&hklm, policy, "UserAuthentication").is_some(),
+            auto_config: user_sid
+                .and_then(proxy)
+                .is_some_and(|p| p.auto_config.is_some()),
+        }
     }
 
     /// Liest alle Fakten (nur lesend; dauert je nach System einige Sekunden – nicht unter

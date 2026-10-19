@@ -256,6 +256,17 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Identitätswechsel-Stufe „Impersonate“) – sonst nutzt der Dienst kein COM. Was nicht lesbar
   ist, bleibt „unbekannt“ und zählt nicht; liegt weniger als die Hälfte der Gewichte vor, gibt
   es keinen Score (D-043). Behoben wird hier nichts – das kommt als eigener Plan (P6.2).
+- **Härtung beheben (P6.2):** jeder Vorschlag ist ein Plan, dessen Ziele genau die Schritte
+  nennen (Registrierungswert mit neuem Wert, Firewall-Profil, Gastkonto); beim Ausführen
+  bestimmt der Dienst die Schritte neu – weichen sie vom Plan ab, passiert nichts. Rechnerweite
+  Schritte nur für Administratoren (Prüfung beim Vorschlag und beim Ausführen), der Proxy nur im
+  Zweig `HKU\<SID>` des anfragenden Kontos. Vor dem Ändern liest der Dienst den alten Wert roh
+  (Typ + Bytes) und merkt ihn (höchstens 50 Stände je Rechner); „Rückgängig“ ist ein eigener
+  Plan des Kontos, das behoben hat. Schlägt ein Schritt fehl, werden die schon ausgeführten
+  zurückgenommen. Gruppenrichtlinien werden nie geändert (AEGIS sagt das und verweist auf die
+  IT). `netsh`/`net` laufen vom festen Systemort, mit festen Argumenten (Kontoname geprüft),
+  höchstens 30 s. Updates, BitLocker und Virenschutz öffnet die App nur als Windows-Seite
+  (feste Liste) – den Manipulationsschutz von Defender fasst AEGIS nie an.
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.

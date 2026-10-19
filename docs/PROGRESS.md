@@ -108,8 +108,11 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
        Fakten nur lesend (Registrierung, WMI, Hosts-Datei, Port-Tabellen) außerhalb der
        Dienst-Sperre; „unbekannt“ zählt nicht, ohne genug Bewertbares kein Score. Seite „Härtung“
        mit Verlauf je Tag, Dashboard zeigt den Score.
-2. [ ] P6.2 Beheben mit Vorschau, Rückgängig und „Ja“ (UAC, SMBv1, RDP/NLA, Gastkonto,
-       Firewall, Proxy; sonst Windows-Einstellungen öffnen).
+2. [x] P6.2 Beheben mit Vorschau, Rückgängig und „Ja“: UAC, SMBv1, Remotedesktop/NLA,
+       Gastkonto, Firewall (rechnerweit nur für Administratoren), Proxy (nur eigenes Konto);
+       jeder Schritt steht im Plan, alter Stand gemerkt, „Rückgängig“ als eigener Plan;
+       Gruppenrichtlinien werden nie geändert; Update/Verschlüsselung/Virenschutz öffnen nur die
+       Windows-Einstellungen.
 3. [ ] P6.3 Persistenz-Check (Run-Schlüssel, Autostart-Ordner, Aufgaben, Dienste, WMI, IFEO,
        AppInit, COM, Browser-Erweiterungen).
 4. [ ] P6.4 Treiber-Check gegen eine Liste verwundbarer Treiber (Lizenz vorher prüfen).
@@ -117,7 +120,7 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 6. [ ] P6.6 Kamera/Mikrofon-Wächter, Zwischenablage (Krypto-Adressen, opt-in), USB-Geräte.
 7. [ ] P6.7 Sicherheits-Review (separater Agent), Doku, DoD.
 
-**Nächster Schritt:** P6.2 Beheben mit Plan.
+**Nächster Schritt:** P6.3 Persistenz-Check.
 
 ## P5 – Schutz-Werkzeuge
 

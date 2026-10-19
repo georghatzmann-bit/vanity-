@@ -103,6 +103,9 @@ pub struct ServiceSettings {
     /// Score-Verlauf der Härtung (je Tag, höchstens 90).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hardening: Vec<ScorePoint>,
+    /// Gemerkte Stände vor dem Beheben (für „Rückgängig“, höchstens 50).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hardening_undo: Vec<crate::handler::harden::FixRecord>,
 }
 
 /// Sicherheits-Score eines Tages (Härtung, P6).
@@ -164,6 +167,7 @@ impl Default for ServiceSettings {
             protected: Vec::new(),
             backup: Vec::new(),
             hardening: Vec::new(),
+            hardening_undo: Vec::new(),
         }
     }
 }
