@@ -9,6 +9,7 @@ const ini = require('./ini');
 const { locateFortnite } = require('./locator');
 const { scan } = require('./scanner');
 const engine = require('./engine');
+const clientsettings = require('./clientsettings');
 const { SnapshotStore } = require('./snapshots');
 const archive = require('./archive');
 const fortnite = require('./fortnite');
@@ -668,6 +669,32 @@ class CoreService {
       out.push(entry);
     }
     return { id, kind, name: meta.name || meta.label, files: out };
+  }
+
+  /**
+   * Tasten & Sensi eines Profils, gelesen aus seiner ClientSettings-Kopie, plus Unterschiede
+   * zur aktuellen Kopie auf dem PC (= Stand vom letzten Spielen). Nur lesen.
+   */
+  async controls(id) {
+    const meta = await this.profiles.get(id);
+    const files = meta.files.filter((f) => f.kind === 'controls');
+    const f = files.find((x) => /(^|\/)ClientSettings\.sav$/i.test(x.rel)) || files[0];
+    if (!f) return { available: false, profile: null, current: null, diff: null };
+    let saved = null;
+    try { saved = clientsettings.extract(await engine.readStored(this.profiles.dir(id), f)); } catch { saved = null; }
+    let current = null;
+    try {
+      const loc = await this.requireLocation();
+      const sc = await this.scanNow();
+      const rel = engine.resolveAccount(f.rel, sc);
+      if (rel) current = clientsettings.extract(await fsp.readFile(safeJoin(loc.savedDir, rel)));
+    } catch { current = null; }
+    return {
+      available: true,
+      profile: clientsettings.view(saved),
+      current: current ? clientsettings.view(current) : null,
+      diff: clientsettings.diff(current, saved),
+    };
   }
 
   // ---------- Export / Import ----------

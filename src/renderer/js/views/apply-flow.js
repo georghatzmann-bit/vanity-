@@ -1,5 +1,6 @@
 // Ablauf "Profil anwenden": Prüfen -> Vorschau -> Anwenden -> Ergebnis.
 // Wird vom Cockpit (Profil-Leiste) und von der Profil-Ansicht benutzt.
+import { controlsDiffBox } from './controls.js';
 
 const ACTION_TEXT = {
   change: ['wird ersetzt', 'accent'],
@@ -63,6 +64,8 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
   const ui = env.ui;
   const { h, icon } = ui;
   let preview;
+  // Tasten & Sensi VOR dem Anwenden lesen: danach ist die Kopie auf dem PC schon die des Profils
+  const controlsBefore = env.call('profiles.controls', { id: profileId }).catch(() => null);
   try {
     preview = await env.call('profiles.preview', { id: profileId });
   } catch (e) {
@@ -142,7 +145,7 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
       h('strong', 'Richtiges Konto?'),
       h('p.hint', 'Logg dich vorher im Epic Games Launcher in das Konto dieses Profils ein.'),
       preview.items.some((i) => i.kind === 'controls')
-        ? ui.more('Was ist mit Tasten und Sensi?', 'Tastenbelegung und Sensi speichert Fortnite pro Konto in der Epic-Cloud. HELIX legt die gesicherte Kopie zurück – unterscheidet sie sich von der Cloud, holt Fortnite beim Einloggen die Cloud-Version. HELIX sagt dir dann Bescheid.')
+        ? ui.more('Was ist mit Tasten und Sensi?', 'Tastenbelegung und Sensi speichert Fortnite pro Konto in der Epic-Cloud und holt sie beim Einloggen. Nach dem Anwenden zeigt HELIX dir genau, welche Tasten und Werte du im Spiel noch umstellen musst.')
         : null)),
     fnBox,
     h('h4', 'Was passiert'),
@@ -200,7 +203,7 @@ export async function applyFlow(env, profileId, { onDone } = {}) {
   requestAnimationFrame(() => { bindApplyButton(applyBtnHolder); renderFortnite(); });
   const r = await pending;
   if (r !== 'applied' || !result) return;
-  await showResult(env, p, result);
+  await showResult(env, p, result, await controlsBefore);
   env.refreshStatus?.();
   onDone?.(result);
 }
@@ -210,7 +213,7 @@ function bindApplyButton(holder) {
   holder.el = btn || null;
 }
 
-export async function showResult(env, p, result) {
+export async function showResult(env, p, result, controls = null) {
   const { h, icon } = env.ui;
   const ui = env.ui;
   if (!result.ok) {
@@ -239,6 +242,7 @@ export async function showResult(env, p, result) {
     subtitle: `${result.written.length} kopiert · ${result.removed.length} entfernt · ${result.same.length} unverändert`,
     wide: true,
     content: [
+      controlsDiffBox(env, controls),
       h('ul.list.files', rows),
       h('div.callout.info', icon('shield'), h('div', h('strong', 'Sicherung angelegt'), h('p.hint', 'Der alte Stand liegt in der Zeitmaschine.'))),
       h('p.hint', ro),

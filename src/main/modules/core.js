@@ -106,6 +106,7 @@ const profilesModule = {
     preview: (a, ctx) => ctx.core.previewProfile(str(a.id, 'id'), { removeExtra: a.removeExtra }),
     apply: (a, ctx) => ctx.core.applyProfile(str(a.id, 'id'), { readOnly: a.readOnly, removeExtra: a.removeExtra }),
     diff: (a, ctx) => ctx.core.diff('profile', str(a.id, 'id')),
+    controls: (a, ctx) => ctx.core.controls(str(a.id, 'id')),
     export: async (a, ctx) => {
       const p = await ctx.core.getProfile(str(a.id, 'id'));
       const safe = p.name.replace(/[^\w\- äöüÄÖÜß()]/g, '_');

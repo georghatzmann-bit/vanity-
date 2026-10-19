@@ -1,7 +1,7 @@
 {
   "name": "helix",
   "productName": "HELIX",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "HELIX – dein Fortnite-Tuning-Cockpit: Settings-Profile, Sensi-Kalibrierung, PC- und Monitor-Tuning. Arbeitet nur mit lokalen Dateien.",
   "main": "src/main/main.js",
   "author": "Georg Hatzmann",

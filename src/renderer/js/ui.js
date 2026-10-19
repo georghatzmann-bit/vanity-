@@ -134,7 +134,7 @@ export function button(label, { onClick, variant = '', iconName, title, disabled
       if (b.dataset.busy) return;
       b.dataset.busy = '1';
       b.classList.add('busy');
-      try { await onClick(e); } finally { delete b.dataset.busy; b.classList.remove('busy'); }
+      try { await onClick(e); } catch (err) { showError(err); } finally { delete b.dataset.busy; b.classList.remove('busy'); }
     });
   }
   return b;

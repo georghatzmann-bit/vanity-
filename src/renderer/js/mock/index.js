@@ -127,6 +127,26 @@ const CORE = {
       { ...FILES[2], status: 'same', changes: [] },
     ],
   }),
+  'profiles.controls': () => ({
+    available: true,
+    profile: {
+      ok: true,
+      sens: [{ name: 'MouseSensitivityX', label: 'Maus-Sensi X', value: '7,2 %' }, { name: 'MouseSensitivityY', label: 'Maus-Sensi Y', value: '7,2 %' }, { name: 'TargetingMultiplier', label: 'Sensi beim Zielen', value: '45 %' }],
+      binds: [
+        { action: 'Wall', label: 'Wand', keys: ['Maustaste 4'] }, { action: 'Floor', label: 'Boden', keys: ['Q'] },
+        { action: 'Stair', label: 'Treppe', keys: ['Maustaste 5'] }, { action: 'Roof', label: 'Dach', keys: ['Shift links'] },
+        { action: 'Edit', label: 'Bearbeiten', keys: ['F'] }, { action: 'Jump', label: 'Springen', keys: ['Leertaste'] },
+      ],
+      other: [{ name: 'HUDScale', label: 'HUD-Größe', value: '85 %' }],
+    },
+    current: null,
+    diff: {
+      count: 4,
+      binds: [{ action: 'Wall', label: 'Wand', from: ['Q'], to: ['Maustaste 4'] }, { action: 'Floor', label: 'Boden', from: ['F2'], to: ['Q'] }],
+      sens: [{ name: 'MouseSensitivityX', label: 'Maus-Sensi X', from: '6,5 %', to: '7,2 %' }],
+      other: [{ name: 'HUDScale', label: 'HUD-Größe', from: '100 %', to: '85 %' }],
+    },
+  }),
   'profiles.export': () => ({ canceled: false, file: 'C:\\Users\\Spieler\\Documents\\Main.helixprofil' }),
   'profiles.import': () => ({ canceled: true }),
   'profiles.reorder': () => db.profiles.map(pub),

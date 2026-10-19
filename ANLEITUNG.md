@@ -35,10 +35,11 @@ Wichtig zu wissen:
 
 - **Grafik, Auflösung, FPS, Helligkeit** stehen in `GameUserSettings.ini`. Diese Datei gilt für alle Konten
   auf deinem PC gemeinsam – genau dafür sind die Profile da.
-- **Tastenbelegung und Sensi** speichert Fortnite pro Konto in der Epic-Cloud. Auf dem PC liegt nur eine Kopie
-  (`Saved\Cloud\<Konto>\ClientSettings.Sav`). HELIX sichert sie und legt sie beim Anwenden zurück.
-  Holt Fortnite beim Einloggen die Cloud-Version, bekommst du eine Warnung. Das ist normal:
-  Tasten und Sensi wandern ohnehin mit deinem Konto mit.
+- **Tastenbelegung und Sensi** speichert Fortnite pro Konto in der Epic-Cloud und holt sie beim Einloggen.
+  Deshalb kann HELIX sie nicht selbst umstellen. Stattdessen liest HELIX sie aus der Kopie auf dem PC
+  (`Saved\Cloud\<Konto>\ClientSettings.Sav`) und zeigt dir nach dem Anwenden nur die Unterschiede,
+  zum Beispiel „Wand: Q → Maustaste 4“ oder „Maus-Sensi X: 6,5 % → 7,2 %“. Die stellst du im Spiel um – fertig.
+  Die ganze Belegung eines Profils siehst du jederzeit über den Knopf **Tasten & Sensi** am Profil.
 - **Schreibschutz** (pro Profil wählbar): schützt die Grafik-Datei davor, dass sie verändert wird.
   Dann speichert Fortnite aber auch Änderungen im Spiel nicht. Aufheben: Kern → „Gefundene Dateien“ →
   **Schreibschutz überall aufheben**.

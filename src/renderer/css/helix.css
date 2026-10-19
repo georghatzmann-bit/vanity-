@@ -403,3 +403,18 @@ body.reduce-motion .stage.fade-out { transform: none; }
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0ms !important; animation-duration: 0ms !important; animation-delay: 0ms !important; }
 }
+
+/* ---------- Tasten & Sensi ---------- */
+.ctl-list li.ctl-row { justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.ctl-name { font-weight: 500; }
+.ctl-change { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ctl-change > .icon { color: var(--accent); }
+.ctl-old { color: var(--muted); text-decoration: line-through; }
+.keys { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+kbd {
+  font: 600 12px/1 var(--font); padding: 4px 8px; border-radius: 6px;
+  background: var(--surface-3); border: 1px solid var(--line-2); border-bottom-width: 2px; color: var(--text);
+}
+.ctl-change .keys:first-child kbd { opacity: 0.6; }
+.ctl-all { max-height: 360px; overflow: auto; }
+.ctl-diff h4 { margin: 12px 0 8px; }

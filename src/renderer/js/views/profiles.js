@@ -1,6 +1,7 @@
 // Hauptfunktion: Settings-Profile verwalten, gefundene Dateien, Zeitmaschine (Backups).
 
 import { applyFlow, withFortniteClosed, RO_OPTIONS, roKey, roValue } from './apply-flow.js';
+import { showControls } from './controls.js';
 
 let cleanup = [];
 
@@ -108,6 +109,7 @@ export default {
         h('div.card-actions',
           ui.button('Anwenden', { variant: 'primary', iconName: 'play', title: p.active ? 'Ist schon aktiv – nochmal anwenden' : null, onClick: () => applyFlow(env, p.id, { onDone: renderAll }) }),
           ui.button('Vergleichen', { iconName: 'eye', onClick: () => showDiff('profile', p.id, p.name) }),
+          ui.button('Tasten & Sensi', { iconName: 'mouse', onClick: () => showControls(env, p) }),
           menu));
     }
 
