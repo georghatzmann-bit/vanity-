@@ -22,7 +22,7 @@ Stand: 2026-10-19 · **P0 abgeschlossen** · nächste Phase: **P1 – Shell, Das
 | Phase | Inhalt | Status |
 | --- | --- | --- |
 | P0 | Fundament, Design-Tokens, Logo, Start-Animation | **erledigt** |
-| P1 | Shell, Dashboard, Design-System | als Nächstes |
+| P1 | Shell, Dashboard, Design-System | **in Arbeit** |
 | P2 | Dienst + Pipe + Engine-Kern (ClamAV, Hashes, YARA-X, statische Analyse), Quarantäne | offen |
 | P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | offen |
 | P4 | Sandbox Stufe 1+2 + Verhaltensbericht | offen |
@@ -94,6 +94,20 @@ Stand: 2026-10-19 · **P0 abgeschlossen** · nächste Phase: **P1 – Shell, Das
 - **Projektlizenz** (z. B. proprietär, MIT, GPL-3.0)? Bis dahin: keine Lizenzangabe, `publish = false`.
 - **Code-Signing-Zertifikat** (kostet Geld) – wird vorbereitet, nicht vorausgesetzt (P13).
 - Hinweis: Das Repo ist öffentlich → GitHub Actions (auch `windows-latest`) ist kostenlos.
+
+## P1 – Plan (in Arbeit)
+
+1. [ ] `packages/ui` Komponenten: Button (Feder-Animation), IconButton, Panel/Card, StatusRing,
+       ScoreGauge, CountUp, RiskBadge, Toggle, SegmentedControl, Tabs, Tooltip, Toast,
+       Dialog + **Freigabe-Dialog** (Was? Warum? Was passiert dann? Rückgängig? – Ja, ausführen /
+       Nein / Ignorieren / Vertrauen; Standard-Fokus nie auf „Ja“), Befehlspalette, eigene Icons
+2. [ ] Rust-Seite der App: rahmenloses Fenster + eigene Titelleiste (einzeln begründete
+       Fenster-Rechte), Tray mit Menü, nur eine Instanz, sichtbare Startfehler, `app_info`
+3. [ ] Shell: Titelleiste, Navigation, Seitenübergänge, Dashboard (ehrliche Zustände – keine
+       erfundenen Werte), Platzhalterseiten je Modul, Einstellungen (Sprache, Hell/Dunkel,
+       Klang, Bewegung, Schließen-Verhalten), Befehlspalette Strg+K, Deutsch/Englisch
+4. [ ] Tests: Vitest, Playwright inkl. axe (Barrierefreiheit) in beiden Themes, Tastatur-Bedienung
+5. [ ] Review (Sicherheit der Fenster-/Tray-Rechte, UI/Barrierefreiheit), Korrekturen, DoD, Commit
 
 ## Nächster Schritt
 
