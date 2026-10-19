@@ -387,3 +387,5 @@ apps/desktop/src-tauri/src/vault.rs :: desktop-vault-dir :: Passwort-Tresor: leg
 apps/desktop/src-tauri/src/vault.rs :: desktop-vault-write :: Passwort-Tresor: schreibt nur die eigene Hilfsdatei vault.aegisvault.tmp (verschlüsselter Inhalt) – auf ausdrückliche Änderung des Nutzers im Tresor.
 apps/desktop/src-tauri/src/vault.rs :: desktop-vault-backup :: Passwort-Tresor: kopiert die vorige eigene Tresordatei nach vault.aegisvault.bak (Sicherung vor dem Ersetzen).
 apps/desktop/src-tauri/src/vault.rs :: desktop-vault-replace :: Passwort-Tresor: ersetzt die eigene Tresordatei durch die eben geschriebene Fassung (Umbenennen der Hilfsdatei).
+crates/winffi/src/process.rs :: winffi-token-restricted :: Windows-FFI (Prüfprozess, nur lesend): fragt ab, ob ein Token eingeschränkt ist bzw. demselben Konto gehört – verändert nichts.
+crates/winffi/src/process.rs :: winffi-token-same-user :: Windows-FFI (Prüfprozess, nur lesend): fragt ab, ob ein Token eingeschränkt ist bzw. demselben Konto gehört – verändert nichts.

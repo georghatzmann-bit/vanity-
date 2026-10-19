@@ -25,10 +25,12 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::Security::Authorization::ConvertStringSidToSidW;
 use windows_sys::Win32::Security::{
-    CreateRestrictedToken, DISABLE_MAX_PRIVILEGE, DuplicateTokenEx, GetLengthSid, LUA_TOKEN, PSID,
-    SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, SecurityImpersonation, SetTokenInformation,
-    TOKEN_ADJUST_DEFAULT, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_MANDATORY_LABEL,
-    TOKEN_QUERY, TokenIntegrityLevel, TokenPrimary, WinBuiltinAdministratorsSid, WinLocalSystemSid,
+    CreateRestrictedToken, DISABLE_MAX_PRIVILEGE, DuplicateTokenEx, EqualSid, GetLengthSid,
+    IsTokenRestricted, LUA_TOKEN, PSID, SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES,
+    SecurityImpersonation, SetTokenInformation, TOKEN_ADJUST_DEFAULT, TOKEN_ASSIGN_PRIMARY,
+    TOKEN_DUPLICATE, TOKEN_MANDATORY_LABEL, TOKEN_QUERY, TokenIntegrityLevel, TokenPrimary,
+    WinAuthenticatedUserSid, WinBuiltinAdministratorsSid, WinBuiltinUsersSid, WinLocalSystemSid,
+    WinRestrictedCodeSid, WinWorldSid,
 };
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_ACTIVE_PROCESS,
@@ -73,92 +75,121 @@ impl RestrictedToken {
     /// # Errors
     /// Token nicht lesbar oder nicht einschränkbar.
     pub fn from_current_identity() -> io::Result<Self> {
-        let mut source: HANDLE = ptr::null_mut();
-        let mut own_process = false;
-        // SAFETY: Pseudo-Handle des Threads; OpenAsSelf = 1; `source` ist ein Ausgabezeiger.
+        let mut thread: HANDLE = ptr::null_mut();
+        // SAFETY: Pseudo-Handle des Threads; OpenAsSelf = 1; `thread` ist ein Ausgabezeiger.
         // aegis-unsafe: winffi-thread-token-for-child
         #[allow(unsafe_code)]
-        let ok = unsafe { OpenThreadToken(GetCurrentThread(), TOKEN_ACCESS, 1, &mut source) };
-        if ok == 0 {
+        let ok = unsafe { OpenThreadToken(GetCurrentThread(), TOKEN_ACCESS, 1, &mut thread) };
+        let thread = if ok == 0 {
             let err = io::Error::last_os_error();
             if err.raw_os_error() != i32::try_from(ERROR_NO_TOKEN).ok() {
                 return Err(err);
             }
-            // SAFETY: Pseudo-Handle des eigenen Prozesses; `source` ist ein Ausgabezeiger.
-            // aegis-unsafe: winffi-process-token-for-child
-            #[allow(unsafe_code)]
-            let ok = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_ACCESS, &mut source) };
-            if ok == 0 {
-                return Err(io::Error::last_os_error());
-            }
-            own_process = true;
-        }
-        let source = own(source)?;
-        // Eigenes Prozess-Token direkt einschränken: Nur ein unmittelbar abgeleitetes
-        // („Kind“-)Token darf ohne Sonderrecht einem neuen Prozess zugewiesen werden
-        // (Konsolenbetrieb, CI). Das Thread-Token (Identitätswechsel) muss erst zum
-        // Primär-Token werden.
-        let primary = if own_process {
-            source
+            None
         } else {
-            let mut primary: HANDLE = ptr::null_mut();
-            // SAFETY: `source` ist ein gültiges Token mit TOKEN_DUPLICATE; Ausgabezeiger gültig.
-            // aegis-unsafe: winffi-duplicate-token
-            #[allow(unsafe_code)]
-            let ok = unsafe {
-                DuplicateTokenEx(
-                    source.as_raw_handle(),
-                    TOKEN_ACCESS,
-                    ptr::null(),
-                    SecurityImpersonation,
-                    TokenPrimary,
-                    &mut primary,
-                )
-            };
-            if ok == 0 {
-                return Err(step("DuplicateTokenEx", io::Error::last_os_error()));
-            }
-            own(primary)?
+            Some(own(thread)?)
         };
-        // Ist die Quelle schon ein eingeschränktes LUA-Token (Hintergrundprüfung „nur Nutzer“),
-        // lehnt Windows ein zweites LUA_TOKEN mit Fehler 87 ab. Dann ohne diesen Schalter –
-        // aber Administratoren und SYSTEM ausdrücklich nur „deny“, damit der Prüfprozess auch
-        // bei einem vollen Administrator-Token keine Admin-Gruppe behält.
+        let mut process: HANDLE = ptr::null_mut();
+        // SAFETY: Pseudo-Handle des eigenen Prozesses; `process` ist ein Ausgabezeiger.
+        // aegis-unsafe: winffi-process-token-for-child
+        #[allow(unsafe_code)]
+        let ok = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_ACCESS, &mut process) };
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let process = own(process)?;
+        // Ohne Sonderrecht (SeAssignPrimaryToken, das nur SYSTEM/Dienste haben) darf nur ein
+        // direkt vom eigenen Prozess-Token abgeleitetes Token einem neuen Prozess zugewiesen
+        // werden. Ist die übernommene Identität dieselbe wie die des Prozesses (Konsolen- und
+        // Testbetrieb), wird deshalb vom Prozess-Token abgeleitet – war das Thread-Token
+        // eingeschränkt („nur Nutzer“), mit denselben Einschränkungen. Fremde Identitäten
+        // (Dienst als SYSTEM) werden erst zum Primär-Token.
+        let (primary, shared_reader) = match thread {
+            None => (process, false),
+            Some(t) if same_user(t.as_raw_handle(), process.as_raw_handle())? => {
+                // SAFETY: gültiges Token mit TOKEN_QUERY.
+                // aegis-unsafe: winffi-token-restricted
+                #[allow(unsafe_code)]
+                let restricted = unsafe { IsTokenRestricted(t.as_raw_handle()) } != 0;
+                (process, restricted)
+            }
+            Some(t) => {
+                let mut primary: HANDLE = ptr::null_mut();
+                // SAFETY: `t` ist ein gültiges Token mit TOKEN_DUPLICATE; Ausgabezeiger gültig.
+                // aegis-unsafe: winffi-duplicate-token
+                #[allow(unsafe_code)]
+                let ok = unsafe {
+                    DuplicateTokenEx(
+                        t.as_raw_handle(),
+                        TOKEN_ACCESS,
+                        ptr::null(),
+                        SecurityImpersonation,
+                        TokenPrimary,
+                        &mut primary,
+                    )
+                };
+                if ok == 0 {
+                    return Err(step("DuplicateTokenEx", io::Error::last_os_error()));
+                }
+                (own(primary)?, false)
+            }
+        };
+        // Administratoren und SYSTEM immer nur „deny“; beim „nur Nutzer“-Token zusätzlich auf
+        // Jeder, Authentifizierte Benutzer, Benutzer und RESTRICTED eingeschränkt.
         let mut deny = [
             crate::identity::well_known(WinBuiltinAdministratorsSid)?,
             crate::identity::well_known(WinLocalSystemSid)?,
         ];
-        let deny_attrs: Vec<SID_AND_ATTRIBUTES> = deny
-            .iter_mut()
-            .map(|sid| SID_AND_ATTRIBUTES {
-                Sid: sid.as_mut_ptr().cast(),
-                Attributes: 0,
-            })
-            .collect();
+        let mut restrict = [
+            crate::identity::well_known(WinWorldSid)?,
+            crate::identity::well_known(WinAuthenticatedUserSid)?,
+            crate::identity::well_known(WinBuiltinUsersSid)?,
+            crate::identity::well_known(WinRestrictedCodeSid)?,
+        ];
+        let attrs = |sids: &mut [Vec<u8>]| -> Vec<SID_AND_ATTRIBUTES> {
+            sids.iter_mut()
+                .map(|sid| SID_AND_ATTRIBUTES {
+                    Sid: sid.as_mut_ptr().cast(),
+                    Attributes: 0,
+                })
+                .collect()
+        };
+        let deny_attrs = attrs(&mut deny);
+        let restrict_attrs = attrs(&mut restrict);
+        let deny_count = u32::try_from(deny_attrs.len()).unwrap_or(0);
+        let (restrict_count, restrict_ptr) = if shared_reader {
+            (
+                u32::try_from(restrict_attrs.len()).unwrap_or(0),
+                restrict_attrs.as_ptr(),
+            )
+        } else {
+            (0, ptr::null())
+        };
+        // Ist die Quelle schon ein LUA-Token, lehnt Windows ein zweites LUA_TOKEN mit Fehler 87
+        // ab – dann ohne diesen Schalter (die Deny-Liste bleibt).
         let mut restricted: HANDLE = ptr::null_mut();
         let mut ok = 0;
-        for (flags, count, sids) in [
-            (DISABLE_MAX_PRIVILEGE | LUA_TOKEN, 0, ptr::null()),
-            (
-                DISABLE_MAX_PRIVILEGE,
-                u32::try_from(deny_attrs.len()).unwrap_or(0),
-                deny_attrs.as_ptr(),
-            ),
+        // Erster Versuch wie bisher (LUA ohne eigene Deny-Liste, außer beim „nur Nutzer“-Token),
+        // Rückfall ohne LUA mit Deny-Liste.
+        let first_deny = if shared_reader { deny_count } else { 0 };
+        for (flags, deny_n) in [
+            (DISABLE_MAX_PRIVILEGE | LUA_TOKEN, first_deny),
+            (DISABLE_MAX_PRIVILEGE, deny_count),
         ] {
-            // SAFETY: `primary` ist gültig; die Deny-Liste zeigt in `deny`, das bis nach dem
-            // Aufruf lebt, Zähler passen; `restricted` ist ein Ausgabezeiger.
+            // SAFETY: `primary` ist gültig; die SID-Listen zeigen in `deny`/`restrict`, die bis
+            // nach dem Aufruf leben, Zähler passen; `restricted` ist ein Ausgabezeiger.
             // aegis-unsafe: winffi-restrict-token
             #[allow(unsafe_code)]
             let created = unsafe {
                 CreateRestrictedToken(
                     primary.as_raw_handle(),
                     flags,
-                    count,
-                    sids,
+                    deny_n,
+                    deny_attrs.as_ptr(),
                     0,
                     ptr::null(),
-                    0,
-                    ptr::null(),
+                    restrict_count,
+                    restrict_ptr,
                     &mut restricted,
                 )
             };
@@ -174,6 +205,19 @@ impl RestrictedToken {
         set_low_integrity(restricted.as_raw_handle()).map_err(|e| step("Integritätsstufe", e))?;
         Ok(Self(restricted))
     }
+}
+
+/// Gehören beide Tokens demselben Konto?
+fn same_user(a: HANDLE, b: HANDLE) -> io::Result<bool> {
+    crate::util::token_user(a, |sa| {
+        crate::util::token_user(b, |sb| {
+            // SAFETY: beide SIDs leben während der Rückrufe; EqualSid liest nur.
+            // aegis-unsafe: winffi-token-same-user
+            #[allow(unsafe_code)]
+            let equal = unsafe { EqualSid(sa, sb) };
+            equal != 0
+        })
+    })?
 }
 
 /// Fehler mit dem fehlgeschlagenen Schritt (Fehlersuche ohne Debugger, z. B. in CI).
