@@ -27,6 +27,8 @@ use aegis_quarantine::{Entry, UserAccess, Vault};
 
 use crate::protocol::{PROTOCOL_VERSION, Proposal, Request, Response};
 
+mod safe;
+
 /// Höchstzahl Pfade pro Anfrage.
 pub const MAX_PATHS: usize = 1000;
 /// Höchstlänge aller Pfade einer Anfrage zusammen (Byte) – hält Pläne und Protokoll klein.
@@ -73,6 +75,7 @@ pub struct Service<C: Clock, W: Durable> {
     history: Arc<Mutex<History>>,
     settings: SettingsStore,
     lab: Arc<crate::lab::Lab>,
+    safe: safe::SafeState,
 }
 
 /// Einstellung „Windows-Feature Windows Sandbox“.
@@ -143,6 +146,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             history: Arc::new(Mutex::new(History::in_memory())),
             settings: SettingsStore::in_memory(),
             lab: crate::lab::Lab::new(None),
+            safe: safe::SafeState::default(),
         }
     }
 
@@ -1285,6 +1289,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
             self.proposals.remove(&id);
         }
         let now = self.gate.clock().now();
+        let open = &self.proposals;
+        self.safe.expire(now, &|id| open.contains_key(id));
         self.second
             .retain(|_, p| now - p.created < Duration::minutes(SECOND_TTL_MINUTES));
         let response = match request {
@@ -1363,6 +1369,18 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 available: cfg!(windows),
             },
             Request::ProposePanic { on } => self.propose_panic(on, user),
+            Request::SafeStatus {} => self.safe_status(user),
+            Request::SafeCreate { password } => self.propose_safe_create(&password, user),
+            Request::SafeUnlock { password } => self.safe_unlock(&password, user),
+            Request::SafeLock {} => self.safe_lock(user),
+            Request::ProposeSafeStore { paths } => match self.check_paths(&paths) {
+                Ok(()) => match long_paths(&paths, user) {
+                    Ok(paths) => self.propose_safe_store(&paths, user),
+                    Err(e) => e,
+                },
+                Err(e) => Response::error("input", e),
+            },
+            Request::ProposeSafeRetrieve { id } => self.propose_safe_retrieve(&id, user),
             Request::ProposeLabRun {
                 path,
                 stage,
@@ -1854,6 +1872,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
             | ActionKind::ResumeProcess => {
                 return self.control_processes(permit, user);
             }
+            ActionKind::SafeStore => return self.apply_safe_store(permit, user),
+            ActionKind::SafeRetrieve => return self.apply_safe_retrieve(permit, user),
             ActionKind::ChangeSetting => {
                 let bait = plan.targets().iter().any(|t| {
                     matches!(t, Target::Setting { id } if id == aegis_quarantine::bait::BAIT_SETTING)
@@ -1861,10 +1881,15 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 let panic = plan.targets().iter().any(
                     |t| matches!(t, Target::Setting { id } if id == crate::panic::PANIC_SETTING),
                 );
+                let safe = plan.targets().iter().any(|t| {
+                    matches!(t, Target::Setting { id } if id == aegis_quarantine::safe::SAFE_SETTING)
+                });
                 return if bait {
                     self.apply_baits(permit, user)
                 } else if panic {
                     self.apply_panic(permit, user)
+                } else if safe {
+                    self.apply_safe_create(permit, user)
                 } else {
                     self.enable_sandbox_feature(permit, user)
                 };

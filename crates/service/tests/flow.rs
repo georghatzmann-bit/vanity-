@@ -846,3 +846,156 @@ fn speicher_scan_nur_lesend() {
         assert_eq!(r["code"], "scan");
     }
 }
+
+#[test]
+fn datei_safe_nur_per_plan_und_passwort_nie_gespeichert() {
+    struct Account(std::path::PathBuf);
+    impl aegis_quarantine::UserAccess for Account {
+        fn enter(&self) -> std::io::Result<aegis_quarantine::UserScope> {
+            Ok(aegis_quarantine::UserScope::unchanged())
+        }
+        fn identity(&self) -> Option<String> {
+            Some("S-1-SAFE".into())
+        }
+        fn profile(&self) -> Option<std::path::PathBuf> {
+            Some(self.0.clone())
+        }
+    }
+    const PASSWORT: &str = "Mein-sehr-geheimes-Passwort-42";
+    let vault_dir = tempfile::tempdir().unwrap();
+    let clock = ManualClock::default();
+    let gate = ConsentGate::with_clock(clock.clone(), ConsentConfig::default()).unwrap();
+    let mut log = Vec::new();
+    let home = tempfile::tempdir().unwrap();
+    let home_path = {
+        let c = std::fs::canonicalize(home.path()).unwrap();
+        let text = c.to_string_lossy().into_owned();
+        text.strip_prefix(r"\\?\")
+            .map_or(c.clone(), std::path::PathBuf::from)
+    };
+    let a = Account(home_path.clone());
+    let file = write_fixture(
+        &home_path,
+        "Documents/vertrag.txt",
+        b"harmloser Vertragstext",
+    )
+    .unwrap();
+    let mut outputs = Vec::new();
+    {
+        let mut service = Service::new(
+            Engine::with_builtin_rules().unwrap(),
+            Vault::open(vault_dir.path()).unwrap(),
+            gate,
+            AuditLog::new(&mut log),
+        );
+        let mut send = |v: Value| {
+            let req: Request = serde_json::from_value(v).unwrap();
+            assert!(
+                !format!("{req:?}").contains(PASSWORT),
+                "Debug zeigt kein Passwort"
+            );
+            let out = serde_json::to_value(service.handle(req, &a)).unwrap();
+            outputs.push(out.to_string());
+            out
+        };
+        let decide = |p: &Value, decision: &str| {
+            json!({
+                "type": "decide", "plan_id": p["proposal"]["ticket"]["id"],
+                "digest": p["proposal"]["ticket"]["digest"], "nonce": p["proposal"]["nonce"],
+                "decision": decision, "dialog_id": "d"
+            })
+        };
+        let status = send(json!({"type": "safe_status"}));
+        assert_eq!(status["type"], "safe", "{status}");
+        assert_eq!(status["exists"], false);
+        assert_eq!(
+            send(json!({"type": "safe_unlock", "password": PASSWORT}))["code"],
+            "safe"
+        );
+        assert_eq!(
+            send(json!({"type": "safe_create", "password": "kurz"}))["code"],
+            "password"
+        );
+
+        // Anlegen: ohne „Ja“ entsteht nichts; Vertrauen gibt es nicht.
+        let p = send(json!({"type": "safe_create", "password": PASSWORT}));
+        assert_eq!(p["type"], "proposal", "{p}");
+        assert_eq!(send(decide(&p, "trust"))["code"], "trust");
+        assert_eq!(send(decide(&p, "decline"))["type"], "nothing_done");
+        assert_eq!(send(json!({"type": "safe_status"}))["exists"], false);
+        let p = send(json!({"type": "safe_create", "password": PASSWORT}));
+        let done = send(decide(&p, "execute"));
+        assert_eq!(done["result"]["status"], "succeeded", "{done}");
+        let status = send(json!({"type": "safe_status"}));
+        assert_eq!(
+            (status["exists"].clone(), status["unlocked"].clone()),
+            (json!(true), json!(true))
+        );
+
+        // Hineinlegen nur mit „Ja“.
+        let p = send(json!({"type": "propose_safe_store", "paths": [file]}));
+        assert_eq!(p["proposal"]["plan"]["kind"], "safe_store", "{p}");
+        assert_eq!(send(decide(&p, "decline"))["type"], "nothing_done");
+        assert!(file.exists());
+        let p = send(json!({"type": "propose_safe_store", "paths": [file]}));
+        let done = send(decide(&p, "execute"));
+        assert_eq!(done["result"]["status"], "succeeded", "{done}");
+        assert!(!file.exists());
+        let entries = send(json!({"type": "safe_status"}))["entries"].clone();
+        assert_eq!(entries.as_array().unwrap().len(), 1);
+        let id = entries[0]["id"].as_str().unwrap().to_owned();
+
+        // Gesperrt: kein Vorschlag, keine Einträge; falsches Passwort zählt.
+        send(json!({"type": "safe_lock"}));
+        let status = send(json!({"type": "safe_status"}));
+        assert_eq!(status["unlocked"], false);
+        assert!(status["entries"].as_array().unwrap().is_empty());
+        assert_eq!(
+            send(json!({"type": "propose_safe_retrieve", "id": id}))["code"],
+            "locked"
+        );
+        for _ in 0..5 {
+            assert_eq!(
+                send(json!({"type": "safe_unlock", "password": "falsches-passwort"}))["code"],
+                "password"
+            );
+        }
+        assert_eq!(
+            send(json!({"type": "safe_unlock", "password": PASSWORT}))["code"],
+            "wait"
+        );
+        clock.advance(Duration::seconds(61));
+        assert_eq!(
+            send(json!({"type": "safe_unlock", "password": PASSWORT}))["unlocked"],
+            true
+        );
+
+        // Herausholen an den ursprünglichen Ort.
+        let p = send(json!({"type": "propose_safe_retrieve", "id": id}));
+        assert_eq!(p["proposal"]["plan"]["kind"], "safe_retrieve", "{p}");
+        let done = send(decide(&p, "execute"));
+        assert_eq!(done["result"]["status"], "succeeded", "{done}");
+        assert_eq!(std::fs::read(&file).unwrap(), b"harmloser Vertragstext");
+
+        // Nach 10 min ohne Nutzung gesperrt.
+        clock.advance(Duration::minutes(11));
+        assert_eq!(send(json!({"type": "safe_status"}))["unlocked"], false);
+        assert!(service_events_empty(&mut service));
+    }
+    let text = String::from_utf8(log).unwrap();
+    assert!(
+        text.contains("safe_store") && text.contains("safe_retrieve"),
+        "{text}"
+    );
+    assert!(!text.contains(PASSWORT), "Passwort nicht im Prüfprotokoll");
+    assert!(
+        outputs.iter().all(|o| !o.contains(PASSWORT)),
+        "Passwort in keiner Antwort"
+    );
+}
+
+fn service_events_empty<W: aegis_core::audit::Durable>(
+    service: &mut Service<ManualClock, W>,
+) -> bool {
+    service.take_unwritten_events().is_empty()
+}

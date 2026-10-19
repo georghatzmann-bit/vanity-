@@ -68,6 +68,7 @@ crates/quarantine/src/lib.rs :: quarantine-create-vault-dir :: Quarantäne: legt
 crates/quarantine/src/lib.rs :: quarantine-create-new-file :: Quarantäne: legt ausschließlich NEUE Dateien an (create_new) – Container/Metadaten im Tresor bzw. eine Wiederherstellungs-Teildatei nur innerhalb von restore() mit Erlaubnis; überschreibt nie.
 crates/quarantine/src/lib.rs :: quarantine-commit-container :: Quarantäne: benennt die geprüfte Teil-Datei im Tresor um (AEGIS-eigene Daten).
 crates/quarantine/src/lib.rs :: quarantine-remove-own-file :: Quarantäne: entfernt nur Tresor-Dateien (Teil-Dateien, Rücknahme, wiederhergestellte oder mit zweiter Bestätigung gelöschte Einträge).
+crates/quarantine/src/safe.rs :: quarantine-safe-create-dir :: Datei-Safe: legt den Safe-Ordner im Profil an – nur in create(ExecutionPermit) des Plans „Datei-Safe anlegen“, mit den Rechten des Nutzers.
 crates/service/src/handler.rs :: service-pipe-decide :: Dienst: einzige Stelle im Betrieb, die die Antwort aus dem Freigabe-Dialog der Oberfläche annimmt – erst nach Prüfung der Einmal-Nonce des Vorschlags; der Plan stammt vom Dienst selbst.
 crates/service/src/handler.rs :: service-pipe-confirm-second :: Dienst: nimmt die zweite, getrennte Bestätigung vor endgültigem Löschen an – nur mit eigener Einmal-Nonce der Rückfrage.
 crates/service/src/transport.rs :: service-unix-socket-bind :: Dienst (nur Entwicklung unter Linux): legt den Unix-Socket im AEGIS-eigenen Datenordner an.

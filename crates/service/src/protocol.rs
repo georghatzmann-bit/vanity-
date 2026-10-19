@@ -88,6 +88,18 @@ pub enum Request {
     PanicStatus {},
     /// Netz trennen (`on`) bzw. wieder verbinden vorschlagen.
     ProposePanic { on: bool },
+    /// Datei-Safe: Zustand und – wenn entsperrt – Einträge (nur lesend).
+    SafeStatus {},
+    /// Datei-Safe anlegen vorschlagen (das Passwort bleibt nur im Speicher des Dienstes).
+    SafeCreate { password: Password },
+    /// Datei-Safe entsperren (Schlüssel bleibt höchstens 10 min ohne Nutzung im Speicher).
+    SafeUnlock { password: Password },
+    /// Datei-Safe sperren (Schlüssel aus dem Speicher entfernen).
+    SafeLock {},
+    /// Dateien in den Safe legen vorschlagen.
+    ProposeSafeStore { paths: Vec<PathBuf> },
+    /// Eintrag aus dem Safe holen vorschlagen.
+    ProposeSafeRetrieve { id: String },
     /// Antwort des Nutzers im Freigabe-Dialog.
     Decide {
         plan_id: PlanId,
@@ -103,6 +115,47 @@ pub enum Request {
         decision: Decision,
         dialog_id: String,
     },
+}
+
+/// Passwort in einer Anfrage: erscheint nie in `Debug`-Ausgaben und wird beim Verwerfen
+/// überschrieben.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Password(zeroize::Zeroizing<String>);
+
+impl Password {
+    /// Neues Passwort (z. B. in Tests oder in der App).
+    #[must_use]
+    pub fn new(text: impl Into<String>) -> Self {
+        Self(zeroize::Zeroizing::new(text.into()))
+    }
+
+    /// Der Text.
+    #[must_use]
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for Password {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Password(***)")
+    }
+}
+
+impl Serialize for Password {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for Password {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(d)?;
+        if text.len() > 1024 {
+            return Err(serde::de::Error::custom("Passwort zu lang"));
+        }
+        Ok(Self::new(text))
+    }
 }
 
 /// Ein offener Vorschlag für die Oberfläche.
@@ -179,6 +232,19 @@ pub enum Response {
     Panic {
         since: Option<String>,
         available: bool,
+    },
+    /// Datei-Safe des Kontos.
+    Safe {
+        /// Gibt es einen Safe?
+        exists: bool,
+        /// Ist er gerade entsperrt?
+        unlocked: bool,
+        /// Einträge (nur wenn entsperrt).
+        entries: Vec<aegis_quarantine::safe::SafeEntry>,
+        /// Mindestlänge des Passworts.
+        min_password: usize,
+        /// Nach so vielen Minuten ohne Nutzung sperrt der Dienst den Safe.
+        idle_minutes: u32,
     },
     /// Verhaltensbericht eines Labor-Laufs.
     LabReport {

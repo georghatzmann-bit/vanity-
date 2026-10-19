@@ -207,7 +207,9 @@ fn targets_must_match_kind() {
                 | ActionKind::DeletePermanently
                 | ActionKind::MoveFile
                 | ActionKind::RenameFile
-                | ActionKind::RunInSandbox => matches!(target, Target::File { .. }),
+                | ActionKind::RunInSandbox
+                | ActionKind::SafeStore
+                | ActionKind::SafeRetrieve => matches!(target, Target::File { .. }),
                 ActionKind::SuspendProcess
                 | ActionKind::ResumeProcess
                 | ActionKind::TerminateProcess => matches!(target, Target::Process { .. }),
@@ -934,4 +936,24 @@ fn labor_lauf_braucht_gueltige_parameter() {
         .parameter(param::LAB_STAGE, "windows_sandbox")
         .parameter(param::LAB_NETWORK, "on");
     assert!(net.build(crate::time::OffsetDateTime::UNIX_EPOCH).is_ok());
+}
+
+#[test]
+fn datei_safe_holen_braucht_eintrag() {
+    assert!(
+        sample_plan_builder(ActionKind::SafeRetrieve)
+            .build(T0)
+            .is_ok()
+    );
+    let b = sample_plan_builder(ActionKind::SafeRetrieve).parameter(param::SAFE_ENTRY, "kein-uuid");
+    assert!(matches!(
+        b.build(T0),
+        Err(PlanError::InvalidParameter { .. })
+    ));
+    let mut b = sample_plan_builder(ActionKind::SafeRetrieve);
+    b.targets.push(Target::file(test_path("zweite.txt")));
+    assert!(matches!(
+        b.build(T0),
+        Err(PlanError::ExactlyOneTarget { .. })
+    ));
 }

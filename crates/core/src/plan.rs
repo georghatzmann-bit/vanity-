@@ -72,6 +72,8 @@ pub mod param {
     /// SHA-256 der Probe zum Zeitpunkt des Vorschlags (Pflicht, 64 Hex-Zeichen): Weicht die
     /// Datei beim Start ab, startet nichts.
     pub const LAB_SHA256: &str = "lab_sha256";
+    /// Eintrag im Datei-Safe ([`super::ActionKind::SafeRetrieve`], Pflicht, UUID).
+    pub const SAFE_ENTRY: &str = "safe_entry";
     /// Erlaubte Werte für [`VALUE_TYPE`].
     pub const REGISTRY_VALUE_TYPES: [&str; 6] = [
         "REG_SZ",
@@ -341,11 +343,16 @@ pub enum ActionKind {
     /// Datei im Labor (Windows Sandbox bzw. Mini-Sandbox) starten und beobachten. Die Datei
     /// selbst bleibt unverändert; das Labor wird danach verworfen.
     RunInSandbox,
+    /// Datei verschlüsselt in den Datei-Safe legen (das Original wird danach entfernt).
+    SafeStore,
+    /// Datei aus dem Datei-Safe an ihren ursprünglichen Ort zurückholen (Eintrag in
+    /// [`param::SAFE_ENTRY`]; das [`Target::File`] ist der Ort, an den sie zurückkommt).
+    SafeRetrieve,
 }
 
 impl ActionKind {
     /// Alle bekannten Arten.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 14] = [
         Self::Quarantine,
         Self::Restore,
         Self::DeletePermanently,
@@ -358,6 +365,8 @@ impl ActionKind {
         Self::AddTrust,
         Self::RemoveTrust,
         Self::RunInSandbox,
+        Self::SafeStore,
+        Self::SafeRetrieve,
     ];
 
     /// Stabile Kennung (identisch mit der serde-Darstellung, Teil der Prüfsumme).
@@ -376,6 +385,8 @@ impl ActionKind {
             Self::AddTrust => "add_trust",
             Self::RemoveTrust => "remove_trust",
             Self::RunInSandbox => "run_in_sandbox",
+            Self::SafeStore => "safe_store",
+            Self::SafeRetrieve => "safe_retrieve",
         }
     }
 
@@ -395,6 +406,8 @@ impl ActionKind {
             Self::AddTrust => "Als vertrauenswürdig markieren",
             Self::RemoveTrust => "Vertrauen entziehen",
             Self::RunInSandbox => "Im Labor ausführen",
+            Self::SafeStore => "In den Datei-Safe legen",
+            Self::SafeRetrieve => "Aus dem Datei-Safe holen",
         }
     }
 
@@ -414,6 +427,8 @@ impl ActionKind {
             Self::AddTrust => "Mark as trusted",
             Self::RemoveTrust => "Remove trust",
             Self::RunInSandbox => "Run in the lab",
+            Self::SafeStore => "Move into the file safe",
+            Self::SafeRetrieve => "Take out of the file safe",
         }
     }
 
@@ -440,7 +455,9 @@ impl ActionKind {
             | Self::DeletePermanently
             | Self::MoveFile
             | Self::RenameFile
-            | Self::RunInSandbox => matches!(target, Target::File { .. }),
+            | Self::RunInSandbox
+            | Self::SafeStore
+            | Self::SafeRetrieve => matches!(target, Target::File { .. }),
             Self::SuspendProcess | Self::ResumeProcess | Self::TerminateProcess => {
                 matches!(target, Target::Process { .. })
             }
@@ -1017,6 +1034,18 @@ impl ActionPlan {
                 let sha = required_parameter(&plan, param::LAB_SHA256)?;
                 if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
                     return Err(invalid(param::LAB_SHA256, "SHA-256 als 64 Hex-Zeichen"));
+                }
+            }
+            ActionKind::SafeRetrieve => {
+                if plan.targets.len() != 1 {
+                    return Err(PlanError::ExactlyOneTarget { kind: plan.kind });
+                }
+                let entry = required_parameter(&plan, param::SAFE_ENTRY)?;
+                if crate::uuid::Uuid::parse_str(entry).is_err() {
+                    return Err(PlanError::InvalidParameter {
+                        key: param::SAFE_ENTRY.to_owned(),
+                        reason: "Eintrag muss eine UUID sein",
+                    });
                 }
             }
             ActionKind::Restore if plan.parameter(param::DESTINATION).is_some() => {

@@ -21,6 +21,7 @@
 
 pub mod bait;
 pub mod crypto;
+pub mod safe;
 pub mod userfs;
 
 use std::fs::{File, OpenOptions};
