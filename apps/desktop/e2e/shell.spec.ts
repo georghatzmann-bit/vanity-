@@ -19,7 +19,7 @@ const pages = [
   { nav: 'Datei-Safe', route: 'safe', heading: 'Datei-Safe', phase: null },
   { nav: 'Labor', route: 'lab', heading: 'Labor', phase: null },
   { nav: 'Härtung', route: 'hardening', heading: 'Härtung', phase: null },
-  { nav: 'Netzwerk', route: 'network', heading: 'Netzwerk', phase: 'P7' },
+  { nav: 'Netzwerk', route: 'network', heading: 'Netzwerk', phase: null },
   { nav: 'Tresor', route: 'vault', heading: 'Tresor', phase: 'P9' },
   { nav: 'Tools', route: 'tools', heading: 'Tools', phase: 'P10' },
   { nav: 'Einstellungen', route: 'settings', heading: 'Einstellungen', phase: null },
@@ -195,9 +195,9 @@ test.describe('Navigation', () => {
     await waitForHome(page);
     await page.getByRole('button', { name: 'Navigation einklappen' }).click();
     await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');
-    const network = navigation(page).getByRole('link', { name: 'Netzwerk, folgt in P7' });
-    await network.hover();
-    await expect(page.getByRole('tooltip')).toHaveText('Netzwerk · Folgt in P7');
+    const vault = navigation(page).getByRole('link', { name: 'Tresor, folgt in P9' });
+    await vault.hover();
+    await expect(page.getByRole('tooltip')).toHaveText('Tresor · Folgt in P9');
     await page.reload();
     await waitForHome(page);
     await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');
