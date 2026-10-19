@@ -178,6 +178,15 @@ version = "0.1.0"
 [[package]]
 name = "aegis-vault-core"
 version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "argon2",
+ "getrandom 0.4.3",
+ "serde",
+ "serde_json",
+ "uuid",
+ "zeroize",
+]
 
 [[package]]
 name = "aegis-winffi"

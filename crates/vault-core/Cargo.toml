@@ -8,6 +8,13 @@ publish.workspace = true
 authors.workspace = true
 
 [dependencies]
+aes-gcm = { workspace = true }
+argon2 = { workspace = true }
+getrandom = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+zeroize = { workspace = true }
 
 [lints]
 workspace = true
