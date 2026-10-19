@@ -40,6 +40,12 @@
     "allow-service-memory-scan",
     "allow-service-panic-status",
     "allow-service-propose-panic",
+    "allow-service-safe-status",
+    "allow-service-propose-safe-setup",
+    "allow-service-safe-unlock",
+    "allow-service-safe-lock",
+    "allow-service-propose-safe-store",
+    "allow-service-propose-safe-retrieve",
     "allow-lab-capture-windows",
     "allow-export-report",
     "dialog:allow-open"

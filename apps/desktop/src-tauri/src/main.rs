@@ -74,6 +74,12 @@ fn main() {
             service::service_memory_scan,
             service::service_panic_status,
             service::service_propose_panic,
+            service::service_safe_status,
+            service::service_propose_safe_setup,
+            service::service_safe_unlock,
+            service::service_safe_lock,
+            service::service_propose_safe_store,
+            service::service_propose_safe_retrieve,
             service::lab_capture_windows,
             report::export_report
         ])
@@ -156,6 +162,12 @@ mod test_support {
                 crate::service::service_memory_scan,
                 crate::service::service_panic_status,
                 crate::service::service_propose_panic,
+                crate::service::service_safe_status,
+                crate::service::service_propose_safe_setup,
+                crate::service::service_safe_unlock,
+                crate::service::service_safe_lock,
+                crate::service::service_propose_safe_store,
+                crate::service::service_propose_safe_retrieve,
                 crate::service::lab_capture_windows,
                 crate::report::export_report
             ])
@@ -180,7 +192,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 39] = [
+    const EXPECTED_PERMISSIONS: [&str; 45] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -217,6 +229,12 @@ mod tests {
         "allow-service-memory-scan",
         "allow-service-panic-status",
         "allow-service-propose-panic",
+        "allow-service-safe-status",
+        "allow-service-propose-safe-setup",
+        "allow-service-safe-unlock",
+        "allow-service-safe-lock",
+        "allow-service-propose-safe-store",
+        "allow-service-propose-safe-retrieve",
         "allow-lab-capture-windows",
         "allow-export-report",
         "dialog:allow-open",
@@ -489,6 +507,15 @@ mod tests {
                 ("service_memory_scan", json!({})),
                 ("service_panic_status", json!({})),
                 ("service_propose_panic", json!({ "on": false })),
+                ("service_safe_status", json!({})),
+                ("service_propose_safe_setup", json!({ "password": "x" })),
+                ("service_safe_unlock", json!({ "password": "x" })),
+                ("service_safe_lock", json!({})),
+                (
+                    "service_propose_safe_store",
+                    json!({ "paths": ["/aegis-test/gibt-es-nicht"] }),
+                ),
+                ("service_propose_safe_retrieve", json!({ "id": "x" })),
                 (
                     "service_propose_process_action",
                     json!({ "program": "/aegis-test/x", "action": "suspend" }),

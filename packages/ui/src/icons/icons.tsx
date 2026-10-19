@@ -60,6 +60,15 @@ export const IconKey = createIcon(
   </>,
 );
 
+export const IconSafe = createIcon(
+  'IconSafe',
+  <>
+    <rect x="3.75" y="4.25" width="16.5" height="14.5" rx="2" />
+    <circle cx="12" cy="11.5" r="3.25" />
+    <path d="M12 8.25v1.5M15.25 11.5h-1.5M6.5 20.5v-1.75M17.5 20.5v-1.75M6.75 9.5v4" />
+  </>,
+);
+
 export const IconTools = createIcon(
   'IconTools',
   <path d="M19.56 6.56 17.27 8.85 15.15 6.73 17.44 4.44A4.5 4.5 0 0 0 11.4 10.34L4.37 17.37A1.6 1.6 0 0 0 6.63 19.63L13.66 12.6A4.5 4.5 0 0 0 19.56 6.56z" />,

@@ -7,6 +7,7 @@ import {
   IconNetwork,
   IconQuarantine,
   IconReport,
+  IconSafe,
   IconScan,
   IconSettings,
   IconShield,
@@ -26,7 +27,7 @@ export interface NavGroup {
 /** Reihenfolge der Seitenleiste; „App“ steht unten abgesetzt. */
 export const navGroups: readonly NavGroup[] = [
   { id: 'overview', routes: ['dashboard', 'reports'] },
-  { id: 'protection', routes: ['scan', 'realtime', 'quarantine', 'lab'] },
+  { id: 'protection', routes: ['scan', 'realtime', 'quarantine', 'safe', 'lab'] },
   { id: 'system', routes: ['hardening', 'network'] },
   { id: 'privacy', routes: ['vault', 'tools'] },
   { id: 'app', routes: ['settings', 'about'] },
@@ -42,6 +43,7 @@ export const routeIcons: Readonly<Record<RouteId, IconComponent>> = {
   vault: IconKey,
   tools: IconTools,
   quarantine: IconQuarantine,
+  safe: IconSafe,
   reports: IconReport,
   settings: IconSettings,
   about: IconInfo,

@@ -131,6 +131,14 @@ export const en: Messages<typeof de> = {
       summary:
         'Suspicious files are moved into encrypted quarantine – only after your yes. They can be restored from there; permanent deletion needs a second confirmation.',
     },
+    safe: {
+      nav: 'File safe',
+      title: 'File safe',
+      eyebrow: 'Protection',
+      tagline: 'Keep your own files encrypted with a password',
+      summary:
+        'Stores files encrypted (AES-256-GCM, key derived from your password with Argon2id) in a safe in your profile. Moving files in and out only after your yes.',
+    },
     reports: {
       nav: 'Reports',
       title: 'Reports',
@@ -601,6 +609,31 @@ export const en: Messages<typeof de> = {
     revoke: 'Revoke',
     revoked: 'Trust revoked.',
     since: 'Since {date}',
+  },
+  safe: {
+    honest:
+      'Honestly: the password is not stored anywhere. If you forget it, nobody can get the files back out of the safe – not even AEGIS.',
+    createTitle: 'Create safe',
+    createIntro:
+      'Choose a password with at least {min} characters. A sentence of several words is easy to remember and hard to guess.',
+    password: 'Password',
+    repeat: 'Repeat password',
+    mismatch: 'The passwords do not match.',
+    tooShort: 'The password needs at least {min} characters.',
+    create: 'Create safe…',
+    unlockTitle: 'Safe is locked',
+    unlockIntro:
+      'Unlocking shows the entries. The key stays in the service only and expires after {minutes} minutes without use.',
+    unlock: 'Unlock',
+    unlocked: 'Unlocked – locks itself after {minutes} minutes without use.',
+    lock: 'Lock',
+    store: 'Move files in…',
+    storeHint: 'Originals are removed only after a verified encrypted copy exists.',
+    empty: 'The safe is empty.',
+    retrieve: 'Take out…',
+    storedAt: 'Stored on {date}',
+    size: '{size} KB',
+    refresh: 'Refresh',
   },
   vault: {
     intro:

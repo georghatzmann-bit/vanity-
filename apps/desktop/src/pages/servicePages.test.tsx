@@ -9,6 +9,7 @@ import type {
   LabReport,
   LabRun,
   LabState,
+  SafeState,
   Proposal,
   ScheduleState,
   ServiceApi,
@@ -125,7 +126,24 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     ),
     proposePanic: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBaits: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    safeStatus: vi.fn(() => Promise.resolve(safeState())),
+    proposeSafeSetup: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    safeUnlock: vi.fn(() => Promise.resolve(safeState({ exists: true, unlocked: true }))),
+    safeLock: vi.fn(() => Promise.resolve(safeState({ exists: true }))),
+    proposeSafeStore: vi.fn(() => Promise.resolve(proposal('In den Datei-Safe legen'))),
+    proposeSafeRetrieve: vi.fn(() => Promise.resolve(proposal('Aus dem Datei-Safe holen'))),
     ...overrides,
+  };
+}
+
+function safeState(over: Partial<SafeState> = {}): SafeState {
+  return {
+    exists: false,
+    unlocked: false,
+    entries: [],
+    minPassword: 10,
+    idleMinutes: 10,
+    ...over,
   };
 }
 
@@ -711,5 +729,80 @@ describe('Speicher-Scan', () => {
     expect(within(result).getByTestId('memory-finding')).toHaveTextContent('PID 7');
     expect(service.decide).not.toHaveBeenCalled();
     expect(service.proposeQuarantine).not.toHaveBeenCalled();
+  });
+});
+
+describe('Datei-Safe', () => {
+  const entry = {
+    id: '0b6f3c1e-1111-4222-8333-944455556666',
+    originalPath: 'C:\\Users\\a\\Documents\\vertrag.txt',
+    size: 4096,
+    sha256: 'ab'.repeat(32),
+    storedAt: '2026-10-19T12:00:00Z',
+  };
+
+  it('Anlegen prüft das Passwort und geht nur über den Freigabe-Dialog', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/safe' });
+    const form = await screen.findByTestId('safe-create');
+    const pw = within(form).getByLabelText('Passwort') as HTMLInputElement;
+    const repeat = within(form).getByLabelText('Passwort wiederholen');
+    fireEvent.change(pw, { target: { value: 'kurz' } });
+    fireEvent.change(repeat, { target: { value: 'kurz' } });
+    fireEvent.click(within(form).getByRole('button', { name: /Safe anlegen/ }));
+    expect(await screen.findAllByText(/braucht mindestens 10 Zeichen/)).not.toHaveLength(0);
+    expect(service.proposeSafeSetup).not.toHaveBeenCalled();
+    fireEvent.change(pw, { target: { value: 'ein-langes-passwort' } });
+    fireEvent.change(repeat, { target: { value: 'ein-anderes-passwort' } });
+    fireEvent.click(within(form).getByRole('button', { name: /Safe anlegen/ }));
+    expect(await screen.findAllByText(/stimmen nicht überein/)).not.toHaveLength(0);
+    fireEvent.change(repeat, { target: { value: 'ein-langes-passwort' } });
+    fireEvent.click(within(form).getByRole('button', { name: /Safe anlegen/ }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(service.proposeSafeSetup).toHaveBeenCalledWith('ein-langes-passwort');
+    expect(pw.value).toBe('');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Nein' }));
+    await waitFor(() => expect(vi.mocked(service.decide).mock.calls[0]?.[1]).toBe('decline'));
+  });
+
+  it('Entsperren zeigt Einträge; Hineinlegen und Herausholen nur als Vorschlag', async () => {
+    const service = fakeService({
+      safeStatus: vi.fn(() => Promise.resolve(safeState({ exists: true }))),
+      safeUnlock: vi.fn(() =>
+        Promise.resolve(safeState({ exists: true, unlocked: true, entries: [entry] })),
+      ),
+    });
+    renderApp({
+      platform: fakePlatform('tauri', undefined, service, ['C:\\Users\\a\\x.txt']),
+      hash: '#/safe',
+    });
+    const form = await screen.findByTestId('safe-unlock');
+    fireEvent.change(within(form).getByLabelText('Passwort'), {
+      target: { value: 'ein-langes-passwort' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Entsperren' }));
+    const open = await screen.findByTestId('safe-open');
+    expect(service.safeUnlock).toHaveBeenCalledWith('ein-langes-passwort');
+    expect(within(open).getByTestId('safe-entry')).toHaveTextContent('vertrag.txt');
+    fireEvent.click(within(open).getByRole('button', { name: /Herausholen/ }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeSafeRetrieve).toHaveBeenCalledWith(entry.id);
+    expect(service.decide).not.toHaveBeenCalled();
+  });
+
+  it('Hineinlegen nimmt die gewählten Dateien', async () => {
+    const service = fakeService({
+      safeStatus: vi.fn(() => Promise.resolve(safeState({ exists: true, unlocked: true }))),
+    });
+    renderApp({
+      platform: fakePlatform('tauri', undefined, service, ['C:\\Users\\a\\x.txt']),
+      hash: '#/safe',
+    });
+    expect(await screen.findByTestId('safe-empty')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /hineinlegen/ }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeSafeStore).toHaveBeenCalledWith(['C:\\Users\\a\\x.txt']);
+    fireEvent.click(screen.getByRole('button', { name: 'Sperren' }));
+    await waitFor(() => expect(service.safeLock).toHaveBeenCalled());
   });
 });

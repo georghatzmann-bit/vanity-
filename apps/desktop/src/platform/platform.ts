@@ -28,6 +28,7 @@ import {
   parseMemoryScan,
   parsePanic,
   parseRansom,
+  parseSafe,
   parseLabScreenshot,
   decodeBase64,
   parseSchedule,
@@ -226,6 +227,16 @@ function createTauriService(): ServiceApi {
     panicStatus: async () => parsePanic(await invoke<unknown>('service_panic_status')),
     proposePanic: async (on) =>
       parseProposal(await invoke<unknown>('service_propose_panic', { on })),
+    safeStatus: async () => parseSafe(await invoke<unknown>('service_safe_status')),
+    proposeSafeSetup: async (password) =>
+      parseProposal(await invoke<unknown>('service_propose_safe_setup', { password })),
+    safeUnlock: async (password) =>
+      parseSafe(await invoke<unknown>('service_safe_unlock', { password })),
+    safeLock: async () => parseSafe(await invoke<unknown>('service_safe_lock')),
+    proposeSafeStore: async (paths) =>
+      parseProposal(await invoke<unknown>('service_propose_safe_store', { paths })),
+    proposeSafeRetrieve: async (id) =>
+      parseProposal(await invoke<unknown>('service_propose_safe_retrieve', { id })),
     ransomStatus: async () => parseRansom(await invoke<unknown>('service_ransom_status')),
     proposeBaits: async (on) =>
       parseProposal(await invoke<unknown>('service_propose_baits', { on })),

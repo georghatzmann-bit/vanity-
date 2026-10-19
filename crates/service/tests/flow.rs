@@ -913,17 +913,17 @@ fn datei_safe_nur_per_plan_und_passwort_nie_gespeichert() {
             "safe"
         );
         assert_eq!(
-            send(json!({"type": "safe_create", "password": "kurz"}))["code"],
+            send(json!({"type": "propose_safe_setup", "password": "kurz"}))["code"],
             "password"
         );
 
         // Anlegen: ohne „Ja“ entsteht nichts; Vertrauen gibt es nicht.
-        let p = send(json!({"type": "safe_create", "password": PASSWORT}));
+        let p = send(json!({"type": "propose_safe_setup", "password": PASSWORT}));
         assert_eq!(p["type"], "proposal", "{p}");
         assert_eq!(send(decide(&p, "trust"))["code"], "trust");
         assert_eq!(send(decide(&p, "decline"))["type"], "nothing_done");
         assert_eq!(send(json!({"type": "safe_status"}))["exists"], false);
-        let p = send(json!({"type": "safe_create", "password": PASSWORT}));
+        let p = send(json!({"type": "propose_safe_setup", "password": PASSWORT}));
         let done = send(decide(&p, "execute"));
         assert_eq!(done["result"]["status"], "succeeded", "{done}");
         let status = send(json!({"type": "safe_status"}));

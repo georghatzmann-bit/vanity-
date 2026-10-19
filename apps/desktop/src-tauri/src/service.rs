@@ -429,6 +429,59 @@ pub async fn service_propose_panic(on: bool) -> Result<Value, String> {
     send(json!({ "type": "propose_panic", "on": on })).await
 }
 
+/// Höchstlänge eines Passworts (Zeichen).
+const MAX_PASSWORD_CHARS: usize = 256;
+
+/// Anfrage mit Passwort (Datei-Safe). Das Passwort wird nur an den Dienst weitergereicht –
+/// nie gespeichert oder protokolliert.
+pub fn safe_password_request(kind: &str, password: &str) -> Result<Value, String> {
+    if password.is_empty()
+        || password.chars().count() > MAX_PASSWORD_CHARS
+        || password.contains('\0')
+    {
+        return Err(format!("Passwort: 1 bis {MAX_PASSWORD_CHARS} Zeichen."));
+    }
+    Ok(json!({ "type": kind, "password": password }))
+}
+
+/// Datei-Safe: Zustand und – wenn entsperrt – Einträge (nur lesend).
+#[tauri::command]
+pub async fn service_safe_status() -> Result<Value, String> {
+    send(json!({ "type": "safe_status" })).await
+}
+
+/// Datei-Safe anlegen vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_safe_setup(password: String) -> Result<Value, String> {
+    send(safe_password_request("propose_safe_setup", &password)?).await
+}
+
+/// Datei-Safe entsperren (verändert nichts; der Schlüssel bleibt nur im Dienst).
+#[tauri::command]
+pub async fn service_safe_unlock(password: String) -> Result<Value, String> {
+    send(safe_password_request("safe_unlock", &password)?).await
+}
+
+/// Datei-Safe sperren.
+#[tauri::command]
+pub async fn service_safe_lock() -> Result<Value, String> {
+    send(json!({ "type": "safe_lock" })).await
+}
+
+/// Dateien in den Safe legen vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_safe_store(paths: Vec<String>) -> Result<Value, String> {
+    check_paths(&paths)?;
+    send(json!({ "type": "propose_safe_store", "paths": paths })).await
+}
+
+/// Eintrag aus dem Safe holen vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_safe_retrieve(id: String) -> Result<Value, String> {
+    check_id(&id)?;
+    send(json!({ "type": "propose_safe_retrieve", "id": id })).await
+}
+
 /// Ransomware-Schutz: eigene Köderdateien (nur lesend).
 #[tauri::command]
 pub async fn service_ransom_status() -> Result<Value, String> {
@@ -564,6 +617,10 @@ mod tests {
         assert!(propose_process_request("a.exe", "suspend").is_err());
         assert!(check_screenshot_name("../x.png").is_err());
         assert!(check_screenshot_name("bild.exe").is_err());
+        assert!(safe_password_request("safe_unlock", "ein-passwort").is_ok());
+        assert!(safe_password_request("safe_unlock", "").is_err());
+        assert!(safe_password_request("safe_unlock", &"x".repeat(257)).is_err());
+        assert!(safe_password_request("propose_safe_setup", "a\0b").is_err());
     }
 
     #[test]

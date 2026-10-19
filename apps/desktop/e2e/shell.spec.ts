@@ -16,6 +16,7 @@ const pages = [
   { nav: 'Scan', route: 'scan', heading: 'Scan', phase: null },
   { nav: 'Echtzeit-Wächter', route: 'realtime', heading: 'Echtzeit-Wächter', phase: null },
   { nav: 'Quarantäne', route: 'quarantine', heading: 'Quarantäne', phase: null },
+  { nav: 'Datei-Safe', route: 'safe', heading: 'Datei-Safe', phase: null },
   { nav: 'Labor', route: 'lab', heading: 'Labor', phase: null },
   { nav: 'Härtung', route: 'hardening', heading: 'Härtung', phase: 'P6' },
   { nav: 'Netzwerk', route: 'network', heading: 'Netzwerk', phase: 'P7' },

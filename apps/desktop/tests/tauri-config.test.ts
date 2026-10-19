@@ -58,6 +58,16 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-panic-status': 'Dienst: Zustand des Panic-Buttons (nur lesend)',
   'allow-service-propose-panic':
     'Dienst: Netz trennen/wieder verbinden vorschlagen (nur nach „Ja“)',
+  'allow-service-safe-status': 'Dienst: Zustand des eigenen Datei-Safes (nur lesend)',
+  'allow-service-propose-safe-setup':
+    'Dienst: Datei-Safe anlegen vorschlagen (Passwort nur an den Dienst, nur nach „Ja“)',
+  'allow-service-safe-unlock':
+    'Dienst: Datei-Safe entsperren (Schlüssel bleibt nur im Dienst, verändert nichts)',
+  'allow-service-safe-lock': 'Dienst: Datei-Safe sperren (Schlüssel verwerfen)',
+  'allow-service-propose-safe-store':
+    'Dienst: Dateien in den Datei-Safe legen vorschlagen (nur nach „Ja“)',
+  'allow-service-propose-safe-retrieve':
+    'Dienst: Eintrag aus dem Datei-Safe holen vorschlagen (nur nach „Ja“)',
   'allow-lab-capture-windows': 'Fensterfotos eines eigenen Mini-Sandbox-Laufs (nur lesend)',
   'allow-export-report':
     'Bericht als HTML speichern – Inhalt aus Rust, Ort nur über den Speichern-Dialog',

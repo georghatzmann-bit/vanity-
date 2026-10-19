@@ -1370,7 +1370,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             },
             Request::ProposePanic { on } => self.propose_panic(on, user),
             Request::SafeStatus {} => self.safe_status(user),
-            Request::SafeCreate { password } => self.propose_safe_create(&password, user),
+            Request::ProposeSafeSetup { password } => self.propose_safe_create(&password, user),
             Request::SafeUnlock { password } => self.safe_unlock(&password, user),
             Request::SafeLock {} => self.safe_lock(user),
             Request::ProposeSafeStore { paths } => match self.check_paths(&paths) {

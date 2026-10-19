@@ -14,6 +14,7 @@ export const routeIds = [
   'vault',
   'tools',
   'quarantine',
+  'safe',
   'reports',
   'settings',
   'about',

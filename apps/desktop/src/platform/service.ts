@@ -267,6 +267,26 @@ export interface PanicState {
   readonly available: boolean;
 }
 
+/** Eintrag im Datei-Safe. */
+export interface SafeEntry {
+  readonly id: string;
+  readonly originalPath: string;
+  readonly size: number;
+  readonly sha256: string;
+  readonly storedAt: string;
+}
+
+/** Datei-Safe des Kontos. */
+export interface SafeState {
+  readonly exists: boolean;
+  readonly unlocked: boolean;
+  /** Nur wenn entsperrt. */
+  readonly entries: readonly SafeEntry[];
+  readonly minPassword: number;
+  /** Nach so vielen Minuten ohne Nutzung sperrt der Dienst den Safe. */
+  readonly idleMinutes: number;
+}
+
 /** Ransomware-Schutz des Kontos. */
 export interface RansomState {
   /** Angelegte Köderdateien. */
@@ -326,6 +346,18 @@ export interface ServiceApi {
   panicStatus(): Promise<PanicState>;
   /** Netz trennen (`true`) bzw. wieder verbinden vorschlagen. */
   proposePanic(on: boolean): Promise<Proposal>;
+  /** Datei-Safe: Zustand (Einträge nur, wenn entsperrt). */
+  safeStatus(): Promise<SafeState>;
+  /** Datei-Safe anlegen vorschlagen – das Passwort geht nur an den Dienst. */
+  proposeSafeSetup(password: string): Promise<Proposal>;
+  /** Datei-Safe entsperren (verändert nichts). */
+  safeUnlock(password: string): Promise<SafeState>;
+  /** Datei-Safe sperren. */
+  safeLock(): Promise<SafeState>;
+  /** Dateien in den Safe legen vorschlagen. */
+  proposeSafeStore(paths: readonly string[]): Promise<Proposal>;
+  /** Eintrag aus dem Safe holen vorschlagen. */
+  proposeSafeRetrieve(id: string): Promise<Proposal>;
   /** Ransomware-Schutz: eigene Köderdateien (nur lesend). */
   ransomStatus(): Promise<RansomState>;
   /** Köderdateien anlegen (`true`) bzw. entfernen vorschlagen. */
@@ -682,6 +714,25 @@ export function parsePanic(response: unknown): PanicState {
   };
 }
 
+export function parseSafe(response: unknown): SafeState {
+  const r = expectType(response, 'safe');
+  return {
+    exists: r['exists'] === true,
+    unlocked: r['unlocked'] === true,
+    entries: arr(r['entries'])
+      .filter(isObject)
+      .map((e) => ({
+        id: str(e['id']),
+        originalPath: str(e['original_path']),
+        size: num(e['size']),
+        sha256: str(e['sha256']),
+        storedAt: str(e['stored_at']),
+      })),
+    minPassword: num(r['min_password']),
+    idleMinutes: num(r['idle_minutes']),
+  };
+}
+
 export function parseRansom(response: unknown): RansomState {
   return {
     baits: arr(expectType(response, 'ransom')['baits']).filter(
@@ -707,6 +758,8 @@ const kindLabels: Readonly<Record<string, string>> = {
   suspend_process: 'Prozess anhalten',
   resume_process: 'Prozess fortsetzen',
   change_setting: 'Einstellung ändern',
+  safe_store: 'In den Datei-Safe legen',
+  safe_retrieve: 'Aus dem Datei-Safe holen',
 };
 
 /** Wandelt den Vorschlag des Dienstes in die Form des Freigabe-Dialogs. */

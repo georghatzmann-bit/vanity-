@@ -131,6 +131,14 @@ export const de = {
       summary:
         'Verdächtige Dateien landen verschlüsselt in der Quarantäne – nur nach deinem Ja. Von dort lassen sie sich wiederherstellen; endgültiges Löschen braucht eine zweite Bestätigung.',
     },
+    safe: {
+      nav: 'Datei-Safe',
+      title: 'Datei-Safe',
+      eyebrow: 'Schutz',
+      tagline: 'Eigene Dateien mit Passwort verschlüsselt aufbewahren',
+      summary:
+        'Legt Dateien verschlüsselt (AES-256-GCM, Schlüssel aus deinem Passwort per Argon2id) in einen Safe in deinem Profil. Hineinlegen und Herausholen nur nach deinem Ja.',
+    },
     reports: {
       nav: 'Berichte',
       title: 'Berichte',
@@ -604,6 +612,31 @@ export const de = {
     revoke: 'Widerrufen',
     revoked: 'Vertrauen widerrufen.',
     since: 'Seit {date}',
+  },
+  safe: {
+    honest:
+      'Ehrlich: Das Passwort wird nirgends gespeichert. Vergisst du es, kann niemand die Dateien im Safe zurückholen – auch AEGIS nicht.',
+    createTitle: 'Safe anlegen',
+    createIntro:
+      'Wähle ein Passwort mit mindestens {min} Zeichen. Ein Satz aus mehreren Wörtern ist leicht zu merken und schwer zu erraten.',
+    password: 'Passwort',
+    repeat: 'Passwort wiederholen',
+    mismatch: 'Die Passwörter stimmen nicht überein.',
+    tooShort: 'Das Passwort braucht mindestens {min} Zeichen.',
+    create: 'Safe anlegen …',
+    unlockTitle: 'Safe ist gesperrt',
+    unlockIntro:
+      'Entsperren zeigt die Einträge. Der Schlüssel bleibt nur im Dienst und verfällt nach {minutes} Minuten ohne Nutzung.',
+    unlock: 'Entsperren',
+    unlocked: 'Entsperrt – sperrt sich nach {minutes} Minuten ohne Nutzung.',
+    lock: 'Sperren',
+    store: 'Dateien hineinlegen …',
+    storeHint: 'Die Originale werden erst nach geprüfter verschlüsselter Kopie entfernt.',
+    empty: 'Der Safe ist leer.',
+    retrieve: 'Herausholen …',
+    storedAt: 'Hineingelegt am {date}',
+    size: '{size} KB',
+    refresh: 'Aktualisieren',
   },
   vault: {
     intro:

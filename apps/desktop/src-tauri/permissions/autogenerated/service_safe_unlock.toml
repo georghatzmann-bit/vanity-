@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-safe-unlock"
+description = "Enables the service_safe_unlock command without any pre-configured scope."
+commands.allow = ["service_safe_unlock"]
+
+[[permission]]
+identifier = "deny-service-safe-unlock"
+description = "Denies the service_safe_unlock command without any pre-configured scope."
+commands.deny = ["service_safe_unlock"]

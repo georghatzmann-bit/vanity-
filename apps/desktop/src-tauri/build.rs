@@ -35,6 +35,12 @@ const APP_COMMANDS: &[&str] = &[
     "service_memory_scan",
     "service_panic_status",
     "service_propose_panic",
+    "service_safe_status",
+    "service_propose_safe_setup",
+    "service_safe_unlock",
+    "service_safe_lock",
+    "service_propose_safe_store",
+    "service_propose_safe_retrieve",
     "lab_capture_windows",
     "export_report",
 ];

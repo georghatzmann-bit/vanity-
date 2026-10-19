@@ -67,6 +67,12 @@ ersetzen, Pfade des Nutzers auslesen, Events an das Backend senden) und auch kei
 | `allow-service-memory-scan`                  | App-Befehl `service_memory_scan`: eigene laufende Programme, Module und nachgeladenen Code prüfen. Nur lesend.                                                                                    |
 | `allow-service-panic-status`                 | App-Befehl `service_panic_status`: Zustand des Panic-Buttons (Netz getrennt seit …). Nur lesend.                                                                                                  |
 | `allow-service-propose-panic`                | App-Befehl `service_propose_panic`: Netz trennen bzw. wieder verbinden vorschlagen – geändert wird die Firewall nur nach „Ja“.                                                                    |
+| `allow-service-safe-status`                  | App-Befehl `service_safe_status`: Zustand des eigenen Datei-Safes und – nur wenn entsperrt – seine Einträge. Nur lesend.                                                                          |
+| `allow-service-propose-safe-setup`           | App-Befehl `service_propose_safe_setup`: Datei-Safe anlegen vorschlagen. Das Passwort geht nur an den Dienst (nie gespeichert); angelegt wird nur nach „Ja“.                                      |
+| `allow-service-safe-unlock`                  | App-Befehl `service_safe_unlock`: Datei-Safe mit dem Passwort entsperren. Der Schlüssel bleibt nur im Speicher des Dienstes (10 min ohne Nutzung). Verändert nichts.                              |
+| `allow-service-safe-lock`                    | App-Befehl `service_safe_lock`: Datei-Safe sperren (Schlüssel im Dienst verwerfen).                                                                                                               |
+| `allow-service-propose-safe-store`           | App-Befehl `service_propose_safe_store`: Dateien in den Datei-Safe legen vorschlagen – verschoben wird nur nach „Ja“.                                                                             |
+| `allow-service-propose-safe-retrieve`        | App-Befehl `service_propose_safe_retrieve`: Eintrag aus dem Datei-Safe holen vorschlagen – angelegt wird nur nach „Ja“, nie überschrieben.                                                        |
 | `allow-lab-capture-windows`                  | App-Befehl `lab_capture_windows`: Fensterfotos eines laufenden eigenen Mini-Sandbox-Laufs (Prozess-IDs nennt der Dienst). Nur lesend.                                                             |
 | `allow-export-report`                        | App-Befehl `export_report`: Verlauf als HTML-Bericht speichern. Inhalt erzeugt Rust (maskiert, ohne Skripte); den Ort wählt der Nutzer im Speichern-Dialog – die Oberfläche gibt keinen Pfad vor. |
 | `dialog:allow-open`                          | Datei- bzw. Ordnerauswahl für Scans („Datei wählen…“). Nur Auswahl; die App liest/schreibt dabei nichts. `save`, `message`, `ask` usw. bleiben gesperrt.                                          |
@@ -128,6 +134,12 @@ echten ACL: jeder Aufruf der Oberfläche läuft, alles andere wird abgelehnt).
 | `invoke('service_memory_scan')`                                 | `service_memory_scan`                     | `allow-service-memory-scan`                  |
 | `invoke('service_panic_status')`                                | `service_panic_status`                    | `allow-service-panic-status`                 |
 | `invoke('service_propose_panic')`                               | `service_propose_panic`                   | `allow-service-propose-panic`                |
+| `invoke('service_safe_status')`                                 | `service_safe_status`                     | `allow-service-safe-status`                  |
+| `invoke('service_propose_safe_setup')`                          | `service_propose_safe_setup`              | `allow-service-propose-safe-setup`           |
+| `invoke('service_safe_unlock')`                                 | `service_safe_unlock`                     | `allow-service-safe-unlock`                  |
+| `invoke('service_safe_lock')`                                   | `service_safe_lock`                       | `allow-service-safe-lock`                    |
+| `invoke('service_propose_safe_store')`                          | `service_propose_safe_store`              | `allow-service-propose-safe-store`           |
+| `invoke('service_propose_safe_retrieve')`                       | `service_propose_safe_retrieve`           | `allow-service-propose-safe-retrieve`        |
 | `invoke('lab_capture_windows')`                                 | `lab_capture_windows`                     | `allow-lab-capture-windows`                  |
 | `invoke('export_report')`                                       | `export_report`                           | `allow-export-report`                        |
 | `open()` aus `@tauri-apps/plugin-dialog`                        | `plugin:dialog\|open`                     | `dialog:allow-open`                          |

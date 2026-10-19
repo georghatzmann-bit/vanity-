@@ -91,7 +91,7 @@ pub enum Request {
     /// Datei-Safe: Zustand und – wenn entsperrt – Einträge (nur lesend).
     SafeStatus {},
     /// Datei-Safe anlegen vorschlagen (das Passwort bleibt nur im Speicher des Dienstes).
-    SafeCreate { password: Password },
+    ProposeSafeSetup { password: Password },
     /// Datei-Safe entsperren (Schlüssel bleibt höchstens 10 min ohne Nutzung im Speicher).
     SafeUnlock { password: Password },
     /// Datei-Safe sperren (Schlüssel aus dem Speicher entfernen).
