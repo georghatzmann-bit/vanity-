@@ -829,3 +829,14 @@ fn panic_button_nur_als_vorschlag() {
         assert_eq!(on["code"], "panic");
     }
 }
+
+#[test]
+fn speicher_scan_nur_lesend() {
+    let mut h = harness();
+    let r = h.send(json!({"type": "memory_scan"}));
+    if cfg!(windows) {
+        assert_eq!(r["type"], "memory_scan", "{r}");
+    } else {
+        assert_eq!(r["code"], "scan");
+    }
+}

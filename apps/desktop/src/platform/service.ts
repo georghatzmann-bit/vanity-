@@ -251,6 +251,14 @@ export interface LabState {
   readonly runs: readonly LabRun[];
 }
 
+/** Ergebnis des Speicher-Scans. */
+export interface MemoryScanResult {
+  readonly result: ScanResult;
+  readonly processes: number;
+  readonly modules: number;
+  readonly regions: number;
+}
+
 /** Panic-Button. */
 export interface PanicState {
   /** Netz getrennt seit (ISO-Zeit) bzw. `null`. */
@@ -312,6 +320,8 @@ export interface ServiceApi {
     seconds: number,
     network: boolean,
   ): Promise<Proposal>;
+  /** Speicher-Scan der eigenen laufenden Programme (nur lesend). */
+  memoryScan(): Promise<MemoryScanResult>;
   /** Panic-Button: Zustand (nur lesend). */
   panicStatus(): Promise<PanicState>;
   /** Netz trennen (`true`) bzw. wieder verbinden vorschlagen. */
@@ -644,6 +654,23 @@ export function parseLab(response: unknown): LabState {
         state: parseLabRunState(run['state']),
         container: typeof run['container'] === 'string' ? run['container'] : null,
       })),
+  };
+}
+
+export function parseMemoryScan(response: unknown): MemoryScanResult {
+  const r = expectType(response, 'memory_scan');
+  const report = isObject(r['report']) ? r['report'] : {};
+  return {
+    result: {
+      findings: arr(report['findings']).map(parseFinding),
+      skipped: arr(report['skipped'])
+        .filter(isObject)
+        .map((s) => ({ path: str(s['path']), reason: str(s['reason']) })),
+      truncated: report['truncated'] === true,
+    },
+    processes: num(r['processes']),
+    modules: num(r['modules']),
+    regions: num(r['regions']),
   };
 }
 

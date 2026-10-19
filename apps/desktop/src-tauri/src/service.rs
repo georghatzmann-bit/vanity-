@@ -411,6 +411,12 @@ pub async fn service_propose_process_action(
     send(propose_process_request(&program, &action)?).await
 }
 
+/// Speicher-Scan der eigenen laufenden Programme (nur lesend).
+#[tauri::command]
+pub async fn service_memory_scan() -> Result<Value, String> {
+    send(json!({ "type": "memory_scan" })).await
+}
+
 /// Panic-Button: Zustand (nur lesend).
 #[tauri::command]
 pub async fn service_panic_status() -> Result<Value, String> {

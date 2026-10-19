@@ -28,6 +28,13 @@ pub fn is_eicar(bytes: &[u8]) -> bool {
             .all(|b| matches!(b, b' ' | b'\t' | b'\r' | b'\n' | 0x1a))
 }
 
+/// Kommt die EICAR-Zeichenkette irgendwo vor (Speicher-Scan)?
+#[must_use]
+pub fn occurs_in(bytes: &[u8]) -> bool {
+    let sig = signature();
+    bytes.windows(sig.len()).any(|w| w == sig.as_slice())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -46,5 +53,10 @@ mod tests {
         assert!(!is_eicar(&sig[1..]));
         assert!(!is_eicar(b""));
         assert_eq!(sig, aegis_core::testing::eicar());
+        let mut memory = vec![0u8; 100];
+        memory.extend_from_slice(&sig);
+        memory.extend_from_slice(&[0u8; 50]);
+        assert!(occurs_in(&memory));
+        assert!(!occurs_in(&memory[..120]));
     }
 }

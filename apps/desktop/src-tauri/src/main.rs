@@ -71,6 +71,7 @@ fn main() {
             service::service_propose_process_action,
             service::service_ransom_status,
             service::service_propose_baits,
+            service::service_memory_scan,
             service::service_panic_status,
             service::service_propose_panic,
             service::lab_capture_windows,
@@ -152,6 +153,7 @@ mod test_support {
                 crate::service::service_propose_process_action,
                 crate::service::service_ransom_status,
                 crate::service::service_propose_baits,
+                crate::service::service_memory_scan,
                 crate::service::service_panic_status,
                 crate::service::service_propose_panic,
                 crate::service::lab_capture_windows,
@@ -178,7 +180,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 38] = [
+    const EXPECTED_PERMISSIONS: [&str; 39] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -212,6 +214,7 @@ mod tests {
         "allow-service-propose-process-action",
         "allow-service-ransom-status",
         "allow-service-propose-baits",
+        "allow-service-memory-scan",
         "allow-service-panic-status",
         "allow-service-propose-panic",
         "allow-lab-capture-windows",
@@ -483,6 +486,7 @@ mod tests {
                 ("service_propose_enable_sandbox", json!({})),
                 ("service_ransom_status", json!({})),
                 ("service_propose_baits", json!({ "on": false })),
+                ("service_memory_scan", json!({})),
                 ("service_panic_status", json!({})),
                 ("service_propose_panic", json!({ "on": false })),
                 (

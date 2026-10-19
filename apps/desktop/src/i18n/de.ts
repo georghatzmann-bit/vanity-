@@ -381,6 +381,19 @@ export const de = {
       'In der Browser-Vorschau gibt es keinen Dienst. Hier wird nichts geprüft und nichts verändert.',
     error: 'Fehler',
   },
+  memory: {
+    title: 'Speicher-Scan',
+    honest:
+      'Prüft deine laufenden Programme, ihre geladenen Module und nachgeladenen Code im Arbeitsspeicher – nur lesend, nur Programme deines Kontos.',
+    intro:
+      'Findet z. B. Schadcode, der nur im Speicher steckt. Dauert je nach Rechner einige Minuten.',
+    run: 'Arbeitsspeicher prüfen',
+    summary:
+      '{processes} Programme · {modules} Programmdateien/Module · {regions} Speicherbereiche geprüft · {notable} auffällig',
+    findingHint:
+      'Fund im Arbeitsspeicher: Im Echtzeit-Wächter bzw. über „Beenden …“ lässt sich das Programm nach deinem Ja beenden.',
+    skipped: '{count} Programme bzw. Bereiche nicht lesbar (z. B. geschützte Prozesse)',
+  },
   scanner: {
     intro:
       'Wähle Dateien oder einen Ordner. AEGIS prüft nur und erklärt die Funde – verändert wird nichts ohne dein Ja.',

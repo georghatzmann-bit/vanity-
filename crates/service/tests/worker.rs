@@ -98,3 +98,26 @@ fn hintergrund_liest_nur_was_alle_nutzer_lesen_duerfen() {
     let own = worker().examine(&[private], &OwnProcess).unwrap();
     assert_eq!(own[0].risk, RiskLevel::Dangerous);
 }
+
+#[test]
+fn speicher_wird_im_pruefprozess_geprueft() {
+    use base64::Engine as _;
+    let mut memory = vec![0x90u8; 4096];
+    memory.extend_from_slice(&eicar());
+    memory.extend_from_slice(&[0u8; 512]);
+    let blocks = vec![
+        aegis_service::worker::MemoryBlock {
+            label: "Speicher von test.exe (PID 1) @ 0x1000".into(),
+            data: base64::engine::general_purpose::STANDARD.encode(&memory),
+        },
+        aegis_service::worker::MemoryBlock {
+            label: "Speicher von test.exe (PID 1) @ 0x9000".into(),
+            data: base64::engine::general_purpose::STANDARD.encode([0u8; 1024]),
+        },
+    ];
+    let findings = worker().scan_memory(blocks, &OwnProcess).unwrap();
+    assert_eq!(findings.len(), 2);
+    assert_eq!(findings[0].risk, RiskLevel::Dangerous);
+    assert!(findings[0].path.to_string_lossy().contains("@ 0x1000"));
+    assert!(findings[1].risk <= RiskLevel::Info);
+}

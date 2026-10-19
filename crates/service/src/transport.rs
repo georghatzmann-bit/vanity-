@@ -149,6 +149,19 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                     },
                 }
             }
+            // Speicher-Scan außerhalb der Dienst-Sperre (dauert).
+            Ok(Request::MemoryScan {}) => {
+                let scanner = lock()?.scanner();
+                match Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS) {
+                    None => busy(),
+                    Some(slot) => {
+                        let mut response = crate::handler::memory_scan(&scanner, user);
+                        drop(slot);
+                        lock()?.mark_trusted_response(&mut response, user.identity().as_deref());
+                        response
+                    }
+                }
+            }
             // Bildschirmfoto außerhalb der Dienst-Sperre lesen (die Datei kann warten lassen).
             Ok(Request::LabScreenshot { run_id, name }) => {
                 let lab = lock()?.lab();

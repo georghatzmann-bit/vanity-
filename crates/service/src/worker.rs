@@ -39,7 +39,23 @@ pub struct WorkerRequest {
     pub files_only: bool,
     /// ClamAV verwenden, falls installiert.
     pub clamav: bool,
+    /// Speicherbereiche (Speicher-Scan): statt Pfaden geprüft, nur YARA/EICAR.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub memory: Vec<MemoryBlock>,
 }
+
+/// Ein gelesener Speicherbereich für den Prüfprozess.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MemoryBlock {
+    /// Herkunft (Programm, PID, Adresse).
+    pub label: String,
+    /// Inhalt (Base64).
+    pub data: String,
+}
+
+/// Höchstgröße der Rohdaten je Anfrage (Base64 vergrößert um 4/3, Rest: Rahmen).
+pub const MAX_MEMORY_PER_REQUEST: usize = 10 * 1024 * 1024;
 
 /// Wo geprüft wird.
 #[derive(Debug, Clone)]
@@ -84,6 +100,7 @@ impl Scanner {
                     paths: paths.to_vec(),
                     files_only: false,
                     clamav: *clamav,
+                    memory: Vec::new(),
                 },
                 user,
                 SCAN_TIMEOUT,
@@ -111,6 +128,44 @@ impl Scanner {
                     paths: paths.to_vec(),
                     files_only: true,
                     clamav: *clamav,
+                    memory: Vec::new(),
+                },
+                user,
+                EXAMINE_TIMEOUT,
+            )
+            .map(|r| r.findings),
+        }
+    }
+}
+
+impl Scanner {
+    /// Prüft gelesene Speicherbereiche (nur YARA/EICAR) – im Prüfprozess, nie im Dienst.
+    ///
+    /// # Errors
+    /// Wie [`Scanner::scan`].
+    pub fn scan_memory(
+        &self,
+        blocks: Vec<MemoryBlock>,
+        user: &dyn UserAccess,
+    ) -> Result<Vec<Finding>, String> {
+        use base64::Engine as _;
+        match self {
+            Self::InProcess(engine) => Ok(blocks
+                .iter()
+                .map(|b| {
+                    let data = base64::engine::general_purpose::STANDARD
+                        .decode(&b.data)
+                        .unwrap_or_default();
+                    engine.scan_memory(&b.label, &data)
+                })
+                .collect()),
+            Self::Worker { exe, .. } => run(
+                exe,
+                &WorkerRequest {
+                    paths: Vec::new(),
+                    files_only: true,
+                    clamav: false,
+                    memory: blocks,
                 },
                 user,
                 EXAMINE_TIMEOUT,

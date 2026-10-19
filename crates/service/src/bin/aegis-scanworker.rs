@@ -35,7 +35,22 @@ fn main() {
         },
         ..EngineConfig::default()
     });
-    let report = if request.files_only {
+    let report = if !request.memory.is_empty() {
+        use base64::Engine as _;
+        ScanReport {
+            findings: request
+                .memory
+                .iter()
+                .map(|b| {
+                    let data = base64::engine::general_purpose::STANDARD
+                        .decode(&b.data)
+                        .unwrap_or_default();
+                    engine.scan_memory(&b.label, &data)
+                })
+                .collect(),
+            ..ScanReport::default()
+        }
+    } else if request.files_only {
         ScanReport {
             findings: request.paths.iter().map(|p| engine.scan_file(p)).collect(),
             ..ScanReport::default()

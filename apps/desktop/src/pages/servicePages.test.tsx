@@ -105,6 +105,24 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     proposeProcessAction: vi.fn(() => Promise.resolve(proposal('Prozess beenden'))),
     ransomStatus: vi.fn(() => Promise.resolve({ baits: [] })),
     panicStatus: vi.fn(() => Promise.resolve({ since: null, available: true })),
+    memoryScan: vi.fn(() =>
+      Promise.resolve({
+        result: {
+          findings: [
+            {
+              ...finding,
+              path: 'Speicher von C:\\x\\tool.exe (PID 7) @ 0x1000',
+              sha256: null,
+            },
+          ],
+          skipped: [],
+          truncated: false,
+        },
+        processes: 12,
+        modules: 340,
+        regions: 5,
+      }),
+    ),
     proposePanic: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBaits: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     ...overrides,
@@ -679,5 +697,19 @@ describe('Panic-Button', () => {
     await screen.findByRole('alertdialog');
     expect(service.proposePanic).toHaveBeenCalledWith(false);
     expect(service.decide).not.toHaveBeenCalled();
+  });
+});
+
+describe('Speicher-Scan', () => {
+  it('zeigt Umfang und Funde – ohne Aktion', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/scan' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Arbeitsspeicher prüfen' }));
+    const result = await screen.findByTestId('memory-result');
+    expect(result).toHaveTextContent('12 Programme');
+    expect(result).toHaveTextContent('340 Programmdateien/Module');
+    expect(within(result).getByTestId('memory-finding')).toHaveTextContent('PID 7');
+    expect(service.decide).not.toHaveBeenCalled();
+    expect(service.proposeQuarantine).not.toHaveBeenCalled();
   });
 });

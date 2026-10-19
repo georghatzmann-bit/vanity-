@@ -378,6 +378,19 @@ export const en: Messages<typeof de> = {
       'The browser preview has no service. Nothing is scanned and nothing is changed here.',
     error: 'Error',
   },
+  memory: {
+    title: 'Memory scan',
+    honest:
+      'Checks your running programs, their loaded modules and code loaded into memory – read-only, only programs of your account.',
+    intro:
+      'Finds e.g. malicious code that only lives in memory. Takes a few minutes depending on the PC.',
+    run: 'Scan memory',
+    summary:
+      '{processes} programs · {modules} program files/modules · {regions} memory regions checked · {notable} notable',
+    findingHint:
+      'Found in memory: the program can be terminated via the real-time guard (“Terminate…”) after your yes.',
+    skipped: '{count} programs or regions not readable (e.g. protected processes)',
+  },
   scanner: {
     intro:
       'Choose files or a folder. AEGIS only scans and explains its findings – nothing is changed without your yes.',

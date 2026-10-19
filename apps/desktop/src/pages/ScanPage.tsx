@@ -6,7 +6,13 @@ import { Button, IconFile, IconTree, Panel, RiskBadge, SafeText, useToast } from
 import { useCallback, useState } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
-import { ServiceError, type ScanFinding, type ScanResult } from '../platform/service.ts';
+import {
+  ServiceError,
+  type MemoryScanResult,
+  type ScanFinding,
+  type ScanResult,
+  type ServiceApi,
+} from '../platform/service.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 import { SchedulePanel } from './SchedulePanel.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
@@ -103,6 +109,95 @@ function FindingRow({
         </div>
       )}
     </li>
+  );
+}
+
+/** Speicher-Scan: eigene laufende Programme, Module und nachgeladener Code – nur lesend. */
+function MemoryPanel({
+  service,
+  onIsolate,
+}: {
+  readonly service: ServiceApi;
+  readonly onIsolate: (path: string) => void;
+}) {
+  const { t, language } = useT();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<MemoryScanResult | null>(null);
+  const run = async () => {
+    setBusy(true);
+    try {
+      setResult(await service.memoryScan());
+    } catch (error) {
+      toast.show({
+        tone: 'danger',
+        title: t('consentFlow.error'),
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const notable = result?.result.findings.filter((f) => f.risk !== 'clean') ?? [];
+  const isMemory = (f: ScanFinding) => f.sha256 === null && f.path.startsWith('Speicher von');
+  return (
+    <Panel
+      title={t('memory.title')}
+      description={t('memory.honest')}
+      actions={
+        <Button loading={busy} onClick={() => void run()}>
+          {t('memory.run')}
+        </Button>
+      }
+    >
+      {result === null ? (
+        <p className="text-sm text-text-muted">
+          {busy ? t('scanner.scanning') : t('memory.intro')}
+        </p>
+      ) : (
+        <div aria-live="polite" data-testid="memory-result">
+          <p className="text-sm text-text-muted tabular-nums">
+            {t('memory.summary', {
+              processes: String(result.processes),
+              modules: String(result.modules),
+              regions: String(result.regions),
+              notable: String(notable.length),
+            })}
+          </p>
+          {notable.length === 0 ? (
+            <p className="mt-3 text-sm text-success">{t('scanner.clean')}</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {notable.map((f) =>
+                isMemory(f) ? (
+                  <li
+                    key={f.path}
+                    className="rounded-xl border border-border bg-surface-2 p-4"
+                    data-testid="memory-finding"
+                  >
+                    <RiskBadge level={f.risk} />
+                    <p className="mt-2 text-sm text-text">
+                      <SafeText value={f.path} mono breakAll />
+                    </p>
+                    <p className="mt-1 text-sm text-text-muted">
+                      {language === 'en' ? f.summaryEn : f.summaryDe}
+                    </p>
+                    <p className="mt-1 text-xs text-text-subtle">{t('memory.findingHint')}</p>
+                  </li>
+                ) : (
+                  <FindingRow key={f.path} finding={f} onIsolate={() => onIsolate(f.path)} />
+                ),
+              )}
+            </ul>
+          )}
+          {result.result.skipped.length > 0 && (
+            <p className="mt-3 text-xs text-text-subtle">
+              {t('memory.skipped', { count: String(result.result.skipped.length) })}
+            </p>
+          )}
+        </div>
+      )}
+    </Panel>
   );
 }
 
@@ -217,6 +312,10 @@ export function ScanPage() {
               </div>
             )}
           </Panel>
+          <MemoryPanel
+            service={service}
+            onIsolate={(path) => void flow.start(() => service.proposeQuarantine([path]))}
+          />
           <SchedulePanel service={service} />
           {flow.dialogs}
         </>

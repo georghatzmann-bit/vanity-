@@ -64,6 +64,7 @@ ersetzen, Pfade des Nutzers auslesen, Events an das Backend senden) und auch kei
 | `allow-service-propose-process-action`       | App-Befehl `service_propose_process_action`: laufende Prozesse eines Programms beenden/anhalten/fortsetzen vorschlagen – nur eigene, nur nach „Ja“.                                               |
 | `allow-service-ransom-status`                | App-Befehl `service_ransom_status`: eigene Köderdateien des Ransomware-Schutzes anzeigen. Nur lesend.                                                                                             |
 | `allow-service-propose-baits`                | App-Befehl `service_propose_baits`: Köderdateien anlegen/entfernen vorschlagen – angelegt bzw. gelöscht wird nur nach „Ja“.                                                                       |
+| `allow-service-memory-scan`                  | App-Befehl `service_memory_scan`: eigene laufende Programme, Module und nachgeladenen Code prüfen. Nur lesend.                                                                                    |
 | `allow-service-panic-status`                 | App-Befehl `service_panic_status`: Zustand des Panic-Buttons (Netz getrennt seit …). Nur lesend.                                                                                                  |
 | `allow-service-propose-panic`                | App-Befehl `service_propose_panic`: Netz trennen bzw. wieder verbinden vorschlagen – geändert wird die Firewall nur nach „Ja“.                                                                    |
 | `allow-lab-capture-windows`                  | App-Befehl `lab_capture_windows`: Fensterfotos eines laufenden eigenen Mini-Sandbox-Laufs (Prozess-IDs nennt der Dienst). Nur lesend.                                                             |
@@ -124,6 +125,7 @@ echten ACL: jeder Aufruf der Oberfläche läuft, alles andere wird abgelehnt).
 | `invoke('service_propose_process_action')`                      | `service_propose_process_action`          | `allow-service-propose-process-action`       |
 | `invoke('service_ransom_status')`                               | `service_ransom_status`                   | `allow-service-ransom-status`                |
 | `invoke('service_propose_baits')`                               | `service_propose_baits`                   | `allow-service-propose-baits`                |
+| `invoke('service_memory_scan')`                                 | `service_memory_scan`                     | `allow-service-memory-scan`                  |
 | `invoke('service_panic_status')`                                | `service_panic_status`                    | `allow-service-panic-status`                 |
 | `invoke('service_propose_panic')`                               | `service_propose_panic`                   | `allow-service-propose-panic`                |
 | `invoke('lab_capture_windows')`                                 | `lab_capture_windows`                     | `allow-lab-capture-windows`                  |

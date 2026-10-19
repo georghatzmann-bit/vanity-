@@ -82,6 +82,8 @@ pub enum Request {
     RansomStatus {},
     /// Köderdateien anlegen (`on`) bzw. entfernen vorschlagen.
     ProposeBaits { on: bool },
+    /// Speicher-Scan der eigenen laufenden Programme (nur lesend).
+    MemoryScan {},
     /// Panic-Button: Zustand (nur lesend).
     PanicStatus {},
     /// Netz trennen (`on`) bzw. wieder verbinden vorschlagen.
@@ -164,6 +166,13 @@ pub enum Response {
     },
     /// Bildschirmfoto (PNG, Base64).
     LabScreenshot { png_base64: String },
+    /// Ergebnis des Speicher-Scans (Funde wie beim Scan; dazu, was geprüft wurde).
+    MemoryScan {
+        report: Box<aegis_engine::ScanReport>,
+        processes: usize,
+        modules: usize,
+        regions: usize,
+    },
     /// Ransomware-Schutz des Kontos.
     Ransom { baits: Vec<PathBuf> },
     /// Panic-Button: aktiv seit (RFC 3339) bzw. `None`.

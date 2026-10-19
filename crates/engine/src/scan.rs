@@ -138,6 +138,46 @@ impl Engine {
         }))
     }
 
+    /// Prüft einen gelesenen Speicherbereich (Speicher-Scan): nur YARA-Regeln und die
+    /// EICAR-Prüfung – Speicher hat kein Dateiformat. `label` beschreibt die Herkunft.
+    #[must_use]
+    pub fn scan_memory(&self, label: &str, bytes: &[u8]) -> Finding {
+        let mut reasons = Vec::new();
+        let mut not_scannable = None;
+        if eicar::occurs_in(bytes) {
+            reasons.push(Reason::new(
+                "eicar",
+                Source::Eicar,
+                Weight::Definite(RiskLevel::Dangerous),
+                "Enthält die EICAR-Prüfzeichenkette.",
+                "Contains the EICAR test string.",
+            ));
+        }
+        if let Some(rules) = &self.config.yara {
+            match rules.scan(bytes) {
+                Ok(hits) => reasons.extend(hits.iter().map(yara::reason)),
+                Err(e) => not_scannable = Some(format!("YARA: {e}")),
+            }
+        }
+        let (risk, confidence, category) = finding::assess(&reasons);
+        let (summary_de, summary_en) = finding::summarize(risk, category, &reasons);
+        Finding {
+            path: PathBuf::from(label),
+            sha256: None,
+            size: bytes.len() as u64,
+            risk,
+            confidence,
+            category,
+            summary_de,
+            summary_en,
+            recommendation: finding::recommend(risk),
+            reasons,
+            not_scannable,
+            contained: Vec::new(),
+            trusted: None,
+        }
+    }
+
     /// Prüft eine Datei. Liest nur; folgt keinen Links.
     #[must_use]
     pub fn scan_file(&self, path: &Path) -> Finding {

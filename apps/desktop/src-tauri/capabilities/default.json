@@ -37,6 +37,7 @@
     "allow-service-propose-process-action",
     "allow-service-ransom-status",
     "allow-service-propose-baits",
+    "allow-service-memory-scan",
     "allow-service-panic-status",
     "allow-service-propose-panic",
     "allow-lab-capture-windows",

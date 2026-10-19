@@ -1211,7 +1211,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
 
     /// Wie [`Service::mark_trusted`] für eine Scan-Antwort.
     pub fn mark_trusted_response(&self, response: &mut Response, owner: Option<&str>) {
-        if let Response::ScanReport { report } = response {
+        if let Response::ScanReport { report } | Response::MemoryScan { report, .. } = response {
             self.mark_trusted(&mut report.findings, owner);
         }
     }
@@ -1353,6 +1353,11 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 baits: self.baits_of(user.identity().as_deref()),
             },
             Request::ProposeBaits { on } => self.propose_baits(on, user),
+            Request::MemoryScan {} => {
+                let mut response = memory_scan(&self.scanner, user);
+                self.mark_trusted_response(&mut response, user.identity().as_deref());
+                response
+            }
             Request::PanicStatus {} => Response::Panic {
                 since: self.settings.get().panic_since.clone(),
                 available: cfg!(windows),
@@ -2197,6 +2202,145 @@ fn new_nonce() -> Option<String> {
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Höchstwerte des Speicher-Scans.
+#[cfg(windows)]
+const MEMORY_MAX_PROCESSES: usize = 300;
+#[cfg(windows)]
+const MEMORY_MAX_MODULES: usize = 2000;
+#[cfg(windows)]
+const MEMORY_PER_PROCESS: usize = 16 * 1024 * 1024;
+#[cfg(windows)]
+const MEMORY_TOTAL: usize = 256 * 1024 * 1024;
+
+/// Speicher-Scan: Programme, geladene Module und ausführbarer privater Speicher der eigenen
+/// laufenden Prozesse. Gelesen wird im Identitätswechsel des Nutzers, geprüft nur im
+/// Prüfprozess; es wird nichts verändert.
+pub fn memory_scan(scanner: &crate::worker::Scanner, user: &dyn UserAccess) -> Response {
+    #[cfg(windows)]
+    {
+        use base64::Engine as _;
+        let me = user.identity();
+        let Ok(all) = aegis_winffi::inspect::processes() else {
+            return Response::error("scan", "Prozessliste nicht lesbar");
+        };
+        let own: Vec<u32> = all
+            .into_iter()
+            .map(|p| p.pid)
+            .filter(|pid| *pid != 0 && *pid != 4)
+            .filter(|pid| me.is_some() && aegis_winffi::system::process_user_sid(*pid).ok() == me)
+            .take(MEMORY_MAX_PROCESSES)
+            .collect();
+        let mut files: Vec<PathBuf> = Vec::new();
+        let mut blocks = Vec::new();
+        let mut skipped = Vec::new();
+        let mut total = 0usize;
+        {
+            let _scope = match user.enter() {
+                Ok(s) => s,
+                Err(e) => return Response::error("identity", e.to_string()),
+            };
+            for pid in &own {
+                let image = aegis_winffi::system::process_image_path(*pid).ok();
+                if let Some(image) = &image
+                    && !files.iter().any(|f| crate::paths::same_path(f, image))
+                {
+                    files.push(image.clone());
+                }
+                if let Ok(mods) = aegis_winffi::memory::modules(*pid, 512) {
+                    for m in mods {
+                        if files.len() < MEMORY_MAX_MODULES
+                            && !files.iter().any(|f| crate::paths::same_path(f, &m))
+                        {
+                            files.push(m);
+                        }
+                    }
+                }
+                if total >= MEMORY_TOTAL {
+                    continue;
+                }
+                match aegis_winffi::memory::executable_private_regions(
+                    *pid,
+                    MEMORY_PER_PROCESS.min(MEMORY_TOTAL - total),
+                ) {
+                    Ok(regions) => {
+                        for r in regions {
+                            total += r.data.len();
+                            let name = image
+                                .as_ref()
+                                .map_or_else(|| format!("PID {pid}"), |i| i.display().to_string());
+                            blocks.push(crate::worker::MemoryBlock {
+                                label: format!("Speicher von {name} (PID {pid}) @ {:#x}", r.base),
+                                data: base64::engine::general_purpose::STANDARD.encode(&r.data),
+                            });
+                        }
+                    }
+                    Err(e) => skipped.push(aegis_engine::scan::Skipped {
+                        path: image.unwrap_or_else(|| PathBuf::from(format!("PID {pid}"))),
+                        reason: format!("Speicher nicht lesbar: {e}"),
+                    }),
+                }
+            }
+        }
+        let modules = files.len();
+        let regions = blocks.len();
+        let mut findings = Vec::new();
+        for chunk in files.chunks(200) {
+            match scanner.examine(chunk, user) {
+                Ok(found) => findings.extend(found),
+                Err(e) => skipped.push(aegis_engine::scan::Skipped {
+                    path: chunk.first().cloned().unwrap_or_default(),
+                    reason: e,
+                }),
+            }
+        }
+        // Speicher in Paketen bis zur Größe einer Anfrage.
+        let mut batch = Vec::new();
+        let mut size = 0usize;
+        let flush = |batch: &mut Vec<crate::worker::MemoryBlock>,
+                     findings: &mut Vec<Finding>,
+                     skipped: &mut Vec<aegis_engine::scan::Skipped>| {
+            if batch.is_empty() {
+                return;
+            }
+            match scanner.scan_memory(std::mem::take(batch), user) {
+                Ok(found) => findings.extend(found),
+                Err(e) => skipped.push(aegis_engine::scan::Skipped {
+                    path: PathBuf::from("Speicher"),
+                    reason: e,
+                }),
+            }
+        };
+        for block in blocks {
+            let len = block.data.len() * 3 / 4;
+            if size + len > crate::worker::MAX_MEMORY_PER_REQUEST {
+                flush(&mut batch, &mut findings, &mut skipped);
+                size = 0;
+            }
+            size += len;
+            batch.push(block);
+        }
+        flush(&mut batch, &mut findings, &mut skipped);
+        findings.retain(|f| f.risk > RiskLevel::Info || f.not_scannable.is_some());
+        findings.truncate(1000);
+        skipped.truncate(200);
+        Response::MemoryScan {
+            report: Box::new(aegis_engine::ScanReport {
+                findings,
+                skipped,
+                truncated: false,
+            }),
+            processes: own.len(),
+            modules,
+            regions,
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (scanner, user);
+        Response::error("scan", "Den Speicher-Scan gibt es nur unter Windows")
+    }
 }
 
 /// Laufende Prozesse eines Programms, die das Konto anfassen darf: eigene; Administratoren alle.
