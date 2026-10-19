@@ -35,7 +35,10 @@ fn conversation<S: std::io::Read + std::io::Write>(stream: &mut S, home: &std::p
     );
     assert_eq!(hello["type"], "hello");
     let scan = ask(stream, &json!({"type": "scan", "paths": [home]}));
-    assert_eq!(scan["report"]["findings"][0]["category"], "test_file");
+    assert_eq!(
+        scan["report"]["findings"][0]["category"], "test_file",
+        "Antwort des Dienstes: {scan}"
+    );
     let bad = ask(stream, &json!({"type": "execute_now"}));
     assert_eq!(bad["code"], "invalid");
     let path = home.join("eicar.com");
