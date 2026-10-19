@@ -20,6 +20,7 @@ aegis-netwatch = { path = "crates/netwatch" }
 aegis-vault-core = { path = "crates/vault-core" }
 aegis-tools = { path = "crates/tools" }
 aegis-defender-switch = { path = "crates/defender-switch" }
+aegis-quarantine = { path = "crates/quarantine" }
 
 # Externe Crates (Versionen zentral gepflegt)
 serde = { version = "1.0.229", features = ["derive"] }

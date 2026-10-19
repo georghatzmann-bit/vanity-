@@ -49,6 +49,10 @@ pub mod param {
     /// Neuer Dateiname für [`super::ActionKind::RenameFile`] (ein einzelner, unter Windows
     /// gültiger Dateiname, Pflicht).
     pub const NEW_NAME: &str = "new_name";
+    /// Kennung des Quarantäne-Eintrags für [`super::ActionKind::Restore`] und
+    /// [`super::ActionKind::DeletePermanently`] aus der Quarantäne (das Datei-Ziel ist der
+    /// ursprüngliche Ort, der dem Nutzer angezeigt wird).
+    pub const QUARANTINE_ID: &str = "quarantine_id";
     /// Neuer Wert für [`super::ActionKind::ChangeSetting`] (Pflicht; darf leer sein). So ist
     /// das „Ja“ des Nutzers an den Wert gebunden, auf den geändert wird – ein Ausführer
     /// nimmt ihn ausschließlich von hier.

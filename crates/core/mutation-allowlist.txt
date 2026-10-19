@@ -64,3 +64,11 @@ crates/core/tests/mutation_guard.rs :: guard-runs-cargo :: Der Wächter selbst: 
 apps/desktop/src-tauri/src/startup_error.rs :: startup-log-create-dir :: Startprotokoll der Desktop-App: legt nur den AEGIS-eigenen Ordner %LOCALAPPDATA%\AEGIS\logs (bzw. $XDG_STATE_HOME/aegis/logs) an, damit ein Startfehler ohne Konsole sichtbar bleibt – berührt keine Nutzerdaten.
 apps/desktop/src-tauri/src/startup_error.rs :: startup-log-append :: Startprotokoll der Desktop-App: hängt nur eine Zeile an die AEGIS-eigene Datei startup.log an – nie kürzen oder löschen, Links/Sonderdateien werden verweigert, ab 1 MiB wird nichts mehr geschrieben.
 crates/engine/src/clamav.rs :: engine-clamav-scan :: Engine: startet ClamAV (clamdscan/clamscan) als getrennten Prozess nur zum Prüfen – ohne --remove/--move, Dateiname nach „--“; ClamAV ist GPL und wird deshalb nie eingelinkt.
+crates/quarantine/src/lib.rs :: quarantine-create-vault-dir :: Quarantäne: legt nur den AEGIS-eigenen Tresor-Ordner an.
+crates/quarantine/src/lib.rs :: quarantine-create-new-file :: Quarantäne: legt ausschließlich NEUE Dateien an (create_new) – Container/Metadaten im Tresor bzw. eine Wiederherstellungs-Teildatei nur innerhalb von restore() mit Erlaubnis; überschreibt nie.
+crates/quarantine/src/lib.rs :: quarantine-commit-container :: Quarantäne: benennt die geprüfte Teil-Datei im Tresor um (AEGIS-eigene Daten).
+crates/quarantine/src/lib.rs :: quarantine-remove-own-file :: Quarantäne: entfernt nur Tresor-Dateien (Teil-Dateien, Rücknahme, wiederhergestellte oder mit zweiter Bestätigung gelöschte Einträge).
+crates/quarantine/src/lib.rs :: quarantine-remove-original :: Quarantäne: entfernt das Original erst nach geprüfter verschlüsselter Kopie; nur aus quarantine(ExecutionPermit) erreichbar.
+crates/quarantine/src/lib.rs :: quarantine-restore-create-parent :: Quarantäne: legt beim Wiederherstellen den fehlenden ursprünglichen Ordner an; nur aus restore(ExecutionPermit).
+crates/quarantine/src/lib.rs :: quarantine-remove-restore-part :: Quarantäne: verwirft die eigene, unfertige Wiederherstellungs-Teildatei.
+crates/quarantine/src/lib.rs :: quarantine-restore-commit :: Quarantäne: legt die geprüfte Datei an den freien ursprünglichen Ort; nur aus restore(ExecutionPermit), überschreibt nie.
