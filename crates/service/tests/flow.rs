@@ -880,7 +880,11 @@ fn haertung_nur_lesend_mit_ehrlichem_score() {
     assert_eq!(r["code"], "unknown", "{r}");
     let r = h.send(json!({"type": "propose_hardening_fix", "fix": "disable_smb1"}));
     if cfg!(windows) {
-        assert!(r["type"] == "proposal" || r["code"] == "admin", "{r}");
+        // Echter Rechner: Vorschlag, fehlende Rechte oder „ist bereits aus“ (dann kein Plan).
+        assert!(
+            r["type"] == "proposal" || r["code"] == "admin" || r["code"] == "hardening",
+            "{r}"
+        );
     } else {
         assert_eq!(r["code"], "hardening", "{r}");
     }
