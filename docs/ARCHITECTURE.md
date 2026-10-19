@@ -46,7 +46,7 @@
    Antwort. Nur „Ja“ ergibt `Outcome::Approved(Approval)`, nur „Vertrauen“ ein `TrustGrant`.
    Eine `Approval` ist nicht kopier-, klon- oder (de)serialisierbar, einmalig, an den Digest
    gebunden und läuft nach 2 min ab.
-5. `approval.redeem(&plan, gate.clock())` tauscht sie gegen eine **`ExecutionPermit`**, die den
+5. `approval.redeem(&plan, &mut gate)` tauscht sie gegen eine **`ExecutionPermit`**, die den
    freigegebenen Plan enthält. Ausführende Funktionen nehmen die Erlaubnis als Wert und lesen
    ihre Ziele nur aus `permit.plan()`. Danach `permit.complete(result)` → `AuditEvent`.
 6. Endgültiges Löschen: Eine normale `Approval` lässt sich dafür nicht einlösen.
@@ -60,17 +60,40 @@
 Abgelaufene oder unbeantwortete Pläne verfallen ohne Wirkung (`expire_stale()`).
 Fristen prüft eine versiegelte `Clock` – im Betrieb gibt es nur die Systemuhr.
 
-## Datenhaltung (geplant)
+## Dienst und Pipe (P2)
 
-- `%ProgramData%\AEGIS\` (Dienst): Quarantäne (verschlüsselt), Prüfprotokoll, Signaturen, Regeln.
+| Teil | Ort | Aufgabe |
+| --- | --- | --- |
+| Engine | `crates/engine` | nur lesend: EICAR, Hash-Listen (SHA-256), YARA-X (eigene Regeln), statische PE-Analyse (goblin), Entropie, ClamAV als getrennter Prozess (`clamscan`) |
+| Quarantäne | `crates/quarantine` | AES-256-GCM-Container in 1-MiB-Blöcken, Index, Wiederherstellen, endgültig Löschen – jede Funktion verlangt eine `ExecutionPermit` |
+| Dienst | `crates/service` | Protokoll (`protocol.rs`), Handler (`handler.rs` – **einzige** Stelle, die Nutzerantworten an das Tor gibt), Transport, Server, Windows-Dienst (`scm.rs`) |
+| Windows-FFI | `crates/winffi` | einzige Stelle mit `unsafe`: Pipe-Instanz mit SDDL, Datenordner-DACL |
+| App-Client | `apps/desktop/src-tauri/src/service.rs` | prüft Eingaben, schickt Rahmen über die Pipe, gibt Antworten an die UI |
+
+Rahmen: 4 Byte Länge (LE) + JSON, höchstens 16 MiB, unbekannte Felder werden abgelehnt.
+Jeder Vorschlag trägt Plan-ID, Digest und eine **Einmal-Nonce**; `Decide` muss alle drei
+zurückschicken. Endgültiges Löschen liefert zuerst `SecondConfirmationRequired` mit eigener
+Nonce. Schlägt das Schreiben des Prüfprotokolls fehl, verweigert der Dienst jede weitere
+Ausführung, bis er neu gestartet ist.
+
+Pipe `\\.\pipe\aegis-service`: SDDL `D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)`,
+`PIPE_REJECT_REMOTE_CLIENTS`, erste Instanz mit `FILE_FLAG_FIRST_PIPE_INSTANCE` (kein
+Vorbesetzen durch Fremde). Unter Linux (nur Entwicklung) ein Unix-Socket im Zustandsordner des Nutzers.
+
+## Datenhaltung
+
+- `%ProgramData%\AEGIS\` (Dienst, DACL nur SYSTEM + Administratoren): `quarantine\`
+  (verschlüsselte Container + Index + `vault.key`), `audit.log` (Hash-Kette, JSON-Zeilen).
+  Später: Signaturen, Regeln.
 - `%LOCALAPPDATA%\AEGIS\` (Nutzer): UI-Einstellungen, Tresor-Datei, Layouts.
 - SQLite (`rusqlite`) für Funde, Zeitleiste, Whitelist (Hash + Pfad + Grund + Datum).
 
-## Prozessisolation fremder Dateien (ab P2)
+## Prozessisolation fremder Dateien (geplant, P3)
 
 Parser für PE/Office/PDF/LNK/Archive laufen in Kindprozessen mit eingeschränktem Token,
 niedriger Integrität, Job-Objekt (CPU/RAM/Zeit, keine Kindprozesse) und ohne Netz.
 Ergebnis als JSON über eine anonyme Pipe; Absturz eines Parsers = Befund „nicht prüfbar“.
+Stand P2: PE-Analyse und YARA-X laufen noch im Dienstprozess (mit Größenlimits).
 
 ## Build & Verteilung
 

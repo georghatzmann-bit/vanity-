@@ -12,16 +12,19 @@ Bestätigung des Nutzers. Ohne „Ja“ nur: scannen, melden, erklären.
 
 - Jede verändernde Funktion verlangt eine `aegis_core::consent::ExecutionPermit` **als Wert**
   und liest ihre Ziele nur aus `permit.plan()`. Die Erlaubnis entsteht nur über
-  `approval.redeem(&plan, gate.clock())`; eine `Approval` nur in `ConsentGate::decide` aus der
+  `approval.redeem(&plan, &mut gate)`; eine `Approval` nur in `ConsentGate::decide` aus der
   Nutzerentscheidung „Ja, ausführen“ für genau diesen Plan (Digest-gebunden, einmalig, läuft ab).
   Nach der Ausführung: `permit.complete(result)` → Audit-Ereignis.
+- Nutzerantworten nimmt im Betrieb **nur** der Pipe-Handler des Dienstes an
+  (`crates/service/src/handler.rs`, Einmal-Nonce je Vorschlag); der Dienst formuliert jeden
+  Plan selbst. `decide`/`confirm_second` sind per Clippy gesperrt (Markierung `aegis-consent`).
 - Vor jeder Aktion ein `ActionPlan`: Was genau? Warum? Was passiert dann? Rückgängig wie?
   Antworten: Ja, ausführen / Nein / Ignorieren / Vertrauen. Keine Reaktion = nichts tun.
 - Endgültiges Löschen: zweite, getrennte Bestätigung (`PermanentDeleteApproval`).
   Kein automatisches Löschen, auch nicht nach Fristen – nur Erinnerungen.
 - Gilt auch für „Gefährlich“, Echtzeit-Wächter, Panic-Button, Hintergrundprozesse.
-- Verändernde std-APIs sind per `clippy.toml` (`disallowed-methods`) gesperrt (Windows-APIs
-  werden ergänzt, sobald `windows`/`windows-sys` dazukommen). Ausnahme nur mit eng gesetztem
+- Verändernde std-, tokio-, tempfile- und windows-sys-APIs sind per `clippy.toml`
+  (`disallowed-methods`) gesperrt. Ausnahme nur mit eng gesetztem
   `#[allow(clippy::disallowed_methods)]` + Markierung `// aegis-mutation: <kennung>` +
   Eintrag in `crates/core/mutation-allowlist.txt` (Test `mutation_guard` erzwingt das).
   Testcode legt Dateien nur über `aegis_core::testing` an (Feature `testing`, nur dev-deps).
@@ -52,7 +55,11 @@ apps/browser        Privacy-Browser (P12)
 extensions/vault    MV3-Erweiterung Passwort-Tresor (P9)
 extensions/webshield MV3-Erweiterung Web-Schutz (P7)
 crates/core         Goldene Regel, Aktionspläne, Prüfprotokoll, Risikostufen
-crates/engine|service|sandbox|hardening|netwatch|vault-core|tools|defender-switch
+crates/engine       Erkennung (EICAR, Hash-Listen, YARA-X, PE, Heuristik, ClamAV-Prozess) – nur lesend
+crates/quarantine   verschlüsselter Tresor (isolieren/wiederherstellen/löschen nur mit Permit)
+crates/service      aegis-service: Protokoll, Handler (einzige Antwort-Stelle), Pipe, SCM
+crates/winffi       einzige Bibliothek mit unsafe (Named Pipe + ACL)
+crates/sandbox|hardening|netwatch|vault-core|tools|defender-switch  (spätere Phasen)
 packages/ui         Design-System: Tokens, Logo, Start-Animation, Showcase
 rules/              YARA, Whitelist, Kategorien (nur lizenziert)
 tests/fixtures      nur harmlose Dateien
@@ -70,14 +77,16 @@ pnpm rust:check                    # cargo fmt --check, clippy -D warnings, carg
 pnpm rust:check:windows            # clippy gegen x86_64-pc-windows-msvc (ohne Linken)
 pnpm --filter @aegis/ui dev        # Design-System-Showcase
 pnpm --filter @aegis/desktop tauri dev   # App starten (Windows bzw. Linux mit webkit2gtk)
+cargo run -p aegis-service -- run        # Dienst in der Konsole (Linux: Unix-Socket, Entwicklung)
 cargo llvm-cov -p aegis-core       # Abdeckung (Ziel ≥ 80 % für kritische Module)
 ```
 
 ## Konventionen
 
 - Code-Bezeichner Englisch; Kommentare, Docs, UI-Texte Deutsch (Englisch als 2. Sprache).
-- Rust: Edition 2024, Workspace-Lints (`unsafe_code = deny`; Windows-FFI nur lokal erlaubt
-  mit `// SAFETY:`), kein `unwrap/expect` außerhalb von Tests. Windows-Code hinter `cfg(windows)`.
+- Rust: Edition 2024, Workspace-Lints, alle Bibliotheken `#![forbid(unsafe_code)]` – einzige
+  Ausnahme `crates/winffi` (Windows-FFI: je Block `// SAFETY:` + `// aegis-unsafe:` +
+  Allowlist). Kein `unwrap/expect` außerhalb von Tests. Windows-Code hinter `cfg(windows)`.
 - TypeScript strikt (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`).
 - Design: Tokens aus `packages/ui/src/tokens` – keine hart codierten Farben in Komponenten.
   Animationen nur über `transform`/`opacity` (Ausnahme: SVG-Linien zeichnen), 60 fps,

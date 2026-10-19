@@ -99,3 +99,29 @@ unabhängig von der Oberfläche.
 
 ## D-022 – Fehlerdialog über `rfd`
 Statt eigenem `unsafe`-FFI (MessageBoxW) nutzt die App `rfd` (MIT) – weniger eigenes unsafe.
+
+## D-023 – Eigenes Crate `aegis-winffi` für `unsafe`
+Alle Bibliotheken unter `crates/` tragen `#![forbid(unsafe_code)]`. Die einzige Ausnahme ist
+`aegis-winffi` (Named Pipe mit SDDL, Datenordner-DACL): jede `unsafe`-Stelle mit
+`// SAFETY:` und `// aegis-unsafe:`-Markierung in der Allowlist. So bleibt FFI an einer
+prüfbaren Stelle.
+
+## D-024 – Nur der Dienst nimmt Nutzerantworten an
+`ConsentGate::decide`/`confirm_second` sind per `clippy.toml` gesperrt; einzige Ausnahme ist
+der Handler in `crates/service`. Die App gibt die Antwort nur weiter (mit Plan-ID, Digest,
+Nonce). Die App hält kein eigenes Tor.
+
+## D-025 – Eigener Pipe-Client in der App
+Die App spricht das Dienstprotokoll mit einem kleinen eigenen Client (`src-tauri/src/service.rs`),
+statt das Dienst-Crate einzubinden – die App zieht so weder Engine noch Quarantäne nach und
+prüft Eingaben selbst, bevor sie etwas sendet.
+
+## D-026 – Dateiauswahl über `tauri-plugin-dialog`
+Pfade wählt der Nutzer im System-Dialog (nur `dialog:allow-open`). Die Oberfläche bekommt
+keinen Dateisystem-Zugriff; sie reicht nur die gewählten Pfade an den Dienst.
+
+## D-027 – Quarantäne-Format
+AES-256-GCM in 1-MiB-Blöcken (Nonce = 7-Byte-Präfix + Zähler + Letzter-Block-Flag, Kopf als
+AAD) – große Dateien ohne ganzen Inhalt im Speicher, Abschneiden/Umordnen fällt auf.
+Wiederherstellen schreibt erst eine versteckte Teil-Datei neben dem Ziel, prüft SHA-256 und
+Größe und legt sie erst dann an den ursprünglichen Ort; ein belegtes Ziel wird nicht überschrieben.

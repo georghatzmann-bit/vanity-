@@ -11,26 +11,40 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
 | Freigabe an Plan-Digest gebunden, einmalig, mit Ablauf | Kein Wiederverwenden, kein Unterschieben eines anderen Plans |
 | Keine Reaktion = Plan verfällt | Standard ist „nichts tun“ |
 | Endgültiges Löschen: zweite getrennte Bestätigung mit Mindestabstand | Kein versehentlicher Doppelklick |
-| `clippy.toml` `disallowed-methods` für verändernde APIs (std, tokio, tempfile) + Allowlist-Test | Jede neue Veränderungsstelle fällt im Review auf |
+| `clippy.toml` `disallowed-methods` für verändernde APIs (std, tokio, tempfile, windows-sys) + Allowlist-Test | Jede neue Veränderungsstelle fällt im Review auf |
 | `ConsentGate::decide`/`confirm_second` ebenfalls gesperrt (Markierung `aegis-consent`) | Im Betrieb darf nur der Pipe-Handler des Dienstes Nutzerantworten annehmen – kein Hintergrundcode „genehmigt sich selbst“ |
 | Einlösen nur am ausgebenden Tor; abgelehnte Einlösungen werden protokolliert | Manipulierte Pläne, fremde Tore und Fristüberschreitungen hinterlassen eine Spur |
 | Mutations-Wächter liest Manifeste über `cargo metadata`/TOML, prüft `.cargo/config`, `cfg(clippy)`, Doctests, `unsafe`-Ausnahmen | Die Sperre lässt sich nicht still per Konfiguration aushebeln |
 | Prüfprotokoll mit Hash-Kette | Nachträgliche Manipulation des Protokolls wird erkannt |
+| `unsafe` nur in `crates/winffi` (alle anderen Bibliotheken `forbid(unsafe_code)`, Test erzwingt das) | Windows-FFI an einer Stelle, jede `unsafe`-Stelle mit `SAFETY` + Allowlist |
+| Pipe: Einmal-Nonce je Vorschlag, `deny_unknown_fields`, Rahmenlimit, nur absolute Pfade (≤ 1000) | Keine wiederholten oder untergeschobenen Antworten, keine Speicher-Erschöpfung |
+| Engine nur lesend (Links werden nicht verfolgt, Byte-Schnappschuss-Test) | Ein Scan verändert nachweislich nichts |
 | „Nichts ohne Ja“-Tests (Zustands-Schnappschuss byte-genau) | Scans/Wächter/Panic ohne Bestätigung ändern nachweislich nichts |
 
 ## Bedrohungsmodell (ehrlich)
 
 - **Kein Kernel-Treiber.** AEGIS erkennt, warnt und isoliert auf Wunsch; es blockiert keine
   Programme vor dem Start. Das steht so in der UI.
-- **Wiederholte Antworten (offen bis P2):** Eine Entscheidung ist an Plan-ID + Digest gebunden,
-  noch nicht an eine Vorschlags-Nonce. Legt der Dienst denselben gespeicherten Plan in einem
-  neuen Tor erneut vor, würde ein wiederholtes „Ja“ angenommen. P2 bindet Antworten im
-  Pipe-Protokoll an eine Nonce, die die UI zurückschickt.
+- **Wiederholte Antworten (geschlossen in P2):** Jede Antwort muss Plan-ID, Digest und die
+  Einmal-Nonce des Vorschlags tragen (Vergleich in konstanter Zeit); die zweite Bestätigung
+  beim Löschen hat eine eigene Nonce. Eine mitgeschnittene Antwort passt auf keinen neuen
+  Vorschlag.
 - **Gleichrangige Schadsoftware:** Läuft Schadcode bereits mit den Rechten des Nutzers, kann er
-  theoretisch die UI fernsteuern oder Pipe-Nachrichten senden. Gegenmaßnahmen (geplant):
-  Pipe-ACL nur für den interaktiven Nutzer + SYSTEM, Prüfung der Client-Prozess-Identität
-  (Pfad + Signatur der AEGIS-App), für besonders folgenreiche Aktionen optional
-  Windows-Hello/UAC-Bestätigung. Admin-Schadsoftware kann AEGIS grundsätzlich aushebeln.
+  theoretisch die UI fernsteuern oder Pipe-Nachrichten senden. Stand P2: Die Pipe-ACL lässt
+  SYSTEM, Administratoren und **interaktiv angemeldete Nutzer** (IU, nur Lesen/Schreiben) zu;
+  Netzwerk-Clients sind abgewiesen. Eine Prüfung der Client-Prozess-Identität (Pfad + Signatur
+  der AEGIS-App) fehlt noch (geplant P13 mit Code-Signing); bis dahin könnte ein Prozess des
+  Nutzers selbst Vorschläge anfordern und beantworten. Für besonders folgenreiche Aktionen ist
+  optional Windows-Hello/UAC geplant. Admin-Schadsoftware kann AEGIS grundsätzlich aushebeln.
+- **Quarantäne-Schlüssel:** liegt als Datei `vault.key` im Datenordner, geschützt nur durch die
+  DACL (SYSTEM + Administratoren). Die Verschlüsselung verhindert, dass Funde versehentlich
+  ausgeführt oder von anderen Scannern gemeldet werden – nicht, dass ein Admin sie liest.
+  DPAPI-Bindung (Maschinenschlüssel) ist für P5 vorgesehen.
+- **Parser im Dienstprozess (bis P3):** goblin und YARA-X laufen noch im Dienst (Größenlimits,
+  Zeitlimit für YARA). Die Auslagerung in Kindprozesse folgt in P3.
+- **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
+  (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
+  in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.
 - **Fremde Dateien parsen ist riskant:** Parser laufen isoliert (Kindprozess, niedrige
   Integrität, Job-Objekt, kein Netz). Größen-/Tiefenlimits gegen Zip-Bomben.
 - **Selbstschutz ist begrenzt:** Dienst-ACLs, Integritätsprüfung eigener Dateien, signierte

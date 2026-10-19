@@ -1,6 +1,6 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-19 · **P0 + P1 abgeschlossen** · nächste Phase: **P2 – Dienst, Pipe, Engine-Kern, Quarantäne**
+Stand: 2026-10-19 · **P0–P1 abgeschlossen, P2 im Review** · danach: **P3 – Echtzeit-Wächter, Whitelist, Berichte**
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
@@ -15,7 +15,8 @@ Stand: 2026-10-19 · **P0 + P1 abgeschlossen** · nächste Phase: **P2 – Diens
 | NSIS | nicht vorhanden | Tauri lädt NSIS im Windows-CI-Build selbst |
 | Chromium (Playwright) | 1194 (= Playwright 1.56.1) | ok – Playwright gepinnt |
 | cargo-llvm-cov / cargo-deny | installiert / in CI | Abdeckung bzw. Lieferkette |
-| ClamAV / YARA | nicht installiert | erst ab P2 nötig |
+| ClamAV | nicht installiert | optional: Engine nutzt `clamscan`, wenn vorhanden; Tests ohne |
+| YARA | YARA-X 1.21 als Crate | ok – keine Systeminstallation nötig |
 
 ## Phasen-Übersicht
 
@@ -23,8 +24,8 @@ Stand: 2026-10-19 · **P0 + P1 abgeschlossen** · nächste Phase: **P2 – Diens
 | --- | --- | --- |
 | P0 | Fundament, Design-Tokens, Logo, Start-Animation | **erledigt** |
 | P1 | Shell, Dashboard, Design-System | **erledigt** |
-| P2 | Dienst + Pipe + Engine-Kern (ClamAV, Hashes, YARA-X, statische Analyse), Quarantäne | als Nächstes |
-| P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | offen |
+| P2 | Dienst + Pipe + Engine-Kern (ClamAV, Hashes, YARA-X, statische Analyse), Quarantäne | **erledigt** |
+| P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | als Nächstes |
 | P4 | Sandbox Stufe 1+2 + Verhaltensbericht | offen |
 | P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | offen |
 | P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | offen |
@@ -81,10 +82,12 @@ Stand: 2026-10-19 · **P0 + P1 abgeschlossen** · nächste Phase: **P2 – Diens
 
 ## Offen / bekannt
 
-- **Antwort-Nonce** (Review-Fund): Antworten sind an Plan-ID + Digest gebunden, noch nicht an
-  eine Vorschlags-Nonce → wird mit dem Pipe-Protokoll in P2 geschlossen.
 - Manuell auf Windows prüfen: Doppelklick auf Titelleiste, Tray-Symbol, Startzeit mit GPU.
-- Windows-APIs (`windows-sys`) in die Mutations-Sperre aufnehmen, sobald sie dazukommen (P2).
+- Parser (goblin, YARA-X) in Kindprozesse mit niedriger Integrität + Job-Objekt auslagern (P3).
+- ClamAV-Signaturen aktualisieren (`freshclam`) und Zeitpläne (P3); ClamAV-Installation im Setup (P13).
+- Quarantäne-Schlüssel per DPAPI (Maschine) binden statt nur Ordner-ACL (P5).
+- Pipe: Identität des Client-Prozesses prüfen (Pfad + Signatur, braucht Code-Signing → P13).
+- „Vertrauen“ legt noch keinen Whitelist-Eintrag an – der Dienst meldet das ehrlich (P3).
 - 16-px-Icon: Schild gut erkennbar, die A-Aussparung verschwimmt → eigene 16-px-Variante (P11).
 - Optional: Dependabot für Action-Pins (öffnet automatisch PRs – nur auf deinen Wunsch).
 
@@ -92,6 +95,9 @@ Stand: 2026-10-19 · **P0 + P1 abgeschlossen** · nächste Phase: **P2 – Diens
 
 - **Projektlizenz** (z. B. proprietär, MIT, GPL-3.0)? Bis dahin: keine Lizenzangabe, `publish = false`.
 - **Code-Signing-Zertifikat** (kostet Geld) – wird vorbereitet, nicht vorausgesetzt (P13).
+- **Online-Dienste mit API-Schlüssel** (abuse.ch MalwareBazaar-Hashlisten, VirusTotal): brauchen
+  deinen eigenen Schlüssel und senden Hashes ins Netz – nur abschaltbar und erst nach deinem
+  Ja. Bis dahin: lokale Hash-Listen (eigene Dateien).
 - Hinweis: Das Repo ist öffentlich → GitHub Actions (auch `windows-latest`) ist kostenlos.
 
 ## P1 – erledigt
@@ -108,8 +114,34 @@ Stand: 2026-10-19 · **P0 + P1 abgeschlossen** · nächste Phase: **P2 – Diens
 4. [x] Tests: Vitest, Playwright inkl. axe (Barrierefreiheit) in beiden Themes, Tastatur-Bedienung
 5. [x] Review (Sicherheit der Fenster-/Tray-Rechte, UI/Barrierefreiheit), Korrekturen, DoD, Commit
 
+## P2 – erledigt
+
+1. [x] P2.1 `crates/engine` (nur lesend): EICAR, SHA-256-Hash-Listen, YARA-X mit eigenen
+       Regeln (`rules/yara/aegis-builtin.yar`), statische PE-Analyse (goblin: Sektionen,
+       Entropie, Importe, Signaturhinweis), ClamAV als getrennter Prozess. „Gefährlich“ nur bei
+       eindeutigem Treffer; Heuristik höchstens „Verdächtig“.
+2. [x] P2.2 `crates/quarantine`: AES-256-GCM-Container, Isolieren → Wiederherstellen →
+       endgültig Löschen (zweite Bestätigung), Rückgängig-Einträge; Abdeckung 88,8 %.
+3. [x] P2.3 `crates/service`: Protokoll (Länge + JSON, Einmal-Nonce), Handler als einzige
+       Antwort-Stelle, Named Pipe mit SDDL (`crates/winffi`), Windows-Dienst (SCM),
+       Prüfprotokoll-Datei mit Hash-Kette (Fortsetzen, abgerissene letzte Zeile kürzen).
+4. [x] P2.4 App: Pipe-Client, Scan-Seite (Dateien/Ordner wählen, Funde, Ampel), Quarantäne-Seite
+       (Wiederherstellen, endgültig Löschen mit zweitem Dialog), Freigabe-Dialog für jede Aktion.
+5. [ ] P2.5 Sicherheits-Review (separater Agent), Korrekturen, Docs.
+
+### Definition of Done – Stand P2
+
+| Kriterium | Status |
+| --- | --- |
+| EICAR wird erkannt, isoliert, wiederhergestellt, endgültig gelöscht (Ende-zu-Ende über das echte Tor) | ✅ `crates/quarantine/tests/eicar_end_to_end.rs`, `crates/service/tests/flow.rs` |
+| „Nichts ohne Ja“: Scan ändert nichts (Byte-Schnappschuss), „Nein/Ignorieren/keine Antwort“ ändern nichts | ✅ `crates/engine/tests/scan_readonly.rs`, `crates/service/tests/flow.rs` |
+| Wiederholte/fremde Antworten werden abgewiesen (Nonce, Digest) | ✅ `crates/service/tests/flow.rs` |
+| Pipe unter Windows (ACL, erste Instanz) | ✅ CI `windows-latest` (`tests/transport.rs`) |
+| `pnpm check` + E2E grün | ✅ lokal; CI Linux + Windows |
+| Review dokumentiert | ⏳ läuft |
+
 ## Nächster Schritt
 
-P2: Windows-Dienst `aegis-service` + Named Pipe (ACL, Antwort-Nonce gegen Wiederholung),
-Engine-Kern (Hash-Abgleich, YARA-X, statische PE-Analyse, ClamAV als getrennter Prozess),
-verschlüsselte Quarantäne mit Wiederherstellen, EICAR-Ende-zu-Ende-Test, „Nichts ohne Ja“-Test.
+P3: Echtzeit-Wächter (notify; ETW wo ohne Treiber möglich), Whitelist (Hash + Pfad + Grund +
+Datum, SQLite) für „Vertrauen“, Parser in Kindprozessen, Dokument-/Skript-/Archiv-Analyse
+(Limits gegen Zip-Bomben), Cheat-Logik-Erkennung (nur melden), Berichte (Export), Zeitpläne.
