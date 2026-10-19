@@ -4,6 +4,7 @@ import { DashboardPage } from './DashboardPage.tsx';
 import { ModulePage } from './ModulePage.tsx';
 import { QuarantinePage } from './QuarantinePage.tsx';
 import { RealtimePage } from './RealtimePage.tsx';
+import { ReportsPage } from './ReportsPage.tsx';
 import { ScanPage } from './ScanPage.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -22,6 +23,8 @@ export function Page({ route }: { readonly route: RouteId }) {
       return <QuarantinePage />;
     case 'realtime':
       return <RealtimePage />;
+    case 'reports':
+      return <ReportsPage />;
     default:
       return <ModulePage route={route} />;
   }

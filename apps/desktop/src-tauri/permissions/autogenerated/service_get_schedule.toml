@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-get-schedule"
+description = "Enables the service_get_schedule command without any pre-configured scope."
+commands.allow = ["service_get_schedule"]
+
+[[permission]]
+identifier = "deny-service-get-schedule"
+description = "Denies the service_get_schedule command without any pre-configured scope."
+commands.deny = ["service_get_schedule"]

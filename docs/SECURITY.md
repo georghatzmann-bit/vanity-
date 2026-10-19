@@ -96,6 +96,13 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Isolieren/Vertrauen nur über Vorschlag + Freigabe-Dialog. **Gaming-Modus** pausiert Prüfen
   und Hinweise rechnerweit und endet spätestens nach 4 Stunden von selbst; danach wird
   nachgeprüft. Grenze: Neue Profile werden erst nach einem Dienst-Neustart überwacht.
+- **Verlauf, Zeitpläne, Updates (P3.5):** Der Verlauf (Berichte) enthält nur Zusammenfassungen
+  und Pfade, keine Inhalte; jedes Konto sieht nur eigene Einträge, Einträge seines Profils und
+  gemeinsame (USB, Updates). Geplante Scans prüfen Downloads/Desktop/Dokumente des eigenen
+  Profils im eingeschränkten Prüfprozess und melden nur. `freshclam` startet nur vom festen
+  ClamAV-Ort (nicht `PATH`), mit Zeitlimit, täglich und abschaltbar. Der HTML-Export wird in
+  Rust erzeugt (maskiert, CSP ohne Skripte) und nur an den im Speichern-Dialog gewählten Ort
+  geschrieben – die Oberfläche hat keinen Schreibbefehl mit eigenem Pfad.
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.

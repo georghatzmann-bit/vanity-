@@ -15,6 +15,8 @@ use aegis_engine::ScanReport;
 use aegis_quarantine::Entry;
 use serde::{Deserialize, Serialize};
 
+use crate::history::HistoryEntry;
+use crate::schedule::{Schedule, UpdateRecord};
 use crate::trust::TrustEntry;
 use crate::watch::{WatchEvent, WatchStatus};
 
@@ -47,6 +49,18 @@ pub enum Request {
     WatchPoll { after: u64 },
     /// Gaming-Modus an/aus (keine Prüfungen und Hinweise; endet spätestens nach 4 h).
     SetGaming { on: bool },
+    /// Verlauf für Berichte und Zeitleiste (nur lesend, nur eigene/gemeinsame Einträge).
+    History {},
+    /// Eigener Zeitplan und Update-Einstellung.
+    GetSchedule {},
+    /// Eigenen geplanten Scan setzen (nur prüfen und melden).
+    SetSchedule {
+        enabled: bool,
+        every_days: u16,
+        hour_utc: u8,
+    },
+    /// ClamAV-Signaturen täglich aktualisieren (Netzwerk) an/aus.
+    SetClamavUpdate { on: bool },
     /// Antwort des Nutzers im Freigabe-Dialog.
     Decide {
         plan_id: PlanId,
@@ -105,6 +119,17 @@ pub enum Response {
     Trust { entries: Vec<TrustEntry> },
     /// Eintrag widerrufen.
     TrustRevoked { id: String },
+    /// Verlauf, neueste zuerst.
+    History {
+        entries: Vec<HistoryEntry>,
+        /// Konnte der Verlauf zuletzt nicht gespeichert werden?
+        save_failed: bool,
+    },
+    /// Zeitplan und Update-Einstellung.
+    Schedule {
+        #[serde(flatten)]
+        info: Box<ScheduleInfo>,
+    },
     /// Meldungen und Zustand des Echtzeit-Wächters.
     Watch {
         events: Vec<WatchEvent>,
@@ -119,6 +144,21 @@ pub enum Response {
     },
     /// Fehler – es wurde nichts ausgeführt, sofern nicht anders gesagt.
     Error { code: String, message: String },
+}
+
+/// Zeitplan des Kontos und Update-Einstellung.
+#[derive(Debug, Clone, Serialize)]
+pub struct ScheduleInfo {
+    /// Eigener Zeitplan.
+    pub schedule: Option<Schedule>,
+    /// Ist ClamAV installiert?
+    pub clamav_available: bool,
+    /// Ist `freshclam` installiert?
+    pub clamav_update_available: bool,
+    /// Tägliches Signatur-Update an?
+    pub clamav_update: bool,
+    /// Letztes Update.
+    pub last_update: Option<UpdateRecord>,
 }
 
 impl Response {

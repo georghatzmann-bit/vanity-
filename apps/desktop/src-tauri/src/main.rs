@@ -4,6 +4,7 @@
 
 mod app_info;
 mod navigation;
+mod report;
 mod service;
 mod startup_error;
 mod tray;
@@ -57,7 +58,12 @@ fn main() {
             service::service_list_trust,
             service::service_revoke_trust,
             service::service_watch_poll,
-            service::service_set_gaming
+            service::service_set_gaming,
+            service::service_history,
+            service::service_get_schedule,
+            service::service_set_schedule,
+            service::service_set_clamav_update,
+            report::export_report
         ])
         .on_window_event(window::on_window_event)
         .setup(move |app| {
@@ -122,7 +128,12 @@ mod test_support {
                 crate::service::service_list_trust,
                 crate::service::service_revoke_trust,
                 crate::service::service_watch_poll,
-                crate::service::service_set_gaming
+                crate::service::service_set_gaming,
+                crate::service::service_history,
+                crate::service::service_get_schedule,
+                crate::service::service_set_schedule,
+                crate::service::service_set_clamav_update,
+                crate::report::export_report
             ])
             .build(tauri::generate_context!(test = true))
             .unwrap();
@@ -145,7 +156,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 22] = [
+    const EXPECTED_PERMISSIONS: [&str; 27] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -167,6 +178,11 @@ mod tests {
         "allow-service-revoke-trust",
         "allow-service-watch-poll",
         "allow-service-set-gaming",
+        "allow-service-history",
+        "allow-service-get-schedule",
+        "allow-service-set-schedule",
+        "allow-service-set-clamav-update",
+        "allow-export-report",
         "dialog:allow-open",
     ];
 
@@ -414,6 +430,14 @@ mod tests {
                 ),
                 ("service_watch_poll", json!({ "after": 0 })),
                 ("service_set_gaming", json!({ "on": false })),
+                ("service_history", json!({})),
+                ("service_get_schedule", json!({})),
+                (
+                    "service_set_schedule",
+                    json!({ "enabled": false, "everyDays": 7, "hourUtc": 9 }),
+                ),
+                ("service_set_clamav_update", json!({ "on": true })),
+                ("export_report", json!({ "english": false })),
                 // Zuletzt: schließt das Testfenster.
                 ("plugin:window|close", json!({})),
             ] {

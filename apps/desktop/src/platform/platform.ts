@@ -22,6 +22,8 @@ import {
   parseProposal,
   parseQuarantine,
   parseScan,
+  parseHistory,
+  parseSchedule,
   parseTrust,
   parseWatch,
   type ServiceApi,
@@ -182,6 +184,13 @@ function createTauriService(): ServiceApi {
     },
     watchPoll: async (after) => parseWatch(await invoke<unknown>('service_watch_poll', { after })),
     setGaming: async (on) => parseWatch(await invoke<unknown>('service_set_gaming', { on })),
+    history: async () => parseHistory(await invoke<unknown>('service_history')),
+    getSchedule: async () => parseSchedule(await invoke<unknown>('service_get_schedule')),
+    setSchedule: async (enabled, everyDays, hourUtc) =>
+      parseSchedule(await invoke<unknown>('service_set_schedule', { enabled, everyDays, hourUtc })),
+    setClamavUpdate: async (on) =>
+      parseSchedule(await invoke<unknown>('service_set_clamav_update', { on })),
+    exportReport: async (english) => invoke<string | null>('export_report', { english }),
   };
 }
 

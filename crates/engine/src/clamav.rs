@@ -175,6 +175,88 @@ impl ClamAv {
     }
 }
 
+/// Zeitlimit für ein Signatur-Update.
+pub const UPDATE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+
+impl ClamAv {
+    /// `freshclam` neben dem gefundenen Scanner (gleicher fester Installationsort).
+    #[must_use]
+    pub fn updater(&self) -> Option<PathBuf> {
+        let exe = if cfg!(windows) { ".exe" } else { "" };
+        let candidate = self.program.with_file_name(format!("freshclam{exe}"));
+        candidate.is_file().then_some(candidate)
+    }
+
+    /// Lädt neue ClamAV-Signaturen (`freshclam`, eigener Prozess). Verändert nur die
+    /// Signatur-Datenbank von ClamAV, keine Nutzerdateien. Liefert die letzte Ausgabezeile.
+    ///
+    /// # Errors
+    /// `freshclam` fehlt, startet nicht, Zeitlimit oder Fehlercode (Text für den Verlauf).
+    pub fn update_signatures(&self, timeout: Duration) -> Result<String, String> {
+        let program = self
+            .updater()
+            .ok_or_else(|| "freshclam ist nicht installiert".to_owned())?;
+        // Startet das Signatur-Update von ClamAV (fester Installationsort, abschaltbar in den
+        // Einstellungen); ändert nur die ClamAV-Datenbank.
+        // aegis-mutation: engine-clamav-update
+        #[allow(clippy::disallowed_methods)]
+        let spawned = Command::new(&program)
+            .args(["--stdout", "--no-warnings"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn();
+        let mut child = spawned.map_err(|e| format!("freshclam startet nicht: {e}"))?;
+        let stdout = child.stdout.take();
+        let collector = std::thread::spawn(move || {
+            let mut text = String::new();
+            if let Some(out) = stdout {
+                let _ = out.take(MAX_OUTPUT).read_to_string(&mut text);
+            }
+            text
+        });
+        let deadline = Instant::now() + timeout;
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    let text = collector.join().unwrap_or_default();
+                    let last = text
+                        .lines()
+                        .rev()
+                        .find(|l| !l.trim().is_empty())
+                        .unwrap_or("")
+                        .trim()
+                        .chars()
+                        .take(300)
+                        .collect::<String>();
+                    return if status.success() {
+                        Ok(last)
+                    } else {
+                        Err(format!(
+                            "freshclam meldet Fehler (Code {}): {last}",
+                            status.code().unwrap_or(-1)
+                        ))
+                    };
+                }
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(200));
+                }
+                Ok(None) | Err(_) => {
+                    // Eigenen, hängenden freshclam-Prozess beenden (Zeitlimit).
+                    // aegis-mutation: engine-clamav-update-timeout
+                    #[allow(clippy::disallowed_methods)]
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!(
+                        "freshclam hat das Zeitlimit von {} min überschritten",
+                        timeout.as_secs() / 60
+                    ));
+                }
+            }
+        }
+    }
+}
+
 /// Wertet die Ausgabe aus. Exit-Code 0 = sauber, 1 = Fund, sonst Fehler.
 #[must_use]
 pub fn parse_output(stdout: &str, exit_code: Option<i32>) -> ClamResult {
@@ -307,5 +389,44 @@ mod tests {
             matches!(slow.scan_reader(std::io::empty()), ClamResult::Error(e) if e.contains("Zeitlimit"))
         );
         assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn signatur_update_ersatzprogramm() {
+        use aegis_core::testing::{set_fixture_mode, write_fixture};
+        let dir = tempfile::tempdir().unwrap();
+        write_fixture(dir.path(), "clamscan", b"#!/bin/sh\nexit 0\n").unwrap();
+        let clam = ClamAv::locate_in(&[dir.path().to_path_buf()]).unwrap();
+        assert!(clam.updater().is_none());
+        assert!(
+            clam.update_signatures(UPDATE_TIMEOUT)
+                .unwrap_err()
+                .contains("nicht installiert")
+        );
+        write_fixture(
+            dir.path(),
+            "freshclam",
+            b"#!/bin/sh\necho 'daily.cvd updated (version: 1)'\nexit 0\n",
+        )
+        .unwrap();
+        set_fixture_mode(dir.path(), "freshclam", 0o700).unwrap();
+        assert_eq!(
+            clam.update_signatures(UPDATE_TIMEOUT).unwrap(),
+            "daily.cvd updated (version: 1)"
+        );
+        write_fixture(
+            dir.path(),
+            "freshclam",
+            b"#!/bin/sh\necho 'kein Netz'\nexit 1\n",
+        )
+        .unwrap();
+        let err = clam.update_signatures(UPDATE_TIMEOUT).unwrap_err();
+        assert!(err.contains("Code 1") && err.contains("kein Netz"), "{err}");
+        write_fixture(dir.path(), "freshclam", b"#!/bin/sh\nsleep 30\n").unwrap();
+        let err = clam
+            .update_signatures(Duration::from_millis(300))
+            .unwrap_err();
+        assert!(err.contains("Zeitlimit"), "{err}");
     }
 }

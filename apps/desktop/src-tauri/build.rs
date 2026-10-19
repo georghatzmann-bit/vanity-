@@ -20,6 +20,11 @@ const APP_COMMANDS: &[&str] = &[
     "service_revoke_trust",
     "service_watch_poll",
     "service_set_gaming",
+    "service_history",
+    "service_get_schedule",
+    "service_set_schedule",
+    "service_set_clamav_update",
+    "export_report",
 ];
 
 fn main() {

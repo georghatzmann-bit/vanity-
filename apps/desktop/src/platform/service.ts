@@ -117,6 +117,44 @@ export interface WatchState {
   readonly note: string | null;
 }
 
+/** Art eines Verlaufseintrags. */
+export type HistoryKind = 'scan' | 'action' | 'decision' | 'watch' | 'schedule' | 'update';
+
+/** Eintrag des Verlaufs (Bericht/Zeitleiste). */
+export interface HistoryEntry {
+  readonly seq: number;
+  readonly at: string;
+  readonly kind: HistoryKind;
+  readonly risk: RiskLevel | null;
+  readonly title: string;
+  readonly detail: string;
+  readonly paths: readonly string[];
+}
+
+/** Verlauf. */
+export interface HistoryState {
+  readonly entries: readonly HistoryEntry[];
+  readonly saveFailed: boolean;
+}
+
+/** Eigener Zeitplan und Update-Einstellung. */
+export interface ScheduleState {
+  readonly schedule: {
+    readonly enabled: boolean;
+    readonly everyDays: 1 | 7 | 30;
+    readonly hourUtc: number;
+    readonly lastRun: string | null;
+  } | null;
+  readonly clamavAvailable: boolean;
+  readonly clamavUpdateAvailable: boolean;
+  readonly clamavUpdate: boolean;
+  readonly lastUpdate: {
+    readonly at: string;
+    readonly ok: boolean;
+    readonly message: string;
+  } | null;
+}
+
 /** Fehler des Dienstes (es wurde nichts ausgeführt, sofern nicht anders gesagt). */
 export class ServiceError extends Error {
   constructor(
@@ -147,6 +185,14 @@ export interface ServiceApi {
   watchPoll(after: number): Promise<WatchState>;
   /** Gaming-Modus an/aus (pausiert nur Prüfungen und Hinweise, endet nach spätestens 4 h). */
   setGaming(on: boolean): Promise<WatchState>;
+  /** Eigener Verlauf (nur lesend). */
+  history(): Promise<HistoryState>;
+  getSchedule(): Promise<ScheduleState>;
+  /** Geplanten Scan setzen – prüft und meldet nur. */
+  setSchedule(enabled: boolean, everyDays: 1 | 7 | 30, hourUtc: number): Promise<ScheduleState>;
+  setClamavUpdate(on: boolean): Promise<ScheduleState>;
+  /** Bericht als HTML speichern (Ort wählt der Nutzer im Dialog); `null` = abgebrochen. */
+  exportReport(english: boolean): Promise<string | null>;
 }
 
 type Json = Record<string, unknown>;
@@ -274,6 +320,59 @@ export function parseWatch(response: unknown): WatchState {
     pending: num(s['pending']),
     dropped: num(s['dropped']),
     note: typeof s['note'] === 'string' ? s['note'] : null,
+  };
+}
+
+const historyKinds: readonly HistoryKind[] = [
+  'scan',
+  'action',
+  'decision',
+  'watch',
+  'schedule',
+  'update',
+];
+
+export function parseHistory(response: unknown): HistoryState {
+  const r = expectType(response, 'history');
+  return {
+    entries: arr(r['entries'])
+      .filter(isObject)
+      .map((e) => {
+        const kind = str(e['kind']);
+        return {
+          seq: num(e['seq']),
+          at: str(e['at']),
+          kind: historyKinds.find((k) => k === kind) ?? 'scan',
+          risk: typeof e['risk'] === 'string' ? (riskLevelFromCoreId(e['risk']) ?? null) : null,
+          title: str(e['title']),
+          detail: str(e['detail']),
+          paths: arr(e['paths']).filter((p): p is string => typeof p === 'string'),
+        };
+      }),
+    saveFailed: r['save_failed'] === true,
+  };
+}
+
+export function parseSchedule(response: unknown): ScheduleState {
+  const r = expectType(response, 'schedule');
+  const s = isObject(r['schedule']) ? r['schedule'] : null;
+  const u = isObject(r['last_update']) ? r['last_update'] : null;
+  const every = num(s?.['every_days']);
+  return {
+    schedule:
+      s === null
+        ? null
+        : {
+            enabled: s['enabled'] === true,
+            everyDays: every === 1 || every === 30 ? every : 7,
+            hourUtc: Math.min(23, Math.max(0, num(s['hour_utc']))),
+            lastRun: typeof s['last_run'] === 'string' ? s['last_run'] : null,
+          },
+    clamavAvailable: r['clamav_available'] === true,
+    clamavUpdateAvailable: r['clamav_update_available'] === true,
+    clamavUpdate: r['clamav_update'] === true,
+    lastUpdate:
+      u === null ? null : { at: str(u['at']), ok: u['ok'] === true, message: str(u['message']) },
   };
 }
 

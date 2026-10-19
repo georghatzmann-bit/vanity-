@@ -136,3 +136,22 @@ Zeitleiste mit vielen Funden). Einträge gelten je Konto (SID) und nur für Hash
 Fremde Dateien parst ausschließlich `aegis-scanworker` mit eingeschränktem, vom Nutzer
 abgeleitetem Token, niedriger Integrität und Job-Objekt. Fehlt das Programm, startet der Dienst
 nicht – kein stiller Rückfall auf das Parsen als SYSTEM.
+
+## D-030 – Verlauf getrennt vom Prüfprotokoll
+Berichte und Zeitleiste lesen einen eigenen Verlauf (`history.json`, höchstens 2000 Einträge,
+je Konto bzw. Profil sichtbar), nicht das Prüfprotokoll. Das Prüfprotokoll (Hash-Kette) bleibt
+der fälschungssichere Nachweis jeder Freigabe; der Verlauf ist eine lesbare Zusammenfassung,
+deren Speicherfehler nichts blockiert (er wird nur angezeigt).
+
+## D-031 – HTML-Bericht entsteht in Rust, Ort nur über den Speichern-Dialog
+`export_report` holt den Verlauf selbst vom Dienst, erzeugt die Seite (alle Texte maskiert,
+CSP `default-src 'none'`, keine Skripte/externen Quellen) und speichert sie dort, wo der
+Nutzer es im System-Dialog wählt. Die Oberfläche kann weder Inhalt noch Pfad vorgeben – kein
+allgemeiner Schreibbefehl. PDF entsteht über Drucken („Als PDF speichern“) mit Druck-CSS.
+
+## D-032 – Geplante Scans und Signatur-Updates im Dienst
+Zeitpläne gelten je Konto für Downloads, Desktop und Dokumente des Profils, laufen im
+eingeschränkten Prüfprozess und melden nur (wie der Wächter). Die Stunde speichert der Dienst
+in UTC; die App rechnet aus der Ortszeit um (Sommerzeit verschiebt um eine Stunde – bewusst
+hingenommen). `freshclam` läuft täglich vom festen ClamAV-Ort, ist abschaltbar und ändert nur
+die ClamAV-Datenbank.

@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use aegis_core::audit::{AuditEvent, AuditLog, Durable, TimedEvent};
 use aegis_core::consent::{
@@ -18,6 +18,8 @@ use aegis_core::risk::RiskLevel;
 use aegis_core::time::{Duration, OffsetDateTime};
 use aegis_engine::{Engine, Finding};
 
+use crate::history::{History, HistoryKind, NewEntry, Reader};
+use crate::schedule::{Schedule, SettingsStore, UpdateRecord, check_schedule_input};
 use crate::trust::{TrustEntry, TrustStore};
 use crate::watch::{Viewer, WatchShared};
 use crate::worker::Scanner;
@@ -65,6 +67,17 @@ pub struct Service<C: Clock, W: Durable> {
     protected: Vec<PathBuf>,
     trust: TrustStore,
     watch: Arc<WatchShared>,
+    history: Arc<Mutex<History>>,
+    settings: SettingsStore,
+}
+
+/// Arbeit, die der Zeitplaner außerhalb der Sperre erledigt.
+#[derive(Debug, Default)]
+pub struct DueWork {
+    /// Fällige geplante Scans (bereits als gelaufen markiert).
+    pub schedules: Vec<Schedule>,
+    /// Signatur-Update fällig?
+    pub update: bool,
 }
 
 impl<C: Clock, W: Durable> Service<C, W> {
@@ -83,6 +96,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
             protected,
             trust: TrustStore::in_memory(),
             watch: WatchShared::new(),
+            history: Arc::new(Mutex::new(History::in_memory())),
+            settings: SettingsStore::in_memory(),
         }
     }
 
@@ -98,6 +113,259 @@ impl<C: Clock, W: Durable> Service<C, W> {
     pub fn with_watch(mut self, watch: Arc<WatchShared>) -> Self {
         self.watch = watch;
         self
+    }
+
+    /// Dauerhafter Verlauf (Betrieb).
+    #[must_use]
+    pub fn with_history(mut self, history: History) -> Self {
+        self.history = Arc::new(Mutex::new(history));
+        self
+    }
+
+    /// Dauerhafte Dienst-Einstellungen (Betrieb).
+    #[must_use]
+    pub fn with_settings(mut self, settings: SettingsStore) -> Self {
+        self.settings = settings;
+        self
+    }
+
+    /// Der Verlauf (auch der Wächter schreibt hinein).
+    #[must_use]
+    pub fn history(&self) -> Arc<Mutex<History>> {
+        Arc::clone(&self.history)
+    }
+
+    fn add_history(&self, entry: NewEntry) {
+        let at = self.gate.clock().now();
+        lock_history(&self.history).add(at, entry);
+    }
+
+    /// Hält einen Scan im Verlauf fest (Anzahl, höchste Stufe, auffällige Pfade).
+    pub fn record_scan(&self, response: &Response, user: &dyn UserAccess) {
+        let Response::ScanReport { report } = response else {
+            return;
+        };
+        self.add_history(scan_entry(
+            HistoryKind::Scan,
+            report,
+            "Scan",
+            user.identity(),
+            None,
+        ));
+    }
+
+    fn record_decision(
+        &self,
+        plan: Option<&ActionPlan>,
+        response: &Response,
+        user: &dyn UserAccess,
+    ) {
+        let Some(plan) = plan else { return };
+        let paths: Vec<PathBuf> = plan
+            .targets()
+            .iter()
+            .filter_map(|t| match t {
+                Target::File { path } => Some(path.clone()),
+                _ => None,
+            })
+            .collect();
+        let (kind, title, detail) = match response {
+            Response::Executed { result, .. } => {
+                let (state, message) = match result {
+                    aegis_core::audit::ExecutionResult::Succeeded => ("ausgeführt", String::new()),
+                    aegis_core::audit::ExecutionResult::PartiallySucceeded { message } => {
+                        ("teilweise ausgeführt", message.clone())
+                    }
+                    aegis_core::audit::ExecutionResult::Failed { message } => {
+                        ("fehlgeschlagen", message.clone())
+                    }
+                };
+                (
+                    HistoryKind::Action,
+                    format!("{} – {state}", plan.what()),
+                    message,
+                )
+            }
+            Response::NothingDone { decision } => (
+                HistoryKind::Decision,
+                format!(
+                    "{} – {}, nichts verändert",
+                    plan.what(),
+                    match decision {
+                        Decision::Ignore => "ignoriert",
+                        _ => "abgelehnt",
+                    }
+                ),
+                String::new(),
+            ),
+            Response::Trusted { .. } => (
+                HistoryKind::Decision,
+                format!("{} – vertraut, nichts verändert", plan.what()),
+                String::new(),
+            ),
+            _ => return,
+        };
+        self.add_history(NewEntry {
+            kind,
+            risk: Some(plan.severity()),
+            title,
+            detail,
+            paths,
+            owner: user.identity(),
+            scope: None,
+        });
+    }
+
+    /// Verlauf sichern (der Zeitplaner ruft das jede Minute auf).
+    pub fn flush_history(&self) {
+        lock_history(&self.history).flush();
+    }
+
+    /// Fällige geplante Scans und Updates; geplante Scans werden sofort als gelaufen
+    /// markiert (kein doppelter Start, auch wenn der Lauf scheitert).
+    pub fn take_due_work(&mut self) -> DueWork {
+        let now = self.gate.clock().now();
+        let schedules: Vec<Schedule> = self
+            .settings
+            .get()
+            .schedules
+            .iter()
+            .filter(|s| s.due(now))
+            .cloned()
+            .collect();
+        if !schedules.is_empty() {
+            let _ = self.settings.update(|s| {
+                for sched in &mut s.schedules {
+                    if sched.due(now) {
+                        sched.last_run = Some(now);
+                    }
+                }
+            });
+        }
+        let update = self.settings.get().update_due(now)
+            && aegis_engine::clamav::ClamAv::locate().is_some_and(|c| c.updater().is_some());
+        DueWork { schedules, update }
+    }
+
+    /// Ergebnis eines geplanten Scans: Verlauf + Meldung (wie beim Wächter).
+    pub fn record_scheduled(
+        &self,
+        schedule: &Schedule,
+        result: Result<aegis_engine::ScanReport, String>,
+    ) {
+        let entry = match result {
+            Ok(report) => {
+                for f in report.findings.iter().filter(|f| f.risk > RiskLevel::Info) {
+                    self.watch.report(
+                        crate::watch::WatchKind::Schedule,
+                        f.path.clone(),
+                        Some(schedule.profile.clone()),
+                        f.clone(),
+                    );
+                }
+                scan_entry(
+                    HistoryKind::Schedule,
+                    &report,
+                    "Geplanter Scan",
+                    schedule.owner.clone(),
+                    Some(schedule.profile.clone()),
+                )
+            }
+            Err(e) => NewEntry {
+                kind: HistoryKind::Schedule,
+                risk: None,
+                title: "Geplanter Scan nicht möglich".into(),
+                detail: e,
+                paths: Vec::new(),
+                owner: schedule.owner.clone(),
+                scope: Some(schedule.profile.clone()),
+            },
+        };
+        self.add_history(entry);
+    }
+
+    /// Ergebnis eines Signatur-Updates.
+    pub fn record_update(&mut self, result: Result<String, String>) {
+        let at = self.gate.clock().now();
+        let (ok, message) = match result {
+            Ok(m) => (true, m),
+            Err(m) => (false, m),
+        };
+        let _ = self.settings.update(|s| {
+            s.last_update = Some(UpdateRecord {
+                at,
+                ok,
+                message: message.clone(),
+            });
+        });
+        self.add_history(NewEntry {
+            kind: HistoryKind::Update,
+            risk: None,
+            title: if ok {
+                "ClamAV-Signaturen aktualisiert".into()
+            } else {
+                "ClamAV-Signaturen nicht aktualisiert".into()
+            },
+            detail: message,
+            paths: Vec::new(),
+            owner: None,
+            scope: None,
+        });
+    }
+
+    fn schedule_response(&self, user: &dyn UserAccess) -> Response {
+        let settings = self.settings.get();
+        let clam = aegis_engine::clamav::ClamAv::locate();
+        Response::Schedule {
+            info: Box::new(crate::protocol::ScheduleInfo {
+                schedule: settings.schedule_of(user.identity().as_deref()).cloned(),
+                clamav_available: clam.is_some(),
+                clamav_update_available: clam.is_some_and(|c| c.updater().is_some()),
+                clamav_update: settings.clamav_update,
+                last_update: settings.last_update.clone(),
+            }),
+        }
+    }
+
+    fn set_schedule(
+        &mut self,
+        enabled: bool,
+        every_days: u16,
+        hour_utc: u8,
+        user: &dyn UserAccess,
+    ) -> Response {
+        if let Err(e) = check_schedule_input(every_days, hour_utc) {
+            return Response::error("input", e);
+        }
+        let owner = user.identity();
+        let profile = match (user.profile(), &owner) {
+            (Some(p), _) => crate::watch::long_name(p),
+            (None, None) => {
+                match std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
+                    Some(home) => PathBuf::from(home),
+                    None => return Response::error("profile", "Profilordner unbekannt"),
+                }
+            }
+            (None, Some(_)) => {
+                return Response::error("profile", "Profilordner des Kontos nicht ermittelbar");
+            }
+        };
+        let saved = self.settings.update(|s| {
+            let last_run = s.schedule_of(owner.as_deref()).and_then(|x| x.last_run);
+            s.schedules.retain(|x| x.owner != owner);
+            s.schedules.push(Schedule {
+                owner: owner.clone(),
+                profile,
+                enabled,
+                every_days,
+                hour_utc,
+                last_run,
+            });
+        });
+        match saved {
+            Ok(()) => self.schedule_response(user),
+            Err(e) => Response::error("settings", e.to_string()),
+        }
     }
 
     /// Der gemeinsame Zustand des Wächters.
@@ -209,6 +477,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 Ok(()) => {
                     let mut response = scan_as_user(&self.scanner, &paths, user);
                     self.mark_trusted_response(&mut response, user.identity().as_deref());
+                    self.record_scan(&response, user);
                     response
                 }
                 Err(e) => Response::error("input", e),
@@ -224,6 +493,30 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 }
             }
             Request::WatchPoll { after } => self.watch_poll(after, user),
+            Request::History {} => {
+                let owner = user.identity();
+                let profile = user.profile().map(crate::watch::long_name);
+                let history = lock_history(&self.history);
+                Response::History {
+                    entries: history.list(Reader {
+                        owner: owner.as_deref(),
+                        profile: profile.as_deref(),
+                    }),
+                    save_failed: history.save_failed(),
+                }
+            }
+            Request::GetSchedule {} => self.schedule_response(user),
+            Request::SetSchedule {
+                enabled,
+                every_days,
+                hour_utc,
+            } => self.set_schedule(enabled, every_days, hour_utc, user),
+            Request::SetClamavUpdate { on } => {
+                match self.settings.update(|s| s.clamav_update = on) {
+                    Ok(()) => self.schedule_response(user),
+                    Err(e) => Response::error("settings", e.to_string()),
+                }
+            }
             Request::SetGaming { on } => {
                 self.watch.set_gaming(on);
                 self.watch_poll(u64::MAX, user)
@@ -263,13 +556,32 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 nonce,
                 decision,
                 dialog_id,
-            } => self.decide(plan_id, &digest, &nonce, decision, &dialog_id, user),
+            } => {
+                let plan = self
+                    .proposals
+                    .get(&plan_id)
+                    .filter(|p| p.owner == user.identity())
+                    .map(|p| p.plan.clone());
+                let response = self.decide(plan_id, &digest, &nonce, decision, &dialog_id, user);
+                self.record_decision(plan.as_ref(), &response, user);
+                response
+            }
             Request::ConfirmSecond {
                 challenge_id,
                 nonce,
                 decision,
                 dialog_id,
-            } => self.confirm_second(challenge_id, &nonce, decision, &dialog_id, user),
+            } => {
+                let plan = self
+                    .second
+                    .get(&challenge_id)
+                    .filter(|p| p.owner == user.identity())
+                    .map(|p| p.plan.clone());
+                let response =
+                    self.confirm_second(challenge_id, &nonce, decision, &dialog_id, user);
+                self.record_decision(plan.as_ref(), &response, user);
+                response
+            }
         };
         self.flush_gate_events();
         response
@@ -738,6 +1050,51 @@ pub fn long_paths(paths: &[PathBuf], user: &dyn UserAccess) -> Result<Vec<PathBu
     {
         let _ = user;
         Ok(paths.to_vec())
+    }
+}
+
+fn lock_history(history: &Mutex<History>) -> std::sync::MutexGuard<'_, History> {
+    history
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Verlaufseintrag für einen Scan.
+fn scan_entry(
+    kind: HistoryKind,
+    report: &aegis_engine::ScanReport,
+    label: &str,
+    owner: Option<String>,
+    scope: Option<PathBuf>,
+) -> NewEntry {
+    let notable: Vec<&Finding> = report
+        .findings
+        .iter()
+        .filter(|f| f.risk > RiskLevel::Info)
+        .collect();
+    let detail = notable
+        .iter()
+        .take(crate::history::MAX_PATHS)
+        .map(|f| format!("{}: {}", f.path.display(), f.summary_de))
+        .collect::<Vec<_>>()
+        .join("\n");
+    NewEntry {
+        kind,
+        risk: notable.iter().map(|f| f.risk).max(),
+        title: format!(
+            "{label}: {} Dateien geprüft, {} auffällig{}",
+            report.findings.len(),
+            notable.len(),
+            if report.truncated {
+                " (abgebrochen: zu viele Dateien)"
+            } else {
+                ""
+            }
+        ),
+        detail,
+        paths: notable.iter().map(|f| f.path.clone()).collect(),
+        owner,
+        scope,
     }
 }
 

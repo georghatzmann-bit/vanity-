@@ -284,6 +284,48 @@ pub async fn service_set_gaming(on: bool) -> Result<Value, String> {
     send(json!({ "type": "set_gaming", "on": on })).await
 }
 
+/// Verlauf (für den HTML-Export in Rust).
+pub async fn history() -> Result<Value, String> {
+    send(json!({ "type": "history" })).await
+}
+
+/// Verlauf für Berichte und Zeitleiste (nur lesend).
+#[tauri::command]
+pub async fn service_history() -> Result<Value, String> {
+    history().await
+}
+
+/// Eigener Zeitplan und Update-Einstellung (nur lesend).
+#[tauri::command]
+pub async fn service_get_schedule() -> Result<Value, String> {
+    send(json!({ "type": "get_schedule" })).await
+}
+
+/// Eigenen geplanten Scan setzen – geplante Scans prüfen und melden nur.
+#[tauri::command]
+pub async fn service_set_schedule(
+    enabled: bool,
+    every_days: u16,
+    hour_utc: u8,
+) -> Result<Value, String> {
+    if ![1, 7, 30].contains(&every_days) || hour_utc > 23 {
+        return Err("Ungültiger Zeitplan.".into());
+    }
+    send(json!({
+        "type": "set_schedule",
+        "enabled": enabled,
+        "every_days": every_days,
+        "hour_utc": hour_utc,
+    }))
+    .await
+}
+
+/// Tägliches ClamAV-Signatur-Update an/aus (Netzwerk).
+#[tauri::command]
+pub async fn service_set_clamav_update(on: bool) -> Result<Value, String> {
+    send(json!({ "type": "set_clamav_update", "on": on })).await
+}
+
 /// Antwort im zweiten Dialog weiterreichen.
 #[tauri::command]
 pub async fn service_confirm_second(

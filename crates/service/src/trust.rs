@@ -1,9 +1,9 @@
 //! Vertrauensliste („Vertraut“): Hash **und** Pfad, mit Grund und Datum, je Konto, jederzeit
 //! widerrufbar. Einträge entstehen nur aus der Nutzerentscheidung „Vertrauen“ im
-//! Freigabe-Dialog (`TrustGrant`). Gespeichert als JSON im Datenordner des Dienstes,
-//! atomar ersetzt (Teil-Datei → umbenennen).
+//! Freigabe-Dialog (`TrustGrant`). Gespeichert als JSON im Datenordner des Dienstes
+//! (atomar ersetzt, siehe [`crate::store`]).
 
-use std::io::{self, Read, Write};
+use std::io;
 use std::path::{Path, PathBuf};
 
 use aegis_core::time::OffsetDateTime;
@@ -11,8 +11,6 @@ use serde::{Deserialize, Serialize};
 
 /// Höchstzahl Einträge (Schutz vor beliebigem Anwachsen).
 pub const MAX_ENTRIES: usize = 10_000;
-/// Höchstgröße der Datei beim Lesen.
-const MAX_FILE: u64 = 16 * 1024 * 1024;
 
 /// Ein vertrauter Eintrag.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,20 +54,7 @@ impl TrustStore {
     /// Datei beschädigt oder nicht lesbar – dann startet der Dienst nicht (lieber sichtbar
     /// als still „alles vertraut“ oder „nichts vertraut“).
     pub fn open(path: &Path) -> io::Result<Self> {
-        let entries = match std::fs::File::open(path) {
-            Ok(file) => {
-                let mut text = String::new();
-                file.take(MAX_FILE).read_to_string(&mut text)?;
-                serde_json::from_str(&text).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("Vertrauensliste {} beschädigt: {e}", path.display()),
-                    )
-                })?
-            }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Vec::new(),
-            Err(e) => return Err(e),
-        };
+        let entries = crate::store::load(path, "Vertrauensliste")?.unwrap_or_default();
         Ok(Self {
             path: Some(path.to_owned()),
             entries,
@@ -147,48 +132,8 @@ impl TrustStore {
         let Some(path) = &self.path else {
             return Ok(());
         };
-        let json = serde_json::to_vec_pretty(entries).map_err(io::Error::other)?;
-        let part = path.with_extension("json.part");
-        remove_part(&part)?;
-        {
-            let mut file = create_part(&part)?;
-            file.write_all(&json)?;
-            file.sync_all()?;
-        }
-        commit(&part, path)
+        crate::store::save(path, entries)
     }
-}
-
-// ---------------------------------------------------------------------------------------
-// Verändernde Aufrufe – nur die eigene Datei im Datenordner, jeweils markiert.
-// ---------------------------------------------------------------------------------------
-
-fn remove_part(path: &Path) -> io::Result<()> {
-    // Eigene, liegengebliebene Teil-Datei der Vertrauensliste entfernen.
-    // aegis-mutation: service-trust-remove-part
-    #[allow(clippy::disallowed_methods)]
-    match std::fs::remove_file(path) {
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-        other => other,
-    }
-}
-
-fn create_part(path: &Path) -> io::Result<std::fs::File> {
-    // Neue Teil-Datei der Vertrauensliste im eigenen Datenordner.
-    // aegis-mutation: service-trust-create-part
-    #[allow(clippy::disallowed_methods)]
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path);
-    file
-}
-
-fn commit(from: &Path, to: &Path) -> io::Result<()> {
-    // Vertrauensliste atomar ersetzen (eigene Datei im Datenordner).
-    // aegis-mutation: service-trust-commit
-    #[allow(clippy::disallowed_methods)]
-    std::fs::rename(from, to)
 }
 
 #[cfg(test)]

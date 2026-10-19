@@ -63,3 +63,22 @@ body {
 .aegis-scroll-fade {
   mask-image: linear-gradient(to bottom, black calc(100% - 1rem), transparent);
 }
+
+/* Drucken / „Als PDF speichern“ (Berichte): nur der Inhalt, ohne Fensterrahmen, Navigation,
+   Knöpfe und Hintergrundlicht; der Inhalt läuft über alle Seiten statt im Fenster zu scrollen. */
+@media print {
+  html,
+  body,
+  [data-testid='shell'],
+  [data-testid='main'] {
+    overflow: visible !important;
+    height: auto !important;
+  }
+  [data-testid='titlebar'],
+  [data-testid='sidebar'],
+  [data-testid='statusbar'],
+  [data-print-hide],
+  .aegis-content-glow {
+    display: none !important;
+  }
+}

@@ -25,6 +25,11 @@
     "allow-service-revoke-trust",
     "allow-service-watch-poll",
     "allow-service-set-gaming",
+    "allow-service-history",
+    "allow-service-get-schedule",
+    "allow-service-set-schedule",
+    "allow-service-set-clamav-update",
+    "allow-export-report",
     "dialog:allow-open"
   ]
 }

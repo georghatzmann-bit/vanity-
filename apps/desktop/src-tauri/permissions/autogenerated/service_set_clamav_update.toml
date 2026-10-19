@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-set-clamav-update"
+description = "Enables the service_set_clamav_update command without any pre-configured scope."
+commands.allow = ["service_set_clamav_update"]
+
+[[permission]]
+identifier = "deny-service-set-clamav-update"
+description = "Denies the service_set_clamav_update command without any pre-configured scope."
+commands.deny = ["service_set_clamav_update"]

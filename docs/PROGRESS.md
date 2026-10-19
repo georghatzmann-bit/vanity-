@@ -1,6 +1,6 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-19 · **P0–P2 abgeschlossen** · nächste Phase: **P3 – Echtzeit-Wächter, Whitelist, Berichte**
+Stand: 2026-10-19 · **P0–P2 abgeschlossen** · **P3 in Arbeit** (P3.1–P3.5 erledigt, Review offen)
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
@@ -25,7 +25,7 @@ Stand: 2026-10-19 · **P0–P2 abgeschlossen** · nächste Phase: **P3 – Echtz
 | P0 | Fundament, Design-Tokens, Logo, Start-Animation | **erledigt** |
 | P1 | Shell, Dashboard, Design-System | **erledigt** |
 | P2 | Dienst + Pipe + Engine-Kern (ClamAV, Hashes, YARA-X, statische Analyse), Quarantäne | **erledigt** |
-| P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | als Nächstes |
+| P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | in Arbeit (Review offen) |
 | P4 | Sandbox Stufe 1+2 + Verhaltensbericht | offen |
 | P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | offen |
 | P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | offen |
@@ -83,11 +83,11 @@ Stand: 2026-10-19 · **P0–P2 abgeschlossen** · nächste Phase: **P3 – Echtz
 ## Offen / bekannt
 
 - Manuell auf Windows prüfen: Doppelklick auf Titelleiste, Tray-Symbol, Startzeit mit GPU.
-- ClamAV-Signaturen aktualisieren (`freshclam`) und Zeitpläne (P3); ClamAV-Installation im Setup (P13).
+- ClamAV-Installation im Setup (P13).
 - Quarantäne-Schlüssel per DPAPI (Maschine) binden statt nur Ordner-ACL (P5).
 - Pipe: Identität des Client-Prozesses prüfen (Pfad + Signatur, braucht Code-Signing → P13).
   Bis dahin begrenzt der Identitätswechsel alles auf die Rechte des anfragenden Nutzers.
-- Dashboard zeigt Module/Score noch als „folgt“ – auf echte Zustände umstellen (P3.5).
+- Sicherheits-Score bleibt „noch nicht bewertet“, bis die Systemprüfungen (P6) da sind.
 - Wächter: neue Nutzerprofile erst nach Dienst-Neustart überwacht.
 - 16-px-Icon: Schild gut erkennbar, die A-Aussparung verschwimmt → eigene 16-px-Variante (P11).
 - Optional: Dependabot für Action-Pins (öffnet automatisch PRs – nur auf deinen Wunsch).
@@ -155,12 +155,12 @@ Stand: 2026-10-19 · **P0–P2 abgeschlossen** · nächste Phase: **P3 – Echtz
 4. [x] P3.4 Echtzeit-Wächter: Downloads/Desktop/Temp je Profil, Wechseldatenträger,
        Programmstarts (ETW); Meldungen je Konto, Gaming-Modus (max. 4 h), Hinweise in der App
        mit Isolieren / Vertrauen (Freigabe-Dialog) / Ignorieren / Mehr Infos.
-5. [ ] P3.5 Berichte & Zeitleiste, Export (HTML, Drucken als PDF), Zeitpläne, `freshclam`;
-       Dashboard mit echten Zuständen.
+5. [x] P3.5 Berichte & Zeitleiste (Verlauf je Konto, Filter, nach Tagen), Export als HTML
+       (in Rust erzeugt, Speichern-Dialog) und Drucken/PDF; geplante Scans (1/7/30 Tage) und
+       tägliches `freshclam` (abschaltbar); Dashboard zeigt echte Zustände von Engine und Wächter.
 6. [ ] P3.6 Sicherheits-Review P3 (separater Agent), Korrekturen, DoD.
 
 ## Nächster Schritt
 
-P3.5: Berichte & Zeitleiste (aus dem Prüfprotokoll und den Wächter-Meldungen), Export als HTML
-bzw. Drucken als PDF, Zeitpläne für Scans (nur prüfen/melden), ClamAV-Signaturen aktualisieren
-(`freshclam`, abschaltbar), Dashboard mit echten Zuständen. Danach P3.6 Review.
+P3.6: Sicherheits-Review P3 durch separaten Agenten (Prüfprozess/Token, Vertrauensliste, Wächter,
+Verlauf/Zeitpläne/Updates, HTML-Export), Korrekturen, Definition of Done P3. Danach P4 (Sandbox).

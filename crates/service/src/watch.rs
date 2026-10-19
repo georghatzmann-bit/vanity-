@@ -48,6 +48,8 @@ pub enum WatchKind {
     File,
     /// Gestartetes Programm.
     Process,
+    /// Fund eines geplanten Scans.
+    Schedule,
 }
 
 /// Ein Fund des Wächters.
@@ -105,6 +107,7 @@ pub struct WatchShared {
     next_seq: Mutex<u64>,
     gaming_until: Mutex<Option<Instant>>,
     status: Mutex<WatchStatus>,
+    history: Mutex<Option<Arc<Mutex<crate::history::History>>>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -163,6 +166,16 @@ impl WatchShared {
             .map(|d| d.as_secs())
     }
 
+    /// Meldungen zusätzlich im Verlauf festhalten.
+    pub fn attach_history(&self, history: Arc<Mutex<crate::history::History>>) {
+        *lock(&self.history) = Some(history);
+    }
+
+    /// Meldet einen Fund (Wächter, geplanter Scan).
+    pub fn report(&self, kind: WatchKind, path: PathBuf, scope: Option<PathBuf>, finding: Finding) {
+        self.push(kind, path, scope, finding);
+    }
+
     /// Hält fest, dass der Wächter nicht läuft (und warum).
     pub fn note_failure(&self, note: &str) {
         let mut status = lock(&self.status);
@@ -185,9 +198,30 @@ impl WatchShared {
             *next += 1;
             seq
         };
-        let at = OffsetDateTime::now_utc()
+        let now = OffsetDateTime::now_utc();
+        let at = now
             .format(&aegis_core::time::format_description::well_known::Rfc3339)
             .unwrap_or_default();
+        if kind != WatchKind::Schedule
+            && let Some(history) = lock(&self.history).as_ref()
+        {
+            let label = match kind {
+                WatchKind::Process => "Programmstart",
+                _ => "Neue Datei",
+            };
+            lock(history).add(
+                now,
+                crate::history::NewEntry {
+                    kind: crate::history::HistoryKind::Watch,
+                    risk: Some(finding.risk),
+                    title: format!("Wächter – {label}: {}", finding.summary_de),
+                    detail: String::new(),
+                    paths: vec![path.clone()],
+                    owner: None,
+                    scope: scope.clone(),
+                },
+            );
+        }
         let mut events = lock(&self.events);
         events.push_back(WatchEvent {
             seq,
@@ -214,8 +248,9 @@ fn same_dir(a: &Path, b: &Path) -> bool {
 /// Liegt `path` in `dir` (komponentenweise; unter Windows ohne Groß-/Kleinschreibung)?
 fn starts_with(path: &Path, dir: &Path) -> bool {
     if cfg!(windows) {
-        let p = path.to_string_lossy().to_lowercase();
-        let d = dir.to_string_lossy().to_lowercase();
+        // Beide Trennzeichen zulassen (`\` und `/`), ohne Groß-/Kleinschreibung.
+        let p = path.to_string_lossy().to_lowercase().replace('/', "\\");
+        let d = dir.to_string_lossy().to_lowercase().replace('/', "\\");
         let d = d.trim_end_matches('\\');
         p == d || p.strip_prefix(d).is_some_and(|rest| rest.starts_with('\\'))
     } else {

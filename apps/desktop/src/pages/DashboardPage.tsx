@@ -18,18 +18,21 @@ import {
   Tooltip,
   cx,
   type IconComponent,
+  type ModuleState,
 } from '@aegis/ui';
-import { useMemo, useState, type ComponentPropsWithRef, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import type { ActivityEntry } from '../activity/activityLog.ts';
 import { useActivity, useServices } from '../app/services.tsx';
 import { useT } from '../i18n/I18nProvider.tsx';
+import { usePlatform } from '../platform/PlatformContext.tsx';
+import type { WatchState } from '../platform/service.ts';
 import type { Translator } from '../i18n/translator.ts';
 import { describeSettingValue, settingLabelKeys } from '../settings/describe.ts';
 import { useShell } from '../shell/ShellContext.tsx';
 import { modifierKeys } from '../shell/shortcuts.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 
-/** Bauplan laut docs/PROGRESS.md: P0 erledigt, P1 in Arbeit. */
+/** Bauplan laut docs/PROGRESS.md: P0–P2 erledigt, P3 in Arbeit. */
 export const buildPhases = [
   'P0',
   'P1',
@@ -47,17 +50,101 @@ export const buildPhases = [
   'P13',
 ] as const;
 type BuildPhase = (typeof buildPhases)[number];
-export const CURRENT_PHASE: BuildPhase = 'P1';
+export const CURRENT_PHASE: BuildPhase = 'P3';
 const currentIndex = buildPhases.indexOf(CURRENT_PHASE);
 const LAST_PHASE: BuildPhase = 'P13';
 
-/** Schutz-Module des Dashboards – es gibt sie noch nicht, daher „Nicht verfügbar“. */
+/** Schutz-Module des Dashboards: gebaute zeigen ihren echten Zustand, fehlende ihre Phase. */
 const modules = [
-  { id: 'signatures', phase: 'P2' },
-  { id: 'realtime', phase: 'P3' },
+  { id: 'signatures', phase: null },
+  { id: 'realtime', phase: null },
   { id: 'ransomware', phase: 'P5' },
   { id: 'network', phase: 'P7' },
 ] as const;
+
+interface LiveModule {
+  readonly state: ModuleState;
+  readonly stateLabel: string;
+  readonly sublabel: string;
+}
+
+/** Echte Zustände von Engine und Wächter (alle 10 s vom Dienst; in der Vorschau: keine). */
+function useLiveModules(): Readonly<Record<'signatures' | 'realtime', LiveModule>> {
+  const { t } = useT();
+  const service = usePlatform().service;
+  const [live, setLive] = useState<{
+    readonly reachable: boolean | null;
+    readonly clamav: boolean;
+    readonly watch: WatchState | null;
+  }>({ reachable: null, clamav: false, watch: null });
+
+  useEffect(() => {
+    if (service === null) {
+      return undefined;
+    }
+    let active = true;
+    const tick = () => {
+      Promise.all([service.watchPoll(Number.MAX_SAFE_INTEGER), service.getSchedule()]).then(
+        ([watch, schedule]) => {
+          if (active) {
+            setLive({ reachable: true, clamav: schedule.clamavAvailable, watch });
+          }
+        },
+        () => {
+          if (active) {
+            setLive({ reachable: false, clamav: false, watch: null });
+          }
+        },
+      );
+    };
+    tick();
+    const timer = window.setInterval(tick, 10_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [service]);
+
+  if (service === null) {
+    const preview: LiveModule = {
+      state: 'unavailable',
+      stateLabel: t('dashboard.modules.unavailable'),
+      sublabel: t('dashboard.modules.previewOnly'),
+    };
+    return { signatures: preview, realtime: preview };
+  }
+  if (live.reachable !== true) {
+    const unknown: LiveModule = {
+      state: live.reachable === false ? 'warn' : 'scanning',
+      stateLabel:
+        live.reachable === false ? t('dashboard.modules.down') : t('dashboard.modules.checking'),
+      sublabel: live.reachable === false ? t('dashboard.modules.downHint') : '',
+    };
+    return { signatures: unknown, realtime: unknown };
+  }
+  const watch = live.watch;
+  return {
+    signatures: {
+      state: 'ok',
+      stateLabel: t('dashboard.modules.ready'),
+      sublabel: live.clamav ? t('dashboard.modules.withClamav') : t('dashboard.modules.noClamav'),
+    },
+    realtime:
+      watch === null || !watch.active
+        ? { state: 'off', stateLabel: t('dashboard.modules.off'), sublabel: watch?.note ?? '' }
+        : watch.gaming
+          ? {
+              state: 'warn',
+              stateLabel: t('dashboard.modules.gaming'),
+              sublabel: t('dashboard.modules.gamingHint'),
+            }
+          : {
+              state: 'ok',
+              stateLabel: t('dashboard.modules.active'),
+              sublabel: t('realtime.folders', { count: String(watch.folders.length) }),
+            },
+  };
+}
 
 /** Zwei Spalten mit gemeinsamen Fugen: schmal (Score, Schnellzugriff) | breit. */
 const columns = 'grid grid-cols-[minmax(0,1fr)_minmax(0,1.65fr)] gap-5';
@@ -177,6 +264,7 @@ function ScorePanel() {
 
 function ModulesPanel() {
   const { t } = useT();
+  const live = useLiveModules();
   return (
     <Panel
       eyebrow={t('dashboard.modules.eyebrow')}
@@ -190,18 +278,28 @@ function ModulesPanel() {
       }
     >
       <ul className="grid grid-cols-2 gap-x-6 gap-y-5 pt-1">
-        {modules.map((module) => (
-          <li key={module.id} data-testid={`module-${module.id}`}>
-            <StatusRing
-              state="unavailable"
-              layout="inline"
-              label={t(`dashboard.modules.${module.id}`)}
-              stateLabel={t('dashboard.modules.unavailable')}
-              sublabel={t('phase.comingIn', { phase: module.phase })}
-              size={60}
-            />
-          </li>
-        ))}
+        {modules.map((module) => {
+          const state =
+            module.phase === null
+              ? live[module.id]
+              : {
+                  state: 'unavailable' as const,
+                  stateLabel: t('dashboard.modules.unavailable'),
+                  sublabel: t('phase.comingIn', { phase: module.phase }),
+                };
+          return (
+            <li key={module.id} data-testid={`module-${module.id}`}>
+              <StatusRing
+                state={state.state}
+                layout="inline"
+                label={t(`dashboard.modules.${module.id}`)}
+                stateLabel={state.stateLabel}
+                sublabel={state.sublabel}
+                size={60}
+              />
+            </li>
+          );
+        })}
       </ul>
     </Panel>
   );

@@ -89,7 +89,9 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                     (Ok(()), Some(slot)) => {
                         let mut response = scan_as_user(&scanner, &paths, user);
                         drop(slot);
-                        lock()?.mark_trusted_response(&mut response, user.identity().as_deref());
+                        let guard = lock()?;
+                        guard.mark_trusted_response(&mut response, user.identity().as_deref());
+                        guard.record_scan(&response, user);
                         response
                     }
                 }

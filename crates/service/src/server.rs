@@ -15,7 +15,6 @@ use aegis_engine::yara::YaraRules;
 use aegis_engine::{Engine, EngineConfig};
 use aegis_quarantine::Vault;
 
-#[cfg(unix)]
 use aegis_quarantine::OwnProcess;
 
 use crate::handler::Service;
@@ -96,13 +95,18 @@ pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
     });
     let gate = ConsentGate::new(ConsentConfig::default()).map_err(io::Error::other)?;
     let trust = TrustStore::open(&data_dir.join("trust.json"))?;
-    Ok(Service::new(engine, vault, gate, audit)
+    let history = crate::history::History::open(&data_dir.join("history.json"))?;
+    let settings = crate::schedule::SettingsStore::open(&data_dir.join("settings.json"))?;
+    let service = Service::new(engine, vault, gate, audit)
         .with_protected(vec![data_dir.to_owned()])
         .with_trust(trust)
-        .with_scanner(Scanner::Worker {
-            exe: worker,
-            clamav: ClamAv::locate().is_some(),
-        }))
+        .with_history(history)
+        .with_settings(settings);
+    service.watch().attach_history(service.history());
+    Ok(service.with_scanner(Scanner::Worker {
+        exe: worker,
+        clamav: ClamAv::locate().is_some(),
+    }))
 }
 
 fn open_audit(path: &Path) -> io::Result<AuditLog<File>> {
@@ -149,7 +153,48 @@ pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
             .note_failure(&format!("Echtzeit-Wächter nicht gestartet: {e}"));
     }
     let service = Arc::new(Mutex::new(service));
+    spawn_scheduler(Arc::clone(&service), Arc::clone(stop));
     serve(&config.endpoint, &service, stop)
+}
+
+/// Zeitplaner: prüft jede Minute, ob geplante Scans oder ein Signatur-Update fällig sind.
+/// Scans laufen im eingeschränkten Prüfprozess außerhalb der Sperre und **melden nur**.
+fn spawn_scheduler(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
+    std::thread::spawn(move || {
+        let lock = || {
+            service
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+        while !stop.load(Ordering::SeqCst) {
+            let (work, scanner) = {
+                let mut guard = lock();
+                guard.flush_history();
+                (guard.take_due_work(), guard.scanner())
+            };
+            for schedule in &work.schedules {
+                let folders: Vec<PathBuf> = crate::schedule::SCHEDULED_FOLDERS
+                    .iter()
+                    .map(|f| schedule.profile.join(f))
+                    .filter(|p| p.is_dir())
+                    .collect();
+                let result = scanner.scan(&folders, &OwnProcess);
+                lock().record_scheduled(schedule, result);
+            }
+            if work.update {
+                let result = ClamAv::locate()
+                    .ok_or_else(|| "ClamAV ist nicht installiert".to_owned())
+                    .and_then(|c| c.update_signatures(aegis_engine::clamav::UPDATE_TIMEOUT));
+                lock().record_update(result);
+            }
+            for _ in 0..60 {
+                if stop.load(Ordering::SeqCst) {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+    });
 }
 
 static CONNECTIONS: AtomicUsize = AtomicUsize::new(0);

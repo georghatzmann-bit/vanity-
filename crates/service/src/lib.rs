@@ -6,10 +6,13 @@
 #![forbid(unsafe_code)]
 
 pub mod handler;
+pub mod history;
 pub mod protocol;
+pub mod schedule;
 #[cfg(windows)]
 pub mod scm;
 pub mod server;
+pub mod store;
 pub mod transport;
 pub mod trust;
 pub mod watch;

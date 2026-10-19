@@ -111,6 +111,8 @@ crates/winffi/src/fs.rs :: winffi-open-existing-dir :: Windows-FFI: CreateFileW 
 crates/core/src/testing.rs :: testing-fixture-hardlink :: Test-Hilfe (Feature "testing"): legt einen zweiten Namen für eine vorhandene Fixture-Datei innerhalb des Test-Ordners an.
 crates/core/src/testing.rs :: testing-fixture-set-mode :: Test-Hilfe (Feature "testing", nur Unix): setzt die Rechte einer Fixture-Datei im Test-Ordner (z. B. harmloses Ersatzprogramm ausführbar).
 crates/engine/src/clamav.rs :: engine-clamav-timeout :: Engine: beendet nur den eigenen, hängenden ClamAV-Prozess nach dem Zeitlimit – nie Nutzerprozesse.
+crates/engine/src/clamav.rs :: engine-clamav-update :: Engine: startet das ClamAV-Signatur-Update freshclam (fester Installationsort, abschaltbar) – ändert nur die ClamAV-Datenbank.
+crates/engine/src/clamav.rs :: engine-clamav-update-timeout :: Engine: beendet den eigenen, hängenden freshclam-Prozess nach dem Zeitlimit.
 crates/winffi/src/pipe.rs :: winffi-pipe-owner :: Windows-FFI: liest den Besitzer der Pipe (Client prüft, ob der echte Dienst – SYSTEM – antwortet).
 crates/winffi/src/pipe.rs :: winffi-pipe-server-session :: Windows-FFI: liest die Sitzung des Pipe-Servers (Dienst läuft in Sitzung 0).
 crates/winffi/src/pipe.rs :: winffi-open-own-token :: Windows-FFI: öffnet das eigene Prozess-Token nur zum Abfragen (läuft der Dienst als SYSTEM?).
@@ -158,12 +160,13 @@ crates/winffi/src/process.rs :: winffi-kill-unassigned-call :: Windows: beendet 
 crates/winffi/src/process.rs :: winffi-resume-child :: Windows-FFI: lässt den eigenen Prüfprozess nach der Job-Zuordnung anlaufen.
 crates/service/src/worker.rs :: service-worker-spawn :: Dienst (Unix/Entwicklung): startet den eigenen Prüfprozess (festes Programm, keine Argumente); unter Windows über aegis-winffi mit eingeschränktem Token.
 crates/service/src/worker.rs :: service-worker-kill :: Dienst (Unix/Entwicklung): beendet nur den eigenen Prüfprozess nach dem Zeitlimit.
-crates/service/src/trust.rs :: service-trust-remove-part :: Dienst: entfernt nur eine liegengebliebene eigene Teil-Datei der Vertrauensliste im Datenordner.
-crates/service/src/trust.rs :: service-trust-create-part :: Dienst: legt die neue Teil-Datei der eigenen Vertrauensliste an (create_new).
-crates/service/src/trust.rs :: service-trust-commit :: Dienst: ersetzt die eigene Vertrauensliste atomar (nur nach der Nutzerentscheidung „Vertrauen“ bzw. Widerruf).
+crates/service/src/store.rs :: service-store-remove-part :: Dienst: entfernt nur eine liegengebliebene eigene Teil-Datei (Vertrauensliste, Verlauf, Einstellungen) im Datenordner.
+crates/service/src/store.rs :: service-store-create-part :: Dienst: legt die neue Teil-Datei einer eigenen JSON-Datei im Datenordner an (create_new).
+crates/service/src/store.rs :: service-store-commit :: Dienst: ersetzt eine eigene JSON-Datei im Datenordner atomar (Vertrauensliste nur nach „Vertrauen“/Widerruf; Verlauf; Einstellungen).
 crates/winffi/src/system.rs :: winffi-open-process-query :: Windows-FFI: öffnet einen Prozess nur zum Abfragen (Programmpfad für den Echtzeit-Wächter).
 crates/winffi/src/system.rs :: winffi-process-image-name :: Windows-FFI: liest den Programmpfad eines Prozesses (nur lesend).
 crates/winffi/src/system.rs :: winffi-logical-drives :: Windows-FFI: liest die Laufwerksliste (nur lesend).
 crates/winffi/src/system.rs :: winffi-drive-type :: Windows-FFI: liest den Laufwerkstyp (Wechseldatenträger erkennen).
 crates/winffi/src/pipe.rs :: winffi-open-client-token-profile :: Windows-FFI: liest das Client-Token während des Identitätswechsels (Profilordner bestimmen).
 crates/winffi/src/pipe.rs :: winffi-profile-dir :: Windows-FFI: liest den Profilordner des Clients (nur lesend).
+apps/desktop/src-tauri/src/report.rs :: desktop-report-write :: App: schreibt den erzeugten HTML-Bericht an den Ort, den der Nutzer im Speichern-Dialog selbst gewählt hat (Windows fragt vor dem Überschreiben).

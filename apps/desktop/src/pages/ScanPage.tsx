@@ -8,6 +8,7 @@ import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
 import { ServiceError, type ScanFinding, type ScanResult } from '../platform/service.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
+import { SchedulePanel } from './SchedulePanel.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
 import { useConsentFlow } from './useConsentFlow.tsx';
 
@@ -216,6 +217,7 @@ export function ScanPage() {
               </div>
             )}
           </Panel>
+          <SchedulePanel service={service} />
           {flow.dialogs}
         </>
       )}

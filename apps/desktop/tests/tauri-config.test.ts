@@ -39,6 +39,12 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-revoke-trust': 'Dienst: Vertrauens-Eintrag widerrufen (macht AEGIS strenger)',
   'allow-service-watch-poll': 'Dienst: Meldungen des Echtzeit-Wächters abholen (nur lesend)',
   'allow-service-set-gaming': 'Dienst: Gaming-Modus an/aus (pausiert nur Hinweise, max. 4 h)',
+  'allow-service-history': 'Dienst: eigener Verlauf für Berichte (nur lesend)',
+  'allow-service-get-schedule': 'Dienst: eigener Zeitplan und Update-Einstellung (nur lesend)',
+  'allow-service-set-schedule': 'Dienst: geplanten Scan setzen (prüft und meldet nur)',
+  'allow-service-set-clamav-update': 'Dienst: tägliches ClamAV-Signatur-Update an/aus',
+  'allow-export-report':
+    'Bericht als HTML speichern – Inhalt aus Rust, Ort nur über den Speichern-Dialog',
   'dialog:allow-open': 'Datei-/Ordnerauswahl für Scans (nur Auswahl)',
 };
 

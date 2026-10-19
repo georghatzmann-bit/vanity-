@@ -38,11 +38,18 @@ describe('Dashboard – ehrlich', () => {
     expect(within(panel).queryByText(/\d+\s*von 100/)).toBeNull();
   });
 
-  it('Module „Nicht verfügbar“ mit Phase: Signaturen P2, Wächter P3, Ransomware P5, Netzwerk P7', () => {
+  it('Module: Engine und Wächter nur mit Dienst, Ransomware P5, Netzwerk P7', () => {
     renderApp();
+    for (const [id, label] of [
+      ['signatures', 'Signaturen & Engine'],
+      ['realtime', 'Echtzeit-Wächter'],
+    ] as const) {
+      const item = screen.getByTestId(`module-${id}`);
+      expect(item).toHaveTextContent(label);
+      expect(item).toHaveTextContent('Nur in der Windows-App mit Dienst');
+      expect(item.querySelector('[data-state]')).toHaveAttribute('data-state', 'unavailable');
+    }
     const expected = [
-      ['signatures', 'Signaturen & Engine', 'P2'],
-      ['realtime', 'Echtzeit-Wächter', 'P3'],
       ['ransomware', 'Ransomware-Schutz', 'P5'],
       ['network', 'Netzwerk-Schutz', 'P7'],
     ] as const;

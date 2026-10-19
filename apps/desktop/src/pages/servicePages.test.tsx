@@ -4,7 +4,14 @@
  */
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Proposal, ServiceApi, WatchState } from '../platform/service.ts';
+import type {
+  HistoryEntry,
+  Proposal,
+  ScheduleState,
+  ServiceApi,
+  WatchState,
+} from '../platform/service.ts';
+import { toLocalHour, toUtcHour } from './SchedulePanel.tsx';
 import { disposeApps, fakePlatform, renderApp } from '../test/harness.tsx';
 
 const finding = {
@@ -78,7 +85,25 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     setGaming: vi.fn((on: boolean) =>
       Promise.resolve({ ...watchState(), gaming: on, gamingLeft: on ? 14_400 : null }),
     ),
+    history: vi.fn(() => Promise.resolve({ entries: [], saveFailed: false })),
+    getSchedule: vi.fn(() => Promise.resolve(scheduleState())),
+    setSchedule: vi.fn((enabled: boolean, everyDays: 1 | 7 | 30, hourUtc: number) =>
+      Promise.resolve(scheduleState({ schedule: { enabled, everyDays, hourUtc, lastRun: null } })),
+    ),
+    setClamavUpdate: vi.fn((on: boolean) => Promise.resolve(scheduleState({ clamavUpdate: on }))),
+    exportReport: vi.fn(() => Promise.resolve('/home/x/AEGIS-Bericht.html')),
     ...overrides,
+  };
+}
+
+function scheduleState(over: Partial<ScheduleState> = {}): ScheduleState {
+  return {
+    schedule: null,
+    clamavAvailable: true,
+    clamavUpdateAvailable: true,
+    clamavUpdate: true,
+    lastUpdate: null,
+    ...over,
   };
 }
 
@@ -285,5 +310,92 @@ describe('Echtzeit-Wächter', () => {
     await waitFor(() => expect(window.location.hash).toBe('#/realtime'));
     expect(service.proposeQuarantine).not.toHaveBeenCalled();
     act(() => undefined);
+  });
+});
+
+describe('Berichte', () => {
+  const entries: HistoryEntry[] = [
+    {
+      seq: 3,
+      at: '2026-10-19T12:00:00Z',
+      kind: 'decision',
+      risk: 'dangerous',
+      title: '1 Datei in die Quarantäne verschieben – abgelehnt, nichts verändert',
+      detail: '',
+      paths: ['/home/x/Downloads/eicar.com'],
+    },
+    {
+      seq: 2,
+      at: '2026-10-19T11:00:00Z',
+      kind: 'watch',
+      risk: 'dangerous',
+      title: 'Wächter – Neue Datei: EICAR',
+      detail: '',
+      paths: ['/home/x/Downloads/eicar.com'],
+    },
+    {
+      seq: 1,
+      at: '2026-10-18T09:00:00Z',
+      kind: 'scan',
+      risk: null,
+      title: 'Scan: 3 Dateien geprüft, 0 auffällig',
+      detail: '',
+      paths: [],
+    },
+  ];
+
+  it('Zeitleiste nach Tagen, Filter, Export und Drucken – nur lesend', async () => {
+    const service = fakeService({
+      history: vi.fn(() => Promise.resolve({ entries, saveFailed: false })),
+    });
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/reports' });
+    expect(await screen.findAllByTestId('history-entry')).toHaveLength(3);
+    expect(screen.getAllByRole('region').length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(screen.getByRole('radio', { name: 'Wächter' }));
+    expect(screen.getAllByTestId('history-entry')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('radio', { name: 'Entscheidungen' }));
+    expect(screen.getByTestId('history-entry')).toHaveTextContent('nichts verändert');
+    fireEvent.click(screen.getByRole('radio', { name: 'Updates' }));
+    expect(screen.getByTestId('history-empty')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Drucken / als PDF' }));
+    expect(print).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /Als HTML speichern/ }));
+    await waitFor(() => expect(service.exportReport).toHaveBeenCalledWith(false));
+    expect(await screen.findByText('Bericht gespeichert.')).toBeInTheDocument();
+    expect(service.decide).not.toHaveBeenCalled();
+    print.mockRestore();
+  });
+
+  it('Vorschau ohne Dienst: ehrlicher Hinweis', async () => {
+    renderApp({ platform: fakePlatform('browser'), hash: '#/reports' });
+    expect(await screen.findByTestId('service-preview')).toBeInTheDocument();
+  });
+});
+
+describe('Zeitplan', () => {
+  it('Stunden zwischen Ortszeit und UTC', () => {
+    expect(toUtcHour(18, -120)).toBe(16);
+    expect(toLocalHour(16, -120)).toBe(18);
+    expect(toUtcHour(1, -120)).toBe(23);
+    expect(toLocalHour(23, -120)).toBe(1);
+    expect(toUtcHour(22, 300)).toBe(3);
+  });
+
+  it('setzt den geplanten Scan und das Signatur-Update über den Dienst', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/scan' });
+    const panel = await screen.findByTestId('schedule-panel');
+    fireEvent.click(within(panel).getByRole('switch', { name: /Geplanter Scan/ }));
+    await waitFor(() => expect(service.setSchedule).toHaveBeenCalledTimes(1));
+    const [enabled, every, hour] = vi.mocked(service.setSchedule).mock.calls[0] ?? [];
+    expect(enabled).toBe(true);
+    expect(every).toBe(7);
+    expect(hour).toBe(toUtcHour(18, new Date().getTimezoneOffset()));
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Täglich' }));
+    await waitFor(() => expect(vi.mocked(service.setSchedule).mock.calls[1]?.[1]).toBe(1));
+    fireEvent.click(within(panel).getByRole('switch', { name: /ClamAV-Signaturen/ }));
+    await waitFor(() => expect(service.setClamavUpdate).toHaveBeenCalledWith(false));
   });
 });

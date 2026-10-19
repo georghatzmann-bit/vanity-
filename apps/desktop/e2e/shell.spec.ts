@@ -12,7 +12,7 @@ import {
 /** Alle Seiten in Reihenfolge der Seitenleiste (Beschriftung, Adresse, Phase). */
 const pages = [
   { nav: 'Dashboard', route: 'dashboard', heading: 'Dashboard', phase: null },
-  { nav: 'Berichte', route: 'reports', heading: 'Berichte', phase: 'P3' },
+  { nav: 'Berichte', route: 'reports', heading: 'Berichte', phase: null },
   { nav: 'Scan', route: 'scan', heading: 'Scan', phase: null },
   { nav: 'Echtzeit-Wächter', route: 'realtime', heading: 'Echtzeit-Wächter', phase: null },
   { nav: 'Quarantäne', route: 'quarantine', heading: 'Quarantäne', phase: null },
@@ -194,9 +194,9 @@ test.describe('Navigation', () => {
     await waitForHome(page);
     await page.getByRole('button', { name: 'Navigation einklappen' }).click();
     await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');
-    const reports = navigation(page).getByRole('link', { name: 'Berichte, folgt in P3' });
-    await reports.hover();
-    await expect(page.getByRole('tooltip')).toHaveText('Berichte · Folgt in P3');
+    const lab = navigation(page).getByRole('link', { name: 'Labor, folgt in P4' });
+    await lab.hover();
+    await expect(page.getByRole('tooltip')).toHaveText('Labor · Folgt in P4');
     await page.reload();
     await waitForHome(page);
     await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');

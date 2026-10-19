@@ -491,3 +491,126 @@ fn waechter_meldungen_ueber_das_protokoll() {
     stop.store(true, Ordering::SeqCst);
     assert_unchanged(&before, &DirSnapshot::capture(home.path()).unwrap());
 }
+
+/// Verlauf: Scans, Antworten und Ausführungen landen je Konto im Verlauf; Zeitplan setzen,
+/// fällige Läufe melden nur (nichts verändert); Update-Ergebnis wird festgehalten.
+#[test]
+fn verlauf_zeitplan_und_update() {
+    struct Account(&'static str, std::path::PathBuf);
+    impl aegis_quarantine::UserAccess for Account {
+        fn enter(&self) -> std::io::Result<aegis_quarantine::UserScope> {
+            Ok(aegis_quarantine::UserScope::unchanged())
+        }
+        fn identity(&self) -> Option<String> {
+            Some(self.0.to_owned())
+        }
+        fn profile(&self) -> Option<std::path::PathBuf> {
+            Some(self.1.clone())
+        }
+    }
+    let mut h = harness();
+    let home = tempfile::tempdir().unwrap();
+    let path = write_fixture(home.path(), "Downloads/eicar.com", &eicar()).unwrap();
+    let before = DirSnapshot::capture(home.path()).unwrap();
+    let a = Account("S-1-A", home.path().to_path_buf());
+    let b = Account("S-1-B", std::path::PathBuf::from("/anderes"));
+    let mut send = |who: &Account, v: Value| {
+        let req: Request = serde_json::from_value(v).unwrap();
+        serde_json::to_value(h.service.handle(req, who)).unwrap()
+    };
+
+    send(&a, json!({"type": "scan", "paths": [home.path()]}));
+    let p = send(&a, json!({"type": "propose_quarantine", "paths": [path]}));
+    let r = send(
+        &a,
+        json!({
+            "type": "decide", "plan_id": p["proposal"]["ticket"]["id"],
+            "digest": p["proposal"]["ticket"]["digest"], "nonce": p["proposal"]["nonce"],
+            "decision": "decline", "dialog_id": "d"
+        }),
+    );
+    assert_eq!(r["type"], "nothing_done");
+    let hist = send(&a, json!({"type": "history"}));
+    let entries = hist["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 2, "{hist}");
+    assert_eq!(entries[0]["kind"], "decision");
+    assert!(
+        entries[0]["title"]
+            .as_str()
+            .unwrap()
+            .contains("abgelehnt, nichts verändert")
+    );
+    assert_eq!(entries[1]["kind"], "scan");
+    assert_eq!(entries[1]["risk"], "dangerous");
+    assert!(
+        entries[1]["title"]
+            .as_str()
+            .unwrap()
+            .contains("1 auffällig")
+    );
+    assert!(
+        send(&b, json!({"type": "history"}))["entries"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+
+    // Zeitplan: ungültige Eingaben abgelehnt, gültige gespeichert (je Konto).
+    assert_eq!(
+        send(
+            &a,
+            json!({"type": "set_schedule", "enabled": true, "every_days": 3, "hour_utc": 0})
+        )["code"],
+        "input"
+    );
+    let s = send(
+        &a,
+        json!({"type": "set_schedule", "enabled": true, "every_days": 7, "hour_utc": 0}),
+    );
+    assert_eq!(s["type"], "schedule", "{s}");
+    assert_eq!(s["schedule"]["every_days"], 7);
+    assert!(send(&b, json!({"type": "get_schedule"}))["schedule"].is_null());
+    let off = send(&a, json!({"type": "set_clamav_update", "on": false}));
+    assert_eq!(off["clamav_update"], false);
+
+    // Fällig (Stunde 0 UTC ist immer erreicht) → einmal, dann nicht mehr.
+    let work = h.service.take_due_work();
+    assert_eq!(work.schedules.len(), 1);
+    assert!(!work.update, "Update abgeschaltet");
+    assert!(h.service.take_due_work().schedules.is_empty());
+    let schedule = &work.schedules[0];
+    let folders: Vec<_> = aegis_service::schedule::SCHEDULED_FOLDERS
+        .iter()
+        .map(|f| schedule.profile.join(f))
+        .filter(|p| p.is_dir())
+        .collect();
+    let report = h.service.scanner().scan(&folders, &OwnProcess);
+    h.service.record_scheduled(schedule, report);
+    h.service.record_update(Err("kein Netz".into()));
+    let mut send = |who: &Account, v: Value| {
+        let req: Request = serde_json::from_value(v).unwrap();
+        serde_json::to_value(h.service.handle(req, who)).unwrap()
+    };
+    let hist = send(&a, json!({"type": "history"}));
+    let entries = hist["entries"].as_array().unwrap();
+    assert_eq!(entries[0]["kind"], "update");
+    assert_eq!(entries[1]["kind"], "schedule");
+    assert!(
+        entries[1]["title"]
+            .as_str()
+            .unwrap()
+            .contains("1 auffällig"),
+        "{hist}"
+    );
+    // Gemeinsames Update sieht auch B, den geplanten Scan von A nicht.
+    let other = send(&b, json!({"type": "history"}));
+    assert_eq!(other["entries"].as_array().unwrap().len(), 1);
+    // Fund des geplanten Scans wird wie vom Wächter gemeldet.
+    let watch = send(&a, json!({"type": "watch_poll", "after": 0}));
+    assert_eq!(watch["events"][0]["kind"], "schedule");
+    assert_eq!(
+        send(&a, json!({"type": "get_schedule"}))["last_update"]["ok"],
+        false
+    );
+    assert_unchanged(&before, &DirSnapshot::capture(home.path()).unwrap());
+}
