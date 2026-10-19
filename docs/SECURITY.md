@@ -303,6 +303,14 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   nur als Plan mit „Ja“ (Administrator): fester Name `AEGIS-Block-…`, Programmpfad geprüft
   (Laufwerk, `.exe`, ohne `"`, `..`, `/`, `|`), Argumente einzeln an `netsh` aus dem
   Systemordner; die Prüfsumme bindet die Schritte. Entfernt werden nur AEGIS-Regeln.
+- **Passwort-Tresor (P9):** im App-Prozess des Kontos (D-054). Argon2id ≥ 64 MiB/3, AES-256-GCM
+  mit Kennung als AAD (Vertauschen/Manipulieren erkannt, Tests), Obergrenzen gegen manipulierte
+  Parameter; Master-Passwort nie gespeichert, Mindestlänge 12; Eingaben ohne Steuer- und
+  Richtungszeichen. Geheimnisse nur auf Klick in der Oberfläche, `Zeroize` beim Sperren;
+  Auto-Sperre, verzögerte Fehlversuche, Zwischenablage ohne Verlauf/Cloud und nach 30 s geleert.
+  Grenzen: Schadsoftware mit den Rechten des Kontos kann den entsperrten Prozess auslesen oder
+  Eingaben mitschneiden – wie bei jedem Passwort-Manager; das Master-Passwort ist der einzige
+  Schutz der Datei.
 - **Defender-Schalter (P8):** nur dokumentierte Cmdlets mit festem Wortlaut (keine Eingaben im
   Befehl), PowerShell aus `System32` mit `-NoProfile -NonInteractive`, nur Administratoren,
   nur nach „Ja“, nur aus frischem Status; Manipulationsschutz an → kein Plan zum Abschalten.

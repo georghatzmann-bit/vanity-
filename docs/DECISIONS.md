@@ -386,3 +386,20 @@ beim Vorschlag. Jede Umschaltung steht im
 Prüfprotokoll und im Verlauf (Protokoll auf der Seite). Passiver Defender (anderes Antivirus) und
 eine Richtlinie, die den Echtzeitschutz abschaltet, werden ehrlich gemeldet statt umgangen.
 
+## D-054 – Passwort-Tresor in der App, nicht im Dienst
+
+Status: angenommen (P9). Der Tresor gehört dem Konto, nicht dem Rechner: Datei
+`vault.aegisvault` im App-Datenordner des Kontos, Ver- und Entschlüsselung im App-Prozess
+(Nutzerrechte). Der SYSTEM-Dienst sieht weder Datei noch Schlüssel. Format: Argon2id (64 MiB,
+3 Durchläufe, Parameter + Salz in der Datei; beim Öffnen 64 MiB–1 GiB, 3–20 Durchläufe erlaubt)
+verpackt einen zufälligen 256-Bit-Datenschlüssel; jeder Eintrag einzeln AES-256-GCM mit neuer
+Nonce bei jedem Speichern und der Kennung als AAD. Im Speicher `Zeroize`; die Oberfläche bekommt
+Passwörter nur auf Klick („Anzeigen“, „Bearbeiten“, Leck-Check). Auto-Sperre nach 1–60 Minuten
+Untätigkeit (Standard 5), Fehlversuche verzögern ab dem dritten (bis 60 s). „Kopieren“ setzt
+die Zwischenablage mit den Windows-Hinweisen „nicht in den Verlauf/die Cloud, nicht überwachen“
+und leert sie nach 30 s, wenn nichts anderes kopiert wurde. Speichern: Hilfsdatei → ersetzen,
+vorige Fassung als `.bak`. Löschen eines Eintrags fragt in der Oberfläche nach (Nutzerdaten,
+nicht Schutzbereich – keine Dienst-Freigabe nötig). CSV-Import nur aus einer vom Nutzer gewählten
+Exportdatei (Chrome/Edge, Firefox, Bitwarden) mit Hinweis, sie danach zu löschen. Leck-Check je
+Eintrag über die HIBP-Range-API (nur Präfix, D-052). Es gibt bewusst keinen Klartext-Export.
+

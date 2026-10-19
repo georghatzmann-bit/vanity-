@@ -17,6 +17,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { version as configuredVersion } from '../../src-tauri/tauri.conf.json';
 import { parseAppInfo, previewAppInfo, type AppInfo } from './appInfo.ts';
 import { parseLanReport, type LanReport } from './lan.ts';
+import { parseStrength, parseVaultList, parseVaultStatus, type VaultApi } from './vault.ts';
 import { parseEmailResult, parseRange, type EmailResult, type RangeEntry } from './leak.ts';
 import {
   expectType,
@@ -125,6 +126,8 @@ export interface Platform {
   readonly leakPasswordRange: ((prefix: string) => Promise<readonly RangeEntry[]>) | null;
   /** HIBP-E-Mail-Abfrage mit eigenem Schlüssel. `null` in der Vorschau. */
   readonly leakEmailCheck: ((email: string, apiKey: string) => Promise<EmailResult>) | null;
+  /** Passwort-Tresor (P9). `null` in der Vorschau. */
+  readonly vault: VaultApi | null;
 }
 
 /** Ausgetauschte Krypto-Adresse (gekürzt). */
@@ -245,6 +248,36 @@ export function createTauriPlatform(): Platform {
       invoke<unknown>('leak_password_range', { prefix }).then(parseRange),
     leakEmailCheck: (email, apiKey) =>
       invoke<unknown>('leak_email_check', { email, apiKey }).then(parseEmailResult),
+    vault: {
+      status: () => invoke<unknown>('vault_status').then(parseVaultStatus),
+      setup: (master) => invoke<undefined>('vault_setup', { master }),
+      unlock: (master) => invoke<undefined>('vault_unlock', { master }),
+      lock: () => invoke<undefined>('vault_lock'),
+      setLockMinutes: (minutes) => invoke<undefined>('vault_set_lock_minutes', { minutes }),
+      list: () => invoke<unknown>('vault_list').then(parseVaultList),
+      reveal: async (id) => {
+        const r = await invoke<unknown>('vault_reveal', { id });
+        const o = typeof r === 'object' && r !== null ? (r as Record<string, unknown>) : {};
+        return {
+          password: typeof o['password'] === 'string' ? o['password'] : '',
+          notes: typeof o['notes'] === 'string' ? o['notes'] : '',
+        };
+      },
+      save: async (id, entry) => String(await invoke<unknown>('vault_save', { id, entry })),
+      remove: (id) => invoke<undefined>('vault_delete', { id }),
+      copy: async (id, field) => Number(await invoke<unknown>('vault_copy', { id, field })),
+      generate: async (options) => String(await invoke<unknown>('vault_generate', { options })),
+      strength: (password) => invoke<unknown>('vault_strength', { password }).then(parseStrength),
+      importCsv: async (path) => {
+        const r = await invoke<unknown>('vault_import', { path });
+        const o = typeof r === 'object' && r !== null ? (r as Record<string, unknown>) : {};
+        return {
+          imported: typeof o['imported'] === 'number' ? o['imported'] : 0,
+          skipped: typeof o['skipped'] === 'number' ? o['skipped'] : 0,
+        };
+      },
+      changeMaster: (old, next) => invoke<undefined>('vault_change_master', { old, new: next }),
+    },
   };
 }
 
@@ -385,6 +418,7 @@ export function createBrowserPlatform(info: AppInfo): Platform {
     homeNetworkScan: null,
     leakPasswordRange: null,
     leakEmailCheck: null,
+    vault: null,
   };
 }
 

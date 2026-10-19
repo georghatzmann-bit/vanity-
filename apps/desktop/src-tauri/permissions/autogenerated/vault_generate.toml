@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-vault-generate"
+description = "Enables the vault_generate command without any pre-configured scope."
+commands.allow = ["vault_generate"]
+
+[[permission]]
+identifier = "deny-vault-generate"
+description = "Denies the vault_generate command without any pre-configured scope."
+commands.deny = ["vault_generate"]

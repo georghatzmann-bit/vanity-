@@ -59,6 +59,7 @@ dependencies = [
  "aegis-core",
  "aegis-netwatch",
  "aegis-sandbox",
+ "aegis-vault-core",
  "aegis-winffi",
  "base64 0.22.1",
  "rfd 0.17.2",
@@ -71,6 +72,7 @@ dependencies = [
  "tempfile",
  "time",
  "windows-version",
+ "zeroize",
 ]
 
 [[package]]

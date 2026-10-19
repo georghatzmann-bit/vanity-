@@ -1,16 +1,19 @@
-//! Zwischenablage **nur lesen** (P6.6, Krypto-Adressen-Wächter der App, opt-in): Änderungszähler,
-//! Text (gekürzt) und der Prozess, dem die Zwischenablage gehört. Geschrieben oder geleert wird
-//! die Zwischenablage nie.
+//! Zwischenablage: lesen (P6.6, Krypto-Adressen-Wächter der App, opt-in: Änderungszähler, Text,
+//! Besitzer) und – nur auf Klick „Kopieren“ im Passwort-Tresor (P9) – Text setzen, ohne Verlauf
+//! (Win+V) und ohne Cloud-Abgleich, sowie genau diesen Inhalt nach Ablauf wieder leeren.
 
 use std::io;
 use std::ptr;
 
-use windows_sys::Win32::Foundation::HWND;
+use windows_sys::Win32::Foundation::{GlobalFree, HANDLE, HWND};
 use windows_sys::Win32::System::DataExchange::{
-    CloseClipboard, GetClipboardData, GetClipboardOwner, GetClipboardSequenceNumber,
-    IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW,
+    CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardOwner,
+    GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard,
+    RegisterClipboardFormatW, SetClipboardData,
 };
-use windows_sys::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
+use windows_sys::Win32::System::Memory::{
+    GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
+};
 use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 
 /// Unicode-Text (`CF_UNICODETEXT`).
@@ -130,4 +133,117 @@ pub fn read_text(max_chars: usize) -> io::Result<Option<String>> {
         GlobalUnlock(handle);
     }
     Ok(Some(text.chars().take(max_chars).collect()))
+}
+
+/// Legt `bytes` in einen beweglichen globalen Block und übergibt ihn der Zwischenablage
+/// (die danach Besitzerin ist). Nur bei geöffneter Zwischenablage aufrufen.
+fn put(format: u32, bytes: &[u8]) -> io::Result<()> {
+    // SAFETY: Größe > 0; das Handle wird unten übergeben oder freigegeben.
+    // aegis-unsafe: winffi-clipboard-alloc
+    #[allow(unsafe_code)]
+    let memory = unsafe { GlobalAlloc(GMEM_MOVEABLE, bytes.len().max(1)) };
+    if memory.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: frisch angelegter Block mit mindestens `bytes.len()` Byte.
+    // aegis-unsafe: winffi-clipboard-fill
+    #[allow(unsafe_code)]
+    unsafe {
+        let target = GlobalLock(memory).cast::<u8>();
+        if target.is_null() {
+            GlobalFree(memory);
+            return Err(io::Error::last_os_error());
+        }
+        ptr::copy_nonoverlapping(bytes.as_ptr(), target, bytes.len());
+        GlobalUnlock(memory);
+    }
+    // SAFETY: Zwischenablage ist geöffnet und geleert; bei Erfolg gehört der Block dem System.
+    // aegis-unsafe: winffi-clipboard-set
+    #[allow(unsafe_code)]
+    let set: HANDLE = unsafe { SetClipboardData(format, memory) };
+    if set.is_null() {
+        let err = io::Error::last_os_error();
+        // SAFETY: nicht übergeben – selbst freigeben.
+        // aegis-unsafe: winffi-clipboard-free
+        #[allow(unsafe_code)]
+        unsafe {
+            GlobalFree(memory);
+        }
+        return Err(err);
+    }
+    Ok(())
+}
+
+fn register(name: &str) -> u32 {
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: nullterminierter Name.
+    // aegis-unsafe: winffi-clipboard-register
+    #[allow(unsafe_code)]
+    unsafe {
+        RegisterClipboardFormatW(wide.as_ptr())
+    }
+}
+
+fn open() -> io::Result<Opened> {
+    // SAFETY: ohne Besitzerfenster (null).
+    // aegis-unsafe: winffi-clipboard-open-write
+    #[allow(unsafe_code)]
+    if unsafe { OpenClipboard(ptr::null_mut()) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(Opened)
+}
+
+/// Setzt Text (vom Nutzer per „Kopieren“ angefordert), ohne Aufnahme in den Verlauf und ohne
+/// Cloud-Abgleich. Liefert den Änderungszähler danach (für [`clear_if_unchanged`]).
+///
+/// # Errors
+/// Zwischenablage belegt oder Speicher nicht anlegbar.
+pub fn set_private_text(text: &str) -> io::Result<u32> {
+    let mut wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut bytes: Vec<u8> = wide.iter().flat_map(|u| u.to_le_bytes()).collect();
+    let result = (|| {
+        let _opened = open()?;
+        // SAFETY: Zwischenablage ist geöffnet.
+        // aegis-unsafe: winffi-clipboard-empty
+        #[allow(unsafe_code)]
+        if unsafe { EmptyClipboard() } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        put(CF_UNICODETEXT, &bytes)?;
+        // Hinweise an Windows: nicht in den Verlauf, nicht in die Cloud, nicht überwachen.
+        put(
+            register("ExcludeClipboardContentFromMonitorProcessing"),
+            &[0],
+        )?;
+        put(
+            register("CanIncludeInClipboardHistory"),
+            &0u32.to_le_bytes(),
+        )?;
+        put(register("CanUploadToCloudClipboard"), &0u32.to_le_bytes())?;
+        Ok(())
+    })();
+    // Eigene Kopien des Geheimnisses überschreiben.
+    wide.iter_mut().for_each(|u| *u = 0);
+    bytes.iter_mut().for_each(|b| *b = 0);
+    result.map(|()| sequence_number())
+}
+
+/// Leert die Zwischenablage nur, wenn seit [`set_private_text`] nichts anderes kopiert wurde.
+///
+/// # Errors
+/// Zwischenablage belegt.
+pub fn clear_if_unchanged(sequence: u32) -> io::Result<bool> {
+    if sequence_number() != sequence {
+        return Ok(false);
+    }
+    let _opened = open()?;
+    // SAFETY: Zwischenablage ist geöffnet.
+    // aegis-unsafe: winffi-clipboard-empty-later
+    #[allow(unsafe_code)]
+    let ok = unsafe { EmptyClipboard() };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(true)
 }

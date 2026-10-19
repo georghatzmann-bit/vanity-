@@ -12,6 +12,7 @@ import { ReportsPage } from './ReportsPage.tsx';
 import { SafePage } from './SafePage.tsx';
 import { ScanPage } from './ScanPage.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
+import { VaultPage } from './VaultPage.tsx';
 
 /** Seite zur aktuellen Route. */
 export function Page({ route }: { readonly route: RouteId }) {
@@ -40,6 +41,8 @@ export function Page({ route }: { readonly route: RouteId }) {
       return <NetworkPage />;
     case 'defender':
       return <DefenderPage />;
+    case 'vault':
+      return <VaultPage />;
     default:
       return <ModulePage route={route} />;
   }

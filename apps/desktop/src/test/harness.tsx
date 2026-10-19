@@ -18,6 +18,7 @@ import type {
   WindowApi,
 } from '../platform/platform.ts';
 import { parseLanReport, type LanReport } from '../platform/lan.ts';
+import type { VaultApi, VaultEntryInput } from '../platform/vault.ts';
 import type { ServiceApi } from '../platform/service.ts';
 import { SETTINGS_STORAGE_KEY, SETTINGS_VERSION, type Settings } from '../settings/schema.ts';
 import type { StorageLike } from '../settings/store.ts';
@@ -134,6 +135,7 @@ export function fakePlatform(
             ]),
           )
         : null,
+    vault: kind === 'tauri' ? fakeVault() : null,
     leakEmailCheck:
       kind === 'tauri'
         ? vi.fn(() =>
@@ -152,6 +154,106 @@ export function fakePlatform(
             }),
           )
         : null,
+  };
+}
+
+/** Tresor im Speicher (Master-Passwort „ein langes Master-Passwort“). */
+export function fakeVault(
+  initial: { exists?: boolean; unlocked?: boolean } = {},
+): VaultApi & { readonly entries: Map<string, VaultEntryInput> } {
+  const MASTER = 'ein langes Master-Passwort';
+  let exists = initial.exists ?? true;
+  let unlocked = initial.unlocked ?? false;
+  let next = 1;
+  const entries = new Map<string, VaultEntryInput>([
+    [
+      'e1',
+      {
+        title: 'Bank',
+        username: 'anna',
+        password: 'password',
+        urls: ['bank.example'],
+        notes: 'PIN im Safe',
+        folder: 'Finanzen',
+        tags: ['wichtig'],
+        favorite: true,
+      },
+    ],
+    [
+      'e2',
+      {
+        title: 'Forum',
+        username: 'anna_f',
+        password: 'password',
+        urls: [],
+        notes: '',
+        folder: '',
+        tags: [],
+        favorite: false,
+      },
+    ],
+  ]);
+  const guard = () => (unlocked ? Promise.resolve() : Promise.reject('locked'));
+  return {
+    entries,
+    status: vi.fn(() => Promise.resolve({ exists, unlocked, lockMinutes: 5, retryIn: 0 })),
+    setup: vi.fn((master: string) => {
+      exists = true;
+      unlocked = master.length >= 12;
+      return Promise.resolve();
+    }),
+    unlock: vi.fn((master: string) =>
+      master === MASTER ? ((unlocked = true), Promise.resolve()) : Promise.reject('wrong_password'),
+    ),
+    lock: vi.fn(() => {
+      unlocked = false;
+      return Promise.resolve();
+    }),
+    setLockMinutes: vi.fn(() => Promise.resolve()),
+    list: vi.fn(() =>
+      guard().then(() => ({
+        entries: [...entries].map(([id, e]) => ({
+          id,
+          title: e.title,
+          username: e.username,
+          urls: e.urls,
+          folder: e.folder,
+          tags: e.tags,
+          favorite: e.favorite,
+          modified: 0,
+          passwordChanged: 0,
+          hasNotes: e.notes !== '',
+          hasPassword: e.password !== '',
+        })),
+        folders: [...new Set([...entries.values()].map((e) => e.folder).filter((f) => f))],
+        weak: [...entries].filter(([, e]) => e.password.length < 10).map(([id]) => id),
+        reused: ['e1', 'e2'],
+      })),
+    ),
+    reveal: vi.fn((id: string) =>
+      guard().then(() => ({
+        password: entries.get(id)?.password ?? '',
+        notes: entries.get(id)?.notes ?? '',
+      })),
+    ),
+    save: vi.fn((id: string | null, entry: VaultEntryInput) =>
+      guard().then(() => {
+        const key = id ?? `n${next++}`;
+        entries.set(key, entry);
+        return key;
+      }),
+    ),
+    remove: vi.fn((id: string) => guard().then(() => void entries.delete(id))),
+    copy: vi.fn(() => guard().then(() => 30)),
+    generate: vi.fn(() => Promise.resolve('Gen3riert!Sehr-Lang_2026')),
+    strength: vi.fn((password: string) =>
+      Promise.resolve({
+        level: password.length >= 16 ? ('very_strong' as const) : ('very_weak' as const),
+        bits: password.length * 4,
+      }),
+    ),
+    importCsv: vi.fn(() => guard().then(() => ({ imported: 2, skipped: 1 }))),
+    changeMaster: vi.fn(() => guard()),
   };
 }
 

@@ -14,6 +14,7 @@ mod report;
 mod service;
 mod startup_error;
 mod tray;
+mod vault;
 mod window;
 mod winsec;
 
@@ -59,6 +60,20 @@ fn main() {
             home_network::home_network_scan,
             leak::leak_password_range,
             leak::leak_email_check,
+            vault::vault_status,
+            vault::vault_setup,
+            vault::vault_unlock,
+            vault::vault_lock,
+            vault::vault_set_lock_minutes,
+            vault::vault_list,
+            vault::vault_reveal,
+            vault::vault_save,
+            vault::vault_delete,
+            vault::vault_copy,
+            vault::vault_generate,
+            vault::vault_strength,
+            vault::vault_import,
+            vault::vault_change_master,
             service::service_scan,
             service::service_list_quarantine,
             service::service_propose_quarantine,
@@ -174,6 +189,20 @@ mod test_support {
                 crate::home_network::home_network_scan,
                 crate::leak::leak_password_range,
                 crate::leak::leak_email_check,
+                crate::vault::vault_status,
+                crate::vault::vault_setup,
+                crate::vault::vault_unlock,
+                crate::vault::vault_lock,
+                crate::vault::vault_set_lock_minutes,
+                crate::vault::vault_list,
+                crate::vault::vault_reveal,
+                crate::vault::vault_save,
+                crate::vault::vault_delete,
+                crate::vault::vault_copy,
+                crate::vault::vault_generate,
+                crate::vault::vault_strength,
+                crate::vault::vault_import,
+                crate::vault::vault_change_master,
                 crate::service::service_scan,
                 crate::service::service_list_quarantine,
                 crate::service::service_propose_quarantine,
@@ -253,7 +282,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 72] = [
+    const EXPECTED_PERMISSIONS: [&str; 86] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -268,6 +297,20 @@ mod tests {
         "allow-home-network-scan",
         "allow-leak-password-range",
         "allow-leak-email-check",
+        "allow-vault-status",
+        "allow-vault-setup",
+        "allow-vault-unlock",
+        "allow-vault-lock",
+        "allow-vault-set-lock-minutes",
+        "allow-vault-list",
+        "allow-vault-reveal",
+        "allow-vault-save",
+        "allow-vault-delete",
+        "allow-vault-copy",
+        "allow-vault-generate",
+        "allow-vault-strength",
+        "allow-vault-import",
+        "allow-vault-change-master",
         "allow-service-scan",
         "allow-service-list-quarantine",
         "allow-service-propose-quarantine",
@@ -532,6 +575,26 @@ mod tests {
                     "leak_email_check",
                     json!({ "email": "a@example.org", "apiKey": "x" }),
                 ),
+                ("vault_status", json!({})),
+                ("vault_setup", json!({ "master": "kurz" })),
+                ("vault_unlock", json!({ "master": "x" })),
+                ("vault_lock", json!({})),
+                ("vault_set_lock_minutes", json!({ "minutes": 0 })),
+                ("vault_list", json!({})),
+                ("vault_reveal", json!({ "id": "x" })),
+                (
+                    "vault_save",
+                    json!({ "id": null, "entry": { "title": "x", "username": "", "password": "" } }),
+                ),
+                ("vault_delete", json!({ "id": "x" })),
+                ("vault_copy", json!({ "id": "x", "field": "password" })),
+                (
+                    "vault_generate",
+                    json!({ "options": { "length": 20, "lower": true, "upper": true, "digits": true, "symbols": true, "avoidAmbiguous": true } }),
+                ),
+                ("vault_strength", json!({ "password": "x" })),
+                ("vault_import", json!({ "path": "" })),
+                ("vault_change_master", json!({ "old": "x", "new": "y" })),
                 (
                     "plugin:event|listen",
                     json!({

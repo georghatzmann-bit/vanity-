@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-vault-change-master"
+description = "Enables the vault_change_master command without any pre-configured scope."
+commands.allow = ["vault_change_master"]
+
+[[permission]]
+identifier = "deny-vault-change-master"
+description = "Denies the vault_change_master command without any pre-configured scope."
+commands.deny = ["vault_change_master"]

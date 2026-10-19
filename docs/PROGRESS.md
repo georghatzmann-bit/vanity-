@@ -194,11 +194,14 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        Parameter + Salz in der Datei, AES-256-GCM, neue Nonce je Eintrag und Speichern, Kennung
        als AAD), Zeroize, Generator, Stärke, Wiederverwendung, CSV-Import (Chrome/Edge, Firefox,
        Bitwarden), Adressvergleich fürs Ausfüllen.
-2. [ ] P9.2 App: Tresor-Backend (Datei, Auto-Sperre, Zwischenablage 30 s) + Seite „Tresor“.
+2. [x] P9.2 App: Tresor-Backend (Datei im App-Datenordner, Auto-Sperre, Fehlversuche,
+       Zwischenablage ohne Verlauf + 30 s, Sicherung `.bak`) und Seite „Tresor“ (anlegen,
+       entsperren, Suche, Ordner, Favoriten, Schlagwörter, Generator, Stärke, Mehrfach-/Leck-Check,
+       CSV-Import, Master-Passwort ändern) (D-054).
 3. [ ] P9.3 Browser-Erweiterung über Native Messaging (HKCU, nur unsere ID).
 4. [ ] P9.4 Sicherheits-Review, Doku, DoD.
 
-**Nächster Schritt:** P9.2.
+**Nächster Schritt:** P9.3 Browser-Erweiterung + Native Messaging.
 
 ## P5 – Schutz-Werkzeuge
 

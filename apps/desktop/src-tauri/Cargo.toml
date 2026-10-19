@@ -24,6 +24,9 @@ serde_json = { workspace = true }
 time = { workspace = true }
 # Heimnetz-Scanner: reine Einordnung (Subnetz, Hinweise).
 aegis-netwatch = { workspace = true }
+# Passwort-Tresor (P9).
+aegis-vault-core = { workspace = true }
+zeroize = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 aegis-winffi = { workspace = true }

@@ -21,7 +21,7 @@ const pages = [
   { nav: 'Härtung', route: 'hardening', heading: 'Härtung', phase: null },
   { nav: 'Defender', route: 'defender', heading: 'Defender-Schalter', phase: null },
   { nav: 'Netzwerk', route: 'network', heading: 'Netzwerk', phase: null },
-  { nav: 'Tresor', route: 'vault', heading: 'Tresor', phase: 'P9' },
+  { nav: 'Tresor', route: 'vault', heading: 'Tresor', phase: null },
   { nav: 'Tools', route: 'tools', heading: 'Tools', phase: 'P10' },
   { nav: 'Einstellungen', route: 'settings', heading: 'Einstellungen', phase: null },
   { nav: 'Über AEGIS', route: 'about', heading: 'Über AEGIS', phase: null },
@@ -196,9 +196,9 @@ test.describe('Navigation', () => {
     await waitForHome(page);
     await page.getByRole('button', { name: 'Navigation einklappen' }).click();
     await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');
-    const vault = navigation(page).getByRole('link', { name: 'Tresor, folgt in P9' });
-    await vault.hover();
-    await expect(page.getByRole('tooltip')).toHaveText('Tresor · Folgt in P9');
+    const tools = navigation(page).getByRole('link', { name: 'Tools, folgt in P10' });
+    await tools.hover();
+    await expect(page.getByRole('tooltip')).toHaveText('Tools · Folgt in P10');
     await page.reload();
     await waitForHome(page);
     await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');
