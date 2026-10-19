@@ -35,7 +35,13 @@ function show(found: readonly Signal[]): void {
   }
   shown = true;
   const t = texts(navigator.language);
-  const host = document.createElement('aegis-webshield-hint');
+  // Neutraler, zufälliger Name: Seiten sollen den Hinweis nicht gezielt erkennen können.
+  // getRandomValues gibt es auch auf HTTP-Seiten (randomUUID nicht).
+  const tag = [...crypto.getRandomValues(new Uint8Array(4))]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  const host = document.createElement(`x-${tag}`);
+  host.setAttribute('data-hint', '');
   const root = host.attachShadow({ mode: 'closed' });
   applyTheme(root, ':host');
   const style = document.createElement('style');

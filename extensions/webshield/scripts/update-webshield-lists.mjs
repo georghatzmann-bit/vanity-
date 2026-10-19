@@ -5,7 +5,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseList } from '../src/lib/domains.ts';
+import { blockable, parseList } from '../src/lib/domains.ts';
 import { blockRules } from '../src/lib/rules.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -30,7 +30,9 @@ async function load(file) {
 const seen = new Set();
 const rules = [];
 for (const list of lists) {
-  const domains = parseList(await load(list.file)).filter((d) => !seen.has(d) && seen.add(d));
+  const domains = parseList(await load(list.file))
+    .filter(blockable)
+    .filter((d) => !seen.has(d) && seen.add(d));
   domains.sort();
   rules.push(...blockRules(list.category, domains, list.id));
   console.warn(`${list.category}: ${domains.length} Domains`);

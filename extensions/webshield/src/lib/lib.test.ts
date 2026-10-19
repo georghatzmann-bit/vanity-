@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hostOf, normalizeDomain, parseList, withinDomain } from './domains';
+import { blockable, hostOf, normalizeDomain, parents, parseList, withinDomain } from './domains';
 import { downloadRisks } from './downloads';
 import { texts } from './i18n';
 import { deconfuse, registrable, signals } from './lookalike';
@@ -47,6 +47,17 @@ describe('Domains', () => {
     expect(parseList(text, 1)).toEqual(['evil.example']);
   });
 
+  it('sperrt nie ganze Plattformen oder große Dienste', () => {
+    expect(blockable('evil.example')).toBe(true);
+    expect(blockable('docs.google.com')).toBe(false);
+    expect(blockable('onedrive.live.com')).toBe(false);
+    expect(blockable('github.io')).toBe(false);
+    expect(blockable('co.uk')).toBe(false);
+    expect(blockable('phish.github.io')).toBe(true);
+    expect(blockable('notgoogle.com')).toBe(true);
+    expect(parents('a.b.example.com')).toEqual(['a.b.example.com', 'b.example.com', 'example.com']);
+  });
+
   it('Host und Subdomains', () => {
     expect(hostOf('https://Shop.Example.com/x')).toBe('shop.example.com');
     expect(hostOf('chrome-extension://abc/warn.html')).toBeNull();
@@ -61,7 +72,10 @@ describe('Regeln', () => {
     const domains = Array.from({ length: DOMAINS_PER_RULE + 5 }, (_, i) => `d${i}.example`);
     const rules = blockRules('phishing', domains, 1000);
     expect(rules.map((r) => r.id)).toEqual([1000, 1001]);
-    expect(rules[1]?.condition.requestDomains).toHaveLength(5);
+    const second = rules[1]?.condition;
+    expect(
+      second !== undefined && 'requestDomains' in second ? second.requestDomains : [],
+    ).toHaveLength(5);
     for (const r of rules) {
       expect(r.condition.resourceTypes).toEqual(['main_frame']);
       expect(r.action).toEqual({
@@ -72,10 +86,18 @@ describe('Regeln', () => {
     expect(blockRules('scam', [], 1)).toEqual([]);
   });
 
-  it('Ausnahme hat Vorrang, Kategorie wird geprüft', () => {
+  it('Ausnahme hat Vorrang, gilt nur für genau diesen Host', () => {
     const allow = allowRule('ok.example', ALLOW_BASE);
     expect(allow.priority).toBeGreaterThan(1);
     expect(allow.action.type).toBe('allow');
+    const filter = 'regexFilter' in allow.condition ? allow.condition.regexFilter : '';
+    const re = new RegExp(filter);
+    expect(re.test('https://ok.example/pfad')).toBe(true);
+    expect(re.test('http://ok.example:8080/')).toBe(true);
+    expect(re.test('https://ok.example')).toBe(true);
+    expect(re.test('https://login.ok.example/')).toBe(false);
+    expect(re.test('https://okxexample/')).toBe(false);
+    expect(re.test('https://ok.example.evil.test/')).toBe(false);
     expect(categoryFrom('?c=scam')).toBe('scam');
     expect(categoryFrom('?c=<script>')).toBeNull();
     expect(categoryFrom('')).toBeNull();

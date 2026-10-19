@@ -19,10 +19,9 @@ export interface Rule {
   readonly action:
     | { readonly type: 'redirect'; readonly redirect: { readonly extensionPath: string } }
     | { readonly type: 'allow' };
-  readonly condition: {
-    readonly requestDomains: string[];
-    readonly resourceTypes: ['main_frame'];
-  };
+  readonly condition:
+    | { readonly requestDomains: string[]; readonly resourceTypes: ['main_frame'] }
+    | { readonly regexFilter: string; readonly resourceTypes: ['main_frame'] };
 }
 
 /** Umleitungsregeln für eine Kategorie (in Stücken), Kennungen ab `firstId`. */
@@ -46,13 +45,20 @@ export function blockRules(
   return rules;
 }
 
-/** Ausnahme „trotzdem öffnen“ für genau eine Domain (höhere Priorität, nur diese Sitzung). */
-export function allowRule(domain: string, id: number): Rule {
+/**
+ * Ausnahme „trotzdem öffnen“ für **genau diesen Host** (keine Unteradressen, höhere Priorität,
+ * nur diese Sitzung). So gibt eine Freigabe nie eine gelistete Unterdomain mit frei.
+ */
+export function allowRule(host: string, id: number): Rule {
+  const escaped = host.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
   return {
     id,
     priority: 2,
     action: { type: 'allow' },
-    condition: { requestDomains: [domain], resourceTypes: ['main_frame'] },
+    condition: {
+      regexFilter: `^https?://${escaped}(:[0-9]+)?(/|$)`,
+      resourceTypes: ['main_frame'],
+    },
   };
 }
 

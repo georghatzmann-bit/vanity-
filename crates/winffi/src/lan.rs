@@ -32,6 +32,10 @@ pub struct LocalNet {
     pub gateway: Option<Ipv4Addr>,
     /// Schnittstelle (Index).
     pub interface: u32,
+    /// Art der Schnittstelle (IANA `ifType`: 6 = Ethernet, 71 = WLAN, 131 = Tunnel, …).
+    pub if_type: u16,
+    /// Metrik der Standardroute (kleiner = bevorzugt), falls vorhanden.
+    pub metric: Option<u32>,
 }
 
 /// Eintrag der Nachbartabelle.
@@ -147,19 +151,26 @@ pub fn local_networks() -> io::Result<Vec<LocalNet>> {
         if address.is_loopback() || address.is_link_local() {
             continue;
         }
-        let gateway = routes
+        let route = routes
             .iter()
             .filter(|r| {
                 r.InterfaceIndex == a.InterfaceIndex && r.DestinationPrefix.PrefixLength == 0
             })
-            .min_by_key(|r| r.Metric)
+            .min_by_key(|r| r.Metric);
+        let gateway = route
             .and_then(|r| v4(&r.NextHop))
             .filter(|g| !g.is_unspecified());
+        // SAFETY: NET_LUID_LH ist eine Union aus einem u64 und Bitfeldern derselben Größe.
+        // aegis-unsafe: winffi-lan-luid
+        #[allow(unsafe_code)]
+        let luid = unsafe { a.InterfaceLuid.Value };
         out.push(LocalNet {
             address,
             prefix: a.OnLinkPrefixLength,
             gateway,
             interface: a.InterfaceIndex,
+            if_type: u16::try_from((luid >> 48) & 0xffff).unwrap_or(0),
+            metric: route.map(|r| r.Metric),
         });
     }
     Ok(out)

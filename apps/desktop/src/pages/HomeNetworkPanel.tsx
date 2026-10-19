@@ -16,24 +16,6 @@ import {
 } from '../platform/lan.ts';
 import { usePlatform } from '../platform/PlatformContext.tsx';
 
-const HINT_IDS = [
-  'router_telnet',
-  'router_ftp',
-  'router_http_only',
-  'router_upnp',
-  'device_telnet',
-  'device_rdp',
-  'device_vnc',
-  'device_smb',
-  'wifi_open',
-  'wifi_wep',
-  'wifi_wpa',
-  'wifi_tkip',
-  'wifi_wpa2',
-] as const;
-type HintId = (typeof HINT_IDS)[number];
-const isHintId = (id: string): id is HintId => (HINT_IDS as readonly string[]).includes(id);
-
 const SECURITY = ['open', 'wep', 'wpa', 'wpa2', 'wpa3', 'owe', 'enterprise'] as const;
 type Security = (typeof SECURITY)[number] | 'unknown';
 const security = (s: string): Security =>
@@ -168,7 +150,7 @@ function LanResult({
   readonly fresh: ReadonlySet<string>;
 }) {
   const { t } = useT();
-  const hints = report.hints.filter((h) => isHintId(h.id));
+  const hints = report.hints;
   return (
     <>
       <p className="text-text" data-testid="lan-summary" role="status">
@@ -197,9 +179,7 @@ function LanResult({
                     <SafeText value={h.target} mono />
                   </>
                 )}
-                <p className="text-text-muted">
-                  {t(`network.lan.hint.${h.id as HintId}` satisfies TextKey)}
-                </p>
+                <p className="text-text-muted">{t(`network.lan.hint.${h.id}` satisfies TextKey)}</p>
               </li>
             ))}
           </ul>

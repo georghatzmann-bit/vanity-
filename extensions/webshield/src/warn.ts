@@ -12,26 +12,31 @@ document.documentElement.lang = navigator.language.toLowerCase().startsWith('de'
 const app = document.getElementById('app');
 const category = categoryFrom(location.search);
 
+interface BlockedInfo {
+  readonly host: string | null;
+  readonly allowable: boolean;
+}
+
 /** Angehaltener Host; kurz nachfragen, falls der Hintergrund gerade erst aufwacht. */
-async function blockedHost(): Promise<string | null> {
+async function blockedInfo(): Promise<BlockedInfo> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const answer: unknown = await chrome.runtime.sendMessage({ type: 'blocked-url' });
-    const url =
-      typeof answer === 'object' && answer !== null ? (answer as { url?: unknown }).url : null;
-    const host = typeof url === 'string' ? hostOf(url) : null;
+    const o =
+      typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+    const host = typeof o.url === 'string' ? hostOf(o.url) : null;
     if (host !== null) {
-      return host;
+      return { host, allowable: o.allowable === true };
     }
     await new Promise((done) => setTimeout(done, 200));
   }
-  return null;
+  return { host: null, allowable: false };
 }
 
 async function render(): Promise<void> {
   if (app === null) {
     return;
   }
-  const host = await blockedHost();
+  const { host, allowable } = await blockedInfo();
 
   const back = el('button', { className: 'primary' }, t.warnBack);
   back.type = 'button';
@@ -69,13 +74,15 @@ async function render(): Promise<void> {
       el('strong', {}, category !== null ? t.category[category] : ''),
     ),
     el('div', { className: 'row' }, back),
-    ...(host !== null
+    ...(host !== null && allowable
       ? [
           el('p', { className: 'muted' }, t.warnHint),
           confirm,
           el('div', { className: 'row' }, open),
         ]
-      : []),
+      : host !== null
+        ? [el('p', { className: 'muted' }, t.warnRedirect)]
+        : []),
   );
   back.focus();
 }

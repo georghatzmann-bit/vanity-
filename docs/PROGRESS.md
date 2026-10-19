@@ -29,7 +29,7 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 | P4 | Sandbox Stufe 1+2 + Verhaltensbericht | **erledigt** (Windows-CI wird bestätigt) |
 | P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | **erledigt** |
 | P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | erledigt |
-| P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | in Arbeit |
+| P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | erledigt |
 | P8 | Defender-Schalter | offen |
 | P9 | Tresor + Erweiterung | offen |
 | P10 | Tools 1–11 | offen |
@@ -164,9 +164,14 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 5. [x] P7.5 Leck-Check: Passwort per HIBP-Range (nur 5 Zeichen des SHA-1-Werts verlassen das
        WebView), E-Mail nur mit eigenem HIBP-Schlüssel (nicht gespeichert); HTTPS über WinHTTP
        (D-052).
-6. [ ] P7.6 Sicherheits-Review, Doku, DoD.
+6. [x] P7.6 Sicherheits-Review (separater Prüfer): 2 mittel, 4 niedrig, 3 Kleinigkeiten – alle
+       behoben bzw. dokumentiert (SECURITY, Review-Protokoll).
 
-**Nächster Schritt:** P7.6 Sicherheits-Review P7.
+**DoD P7:** Verbindungen je Programm mit Land/Verlauf, Firewall-Übersicht und eigene Regeln nur
+nach „Ja“; Web-Schutz-Erweiterung mit Listen, Warnseite, Hinweisen und E2E-Tests; Heimnetz nur im
+eigenen LAN/WLAN; Leck-Check mit k-Anonymität; alle Prüfungen grün.
+
+**Nächster Schritt:** P8 Defender-Schalter.
 
 ## P5 – Schutz-Werkzeuge
 

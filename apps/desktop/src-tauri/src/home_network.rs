@@ -1,5 +1,5 @@
 //! Heimnetz-Scanner (P7.4): läuft in der App mit den Rechten des Nutzers, nur auf Knopfdruck
-//! und nur im eigenen privaten Subnetz (RFC 1918). Gefunden wird per Ping und
+//! und nur im eigenen privaten Subnetz (RFC 1918) einer LAN-/WLAN-Verbindung (nie über VPN-Tunnel). Gefunden wird per Ping und
 //! Nachbartabelle; geprüft wird nur, ob wenige bekannte Dienste (Telnet, RDP, …) eine
 //! Verbindung annehmen – ohne Anmeldung, ohne Passwörter, ohne etwas zu verändern.
 
@@ -32,8 +32,8 @@ mod windows {
     use std::time::{Duration, Instant};
 
     use aegis_netwatch::lan::{
-        LanDevice, LanReport, MAX_PROBED_DEVICES, PROBE_PORTS, hints, hosts, is_private, mac_text,
-        network_text, private_mac, sort_devices, ssdp_reply, wifi_info,
+        LanDevice, LanReport, MAX_PROBED_DEVICES, PROBE_PORTS, hints, home_interface, hosts,
+        is_private, mac_text, network_text, private_mac, sort_devices, ssdp_reply, wifi_info,
     };
     use aegis_winffi::lan;
 
@@ -44,10 +44,12 @@ mod windows {
 
     pub fn scan() -> io::Result<LanReport> {
         let networks = lan::local_networks()?;
+        // Nur LAN/WLAN mit Standardroute; bei mehreren die mit der kleinsten Metrik.
         let Some(net) = networks
             .iter()
-            .filter(|n| is_private(n.address))
-            .max_by_key(|n| n.gateway.is_some())
+            .filter(|n| is_private(n.address) && home_interface(n.if_type))
+            .filter(|n| n.gateway.is_some())
+            .min_by_key(|n| n.metric.unwrap_or(u32::MAX))
         else {
             return Ok(LanReport::unavailable("no_private_network"));
         };

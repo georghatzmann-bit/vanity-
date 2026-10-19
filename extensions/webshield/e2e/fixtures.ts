@@ -24,6 +24,13 @@ export const test = base.extend<Fixtures>({
   // eslint-disable-next-line no-empty-pattern
   port: async ({}, provide) => {
     const server: Server = createServer((req, res) => {
+      // `weiter.test` leitet (wie ein Kurz-Link) auf eine gelistete Adresse weiter.
+      if ((req.headers.host ?? '').startsWith('weiter.test')) {
+        const port = (server.address() as AddressInfo).port;
+        res.writeHead(302, { location: `http://login.phish.test:${port}/` });
+        res.end();
+        return;
+      }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(page(req.url ?? ''));
     });

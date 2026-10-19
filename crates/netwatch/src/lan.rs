@@ -26,6 +26,13 @@ pub const PROBE_PORTS: [(u16, &str); 10] = [
     (8080, "http-alt"),
 ];
 
+/// Schnittstellen eines Heimnetzes: Ethernet (6) und WLAN (71). Tunnel/VPN, PPP und virtuelle
+/// Adapter bleiben außen vor – dort läge ein fremdes (Firmen-)Netz.
+#[must_use]
+pub fn home_interface(if_type: u16) -> bool {
+    matches!(if_type, 6 | 71)
+}
+
 /// Privates Netz nach RFC 1918 (nur dort scannt AEGIS).
 #[must_use]
 pub fn is_private(ip: Ipv4Addr) -> bool {
@@ -317,6 +324,15 @@ mod tests {
             network_text(Ipv4Addr::new(192, 168, 1, 20), 24),
             "192.168.1.0/24"
         );
+    }
+
+    #[test]
+    fn nur_lan_und_wlan() {
+        assert!(home_interface(6));
+        assert!(home_interface(71));
+        assert!(!home_interface(131));
+        assert!(!home_interface(23));
+        assert!(!home_interface(53));
     }
 
     #[test]

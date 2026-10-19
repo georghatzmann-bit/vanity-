@@ -22,7 +22,7 @@ export interface WifiInfo {
 export type LanSeverity = 'info' | 'warn' | 'danger';
 
 export interface LanHint {
-  readonly id: string;
+  readonly id: LanHintId;
   readonly severity: LanSeverity;
   readonly target: string | null;
 }
@@ -88,16 +88,38 @@ function wifi(v: unknown): WifiInfo | null {
   return ssid === null || security === null ? null : { ssid, security, tkip: v.tkip === true };
 }
 
+/** Bekannte Hinweise (unbekannte Kennungen werden verworfen). */
+export const LAN_HINT_IDS = [
+  'router_telnet',
+  'router_ftp',
+  'router_http_only',
+  'router_upnp',
+  'device_telnet',
+  'device_rdp',
+  'device_vnc',
+  'device_smb',
+  'wifi_open',
+  'wifi_wep',
+  'wifi_wpa',
+  'wifi_tkip',
+  'wifi_wpa2',
+] as const;
+export type LanHintId = (typeof LAN_HINT_IDS)[number];
+
 function hint(v: unknown): LanHint | null {
   if (!isObj(v)) {
     return null;
   }
   const id = str(v.id, 40);
   const severity = v.severity;
-  if (id === null || (severity !== 'info' && severity !== 'warn' && severity !== 'danger')) {
+  if (
+    id === null ||
+    !(LAN_HINT_IDS as readonly string[]).includes(id) ||
+    (severity !== 'info' && severity !== 'warn' && severity !== 'danger')
+  ) {
     return null;
   }
-  return { id, severity, target: str(v.target, 64) };
+  return { id: id as LanHintId, severity, target: str(v.target, 64) };
 }
 
 /** Liest das Ergebnis tolerant; Unbrauchbares wird verworfen. */

@@ -61,3 +61,93 @@ export function hostOf(url: string): string | null {
 export function withinDomain(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
+
+/**
+ * Öffentliche Endungen und Hosting-Plattformen: Ein Listeneintrag genau dafür würde alle Seiten
+ * darunter sperren – solche Einträge werden verworfen.
+ */
+const SHARED_SUFFIXES = new Set([
+  'co.uk',
+  'com.au',
+  'co.jp',
+  'com.br',
+  'co.nz',
+  'co.za',
+  'com.tr',
+  'com.mx',
+  'co.in',
+  'github.io',
+  'gitlab.io',
+  'blogspot.com',
+  'wordpress.com',
+  'web.app',
+  'firebaseapp.com',
+  'pages.dev',
+  'workers.dev',
+  'netlify.app',
+  'vercel.app',
+  'herokuapp.com',
+  'azurewebsites.net',
+  'appspot.com',
+  'wixsite.com',
+  'weebly.com',
+  'weeblysite.com',
+  '000webhostapp.com',
+  'glitch.me',
+  'ngrok.io',
+  'ngrok-free.app',
+  'ipfs.io',
+  'r2.dev',
+  'onrender.com',
+  'fly.dev',
+  'surge.sh',
+]);
+
+/**
+ * Große Dienste, die AEGIS nie über Fremdlisten sperrt (auch keine Unteradressen wie
+ * `docs.google.com` – das würde den Dienst für alle sperren). Phishing auf diesen Plattformen
+ * erkennen die Seitenhinweise und die Browser-eigenen Filter.
+ */
+const NEVER_BLOCK = [
+  'google.com',
+  'googleapis.com',
+  'gstatic.com',
+  'googleusercontent.com',
+  'youtube.com',
+  'microsoft.com',
+  'live.com',
+  'office.com',
+  'microsoftonline.com',
+  'sharepoint.com',
+  'windows.net',
+  'azure.com',
+  'bing.com',
+  'apple.com',
+  'icloud.com',
+  'amazon.com',
+  'amazonaws.com',
+  'github.com',
+  'githubusercontent.com',
+  'cloudflare.com',
+  'facebook.com',
+  'instagram.com',
+  'whatsapp.com',
+  'dropbox.com',
+  'wikipedia.org',
+  'mozilla.org',
+];
+
+/** Darf dieser Listeneintrag gesperrt werden? */
+export function blockable(domain: string): boolean {
+  return !SHARED_SUFFIXES.has(domain) && !NEVER_BLOCK.some((d) => withinDomain(domain, d));
+}
+
+/** Die Domain und alle übergeordneten Domains mit mindestens zwei Teilen. */
+export function parents(host: string): string[] {
+  const labels = host.split('.');
+  const out: string[] = [];
+  for (let i = 0; i <= labels.length - 2; i += 1) {
+    out.push(labels.slice(i).join('.'));
+  }
+  return out;
+}

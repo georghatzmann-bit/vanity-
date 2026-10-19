@@ -281,7 +281,11 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Ok(s) => s,
             Err(e) => return Response::error("input", e),
         };
-        if present && std::fs::symlink_metadata(program).map_or(true, |m| !m.is_file()) {
+        // Mit den Rechten des Anfragenden prüfen, nicht mit denen des Dienstes.
+        let exists = user
+            .enter()
+            .is_ok_and(|_scope| std::fs::symlink_metadata(program).is_ok_and(|m| m.is_file()));
+        if present && !exists {
             return Response::error("input", "Programm nicht gefunden");
         }
         let texts = if present {

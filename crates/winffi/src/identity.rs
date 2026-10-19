@@ -147,7 +147,7 @@ pub fn impersonate_profile_owner(profile: &Path, sid: Option<&str>) -> io::Resul
     ))
 }
 
-fn well_known(kind: WELL_KNOWN_SID_TYPE) -> io::Result<Vec<u8>> {
+pub(crate) fn well_known(kind: WELL_KNOWN_SID_TYPE) -> io::Result<Vec<u8>> {
     let mut sid = vec![0u8; SECURITY_MAX_SID_SIZE as usize];
     let mut size = SECURITY_MAX_SID_SIZE;
     // SAFETY: Puffer der angegebenen Größe; keine Domänen-SID nötig.

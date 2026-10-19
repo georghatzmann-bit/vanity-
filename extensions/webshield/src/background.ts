@@ -9,7 +9,7 @@
  * - Weist bei riskanten Downloads per Benachrichtigung hin (bricht nie ab, löscht nichts).
  */
 
-import { hostOf, parseList } from './lib/domains';
+import { blockable, hostOf, parents, parseList } from './lib/domains';
 import { downloadRisks } from './lib/downloads';
 import { texts } from './lib/i18n';
 import { ALLOW_BASE, allowRule, blockRules, type Category, type Rule } from './lib/rules';
@@ -94,7 +94,7 @@ async function fetchList(source: Source): Promise<string[]> {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    return parseList(await readLimited(response, MAX_LIST_BYTES), source.max);
+    return parseList(await readLimited(response, MAX_LIST_BYTES), source.max).filter(blockable);
   } finally {
     clearTimeout(timer);
   }
@@ -155,6 +155,10 @@ async function doUpdate(): Promise<ListStatus> {
     remove.push(...existing.filter((r) => inCategory(r, category)).map((r) => r.id));
     add.push(...toDnr(blockRules(category, domains, categoryBase(category))));
   }
+  // Inzwischen ausgeschaltet? Dann nichts übernehmen (dropLists räumt auf).
+  if (!(await settings()).updateLists) {
+    return status();
+  }
   if (remove.length > 0 || add.length > 0) {
     await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: remove, addRules: add });
   }
@@ -179,6 +183,8 @@ async function doUpdate(): Promise<ListStatus> {
 
 /** Ausgeschaltet: geladene Listen wieder entfernen (mitgelieferte Liste bleibt). */
 async function dropLists(): Promise<void> {
+  // Eine laufende Aktualisierung erst zu Ende kommen lassen, dann aufräumen.
+  await running?.catch(() => undefined);
   const existing = await chrome.declarativeNetRequest.getDynamicRules();
   const ids = existing.filter(isBlockRule).map((r) => r.id);
   if (ids.length > 0) {
@@ -193,11 +199,65 @@ async function maybeUpdate(): Promise<void> {
   }
 }
 
-/** Einmalige Freigabe (nur diese Browser-Sitzung) für die Adresse, die im Tab angehalten wurde. */
-async function allowOnce(tabId: number): Promise<boolean> {
+let bundled: Promise<DnrRule[]> | null = null;
+
+/** Mitgelieferte Regeln (einmal gelesen). */
+function bundledRules(): Promise<DnrRule[]> {
+  bundled ??= fetch(chrome.runtime.getURL('rules/bundled.json'))
+    .then((r) => r.json() as Promise<DnrRule[]>)
+    .catch(() => []);
+  return bundled;
+}
+
+/** Steht `host` (oder eine übergeordnete Domain) selbst auf einer Sperrliste? */
+async function listed(host: string): Promise<boolean> {
+  const candidates = parents(host);
+  const rules = [
+    ...(await chrome.declarativeNetRequest.getDynamicRules()),
+    ...(await bundledRules()),
+  ];
+  return rules.some(
+    (r) =>
+      isBlockRule(r) &&
+      r.action.type === 'redirect' &&
+      (r.condition.requestDomains ?? []).some((d) => candidates.includes(d)),
+  );
+}
+
+/** Ist `host` in dieser Sitzung schon freigegeben? */
+async function allowed(host: string): Promise<boolean> {
+  const rule = allowRule(host, 0).condition;
+  const filter = 'regexFilter' in rule ? rule.regexFilter : '';
+  return (await chrome.declarativeNetRequest.getSessionRules()).some(
+    (r) => r.condition.regexFilter === filter,
+  );
+}
+
+interface Blocked {
+  readonly url: string | null;
+  /** Darf „Trotzdem öffnen“ angeboten werden? Nur wenn genau diese Adresse gelistet ist. */
+  readonly allowable: boolean;
+}
+
+/**
+ * Die im Tab angehaltene Adresse. `onBeforeNavigate` kennt nur den Anfang einer Navigation:
+ * Nach einer Weiterleitung (unauffällige Adresse → gelistetes Ziel) ist die gemerkte Adresse
+ * nicht die gesperrte. Dann gibt es keine Freigabe – sonst gäbe man das Falsche frei.
+ */
+async function blocked(tabId: number): Promise<Blocked> {
   const url = await blockedUrl(tabId);
   const host = url === null ? null : hostOf(url);
   if (url === null || host === null) {
+    return { url: null, allowable: false };
+  }
+  return { url, allowable: (await listed(host)) && !(await allowed(host)) };
+}
+
+/** Einmalige Freigabe (nur diese Browser-Sitzung) für genau den Host, der angehalten wurde. */
+async function allowOnce(tabId: number): Promise<boolean> {
+  const { url, allowable } = await blocked(tabId);
+  const host = url === null ? null : hostOf(url);
+  if (url === null || host === null || !allowable) {
     return false;
   }
   const stored = (await chrome.storage.session.get(NEXT_ALLOW))[NEXT_ALLOW];
@@ -305,7 +365,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, reply: (value: unkno
   }
   const tabId = sender.tab?.id;
   if (raw.type === 'blocked-url' && fromPage(sender, 'warn.html') && tabId !== undefined) {
-    void blockedUrl(tabId).then((url) => reply({ url }));
+    void blocked(tabId).then(reply);
     return true;
   }
   if (raw.type === 'allow-once' && fromPage(sender, 'warn.html') && tabId !== undefined) {

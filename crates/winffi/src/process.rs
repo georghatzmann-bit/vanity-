@@ -28,7 +28,7 @@ use windows_sys::Win32::Security::{
     CreateRestrictedToken, DISABLE_MAX_PRIVILEGE, DuplicateTokenEx, GetLengthSid, LUA_TOKEN, PSID,
     SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, SecurityImpersonation, SetTokenInformation,
     TOKEN_ADJUST_DEFAULT, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_MANDATORY_LABEL,
-    TOKEN_QUERY, TokenIntegrityLevel, TokenPrimary,
+    TOKEN_QUERY, TokenIntegrityLevel, TokenPrimary, WinBuiltinAdministratorsSid, WinLocalSystemSid,
 };
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_ACTIVE_PROCESS,
@@ -121,21 +121,40 @@ impl RestrictedToken {
             own(primary)?
         };
         // Ist die Quelle schon ein eingeschränktes LUA-Token (Hintergrundprüfung „nur Nutzer“),
-        // lehnt Windows ein zweites LUA_TOKEN mit Fehler 87 ab – dann ohne diesen Schalter
-        // (die Quelle ist bereits ohne Administratorrechte und Privilegien).
+        // lehnt Windows ein zweites LUA_TOKEN mit Fehler 87 ab. Dann ohne diesen Schalter –
+        // aber Administratoren und SYSTEM ausdrücklich nur „deny“, damit der Prüfprozess auch
+        // bei einem vollen Administrator-Token keine Admin-Gruppe behält.
+        let mut deny = [
+            crate::identity::well_known(WinBuiltinAdministratorsSid)?,
+            crate::identity::well_known(WinLocalSystemSid)?,
+        ];
+        let deny_attrs: Vec<SID_AND_ATTRIBUTES> = deny
+            .iter_mut()
+            .map(|sid| SID_AND_ATTRIBUTES {
+                Sid: sid.as_mut_ptr().cast(),
+                Attributes: 0,
+            })
+            .collect();
         let mut restricted: HANDLE = ptr::null_mut();
         let mut ok = 0;
-        for flags in [DISABLE_MAX_PRIVILEGE | LUA_TOKEN, DISABLE_MAX_PRIVILEGE] {
-            // SAFETY: `primary` ist gültig; keine SID-/Privilegien-Listen (Zähler 0, Zeiger
-            // null); `restricted` ist ein Ausgabezeiger.
+        for (flags, count, sids) in [
+            (DISABLE_MAX_PRIVILEGE | LUA_TOKEN, 0, ptr::null()),
+            (
+                DISABLE_MAX_PRIVILEGE,
+                u32::try_from(deny_attrs.len()).unwrap_or(0),
+                deny_attrs.as_ptr(),
+            ),
+        ] {
+            // SAFETY: `primary` ist gültig; die Deny-Liste zeigt in `deny`, das bis nach dem
+            // Aufruf lebt, Zähler passen; `restricted` ist ein Ausgabezeiger.
             // aegis-unsafe: winffi-restrict-token
             #[allow(unsafe_code)]
             let created = unsafe {
                 CreateRestrictedToken(
                     primary.as_raw_handle(),
                     flags,
-                    0,
-                    ptr::null(),
+                    count,
+                    sids,
                     0,
                     ptr::null(),
                     0,

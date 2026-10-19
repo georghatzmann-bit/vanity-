@@ -124,6 +124,11 @@ pub fn read_values(hive: &Hive, subkey: &str) -> Vec<RegValue> {
     read_values_limited(hive, subkey, 1024, MAX_DATA)
 }
 
+/// `ERROR_MORE_DATA`.
+const ERROR_MORE_DATA_CODE: u32 = 234;
+/// Größter gelesener Einzelwert (Bytes).
+const MAX_VALUE_BYTES: usize = 1024 * 1024;
+
 /// Wie [`read_values`], mit eigenen Grenzen (Anzahl Werte, Zeichen je Wert) – z. B. für die
 /// vielen, langen Firewall-Regeln.
 #[must_use]
@@ -140,25 +145,44 @@ pub fn read_values_limited(
     let mut out = Vec::new();
     for index in 0..max_values {
         let mut name = vec![0u16; 16_384];
-        let mut name_len = u32::try_from(name.len()).unwrap_or(0);
+        let mut name_len;
         let mut data = vec![0u8; 16_384];
-        let mut data_len = u32::try_from(data.len()).unwrap_or(0);
+        let mut data_len;
         let mut kind = 0u32;
-        // SAFETY: Puffer und Längen passen; Schlüssel offen.
-        // aegis-unsafe: winffi-reg-enum-value
-        #[allow(unsafe_code)]
-        let status = unsafe {
-            RegEnumValueW(
-                key.0,
-                index,
-                name.as_mut_ptr(),
-                &mut name_len,
-                ptr::null(),
-                &mut kind,
-                data.as_mut_ptr(),
-                &mut data_len,
-            )
-        };
+        let mut status;
+        loop {
+            name_len = u32::try_from(name.len()).unwrap_or(0);
+            data_len = u32::try_from(data.len()).unwrap_or(0);
+            // SAFETY: Puffer und Längen passen; Schlüssel offen.
+            // aegis-unsafe: winffi-reg-enum-value
+            #[allow(unsafe_code)]
+            let result = unsafe {
+                RegEnumValueW(
+                    key.0,
+                    index,
+                    name.as_mut_ptr(),
+                    &mut name_len,
+                    ptr::null(),
+                    &mut kind,
+                    data.as_mut_ptr(),
+                    &mut data_len,
+                )
+            };
+            status = result;
+            // Wert länger als der Puffer (ERROR_MORE_DATA): einmal größer versuchen (bis
+            // 1 MiB), sonst nur diesen Wert überspringen – nie die folgenden.
+            if status == ERROR_MORE_DATA_CODE
+                && data.len() < MAX_VALUE_BYTES
+                && usize::try_from(data_len).unwrap_or(usize::MAX) <= MAX_VALUE_BYTES
+            {
+                data = vec![0u8; MAX_VALUE_BYTES];
+                continue;
+            }
+            break;
+        }
+        if status == ERROR_MORE_DATA_CODE {
+            continue;
+        }
         if status != 0 {
             break;
         }

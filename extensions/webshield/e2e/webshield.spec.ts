@@ -71,6 +71,12 @@ test('dynamische Regel (Phishing) greift, normale Seiten bleiben frei', async ({
   const page = await context.newPage();
   await page.goto(`http://login.phish.test:${port}/`);
   await expect(page.getByText(/Phishing/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Trotzdem öffnen/ })).toBeVisible();
+  // Über eine Weiterleitung: angezeigt wird die unauffällige Start-Adresse – freigeben lässt
+  // sich dann nichts (sonst gäbe man das Falsche frei).
+  await page.goto(`http://weiter.test:${port}/`);
+  await expect(page.getByText(/weitergeleitet/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Trotzdem öffnen/ })).toHaveCount(0);
   await page.goto(`http://harmlos.test:${port}/`);
   await expect(page.getByRole('heading', { name: 'Harmlose Testseite' })).toBeVisible();
 });
@@ -78,11 +84,11 @@ test('dynamische Regel (Phishing) greift, normale Seiten bleiben frei', async ({
 test('Hinweis bei Markennamen in fremder Domain mit Passwortfeld', async ({ context, port }) => {
   const page = await context.newPage();
   await page.goto(`http://paypal-konto.test:${port}/?pw`);
-  await expect(page.locator('aegis-webshield-hint')).toHaveCount(1);
+  await expect(page.locator('[data-hint]')).toHaveCount(1);
   await page.goto(`http://harmlos.test:${port}/`);
   await page.waitForLoadState('load');
   await page.waitForTimeout(300);
-  await expect(page.locator('aegis-webshield-hint')).toHaveCount(0);
+  await expect(page.locator('[data-hint]')).toHaveCount(0);
 });
 
 test('Optionen: Schalter bleiben gespeichert, Fehler beim Laden ehrlich angezeigt', async ({

@@ -19,6 +19,8 @@ const de = {
   warnOpen: 'Trotzdem öffnen (nur diese Sitzung)',
   warnHint:
     'Listen können irren. Wenn du dir sicher bist, kannst du die Seite für diese Browser-Sitzung freigeben.',
+  warnRedirect:
+    'Diese Adresse hat dich weitergeleitet – das eigentliche Ziel steht auf der Liste. Eine Freigabe ist hier nicht möglich.',
   bannerTitle: 'AEGIS: Vorsicht auf dieser Seite',
   signal: {
     brand:
@@ -74,6 +76,8 @@ const en: Texts = {
   warnUnderstand: 'I understand the risk and want to open the page anyway.',
   warnOpen: 'Open anyway (this session only)',
   warnHint: 'Lists can be wrong. If you are sure, you can allow the page for this browser session.',
+  warnRedirect:
+    'This address redirected you – the actual destination is on the list. Allowing it is not possible here.',
   bannerTitle: 'AEGIS: Be careful on this page',
   signal: {
     brand:
