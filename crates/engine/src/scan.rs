@@ -536,8 +536,12 @@ pub fn open_regular(path: &Path) -> io::Result<(File, std::fs::Metadata)> {
         return Err(io::Error::other("keine reguläre Datei"));
     }
     let file = File::open(path)?;
+    // Kurznamen (8.3) erst in lange Namen umschreiben (löst keine Links auf), dann vergleichen.
     #[cfg(windows)]
-    aegis_winffi::ensure_file_at(&file, path)?;
+    aegis_winffi::ensure_file_at(
+        &file,
+        &aegis_winffi::long_path(path).unwrap_or_else(|_| path.to_path_buf()),
+    )?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
