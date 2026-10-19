@@ -29,8 +29,8 @@ use windows_sys::Win32::System::Registry::{
     RegOpenKeyExW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetSystemMetrics, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible,
-    SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+    EnumWindows, GetSystemMetrics, GetWindowRect, GetWindowThreadProcessId, IsHungAppWindow,
+    IsWindowVisible, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
 };
 
 use crate::util::{own, wide};
@@ -586,6 +586,57 @@ fn windows_of(pids: &[u32]) -> Vec<HWND> {
         .collect()
 }
 
+/// AppContainer-SID eines Prozesses (`None`: kein AppContainer oder nicht abfragbar).
+#[must_use]
+pub fn process_appcontainer_sid(pid: u32) -> Option<String> {
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, TOKEN_APPCONTAINER_INFORMATION, TOKEN_QUERY, TokenAppContainerSid,
+    };
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    // SAFETY: Nur Abfrage-Recht; das Handle wird sofort übernommen.
+    // aegis-unsafe: winffi-open-process-appcontainer
+    #[allow(unsafe_code)]
+    let process = own(unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) }).ok()?;
+    let mut token = ptr::null_mut();
+    // SAFETY: gültiges Prozess-Handle; nur TOKEN_QUERY; Ausgabezeiger gültig.
+    // aegis-unsafe: winffi-process-token-appcontainer
+    #[allow(unsafe_code)]
+    let ok = unsafe { OpenProcessToken(process.as_raw_handle(), TOKEN_QUERY, &mut token) };
+    if ok == 0 {
+        return None;
+    }
+    let token = own(token).ok()?;
+    // TOKEN_APPCONTAINER_INFORMATION + SID passen in 256 Byte; u64-Ausrichtung.
+    let mut buffer = [0u64; 32];
+    let mut needed = 0u32;
+    // SAFETY: gültiges Token mit TOKEN_QUERY; Puffer groß genug und ausgerichtet.
+    // aegis-unsafe: winffi-token-appcontainer-sid
+    #[allow(unsafe_code)]
+    let ok = unsafe {
+        GetTokenInformation(
+            token.as_raw_handle(),
+            TokenAppContainerSid,
+            buffer.as_mut_ptr().cast(),
+            u32::try_from(size_of_val(&buffer)).unwrap_or(256),
+            &mut needed,
+        )
+    };
+    if ok == 0 {
+        return None;
+    }
+    // SAFETY: GetTokenInformation hat die Struktur an den Pufferanfang geschrieben; die SID
+    // liegt im selben Puffer, der bis zum Ende lebt.
+    // aegis-unsafe: winffi-token-appcontainer-read
+    #[allow(unsafe_code)]
+    let info = unsafe { &*buffer.as_ptr().cast::<TOKEN_APPCONTAINER_INFORMATION>() };
+    if info.TokenAppContainer.is_null() {
+        return None;
+    }
+    crate::pipe::sid_to_string(info.TokenAppContainer).ok()
+}
+
 /// Bildschirmfotos der sichtbaren Fenster der Labor-Prozesse (höchstens `max`).
 #[must_use]
 pub fn capture_windows(pids: &[u32], max: usize) -> Vec<Capture> {
@@ -599,6 +650,13 @@ pub fn capture_windows(pids: &[u32], max: usize) -> Vec<Capture> {
         return out;
     }
     for hwnd in windows_of(pids).into_iter().take(max) {
+        // Hängende Fenster nicht anfragen (PrintWindow würde blockieren).
+        // SAFETY: Fenster-Handle aus EnumWindows; nur Abfrage.
+        // aegis-unsafe: winffi-window-hung
+        #[allow(unsafe_code)]
+        if unsafe { IsHungAppWindow(hwnd) } != 0 {
+            continue;
+        }
         let mut rect = RECT::default();
         // SAFETY: gültiges Fenster-Handle; Ausgabezeiger gültig.
         // aegis-unsafe: winffi-window-rect

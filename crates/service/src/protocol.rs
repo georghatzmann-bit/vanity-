@@ -72,6 +72,8 @@ pub enum Request {
     },
     /// Bildschirmfoto eines eigenen Labor-Laufs (Stufe 1).
     LabScreenshot { run_id: String, name: String },
+    /// Vollständiger Verhaltensbericht eines eigenen, fertigen Labor-Laufs.
+    LabReport { run_id: String },
     /// Windows Sandbox einschalten vorschlagen (nur Administratoren; Neustart nötig).
     ProposeEnableSandbox {},
     /// Antwort des Nutzers im Freigabe-Dialog.
@@ -152,6 +154,10 @@ pub enum Response {
     },
     /// Bildschirmfoto (PNG, Base64).
     LabScreenshot { png_base64: String },
+    /// Verhaltensbericht eines Labor-Laufs.
+    LabReport {
+        report: Box<aegis_sandbox::report::BehaviorReport>,
+    },
     /// Meldungen und Zustand des Echtzeit-Wächters.
     Watch {
         events: Vec<WatchEvent>,

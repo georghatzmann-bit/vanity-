@@ -917,6 +917,8 @@ fn labor_lauf_braucht_gueltige_parameter() {
         (param::LAB_SECONDS, "x"),
         (param::LAB_NETWORK, "on"),
         (param::LAB_NETWORK, "vielleicht"),
+        (param::LAB_SHA256, "abc"),
+        (param::LAB_SHA256, &"zz".repeat(32)),
     ] {
         let b = ok.clone().parameter(key, value);
         assert!(

@@ -9,6 +9,7 @@
 //! Freigabe-Dialog (Plan des Dienstes). Diese Bibliothek selbst beobachtet und beschreibt nur.
 #![forbid(unsafe_code)]
 
+pub mod acl;
 pub mod detect;
 pub mod entropy;
 #[cfg(windows)]

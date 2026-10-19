@@ -75,8 +75,14 @@ mod windows {
         })
     }
 
+    /// Läuft die Sonde wirklich in der Windows Sandbox? Konto aus dem Prozess-Token (nicht aus
+    /// Umgebungsvariablen) und die eingebundenen AEGIS-Ordner müssen passen.
     fn in_windows_sandbox() -> bool {
-        std::env::var("USERNAME").is_ok_and(|u| u.eq_ignore_ascii_case(SANDBOX_ACCOUNT))
+        let account = aegis_winffi::system::current_account_name()
+            .is_ok_and(|u| u.eq_ignore_ascii_case(SANDBOX_ACCOUNT));
+        account
+            && Path::new(aegis_sandbox::wsb::SANDBOX_PROBE_DIR).is_dir()
+            && Path::new(aegis_sandbox::wsb::SANDBOX_OUTPUT_DIR).is_dir()
     }
 
     fn write_file(path: &Path, data: &[u8]) -> Result<(), String> {

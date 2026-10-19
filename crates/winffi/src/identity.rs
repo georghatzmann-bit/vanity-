@@ -30,6 +30,11 @@ use windows_sys::Win32::UI::Shell::GetUserProfileDirectoryW;
 use crate::pipe::{Impersonation, thread_is_impersonating};
 use crate::util::own;
 
+/// Identitätswechsel auf ein vorhandenes Token (Labor: Nutzer-Token des Laufs).
+pub(crate) fn impersonate_handle(token: HANDLE) -> io::Result<Impersonation> {
+    impersonate(token)
+}
+
 fn impersonate(token: HANDLE) -> io::Result<Impersonation> {
     if thread_is_impersonating()? {
         return Err(io::Error::other(

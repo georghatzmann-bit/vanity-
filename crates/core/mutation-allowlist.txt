@@ -255,3 +255,20 @@ crates/service/src/lab.rs :: service-lab-enable-feature :: Labor: schaltet nach 
 crates/winffi/src/sandbox.rs :: winffi-create-appcontainer-profile-call :: Labor: legt das AEGIS-eigene AppContainer-Profil (ohne Fähigkeiten) an, das CreateProcess für die Mini-Sandbox braucht – nur vor einem freigegebenen Lauf bzw. im Test.
 crates/winffi/src/sandbox.rs :: winffi-create-appcontainer-profile :: Windows-FFI: CreateAppContainerProfile mit nullterminierten Texten, ohne Fähigkeiten.
 crates/winffi/src/sandbox.rs :: winffi-appcontainer-profile-sid-free :: Windows-FFI: gibt die SID des angelegten Profils frei.
+crates/winffi/src/sandbox.rs :: winffi-delete-appcontainer-profile :: Windows-FFI: DeleteAppContainerProfile mit nullterminiertem Namen.
+crates/winffi/src/sandbox.rs :: winffi-delete-appcontainer-profile-call :: Labor: verwirft das AEGIS-eigene AppContainer-Profil eines beendeten, freigegebenen Laufs (nur Namen „AEGIS.Labor.*“).
+crates/winffi/src/sandbox.rs :: winffi-lab-elevation-type :: Windows-FFI: liest die Erhöhungsart des Nutzer-Tokens.
+crates/winffi/src/sandbox.rs :: winffi-lab-linked-token :: Windows-FFI: liest das verknüpfte (nicht erhöhte) Token.
+crates/winffi/src/sandbox.rs :: winffi-lab-environment :: Windows-FFI: Umgebungsblock des Nutzers für Labor-Prozesse.
+crates/winffi/src/sandbox.rs :: winffi-lab-environment-free :: Windows-FFI: gibt den Umgebungsblock frei.
+crates/winffi/src/sandbox.rs :: winffi-user-process-wait :: Windows-FFI: fragt ab, ob die gestartete Windows Sandbox noch läuft.
+crates/winffi/src/sandbox.rs :: winffi-user-process-terminate :: Windows-FFI: TerminateProcess auf das eigene Prozess-Handle.
+crates/winffi/src/sandbox.rs :: winffi-user-process-terminate-call :: Labor: beendet die selbst gestartete Windows Sandbox am Ende der freigegebenen Laufzeit.
+crates/winffi/src/inspect.rs :: winffi-open-process-appcontainer :: Windows-FFI: öffnet einen Prozess nur zum Abfragen (AppContainer-Prüfung vor Fensterfotos).
+crates/winffi/src/inspect.rs :: winffi-process-token-appcontainer :: Windows-FFI: Prozess-Token nur zum Abfragen.
+crates/winffi/src/inspect.rs :: winffi-token-appcontainer-sid :: Windows-FFI: liest die AppContainer-SID eines Tokens.
+crates/winffi/src/inspect.rs :: winffi-token-appcontainer-read :: Windows-FFI: liest die Struktur aus dem eigenen Puffer.
+crates/winffi/src/inspect.rs :: winffi-window-hung :: Windows-FFI: überspringt hängende Fenster vor PrintWindow.
+crates/winffi/src/system.rs :: winffi-own-token-account :: Windows-FFI: eigenes Prozess-Token nur zum Abfragen.
+crates/winffi/src/system.rs :: winffi-lookup-account :: Windows-FFI: Kontoname zur SID (Sonde prüft, dass sie in der Windows Sandbox läuft).
+crates/service/src/lab.rs :: service-lab-dism-timeout :: Labor: beendet nur das selbst gestartete DISM nach 30 Minuten (Frist des freigegebenen Plans „Windows Sandbox einschalten“).

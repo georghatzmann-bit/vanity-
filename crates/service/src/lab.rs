@@ -3,6 +3,11 @@
 //! Die Kopie der Probe liegt in einem eigenen Labor-Ordner des Dienstes und wird nach dem Lauf
 //! verworfen; das Original bleibt unverändert. Ergebnis: Verhaltensbericht + Einschätzung, im
 //! Verlauf festgehalten. Läufe sieht nur das Konto, das sie gestartet hat.
+//!
+//! Die Erlaubnis (`ExecutionPermit`) wandert mit in den Lauf und wird erst mit dem echten
+//! Ergebnis abgeschlossen; das Prüfprotokoll-Ereignis holt der Dienst bei der nächsten Anfrage
+//! ab ([`Lab::take_audit`]). Was die Probe bzw. die Windows Sandbox schreibt, liest der Dienst
+//! nur mit den Rechten des Nutzers.
 
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -11,6 +16,8 @@ use std::time::Duration;
 #[cfg(windows)]
 use std::time::Instant;
 
+use aegis_core::audit::{AuditEvent, ExecutionResult};
+use aegis_core::consent::ExecutionPermit;
 use aegis_core::time::OffsetDateTime;
 use aegis_sandbox::report::{Assessment, BehaviorReport};
 use serde::Serialize;
@@ -19,12 +26,19 @@ use serde::Serialize;
 pub const MAX_SAMPLE: u64 = 512 * 1024 * 1024;
 /// Höchstzahl gemerkter Läufe je Konto bzw. insgesamt.
 const MAX_RUNS_PER_OWNER: usize = 20;
-const MAX_RUNS: usize = 200;
-/// Höchstzahl gleichzeitiger Läufe.
+const MAX_RUNS: usize = 100;
+/// Höchstzahl gleichzeitiger Läufe insgesamt bzw. je Konto.
 pub const MAX_ACTIVE: usize = 2;
+const MAX_ACTIVE_PER_OWNER: usize = 1;
 /// So lange wartet der Dienst zusätzlich auf den Bericht der Windows Sandbox (Start der VM).
 #[cfg(windows)]
 const SANDBOX_BOOT: Duration = Duration::from_secs(15 * 60);
+/// Nach dem Bericht hat die Windows Sandbox so lange Zeit, sich selbst zu schließen.
+#[cfg(windows)]
+const SANDBOX_GRACE: Duration = Duration::from_secs(60);
+/// Höchstgröße der Ausgabe der Windows Sandbox (Bericht + Bildschirmfotos).
+#[cfg(windows)]
+const MAX_OUTPUT: u64 = 64 * 1024 * 1024;
 /// Höchstgröße eines Bildschirmfotos.
 pub const MAX_SHOT: u64 = 8 * 1024 * 1024;
 
@@ -59,7 +73,8 @@ impl LabStage {
     }
 }
 
-/// Zustand eines Laufs.
+/// Zustand eines Laufs. Der vollständige Bericht wird nicht mit dem Zustand gesendet (nur auf
+/// Anfrage je Lauf, [`Lab::report`]).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum LabState {
@@ -74,7 +89,8 @@ pub enum LabState {
     WaitingForSandbox,
     /// Fertig.
     Done {
-        /// Bericht.
+        /// Bericht (nur über [`Lab::report`]).
+        #[serde(skip)]
         report: Box<BehaviorReport>,
         /// Einschätzung.
         assessment: Assessment,
@@ -84,6 +100,15 @@ pub enum LabState {
         /// Grund.
         message: String,
     },
+}
+
+impl LabState {
+    fn active(&self) -> bool {
+        matches!(
+            self,
+            Self::Preparing | Self::Running { .. } | Self::WaitingForSandbox
+        )
+    }
 }
 
 /// Ein Lauf (für die Anzeige).
@@ -101,6 +126,8 @@ pub struct LabRun {
     pub started: String,
     /// Zustand.
     pub state: LabState,
+    /// AppContainer-SID des Laufs (Stufe 2) – die App fotografiert nur Fenster solcher Prozesse.
+    pub container: Option<String>,
     /// Konto.
     #[serde(skip)]
     pub owner: Option<String>,
@@ -114,6 +141,8 @@ pub struct LabRun {
 pub struct Lab {
     dir: Option<PathBuf>,
     runs: Mutex<Vec<LabRun>>,
+    /// Abgeschlossene Erlaubnisse (für das Prüfprotokoll des Dienstes).
+    audit: Mutex<Vec<AuditEvent>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -121,8 +150,10 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 /// Alles, was ein Lauf zum Start braucht (im Anfrage-Thread mit den Rechten des Nutzers
-/// vorbereitet).
-pub struct LabStart {
+/// vorbereitet). Nur mit der Erlaubnis des freigegebenen Plans.
+pub(crate) struct LabStart {
+    /// Erlaubnis des Plans „Im Labor ausführen“ (wird mit dem echten Ergebnis abgeschlossen).
+    pub permit: ExecutionPermit,
     /// Kennung.
     pub id: String,
     /// Original (nur gelesen, mit den Rechten des Nutzers geöffnet).
@@ -135,11 +166,36 @@ pub struct LabStart {
     pub seconds: u32,
     /// Netzwerk (nur Stufe 1).
     pub network: bool,
+    /// SHA-256 zum Zeitpunkt des Vorschlags (aus dem Plan).
+    pub expected_sha256: String,
     /// Konto (SID).
     pub owner: Option<String>,
     /// Token des Nutzers (Windows).
     #[cfg(windows)]
     pub token: aegis_winffi::sandbox::UserToken,
+}
+
+/// Name der Kopie im Labor: fester Name + geprüfte Endung des Originals (kein Nutzername auf
+/// der Platte – keine Datenströme, Punkte am Ende oder Sonderzeichen).
+#[must_use]
+pub fn copy_name(original: &str) -> String {
+    let ext = Path::new(original)
+        .extension()
+        .and_then(|e| e.to_str())
+        .filter(|e| (1..=8).contains(&e.len()) && e.bytes().all(|b| b.is_ascii_alphanumeric()))
+        .map(str::to_ascii_lowercase);
+    ext.map_or_else(|| "probe".to_owned(), |e| format!("probe.{e}"))
+}
+
+/// Gültiger Name eines Bildschirmfotos der Sonde (`bild-NN.png`, nur ASCII).
+#[must_use]
+pub fn valid_screenshot_name(name: &str) -> bool {
+    let b = name.as_bytes();
+    b.len() == 11
+        && name.is_ascii()
+        && b.starts_with(b"bild-")
+        && b.ends_with(b".png")
+        && b[5..7].iter().all(u8::is_ascii_digit)
 }
 
 impl Lab {
@@ -149,10 +205,11 @@ impl Lab {
         Arc::new(Self {
             dir,
             runs: Mutex::new(Vec::new()),
+            audit: Mutex::new(Vec::new()),
         })
     }
 
-    /// Läufe eines Kontos, neueste zuerst.
+    /// Läufe eines Kontos, neueste zuerst (ohne vollständige Berichte).
     #[must_use]
     pub fn runs_of(&self, owner: Option<&str>) -> Vec<LabRun> {
         lock(&self.runs)
@@ -163,18 +220,36 @@ impl Lab {
             .collect()
     }
 
+    /// Vollständiger Bericht eines eigenen, fertigen Laufs.
+    ///
+    /// # Errors
+    /// Unbekannter Lauf oder noch nicht fertig.
+    pub fn report(&self, owner: Option<&str>, id: &str) -> Result<BehaviorReport, String> {
+        let runs = lock(&self.runs);
+        let run = runs
+            .iter()
+            .find(|r| r.id == id && r.owner.as_deref() == owner)
+            .ok_or("Unbekannter Labor-Lauf")?;
+        match &run.state {
+            LabState::Done { report, .. } => Ok((**report).clone()),
+            _ => Err("Der Lauf ist noch nicht fertig".into()),
+        }
+    }
+
     /// Laufende Läufe (für die Grenze gleichzeitiger Läufe).
     #[must_use]
     pub fn active(&self) -> usize {
-        lock(&self.runs)
-            .iter()
-            .filter(|r| {
-                matches!(
-                    r.state,
-                    LabState::Preparing | LabState::Running { .. } | LabState::WaitingForSandbox
-                )
-            })
-            .count()
+        lock(&self.runs).iter().filter(|r| r.state.active()).count()
+    }
+
+    /// Merkt ein Prüfprotokoll-Ereignis eines Hintergrund-Ablaufs vor.
+    pub(crate) fn push_audit(&self, event: AuditEvent) {
+        lock(&self.audit).push(event);
+    }
+
+    /// Prüfprotokoll-Ereignisse abgeschlossener Läufe (holt der Dienst ab).
+    pub fn take_audit(&self) -> Vec<AuditEvent> {
+        std::mem::take(&mut *lock(&self.audit))
     }
 
     fn set_state(&self, id: &str, state: LabState) {
@@ -184,55 +259,51 @@ impl Lab {
     }
 
     #[cfg(windows)]
-    fn set_output(&self, id: &str, output: PathBuf) {
+    fn update(&self, id: &str, f: impl FnOnce(&mut LabRun)) {
         if let Some(run) = lock(&self.runs).iter_mut().find(|r| r.id == id) {
-            run.output = Some(output);
+            f(run);
         }
     }
 
-    /// Bildschirmfoto eines eigenen Laufs der Stufe 1 (nur Namen aus dem Bericht).
+    /// Pfad eines Bildschirmfotos eines eigenen Laufs der Stufe 1 (nur im Bericht genannte
+    /// Namen). Gelesen wird es mit [`read_screenshot`] – mit den Rechten des Nutzers.
     ///
     /// # Errors
-    /// Unbekannter Lauf/Name oder nicht lesbar.
-    pub fn screenshot(&self, owner: Option<&str>, id: &str, name: &str) -> Result<Vec<u8>, String> {
-        let (output, listed) = {
-            let runs = lock(&self.runs);
-            let run = runs
-                .iter()
-                .find(|r| r.id == id && r.owner.as_deref() == owner)
-                .ok_or("Unbekannter Labor-Lauf")?;
-            let listed = match &run.state {
-                LabState::Done { report, .. } => report.screenshots.iter().any(|s| s == name),
-                _ => false,
-            };
-            (run.output.clone(), listed)
-        };
-        let valid = name.len() == 12
-            && name.starts_with("bild-")
-            && name.ends_with(".png")
-            && name[5..7].bytes().all(|b| b.is_ascii_digit());
-        let output = output.ok_or("Kein Bildschirmfoto vorhanden")?;
-        if !listed || !valid {
+    /// Unbekannter Lauf/Name.
+    pub fn screenshot_path(
+        &self,
+        owner: Option<&str>,
+        id: &str,
+        name: &str,
+    ) -> Result<PathBuf, String> {
+        if !valid_screenshot_name(name) {
             return Err("Unbekanntes Bildschirmfoto".into());
         }
-        let (file, meta) = aegis_engine::scan::open_regular(&output.join(name))
-            .map_err(|e| format!("Bildschirmfoto nicht lesbar: {e}"))?;
-        if meta.len() > MAX_SHOT {
-            return Err("Bildschirmfoto zu groß".into());
+        let runs = lock(&self.runs);
+        let run = runs
+            .iter()
+            .find(|r| r.id == id && r.owner.as_deref() == owner)
+            .ok_or("Unbekannter Labor-Lauf")?;
+        let listed = match &run.state {
+            LabState::Done { report, .. } => report.screenshots.iter().any(|s| s == name),
+            _ => false,
+        };
+        let output = run.output.as_ref().ok_or("Kein Bildschirmfoto vorhanden")?;
+        if !listed {
+            return Err("Unbekanntes Bildschirmfoto".into());
         }
-        let mut data = Vec::new();
-        file.take(MAX_SHOT)
-            .read_to_end(&mut data)
-            .map_err(|e| e.to_string())?;
-        Ok(data)
+        Ok(output.join(name))
     }
 
     /// Startet einen Lauf im Hintergrund. `on_done` hält das Ergebnis im Verlauf fest.
-    pub fn start(
+    ///
+    /// # Errors
+    /// Zu viele gleichzeitige Läufe – die Erlaubnis kommt unverbraucht zurück.
+    pub(crate) fn start(
         self: &Arc<Self>,
         start: LabStart,
         on_done: impl FnOnce(&LabRun) + Send + 'static,
-    ) {
+    ) -> Result<(), Box<(LabStart, String)>> {
         let run = LabRun {
             id: start.id.clone(),
             sample: start.sample_name.clone(),
@@ -242,48 +313,88 @@ impl Lab {
                 .format(&aegis_core::time::format_description::well_known::Rfc3339)
                 .unwrap_or_default(),
             state: LabState::Preparing,
+            container: None,
             owner: start.owner.clone(),
             output: None,
         };
         {
+            // Grenzen und Eintragen in einem Schritt (keine Lücke zwischen Prüfen und Starten).
             let mut runs = lock(&self.runs);
+            let active = runs.iter().filter(|r| r.state.active()).count();
+            let active_own = runs
+                .iter()
+                .filter(|r| r.state.active() && r.owner == run.owner)
+                .count();
+            if active >= MAX_ACTIVE || active_own >= MAX_ACTIVE_PER_OWNER {
+                return Err(Box::new((
+                    start,
+                    "Es läuft schon ein Labor-Lauf – bitte warten, bis er fertig ist".into(),
+                )));
+            }
+            // Platz schaffen: nur fertige Läufe werden vergessen.
             let owner_runs = runs.iter().filter(|r| r.owner == run.owner).count();
             if owner_runs >= MAX_RUNS_PER_OWNER
-                && let Some(i) = runs.iter().position(|r| r.owner == run.owner)
+                && let Some(i) = runs
+                    .iter()
+                    .position(|r| r.owner == run.owner && !r.state.active())
             {
                 runs.remove(i);
             }
-            runs.push(run);
-            while runs.len() > MAX_RUNS {
-                runs.remove(0);
+            while runs.len() >= MAX_RUNS {
+                let Some(i) = runs.iter().position(|r| !r.state.active()) else {
+                    break;
+                };
+                runs.remove(i);
             }
+            runs.push(run);
         }
         let lab = Arc::clone(self);
         std::thread::spawn(move || {
             let id = start.id.clone();
-            let state = lab.execute(start);
+            let (permit, state) = lab.execute(start);
+            let result = match &state {
+                LabState::Failed { message } => ExecutionResult::Failed {
+                    message: message.clone(),
+                },
+                _ => ExecutionResult::Succeeded,
+            };
+            lock(&lab.audit).push(permit.complete(result));
             lab.set_state(&id, state);
             if let Some(run) = lock(&lab.runs).iter().find(|r| r.id == id) {
                 on_done(run);
             }
         });
+        Ok(())
     }
 
     #[cfg(not(windows))]
-    fn execute(&self, start: LabStart) -> LabState {
-        let _ = (&start.sample, start.network, &self.dir);
-        LabState::Failed {
-            message: "Das Labor gibt es nur unter Windows.".into(),
-        }
+    fn execute(&self, start: LabStart) -> (ExecutionPermit, LabState) {
+        let _ = (
+            &start.sample,
+            start.network,
+            &self.dir,
+            &start.expected_sha256,
+        );
+        (
+            start.permit,
+            LabState::Failed {
+                message: "Das Labor gibt es nur unter Windows.".into(),
+            },
+        )
     }
 
     #[cfg(windows)]
-    fn execute(&self, start: LabStart) -> LabState {
+    fn execute(&self, mut start: LabStart) -> (ExecutionPermit, LabState) {
         let Some(base) = &self.dir else {
-            return LabState::Failed {
-                message: "Kein Labor-Ordner".into(),
-            };
+            return (
+                start.permit,
+                LabState::Failed {
+                    message: "Kein Labor-Ordner".into(),
+                },
+            );
         };
+        // Die Probe bekommt nie Administratorrechte (verknüpftes, nicht erhöhtes Token).
+        start.token = start.token.into_unelevated();
         let run_dir = base.join(&start.id);
         let result = match start.stage {
             LabStage::MiniSandbox => self.run_mini(&run_dir, &start),
@@ -293,7 +404,7 @@ impl Lab {
         // bleiben nur Bericht und Bildschirmfotos.
         let keep = matches!(start.stage, LabStage::WindowsSandbox).then(|| run_dir.join("bericht"));
         cleanup(&run_dir, keep.as_deref());
-        match result {
+        let state = match result {
             Ok(mut report) => {
                 report.truncate();
                 let assessment = report.assess();
@@ -303,44 +414,64 @@ impl Lab {
                 }
             }
             Err(message) => LabState::Failed { message },
-        }
+        };
+        (start.permit, state)
     }
 
     #[cfg(windows)]
     fn run_mini(&self, run_dir: &Path, start: &LabStart) -> Result<BehaviorReport, String> {
-        use aegis_winffi::sandbox::{LAB_APPCONTAINER, appcontainer_sid, create_dir_with_sddl};
-        let sid = appcontainer_sid(LAB_APPCONTAINER).map_err(|e| e.to_string())?;
-        create_dir_with_sddl(
-            run_dir,
-            &format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;{sid})"),
-        )
-        .map_err(|e| format!("Labor-Ordner nicht anlegbar: {e}"))?;
-        let (copy, sha) = copy_sample(&start.sample, run_dir, &start.sample_name)?;
-        let hive = start.owner.clone().map_or(
-            aegis_winffi::inspect::Hive::CurrentUser,
-            aegis_winffi::inspect::Hive::User,
-        );
-        let id = start.id.clone();
-        let report = aegis_sandbox::mini::run(
-            &aegis_sandbox::mini::MiniRun {
-                sample: copy,
-                work_dir: run_dir.to_path_buf(),
-                seconds: start.seconds,
-                hive,
-                sample_name: start.sample_name.clone(),
-                sha256: Some(sha),
-            },
-            &start.token,
-            |pids| {
-                self.set_state(
-                    &id,
-                    LabState::Running {
-                        pids: pids.to_vec(),
-                    },
-                );
-            },
-        );
-        Ok(report)
+        use aegis_winffi::sandbox::{
+            appcontainer_sid, create_dir_with_sddl, delete_appcontainer_profile,
+            ensure_appcontainer_profile, lab_appcontainer_name,
+        };
+        let user = start
+            .owner
+            .clone()
+            .ok_or("Mini-Sandbox nur mit angemeldetem Konto")?;
+        // Eigenes AppContainer-Profil je Lauf, angelegt und gelöscht als der Nutzer.
+        let container = lab_appcontainer_name(&start.id);
+        {
+            let _as_user = start
+                .token
+                .impersonate()
+                .map_err(|e| format!("Rechte des Nutzers nicht übernehmbar: {e}"))?;
+            ensure_appcontainer_profile(&container)
+                .map_err(|e| format!("AppContainer-Profil nicht anlegbar: {e}"))?;
+        }
+        let result = (|| {
+            let sid = appcontainer_sid(&container).map_err(|e| e.to_string())?;
+            self.update(&start.id, |r| r.container = Some(sid.clone()));
+            create_dir_with_sddl(run_dir, &aegis_sandbox::acl::mini_work_dir(&sid, &user)?)
+                .map_err(|e| format!("Labor-Ordner nicht anlegbar: {e}"))?;
+            let name = copy_name(&start.sample_name);
+            let (copy, sha) = copy_sample(&start.sample, run_dir, &name)?;
+            check_hash(&sha, &start.expected_sha256)?;
+            let id = start.id.clone();
+            Ok(aegis_sandbox::mini::run(
+                &aegis_sandbox::mini::MiniRun {
+                    sample: copy,
+                    work_dir: run_dir.to_path_buf(),
+                    seconds: start.seconds,
+                    hive: aegis_winffi::inspect::Hive::User(user.clone()),
+                    sample_name: start.sample_name.clone(),
+                    sha256: Some(sha),
+                    container: container.clone(),
+                },
+                &start.token,
+                |pids| {
+                    self.set_state(
+                        &id,
+                        LabState::Running {
+                            pids: pids.to_vec(),
+                        },
+                    );
+                },
+            ))
+        })();
+        if let Ok(_as_user) = start.token.impersonate() {
+            let _ = delete_appcontainer_profile(&container);
+        }
+        result
     }
 
     #[cfg(windows)]
@@ -349,7 +480,8 @@ impl Lab {
         run_dir: &Path,
         start: &LabStart,
     ) -> Result<BehaviorReport, String> {
-        use aegis_sandbox::wsb::{Network, PROBE_EXE, WsbConfig, check_sample_name};
+        use aegis_sandbox::acl::{wsb_output, wsb_read_only};
+        use aegis_sandbox::wsb::{Network, PROBE_EXE, WsbConfig};
         use aegis_winffi::sandbox::{create_dir_with_sddl, spawn_as_user};
         let user = start
             .owner
@@ -360,24 +492,20 @@ impl Lab {
             return Err(status.message_de().to_owned());
         }
         let probe = locate_probe().ok_or("Sonde aegis-sandbox-probe fehlt neben dem Dienst")?;
-        check_sample_name(&start.sample_name)?;
-        let base = format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FR;;;{user})");
-        create_dir_with_sddl(run_dir, &base).map_err(|e| e.to_string())?;
+        let name = copy_name(&start.sample_name);
+        create_dir_with_sddl(run_dir, &wsb_read_only(&user)?).map_err(|e| e.to_string())?;
         let probe_dir = run_dir.join("probe");
         let output = run_dir.join("bericht");
-        create_dir_with_sddl(&probe_dir, &base).map_err(|e| e.to_string())?;
-        create_dir_with_sddl(
-            &output,
-            &format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;{user})"),
-        )
-        .map_err(|e| e.to_string())?;
-        let (_, sha) = copy_sample(&start.sample, &probe_dir, &start.sample_name)?;
+        create_dir_with_sddl(&probe_dir, &wsb_read_only(&user)?).map_err(|e| e.to_string())?;
+        create_dir_with_sddl(&output, &wsb_output(&user)?).map_err(|e| e.to_string())?;
+        let (_, sha) = copy_sample(&start.sample, &probe_dir, &name)?;
+        check_hash(&sha, &start.expected_sha256)?;
         let probe_file = std::fs::File::open(&probe).map_err(|e| e.to_string())?;
         copy_sample(&probe_file, &probe_dir, PROBE_EXE)?;
         let config = WsbConfig {
             probe_dir: probe_dir.clone(),
             output_dir: output.clone(),
-            sample_name: start.sample_name.clone(),
+            sample_name: name,
             seconds: start.seconds,
             network: if start.network {
                 Network::Simulated
@@ -388,48 +516,149 @@ impl Lab {
         let wsb = run_dir.join("labor.wsb");
         write_new(&wsb, config.to_xml()?.as_bytes())?;
         let exe = aegis_sandbox::detect::sandbox_exe().ok_or("WindowsSandbox.exe fehlt")?;
-        spawn_as_user(&start.token, &exe, &wsb)
+        let vm = spawn_as_user(&start.token, &exe, &wsb)
             .map_err(|e| format!("Windows Sandbox startet nicht: {e}"))?;
-        self.set_output(&start.id, output.clone());
-        self.set_state(&start.id, LabState::WaitingForSandbox);
+        self.update(&start.id, |r| {
+            r.output = Some(output.clone());
+            r.state = LabState::WaitingForSandbox;
+        });
         let deadline =
             Instant::now() + SANDBOX_BOOT + Duration::from_secs(u64::from(start.seconds));
         let report_path = output.join("report.json");
-        while Instant::now() < deadline {
+        let mut report_seen: Option<Instant> = None;
+        let outcome = loop {
             std::thread::sleep(Duration::from_secs(3));
-            if let Ok((file, meta)) = aegis_engine::scan::open_regular(&report_path)
-                && meta.len() <= 16 * 1024 * 1024
-            {
-                let mut text = String::new();
-                if file
-                    .take(16 * 1024 * 1024)
-                    .read_to_string(&mut text)
-                    .is_ok()
-                    && let Ok(mut report) = serde_json::from_str::<BehaviorReport>(&text)
-                {
-                    report.sha256 = Some(sha);
-                    report.sample = start.sample_name.clone();
-                    report.stage = aegis_sandbox::Stage::WindowsSandbox;
-                    report
-                        .screenshots
-                        .retain(|s| s.starts_with("bild-") && s.ends_with(".png"));
-                    return Ok(report);
-                }
+            if dir_size(&output) > MAX_OUTPUT {
+                let _ = vm.terminate();
+                break Err(
+                    "Die Windows Sandbox hat zu viele Daten geschrieben – Lauf beendet.".to_owned(),
+                );
             }
-        }
-        Err("Die Windows Sandbox hat keinen Bericht geliefert (Zeitlimit).".into())
+            let exists = std::fs::symlink_metadata(&report_path).is_ok();
+            if exists && report_seen.is_none() {
+                report_seen = Some(Instant::now());
+            }
+            // Bericht erst lesen, wenn die VM beendet ist (bzw. nach kurzer Frist beendet wurde) –
+            // bis dahin könnte die Probe ihn noch verändern.
+            let grace_over = report_seen.is_some_and(|t| t.elapsed() > SANDBOX_GRACE);
+            if exists && (!vm.running() || grace_over) {
+                let _ = vm.terminate();
+                break Ok(());
+            }
+            if Instant::now() >= deadline {
+                let _ = vm.terminate();
+                if exists {
+                    break Ok(());
+                }
+                break Err("Die Windows Sandbox hat keinen Bericht geliefert (Zeitlimit) – sie wurde beendet.".to_owned());
+            }
+        };
+        outcome?;
+        let text = {
+            let _as_user = start
+                .token
+                .impersonate()
+                .map_err(|e| format!("Rechte des Nutzers nicht übernehmbar: {e}"))?;
+            read_user_file(&report_path, aegis_sandbox::report::MAX_REPORT_BYTES)?
+        };
+        let mut report: BehaviorReport = serde_json::from_slice(&text)
+            .map_err(|e| format!("Bericht der Windows Sandbox unlesbar: {e}"))?;
+        report.sha256 = Some(sha);
+        report.sample = start.sample_name.clone();
+        report.stage = aegis_sandbox::Stage::WindowsSandbox;
+        report.seconds = start.seconds;
+        report.screenshots.retain(|s| valid_screenshot_name(s));
+        report.screenshots.truncate(32);
+        // Hinweise stammen vom Dienst, nicht aus der VM.
+        report.notes = wsb_notes(start.network);
+        Ok(report)
     }
 }
 
-/// Sonde neben dem Dienst.
+/// Ehrliche Hinweise zu Stufe 1 (vom Dienst, nicht aus der VM).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn wsb_notes(network: bool) -> Vec<String> {
+    let mut notes = vec![
+        "Windows Sandbox (eigene, wegwerfbare VM). Der Bericht wurde in der VM erstellt – die Probe lief dort mit Administratorrechten und hätte ihn verfälschen können.".to_owned(),
+    ];
+    if network {
+        notes.push(
+            "Netzwerk war eingeschaltet: Die Probe konnte ins Internet und ins Heimnetz.".into(),
+        );
+    }
+    notes
+}
+
+/// Bricht ab, wenn die Probe nicht mehr die geprüfte Datei ist.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn check_hash(actual: &str, expected: &str) -> Result<(), String> {
+    if actual.eq_ignore_ascii_case(expected) {
+        Ok(())
+    } else {
+        Err("Die Datei hat sich seit dem Vorschlag verändert – nichts gestartet.".into())
+    }
+}
+
+/// Größe aller Dateien eines (eigenen) Ordners, ohne Links zu folgen.
+#[cfg(windows)]
+fn dir_size(dir: &Path) -> u64 {
+    let mut total = 0u64;
+    let mut stack = vec![(dir.to_path_buf(), 0usize)];
+    while let Some((current, depth)) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&current) else {
+            continue;
+        };
+        for entry in entries.flatten().take(10_000) {
+            let Ok(meta) = std::fs::symlink_metadata(entry.path()) else {
+                continue;
+            };
+            total = total.saturating_add(meta.len());
+            if meta.is_dir() && depth < 4 {
+                stack.push((entry.path(), depth + 1));
+            }
+        }
+    }
+    total
+}
+
+/// Liest eine Datei, die ein Nutzer (bzw. die Windows Sandbox als Nutzer) schreiben konnte –
+/// **im Identitätswechsel aufrufen**. Ohne Links, ohne weitere Hardlinks, mit Größengrenze.
+///
+/// # Errors
+/// Nicht lesbar, Link, mehrere Namen oder zu groß.
+pub fn read_user_file(path: &Path, max: u64) -> Result<Vec<u8>, String> {
+    let (file, meta) =
+        aegis_engine::scan::open_regular(path).map_err(|e| format!("nicht lesbar: {e}"))?;
+    #[cfg(windows)]
+    if aegis_winffi::fs::link_count(&file).map_err(|e| e.to_string())? != 1 {
+        return Err("Datei hat mehrere Namen (Hardlink) – nicht gelesen".into());
+    }
+    if meta.len() > max {
+        return Err("Datei zu groß".into());
+    }
+    let mut data = Vec::new();
+    file.take(max)
+        .read_to_end(&mut data)
+        .map_err(|e| e.to_string())?;
+    Ok(data)
+}
+
+/// Bildschirmfoto lesen (im Identitätswechsel) und als PNG prüfen.
+///
+/// # Errors
+/// Nicht lesbar oder kein gültiges PNG.
+pub fn read_screenshot(path: &Path) -> Result<Vec<u8>, String> {
+    let data = read_user_file(path, MAX_SHOT).map_err(|e| format!("Bildschirmfoto {e}"))?;
+    aegis_sandbox::png::check_png(&data).map_err(|e| format!("Bildschirmfoto: {e}"))?;
+    Ok(data)
+}
+
+/// Sonde neben dem Dienst (nur im Programmordner).
 #[cfg(windows)]
 fn locate_probe() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
-    let name = aegis_sandbox::wsb::PROBE_EXE;
-    let dir = exe.parent()?;
-    [dir.join(name), dir.parent()?.join(name)]
-        .into_iter()
-        .find(|p| p.is_file())
+    let probe = exe.parent()?.join(aegis_sandbox::wsb::PROBE_EXE);
+    probe.is_file().then_some(probe)
 }
 
 /// Kopiert die Probe (aus dem mit Nutzerrechten geöffneten Original) in den Labor-Ordner und
@@ -522,12 +751,27 @@ fn remove_lab_entry(path: &Path) -> io::Result<()> {
     result
 }
 
+/// Läuft gerade DISM (höchstens einmal gleichzeitig)?
+static DISM_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Schaltet das Windows-Feature „Windows Sandbox“ ein (DISM, fester Systempfad, ohne
-/// Neustart). Nur nach Freigabe eines Administrators aufrufen.
+/// Neustart, höchstens 30 Minuten). Nur mit der Erlaubnis des Plans „Windows Sandbox
+/// einschalten“ (Administrator).
 ///
 /// # Errors
-/// DISM fehlt, startet nicht oder meldet einen Fehler.
-pub fn enable_windows_sandbox() -> Result<(), String> {
+/// DISM läuft schon, fehlt, startet nicht, dauert zu lange oder meldet einen Fehler.
+pub(crate) fn enable_windows_sandbox(permit: &ExecutionPermit) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    let _ = permit.plan();
+    if DISM_RUNNING.swap(true, Ordering::SeqCst) {
+        return Err("Windows Sandbox wird bereits eingeschaltet".into());
+    }
+    let result = run_dism();
+    DISM_RUNNING.store(false, Ordering::SeqCst);
+    result
+}
+
+fn run_dism() -> Result<(), String> {
     #[cfg(windows)]
     {
         let root = std::env::var_os("SystemRoot")
@@ -538,7 +782,7 @@ pub fn enable_windows_sandbox() -> Result<(), String> {
         // festes Programm, feste Argumente, kein Neustart.
         // aegis-mutation: service-lab-enable-feature
         #[allow(clippy::disallowed_methods)]
-        let status = std::process::Command::new(&dism)
+        let child = std::process::Command::new(&dism)
             .args([
                 "/Online",
                 "/Enable-Feature",
@@ -550,8 +794,22 @@ pub fn enable_windows_sandbox() -> Result<(), String> {
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
-            .status()
-            .map_err(|e| format!("DISM startet nicht: {e}"))?;
+            .spawn();
+        let mut child = child.map_err(|e| format!("DISM startet nicht: {e}"))?;
+        let deadline = Instant::now() + Duration::from_secs(30 * 60);
+        let status = loop {
+            if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+                break status;
+            }
+            if Instant::now() >= deadline {
+                // Beendet nur das selbst gestartete DISM nach Ablauf der Frist.
+                // aegis-mutation: service-lab-dism-timeout
+                #[allow(clippy::disallowed_methods)]
+                let _ = child.kill();
+                return Err("DISM hat zu lange gebraucht (30 Minuten) – abgebrochen".into());
+            }
+            std::thread::sleep(Duration::from_secs(2));
+        };
         // 3010 = Erfolg, Neustart nötig.
         match status.code() {
             Some(0 | 3010) => Ok(()),
@@ -598,22 +856,97 @@ mod tests {
         assert!(src.exists(), "Original bleibt");
     }
 
-    #[test]
-    fn fremde_laeufe_unsichtbar() {
-        let lab = Lab::new(None);
-        lock(&lab.runs).push(LabRun {
-            id: "1".into(),
+    fn run(id: &str, owner: &str, state: LabState) -> LabRun {
+        LabRun {
+            id: id.into(),
             sample: "a.exe".into(),
             stage: LabStage::MiniSandbox,
             seconds: 30,
             started: String::new(),
-            state: LabState::Preparing,
-            owner: Some("S-A".into()),
-            output: None,
-        });
+            state,
+            container: None,
+            owner: Some(owner.into()),
+            output: Some(PathBuf::from("/labor/x/bericht")),
+        }
+    }
+
+    #[test]
+    fn fremde_laeufe_unsichtbar() {
+        let lab = Lab::new(None);
+        lock(&lab.runs).push(run("1", "S-A", LabState::Preparing));
         assert_eq!(lab.runs_of(Some("S-A")).len(), 1);
         assert!(lab.runs_of(Some("S-B")).is_empty());
         assert_eq!(lab.active(), 1);
-        assert!(lab.screenshot(Some("S-B"), "1", "bild-01.png").is_err());
+        assert!(
+            lab.screenshot_path(Some("S-B"), "1", "bild-01.png")
+                .is_err()
+        );
+        assert!(lab.report(Some("S-B"), "1").is_err());
+        assert!(lab.report(Some("S-A"), "1").is_err(), "noch nicht fertig");
+    }
+
+    #[test]
+    fn bildnamen_ohne_absturz_und_nur_aus_dem_bericht() {
+        for bad in [
+            "bild-€.png",
+            "bild-ü1.png",
+            "bild-0a.png",
+            "../bild-01.png",
+            "bild-01.PNG",
+            "",
+        ] {
+            assert!(!valid_screenshot_name(bad), "{bad:?}");
+        }
+        assert!(valid_screenshot_name("bild-07.png"));
+        let lab = Lab::new(None);
+        let report: BehaviorReport = serde_json::from_value(serde_json::json!({
+            "stage": "windows_sandbox", "sample": "a.exe", "seconds": 30,
+            "end": {"type": "timed_out"}, "screenshots": ["bild-01.png"]
+        }))
+        .unwrap();
+        let assessment = report.assess();
+        lock(&lab.runs).push(run(
+            "1",
+            "S-A",
+            LabState::Done {
+                report: Box::new(report),
+                assessment,
+            },
+        ));
+        assert!(lab.screenshot_path(Some("S-A"), "1", "bild-€.png").is_err());
+        assert!(
+            lab.screenshot_path(Some("S-A"), "1", "bild-02.png")
+                .is_err()
+        );
+        let path = lab
+            .screenshot_path(Some("S-A"), "1", "bild-01.png")
+            .unwrap();
+        assert!(path.ends_with("bericht/bild-01.png"));
+        assert_eq!(lab.report(Some("S-A"), "1").unwrap().screenshots.len(), 1);
+        // Der Zustand im Status enthält den Bericht nicht.
+        let status = serde_json::to_value(lab.runs_of(Some("S-A"))).unwrap();
+        assert!(status[0]["state"].get("report").is_none(), "{status}");
+        assert!(status[0]["state"]["assessment"].is_object());
+    }
+
+    #[test]
+    fn kopie_heisst_probe_mit_gepruefter_endung() {
+        assert_eq!(copy_name("Setup 2.0.EXE"), "probe.exe");
+        assert_eq!(
+            copy_name("a.txt:x.exe"),
+            "probe.exe",
+            "nur die Endung zählt"
+        );
+        assert_eq!(copy_name("a.exe."), "probe");
+        assert_eq!(copy_name("ohne"), "probe");
+        assert_eq!(copy_name("x.verylongext"), "probe");
+        assert!(check_hash(&"AB".repeat(32), &"ab".repeat(32)).is_ok());
+        assert!(check_hash(&"ab".repeat(32), &"cd".repeat(32)).is_err());
+    }
+
+    #[test]
+    fn bericht_hinweise_kommen_vom_dienst() {
+        assert_eq!(wsb_notes(false).len(), 1);
+        assert!(wsb_notes(true)[1].contains("Heimnetz"));
     }
 }

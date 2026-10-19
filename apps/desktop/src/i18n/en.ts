@@ -494,6 +494,7 @@ export const en: Messages<typeof de> = {
     registry: 'Registry (autostart)',
     network: 'Connection attempts',
     nothingObserved: 'Nothing observed.',
+    loadingReport: 'Loading report…',
     highEntropy: 'looks encrypted',
     blocked: 'blocked',
     notBlocked: 'not blocked',

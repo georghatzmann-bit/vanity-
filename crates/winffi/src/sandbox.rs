@@ -18,14 +18,17 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::Security::Authorization::{ConvertSidToStringSidW, ConvertStringSidToSidW};
 use windows_sys::Win32::Security::Isolation::{
-    CreateAppContainerProfile, DeriveAppContainerSidFromAppContainerName,
+    CreateAppContainerProfile, DeleteAppContainerProfile, DeriveAppContainerSidFromAppContainerName,
 };
 use windows_sys::Win32::Security::{
-    DuplicateTokenEx, FreeSid, PSID, SECURITY_CAPABILITIES, SecurityImpersonation,
-    TOKEN_ADJUST_DEFAULT, TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE,
-    TOKEN_QUERY, TokenPrimary,
+    DuplicateTokenEx, FreeSid, GetTokenInformation, PSID, SECURITY_CAPABILITIES,
+    SecurityImpersonation, TOKEN_ADJUST_DEFAULT, TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY,
+    TOKEN_DUPLICATE, TOKEN_IMPERSONATE, TOKEN_LINKED_TOKEN, TOKEN_QUERY, TokenElevationType,
+    TokenElevationTypeFull, TokenLinkedToken, TokenPrimary, WinLocalServiceSid, WinLocalSystemSid,
+    WinNetworkServiceSid,
 };
 use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
+use windows_sys::Win32::System::Environment::{CreateEnvironmentBlock, DestroyEnvironmentBlock};
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_CPU_RATE_CONTROL_ENABLE,
     JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP, JOB_OBJECT_LIMIT_ACTIVE_PROCESS,
@@ -41,17 +44,29 @@ use windows_sys::Win32::System::JobObjects::{
     TerminateJobObject,
 };
 use windows_sys::Win32::System::Threading::{
-    CREATE_NEW_CONSOLE, CREATE_SUSPENDED, CreateProcessAsUserW, DeleteProcThreadAttributeList,
-    EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess, GetCurrentThread, GetExitCodeProcess,
-    InitializeProcThreadAttributeList, OpenProcessToken, OpenThreadToken,
-    PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, PROCESS_INFORMATION, ResumeThread, STARTUPINFOEXW,
-    UpdateProcThreadAttribute, WaitForSingleObject,
+    CREATE_NEW_CONSOLE, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateProcessAsUserW,
+    DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess,
+    GetCurrentThread, GetExitCodeProcess, InitializeProcThreadAttributeList, OpenProcessToken,
+    OpenThreadToken, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, PROCESS_INFORMATION,
+    ResumeThread, STARTUPINFOEXW, UpdateProcThreadAttribute, WaitForSingleObject,
 };
 
-use crate::util::{SecurityDescriptor, own, wide};
+use crate::pipe::Impersonation;
+use crate::util::{SecurityDescriptor, own, token_user_is, wide};
 
-/// Name des AppContainers des Labors.
+/// Namensanfang der AppContainer des Labors (je Lauf: `AEGIS.Labor.<Kennung>`).
 pub const LAB_APPCONTAINER: &str = "AEGIS.Labor";
+
+/// AppContainer-Name eines Laufs (eigenes Profil und eigene SID je Lauf).
+#[must_use]
+pub fn lab_appcontainer_name(run_id: &str) -> String {
+    let id: String = run_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
+        .take(40)
+        .collect();
+    format!("{LAB_APPCONTAINER}.{id}")
+}
 
 /// Grenzen eines Labor-Laufs.
 #[derive(Debug, Clone, Copy)]
@@ -110,6 +125,30 @@ pub fn ensure_appcontainer_profile(name: &str) -> io::Result<()> {
         return Ok(());
     }
     Err(io::Error::from_raw_os_error(hr))
+}
+
+/// Löscht das AppContainer-Profil eines beendeten Laufs (Ordner und Registrierung des
+/// Profils, samt allem, was die Probe dort abgelegt hat). Nur für Namen des Labors.
+///
+/// # Errors
+/// Fremder Name oder Profil nicht löschbar.
+pub fn delete_appcontainer_profile(name: &str) -> io::Result<()> {
+    if !name.starts_with(&format!("{LAB_APPCONTAINER}.")) {
+        return Err(io::Error::other("Nur Profile des Labors"));
+    }
+    let text = wide(name);
+    // SAFETY: `text` ist nullterminiert.
+    // aegis-unsafe: winffi-delete-appcontainer-profile
+    #[allow(unsafe_code)]
+    // Verwirft das AEGIS-eigene Profil eines beendeten Labor-Laufs (Teil des freigegebenen
+    // Laufs: „Das Labor wird nach dem Lauf verworfen“).
+    // aegis-mutation: winffi-delete-appcontainer-profile-call
+    #[allow(clippy::disallowed_methods)]
+    let hr = unsafe { DeleteAppContainerProfile(text.as_ptr()) };
+    if hr < 0 {
+        return Err(io::Error::from_raw_os_error(hr));
+    }
+    Ok(())
 }
 
 /// SID eines AppContainers als Text (`S-1-15-2-…`), abgeleitet aus dem Namen.
@@ -181,69 +220,205 @@ pub fn create_dir_with_sddl(path: &Path, sddl: &str) -> io::Result<()> {
     Ok(())
 }
 
-/// Primär-Token des aktuellen Nutzers (während eines Identitätswechsels: des anfragenden
-/// Nutzers), **nicht** eingeschränkt – die Einschränkung liefert der AppContainer.
+/// Primär-Token des anfragenden Nutzers, **nicht** eingeschränkt – die Einschränkung liefert
+/// der AppContainer bzw. die VM. Nie das Token des Dienstes (SYSTEM).
 #[derive(Debug)]
 pub struct UserToken {
     token: OwnedHandle,
-    /// Token des eigenen Prozesses (kein Identitätswechsel aktiv)?
+    /// Token des eigenen Prozesses (Konsole, Tests) – nur über [`UserToken::for_console`].
     own: bool,
 }
 
 const TOKEN_ACCESS: u32 = TOKEN_QUERY
     | TOKEN_DUPLICATE
+    | TOKEN_IMPERSONATE
     | TOKEN_ASSIGN_PRIMARY
     | TOKEN_ADJUST_DEFAULT
     | TOKEN_ADJUST_SESSIONID;
 
+/// Dienstkonten (SYSTEM, LocalService, NetworkService) starten nie etwas im Labor.
+fn refuse_service_account(token: HANDLE) -> io::Result<()> {
+    if token_user_is(
+        token,
+        &[WinLocalSystemSid, WinLocalServiceSid, WinNetworkServiceSid],
+    )? {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Labor startet nie mit einem Dienstkonto",
+        ));
+    }
+    Ok(())
+}
+
+fn primary_from(source: HANDLE) -> io::Result<OwnedHandle> {
+    let mut primary: HANDLE = ptr::null_mut();
+    // SAFETY: `source` hat TOKEN_DUPLICATE; Ausgabezeiger gültig.
+    // aegis-unsafe: winffi-lab-duplicate-token
+    #[allow(unsafe_code)]
+    let ok = unsafe {
+        DuplicateTokenEx(
+            source,
+            TOKEN_ACCESS,
+            ptr::null(),
+            SecurityImpersonation,
+            TokenPrimary,
+            &mut primary,
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    own(primary)
+}
+
 impl UserToken {
-    /// Muss innerhalb des Identitätswechsels aufgerufen werden (sonst: eigener Prozess).
+    /// Token des Nutzers, dessen Identität der aktuelle Thread angenommen hat (Pipe-Client).
+    /// Ohne Identitätswechsel ist das ein Fehler – es gibt keinen stillen Rückfall auf das
+    /// Token des Dienstes.
     ///
     /// # Errors
-    /// Token nicht lesbar.
+    /// Kein Identitätswechsel aktiv, Dienstkonto oder Token nicht lesbar.
     pub fn from_current_identity() -> io::Result<Self> {
         let mut source: HANDLE = ptr::null_mut();
-        let mut own_process = false;
         // SAFETY: Pseudo-Handle des Threads; OpenAsSelf = 1; Ausgabezeiger gültig.
         // aegis-unsafe: winffi-lab-thread-token
         #[allow(unsafe_code)]
         let ok = unsafe { OpenThreadToken(GetCurrentThread(), TOKEN_ACCESS, 1, &mut source) };
         if ok == 0 {
             let err = io::Error::last_os_error();
-            if err.raw_os_error() != i32::try_from(ERROR_NO_TOKEN).ok() {
-                return Err(err);
+            if err.raw_os_error() == i32::try_from(ERROR_NO_TOKEN).ok() {
+                return Err(io::Error::other(
+                    "Kein Identitätswechsel aktiv – Labor nur mit den Rechten des Nutzers",
+                ));
             }
-            // SAFETY: Pseudo-Handle des eigenen Prozesses; Ausgabezeiger gültig.
-            // aegis-unsafe: winffi-lab-process-token
-            #[allow(unsafe_code)]
-            let ok = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_ACCESS, &mut source) };
-            if ok == 0 {
-                return Err(io::Error::last_os_error());
-            }
-            own_process = true;
+            return Err(err);
         }
         let source = own(source)?;
-        let mut primary: HANDLE = ptr::null_mut();
-        // SAFETY: `source` hat TOKEN_DUPLICATE; Ausgabezeiger gültig.
-        // aegis-unsafe: winffi-lab-duplicate-token
+        refuse_service_account(source.as_raw_handle())?;
+        Ok(Self {
+            token: primary_from(source.as_raw_handle())?,
+            own: false,
+        })
+    }
+
+    /// Token des eigenen Prozesses – nur für Konsole und Tests (nie als Dienstkonto).
+    ///
+    /// # Errors
+    /// Dienstkonto oder Token nicht lesbar.
+    pub fn for_console() -> io::Result<Self> {
+        let mut source: HANDLE = ptr::null_mut();
+        // SAFETY: Pseudo-Handle des eigenen Prozesses; Ausgabezeiger gültig.
+        // aegis-unsafe: winffi-lab-process-token
         #[allow(unsafe_code)]
-        let ok = unsafe {
-            DuplicateTokenEx(
-                source.as_raw_handle(),
-                TOKEN_ACCESS,
-                ptr::null(),
-                SecurityImpersonation,
-                TokenPrimary,
-                &mut primary,
-            )
-        };
+        let ok = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_ACCESS, &mut source) };
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
+        let source = own(source)?;
+        refuse_service_account(source.as_raw_handle())?;
         Ok(Self {
-            token: own(primary)?,
-            own: own_process,
+            token: primary_from(source.as_raw_handle())?,
+            own: true,
         })
+    }
+
+    /// Bei einem erhöhten Administrator-Token: das verknüpfte, nicht erhöhte Token (die Probe
+    /// bekommt nie Administratorrechte). Im Dienst (SYSTEM, ohne Identitätswechsel) aufrufen;
+    /// ist das verknüpfte Token nicht als Primär-Token erhältlich, bleibt es beim Original.
+    #[must_use]
+    pub fn into_unelevated(self) -> Self {
+        let mut kind = 0i32;
+        let mut needed = 0u32;
+        // SAFETY: gültiges Token mit TOKEN_QUERY; Ausgabe ist ein i32.
+        // aegis-unsafe: winffi-lab-elevation-type
+        #[allow(unsafe_code)]
+        let ok = unsafe {
+            GetTokenInformation(
+                self.token.as_raw_handle(),
+                TokenElevationType,
+                (&raw mut kind).cast(),
+                4,
+                &mut needed,
+            )
+        };
+        if ok == 0 || kind != TokenElevationTypeFull {
+            return self;
+        }
+        let mut linked = TOKEN_LINKED_TOKEN {
+            LinkedToken: ptr::null_mut(),
+        };
+        // SAFETY: gültiges Token; Ausgabe ist eine TOKEN_LINKED_TOKEN-Struktur.
+        // aegis-unsafe: winffi-lab-linked-token
+        #[allow(unsafe_code)]
+        let ok = unsafe {
+            GetTokenInformation(
+                self.token.as_raw_handle(),
+                TokenLinkedToken,
+                (&raw mut linked).cast(),
+                u32::try_from(size_of::<TOKEN_LINKED_TOKEN>()).unwrap_or(0),
+                &mut needed,
+            )
+        };
+        if ok == 0 {
+            return self;
+        }
+        let Ok(linked) = own(linked.LinkedToken) else {
+            return self;
+        };
+        match primary_from(linked.as_raw_handle()) {
+            Ok(token) => Self {
+                token,
+                own: self.own,
+            },
+            Err(_) => self,
+        }
+    }
+
+    /// Nimmt im aktuellen Thread die Identität dieses Nutzers an (Lesen seiner Labor-Ausgabe,
+    /// Profil anlegen/löschen) – endet mit dem Rückgabewert.
+    ///
+    /// # Errors
+    /// Wechsel nicht möglich oder bereits aktiv.
+    pub fn impersonate(&self) -> io::Result<Impersonation> {
+        crate::identity::impersonate_handle(self.token.as_raw_handle())
+    }
+
+    /// Umgebung des Nutzers (statt der des Dienstes) für neue Prozesse.
+    fn environment(&self) -> Environment {
+        let mut block: *mut core::ffi::c_void = ptr::null_mut();
+        // SAFETY: gültiges Token; Ausgabezeiger gültig; ohne Erben der Dienstumgebung.
+        // aegis-unsafe: winffi-lab-environment
+        #[allow(unsafe_code)]
+        let ok = unsafe { CreateEnvironmentBlock(&mut block, self.token.as_raw_handle(), 0) };
+        Environment(if ok == 0 { ptr::null_mut() } else { block })
+    }
+}
+
+/// Umgebungsblock eines Nutzers (wird freigegeben).
+struct Environment(*mut core::ffi::c_void);
+
+impl Environment {
+    fn ptr(&self) -> *const core::ffi::c_void {
+        self.0
+    }
+
+    fn flags(&self) -> u32 {
+        if self.0.is_null() {
+            0
+        } else {
+            CREATE_UNICODE_ENVIRONMENT
+        }
+    }
+}
+
+impl Drop for Environment {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            // SAFETY: Block von CreateEnvironmentBlock; genau einmal freigeben.
+            // aegis-unsafe: winffi-lab-environment-free
+            #[allow(unsafe_code)]
+            let _ = unsafe { DestroyEnvironmentBlock(self.0) };
+        }
     }
 }
 
@@ -517,6 +692,7 @@ fn spawn_with_sid(
     line.push(u16::from(b'"'));
     line.push(0);
     let dir = wide(workdir);
+    let environment = token.environment();
     let mut process = PROCESS_INFORMATION::default();
     // SAFETY: Alle Zeiger zeigen auf lebende, nullterminierte Puffer bzw. Strukturen; keine
     // Handles werden vererbt; der Prozess startet angehalten und läuft erst im Job an.
@@ -533,8 +709,11 @@ fn spawn_with_sid(
             ptr::null(),
             ptr::null(),
             0,
-            CREATE_SUSPENDED | CREATE_NEW_CONSOLE | EXTENDED_STARTUPINFO_PRESENT,
-            ptr::null(),
+            CREATE_SUSPENDED
+                | CREATE_NEW_CONSOLE
+                | EXTENDED_STARTUPINFO_PRESENT
+                | environment.flags(),
+            environment.ptr(),
             dir.as_ptr(),
             &raw const info.StartupInfo,
             &mut process,
@@ -561,8 +740,11 @@ fn spawn_with_sid(
                 ptr::null(),
                 ptr::null(),
                 0,
-                CREATE_SUSPENDED | CREATE_NEW_CONSOLE | EXTENDED_STARTUPINFO_PRESENT,
-                ptr::null(),
+                CREATE_SUSPENDED
+                    | CREATE_NEW_CONSOLE
+                    | EXTENDED_STARTUPINFO_PRESENT
+                    | environment.flags(),
+                environment.ptr(),
                 dir.as_ptr(),
                 &raw const info.StartupInfo,
                 &mut process,
@@ -621,7 +803,8 @@ fn spawn_with_sid(
 ///
 /// # Errors
 /// Start fehlgeschlagen.
-pub fn spawn_as_user(token: &UserToken, exe: &Path, argument: &Path) -> io::Result<()> {
+pub fn spawn_as_user(token: &UserToken, exe: &Path, argument: &Path) -> io::Result<UserProcess> {
+    let environment = token.environment();
     let mut desktop = wide(r"winsta0\default");
     let info = windows_sys::Win32::System::Threading::STARTUPINFOW {
         cb: u32::try_from(size_of::<windows_sys::Win32::System::Threading::STARTUPINFOW>())
@@ -656,8 +839,8 @@ pub fn spawn_as_user(token: &UserToken, exe: &Path, argument: &Path) -> io::Resu
             ptr::null(),
             ptr::null(),
             0,
-            0,
-            ptr::null(),
+            environment.flags(),
+            environment.ptr(),
             ptr::null(),
             &raw const info,
             &mut process,
@@ -681,8 +864,8 @@ pub fn spawn_as_user(token: &UserToken, exe: &Path, argument: &Path) -> io::Resu
                 ptr::null(),
                 ptr::null(),
                 0,
-                0,
-                ptr::null(),
+                environment.flags(),
+                environment.ptr(),
                 ptr::null(),
                 &raw const info,
                 &mut process,
@@ -693,12 +876,55 @@ pub fn spawn_as_user(token: &UserToken, exe: &Path, argument: &Path) -> io::Resu
             return Err(io::Error::last_os_error());
         }
     }
-    // SAFETY: beide Handles neu geliefert; je einmal übernommen und sofort geschlossen.
+    // SAFETY: beide Handles neu geliefert; je einmal übernommen (Thread sofort geschlossen).
     // aegis-unsafe: winffi-spawn-as-user-handles
     #[allow(unsafe_code)]
-    unsafe {
-        drop(OwnedHandle::from_raw_handle(process.hProcess));
+    let process_handle = unsafe {
         drop(OwnedHandle::from_raw_handle(process.hThread));
+        OwnedHandle::from_raw_handle(process.hProcess)
+    };
+    Ok(UserProcess {
+        process: process_handle,
+    })
+}
+
+/// Als Nutzer gestartetes Programm (Windows Sandbox): warten und am Ende beenden.
+#[derive(Debug)]
+pub struct UserProcess {
+    process: OwnedHandle,
+}
+
+impl UserProcess {
+    /// Läuft das Programm noch?
+    #[must_use]
+    pub fn running(&self) -> bool {
+        // SAFETY: gültiges Prozess-Handle.
+        // aegis-unsafe: winffi-user-process-wait
+        #[allow(unsafe_code)]
+        let event = unsafe { WaitForSingleObject(self.process.as_raw_handle(), 0) };
+        event == WAIT_TIMEOUT
     }
-    Ok(())
+
+    /// Beendet das Programm (Ende der Beobachtungszeit; schließt die Windows Sandbox).
+    ///
+    /// # Errors
+    /// Beenden fehlgeschlagen.
+    pub fn terminate(&self) -> io::Result<()> {
+        if !self.running() {
+            return Ok(());
+        }
+        // SAFETY: gültiges Prozess-Handle des selbst gestarteten Programms.
+        // aegis-unsafe: winffi-user-process-terminate
+        #[allow(unsafe_code)]
+        // Beendet die selbst gestartete Windows Sandbox am Ende der freigegebenen Laufzeit.
+        // aegis-mutation: winffi-user-process-terminate-call
+        #[allow(clippy::disallowed_methods)]
+        let ok = unsafe {
+            windows_sys::Win32::System::Threading::TerminateProcess(self.process.as_raw_handle(), 1)
+        };
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
 }

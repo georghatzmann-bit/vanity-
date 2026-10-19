@@ -24,6 +24,7 @@ import {
   parseScan,
   parseHistory,
   parseLab,
+  parseLabReportResponse,
   parseLabScreenshot,
   decodeBase64,
   parseSchedule,
@@ -220,6 +221,8 @@ function createTauriService(): ServiceApi {
       ),
     proposeEnableSandbox: async () =>
       parseProposal(await invoke<unknown>('service_propose_enable_sandbox')),
+    labReport: async (runId) =>
+      parseLabReportResponse(await invoke<unknown>('service_lab_report', { runId })),
     labScreenshot: async (runId, name) =>
       parseLabScreenshot(await invoke<unknown>('service_lab_screenshot', { runId, name })),
     labCaptureWindows: async (runId) => {

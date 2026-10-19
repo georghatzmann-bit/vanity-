@@ -127,6 +127,27 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   (`*.json.corrupt`) statt den Start zu verhindern – AEGIS wird dadurch nur strenger. Der HTML-Export wird in
   Rust erzeugt (maskiert, CSP ohne Skripte) und nur an den im Speichern-Dialog gewählten Ort
   geschrieben – die Oberfläche hat keinen Schreibbefehl mit eigenem Pfad.
+- **Labor (P4):** Jeder Lauf ist ein eigener Plan („Im Labor ausführen“: Stufe, Sekunden,
+  Netz und SHA-256 der Probe zum Zeitpunkt des Vorschlags) und braucht „Ja“; „Vertrauen“ gibt
+  es für Labor- und Einstellungs-Vorschläge nicht. Die Erlaubnis wandert in den Lauf und wird
+  mit dem echten Ergebnis protokolliert. Das Original öffnet der Dienst nur im
+  Identitätswechsel (ohne Links); in den Labor-Ordner kommt eine Kopie unter festem Namen
+  (`probe.<endung>`), deren Prüfsumme dem Plan entsprechen muss. Gestartet wird nie mit einem
+  Dienstkonto: Token nur aus dem Identitätswechsel (kein Rückfall), bei erhöhten
+  Administratoren das nicht erhöhte verknüpfte Token, Umgebung des Nutzers. Stufe 2:
+  AppContainer ohne Fähigkeiten, **eigenes Profil je Lauf** (als Nutzer angelegt und danach
+  gelöscht), Job mit Speicher-/Prozess-/CPU-Grenzen, Arbeitsordner nur für SYSTEM/Admins,
+  Nutzer und diesen AppContainer. Stufe 1: Windows Sandbox (Netz nur auf Wunsch, Zwischenablage,
+  Drucker, GPU, Audio/Kamera aus, Probe-Ordner nur lesbar); AEGIS hält den Prozess, beendet ihn
+  am Ende der Frist bzw. bei mehr als 64 MiB Ausgabe und liest `report.json` (≤ 1 MiB) und
+  Bildschirmfotos erst danach – **nur im Identitätswechsel**, ohne Links/Hardlinks, PNG geprüft
+  (Signatur, Kanten ≤ 4096), Texte und Listen begrenzt. Ehrlich: Den Bericht der Stufe 1
+  erstellt die Sonde in der VM – die Probe könnte ihn verfälschen (steht im Bericht). Die Sonde
+  prüft ihr Konto am Token (WDAGUtilityAccount) und die eingebundenen Ordner. Fensterfotos der
+  Stufe 2 macht die App nur für Prozesse, deren AppContainer-SID der des Laufs entspricht
+  (hängende Fenster übersprungen); Bilder werden auf ein Canvas gezeichnet (CSP unverändert).
+  Grenzen: 2 gleichzeitige Läufe, 1 je Konto; DISM (Windows Sandbox einschalten, nur Admin)
+  einmal gleichzeitig, höchstens 30 Minuten.
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.
@@ -175,6 +196,7 @@ Prüfung „kein Code-Pfad ändert etwas ohne Freigabe“ ist fester Bestandteil
 
 | Datum | Umfang | Ergebnis |
 | --- | --- | --- |
+| 2026-10-19 | P4: Labor (Dienst, winffi-Sandbox, Sonde, App-Befehle, Labor-Seite). 1 Prüfer | 1 hoch: P4-1 Absturz des Dienstes über einen Bildnamen mit Mehrbyte-Zeichen (Byte-Slicing, `panic = abort`) → reine ASCII-/Byteprüfung vor allem anderen, Test. 6 mittel: P4-2 Ausgabe der Stufe 1 als SYSTEM unter der Dienst-Sperre gelesen → Identitätswechsel, Hardlink-Prüfung, außerhalb der Sperre; P4-3 VM nicht kontrolliert, erster Bericht vertraut → Prozess gehalten, Frist/Größengrenze, Lesen erst nach Ende, Hinweise vom Dienst; P4-4 gemeinsames, bleibendes AppContainer-Profil → Profil je Lauf, danach gelöscht, kein SYSTEM-Rückfall; P4-5 Erlaubnis vor der Arbeit als „erfolgreich“ protokolliert → Erlaubnis im Lauf, echtes Ergebnis; P4-6 „Vertrauen“ auf Labor-Vorschläge → abgelehnt (Dienst + UI); P4-7 Berichtsgrößen → 1 MiB, Textgrenzen, Bericht nur je Lauf. 8 niedrig/Kleinigkeiten (stiller Token-Rückfall, Ordnerrechte Stufe 2, Zählung aktiver Läufe, Dateiname der Kopie, Sonde per Umgebungsvariable, Fensterfotos ohne AppContainer-/Hänger-Prüfung, PNG ungeprüft, Prüfsumme nicht verglichen, DISM ohne Frist, Netz-Text) – alle behoben, Tests ergänzt |
 | 2026-10-19 | P3: Prüfprozess/Token, Vertrauensliste, Wächter, Verlauf/Zeitpläne/Updates, HTML-Export. 2 Durchgänge (der erste brach nach dem ersten Fund ab) | 2 hoch: P3-1 Hintergrundprüfungen mit SYSTEM-abgeleitetem Token (→ Profil-Besitzer bzw. LocalService, Öffnen mit Prüfung am Handle), P3-2 Verlauf/Vertrauensliste konnten den Dienststart blockieren (→ Größen- und Längengrenzen, Quoten, Beiseitelegen). 8 mittel (Aushungern/Warteschlange, Abstürze verstecken Dateien, rechnerweite Schalter für jeden Nutzer → Gaming je Konto + Admin-Pflicht, gemeinsame Grenzen → Quoten, Dateizugriffe unter der Sperre, freshclam als SYSTEM ohne Job, Zuordnung „gemeinsam“ nach Pfad → SID/Profil-Wurzel, LocalService statt eingeschränktem SYSTEM). 6 niedrig (Rückfall auf Dienst-Token, gemeinsame „unbekannt“-Kennung, Pfadvergleich, Termine, USB/ETW, Export überschreibt). Alle behoben bzw. Grenzen dokumentiert, Tests ergänzt (Windows-Test „nur Nutzer“-Token) |
 | 2026-10-19 | P2.5-Nachprüfung (separater Agent): Korrekturen + neue Fehler im FFI | Alte Funde geschlossen bzw. teilweise; neu: 1 hoch (Server-Prüfung für Standardnutzer kaputt → Pipe-Besitzer), 6 mittel (Namenslücke, Leerlauf/Grenzen je Konto, Einträge ohne Konto, schreibgeschützt, Analysepunkte, ClamAV als SYSTEM → P3.2), 5 niedrig. Behoben (außer ClamAV-Token → P3.2, Pfad-Textvergleich nur dokumentiert), Tests ergänzt |
 | 2026-10-19 | P2: Quarantäne, Dienst/Pipe, winffi, Engine-Anbindung, App-Client. 1 Prüfer, 4 Funde per Test nachgestellt | 1 kritisch (jeder Nutzer konnte über den SYSTEM-Dienst ohne UI isolieren/wiederherstellen → Identitätswechsel + Pfadregeln), 3 hoch (Links in Zwischenordnern/Überschreiben, Pipe-Instanzen durch Nutzer, vorab angelegter Datenordner), 3 mittel (Ausführung trotz Protokollausfall, Überlastung, ClamAV über PATH), 2 niedrig (Bidi in Plan-Texten, Unix-Rechte, fehlende Sperren). Alle behoben, Regressionstests in `crates/quarantine/tests`, `crates/service/tests`, Windows-Test für Identitätswechsel |

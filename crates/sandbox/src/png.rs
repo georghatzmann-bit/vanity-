@@ -52,10 +52,44 @@ pub fn encode_bgra(width: u32, height: u32, bgra: &[u8]) -> Result<Vec<u8>, Stri
     Ok(out)
 }
 
+/// Prüft ein fremdes PNG (aus der Windows Sandbox), bevor es angezeigt wird: Signatur,
+/// `IHDR` als erster Block, Kantenlängen 1–4096, 8 Bit. Liefert Breite und Höhe.
+///
+/// # Errors
+/// Kein gültiges bzw. zu großes PNG.
+pub fn check_png(data: &[u8]) -> Result<(u32, u32), String> {
+    const SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
+    let header = data.get(..33).ok_or("kein PNG")?;
+    if header[..8] != SIGNATURE || &header[8..16] != b"\0\0\0\x0dIHDR" {
+        return Err("kein PNG".into());
+    }
+    let be = |at: usize| {
+        u32::from_be_bytes([header[at], header[at + 1], header[at + 2], header[at + 3]])
+    };
+    let (width, height) = (be(16), be(20));
+    if width == 0 || height == 0 || width > MAX_EDGE || height > MAX_EDGE || header[24] != 8 {
+        return Err("PNG zu groß oder ungewöhnlich".into());
+    }
+    Ok((width, height))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Read;
+
+    #[test]
+    fn fremde_pngs_werden_geprueft() {
+        let png = encode_bgra(3, 2, &[0u8; 3 * 2 * 4]).unwrap();
+        assert_eq!(check_png(&png).unwrap(), (3, 2));
+        assert!(check_png(b"kein bild").is_err());
+        let mut huge = png.clone();
+        huge[16..20].copy_from_slice(&100_000u32.to_be_bytes());
+        assert!(check_png(&huge).is_err(), "Bombe: zu große Kanten");
+        let mut gif = png;
+        gif[1] = b'G';
+        assert!(check_png(&gif).is_err());
+    }
 
     #[test]
     fn gueltiges_png() {

@@ -32,6 +32,7 @@
     "allow-service-lab-status",
     "allow-service-propose-lab-run",
     "allow-service-lab-screenshot",
+    "allow-service-lab-report",
     "allow-service-propose-enable-sandbox",
     "allow-lab-capture-windows",
     "allow-export-report",

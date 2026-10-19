@@ -147,7 +147,8 @@ pub fn sample_plan_builder(kind: ActionKind) -> ActionPlanBuilder {
             .target(file)
             .parameter(param::LAB_STAGE, "mini_sandbox")
             .parameter(param::LAB_SECONDS, "60")
-            .parameter(param::LAB_NETWORK, "off"),
+            .parameter(param::LAB_NETWORK, "off")
+            .parameter(param::LAB_SHA256, "ab".repeat(32)),
         ActionKind::MoveFile => ActionPlan::builder(kind).target(file).parameter(
             param::DESTINATION,
             test_path("Sortiert").display().to_string(),

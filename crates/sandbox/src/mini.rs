@@ -7,9 +7,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use aegis_winffi::inspect::Hive;
-use aegis_winffi::sandbox::{
-    LAB_APPCONTAINER, LabLimits, UserToken, appcontainer_sid, spawn_in_appcontainer,
-};
+use aegis_winffi::sandbox::{LabLimits, UserToken, appcontainer_sid, spawn_in_appcontainer};
 
 use crate::observe::Observer;
 use crate::report::{BehaviorReport, RunEnd, Stage};
@@ -36,6 +34,8 @@ pub struct MiniRun {
     pub sample_name: String,
     /// SHA-256 der Probe.
     pub sha256: Option<String>,
+    /// Name des AppContainers dieses Laufs (Profil muss angelegt sein).
+    pub container: String,
 }
 
 /// Ehrliche Grenzen dieser Stufe.
@@ -46,6 +46,7 @@ pub fn notes() -> Vec<String> {
         "Netzwerk ist gesperrt; einzelne Verbindungsversuche erkennt diese Stufe nicht.".into(),
         "Zugriffe außerhalb des Labor-Ordners werden verweigert und nicht einzeln aufgezeichnet.".into(),
         "Befehlszeilen der Prozesse werden in dieser Stufe nicht erfasst.".into(),
+        "Was die Probe im Speicher ihres AppContainer-Profils ablegt, wird nicht einzeln aufgezeichnet; das Profil wird nach dem Lauf gelöscht.".into(),
     ]
 }
 
@@ -71,7 +72,7 @@ pub fn run(run: &MiniRun, token: &UserToken, mut on_pids: impl FnMut(&[u32])) ->
         report.truncate();
         report
     };
-    let sid = match appcontainer_sid(LAB_APPCONTAINER) {
+    let sid = match appcontainer_sid(&run.container) {
         Ok(s) => s,
         Err(e) => {
             return report(

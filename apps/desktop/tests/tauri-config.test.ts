@@ -46,6 +46,7 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-lab-status': 'Dienst: Labor-Zustand und eigene Läufe (nur lesend)',
   'allow-service-propose-lab-run': 'Dienst: Labor-Lauf vorschlagen (Start nur nach „Ja“)',
   'allow-service-lab-screenshot': 'Dienst: Bildschirmfoto eines eigenen Laufs (nur lesend)',
+  'allow-service-lab-report': 'Dienst: Verhaltensbericht eines eigenen Laufs (nur lesend)',
   'allow-service-propose-enable-sandbox':
     'Dienst: „Windows Sandbox einschalten“ vorschlagen (nur Admin, nur nach „Ja“)',
   'allow-lab-capture-windows': 'Fensterfotos eines eigenen Mini-Sandbox-Laufs (nur lesend)',

@@ -498,6 +498,7 @@ export const de = {
     registry: 'Registrierung (Autostart)',
     network: 'Verbindungsversuche',
     nothingObserved: 'Nichts beobachtet.',
+    loadingReport: 'Bericht wird geladen …',
     highEntropy: 'sieht verschlüsselt aus',
     blocked: 'blockiert',
     notBlocked: 'nicht blockiert',

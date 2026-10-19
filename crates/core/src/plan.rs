@@ -69,6 +69,9 @@ pub mod param {
     pub const LAB_SECONDS: &str = "lab_seconds";
     /// Netzwerk im Labor (Pflicht): `off` oder `on` (`on` nur in der Windows Sandbox).
     pub const LAB_NETWORK: &str = "lab_network";
+    /// SHA-256 der Probe zum Zeitpunkt des Vorschlags (Pflicht, 64 Hex-Zeichen): Weicht die
+    /// Datei beim Start ab, startet nichts.
+    pub const LAB_SHA256: &str = "lab_sha256";
     /// Erlaubte Werte für [`VALUE_TYPE`].
     pub const REGISTRY_VALUE_TYPES: [&str; 6] = [
         "REG_SZ",
@@ -1010,6 +1013,10 @@ impl ActionPlan {
                         ));
                     }
                     _ => return Err(invalid(param::LAB_NETWORK, "erlaubt: off, on")),
+                }
+                let sha = required_parameter(&plan, param::LAB_SHA256)?;
+                if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    return Err(invalid(param::LAB_SHA256, "SHA-256 als 64 Hex-Zeichen"));
                 }
             }
             ActionKind::Restore if plan.parameter(param::DESTINATION).is_some() => {

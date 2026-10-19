@@ -77,6 +77,8 @@ export interface Proposal {
   readonly plan: ConsentPlan;
   readonly digest: string;
   readonly nonce: string;
+  /** „Vertrauen“ anbieten? Nur bei Isolieren-Vorschlägen (der Dienst prüft das ebenfalls). */
+  readonly allowTrust: boolean;
 }
 
 /** Rückfrage vor endgültigem Löschen. */
@@ -227,7 +229,7 @@ export type LabRunState =
   | { readonly state: 'preparing' }
   | { readonly state: 'running' }
   | { readonly state: 'waiting_for_sandbox' }
-  | { readonly state: 'done'; readonly report: LabReport; readonly assessment: LabAssessment }
+  | { readonly state: 'done'; readonly assessment: LabAssessment }
   | { readonly state: 'failed'; readonly message: string };
 
 /** Ein eigener Labor-Lauf. */
@@ -238,6 +240,8 @@ export interface LabRun {
   readonly seconds: number;
   readonly started: string;
   readonly state: LabRunState;
+  /** AppContainer-SID (Stufe 2). */
+  readonly container: string | null;
 }
 
 /** Labor: Sandbox-Zustand und eigene Läufe (neueste zuerst). */
@@ -296,6 +300,8 @@ export interface ServiceApi {
   ): Promise<Proposal>;
   /** „Windows Sandbox einschalten“ vorschlagen (nur Administratoren). */
   proposeEnableSandbox(): Promise<Proposal>;
+  /** Vollständiger Verhaltensbericht eines eigenen, fertigen Laufs (nur lesend). */
+  labReport(runId: string): Promise<LabReport>;
   /** Bildschirmfoto eines eigenen Laufs der Windows Sandbox (PNG-Bytes). */
   labScreenshot(runId: string, name: string): Promise<Uint8Array>;
   /** Fensterfotos eines laufenden Mini-Sandbox-Laufs (PNG-Bytes; leer, wenn keine). */
@@ -569,7 +575,6 @@ function parseLabRunState(value: unknown): LabRunState {
       const a = isObject(s['assessment']) ? s['assessment'] : {};
       return {
         state: 'done',
-        report: parseLabReport(s['report']),
         assessment: {
           risk: riskLevelFromCoreId(str(a['risk'])) ?? 'info',
           behaviors: arr(a['behaviors']).flatMap((b) => labBehaviors.filter((k) => k === b)),
@@ -605,8 +610,13 @@ export function parseLab(response: unknown): LabState {
         seconds: num(run['seconds']),
         started: str(run['started']),
         state: parseLabRunState(run['state']),
+        container: typeof run['container'] === 'string' ? run['container'] : null,
       })),
   };
+}
+
+export function parseLabReportResponse(response: unknown): LabReport {
+  return parseLabReport(expectType(response, 'lab_report')['report']);
 }
 
 export function parseLabScreenshot(response: unknown): Uint8Array {
@@ -637,6 +647,7 @@ export function parseProposal(response: unknown): Proposal {
   return {
     digest,
     nonce,
+    allowTrust: plan['kind'] === 'quarantine',
     plan: {
       id,
       digest,

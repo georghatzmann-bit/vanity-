@@ -149,6 +149,11 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                     },
                 }
             }
+            // Bildschirmfoto außerhalb der Dienst-Sperre lesen (die Datei kann warten lassen).
+            Ok(Request::LabScreenshot { run_id, name }) => {
+                let lab = lock()?.lab();
+                crate::handler::lab_screenshot_response(&lab, user, &run_id, &name)
+            }
             Ok(request) => lock()?.handle(request, user),
             Err(e) => Response::error("invalid", format!("Ungültige Anfrage: {e}")),
         };

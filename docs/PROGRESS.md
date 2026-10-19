@@ -185,4 +185,7 @@ Angebot für unbekannte Downloads – nie automatisch).
   Plan), Kopie mit SHA-256 im eigenen Labor-Ordner (Original unverändert), Stufe 1 als Nutzer
   gestartet, Stufe 2 im AppContainer; Windows Sandbox einschalten nur Admin + Bestätigung (DISM);
   Reste beim Start verworfen; Verlaufsart „Labor“.
-- ⏳ P4.3: Labor-Seite in der App, Angebot für unbekannte Downloads, Review, DoD.
+- ✅ P4.3: Labor-Seite in der App (Drag & Drop, Stufe, Dauer, Netz nur VM, Bericht mit
+  Einschätzung, Bildschirmfotos), Angebot „Im Labor prüfen“ im Wächter.
+- ✅ P4-Review (1 hoch, 6 mittel, 8 niedrig) behoben – siehe `docs/SECURITY.md`.
+- ⏳ Windows-CI für die Mini-Sandbox (Simulator) bestätigen, dann DoD P4.

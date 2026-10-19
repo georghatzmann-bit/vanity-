@@ -6,6 +6,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   HistoryEntry,
+  LabReport,
   LabRun,
   LabState,
   Proposal,
@@ -55,6 +56,7 @@ function proposal(kind = 'In die Quarantäne verschieben'): Proposal {
       undo: { type: 'reversible', how: 'Quarantäne → Wiederherstellen' },
       expiresAt: new Date(Date.now() + 600_000).toISOString(),
     },
+    allowTrust: kind === 'In die Quarantäne verschieben',
   };
 }
 
@@ -97,6 +99,7 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     labStatus: vi.fn(() => Promise.resolve(labState())),
     proposeLabRun: vi.fn(() => Promise.resolve(proposal('Im Labor ausführen'))),
     proposeEnableSandbox: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    labReport: vi.fn(() => Promise.reject(new Error('kein Bericht'))),
     labScreenshot: vi.fn(() => Promise.resolve(new Uint8Array([137, 80, 78, 71]))),
     labCaptureWindows: vi.fn(() => Promise.resolve([])),
     ...overrides,
@@ -419,31 +422,32 @@ describe('Zeitplan', () => {
 
 describe('Labor', () => {
   const sample = 'C:\\Users\\a\\Downloads\\setup.exe';
+  const doneReport: LabReport = {
+    sha256: 'ab'.repeat(32),
+    end: { type: 'timed_out' },
+    processes: [{ pid: 7, parent: 1, image: 'C:\\AEGIS\\Probe\\probe.exe', commandLine: null }],
+    files: [{ path: 'C:\\Users\\x\\a.locked', change: 'created', size: 10, entropy: 7.9 }],
+    registry: [
+      {
+        key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+        value: 'Updater',
+        change: 'created',
+        data: 'C:\\x.exe',
+      },
+    ],
+    network: [],
+    screenshots: ['bild-01.png'],
+    notes: ['Der Bericht wurde in der VM erstellt – die Probe hätte ihn verfälschen können.'],
+  };
   const done: LabRun = {
     id: 'r1',
     sample: 'setup.exe',
     stage: 'windows_sandbox',
     seconds: 60,
     started: '2026-10-19T12:00:00Z',
+    container: null,
     state: {
       state: 'done',
-      report: {
-        sha256: 'ab'.repeat(32),
-        end: { type: 'timed_out' },
-        processes: [{ pid: 7, parent: 1, image: 'C:\\AEGIS\\Probe\\setup.exe', commandLine: null }],
-        files: [{ path: 'C:\\Users\\x\\a.locked', change: 'created', size: 10, entropy: 7.9 }],
-        registry: [
-          {
-            key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
-            value: 'Updater',
-            change: 'created',
-            data: 'C:\\x.exe',
-          },
-        ],
-        network: [],
-        screenshots: ['bild-01.png'],
-        notes: [],
-      },
       assessment: {
         risk: 'dangerous',
         behaviors: ['autostart'],
@@ -477,6 +481,8 @@ describe('Labor', () => {
     const dialog = await screen.findByRole('alertdialog');
     expect(service.proposeLabRun).toHaveBeenCalledWith(sample, 'windows_sandbox', 120, true);
     expect(service.decide).not.toHaveBeenCalled();
+    // Labor-Vorschläge bieten kein „Vertrauen“ an (die Probe käme sonst auf die Liste).
+    expect(within(dialog).queryByRole('button', { name: /Vertrauen/ })).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Nein' }));
     await waitFor(() => expect(service.decide).toHaveBeenCalledTimes(1));
     expect(vi.mocked(service.decide).mock.calls[0]?.[1]).toBe('decline');
@@ -531,6 +537,7 @@ describe('Labor', () => {
     };
     const service = fakeService({
       labStatus: vi.fn(() => Promise.resolve(labState({ runs: [failed, done] }))),
+      labReport: vi.fn(() => Promise.resolve(doneReport)),
     });
     renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/lab' });
     const runs = await screen.findAllByTestId('lab-run');
@@ -538,6 +545,9 @@ describe('Labor', () => {
     expect(runs[0]).toHaveTextContent('Nicht möglich: Nur unter Windows');
     const report = within(runs[1] as HTMLElement).getByTestId('lab-report');
     expect(report).toHaveTextContent('versucht, sich im Autostart einzutragen');
+    await waitFor(() => expect(report).toHaveTextContent('Dateien (1)'));
+    expect(service.labReport).toHaveBeenCalledWith('r1');
+    expect(within(report).getByTestId('lab-notes')).toHaveTextContent('verfälschen');
     expect(report).toHaveTextContent('Beobachtungszeit abgelaufen');
     expect(report).toHaveTextContent('Dateien (1)');
     expect(report).toHaveTextContent('sieht verschlüsselt aus');

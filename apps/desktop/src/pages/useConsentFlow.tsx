@@ -123,6 +123,7 @@ export function useConsentFlow(service: ServiceApi | null, onDone: () => void): 
         <ConsentDialog
           open
           plan={step.proposal.plan}
+          allowTrust={step.proposal.allowTrust}
           locale={locale}
           onDecision={(decision) => void answer(step.proposal, decision)}
           onDismiss={() => setStep({ kind: 'idle' })}

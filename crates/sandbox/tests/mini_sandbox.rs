@@ -9,8 +9,8 @@ use aegis_sandbox::mini::{MiniRun, run};
 use aegis_sandbox::report::{Change, RunEnd};
 use aegis_winffi::inspect::Hive;
 use aegis_winffi::sandbox::{
-    LAB_APPCONTAINER, UserToken, appcontainer_sid, create_dir_with_sddl,
-    ensure_appcontainer_profile,
+    UserToken, appcontainer_sid, create_dir_with_sddl, delete_appcontainer_profile,
+    ensure_appcontainer_profile, lab_appcontainer_name,
 };
 
 fn simulator() -> Vec<u8> {
@@ -22,18 +22,21 @@ fn simulator() -> Vec<u8> {
 #[test]
 fn simulator_laeuft_isoliert_und_bericht_listet_dateien() {
     let temp = tempfile::tempdir().unwrap();
-    ensure_appcontainer_profile(LAB_APPCONTAINER).unwrap();
-    let sid = appcontainer_sid(LAB_APPCONTAINER).unwrap();
+    let container = lab_appcontainer_name("test-lauf");
+    ensure_appcontainer_profile(&container).unwrap();
+    let sid = appcontainer_sid(&container).unwrap();
     assert!(sid.starts_with("S-1-15-2-"), "{sid}");
+    let user = aegis_winffi::system::process_user_sid(std::process::id()).unwrap();
     let work = temp.path().join("labor");
+    // Dieselbe Zugriffsliste wie im Betrieb.
     create_dir_with_sddl(
         &work,
-        &format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)(A;OICI;0x1301bf;;;{sid})"),
+        &aegis_sandbox::acl::mini_work_dir(&sid, &user).unwrap(),
     )
     .unwrap();
     let sample =
         aegis_core::testing::write_fixture(&work, "lab_simulator.exe", &simulator()).unwrap();
-    let token = UserToken::from_current_identity().unwrap();
+    let token = UserToken::for_console().unwrap();
     let mut seen_pids = false;
     let report = run(
         &MiniRun {
@@ -43,6 +46,7 @@ fn simulator_laeuft_isoliert_und_bericht_listet_dateien() {
             hive: Hive::CurrentUser,
             sample_name: "lab_simulator.exe".into(),
             sha256: None,
+            container: container.clone(),
         },
         &token,
         |pids| seen_pids |= !pids.is_empty(),
@@ -79,4 +83,6 @@ fn simulator_laeuft_isoliert_und_bericht_listet_dateien() {
         a.summary_de.starts_with("Dieses Programm") || a.summary_de.contains("nichts Auffälliges")
     );
     let _ = PathBuf::new();
+    delete_appcontainer_profile(&container).unwrap();
+    assert!(delete_appcontainer_profile("Fremd.Profil").is_err());
 }

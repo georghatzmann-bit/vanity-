@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useT } from '../i18n/I18nProvider.tsx';
 import { listenWhileMounted } from '../platform/platform.ts';
 import { usePlatform } from '../platform/PlatformContext.tsx';
-import type { LabRun, LabStage, LabState, ServiceApi } from '../platform/service.ts';
+import type { LabReport, LabRun, LabStage, LabState, ServiceApi } from '../platform/service.ts';
 import { takeLabCandidate } from './labCandidate.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
@@ -74,12 +74,20 @@ function PngView({ bytes, label }: { readonly bytes: Uint8Array; readonly label:
 }
 
 /** Bildschirmfotos eines Laufs: Stufe 1 aus dem Bericht, Stufe 2 live vom Desktop. */
-function Screenshots({ run, service }: { readonly run: LabRun; readonly service: ServiceApi }) {
+function Screenshots({
+  run,
+  service,
+  names,
+}: {
+  readonly run: LabRun;
+  readonly service: ServiceApi;
+  /** Bildschirmfotos aus dem Bericht (Stufe 1). */
+  readonly names: readonly string[];
+}) {
   const { t } = useT();
   const [images, setImages] = useState<readonly Uint8Array[]>([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const names = run.state.state === 'done' ? run.state.report.screenshots : [];
   const live = run.stage === 'mini_sandbox' && run.state.state === 'running';
   if (names.length === 0 && !live) {
     return null;
@@ -150,12 +158,51 @@ function Section({
   );
 }
 
-function RunReport({ run }: { readonly run: LabRun }) {
+function RunReport({ run, service }: { readonly run: LabRun; readonly service: ServiceApi }) {
   const { t, language } = useT();
+  const done = run.state.state === 'done';
+  const [loaded, setLoaded] = useState<LabReport | string | null>(null);
+  useEffect(() => {
+    if (!done) {
+      return;
+    }
+    let active = true;
+    service.labReport(run.id).then(
+      (r) => {
+        if (active) {
+          setLoaded(r);
+        }
+      },
+      (error: unknown) => {
+        if (active) {
+          setLoaded(error instanceof Error ? error.message : String(error));
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [done, run.id, service]);
   if (run.state.state !== 'done') {
     return null;
   }
-  const { report, assessment } = run.state;
+  const { assessment } = run.state;
+  if (loaded === null || typeof loaded === 'string') {
+    return (
+      <div className="mt-3 space-y-2" data-testid="lab-report">
+        <div className="flex flex-wrap items-center gap-2">
+          <RiskBadge level={assessment.risk} />
+          <p className="text-sm text-text">
+            <SafeText value={language === 'en' ? assessment.summaryEn : assessment.summaryDe} />
+          </p>
+        </div>
+        <p className="text-xs text-text-subtle">
+          {loaded === null ? t('lab.loadingReport') : <SafeText value={loaded} />}
+        </p>
+      </div>
+    );
+  }
+  const report = loaded;
   const change = (c: 'created' | 'modified' | 'deleted') => t(`lab.change.${c}`);
   return (
     <div className="mt-3 space-y-3" data-testid="lab-report">
@@ -240,7 +287,7 @@ function RunReport({ run }: { readonly run: LabRun }) {
         </Section>
       </div>
       {report.notes.length > 0 && (
-        <ul className="space-y-1 text-xs text-text-subtle">
+        <ul className="space-y-1 text-xs text-text-subtle" data-testid="lab-notes">
           {report.notes.map((n, i) => (
             <li key={i}>
               <SafeText value={n} />
@@ -248,6 +295,7 @@ function RunReport({ run }: { readonly run: LabRun }) {
           ))}
         </ul>
       )}
+      <Screenshots run={run} service={service} names={report.screenshots} />
     </div>
   );
 }
@@ -295,8 +343,8 @@ function RunCard({ run, service }: { readonly run: LabRun; readonly service: Ser
           />
         </div>
       )}
-      <RunReport run={run} />
-      <Screenshots run={run} service={service} />
+      <RunReport run={run} service={service} />
+      {run.state.state === 'running' && <Screenshots run={run} service={service} names={[]} />}
     </li>
   );
 }

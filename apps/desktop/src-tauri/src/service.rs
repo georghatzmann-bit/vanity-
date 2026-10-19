@@ -398,47 +398,59 @@ pub async fn service_propose_enable_sandbox() -> Result<Value, String> {
     send(json!({ "type": "propose_enable_sandbox" })).await
 }
 
-/// Höchstzahl Fensterfotos je Abruf.
-#[cfg(windows)]
-const MAX_WINDOW_SHOTS: usize = 4;
-
 /// Fensterfotos eines laufenden Mini-Sandbox-Laufs (Stufe 2). Die Probe läuft auf dem
 /// Desktop des Nutzers; der Dienst (Sitzung 0) sieht ihn nicht – deshalb fotografiert die App
-/// (nur lesend). Die Prozess-IDs nennt der Dienst für den eigenen Lauf, nie die Oberfläche.
+/// (nur lesend). Prozess-IDs und AppContainer-SID nennt der Dienst für den eigenen Lauf, nie
+/// die Oberfläche; fotografiert werden nur Fenster von Prozessen genau dieses AppContainers
+/// (eine inzwischen wiederverwendete Prozess-ID gehört nicht dazu).
 #[tauri::command]
 pub async fn lab_capture_windows(run_id: String) -> Result<Vec<String>, String> {
     check_id(&run_id)?;
     let status = send(json!({ "type": "lab_status" })).await?;
-    let pids = running_pids(&status, &run_id);
-    if pids.is_empty() {
+    let Some((pids, container)) = running_pids(&status, &run_id) else {
         return Ok(Vec::new());
-    }
-    tauri::async_runtime::spawn_blocking(move || capture(&pids))
+    };
+    tauri::async_runtime::spawn_blocking(move || capture(&pids, &container))
         .await
         .map_err(|e| format!("Interner Fehler: {e}"))
 }
 
-/// Prozess-IDs eines laufenden Laufs aus der Antwort `lab` des Dienstes.
-pub fn running_pids(status: &Value, run_id: &str) -> Vec<u32> {
-    status["runs"]
-        .as_array()
-        .into_iter()
-        .flatten()
+/// Prozess-IDs und AppContainer-SID eines laufenden Mini-Sandbox-Laufs aus der Antwort `lab`.
+pub fn running_pids(status: &Value, run_id: &str) -> Option<(Vec<u32>, String)> {
+    let run = status["runs"]
+        .as_array()?
+        .iter()
         .find(|r| r["id"] == run_id && r["stage"] == "mini_sandbox")
-        .filter(|r| r["state"]["state"] == "running")
-        .and_then(|r| r["state"]["pids"].as_array())
-        .into_iter()
-        .flatten()
+        .filter(|r| r["state"]["state"] == "running")?;
+    let container = run["container"]
+        .as_str()
+        .filter(|c| c.starts_with("S-1-15-2-"))?
+        .to_owned();
+    let pids: Vec<u32> = run["state"]["pids"]
+        .as_array()?
+        .iter()
         .filter_map(|p| p.as_u64().and_then(|p| u32::try_from(p).ok()))
         .filter(|p| *p != 0)
         .take(64)
-        .collect()
+        .collect();
+    (!pids.is_empty()).then_some((pids, container))
 }
 
+/// Höchstzahl Fensterfotos je Abruf.
 #[cfg(windows)]
-fn capture(pids: &[u32]) -> Vec<String> {
+const MAX_WINDOW_SHOTS: usize = 4;
+
+#[cfg(windows)]
+fn capture(pids: &[u32], container: &str) -> Vec<String> {
     use base64::Engine as _;
-    aegis_winffi::inspect::capture_windows(pids, MAX_WINDOW_SHOTS)
+    let own: Vec<u32> = pids
+        .iter()
+        .copied()
+        .filter(|&pid| {
+            aegis_winffi::inspect::process_appcontainer_sid(pid).as_deref() == Some(container)
+        })
+        .collect();
+    aegis_winffi::inspect::capture_windows(&own, MAX_WINDOW_SHOTS)
         .into_iter()
         .filter_map(|c| aegis_sandbox::png::encode_bgra(c.width, c.height, &c.bgra).ok())
         .map(|png| base64::engine::general_purpose::STANDARD.encode(png))
@@ -446,8 +458,15 @@ fn capture(pids: &[u32]) -> Vec<String> {
 }
 
 #[cfg(not(windows))]
-fn capture(_pids: &[u32]) -> Vec<String> {
+fn capture(_pids: &[u32], _container: &str) -> Vec<String> {
     Vec::new()
+}
+
+/// Vollständiger Verhaltensbericht eines eigenen Labor-Laufs (nur lesend).
+#[tauri::command]
+pub async fn service_lab_report(run_id: String) -> Result<Value, String> {
+    check_id(&run_id)?;
+    send(json!({ "type": "lab_report", "run_id": run_id })).await
 }
 
 /// Antwort im zweiten Dialog weiterreichen.
@@ -498,15 +517,25 @@ mod tests {
     #[test]
     fn fensterfotos_nur_fuer_laufende_eigene_mini_laeufe() {
         let status = json!({ "runs": [
-            { "id": "a", "stage": "mini_sandbox", "state": { "state": "running", "pids": [12, 0, 13] } },
-            { "id": "b", "stage": "windows_sandbox", "state": { "state": "running", "pids": [14] } },
-            { "id": "c", "stage": "mini_sandbox", "state": { "state": "preparing" } },
+            { "id": "a", "stage": "mini_sandbox", "container": "S-1-15-2-1-2",
+              "state": { "state": "running", "pids": [12, 0, 13] } },
+            { "id": "b", "stage": "windows_sandbox", "container": "S-1-15-2-1-2",
+              "state": { "state": "running", "pids": [14] } },
+            { "id": "c", "stage": "mini_sandbox", "container": "S-1-15-2-1-2",
+              "state": { "state": "preparing" } },
+            { "id": "d", "stage": "mini_sandbox", "container": "S-1-5-18",
+              "state": { "state": "running", "pids": [15] } },
+            { "id": "e", "stage": "mini_sandbox",
+              "state": { "state": "running", "pids": [16] } },
         ]});
-        assert_eq!(running_pids(&status, "a"), vec![12, 13]);
-        assert!(running_pids(&status, "b").is_empty());
-        assert!(running_pids(&status, "c").is_empty());
-        assert!(running_pids(&status, "x").is_empty());
-        assert!(running_pids(&json!({}), "a").is_empty());
+        assert_eq!(
+            running_pids(&status, "a"),
+            Some((vec![12, 13], "S-1-15-2-1-2".to_owned()))
+        );
+        for id in ["b", "c", "d", "e", "x"] {
+            assert!(running_pids(&status, id).is_none(), "{id}");
+        }
+        assert!(running_pids(&json!({}), "a").is_none());
     }
 
     #[test]

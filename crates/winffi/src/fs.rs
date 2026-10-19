@@ -415,6 +415,14 @@ fn handle_owner_trusted(handle: HANDLE) -> io::Result<bool> {
     Ok(trusted)
 }
 
+/// Anzahl der Hardlinks einer geöffneten Datei (> 1: Datei hat weitere Namen).
+///
+/// # Errors
+/// Abfrage fehlgeschlagen.
+pub fn link_count(file: &File) -> io::Result<u32> {
+    Ok(info(file.as_raw_handle())?.nNumberOfLinks)
+}
+
 /// Gehört die Datei bzw. der Ordner SYSTEM oder den Administratoren und ist kein Link?
 /// (Prüfung vorhandener Inhalte des Datenordners beim Start.)
 ///

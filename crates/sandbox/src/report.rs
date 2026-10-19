@@ -8,7 +8,11 @@ use serde::{Deserialize, Serialize};
 use crate::entropy::HIGH;
 
 /// Höchstzahl Einträge je Liste (eine Probe kann nicht beliebig viel Speicher belegen).
-pub const MAX_ITEMS: usize = 5000;
+pub const MAX_ITEMS: usize = 2000;
+/// Höchstlänge eines Textes (Pfad, Befehlszeile, Hinweis) in Byte.
+pub const MAX_TEXT: usize = 1024;
+/// Höchstgröße eines Berichts aus der Windows Sandbox (`report.json`).
+pub const MAX_REPORT_BYTES: u64 = 1024 * 1024;
 
 /// In welcher Stufe beobachtet wurde.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -266,6 +270,45 @@ fn file_name(path: &str) -> String {
 impl BehaviorReport {
     /// Kürzt alle Listen auf [`MAX_ITEMS`] (nach dem Einlesen fremder Berichte).
     pub fn truncate(&mut self) {
+        fn cap(text: &mut String, max: usize) {
+            if text.len() > max {
+                let mut end = max;
+                while !text.is_char_boundary(end) {
+                    end -= 1;
+                }
+                text.truncate(end);
+                text.push('…');
+            }
+        }
+        cap(&mut self.sample, MAX_TEXT);
+        for p in &mut self.processes {
+            cap(&mut p.image, MAX_TEXT);
+            if let Some(c) = &mut p.command_line {
+                cap(c, MAX_TEXT);
+            }
+        }
+        for f in &mut self.files {
+            cap(&mut f.path, MAX_TEXT);
+        }
+        for r in &mut self.registry {
+            cap(&mut r.key, MAX_TEXT);
+            cap(&mut r.value, MAX_TEXT);
+            if let Some(d) = &mut r.data {
+                cap(d, MAX_TEXT);
+            }
+        }
+        for n in &mut self.network {
+            cap(&mut n.remote, 256);
+        }
+        for s in &mut self.screenshots {
+            cap(s, 64);
+        }
+        for n in &mut self.notes {
+            cap(n, MAX_TEXT);
+        }
+        if let RunEnd::Failed { message } = &mut self.end {
+            cap(message, MAX_TEXT);
+        }
         self.processes.truncate(MAX_ITEMS);
         self.files.truncate(MAX_ITEMS);
         self.registry.truncate(MAX_ITEMS);
@@ -533,8 +576,12 @@ mod tests {
     fn json_rundweg_und_grenzen() {
         let mut r = report();
         r.notes = vec!["x".into(); 100];
+        r.notes.push("ü".repeat(MAX_TEXT));
+        r.sample = "a".repeat(MAX_TEXT * 4);
         r.truncate();
         assert_eq!(r.notes.len(), 64);
+        assert!(r.sample.len() <= MAX_TEXT + 3, "Texte gekürzt");
+        assert!(r.notes.iter().all(|n| n.len() <= MAX_TEXT + 3));
         let json = serde_json::to_string(&r).unwrap();
         let back: BehaviorReport = serde_json::from_str(&json).unwrap();
         assert_eq!(back, r);

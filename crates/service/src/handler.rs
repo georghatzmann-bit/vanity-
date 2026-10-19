@@ -78,6 +78,32 @@ pub struct Service<C: Clock, W: Durable> {
 /// Einstellung „Windows-Feature Windows Sandbox“.
 pub const SANDBOX_FEATURE_SETTING: &str = "windows.feature.Containers-DisposableClientVM";
 
+/// Bildschirmfoto eines eigenen Labor-Laufs: Pfad aus dem Lauf (nur im Bericht genannte
+/// Namen), gelesen mit den Rechten des Nutzers und als PNG geprüft. Ohne Dienst-Sperre
+/// aufrufbar (das Lesen kann warten).
+pub fn lab_screenshot_response(
+    lab: &crate::lab::Lab,
+    user: &dyn UserAccess,
+    run_id: &str,
+    name: &str,
+) -> Response {
+    use base64::Engine as _;
+    let path = match lab.screenshot_path(user.identity().as_deref(), run_id, name) {
+        Ok(p) => p,
+        Err(e) => return Response::error("lab", e),
+    };
+    let data = match user.enter() {
+        Ok(_scope) => crate::lab::read_screenshot(&path),
+        Err(e) => Err(format!("Rechte des Nutzers nicht übernehmbar: {e}")),
+    };
+    match data {
+        Ok(png) => Response::LabScreenshot {
+            png_base64: base64::engine::general_purpose::STANDARD.encode(png),
+        },
+        Err(e) => Response::error("lab", e),
+    }
+}
+
 /// Wahl für einen Labor-Lauf (aus der Anfrage; der Dienst prüft sie).
 #[derive(Debug, Clone)]
 pub struct LabOptions {
@@ -199,6 +225,17 @@ impl<C: Clock, W: Durable> Service<C, W> {
         {
             return Response::error("input", e);
         }
+        // Prüfsumme zum Zeitpunkt des Vorschlags: Beim Start muss die Datei noch dieselbe sein.
+        let Some(sha256) = findings
+            .iter()
+            .find(|f| crate::paths::same_path(&f.path, path))
+            .and_then(|f| f.sha256.clone())
+        else {
+            return Response::error(
+                "input",
+                "Die Datei konnte nicht gelesen bzw. geprüft werden – kein Labor-Lauf möglich",
+            );
+        };
         let worst = findings.iter().max_by_key(|f| f.risk);
         let severity = worst.map_or(RiskLevel::Info, |f| f.risk.max(RiskLevel::Info));
         let (label, consequence) = match stage {
@@ -207,7 +244,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 format!(
                     "Eine Kopie startet in der Windows Sandbox (eigene, wegwerfbare VM), {}. AEGIS zeichnet Prozesse, Dateien, Autostart-Einträge, Verbindungsversuche und Bildschirmfotos auf; danach schließt sich die Sandbox.",
                     if options.network {
-                        "MIT Netzwerk – das Programm kann ins Internet"
+                        "MIT Netzwerk – das Programm kann ins Internet und ins Heimnetz"
                     } else {
                         "ohne Netzwerk"
                     }
@@ -241,6 +278,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 param::LAB_NETWORK,
                 if options.network { "on" } else { "off" },
             )
+            .parameter(param::LAB_SHA256, &sha256)
             .build(self.gate.clock().now());
         let hashes = findings
             .iter()
@@ -280,65 +318,49 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
-    /// Startet einen freigegebenen Labor-Lauf im Hintergrund.
+    /// Startet einen freigegebenen Labor-Lauf im Hintergrund. Die Erlaubnis wandert in den
+    /// Lauf und wird dort mit dem echten Ergebnis abgeschlossen.
     fn start_lab(
         &mut self,
         permit: aegis_core::consent::ExecutionPermit,
         user: &dyn UserAccess,
     ) -> Response {
-        use crate::lab::{LabStage, LabStart, MAX_ACTIVE};
+        use crate::lab::{LabStage, LabStart};
         let fail =
             |this: &mut Self, permit: aegis_core::consent::ExecutionPermit, message: String| {
                 let event = permit.complete(aegis_core::audit::ExecutionResult::Failed {
                     message: message.clone(),
                 });
                 this.record(event);
+                if this.audit.sync().is_err() {
+                    this.audit_failed = true;
+                }
                 Response::error("lab", format!("{message} – nichts gestartet"))
             };
         let Ok(plan) = permit.ensure_kind(ActionKind::RunInSandbox).cloned() else {
             return fail(self, permit, "Falsche Aktion".into());
         };
-        let Some(Target::File { path }) = plan.targets().first().cloned() else {
-            return fail(self, permit, "Kein Ziel".into());
+        let (Some(Target::File { path }), 1) =
+            (plan.targets().first().cloned(), plan.targets().len())
+        else {
+            return fail(self, permit, "Genau ein Ziel erwartet".into());
         };
-        let stage = plan
-            .parameter(param::LAB_STAGE)
-            .and_then(LabStage::from_param)
-            .unwrap_or(LabStage::MiniSandbox);
-        let seconds = plan
-            .parameter(param::LAB_SECONDS)
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(60);
+        let (Some(stage), Some(seconds), Some(expected_sha256)) = (
+            plan.parameter(param::LAB_STAGE)
+                .and_then(LabStage::from_param),
+            plan.parameter(param::LAB_SECONDS)
+                .and_then(|s| s.parse().ok()),
+            plan.parameter(param::LAB_SHA256).map(str::to_owned),
+        ) else {
+            return fail(self, permit, "Plan unvollständig".into());
+        };
         let network = plan.parameter(param::LAB_NETWORK) == Some("on");
-        if self.lab.active() >= MAX_ACTIVE {
-            return fail(self, permit, "Es laufen schon zwei Labor-Läufe".into());
-        }
         // Original mit den Rechten des Nutzers öffnen (nur lesen, ohne Links).
         let opened = {
             let scope = user.enter();
             match scope {
                 Err(e) => Err(format!("Rechte des Nutzers nicht übernehmbar: {e}")),
                 Ok(_scope) => {
-                    // Mini-Sandbox: AppContainer-Profil für dieses Konto anlegen (fehlt es,
-                    // scheitert der Start); misslingt es hier, versucht es der Dienst unten.
-                    #[cfg(windows)]
-                    let profile = (stage == LabStage::MiniSandbox).then(|| {
-                        aegis_winffi::sandbox::ensure_appcontainer_profile(
-                            aegis_winffi::sandbox::LAB_APPCONTAINER,
-                        )
-                    });
-                    #[cfg(windows)]
-                    if let Some(Err(_)) = profile {
-                        let _ = std::thread::scope(|s| {
-                            // Eigener Thread ohne Identitätswechsel: Profil im Dienstkonto.
-                            s.spawn(|| {
-                                aegis_winffi::sandbox::ensure_appcontainer_profile(
-                                    aegis_winffi::sandbox::LAB_APPCONTAINER,
-                                )
-                            })
-                            .join()
-                        });
-                    }
                     #[cfg(windows)]
                     let token = aegis_winffi::sandbox::UserToken::from_current_identity()
                         .map_err(|e| e.to_string());
@@ -368,14 +390,16 @@ impl<C: Clock, W: Durable> Service<C, W> {
         let sample_name = path
             .file_name()
             .map_or_else(|| "probe".to_owned(), |n| n.to_string_lossy().into_owned());
-        self.lab.start(
+        let started = self.lab.start(
             LabStart {
+                permit,
                 id,
                 sample: file,
                 sample_name,
                 stage,
                 seconds,
                 network,
+                expected_sha256,
                 owner: owner.clone(),
                 #[cfg(windows)]
                 token,
@@ -408,21 +432,21 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 );
             },
         );
-        let result = aegis_core::audit::ExecutionResult::Succeeded;
-        let event = permit.complete(result.clone());
-        self.record(event);
-        if self.audit.sync().is_err() {
-            self.audit_failed = true;
+        if let Err(refused) = started {
+            let (start, message) = *refused;
+            return fail(self, start.permit, message);
         }
+        // Das Ergebnis (Erfolg oder Fehler) protokolliert der Lauf selbst, sobald er fertig ist.
         Response::Executed {
             kind: ActionKind::RunInSandbox,
-            result,
+            result: aegis_core::audit::ExecutionResult::Succeeded,
             entries: Vec::new(),
             failures: Vec::new(),
         }
     }
 
-    /// Schaltet die Windows Sandbox ein (DISM, im Hintergrund) – nur mit Erlaubnis.
+    /// Schaltet die Windows Sandbox ein (DISM, im Hintergrund) – nur mit Erlaubnis; das Ergebnis
+    /// kommt mit dem echten Ausgang ins Prüfprotokoll.
     fn enable_sandbox_feature(
         &mut self,
         permit: aegis_core::consent::ExecutionPermit,
@@ -431,9 +455,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
         let is_feature = permit
             .ensure_kind(ActionKind::ChangeSetting)
             .is_ok_and(|plan| {
-                plan.targets()
-                    .iter()
-                    .all(|t| matches!(t, Target::Setting { id } if id == SANDBOX_FEATURE_SETTING))
+                matches!(plan.targets(), [Target::Setting { id }] if id == SANDBOX_FEATURE_SETTING)
                     && plan.parameter(param::VALUE) == Some("on")
             });
         if !is_feature || !user.is_admin() {
@@ -447,9 +469,17 @@ impl<C: Clock, W: Durable> Service<C, W> {
             );
         }
         let history = Arc::clone(&self.history);
+        let lab = Arc::clone(&self.lab);
         let owner = user.identity();
         std::thread::spawn(move || {
-            let result = crate::lab::enable_windows_sandbox();
+            let result = crate::lab::enable_windows_sandbox(&permit);
+            let audit_result = match &result {
+                Ok(()) => aegis_core::audit::ExecutionResult::Succeeded,
+                Err(message) => aegis_core::audit::ExecutionResult::Failed {
+                    message: message.clone(),
+                },
+            };
+            lab.push_audit(permit.complete(audit_result));
             let (title, detail) = match result {
                 Ok(()) => (
                     "Windows Sandbox eingeschaltet – bitte neu starten".to_owned(),
@@ -470,15 +500,9 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 },
             );
         });
-        let result = aegis_core::audit::ExecutionResult::Succeeded;
-        let event = permit.complete(result.clone());
-        self.record(event);
-        if self.audit.sync().is_err() {
-            self.audit_failed = true;
-        }
         Response::Executed {
             kind: ActionKind::ChangeSetting,
-            result,
+            result: aegis_core::audit::ExecutionResult::Succeeded,
             entries: Vec::new(),
             failures: Vec::new(),
         }
@@ -574,6 +598,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
     /// Fällige geplante Scans und Updates; geplante Scans werden sofort als gelaufen
     /// markiert (kein doppelter Start, auch wenn der Lauf scheitert).
     pub fn take_due_work(&mut self) -> DueWork {
+        self.drain_lab_audit();
         let now = self.gate.clock().now();
         let schedules: Vec<Schedule> = self
             .settings
@@ -815,6 +840,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
     /// (Standard bei Nicht-Reaktion: nichts tun). Nutzerdateien fasst der Dienst nur mit den
     /// Rechten von `user` an (Windows: Identität des Pipe-Clients).
     pub fn handle(&mut self, request: Request, user: &dyn UserAccess) -> Response {
+        self.drain_lab_audit();
         for id in self.gate.expire_stale() {
             self.proposals.remove(&id);
         }
@@ -869,13 +895,12 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 runs: self.lab.runs_of(user.identity().as_deref()),
             },
             Request::LabScreenshot { run_id, name } => {
-                use base64::Engine as _;
-                match self
-                    .lab
-                    .screenshot(user.identity().as_deref(), &run_id, &name)
-                {
-                    Ok(png) => Response::LabScreenshot {
-                        png_base64: base64::engine::general_purpose::STANDARD.encode(png),
+                lab_screenshot_response(&self.lab, user, &run_id, &name)
+            }
+            Request::LabReport { run_id } => {
+                match self.lab.report(user.identity().as_deref(), &run_id) {
+                    Ok(report) => Response::LabReport {
+                        report: Box::new(report),
                     },
                     Err(e) => Response::error("lab", e),
                 }
@@ -1013,6 +1038,20 @@ impl<C: Clock, W: Durable> Service<C, W> {
     fn flush_gate_events(&mut self) {
         let mut events = self.gate.take_audit_events();
         if self.audit.append_all(&mut events).is_err() {
+            self.audit_failed = true;
+        }
+    }
+
+    /// Abgeschlossene Labor-Läufe bzw. Einstellungen ins Prüfprotokoll übernehmen.
+    pub fn drain_lab_audit(&mut self) {
+        let events = self.lab.take_audit();
+        if events.is_empty() {
+            return;
+        }
+        for event in events {
+            self.record(event);
+        }
+        if self.audit.sync().is_err() {
             self.audit_failed = true;
         }
     }
@@ -1186,6 +1225,19 @@ impl<C: Clock, W: Durable> Service<C, W> {
         dialog_id: &str,
         user: &dyn UserAccess,
     ) -> Response {
+        // „Vertrauen“ gilt nur für Isolieren-Vorschläge (nicht für Labor oder Einstellungen –
+        // sonst käme eine unbekannte Probe auf die Vertrauensliste). Der Vorschlag bleibt offen.
+        if decision == Decision::Trust
+            && self
+                .proposals
+                .get(&plan_id)
+                .is_some_and(|p| p.plan.kind() != ActionKind::Quarantine)
+        {
+            return Response::error(
+                "trust",
+                "„Vertrauen“ gibt es für diesen Vorschlag nicht – nichts verändert",
+            );
+        }
         // Nonce zuerst: unbekannte oder wiederholte Antworten erreichen das Tor gar nicht.
         let Some(pending) = self
             .proposals

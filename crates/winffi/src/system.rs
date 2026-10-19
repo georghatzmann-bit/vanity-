@@ -85,3 +85,48 @@ pub fn removable_drives() -> Vec<PathBuf> {
         .map(PathBuf::from)
         .collect()
 }
+
+/// Name (ohne Domäne) des Kontos, unter dem der eigene Prozess läuft – aus dem Token, nicht aus
+/// Umgebungsvariablen.
+///
+/// # Errors
+/// Token oder Konto nicht lesbar.
+pub fn current_account_name() -> io::Result<String> {
+    use windows_sys::Win32::Security::{LookupAccountSidW, SID_NAME_USE, TOKEN_QUERY};
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    let mut token = std::ptr::null_mut();
+    // SAFETY: Pseudo-Handle des eigenen Prozesses; nur TOKEN_QUERY; Ausgabezeiger gültig.
+    // aegis-unsafe: winffi-own-token-account
+    #[allow(unsafe_code)]
+    let ok = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let token = own(token)?;
+    crate::util::token_user(token.as_raw_handle(), |sid| {
+        let mut name = vec![0u16; 256];
+        let mut domain = vec![0u16; 256];
+        let mut name_len = 256u32;
+        let mut domain_len = 256u32;
+        let mut kind: SID_NAME_USE = 0;
+        // SAFETY: `sid` lebt während des Rückrufs; Puffer und Längen gültig.
+        // aegis-unsafe: winffi-lookup-account
+        #[allow(unsafe_code)]
+        let ok = unsafe {
+            LookupAccountSidW(
+                std::ptr::null(),
+                sid,
+                name.as_mut_ptr(),
+                &mut name_len,
+                domain.as_mut_ptr(),
+                &mut domain_len,
+                &mut kind,
+            )
+        };
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        name.truncate(usize::try_from(name_len).unwrap_or(0));
+        Ok(String::from_utf16_lossy(&name))
+    })?
+}

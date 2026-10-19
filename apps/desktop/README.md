@@ -59,6 +59,7 @@ ersetzen, Pfade des Nutzers auslesen, Events an das Backend senden) und auch kei
 | `allow-service-lab-status`                   | App-Befehl `service_lab_status`: Zustand der Windows Sandbox und eigene Labor-Läufe samt Bericht. Nur lesend.                                                                                     |
 | `allow-service-propose-lab-run`              | App-Befehl `service_propose_lab_run`: Labor-Lauf vorschlagen (Stufe, Sekunden, Netz) – der Dienst formuliert den Plan, gestartet wird nur nach „Ja“.                                              |
 | `allow-service-lab-screenshot`               | App-Befehl `service_lab_screenshot`: Bildschirmfoto eines eigenen Laufs der Windows Sandbox (nur im Bericht genannte Namen). Nur lesend.                                                          |
+| `allow-service-lab-report`                   | App-Befehl `service_lab_report`: vollständiger Verhaltensbericht eines eigenen, fertigen Laufs (auf Anfrage). Nur lesend.                                                                         |
 | `allow-service-propose-enable-sandbox`       | App-Befehl `service_propose_enable_sandbox`: „Windows Sandbox einschalten“ vorschlagen – nur Administratoren, nur nach „Ja“.                                                                      |
 | `allow-lab-capture-windows`                  | App-Befehl `lab_capture_windows`: Fensterfotos eines laufenden eigenen Mini-Sandbox-Laufs (Prozess-IDs nennt der Dienst). Nur lesend.                                                             |
 | `allow-export-report`                        | App-Befehl `export_report`: Verlauf als HTML-Bericht speichern. Inhalt erzeugt Rust (maskiert, ohne Skripte); den Ort wählt der Nutzer im Speichern-Dialog – die Oberfläche gibt keinen Pfad vor. |
@@ -113,6 +114,7 @@ echten ACL: jeder Aufruf der Oberfläche läuft, alles andere wird abgelehnt).
 | `invoke('service_lab_status')`                                  | `service_lab_status`                      | `allow-service-lab-status`                   |
 | `invoke('service_propose_lab_run')`                             | `service_propose_lab_run`                 | `allow-service-propose-lab-run`              |
 | `invoke('service_lab_screenshot')`                              | `service_lab_screenshot`                  | `allow-service-lab-screenshot`               |
+| `invoke('service_lab_report')`                                  | `service_lab_report`                      | `allow-service-lab-report`                   |
 | `invoke('service_propose_enable_sandbox')`                      | `service_propose_enable_sandbox`          | `allow-service-propose-enable-sandbox`       |
 | `invoke('lab_capture_windows')`                                 | `lab_capture_windows`                     | `allow-lab-capture-windows`                  |
 | `invoke('export_report')`                                       | `export_report`                           | `allow-export-report`                        |

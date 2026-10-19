@@ -662,6 +662,16 @@ fn labor_vorschlag_prueft_eingaben() {
         let p = &mini["proposal"]["plan"];
         assert_eq!(p["kind"], "run_in_sandbox");
         assert_eq!(p["parameters"]["lab_stage"], "mini_sandbox");
+        assert_eq!(p["parameters"]["lab_sha256"].as_str().unwrap().len(), 64);
+        // „Vertrauen“ würde die unbekannte Probe auf die Vertrauensliste setzen – abgelehnt,
+        // der Vorschlag bleibt offen.
+        assert_eq!(h.answer(&mini, "trust")["code"], "trust");
+        assert!(
+            h.send(json!({"type": "list_trust"}))["entries"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(h.answer(&mini, "decline")["type"], "nothing_done");
     } else {
         assert_eq!(mini["code"], "sandbox", "{mini}");
