@@ -34,6 +34,15 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 zeroize = { version = "1.9.1", features = ["derive"] }
 tauri = { version = "2.12.4", features = [] }
 tauri-build = { version = "2.7.3", features = [] }
+# Desktop-App: nur eine Instanz (zweiter Start holt das vorhandene Fenster nach vorn).
+tauri-plugin-single-instance = "2.5.4"
+# Desktop-App, nur Windows: native Fehlermeldung, falls die App nicht starten kann
+# (MessageBoxW ohne eigenes `unsafe`; dieselbe Bibliothek nutzt Tauris Dialog-Plugin).
+# Ohne Standard-Features: die sind nur für Linux (xdg-portal/Wayland).
+rfd = { version = "0.17.2", default-features = false }
+# Desktop-App, nur Windows: Windows-Version für `app_info` (nur lesend, RtlGetVersion);
+# ohnehin über tao/wry im Abhängigkeitsbaum.
+windows-version = "0.1.7"
 tempfile = "3.27.0"
 proptest = "1.12.0"
 trybuild = "1.0.122"

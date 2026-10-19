@@ -11,10 +11,23 @@ import viteConfig from '../vite.config.ts';
 const srcTauri = new URL('../src-tauri/', import.meta.url);
 
 /**
- * Jede IPC-Berechtigung des Hauptfensters – mit Begründung (auch in apps/desktop/README.md).
- * P0 ruft keinen einzigen Befehl auf, daher leer. Nie ein ganzes `:default`-Bündel eintragen.
+ * Jede IPC-Berechtigung des Hauptfensters – mit Begründung (ausführlich in apps/desktop/README.md,
+ * gleiche Reihenfolge wie `capabilities/default.json`). Nie ein ganzes `:default`-Bündel
+ * eintragen. Welcher Aufruf der Oberfläche welches Recht braucht, prüft `ipc-contract.test.ts`.
  */
-const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {};
+const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
+  'core:window:allow-minimize': 'Knopf „Minimieren“ der eigenen Titelleiste',
+  'core:window:allow-toggle-maximize': 'Knopf „Maximieren / Wiederherstellen“',
+  'core:window:allow-internal-toggle-maximize':
+    'Doppelklick auf die Titelleiste (Tauris Skript für data-tauri-drag-region)',
+  'core:window:allow-is-maximized': 'Symbol des Maximieren-Knopfs passend zum Zustand (lesend)',
+  'core:window:allow-start-dragging': 'Fenster an der Titelleiste verschieben',
+  'core:window:allow-hide': 'Schließen-Knopf mit „Beim Schließen in den Infobereich“',
+  'core:window:allow-close': 'Schließen-Knopf ohne Infobereich: beendet AEGIS',
+  'core:event:allow-listen': 'tauri://resize und aegis://navigate empfangen (nie senden)',
+  'core:event:allow-unlisten': 'Empfänger wieder abmelden',
+  'allow-app-info': 'App-Befehl app_info (Version, Build-Profil, Plattform; lesend)',
+};
 
 interface Capability {
   readonly identifier?: unknown;
@@ -59,7 +72,7 @@ describe('Capabilities (IPC-Rechte)', () => {
     }
   });
 
-  it('gewährt nur einzeln begründete Berechtigungen (P0: keine), nie ein :default-Bündel', () => {
+  it('gewährt genau die einzeln begründeten Berechtigungen, nie ein :default-Bündel', () => {
     for (const { file, capability } of all) {
       expect(Array.isArray(capability.permissions), file).toBe(true);
       const ids = (capability.permissions as unknown[]).map(permissionId);
@@ -69,7 +82,7 @@ describe('Capabilities (IPC-Rechte)', () => {
           id,
         );
       }
-      expect(ids).toEqual([]);
+      expect(ids).toEqual(Object.keys(JUSTIFIED_PERMISSIONS));
     }
   });
 });
