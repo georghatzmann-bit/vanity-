@@ -48,16 +48,33 @@ fn connect(endpoint: &str) -> io::Result<std::os::unix::net::UnixStream> {
     std::os::unix::net::UnixStream::connect(endpoint)
 }
 
+/// `SECURITY_IMPERSONATION` (2 « 16): Der Dienst darf mit den Rechten des Nutzers auf dessen
+/// Dateien zugreifen – nicht mehr (keine Delegation ins Netz).
+#[cfg(windows)]
+const SECURITY_IMPERSONATION: u32 = 2 << 16;
+
 #[cfg(windows)]
 fn connect(endpoint: &str) -> io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
     // Öffnet die Pipe des Dienstes zum Senden der Anfrage – keine Datei, keine Nutzerdaten.
     // aegis-mutation: desktop-service-pipe-open
     #[allow(clippy::disallowed_methods)]
     let pipe = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
-        .open(endpoint);
-    pipe
+        .security_qos_flags(SECURITY_IMPERSONATION)
+        .open(endpoint)?;
+    // Vor dem ersten Senden: Antwortet wirklich der Dienst (Konto SYSTEM)? Ein Programm, das
+    // den Pipe-Namen besetzt, um Antworten zu fälschen oder Rechte zu übernehmen, läuft
+    // nicht als SYSTEM. Entwicklungs-Builds erlauben einen Dienst aus der Konsole.
+    match aegis_winffi::server_identity(&pipe)? {
+        aegis_winffi::ServerIdentity::LocalSystem => Ok(pipe),
+        aegis_winffi::ServerIdentity::Other if cfg!(debug_assertions) => Ok(pipe),
+        aegis_winffi::ServerIdentity::Other => Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Die Gegenstelle ist nicht der AEGIS-Dienst (läuft nicht als SYSTEM) – nichts gesendet",
+        )),
+    }
 }
 
 /// Sendet eine Nachricht und liest die Antwort.
@@ -79,8 +96,16 @@ fn roundtrip<S: Read + Write>(stream: &mut S, request: &Value) -> io::Result<Val
             "Antwort zu groß",
         ));
     }
-    let mut body = vec![0u8; usize::try_from(len).map_err(io::Error::other)?];
-    stream.read_exact(&mut body)?;
+    let mut body = Vec::with_capacity(usize::try_from(len.min(64 * 1024)).unwrap_or(0));
+    Read::by_ref(stream)
+        .take(u64::from(len))
+        .read_to_end(&mut body)?;
+    if body.len() != usize::try_from(len).unwrap_or(usize::MAX) {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "Antwort unvollständig",
+        ));
+    }
     serde_json::from_slice(&body).map_err(io::Error::other)
 }
 

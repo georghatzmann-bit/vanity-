@@ -9,15 +9,18 @@
 //!   fehl, wird die Kopie verworfen und das Original bleibt unverändert.
 //! - **Wiederherstellen** (`Restore`): nur an den ursprünglichen Ort, nie überschreiben,
 //!   Inhalt per SHA-256 geprüft.
+//! - Nutzerdateien werden nur mit den **Rechten des anfragenden Nutzers** angefasst
+//!   ([`UserAccess`]), ohne Links zu folgen ([`userfs`]).
 //! - **Endgültig löschen** (`DeletePermanently`): nur mit zweiter Bestätigung.
 //! - Es wird **nie automatisch** gelöscht – auch nicht nach Fristen.
 //!
-//! Ehrliche Grenze: Der Schlüssel liegt in diesem Schritt als Datei im Tresor-Ordner, dessen
-//! Zugriff der Dienst (ab P2.3) auf SYSTEM/Administratoren beschränkt; unter Windows wird er
-//! zusätzlich per DPAPI geschützt (siehe `docs/SECURITY.md`).
+//! Ehrliche Grenze: Der Schlüssel liegt als Datei im Tresor-Ordner, dessen Zugriff der Dienst
+//! auf SYSTEM/Administratoren beschränkt. Eine DPAPI-Bindung ist geplant (P5, siehe
+//! `docs/SECURITY.md`) – bis dahin schützt nur die Zugriffsliste.
 #![forbid(unsafe_code)]
 
 pub mod crypto;
+pub mod userfs;
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -32,6 +35,7 @@ use aegis_core::uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::{CryptoError, Key};
+pub use crate::userfs::{OwnProcess, UserAccess, UserScope};
 
 const KEY_FILE: &str = "vault.key";
 const CONTAINER_EXT: &str = "aqf";
@@ -181,11 +185,16 @@ impl Vault {
         self.dir.join(format!("{id}.{META_EXT}"))
     }
 
-    /// Isoliert alle Datei-Ziele des Plans (Art `Quarantine`).
+    /// Isoliert alle Datei-Ziele des Plans (Art `Quarantine`). Die Originale werden mit den
+    /// Rechten von `user` geöffnet und entfernt.
     ///
     /// # Errors
     /// Falsche Planart. Fehler einzelner Ziele stehen in [`Outcome::failures`].
-    pub fn quarantine(&self, permit: ExecutionPermit) -> Result<Outcome, QuarantineError> {
+    pub fn quarantine(
+        &self,
+        permit: ExecutionPermit,
+        user: &dyn UserAccess,
+    ) -> Result<Outcome, QuarantineError> {
         let plan = permit.ensure_kind(ActionKind::Quarantine)?;
         let now = permit.redeemed_at();
         let plan_id = plan.id().to_string();
@@ -197,7 +206,7 @@ impl Vault {
             let Target::File { path } = target else {
                 continue;
             };
-            match self.isolate_one(path, now, &plan_id, &reason) {
+            match self.isolate_one(path, now, &plan_id, &reason, user) {
                 Ok(entry) => {
                     steps.push(UndoStep::RestoreFile {
                         from: self.container_path(&entry.id),
@@ -222,21 +231,20 @@ impl Vault {
         now: OffsetDateTime,
         plan_id: &str,
         reason: &str,
+        user: &dyn UserAccess,
     ) -> Result<Entry, QuarantineError> {
-        let meta = std::fs::symlink_metadata(path)?;
-        if !meta.is_file() {
-            return Err(QuarantineError::InvalidPlan(format!(
-                "{} ist keine reguläre Datei (Links und Ordner werden nicht isoliert)",
-                path.display()
-            )));
-        }
+        // Mit den Rechten des Nutzers öffnen: exklusiv, ohne Links.
+        let original = {
+            let _scope = user.enter()?;
+            userfs::open_original(path)?
+        };
         let id = Uuid::new_v4().hyphenated().to_string();
         let container = self.container_path(&id);
         let part = self.dir.join(format!("{id}.{CONTAINER_EXT}.part"));
 
-        // 1. Verschlüsselt in eine neue Teil-Datei schreiben.
+        // 1. Verschlüsselt in eine neue Teil-Datei schreiben (aus dem geöffneten Handle).
         let (sha, size) = {
-            let source = BufReader::new(File::open(path)?);
+            let source = BufReader::new(&original.file);
             let mut out = BufWriter::new(create_new_file(&part)?);
             let result = crypto::encrypt(&self.key, source, &mut out, crypto::DEFAULT_CHUNK);
             let flushed = out
@@ -277,8 +285,12 @@ impl Vault {
             remove_own_file(&container)?;
             return Err(e.into());
         }
-        // 3. Erst jetzt das Original entfernen – geschützt durch die Erlaubnis des Nutzers.
-        if let Err(e) = remove_user_file(path) {
+        // 3. Erst jetzt das Original entfernen – geschützt durch die Erlaubnis des Nutzers,
+        //    mit seinen Rechten und über das exklusiv geöffnete Handle.
+        let removed = user
+            .enter()
+            .and_then(|_scope| userfs::remove_original(original));
+        if let Err(e) = removed {
             remove_own_file(&self.meta_path(&id))?;
             remove_own_file(&container)?;
             return Err(QuarantineError::Io(io::Error::new(
@@ -292,13 +304,19 @@ impl Vault {
     /// Stellt Einträge an ihren ursprünglichen Ort zurück (Art `Restore`, Parameter
     /// `quarantine_id`, Datei-Ziel = ursprünglicher Ort).
     ///
+    /// Das Ziel wird mit den Rechten von `user` neu angelegt.
+    ///
     /// # Errors
     /// Falsche Planart, fehlender/ungültiger Parameter, Ziel passt nicht zum Eintrag.
-    pub fn restore(&self, permit: ExecutionPermit) -> Result<Outcome, QuarantineError> {
+    pub fn restore(
+        &self,
+        permit: ExecutionPermit,
+        user: &dyn UserAccess,
+    ) -> Result<Outcome, QuarantineError> {
         let plan = permit.ensure_kind(ActionKind::Restore)?;
         let (entry, target) =
             self.planned_entry(plan.parameter(param::QUARANTINE_ID), plan.targets())?;
-        let result = self.restore_one(&entry, &target);
+        let result = self.restore_one(&entry, &target, user);
         let (entries, failures) = match result {
             Ok(()) => (vec![entry], vec![]),
             Err(e) => (vec![], vec![(target, e.to_string())]),
@@ -327,19 +345,20 @@ impl Vault {
         Ok((entry, path.clone()))
     }
 
-    fn restore_one(&self, entry: &Entry, target: &Path) -> Result<(), QuarantineError> {
-        if std::fs::symlink_metadata(target).is_ok() {
+    fn restore_one(
+        &self,
+        entry: &Entry,
+        target: &Path,
+        user: &dyn UserAccess,
+    ) -> Result<(), QuarantineError> {
+        if userfs::occupied(target) {
             return Err(QuarantineError::InvalidPlan(format!(
                 "Am ursprünglichen Ort liegt bereits etwas ({}) – es wird nichts überschrieben",
                 target.display()
             )));
         }
-        let parent = target
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .ok_or_else(|| QuarantineError::InvalidPlan("ursprünglicher Ort ohne Ordner".into()))?;
-        create_restore_parent(parent)?;
-        let part = parent.join(format!(".{}.aegis-restore", entry.id));
+        // 1. Im Tresor entschlüsseln und prüfen – noch nichts beim Nutzer angefasst.
+        let part = self.dir.join(format!("{}.restore.part", entry.id));
         let (sha, size) = {
             let mut out = BufWriter::new(create_new_file(&part)?);
             let source = BufReader::new(File::open(self.container_path(&entry.id))?);
@@ -351,26 +370,56 @@ impl Vault {
             match (result, flushed) {
                 (Ok(r), Ok(())) => r,
                 (Err(e), _) => {
-                    remove_restore_part(&part)?;
+                    remove_own_file(&part)?;
                     return Err(e.into());
                 }
                 (_, Err(e)) => {
-                    remove_restore_part(&part)?;
+                    remove_own_file(&part)?;
                     return Err(e.into());
                 }
             }
         };
         if hex(&sha) != entry.sha256 || size != entry.size {
-            remove_restore_part(&part)?;
+            remove_own_file(&part)?;
             return Err(QuarantineError::Crypto(CryptoError::Tampered));
         }
-        if std::fs::symlink_metadata(target).is_ok() {
-            remove_restore_part(&part)?;
-            return Err(QuarantineError::InvalidPlan(
-                "Ziel ist inzwischen belegt – nichts überschrieben".into(),
-            ));
+        // 2. Ziel mit den Rechten des Nutzers neu anlegen (nie überschreiben, keine Links,
+        //    keine fehlenden Ordner anlegen).
+        let restored = {
+            let scope = user.enter();
+            match scope.and_then(|_scope| userfs::create_restored(target)) {
+                Ok(r) => r,
+                Err(e) => {
+                    remove_own_file(&part)?;
+                    let message = match e.kind() {
+                        io::ErrorKind::AlreadyExists => {
+                            "Ziel ist inzwischen belegt – nichts überschrieben".to_owned()
+                        }
+                        io::ErrorKind::NotFound => format!(
+                            "Der ursprüngliche Ordner existiert nicht mehr ({}) – bitte zuerst anlegen",
+                            target
+                                .parent()
+                                .map_or_else(String::new, |p| p.display().to_string())
+                        ),
+                        _ => format!("Ziel kann nicht angelegt werden: {e}"),
+                    };
+                    return Err(QuarantineError::InvalidPlan(message));
+                }
+            }
+        };
+        // 3. Geprüften Inhalt in das neue Ziel kopieren.
+        let copied = File::open(&part).and_then(|mut source| {
+            let mut out = &restored.file;
+            io::copy(&mut source, &mut out)?;
+            restored.file.sync_all()
+        });
+        remove_own_file(&part)?;
+        if let Err(e) = copied {
+            user.enter()
+                .and_then(|_scope| userfs::discard_restored(restored))?;
+            return Err(e.into());
         }
-        commit_restore(&part, target)?;
+        drop(restored);
         remove_own_file(&self.meta_path(&entry.id))?;
         remove_own_file(&self.container_path(&entry.id))?;
         Ok(())
@@ -462,17 +511,28 @@ fn hex(bytes: &[u8; 32]) -> String {
 // ---------------------------------------------------------------------------------------
 
 fn create_vault_dir(dir: &Path) -> io::Result<()> {
-    // AEGIS-eigener Tresor-Ordner.
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    // AEGIS-eigener Tresor-Ordner (unter Unix nur für den Eigentümer).
     // aegis-mutation: quarantine-create-vault-dir
     #[allow(clippy::disallowed_methods)]
-    std::fs::create_dir_all(dir)
+    builder.create(dir)
 }
 
 fn create_new_file(path: &Path) -> io::Result<File> {
-    // Nur neue Dateien (create_new): Tresor-Container, Metadaten, Wiederherstellungs-Teil.
+    // Nur neue Dateien (create_new) im Tresor: Container, Metadaten, Schlüssel, Teil-Dateien.
     // aegis-mutation: quarantine-create-new-file
     #[allow(clippy::disallowed_methods)]
-    OpenOptions::new().write(true).create_new(true).open(path)
+    let options = {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        options
+    };
+    options.open(path)
 }
 
 fn write_new_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -496,36 +556,4 @@ fn remove_own_file(path: &Path) -> io::Result<()> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         other => other,
     }
-}
-
-fn remove_user_file(path: &Path) -> io::Result<()> {
-    // Entfernt das Original NACH geprüfter verschlüsselter Kopie – nur aus `quarantine`,
-    // also nur mit ExecutionPermit (Nutzer hat „Ja, ausführen“ gewählt).
-    // aegis-mutation: quarantine-remove-original
-    #[allow(clippy::disallowed_methods)]
-    std::fs::remove_file(path)
-}
-
-fn create_restore_parent(dir: &Path) -> io::Result<()> {
-    // Ursprünglichen Ordner wiederherstellen, falls er inzwischen fehlt (nur mit Erlaubnis).
-    // aegis-mutation: quarantine-restore-create-parent
-    #[allow(clippy::disallowed_methods)]
-    std::fs::create_dir_all(dir)
-}
-
-fn remove_restore_part(path: &Path) -> io::Result<()> {
-    // Eigene, unfertige Wiederherstellungs-Datei verwerfen.
-    // aegis-mutation: quarantine-remove-restore-part
-    #[allow(clippy::disallowed_methods)]
-    match std::fs::remove_file(path) {
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-        other => other,
-    }
-}
-
-fn commit_restore(from: &Path, to: &Path) -> io::Result<()> {
-    // Geprüfte Datei an den ursprünglichen Ort legen (vorher geprüft: Ziel ist frei).
-    // aegis-mutation: quarantine-restore-commit
-    #[allow(clippy::disallowed_methods)]
-    std::fs::rename(from, to)
 }

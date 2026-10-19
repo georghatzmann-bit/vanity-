@@ -8,7 +8,7 @@ use aegis_core::consent::{ConsentConfig, ConsentGate};
 use aegis_core::testing::{DirSnapshot, ManualClock, assert_unchanged, eicar, write_fixture};
 use aegis_core::time::Duration;
 use aegis_engine::Engine;
-use aegis_quarantine::Vault;
+use aegis_quarantine::{OwnProcess, Vault};
 use aegis_service::{Request, Service};
 use serde_json::{Value, json};
 
@@ -39,7 +39,7 @@ impl Harness {
     /// Sendet JSON wie die Oberfläche und liefert die Antwort als JSON.
     fn send(&mut self, request: Value) -> Value {
         let req: Request = serde_json::from_value(request).unwrap();
-        serde_json::to_value(self.service.handle(req)).unwrap()
+        serde_json::to_value(self.service.handle(req, &OwnProcess)).unwrap()
     }
 
     fn answer(&mut self, proposal: &Value, decision: &str) -> Value {
@@ -201,12 +201,12 @@ fn pruefprotokoll_ist_lueckenlos() {
         );
         let req: Request =
             serde_json::from_value(json!({"type": "propose_quarantine", "paths": [path]})).unwrap();
-        let p = serde_json::to_value(service.handle(req)).unwrap();
+        let p = serde_json::to_value(service.handle(req, &OwnProcess)).unwrap();
         let req: Request = serde_json::from_value(json!({
             "type": "decide", "plan_id": p["proposal"]["ticket"]["id"], "digest": p["proposal"]["ticket"]["digest"],
             "nonce": p["proposal"]["nonce"], "decision": "execute", "dialog_id": "d"
         })).unwrap();
-        service.handle(req);
+        service.handle(req, &OwnProcess);
         assert!(service.take_unwritten_events().is_empty());
     }
     let report = verify(Cursor::new(&log)).unwrap();
@@ -215,4 +215,103 @@ fn pruefprotokoll_ist_lueckenlos() {
     for needle in ["plan_proposed", "decision_recorded", "action_executed"] {
         assert!(text.contains(needle), "fehlt: {needle}\n{text}");
     }
+}
+
+// ---------------------------------------------------------------------------------------
+// Regressionstests aus dem P2-Sicherheits-Review.
+// ---------------------------------------------------------------------------------------
+
+/// Protokoll, das ab einem Zeitpunkt nicht mehr schreiben bzw. sichern kann.
+struct FlakyLog {
+    broken: std::rc::Rc<std::cell::Cell<bool>>,
+}
+
+impl std::io::Write for FlakyLog {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.broken.get() {
+            Err(std::io::Error::other("Platte voll"))
+        } else {
+            Ok(buf.len())
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl aegis_core::audit::Durable for FlakyLog {
+    fn sync_durable(&mut self) -> std::io::Result<()> {
+        if self.broken.get() {
+            Err(std::io::Error::other("Platte voll"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+/// Review-Fund D: Fällt das Protokoll zwischen Vorschlag und Antwort aus, wird nichts
+/// ausgeführt – die Freigabe muss auf der Platte stehen, bevor etwas verändert wird.
+#[test]
+fn ohne_schreibbares_protokoll_wird_nichts_ausgefuehrt() {
+    let vault_dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let path = write_fixture(home.path(), "f.txt", b"x").unwrap();
+    let clock = ManualClock::default();
+    let gate = ConsentGate::with_clock(clock, ConsentConfig::default()).unwrap();
+    let broken = std::rc::Rc::new(std::cell::Cell::new(false));
+    let mut service = Service::new(
+        Engine::with_builtin_rules().unwrap(),
+        Vault::open(vault_dir.path()).unwrap(),
+        gate,
+        AuditLog::new(FlakyLog {
+            broken: broken.clone(),
+        }),
+    );
+    let mut send = |v: Value| {
+        let req: Request = serde_json::from_value(v).unwrap();
+        serde_json::to_value(service.handle(req, &OwnProcess)).unwrap()
+    };
+    let p = send(json!({"type": "propose_quarantine", "paths": [path]}));
+    broken.set(true);
+    let r = send(json!({
+        "type": "decide", "plan_id": p["proposal"]["ticket"]["id"],
+        "digest": p["proposal"]["ticket"]["digest"], "nonce": p["proposal"]["nonce"],
+        "decision": "execute", "dialog_id": "d"
+    }));
+    assert_eq!(r["code"], "audit", "{r}");
+    assert_eq!(std::fs::read(&path).unwrap(), b"x", "nichts ausgeführt");
+}
+
+/// Review-Fund 1 (Teil Pfade) und 6: nur zulässige Pfade, Datenordner tabu, begrenzte
+/// Anzahl offener Vorschläge.
+#[test]
+fn pfadregeln_und_grenzen() {
+    let mut h = harness();
+    let vault = h.service.quarantine_entries().map(|_| ()).is_ok();
+    assert!(vault);
+    for bad in ["/a/../etc/passwd", "relativ", "/a/./b"] {
+        let r = h.send(json!({"type": "scan", "paths": [bad]}));
+        assert_eq!(r["code"], "input", "{bad}: {r}");
+    }
+    // Der Tresor-Ordner ist nie ein Ziel.
+    let inside = h._vault_dir.path().join("vault.key");
+    let r = h.send(json!({"type": "propose_quarantine", "paths": [inside]}));
+    assert_eq!(r["code"], "input", "{r}");
+    let r = h.send(json!({"type": "scan", "paths": [h._vault_dir.path()]}));
+    assert_eq!(r["code"], "input", "{r}");
+    // Zu viele Pfad-Bytes.
+    let long = format!("/{}", "a".repeat(300 * 1024));
+    let r = h.send(json!({"type": "scan", "paths": [long]}));
+    assert_eq!(r["code"], "input");
+    // Offene Vorschläge sind begrenzt.
+    let home = tempfile::tempdir().unwrap();
+    let path = write_fixture(home.path(), "a.txt", b"a").unwrap();
+    let mut codes = Vec::new();
+    for _ in 0..70 {
+        let r = h.send(json!({"type": "propose_quarantine", "paths": [path]}));
+        codes.push(
+            r["type"].as_str().unwrap_or_default().to_owned() + r["code"].as_str().unwrap_or(""),
+        );
+    }
+    assert!(codes.iter().any(|c| c == "errorbusy"), "{codes:?}");
 }

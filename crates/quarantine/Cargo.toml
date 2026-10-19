@@ -18,6 +18,9 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 zeroize = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+aegis-winffi = { workspace = true }
+
 [dev-dependencies]
 aegis-core = { workspace = true, features = ["testing"] }
 aegis-engine = { workspace = true }

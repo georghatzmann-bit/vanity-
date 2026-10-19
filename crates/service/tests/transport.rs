@@ -16,7 +16,19 @@ fn ask<S: std::io::Read + std::io::Write>(stream: &mut S, request: &Value) -> Va
     serde_json::from_slice(&bytes).unwrap()
 }
 
+/// Langer, tatsächlicher Pfad (Windows-Temp kann Kurznamen wie `RUNNER~1` enthalten; der
+/// Dienst vergleicht mit dem tatsächlichen Pfad und lehnt Abweichungen ab).
+fn real_dir(p: &std::path::Path) -> std::path::PathBuf {
+    let c = std::fs::canonicalize(p).unwrap();
+    let text = c.to_string_lossy().into_owned();
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) => std::path::PathBuf::from(rest),
+        None => c,
+    }
+}
+
 fn conversation<S: std::io::Read + std::io::Write>(stream: &mut S, home: &std::path::Path) {
+    let home = &real_dir(home);
     let hello = ask(
         stream,
         &json!({"type": "hello", "client": "test", "protocol": 1}),
@@ -41,6 +53,31 @@ fn conversation<S: std::io::Read + std::io::Write>(stream: &mut S, home: &std::p
     );
     assert_eq!(done["type"], "nothing_done");
     assert!(path.exists(), "„Nein“ verändert nichts");
+
+    // „Ja“: isolieren und wiederherstellen über den echten Transport (unter Windows mit
+    // Identitätswechsel auf den Client und Zugriff über Handles).
+    let yes = |stream: &mut S, proposal: &Value| {
+        let p = &proposal["proposal"];
+        ask(
+            stream,
+            &json!({
+                "type": "decide", "plan_id": p["ticket"]["id"], "digest": p["ticket"]["digest"],
+                "nonce": p["nonce"], "decision": "execute", "dialog_id": "t"
+            }),
+        )
+    };
+    let proposal = ask(
+        stream,
+        &json!({"type": "propose_quarantine", "paths": [path]}),
+    );
+    let done = yes(stream, &proposal);
+    assert_eq!(done["type"], "executed", "{done}");
+    assert!(!path.exists(), "isoliert");
+    let id = done["entries"][0]["id"].clone();
+    let proposal = ask(stream, &json!({"type": "propose_restore", "entry_id": id}));
+    let done = yes(stream, &proposal);
+    assert_eq!(done["type"], "executed", "{done}");
+    assert_eq!(std::fs::read(&path).unwrap(), eicar(), "wiederhergestellt");
 }
 
 #[cfg(unix)]
@@ -107,4 +144,44 @@ fn named_pipe_ende_zu_ende() {
     stop.store(true, Ordering::SeqCst);
     let _ = connect(&endpoint);
     server.join().unwrap().unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn identitaetswechsel_und_server_pruefung() {
+    use aegis_service::protocol::{read_frame, write_frame};
+    use aegis_service::transport::windows::{
+        ServerIdentity, accept, connect, create_instance, impersonate_client, server_identity,
+        thread_is_impersonating,
+    };
+    let name = format!(r"\\.\pipe\aegis-imp-{}", std::process::id());
+    let instance = create_instance(&name, true).unwrap();
+    let server = std::thread::spawn(move || {
+        let connection = accept(instance).unwrap();
+        let mut reader = &connection;
+        read_frame(&mut reader).unwrap();
+        assert!(!thread_is_impersonating().unwrap());
+        {
+            let _as_client = impersonate_client(&connection).unwrap();
+            assert!(thread_is_impersonating().unwrap());
+        }
+        assert!(
+            !thread_is_impersonating().unwrap(),
+            "zurück zur eigenen Identität"
+        );
+    });
+    let mut client = None;
+    for _ in 0..100 {
+        if let Ok(c) = connect(&name) {
+            client = Some(c);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let client = client.expect("Pipe nicht erreichbar");
+    // In der CI läuft der Test-Server nicht als SYSTEM – die App würde nichts senden.
+    assert_eq!(server_identity(&client).unwrap(), ServerIdentity::Other);
+    let mut writer = &client;
+    write_frame(&mut writer, b"{}").unwrap();
+    server.join().unwrap();
 }

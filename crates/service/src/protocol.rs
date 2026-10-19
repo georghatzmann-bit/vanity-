@@ -121,8 +121,15 @@ pub fn read_frame<R: Read>(reader: &mut R) -> io::Result<Vec<u8>> {
             "Nachricht zu groß",
         ));
     }
-    let mut buf = vec![0u8; usize::try_from(len).map_err(io::Error::other)?];
-    reader.read_exact(&mut buf)?;
+    // Schrittweise lesen: Eine Längenangabe allein reserviert keinen Speicher.
+    let mut buf = Vec::with_capacity(usize::try_from(len.min(64 * 1024)).unwrap_or(0));
+    reader.take(u64::from(len)).read_to_end(&mut buf)?;
+    if buf.len() != usize::try_from(len).unwrap_or(usize::MAX) {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "Nachricht unvollständig",
+        ));
+    }
     Ok(buf)
 }
 

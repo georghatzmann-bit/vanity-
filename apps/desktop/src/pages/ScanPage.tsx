@@ -2,7 +2,7 @@
  * Scan: Dateien/Ordner vom Dienst prüfen lassen und Funde erklären. Isolieren wird nur
  * vorgeschlagen – ausgeführt wird erst nach „Ja, ausführen“ im Freigabe-Dialog.
  */
-import { Button, IconFile, IconTree, Panel, RiskBadge, useToast } from '@aegis/ui';
+import { Button, IconFile, IconTree, Panel, RiskBadge, SafeText, useToast } from '@aegis/ui';
 import { useCallback, useState } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
@@ -31,7 +31,9 @@ function FindingRow({
               {t('scanner.confidence', { value: String(finding.confidence) })}
             </span>
           </div>
-          <p className="mt-2 break-all font-mono text-sm text-text">{finding.path}</p>
+          <p className="mt-2 text-sm text-text">
+            <SafeText value={finding.path} mono breakAll />
+          </p>
           <p className="mt-1 text-sm text-text-muted">{summary}</p>
           {finding.notScannable !== null && (
             <p className="mt-1 text-xs text-warn">

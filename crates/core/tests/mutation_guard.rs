@@ -142,6 +142,7 @@ const MUTATION_CAPABLE_CRATES: &[&str] = &[
     "tempfile",
     "windows",
     "windows-sys",
+    "windows-service",
     "winapi",
     "libc",
     "nix",

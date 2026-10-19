@@ -677,6 +677,45 @@ impl<W: Write> AuditLog<W> {
     }
 }
 
+/// Ziel, das Geschriebenes dauerhaft sichern kann (Datei: `sync_data`).
+pub trait Durable: Write {
+    /// Sichert alles bisher Geschriebene dauerhaft.
+    ///
+    /// # Errors
+    /// Ein-/Ausgabefehler.
+    fn sync_durable(&mut self) -> std::io::Result<()>;
+}
+
+impl Durable for std::fs::File {
+    fn sync_durable(&mut self) -> std::io::Result<()> {
+        self.flush()?;
+        self.sync_data()
+    }
+}
+
+impl<T: Durable + ?Sized> Durable for &mut T {
+    fn sync_durable(&mut self) -> std::io::Result<()> {
+        (**self).sync_durable()
+    }
+}
+
+impl Durable for Vec<u8> {
+    fn sync_durable(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<W: Durable> AuditLog<W> {
+    /// Sichert das Protokoll dauerhaft – vor jeder Ausführung, damit die Freigabe schon auf
+    /// der Platte steht, bevor etwas verändert wird.
+    ///
+    /// # Errors
+    /// [`AuditError::Io`].
+    pub fn sync(&mut self) -> Result<(), AuditError> {
+        self.writer.sync_durable().map_err(AuditError::Io)
+    }
+}
+
 // ---------------------------------------------------------------------------------------
 // Prüfen
 // ---------------------------------------------------------------------------------------

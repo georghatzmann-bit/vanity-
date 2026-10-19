@@ -3,17 +3,21 @@
 use std::fs::File;
 use std::io::{self, BufReader};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use aegis_core::audit::{AuditLog, verify_prefix};
+use aegis_core::audit::{AuditLog, Durable, verify_prefix};
 use aegis_core::consent::{ConsentConfig, ConsentGate, SystemClock};
 use aegis_engine::clamav::ClamAv;
 use aegis_engine::yara::YaraRules;
 use aegis_engine::{Engine, EngineConfig};
 use aegis_quarantine::Vault;
 
+#[cfg(unix)]
+use aegis_quarantine::OwnProcess;
+
 use crate::handler::Service;
+use crate::transport::{MAX_CONNECTIONS, Slot};
 
 /// Dienst mit Systemuhr und Prüfprotokoll-Datei.
 pub type LiveService = Service<SystemClock, File>;
@@ -63,12 +67,12 @@ impl ServerConfig {
 /// # Errors
 /// Datenordner nicht anlegbar/absicherbar, Prüfprotokoll beschädigt, Regeln fehlerhaft.
 pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
-    create_data_dir(data_dir)?;
-    #[cfg(windows)]
-    crate::transport::windows::secure_data_dir(data_dir)?;
-
+    // Jeder Ordner wird mit seiner Zugriffsliste angelegt bzw. – falls vorhanden – auf
+    // Besitzer und Links geprüft (ein vorab von einem Nutzer angelegter Ordner wird abgelehnt).
+    secure_dir(data_dir)?;
     let audit_dir = data_dir.join("audit");
-    create_data_dir(&audit_dir)?;
+    secure_dir(&audit_dir)?;
+    secure_dir(&data_dir.join("quarantine"))?;
     let audit_path = audit_dir.join("audit.jsonl");
     let audit = open_audit(&audit_path)?;
 
@@ -79,7 +83,7 @@ pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
         ..EngineConfig::default()
     });
     let gate = ConsentGate::new(ConsentConfig::default()).map_err(io::Error::other)?;
-    Ok(Service::new(engine, vault, gate, audit))
+    Ok(Service::new(engine, vault, gate, audit).with_protected(vec![data_dir.to_owned()]))
 }
 
 fn open_audit(path: &Path) -> io::Result<AuditLog<File>> {
@@ -113,28 +117,48 @@ pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
     serve(&config.endpoint, &service, stop)
 }
 
-/// Bedient den Endpunkt mit einem vorhandenen Dienst-Zustand.
+static CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
+
+/// Bedient den Endpunkt mit einem vorhandenen Dienst-Zustand. Fehler einzelner Verbindungen
+/// (z. B. sofort wieder getrennte Clients) beenden den Dienst nicht.
 ///
 /// # Errors
 /// Endpunkt belegt oder nicht anlegbar.
 #[cfg(windows)]
-pub fn serve<W: io::Write + Send + 'static>(
+pub fn serve<W: Durable + Send + 'static>(
     endpoint: &str,
     service: &Arc<Mutex<Service<SystemClock, W>>>,
     stop: &Arc<AtomicBool>,
 ) -> io::Result<()> {
-    use crate::transport::windows::{accept, create_instance};
-    let mut first = true;
+    use crate::transport::windows::{PipeClient, accept, create_instance};
+    // Die erste Instanz muss exklusiv gelingen – sonst hat jemand den Namen besetzt.
+    let mut instance = Some(create_instance(endpoint, true)?);
     while !stop.load(Ordering::SeqCst) {
-        let instance = create_instance(endpoint, first)?;
-        first = false;
-        let mut connection = accept(instance)?;
+        let current = match instance.take() {
+            Some(i) => i,
+            None => match create_instance(endpoint, false) {
+                Ok(i) => i,
+                Err(_) => {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    continue;
+                }
+            },
+        };
+        let Ok(connection) = accept(current) else {
+            continue;
+        };
         if stop.load(Ordering::SeqCst) {
             break;
         }
+        let Some(slot) = Slot::try_take(&CONNECTIONS, MAX_CONNECTIONS) else {
+            continue; // Verbindung wird sofort wieder geschlossen.
+        };
         let service = Arc::clone(service);
         std::thread::spawn(move || {
-            let _ = crate::transport::serve_connection(&service, &mut connection);
+            let _slot = slot;
+            let mut stream = &connection;
+            let _ =
+                crate::transport::serve_connection(&service, &mut stream, &PipeClient(&connection));
         });
     }
     Ok(())
@@ -152,7 +176,7 @@ pub fn serve<C, W>(
 ) -> io::Result<()>
 where
     C: aegis_core::consent::Clock + Send + 'static,
-    W: io::Write + Send + 'static,
+    W: Durable + Send + 'static,
 {
     let listener = crate::transport::unix::bind(Path::new(endpoint))?;
     for stream in listener.incoming() {
@@ -160,9 +184,15 @@ where
             break;
         }
         let Ok(mut stream) = stream else { continue };
+        let Some(slot) = Slot::try_take(&CONNECTIONS, MAX_CONNECTIONS) else {
+            continue;
+        };
         let service = Arc::clone(service);
         std::thread::spawn(move || {
-            let _ = crate::transport::serve_connection(&service, &mut stream);
+            let _slot = slot;
+            // Entwicklung unter Linux: Socket nur für den Eigentümer (Ordner 0700), daher
+            // ohne Identitätswechsel.
+            let _ = crate::transport::serve_connection(&service, &mut stream, &OwnProcess);
         });
     }
     Ok(())
@@ -172,11 +202,41 @@ where
 // Verändernde Aufrufe – nur AEGIS-eigene Daten, jeweils markiert.
 // ---------------------------------------------------------------------------------------
 
-fn create_data_dir(dir: &Path) -> io::Result<()> {
+/// Windows: mit Zugriffsliste anlegen bzw. Besitzer/Links prüfen (`aegis-winffi`).
+#[cfg(windows)]
+fn secure_dir(dir: &Path) -> io::Result<()> {
+    crate::transport::windows::create_secure_dir(dir)
+}
+
+/// Unix (Entwicklung): Ordner nur für den Eigentümer; vorhandene Ordner müssen echte
+/// Ordner des eigenen Kontos sein.
+#[cfg(unix)]
+fn secure_dir(dir: &Path) -> io::Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true).mode(0o700);
     // AEGIS-eigener Datenordner des Dienstes (Tresor, Prüfprotokoll).
     // aegis-mutation: service-create-data-dir
     #[allow(clippy::disallowed_methods)]
-    std::fs::create_dir_all(dir)
+    builder.create(dir)?;
+    let meta = std::fs::symlink_metadata(dir)?;
+    let own_uid = std::fs::metadata("/proc/self").map(|m| m.uid()).ok();
+    if !meta.file_type().is_dir() || own_uid.is_some_and(|uid| uid != meta.uid()) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "{} ist kein Ordner dieses Kontos (Link oder fremder Besitzer) – Dienst startet nicht",
+                dir.display()
+            ),
+        ));
+    }
+    if meta.permissions().mode() & 0o077 != 0 {
+        // Eigenen Datenordner auf „nur Eigentümer“ beschränken.
+        // aegis-mutation: service-data-dir-private
+        #[allow(clippy::disallowed_methods)]
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(())
 }
 
 fn open_audit_append(path: &Path) -> io::Result<File> {

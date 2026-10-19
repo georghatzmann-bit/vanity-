@@ -7,20 +7,68 @@
 
 use std::io::{self, Read, Write};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
+use aegis_core::audit::Durable;
 use aegis_core::consent::Clock;
+use aegis_quarantine::UserAccess;
 
-use crate::handler::Service;
+use crate::handler::{Service, examine_as_user, scan_as_user};
 use crate::protocol::{Request, Response, read_frame, write_frame};
 
-/// Bedient eine Verbindung, bis die Gegenseite schließt.
+/// Höchstzahl gleichzeitiger Verbindungen.
+pub const MAX_CONNECTIONS: usize = 16;
+/// Höchstzahl gleichzeitig laufender Scans (lange Läufe blockieren so niemanden ganz).
+pub const MAX_PARALLEL_SCANS: usize = 2;
+
+static RUNNING_SCANS: AtomicUsize = AtomicUsize::new(0);
+
+/// Zählt eine belegte Stelle, gibt sie beim Verwerfen frei.
+#[derive(Debug)]
+pub struct Slot(&'static AtomicUsize);
+
+impl Slot {
+    /// Belegt eine Stelle, wenn weniger als `max` belegt sind.
+    #[must_use]
+    pub fn try_take(counter: &'static AtomicUsize, max: usize) -> Option<Self> {
+        counter
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
+                (n < max).then_some(n + 1)
+            })
+            .ok()
+            .map(|_| Self(counter))
+    }
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+fn busy() -> Response {
+    Response::error(
+        "busy",
+        "Es laufen schon zu viele Prüfungen – bitte gleich noch einmal",
+    )
+}
+
+/// Bedient eine Verbindung, bis die Gegenseite schließt. Scans und die Prüfung für
+/// Vorschläge laufen **ohne** Sperre des Dienst-Zustands (und höchstens
+/// [`MAX_PARALLEL_SCANS`] gleichzeitig); alles andere unter der Sperre.
 ///
 /// # Errors
 /// Ein-/Ausgabefehler der Verbindung.
-pub fn serve_connection<C: Clock, W: Write, S: Read + Write>(
+pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
     service: &Mutex<Service<C, W>>,
     stream: &mut S,
+    user: &dyn UserAccess,
 ) -> io::Result<()> {
+    let lock = || {
+        service
+            .lock()
+            .map_err(|_| io::Error::other("Dienst-Zustand beschädigt"))
+    };
     loop {
         let payload = match read_frame(stream) {
             Ok(p) => p,
@@ -28,10 +76,35 @@ pub fn serve_connection<C: Clock, W: Write, S: Read + Write>(
             Err(e) => return Err(e),
         };
         let response = match serde_json::from_slice::<Request>(&payload) {
-            Ok(request) => service
-                .lock()
-                .map_err(|_| io::Error::other("Dienst-Zustand beschädigt"))?
-                .handle(request),
+            Ok(Request::Scan { paths }) => {
+                let (engine, checked) = {
+                    let guard = lock()?;
+                    (guard.engine(), guard.check_paths(&paths))
+                };
+                match (checked, Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS)) {
+                    (Err(e), _) => Response::error("input", e),
+                    (Ok(()), None) => busy(),
+                    (Ok(()), Some(_slot)) => scan_as_user(&engine, &paths, user),
+                }
+            }
+            Ok(Request::ProposeQuarantine { paths }) => {
+                let (engine, checked) = {
+                    let guard = lock()?;
+                    (guard.engine(), guard.check_paths(&paths))
+                };
+                match (checked, Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS)) {
+                    (Err(e), _) => Response::error("input", e),
+                    (Ok(()), None) => busy(),
+                    (Ok(()), Some(slot)) => match examine_as_user(&engine, &paths, user) {
+                        Ok(findings) => {
+                            drop(slot);
+                            lock()?.propose_quarantine(&paths, &findings)
+                        }
+                        Err(response) => response,
+                    },
+                }
+            }
+            Ok(request) => lock()?.handle(request, user),
             Err(e) => Response::error("invalid", format!("Ungültige Anfrage: {e}")),
         };
         let bytes = serde_json::to_vec(&response).map_err(io::Error::other)?;
@@ -82,11 +155,20 @@ pub mod windows {
     use std::fs::File;
     use std::io;
 
+    use std::os::windows::fs::OpenOptionsExt;
+
+    use aegis_quarantine::{UserAccess, UserScope};
     pub use aegis_winffi::{
-        DATA_DIR_SDDL, PIPE_NAME, PIPE_SDDL, accept, create_instance, secure_data_dir,
+        DATA_DIR_SDDL, PIPE_NAME, PIPE_SDDL, ServerIdentity, accept, create_instance,
+        create_secure_dir, impersonate_client, server_identity, thread_is_impersonating,
     };
 
-    /// Verbindet sich als Client mit der Pipe.
+    /// `SECURITY_IMPERSONATION` (Stufe 2 « 16): Der Dienst darf mit den Rechten des Clients
+    /// auf dessen Dateien zugreifen – mehr nicht (keine Delegation ins Netz).
+    pub const SECURITY_IMPERSONATION: u32 = 2 << 16;
+
+    /// Verbindet sich als Client mit der Pipe (Identitätswechsel nur auf Stufe
+    /// „Impersonation“). Vor dem ersten Senden mit [`server_identity`] prüfen, wer antwortet.
     ///
     /// # Errors
     /// Dienst nicht erreichbar oder Zugriff verweigert.
@@ -97,7 +179,18 @@ pub mod windows {
         let file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
+            .security_qos_flags(SECURITY_IMPERSONATION)
             .open(name);
         file
+    }
+
+    /// Nutzerdateien mit den Rechten des Pipe-Clients anfassen.
+    #[derive(Debug)]
+    pub struct PipeClient<'a>(pub &'a File);
+
+    impl UserAccess for PipeClient<'_> {
+        fn enter(&self) -> io::Result<UserScope> {
+            Ok(UserScope::holding(impersonate_client(self.0)?))
+        }
     }
 }

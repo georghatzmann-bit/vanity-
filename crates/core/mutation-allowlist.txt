@@ -68,24 +68,50 @@ crates/quarantine/src/lib.rs :: quarantine-create-vault-dir :: Quarantäne: legt
 crates/quarantine/src/lib.rs :: quarantine-create-new-file :: Quarantäne: legt ausschließlich NEUE Dateien an (create_new) – Container/Metadaten im Tresor bzw. eine Wiederherstellungs-Teildatei nur innerhalb von restore() mit Erlaubnis; überschreibt nie.
 crates/quarantine/src/lib.rs :: quarantine-commit-container :: Quarantäne: benennt die geprüfte Teil-Datei im Tresor um (AEGIS-eigene Daten).
 crates/quarantine/src/lib.rs :: quarantine-remove-own-file :: Quarantäne: entfernt nur Tresor-Dateien (Teil-Dateien, Rücknahme, wiederhergestellte oder mit zweiter Bestätigung gelöschte Einträge).
-crates/quarantine/src/lib.rs :: quarantine-remove-original :: Quarantäne: entfernt das Original erst nach geprüfter verschlüsselter Kopie; nur aus quarantine(ExecutionPermit) erreichbar.
-crates/quarantine/src/lib.rs :: quarantine-restore-create-parent :: Quarantäne: legt beim Wiederherstellen den fehlenden ursprünglichen Ordner an; nur aus restore(ExecutionPermit).
-crates/quarantine/src/lib.rs :: quarantine-remove-restore-part :: Quarantäne: verwirft die eigene, unfertige Wiederherstellungs-Teildatei.
-crates/quarantine/src/lib.rs :: quarantine-restore-commit :: Quarantäne: legt die geprüfte Datei an den freien ursprünglichen Ort; nur aus restore(ExecutionPermit), überschreibt nie.
 crates/service/src/handler.rs :: service-pipe-decide :: Dienst: einzige Stelle im Betrieb, die die Antwort aus dem Freigabe-Dialog der Oberfläche annimmt – erst nach Prüfung der Einmal-Nonce des Vorschlags; der Plan stammt vom Dienst selbst.
 crates/service/src/handler.rs :: service-pipe-confirm-second :: Dienst: nimmt die zweite, getrennte Bestätigung vor endgültigem Löschen an – nur mit eigener Einmal-Nonce der Rückfrage.
 crates/service/src/transport.rs :: service-unix-socket-bind :: Dienst (nur Entwicklung unter Linux): legt den Unix-Socket im AEGIS-eigenen Datenordner an.
 crates/service/src/transport.rs :: service-pipe-client-open :: Desktop/Client: öffnet die Named Pipe des Dienstes zum Lesen/Schreiben von Nachrichten – keine Datei, keine Nutzerdaten.
-crates/winffi/src/lib.rs :: service-sddl-parse :: Windows-FFI: wandelt die feste SDDL-Zugriffsliste in eine Sicherheitsbeschreibung (nur lesend).
-crates/winffi/src/lib.rs :: service-sddl-free :: Windows-FFI: gibt die Sicherheitsbeschreibung genau einmal frei.
-crates/winffi/src/lib.rs :: service-pipe-create :: Windows-FFI: legt die Named Pipe mit Zugriffsliste an (erste Instanz exklusiv, keine Netzwerk-Clients).
-crates/winffi/src/lib.rs :: service-pipe-own-handle :: Windows-FFI: übernimmt das gerade angelegte Pipe-Handle in ein OwnedHandle (einziger Besitzer).
-crates/winffi/src/lib.rs :: service-pipe-connect :: Windows-FFI: wartet synchron auf einen Client der Pipe.
-crates/winffi/src/lib.rs :: service-dacl-read :: Windows-FFI: liest die DACL aus der festen Sicherheitsbeschreibung.
-crates/winffi/src/lib.rs :: service-dacl-apply :: Windows-FFI: setzt die Zugriffsliste des AEGIS-Datenordners auf SYSTEM/Administratoren (schützt Tresor-Schlüssel und Prüfprotokoll) – nur der eigene Ordner.
-crates/service/src/server.rs :: service-create-data-dir :: Dienst: legt nur den AEGIS-eigenen Datenordner (Tresor, Prüfprotokoll) an.
+crates/winffi/src/util.rs :: service-sddl-parse :: Windows-FFI: wandelt die feste SDDL-Zugriffsliste in eine Sicherheitsbeschreibung (nur lesend).
+crates/winffi/src/util.rs :: service-sddl-free :: Windows-FFI: gibt die Sicherheitsbeschreibung genau einmal frei.
+crates/winffi/src/pipe.rs :: service-pipe-create :: Windows-FFI: legt die Named Pipe mit Zugriffsliste an (erste Instanz exklusiv, keine Netzwerk-Clients).
+crates/winffi/src/pipe.rs :: service-pipe-connect :: Windows-FFI: wartet synchron auf einen Client der Pipe.
+crates/winffi/src/util.rs :: service-dacl-read :: Windows-FFI: liest die DACL aus der festen Sicherheitsbeschreibung.
+crates/winffi/src/fs.rs :: service-dacl-apply :: Windows-FFI: setzt die Zugriffsliste des AEGIS-Datenordners auf SYSTEM/Administratoren (schützt Tresor-Schlüssel und Prüfprotokoll) – nur der eigene Ordner.
+crates/service/src/server.rs :: service-create-data-dir :: Dienst (Unix/Entwicklung): legt nur den AEGIS-eigenen Datenordner (Tresor, Prüfprotokoll) mit Rechten 0700 an.
+crates/service/src/server.rs :: service-data-dir-private :: Dienst (Unix/Entwicklung): beschränkt den eigenen Datenordner auf den Eigentümer (0700).
 crates/service/src/server.rs :: service-audit-append :: Dienst: öffnet das eigene Prüfprotokoll nur zum Anhängen.
 crates/service/src/server.rs :: service-audit-truncate-torn-tail :: Dienst: schneidet nur eine unvollständige letzte Zeile des eigenen Prüfprotokolls ab (nach Absturz); geprüfte Einträge bleiben.
 crates/service/src/server.rs :: service-audit-truncate-set-len :: Dienst: kürzt das eigene Prüfprotokoll auf die geprüfte Länge (nur nach unvollständiger letzter Zeile).
-crates/winffi/src/lib.rs :: service-dacl-apply-acl :: Windows: setzt nur die Zugriffsliste des AEGIS-eigenen Datenordners (SYSTEM/Administratoren), nie die von Nutzerdateien.
+crates/winffi/src/fs.rs :: service-dacl-apply-acl :: Windows: setzt nur die Zugriffsliste des AEGIS-eigenen Datenordners (SYSTEM/Administratoren), nie die von Nutzerdateien.
 apps/desktop/src-tauri/src/service.rs :: desktop-service-pipe-open :: Desktop-App: öffnet die Named Pipe des Dienstes zum Senden einer Anfrage – keine Datei, keine Nutzerdaten.
+crates/quarantine/src/userfs.rs :: quarantine-remove-original :: Quarantäne (Unix/Entwicklung): entfernt das Original erst nach geprüfter verschlüsselter Kopie, nur wenn es noch dieselbe Datei ist; nur aus quarantine(ExecutionPermit).
+crates/quarantine/src/userfs.rs :: quarantine-restore-create :: Quarantäne (Unix/Entwicklung): legt das Wiederherstellungs-Ziel nur NEU an (create_new, nie überschreiben), mit den Rechten des Nutzers; nur aus restore(ExecutionPermit).
+crates/quarantine/src/userfs.rs :: quarantine-restore-discard :: Quarantäne (Unix/Entwicklung): entfernt nur die gerade selbst angelegte, unvollständige Wiederherstellung.
+crates/winffi/src/util.rs :: winffi-own-handle :: Windows-FFI: übernimmt ein gerade von Win32 geliefertes Handle in ein OwnedHandle (einziger Besitzer).
+crates/winffi/src/util.rs :: winffi-sid-compare :: Windows-FFI: vergleicht eine SID mit einer bekannten SID (nur lesend).
+crates/winffi/src/util.rs :: winffi-token-user :: Windows-FFI: liest den Benutzer eines Tokens (nur lesend).
+crates/winffi/src/util.rs :: winffi-token-user-read :: Windows-FFI: liest die TOKEN_USER-Struktur aus dem eigenen Puffer.
+crates/winffi/src/pipe.rs :: winffi-revert-to-self :: Windows-FFI: beendet den Identitätswechsel (bei Fehler Prozessabbruch).
+crates/winffi/src/pipe.rs :: winffi-impersonate-client :: Windows-FFI: übernimmt die Identität des Pipe-Clients, damit Nutzerdateien nur mit dessen Rechten angefasst werden.
+crates/winffi/src/pipe.rs :: winffi-open-thread-token :: Windows-FFI: fragt ab, ob der Thread gerade eine fremde Identität nutzt (nur lesend, Tests/Diagnose).
+crates/winffi/src/pipe.rs :: winffi-pipe-server-pid :: Windows-FFI: liest die Prozess-ID des Pipe-Servers (Client prüft, ob wirklich der Dienst antwortet).
+crates/winffi/src/pipe.rs :: winffi-open-server-process :: Windows-FFI: öffnet den Server-Prozess nur zum Abfragen (PROCESS_QUERY_LIMITED_INFORMATION).
+crates/winffi/src/pipe.rs :: winffi-open-server-token :: Windows-FFI: öffnet das Token des Server-Prozesses nur zum Abfragen (TOKEN_QUERY).
+crates/winffi/src/fs.rs :: winffi-file-info-zeroed :: Windows-FFI: nullinitialisiert eine reine Datenstruktur.
+crates/winffi/src/fs.rs :: winffi-file-info :: Windows-FFI: liest Attribute und Hardlink-Zahl über das Handle (nur lesend).
+crates/winffi/src/fs.rs :: winffi-final-path :: Windows-FFI: liest den tatsächlichen Pfad eines Handles (erkennt Abzweigungen in Zwischenordnern).
+crates/winffi/src/fs.rs :: winffi-open-exclusive :: Windows-FFI: öffnet eine Nutzerdatei exklusiv mit Löschrecht, ohne Links zu folgen; gelöscht wird nur über delete_by_handle nach Freigabe.
+crates/winffi/src/fs.rs :: winffi-create-new :: Windows-FFI: legt eine Datei nur NEU an (CREATE_NEW, ohne Links) – Wiederherstellen ohne Überschreiben.
+crates/winffi/src/fs.rs :: winffi-create-new-file :: Windows: legt eine Datei nur NEU an (CREATE_NEW); nur aus restore(ExecutionPermit) erreichbar.
+crates/winffi/src/fs.rs :: winffi-delete-by-handle-call :: Windows: markiert eine exklusiv geöffnete Datei zum Löschen über ihr Handle; nur aus quarantine/restore (ExecutionPermit).
+crates/winffi/src/fs.rs :: winffi-create-secure-dir-call :: Windows: legt AEGIS-eigene Datenordner direkt mit Zugriffsliste SYSTEM/Administratoren an.
+crates/winffi/src/fs.rs :: winffi-open-existing-dir-call :: Windows: öffnet den vorhandenen AEGIS-Datenordner ohne Abzweigungen zu folgen, um Besitzer zu prüfen und die Zugriffsliste zu setzen.
+crates/winffi/src/fs.rs :: winffi-read-owner :: Windows-FFI: liest den Besitzer des AEGIS-Datenordners (nur lesend).
+crates/winffi/src/fs.rs :: winffi-open-exclusive-call :: Windows: öffnet die Nutzerdatei nur (OPEN_EXISTING) mit Lösch-Recht; das Löschen selbst erfolgt erst nach Freigabe.
+crates/winffi/src/fs.rs :: winffi-delete-by-handle :: Windows-FFI: setzt FileDispositionInfo auf dem eigenen, exklusiv geöffneten Handle.
+crates/winffi/src/fs.rs :: winffi-create-secure-dir :: Windows-FFI: CreateDirectoryW mit fester Sicherheitsbeschreibung.
+crates/winffi/src/fs.rs :: winffi-open-existing-dir :: Windows-FFI: CreateFileW für den vorhandenen Datenordner (nur Prüfen/ACL setzen).
+crates/core/src/testing.rs :: testing-fixture-hardlink :: Test-Hilfe (Feature "testing"): legt einen zweiten Namen für eine vorhandene Fixture-Datei innerhalb des Test-Ordners an.
+crates/core/src/testing.rs :: testing-fixture-set-mode :: Test-Hilfe (Feature "testing", nur Unix): setzt die Rechte einer Fixture-Datei im Test-Ordner (z. B. harmloses Ersatzprogramm ausführbar).
+crates/engine/src/clamav.rs :: engine-clamav-timeout :: Engine: beendet nur den eigenen, hängenden ClamAV-Prozess nach dem Zeitlimit – nie Nutzerprozesse.

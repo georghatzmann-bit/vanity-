@@ -1,6 +1,6 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-19 · **P0–P1 abgeschlossen, P2 im Review** · danach: **P3 – Echtzeit-Wächter, Whitelist, Berichte**
+Stand: 2026-10-19 · **P0–P2 abgeschlossen** · nächste Phase: **P3 – Echtzeit-Wächter, Whitelist, Berichte**
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
@@ -87,6 +87,7 @@ Stand: 2026-10-19 · **P0–P1 abgeschlossen, P2 im Review** · danach: **P3 –
 - ClamAV-Signaturen aktualisieren (`freshclam`) und Zeitpläne (P3); ClamAV-Installation im Setup (P13).
 - Quarantäne-Schlüssel per DPAPI (Maschine) binden statt nur Ordner-ACL (P5).
 - Pipe: Identität des Client-Prozesses prüfen (Pfad + Signatur, braucht Code-Signing → P13).
+  Bis dahin begrenzt der Identitätswechsel alles auf die Rechte des anfragenden Nutzers.
 - „Vertrauen“ legt noch keinen Whitelist-Eintrag an – der Dienst meldet das ehrlich (P3).
 - 16-px-Icon: Schild gut erkennbar, die A-Aussparung verschwimmt → eigene 16-px-Variante (P11).
 - Optional: Dependabot für Action-Pins (öffnet automatisch PRs – nur auf deinen Wunsch).
@@ -127,7 +128,9 @@ Stand: 2026-10-19 · **P0–P1 abgeschlossen, P2 im Review** · danach: **P3 –
        Prüfprotokoll-Datei mit Hash-Kette (Fortsetzen, abgerissene letzte Zeile kürzen).
 4. [x] P2.4 App: Pipe-Client, Scan-Seite (Dateien/Ordner wählen, Funde, Ampel), Quarantäne-Seite
        (Wiederherstellen, endgültig Löschen mit zweitem Dialog), Freigabe-Dialog für jede Aktion.
-5. [ ] P2.5 Sicherheits-Review (separater Agent), Korrekturen, Docs.
+5. [x] P2.5 Sicherheits-Review (separater Agent): 1 kritisch, 3 hoch, 3 mittel, 2 niedrig – alle
+       behoben mit Regressionstests (Identitätswechsel auf den Client, keine Links, Pipe-ACL,
+       Datenordner-Besitzer, Protokoll vor Ausführung, Grenzen, ClamAV nur fest + Zeitlimit).
 
 ### Definition of Done – Stand P2
 
@@ -138,7 +141,7 @@ Stand: 2026-10-19 · **P0–P1 abgeschlossen, P2 im Review** · danach: **P3 –
 | Wiederholte/fremde Antworten werden abgewiesen (Nonce, Digest) | ✅ `crates/service/tests/flow.rs` |
 | Pipe unter Windows (ACL, erste Instanz) | ✅ CI `windows-latest` (`tests/transport.rs`) |
 | `pnpm check` + E2E grün | ✅ lokal; CI Linux + Windows |
-| Review dokumentiert | ⏳ läuft |
+| Review dokumentiert | ✅ `docs/SECURITY.md` → Review-Protokoll |
 
 ## Nächster Schritt
 

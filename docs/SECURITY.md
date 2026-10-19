@@ -29,13 +29,31 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Einmal-Nonce des Vorschlags tragen (Vergleich in konstanter Zeit); die zweite Bestätigung
   beim Löschen hat eine eigene Nonce. Eine mitgeschnittene Antwort passt auf keinen neuen
   Vorschlag.
-- **Gleichrangige Schadsoftware:** Läuft Schadcode bereits mit den Rechten des Nutzers, kann er
-  theoretisch die UI fernsteuern oder Pipe-Nachrichten senden. Stand P2: Die Pipe-ACL lässt
-  SYSTEM, Administratoren und **interaktiv angemeldete Nutzer** (IU, nur Lesen/Schreiben) zu;
-  Netzwerk-Clients sind abgewiesen. Eine Prüfung der Client-Prozess-Identität (Pfad + Signatur
-  der AEGIS-App) fehlt noch (geplant P13 mit Code-Signing); bis dahin könnte ein Prozess des
-  Nutzers selbst Vorschläge anfordern und beantworten. Für besonders folgenreiche Aktionen ist
-  optional Windows-Hello/UAC geplant. Admin-Schadsoftware kann AEGIS grundsätzlich aushebeln.
+- **Rechte des Nutzers (P2.5):** Der Dienst läuft als SYSTEM, fasst Nutzerdateien aber nur
+  mit der Identität des anfragenden Pipe-Clients an (`ImpersonateNamedPipeClient`): Scannen,
+  Öffnen des Originals, Anlegen beim Wiederherstellen. Ein normaler Nutzer kann über den Dienst
+  also nichts lesen, löschen oder schreiben, was er nicht ohnehin dürfte. Nur Laufwerkspfade
+  (`C:\…`), keine Netzwerk-/Gerätepfade, keine `.`/`..`, nichts im AEGIS-Datenordner.
+- **Keine Links:** Originale werden exklusiv und ohne Link-Auflösung geöffnet, der tatsächliche
+  Pfad muss dem angezeigten entsprechen (Abzweigungen in Zwischenordnern werden erkannt),
+  Dateien mit mehreren Hardlinks werden abgelehnt, gelöscht wird über das Handle.
+  Wiederherstellen legt nur neue Dateien an (nie überschreiben, keine fehlenden Ordner).
+- **Gleichrangige Schadsoftware:** Ein Programm, das bereits mit den Rechten des Nutzers läuft,
+  kann Vorschläge anfordern und selbst beantworten – es könnte dieselben Dateien aber ohnehin
+  selbst löschen. Eine Prüfung der Client-Identität (Pfad + Signatur der App) folgt mit dem
+  Code-Signing (P13); optional Windows-Hello/UAC für besonders folgenreiche Aktionen.
+  Admin-Schadsoftware kann AEGIS grundsätzlich aushebeln.
+- **Pipe:** Interaktive Nutzer dürfen lesen/schreiben, aber **keine eigenen Server-Instanzen**
+  anlegen (`0x12019b` statt `GRGW`). Die App prüft vor dem ersten Senden, dass der Server als
+  SYSTEM läuft, und erlaubt nur den Identitätswechsel auf Stufe „Impersonation“.
+- **Datenordner:** wird mit Zugriffsliste angelegt; ein vorhandener Ordner muss SYSTEM oder den
+  Administratoren gehören und darf kein Link sein – sonst startet der Dienst nicht.
+- **Protokoll vor Ausführung:** Freigabe-Ereignisse werden geschrieben und mit `sync_data`
+  gesichert, **bevor** etwas verändert wird; gelingt das nicht, verfällt die Freigabe.
+- **Überlastung:** höchstens 16 Verbindungen, 2 gleichzeitige Scans (außerhalb der Sperre des
+  Dienst-Zustands), 64 offene Vorschläge, 60 Vorschläge/Minute, 256 KiB Pfade pro Anfrage,
+  Rahmen werden schrittweise gelesen. ClamAV: nur feste Installationsorte (nicht `PATH`),
+  Inhalt über die Standardeingabe, Zeitlimit 120 s.
 - **Quarantäne-Schlüssel:** liegt als Datei `vault.key` im Datenordner, geschützt nur durch die
   DACL (SYSTEM + Administratoren). Die Verschlüsselung verhindert, dass Funde versehentlich
   ausgeführt oder von anderen Scannern gemeldet werden – nicht, dass ein Admin sie liest.
@@ -90,5 +108,6 @@ Prüfung „kein Code-Pfad ändert etwas ohne Freigabe“ ist fester Bestandteil
 
 | Datum | Umfang | Ergebnis |
 | --- | --- | --- |
+| 2026-10-19 | P2: Quarantäne, Dienst/Pipe, winffi, Engine-Anbindung, App-Client. 1 Prüfer, 4 Funde per Test nachgestellt | 1 kritisch (jeder Nutzer konnte über den SYSTEM-Dienst ohne UI isolieren/wiederherstellen → Identitätswechsel + Pfadregeln), 3 hoch (Links in Zwischenordnern/Überschreiben, Pipe-Instanzen durch Nutzer, vorab angelegter Datenordner), 3 mittel (Ausführung trotz Protokollausfall, Überlastung, ClamAV über PATH), 2 niedrig (Bidi in Plan-Texten, Unix-Rechte, fehlende Sperren). Alle behoben, Regressionstests in `crates/quarantine/tests`, `crates/service/tests`, Windows-Test für Identitätswechsel |
 | 2026-10-19 | P1: Freigabe-Dialog, Fenster-/Tray-Rechte, Startprotokoll, Einstellungen, Barrierefreiheit, CI. 4 Prüfer + Gegenprüfung (vor Abschluss der Desktop-Korrekturen abgebrochen, Rest selbst geprüft) | 2 hoch (Sperrzeit-Umgehung, gestapelte Dialoge), 7 mittel (u. a. Bidi in Plan-Texten, Fokus bei Seitenwechsel, Windows-CI-Zeitlimit) – behoben mit Tests |
 | 2026-10-19 | P0: `crates/core` (Freigabe, Protokoll, Mutations-Wächter), Tauri/CSP/CI, Design-System. 4 unabhängige Prüfer + adversarielle Gegenprüfung | 48 Funde bestätigt (0 kritisch, 0 hoch, 15 mittel, 24 niedrig, 9 Kleinigkeiten). 46 behoben, jeweils mit Regressionstest. Offen: Antwort-Nonce (→ P2, siehe Bedrohungsmodell), Meldung bei Startfehler der App (→ P1) |

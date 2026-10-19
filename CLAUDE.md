@@ -18,6 +18,8 @@ Bestätigung des Nutzers. Ohne „Ja“ nur: scannen, melden, erklären.
 - Nutzerantworten nimmt im Betrieb **nur** der Pipe-Handler des Dienstes an
   (`crates/service/src/handler.rs`, Einmal-Nonce je Vorschlag); der Dienst formuliert jeden
   Plan selbst. `decide`/`confirm_second` sind per Clippy gesperrt (Markierung `aegis-consent`).
+- Nutzerdateien fasst der SYSTEM-Dienst nur mit den Rechten des Clients an
+  (`aegis_quarantine::UserAccess`, Windows: Identitätswechsel) und ohne Links (`userfs`).
 - Vor jeder Aktion ein `ActionPlan`: Was genau? Warum? Was passiert dann? Rückgängig wie?
   Antworten: Ja, ausführen / Nein / Ignorieren / Vertrauen. Keine Reaktion = nichts tun.
 - Endgültiges Löschen: zweite, getrennte Bestätigung (`PermanentDeleteApproval`).
@@ -58,7 +60,7 @@ crates/core         Goldene Regel, Aktionspläne, Prüfprotokoll, Risikostufen
 crates/engine       Erkennung (EICAR, Hash-Listen, YARA-X, PE, Heuristik, ClamAV-Prozess) – nur lesend
 crates/quarantine   verschlüsselter Tresor (isolieren/wiederherstellen/löschen nur mit Permit)
 crates/service      aegis-service: Protokoll, Handler (einzige Antwort-Stelle), Pipe, SCM
-crates/winffi       einzige Bibliothek mit unsafe (Named Pipe + ACL)
+crates/winffi       einzige Bibliothek mit unsafe (Pipe + ACL, Identitätswechsel, Dateien ohne Links)
 crates/sandbox|hardening|netwatch|vault-core|tools|defender-switch  (spätere Phasen)
 packages/ui         Design-System: Tokens, Logo, Start-Animation, Showcase
 rules/              YARA, Whitelist, Kategorien (nur lizenziert)

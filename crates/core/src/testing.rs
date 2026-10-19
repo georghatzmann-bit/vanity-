@@ -796,6 +796,37 @@ pub fn create_fixture_symlink(dir: &Path, name: &str, target: &Path) -> io::Resu
     Ok(path)
 }
 
+/// Setzt die Unix-Rechte einer Fixture-Datei (z. B. ausführbar für ein harmloses
+/// Ersatzprogramm). Nur Unix.
+///
+/// # Errors
+/// Wie [`write_fixture`].
+#[cfg(unix)]
+pub fn set_fixture_mode(dir: &Path, name: &str, mode: u32) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let path = resolve_fixture(dir, name, false)?;
+    if is_symlink(&path) {
+        return Err(refuse("Fixture ist ein Link – verweigert"));
+    }
+    // aegis-mutation: testing-fixture-set-mode
+    #[allow(clippy::disallowed_methods)]
+    fs::set_permissions(&path, fs::Permissions::from_mode(mode))
+}
+
+/// Legt einen zweiten Namen (Hardlink) `dir/name` für eine vorhandene Fixture-Datei
+/// `dir/existing` an.
+///
+/// # Errors
+/// Wie [`write_fixture`].
+pub fn create_fixture_hardlink(dir: &Path, name: &str, existing: &str) -> io::Result<PathBuf> {
+    let source = resolve_fixture(dir, existing, false)?;
+    let path = resolve_fixture(dir, name, true)?;
+    // aegis-mutation: testing-fixture-hardlink
+    #[allow(clippy::disallowed_methods)]
+    std::fs::hard_link(&source, &path)?;
+    Ok(path)
+}
+
 /// Legt eine Unix-Socket-Datei `dir/name` an (Sonderdatei für Schnappschuss-Tests; der
 /// Socket selbst wird sofort wieder geschlossen, die Datei bleibt). Nur Unix.
 ///

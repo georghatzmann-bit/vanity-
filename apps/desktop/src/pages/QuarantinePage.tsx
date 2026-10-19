@@ -2,7 +2,7 @@
  * Quarantäne: verschlüsselt isolierte Dateien anzeigen, wiederherstellen oder endgültig
  * löschen – beides nur als Vorschlag des Dienstes und erst nach Bestätigung (Löschen: zweimal).
  */
-import { Button, IconRefresh, IconTrash, IconUndo, Panel } from '@aegis/ui';
+import { Button, IconRefresh, IconTrash, IconUndo, Panel, SafeText } from '@aegis/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
@@ -97,7 +97,9 @@ export function QuarantinePage() {
                     className="rounded-xl border border-border bg-surface-2 p-4"
                     data-testid="vault-entry"
                   >
-                    <p className="break-all font-mono text-sm text-text">{e.originalPath}</p>
+                    <p className="text-sm text-text">
+                      <SafeText value={e.originalPath} mono breakAll />
+                    </p>
                     <p className="mt-1 text-xs text-text-subtle">
                       {t('vault.isolatedAt', { date: date(e.quarantinedAt) })}
                     </p>

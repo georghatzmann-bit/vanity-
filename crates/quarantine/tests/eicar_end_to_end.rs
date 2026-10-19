@@ -16,7 +16,7 @@ use aegis_core::testing::{
 };
 use aegis_core::time::Duration;
 use aegis_engine::{Category, Engine};
-use aegis_quarantine::{Entry, Vault};
+use aegis_quarantine::{Entry, OwnProcess, Vault};
 
 fn origin() -> DecisionOrigin {
     DecisionOrigin::ui_dialog("test-dialog")
@@ -90,7 +90,10 @@ fn eicar_erkannt_isoliert_wiederhergestellt_geloescht() {
 
     // 2. Isolieren – nur mit „Ja“.
     let outcome = vault
-        .quarantine(approve(&mut gate, &quarantine_plan(&eicar_path, &clock)))
+        .quarantine(
+            approve(&mut gate, &quarantine_plan(&eicar_path, &clock)),
+            &OwnProcess,
+        )
         .unwrap();
     assert!(outcome.failures.is_empty());
     assert!(matches!(
@@ -114,7 +117,10 @@ fn eicar_erkannt_isoliert_wiederhergestellt_geloescht() {
     // 3. Wiederherstellen – byte-genau.
     clock.advance(Duration::seconds(5));
     let restored = vault
-        .restore(approve(&mut gate, &restore_plan(&entries[0], &clock)))
+        .restore(
+            approve(&mut gate, &restore_plan(&entries[0], &clock)),
+            &OwnProcess,
+        )
         .unwrap();
     assert!(restored.failures.is_empty());
     assert_eq!(std::fs::read(&eicar_path).unwrap(), eicar());
@@ -122,7 +128,10 @@ fn eicar_erkannt_isoliert_wiederhergestellt_geloescht() {
 
     // 4. Erneut isolieren, dann endgültig löschen – nur mit zweiter Bestätigung.
     vault
-        .quarantine(approve(&mut gate, &quarantine_plan(&eicar_path, &clock)))
+        .quarantine(
+            approve(&mut gate, &quarantine_plan(&eicar_path, &clock)),
+            &OwnProcess,
+        )
         .unwrap();
     let entry = vault.list().unwrap().remove(0);
     let plan = delete_plan(&entry, &clock);
@@ -201,14 +210,20 @@ fn manipulierter_tresor_und_belegtes_ziel() {
     let mut gate = ConsentGate::with_clock(clock.clone(), ConsentConfig::default()).unwrap();
     let vault = Vault::open(vault_dir.path()).unwrap();
     vault
-        .quarantine(approve(&mut gate, &quarantine_plan(&path, &clock)))
+        .quarantine(
+            approve(&mut gate, &quarantine_plan(&path, &clock)),
+            &OwnProcess,
+        )
         .unwrap();
     let entry = vault.list().unwrap().remove(0);
 
     // Ziel belegt → nichts überschrieben.
     write_fixture(home.path(), "probe.bin", b"neue Datei").unwrap();
     let out = vault
-        .restore(approve(&mut gate, &restore_plan(&entry, &clock)))
+        .restore(
+            approve(&mut gate, &restore_plan(&entry, &clock)),
+            &OwnProcess,
+        )
         .unwrap();
     assert_eq!(out.failures.len(), 1);
     assert_eq!(std::fs::read(&path).unwrap(), b"neue Datei");
@@ -222,7 +237,10 @@ fn manipulierter_tresor_und_belegtes_ziel() {
     aegis_core::testing::remove_fixture(vault_dir.path(), &format!("{}.aqf", entry.id)).unwrap();
     write_fixture(vault_dir.path(), &format!("{}.aqf", entry.id), &bytes).unwrap();
     let out = vault
-        .restore(approve(&mut gate, &restore_plan(&entry, &clock)))
+        .restore(
+            approve(&mut gate, &restore_plan(&entry, &clock)),
+            &OwnProcess,
+        )
         .unwrap();
     assert_eq!(out.failures.len(), 1);
     assert!(!path.exists());
@@ -249,7 +267,11 @@ fn manipulierter_tresor_und_belegtes_ziel() {
         .severity(RiskLevel::Info)
         .build(clock.now())
         .unwrap();
-    assert!(vault.restore(approve(&mut gate, &wrong)).is_err());
+    assert!(
+        vault
+            .restore(approve(&mut gate, &wrong), &OwnProcess)
+            .is_err()
+    );
     let traversal = ActionPlan::builder(ActionKind::Restore)
         .target(Target::file(&entry.original_path))
         .parameter(param::QUARANTINE_ID, "../vault")
@@ -260,7 +282,11 @@ fn manipulierter_tresor_und_belegtes_ziel() {
         .severity(RiskLevel::Info)
         .build(clock.now())
         .unwrap();
-    assert!(vault.restore(approve(&mut gate, &traversal)).is_err());
+    assert!(
+        vault
+            .restore(approve(&mut gate, &traversal), &OwnProcess)
+            .is_err()
+    );
 }
 
 #[cfg(unix)]
@@ -276,7 +302,10 @@ fn links_werden_nicht_isoliert() {
     let mut gate = ConsentGate::with_clock(clock.clone(), ConsentConfig::default()).unwrap();
     let vault = Vault::open(vault_dir.path()).unwrap();
     let out = vault
-        .quarantine(approve(&mut gate, &quarantine_plan(&link, &clock)))
+        .quarantine(
+            approve(&mut gate, &quarantine_plan(&link, &clock)),
+            &OwnProcess,
+        )
         .unwrap();
     assert_eq!(out.failures.len(), 1);
     assert!(std::fs::symlink_metadata(&link).is_ok());
@@ -293,7 +322,10 @@ fn tresor_wieder_oeffnen_und_beschaedigte_daten() {
     {
         let vault = Vault::open(vault_dir.path()).unwrap();
         vault
-            .quarantine(approve(&mut gate, &quarantine_plan(&path, &clock)))
+            .quarantine(
+                approve(&mut gate, &quarantine_plan(&path, &clock)),
+                &OwnProcess,
+            )
             .unwrap();
         assert_eq!(vault.dir(), vault_dir.path());
     }
@@ -304,7 +336,10 @@ fn tresor_wieder_oeffnen_und_beschaedigte_daten() {
     assert!(vault.entry("kein-uuid").is_err());
     assert!(format!("{vault:?}").contains("Vault"));
     vault
-        .restore(approve(&mut gate, &restore_plan(&entry, &clock)))
+        .restore(
+            approve(&mut gate, &restore_plan(&entry, &clock)),
+            &OwnProcess,
+        )
         .unwrap();
     assert_eq!(std::fs::read(&path).unwrap(), b"Daten");
 
@@ -333,4 +368,179 @@ fn tresor_wieder_oeffnen_und_beschaedigte_daten() {
         Vault::open(other.path()),
         Err(aegis_quarantine::QuarantineError::BadKey)
     ));
+}
+
+// ---------------------------------------------------------------------------------------
+// Regressionstests aus dem P2-Sicherheits-Review (Links in Zwischenordnern, Hardlinks,
+// Überschreiben, fehlende Ordner, Dateirechte).
+// ---------------------------------------------------------------------------------------
+
+/// Review-Fund B: Wird der ursprüngliche Ordner nach dem Isolieren durch einen Link auf einen
+/// anderen Ordner ersetzt, darf das Wiederherstellen nicht dorthin schreiben.
+#[cfg(unix)]
+#[test]
+fn wiederherstellen_folgt_keinem_link_im_ordner() {
+    use aegis_core::testing::{create_fixture_symlink, remove_fixture};
+    let home = tempfile::tempdir().unwrap();
+    let vault_dir = tempfile::tempdir().unwrap();
+    let path = write_fixture(home.path(), "a/payload.dll", b"Bytes").unwrap();
+    let protected = aegis_core::testing::create_fixture_dir(home.path(), "geschuetzt").unwrap();
+    let clock = ManualClock::default();
+    let mut gate = ConsentGate::with_clock(clock.clone(), ConsentConfig::default()).unwrap();
+    let vault = Vault::open(vault_dir.path()).unwrap();
+    let out = vault
+        .quarantine(
+            approve(&mut gate, &quarantine_plan(&path, &clock)),
+            &OwnProcess,
+        )
+        .unwrap();
+    let entry = out.entries[0].clone();
+    remove_fixture(home.path(), "a").unwrap();
+    create_fixture_symlink(home.path(), "a", &protected).unwrap();
+    let result = vault
+        .restore(
+            approve(&mut gate, &restore_plan(&entry, &clock)),
+            &OwnProcess,
+        )
+        .unwrap();
+    assert_eq!(result.failures.len(), 1, "{:?}", result.failures);
+    assert!(
+        !protected.join("payload.dll").exists(),
+        "nichts durch den Link geschrieben"
+    );
+    assert_eq!(
+        vault.list().unwrap(),
+        vec![entry],
+        "Eintrag bleibt im Tresor"
+    );
+}
+
+/// Review-Fund C: Ein Link in einem Zwischenordner – der Plan zeigt einen anderen Pfad, als
+/// tatsächlich entfernt würde. Abgelehnt, Original unverändert.
+#[cfg(unix)]
+#[test]
+fn isolieren_folgt_keinem_link_im_ordner() {
+    use aegis_core::testing::create_fixture_symlink;
+    let home = tempfile::tempdir().unwrap();
+    let vault_dir = tempfile::tempdir().unwrap();
+    let real = write_fixture(home.path(), "echt/x.cfg", b"wichtig").unwrap();
+    create_fixture_symlink(home.path(), "link", &home.path().join("echt")).unwrap();
+    let clock = ManualClock::default();
+    let mut gate = ConsentGate::with_clock(clock.clone(), ConsentConfig::default()).unwrap();
+    let vault = Vault::open(vault_dir.path()).unwrap();
+    let out = vault
+        .quarantine(
+            approve(
+                &mut gate,
+                &quarantine_plan(&home.path().join("link/x.cfg"), &clock),
+            ),
+            &OwnProcess,
+        )
+        .unwrap();
+    assert_eq!(out.failures.len(), 1);
+    assert!(
+        out.failures[0].1.contains("Verknüpfung"),
+        "{:?}",
+        out.failures
+    );
+    assert_eq!(std::fs::read(&real).unwrap(), b"wichtig");
+    assert!(vault.list().unwrap().is_empty());
+}
+
+/// Dateien mit mehreren Namen (Hardlinks) werden nicht isoliert – der Inhalt bliebe unter
+/// dem anderen Namen erreichbar.
+#[test]
+fn hardlinks_werden_nicht_isoliert() {
+    let home = tempfile::tempdir().unwrap();
+    let vault_dir = tempfile::tempdir().unwrap();
+    let path = write_fixture(home.path(), "a.bin", b"Daten").unwrap();
+    aegis_core::testing::create_fixture_hardlink(home.path(), "b.bin", "a.bin").unwrap();
+    let before = DirSnapshot::capture(home.path()).unwrap();
+    let clock = ManualClock::default();
+    let mut gate = ConsentGate::with_clock(clock.clone(), ConsentConfig::default()).unwrap();
+    let vault = Vault::open(vault_dir.path()).unwrap();
+    let out = vault
+        .quarantine(
+            approve(&mut gate, &quarantine_plan(&path, &clock)),
+            &OwnProcess,
+        )
+        .unwrap();
+    assert_eq!(out.failures.len(), 1);
+    assert!(
+        out.failures[0].1.contains("Hardlinks"),
+        "{:?}",
+        out.failures
+    );
+    assert_unchanged(&before, &DirSnapshot::capture(home.path()).unwrap());
+}
+
+/// Fehlt der ursprüngliche Ordner, wird er nicht angelegt; nichts überschrieben.
+#[test]
+fn wiederherstellen_legt_keine_ordner_an_und_ueberschreibt_nie() {
+    use aegis_core::testing::remove_fixture;
+    let home = tempfile::tempdir().unwrap();
+    let vault_dir = tempfile::tempdir().unwrap();
+    let path = write_fixture(home.path(), "sub/a.txt", b"alt").unwrap();
+    let clock = ManualClock::default();
+    let mut gate = ConsentGate::with_clock(clock.clone(), ConsentConfig::default()).unwrap();
+    let vault = Vault::open(vault_dir.path()).unwrap();
+    let entry = vault
+        .quarantine(
+            approve(&mut gate, &quarantine_plan(&path, &clock)),
+            &OwnProcess,
+        )
+        .unwrap()
+        .entries
+        .remove(0);
+    remove_fixture(home.path(), "sub").unwrap();
+    let out = vault
+        .restore(
+            approve(&mut gate, &restore_plan(&entry, &clock)),
+            &OwnProcess,
+        )
+        .unwrap();
+    assert!(
+        out.failures[0].1.contains("existiert nicht mehr"),
+        "{:?}",
+        out.failures
+    );
+    assert!(!home.path().join("sub").exists());
+    // Ordner wieder da, aber Ziel belegt: nichts überschrieben.
+    write_fixture(home.path(), "sub/a.txt", b"neu").unwrap();
+    let out = vault
+        .restore(
+            approve(&mut gate, &restore_plan(&entry, &clock)),
+            &OwnProcess,
+        )
+        .unwrap();
+    assert_eq!(out.failures.len(), 1);
+    assert_eq!(std::fs::read(&path).unwrap(), b"neu");
+    // Ziel frei: klappt, Tresor-Teildateien sind weg.
+    remove_fixture(home.path(), "sub/a.txt").unwrap();
+    vault
+        .restore(
+            approve(&mut gate, &restore_plan(&entry, &clock)),
+            &OwnProcess,
+        )
+        .unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), b"alt");
+    let leftovers: Vec<_> = std::fs::read_dir(vault_dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n != "vault.key")
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+}
+
+/// Review-Fund (niedrig): Schlüssel und Tresor-Ordner nur für den Eigentümer (Unix).
+#[cfg(unix)]
+#[test]
+fn schluessel_nur_fuer_eigentuemer() {
+    use std::os::unix::fs::PermissionsExt;
+    let base = tempfile::tempdir().unwrap();
+    let dir = base.path().join("q");
+    let _vault = Vault::open(&dir).unwrap();
+    let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&dir.join("vault.key")), 0o600);
+    assert_eq!(mode(&dir), 0o700);
 }

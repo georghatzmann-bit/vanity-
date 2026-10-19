@@ -53,6 +53,7 @@ name = "aegis-desktop"
 version = "0.1.0"
 dependencies = [
  "aegis-core",
+ "aegis-winffi",
  "rfd 0.17.2",
  "serde",
  "serde_json",
@@ -93,6 +94,7 @@ version = "0.1.0"
 dependencies = [
  "aegis-core",
  "aegis-engine",
+ "aegis-winffi",
  "aes-gcm",
  "getrandom 0.4.3",
  "serde",

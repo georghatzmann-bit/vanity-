@@ -24,6 +24,7 @@ serde_json = { workspace = true }
 time = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
+aegis-winffi = { workspace = true }
 rfd = { workspace = true }
 windows-version = { workspace = true }
 
