@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-propose-backup"
+description = "Enables the service_propose_backup command without any pre-configured scope."
+commands.allow = ["service_propose_backup"]
+
+[[permission]]
+identifier = "deny-service-propose-backup"
+description = "Denies the service_propose_backup command without any pre-configured scope."
+commands.deny = ["service_propose_backup"]

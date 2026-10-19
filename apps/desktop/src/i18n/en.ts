@@ -521,6 +521,26 @@ export const en: Messages<typeof de> = {
     freeze: 'Freeze…',
     noRecent: 'No recently started programs known.',
   },
+  backup: {
+    title: 'Fallback copies (optional)',
+    intro:
+      'So that waiting for your yes during an attack is not dangerous: AEGIS can keep older versions of your protected folders – encrypted in the AEGIS folder that only the service and administrators can access. Only after your yes; nothing is ever deleted automatically.',
+    off: 'Off.',
+    on: 'On – at most {quota} GiB.',
+    usage: '{files} files · {versions} versions · {size} used',
+    lastRun: 'Last run: {date}',
+    quota: 'Storage limit',
+    enable: 'Turn on fallback copies…',
+    disable: 'Turn off…',
+    restore: 'Restore this version…',
+    export: 'Export to a drive…',
+    exportHint:
+      'Puts normal copies of the newest versions into a chosen folder (e.g. a USB drive – unplug it afterwards).',
+    prune: 'Thin out older than {days} days…',
+    pruneHint: 'The newest version of every file always stays.',
+    recent: 'Newest versions',
+    unavailable: 'Fallback copies require the AEGIS service.',
+  },
   lab: {
     intro:
       'Runs an unknown program in isolation and shows what it tries to do – files, autostart, processes, connections. It only starts after your yes; the original stays unchanged.',

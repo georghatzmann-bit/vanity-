@@ -188,6 +188,14 @@ das bliebe bei großen Ordnern zu teuer. Geprüft werden weiter Downloads, Deskt
 Wechseldatenträger und Programmstarts. Eigene Schutzordner sind eine Einstellung (wie der
 Zeitplan), kein Plan: Sie ändern nur, was AEGIS beobachtet, nicht die Ordner.
 
+## D-041 – Rückfall-Kopien im Datenordner des Dienstes
+Die Spezifikation nennt „versionierten AEGIS-Ordner/externes Laufwerk“. Standard ist der
+Datenordner des Dienstes: Ransomware mit Nutzerrechten kann ihn weder lesen noch verschlüsseln
+oder löschen. Gelesen wird mit den Rechten des Nutzers, geschrieben nur in AEGIS-eigene Dateien.
+Für das externe Laufwerk gibt es den Export (eigener Plan): normale Kopien der neuesten Versionen
+in einen gewählten Ordner – nach dem Abziehen offline geschützt. Ausdünnen ist „Endgültig
+löschen“ mit zweiter Bestätigung; die neueste Version bleibt.
+
 ## D-039 – Panic-Button = Notfall-Scan
 Laut Spezifikation (Modul G) ist der Panic-Button ein sofortiger, nur lesender Notfall-Scan mit
 anschließendem Sammel-Isolieren (vorausgewählt nur „Gefährlich“) und „Alles rückgängig“. Er

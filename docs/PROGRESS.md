@@ -120,7 +120,9 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 9. [x] P5.9 Ransomware-Ergänzungen: geschützte Ordner (Dokumente/Bilder/eigene – vorher wurden
        Köder in Dokumente/Bilder nicht beobachtet), Entropie-Stichproben im Prüfprozess,
        „Einfrieren“ im Alarm, Windows „Überwachter Ordnerzugriff“ erklären/öffnen.
-10. [ ] P5.10 Rückfall-Kopien (Opt-in, versioniert) + Wiederherstellen.
+10. [x] P5.10 Rückfall-Kopien (Opt-in-Plan, versioniert, verschlüsselt im Datenordner des
+        Dienstes, alle 30 min), Zurückholen, Export aufs Laufwerk, Ausdünnen mit zweiter
+        Bestätigung; Panel auf der Echtzeit-Seite.
 11. [ ] P5.11 Nachprüfung der neuen Teile (separater Agent), DoD.
 
 **Nächster Schritt:** Review-Funde beheben, dann P6 (Härtung, Persistenz, Treiber-Check,

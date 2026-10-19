@@ -103,12 +103,17 @@ fn sichern_zurueckholen_ausduennen() {
         .severity(RiskLevel::Info)
         .build(clock.now())
         .unwrap();
-    let (folder, written, failed) = store.export(&approve(&mut gate, &plan), &OwnProcess).unwrap();
+    let (folder, written, failed) = store
+        .export(&approve(&mut gate, &plan), &OwnProcess)
+        .unwrap();
     assert_eq!((written, failed), (1, 0));
     assert!(folder.starts_with(&usb));
     let exported: Vec<PathBuf> = walk(&folder);
     assert_eq!(exported.len(), 1);
-    assert_eq!(std::fs::read(&exported[0]).unwrap(), b"Version 2 (verschluesselt?)");
+    assert_eq!(
+        std::fs::read(&exported[0]).unwrap(),
+        b"Version 2 (verschluesselt?)"
+    );
     assert!(exported[0].ends_with("plan.txt"));
 
     // Ausdünnen: zweite Bestätigung, neueste Version bleibt.

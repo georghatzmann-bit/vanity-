@@ -985,7 +985,11 @@ fn wiederherstellen_mehrerer_eintraege_je_ziel_eine_kennung() {
 
 #[test]
 fn rueckfall_kopien_zurueckholen_und_ausduennen() {
-    assert!(sample_plan_builder(ActionKind::RestoreBackup).build(T0).is_ok());
+    assert!(
+        sample_plan_builder(ActionKind::RestoreBackup)
+            .build(T0)
+            .is_ok()
+    );
     assert!(matches!(
         sample_plan_builder(ActionKind::RestoreBackup)
             .parameter(param::BACKUP_ENTRY, "x")

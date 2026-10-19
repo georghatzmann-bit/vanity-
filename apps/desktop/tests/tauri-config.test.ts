@@ -56,6 +56,15 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
     'Dienst: Köderdateien anlegen/entfernen vorschlagen (nur nach „Ja“)',
   'allow-service-set-protected-folders':
     'Dienst: eigene Schutzordner der Ransomware-Erkennung setzen (nur Beobachtung)',
+  'allow-service-backup-status': 'Dienst: Zustand der eigenen Rückfall-Kopien (nur lesend)',
+  'allow-service-propose-backup':
+    'Dienst: Rückfall-Kopien ein-/ausschalten vorschlagen (nur nach „Ja“)',
+  'allow-service-propose-backup-restore':
+    'Dienst: Rückfall-Kopie zurückholen vorschlagen (nur nach „Ja“, nie überschreibend)',
+  'allow-service-propose-backup-export':
+    'Dienst: Rückfall-Kopien in einen Ordner exportieren vorschlagen (nur nach „Ja“)',
+  'allow-service-propose-backup-prune':
+    'Dienst: alte Rückfall-Kopien ausdünnen vorschlagen (nur nach „Ja“ + zweiter Bestätigung)',
   'allow-open-windows-security':
     'Windows-Sicherheit „Ransomware-Schutz“ öffnen (fester Aufruf, ändert nichts)',
   'allow-service-memory-scan': 'Dienst: Speicher-Scan eigener Programme (nur lesend)',

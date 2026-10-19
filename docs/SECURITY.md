@@ -201,6 +201,21 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Anfrage an den Prüfprozess, insgesamt höchstens 128 MiB). Speicher wird paketweise geprüft,
   sobald ein Paket voll ist – der Dienst hält nie mehr als etwa eine Anfrage im Speicher.
   Geprüft wird ausschließlich im eingeschränkten Prüfprozess (YARA/EICAR); gemeldet wird nur.
+- **Rückfall-Kopien (P5.10, nur nach Opt-in):** Einschalten ist ein Plan (Ordner, Grenze,
+  Wirkung stehen darin); danach sichert der Zeitplaner alle 30 min geänderte Dateien aus
+  Desktop/Dokumente/Bilder/eigenen Schutzordnern – **gelesen** mit den Rechten des angemeldeten
+  Besitzers (geteilte Öffnung, ohne Links, Köder/laute Ordner ausgenommen, Dateien ≤ 200 MiB),
+  **gespeichert** verschlüsselt (eigener, an den Rechner gebundener Schlüssel) im Datenordner
+  des Dienstes (nur SYSTEM/Administratoren) – dorthin kommt Ransomware mit Nutzerrechten nicht.
+  Je Konto ein eigener Unterordner (Kennung aus der SID, ohne Pfadteile). Grenze erreicht →
+  nichts mehr hinzu; **gelöscht wird nie automatisch**. Nach einer Ransomware-Warnung pausiert
+  die Sicherung eine Stunde. Zurückholen: Plan, neu angelegt mit Nutzerrechten, nie
+  überschrieben, SHA-256 geprüft. Export auf ein Laufwerk: Plan, normale Kopien der neuesten
+  Versionen in einen neuen Unterordner des gewählten Ordners (mit Nutzerrechten, nie
+  überschrieben). Ausdünnen: Plan „Endgültig löschen“ mit zweiter Bestätigung; die neueste
+  Version jeder Datei bleibt immer. Der Startcheck des Datenordners durchläuft diesen Ordner
+  nicht (sehr viele eigene Dateien) – er prüft nur den Ordner selbst. Ehrlich: Administratoren
+  dieses Rechners können die Kopien lesen; die Pfade stehen im Klartext-Index im Datenordner.
 - **Datei-Safe (P5.6):** Ordner im Profil des Nutzers; alle Zugriffe im Identitätswechsel und
   ohne Links (der Safe-Ordner muss ohne Umweg über Verknüpfungen erreichbar sein). Zufälliger
   256-Bit-Datenschlüssel, verpackt mit Argon2id (64 MiB, 3 Durchläufe) + AES-256-GCM; Inhalte

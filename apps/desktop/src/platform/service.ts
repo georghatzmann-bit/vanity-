@@ -323,6 +323,28 @@ export interface SafeState {
   readonly idleMinutes: number;
 }
 
+/** Eine gesicherte Version (Rückfall-Kopie). */
+export interface BackupVersion {
+  readonly id: string;
+  readonly original: string;
+  readonly size: number;
+  readonly storedAt: string;
+}
+
+/** Rückfall-Kopien des Kontos. */
+export interface BackupState {
+  readonly available: boolean;
+  readonly enabled: boolean;
+  readonly quotaMb: number;
+  readonly files: number;
+  readonly versions: number;
+  readonly bytes: number;
+  readonly lastRun: string | null;
+  readonly note: string | null;
+  readonly folders: readonly string[];
+  readonly recent: readonly BackupVersion[];
+}
+
 /** Ransomware-Schutz des Kontos. */
 export interface RansomState {
   /** Angelegte Köderdateien. */
@@ -408,6 +430,16 @@ export interface ServiceApi {
   proposeSafeRetrieve(id: string): Promise<Proposal>;
   /** Ransomware-Schutz: eigene Köderdateien (nur lesend). */
   ransomStatus(): Promise<RansomState>;
+  /** Rückfall-Kopien: Zustand (nur lesend). */
+  backupStatus(): Promise<BackupState>;
+  /** Rückfall-Kopien ein- (`true`, Grenze in MiB) bzw. ausschalten vorschlagen. */
+  proposeBackup(on: boolean, quotaMb: number): Promise<Proposal>;
+  /** Version zurückholen vorschlagen. */
+  proposeBackupRestore(id: string): Promise<Proposal>;
+  /** Neueste Versionen in einen Ordner exportieren vorschlagen. */
+  proposeBackupExport(folder: string): Promise<Proposal>;
+  /** Alte Versionen ausdünnen vorschlagen (zweite Bestätigung). */
+  proposeBackupPrune(days: 7 | 30 | 90 | 365): Promise<Proposal>;
   /** Eigene Schutzordner setzen (nur Beobachtung). */
   setProtectedFolders(folders: readonly string[]): Promise<RansomState>;
   /** Köderdateien anlegen (`true`) bzw. entfernen vorschlagen. */
@@ -808,6 +840,31 @@ export function parseSafe(response: unknown): SafeState {
   };
 }
 
+export function parseBackup(response: unknown): BackupState {
+  const s = expectType(response, 'backup')['state'];
+  const st = isObject(s) ? s : {};
+  const usage = isObject(st['usage']) ? st['usage'] : {};
+  return {
+    available: st['available'] === true,
+    enabled: st['enabled'] === true,
+    quotaMb: num(st['quota_mb']),
+    files: num(usage['files']),
+    versions: num(usage['versions']),
+    bytes: num(usage['bytes']),
+    lastRun: typeof st['last_run'] === 'string' ? st['last_run'] : null,
+    note: typeof st['note'] === 'string' ? st['note'] : null,
+    folders: arr(st['folders']).filter((f): f is string => typeof f === 'string'),
+    recent: arr(st['versions'])
+      .filter(isObject)
+      .map((v) => ({
+        id: str(v['id']),
+        original: str(v['original']),
+        size: num(v['size']),
+        storedAt: str(v['stored_at']),
+      })),
+  };
+}
+
 export function parseRansom(response: unknown): RansomState {
   const r = expectType(response, 'ransom');
   const strings = (v: unknown) => arr(v).filter((b): b is string => typeof b === 'string');
@@ -840,6 +897,8 @@ const kindLabels: Readonly<Record<string, string>> = {
   change_setting: 'Einstellung ändern',
   safe_store: 'In den Datei-Safe legen',
   safe_retrieve: 'Aus dem Datei-Safe holen',
+  restore_backup: 'Rückfall-Kopie zurückholen',
+  export_backup: 'Rückfall-Kopien exportieren',
 };
 
 /** Wandelt den Vorschlag des Dienstes in die Form des Freigabe-Dialogs. */

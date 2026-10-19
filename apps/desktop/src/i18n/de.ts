@@ -529,6 +529,26 @@ export const de = {
     freeze: 'Einfrieren …',
     noRecent: 'Keine kürzlich gestarteten Programme bekannt.',
   },
+  backup: {
+    title: 'Rückfall-Kopien (optional)',
+    intro:
+      'Damit die Wartezeit auf dein Ja bei einem Angriff nicht gefährlich wird: AEGIS kann ältere Versionen deiner geschützten Ordner aufbewahren – verschlüsselt im AEGIS-Ordner, auf den nur der Dienst und Administratoren zugreifen. Erst nach deinem Ja; gelöscht wird nie automatisch.',
+    off: 'Ausgeschaltet.',
+    on: 'Eingeschaltet – höchstens {quota} GiB.',
+    usage: '{files} Dateien · {versions} Versionen · {size} belegt',
+    lastRun: 'Letzter Lauf: {date}',
+    quota: 'Speichergrenze',
+    enable: 'Rückfall-Kopien einschalten …',
+    disable: 'Ausschalten …',
+    restore: 'Diese Version zurückholen …',
+    export: 'Auf ein Laufwerk exportieren …',
+    exportHint:
+      'Legt normale Kopien der neuesten Versionen in einen gewählten Ordner (z. B. USB-Laufwerk – danach abziehen).',
+    prune: 'Ältere als {days} Tage ausdünnen …',
+    pruneHint: 'Die neueste Version jeder Datei bleibt immer.',
+    recent: 'Neueste Versionen',
+    unavailable: 'Rückfall-Kopien gibt es nur mit dem AEGIS-Dienst.',
+  },
   lab: {
     intro:
       'Startet ein unbekanntes Programm abgeschottet und zeigt, was es versucht – Dateien, Autostart, Prozesse, Verbindungen. Gestartet wird nur nach deinem Ja; das Original bleibt unverändert.',

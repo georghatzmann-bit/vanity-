@@ -505,6 +505,38 @@ pub async fn service_propose_safe_retrieve(id: String) -> Result<Value, String> 
     send(json!({ "type": "propose_safe_retrieve", "id": id })).await
 }
 
+/// Rückfall-Kopien: Zustand und neueste Versionen (nur lesend).
+#[tauri::command]
+pub async fn service_backup_status() -> Result<Value, String> {
+    send(json!({ "type": "backup_status" })).await
+}
+
+/// Rückfall-Kopien ein-/ausschalten vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_backup(on: bool, quota_mb: u64) -> Result<Value, String> {
+    send(json!({ "type": "propose_backup", "on": on, "quota_mb": quota_mb })).await
+}
+
+/// Version zurückholen vorschlagen – nur nach „Ja“, nie überschreibend.
+#[tauri::command]
+pub async fn service_propose_backup_restore(id: String) -> Result<Value, String> {
+    check_id(&id)?;
+    send(json!({ "type": "propose_backup_restore", "id": id })).await
+}
+
+/// Neueste Versionen in einen gewählten Ordner exportieren vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_backup_export(folder: String) -> Result<Value, String> {
+    check_paths(std::slice::from_ref(&folder))?;
+    send(json!({ "type": "propose_backup_export", "folder": folder })).await
+}
+
+/// Alte Versionen ausdünnen vorschlagen – nur nach „Ja“ und zweiter Bestätigung.
+#[tauri::command]
+pub async fn service_propose_backup_prune(days: u32) -> Result<Value, String> {
+    send(json!({ "type": "propose_backup_prune", "days": days })).await
+}
+
 /// Eigene Schutzordner setzen (nur Beobachtung; höchstens 20, leer = keine).
 #[tauri::command]
 pub async fn service_set_protected_folders(folders: Vec<String>) -> Result<Value, String> {

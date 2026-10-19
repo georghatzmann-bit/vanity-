@@ -11,6 +11,7 @@ import type {
   LabState,
   SafeState,
   RansomState,
+  BackupState,
   EmergencyResult,
   Proposal,
   ScheduleState,
@@ -107,6 +108,11 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     labCaptureWindows: vi.fn(() => Promise.resolve([])),
     proposeProcessAction: vi.fn(() => Promise.resolve(proposal('Prozess beenden'))),
     ransomStatus: vi.fn(() => Promise.resolve(ransomState())),
+    backupStatus: vi.fn(() => Promise.resolve(backupState())),
+    proposeBackup: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    proposeBackupRestore: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopie zurückholen'))),
+    proposeBackupExport: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopien exportieren'))),
+    proposeBackupPrune: vi.fn(() => Promise.resolve(proposal('Endgültig löschen'))),
     setProtectedFolders: vi.fn((folders: readonly string[]) =>
       Promise.resolve(ransomState({ folders })),
     ),
@@ -171,6 +177,22 @@ function emergencyResult(): EmergencyResult {
     ],
     memory: [{ pid: 7, program: 'C:\\x\\t.exe' }],
     update: 'Signatur-Update angestoßen',
+  };
+}
+
+function backupState(over: Partial<BackupState> = {}): BackupState {
+  return {
+    available: true,
+    enabled: false,
+    quotaMb: 10240,
+    files: 0,
+    versions: 0,
+    bytes: 0,
+    lastRun: null,
+    note: null,
+    folders: [],
+    recent: [],
+    ...over,
   };
 }
 
@@ -939,5 +961,56 @@ describe('Ransomware-Schutz – Ordner, Alarm, Windows', () => {
     await waitFor(() => expect(cfa).toHaveTextContent('Ist ausgeschaltet'));
     fireEvent.click(within(cfa).getByRole('button', { name: 'Windows-Sicherheit öffnen' }));
     expect(platform.openWindowsSecurity).toHaveBeenCalled();
+  });
+});
+
+describe('Rückfall-Kopien', () => {
+  it('Einschalten nur als Vorschlag mit gewählter Grenze', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/realtime' });
+    const panel = await screen.findByTestId('backup-panel');
+    expect(panel).toHaveTextContent('Ausgeschaltet');
+    fireEvent.click(within(panel).getByRole('radio', { name: '25 GiB' }));
+    fireEvent.click(within(panel).getByRole('button', { name: /einschalten/ }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeBackup).toHaveBeenCalledWith(true, 25600);
+    expect(service.decide).not.toHaveBeenCalled();
+  });
+
+  it('Versionen: zurückholen, exportieren, ausdünnen – jeweils nur als Vorschlag', async () => {
+    const service = fakeService({
+      backupStatus: vi.fn(() =>
+        Promise.resolve(
+          backupState({
+            enabled: true,
+            files: 1,
+            versions: 2,
+            bytes: 2048,
+            lastRun: '2026-10-19T12:00:00Z',
+            recent: [
+              {
+                id: 'v-1',
+                original: 'C:\\Users\\a\\Documents\\brief.txt',
+                size: 1024,
+                storedAt: '2026-10-19T11:00:00Z',
+              },
+            ],
+          }),
+        ),
+      ),
+    });
+    renderApp({
+      platform: fakePlatform('tauri', undefined, service, ['E:\\']),
+      hash: '#/realtime',
+    });
+    const panel = await screen.findByTestId('backup-panel');
+    expect(await within(panel).findByTestId('backup-version')).toHaveTextContent('brief.txt');
+    fireEvent.click(within(panel).getByRole('button', { name: /Version zurückholen/ }));
+    await waitFor(() => expect(service.proposeBackupRestore).toHaveBeenCalledWith('v-1'));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Nein' }),
+    );
+    fireEvent.click(within(panel).getByRole('button', { name: /exportieren/ }));
+    await waitFor(() => expect(service.proposeBackupExport).toHaveBeenCalledWith('E:\\'));
   });
 });

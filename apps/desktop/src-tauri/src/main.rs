@@ -73,6 +73,11 @@ fn main() {
             service::service_ransom_status,
             service::service_propose_baits,
             service::service_set_protected_folders,
+            service::service_backup_status,
+            service::service_propose_backup,
+            service::service_propose_backup_restore,
+            service::service_propose_backup_export,
+            service::service_propose_backup_prune,
             winsec::open_windows_security,
             service::service_memory_scan,
             service::service_emergency_scan,
@@ -165,6 +170,11 @@ mod test_support {
                 crate::service::service_ransom_status,
                 crate::service::service_propose_baits,
                 crate::service::service_set_protected_folders,
+                crate::service::service_backup_status,
+                crate::service::service_propose_backup,
+                crate::service::service_propose_backup_restore,
+                crate::service::service_propose_backup_export,
+                crate::service::service_propose_backup_prune,
                 crate::winsec::open_windows_security,
                 crate::service::service_memory_scan,
                 crate::service::service_emergency_scan,
@@ -201,7 +211,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 49] = [
+    const EXPECTED_PERMISSIONS: [&str; 54] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -236,6 +246,11 @@ mod tests {
         "allow-service-ransom-status",
         "allow-service-propose-baits",
         "allow-service-set-protected-folders",
+        "allow-service-backup-status",
+        "allow-service-propose-backup",
+        "allow-service-propose-backup-restore",
+        "allow-service-propose-backup-export",
+        "allow-service-propose-backup-prune",
         "allow-open-windows-security",
         "allow-service-memory-scan",
         "allow-service-emergency-scan",
@@ -518,6 +533,17 @@ mod tests {
                 ("service_ransom_status", json!({})),
                 ("service_propose_baits", json!({ "on": false })),
                 ("service_set_protected_folders", json!({ "folders": [] })),
+                ("service_backup_status", json!({})),
+                (
+                    "service_propose_backup",
+                    json!({ "on": false, "quotaMb": 0 }),
+                ),
+                ("service_propose_backup_restore", json!({ "id": "x" })),
+                (
+                    "service_propose_backup_export",
+                    json!({ "folder": "/aegis-test/gibt-es-nicht" }),
+                ),
+                ("service_propose_backup_prune", json!({ "days": 30 })),
                 ("open_windows_security", json!({})),
                 ("service_memory_scan", json!({})),
                 ("service_emergency_scan", json!({})),

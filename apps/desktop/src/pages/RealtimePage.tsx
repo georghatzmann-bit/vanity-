@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
 import type { RansomState, ServiceApi, WatchEvent, WatchState } from '../platform/service.ts';
+import { BackupPanel } from './BackupPanel.tsx';
 import { isLabCandidate, offerToLab } from './labCandidate.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
@@ -450,6 +451,11 @@ export function RealtimePage() {
             state={ransom}
             start={(load) => void flow.start(load)}
             onChange={setRansom}
+          />
+          <BackupPanel
+            service={service}
+            start={(load) => void flow.start(load)}
+            version={ransomVersion}
           />
           <Panel title={t('realtime.events')} description={t('realtime.eventsHint')}>
             {state !== null && events.length === 0 && (

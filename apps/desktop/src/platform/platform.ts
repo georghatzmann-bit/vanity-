@@ -28,6 +28,7 @@ import {
   parseMemoryScan,
   parsePanic,
   parseRansom,
+  parseBackup,
   parseSafe,
   parseEmergency,
   parseLabScreenshot,
@@ -245,6 +246,15 @@ function createTauriService(): ServiceApi {
     proposeSafeRetrieve: async (id) =>
       parseProposal(await invoke<unknown>('service_propose_safe_retrieve', { id })),
     ransomStatus: async () => parseRansom(await invoke<unknown>('service_ransom_status')),
+    backupStatus: async () => parseBackup(await invoke<unknown>('service_backup_status')),
+    proposeBackup: async (on, quotaMb) =>
+      parseProposal(await invoke<unknown>('service_propose_backup', { on, quotaMb })),
+    proposeBackupRestore: async (id) =>
+      parseProposal(await invoke<unknown>('service_propose_backup_restore', { id })),
+    proposeBackupExport: async (folder) =>
+      parseProposal(await invoke<unknown>('service_propose_backup_export', { folder })),
+    proposeBackupPrune: async (days) =>
+      parseProposal(await invoke<unknown>('service_propose_backup_prune', { days })),
     setProtectedFolders: async (folders) =>
       parseRansom(await invoke<unknown>('service_set_protected_folders', { folders })),
     proposeBaits: async (on) =>
