@@ -1,0 +1,13 @@
+[package]
+name = "aegis-engine"
+description = "Erkennungs-Engine (P2/P3): ClamAV-Anbindung, Hash-Abgleich, YARA-X, statische Analyse, Risikobewertung."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

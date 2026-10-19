@@ -1,0 +1,13 @@
+[package]
+name = "aegis-service"
+description = "Windows-Dienst aegis-service (P2): Wächter, Scans, Zeitpläne, Named-Pipe-Server mit Zugriffsliste."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

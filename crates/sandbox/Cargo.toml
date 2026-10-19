@@ -1,0 +1,13 @@
+[package]
+name = "aegis-sandbox"
+description = "Labor (P4): Windows-Sandbox-Konfiguration (.wsb) und Mini-Sandbox (eingeschränktes Token, Job-Objekt, AppContainer)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

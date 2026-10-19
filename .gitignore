@@ -1,0 +1,31 @@
+# Abhängigkeiten & Build-Ausgaben
+node_modules/
+target/
+dist/
+dist-showcase/
+coverage/
+*.tsbuildinfo
+.vite/
+apps/desktop/src-tauri/gen/
+
+# Test-Ausgaben
+playwright-report/
+test-results/
+blob-report/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+
+# Niemals einchecken: Schlüssel, Tresore, echte Funde
+*.pfx
+*.p12
+*.key
+.env
+.env.*
+*.aegisvault
+quarantine/

@@ -1,0 +1,13 @@
+[package]
+name = "aegis-vault-core"
+description = "Passwort-Tresor (P9): Argon2id + AES-256-GCM, Schlüssel nur im RAM."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

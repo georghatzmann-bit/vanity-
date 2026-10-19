@@ -1,0 +1,13 @@
+[package]
+name = "aegis-hardening"
+description = "Härtung & Systemzustand (P6): Sicherheits-Score, Persistenz-Prüfung, Treiber-Check."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

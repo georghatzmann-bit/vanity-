@@ -1,0 +1,13 @@
+[package]
+name = "aegis-tools"
+description = "Windows-Tools (P10/P11): Sortierer, Duplikate, Cleaner u. a. – immer Vorschau, Protokoll, Rückgängig."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

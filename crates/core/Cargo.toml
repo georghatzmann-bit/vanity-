@@ -1,0 +1,13 @@
+[package]
+name = "aegis-core"
+description = "Gemeinsame Grundtypen: Goldene Regel (Freigabe-Tor), Aktionspläne, Prüfprotokoll, Risikostufen."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

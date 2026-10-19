@@ -1,0 +1,13 @@
+[package]
+name = "aegis-defender-switch"
+description = "Defender-Schalter (P8): nur dokumentierte Wege, Manipulationsschutz wird nie umgangen."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
