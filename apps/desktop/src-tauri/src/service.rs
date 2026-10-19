@@ -261,6 +261,18 @@ pub async fn service_decide(
 
 /// Antwort im zweiten Dialog weiterreichen.
 #[tauri::command]
+pub async fn service_list_trust() -> Result<Value, String> {
+    send(json!({ "type": "list_trust" })).await
+}
+
+/// Widerruft einen Eintrag der eigenen Vertrauensliste (macht AEGIS nur strenger).
+#[tauri::command]
+pub async fn service_revoke_trust(id: String) -> Result<Value, String> {
+    check_id(&id)?;
+    send(json!({ "type": "revoke_trust", "id": id })).await
+}
+
+#[tauri::command]
 pub async fn service_confirm_second(
     challenge_id: String,
     nonce: String,

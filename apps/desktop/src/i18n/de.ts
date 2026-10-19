@@ -385,6 +385,16 @@ export const de = {
     confidence: 'Sicherheit {value} %',
     truncated: 'Abgebrochen: zu viele Dateien in einem Lauf.',
     contained: 'Auffällige Inhalte',
+    trusted: 'Vertraut seit {date}',
+  },
+  trust: {
+    title: 'Vertrauensliste',
+    intro:
+      'Dateien, denen du vertraust (Prüfsumme + Pfad). Ändert sich die Datei, gilt das Vertrauen nicht mehr. Widerrufen macht AEGIS nur strenger.',
+    empty: 'Du vertraust noch keiner Datei.',
+    revoke: 'Widerrufen',
+    revoked: 'Vertrauen widerrufen.',
+    since: 'Seit {date}',
   },
   vault: {
     intro:

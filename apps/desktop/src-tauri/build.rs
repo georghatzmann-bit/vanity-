@@ -16,6 +16,8 @@ const APP_COMMANDS: &[&str] = &[
     "service_propose_delete",
     "service_decide",
     "service_confirm_second",
+    "service_list_trust",
+    "service_revoke_trust",
 ];
 
 fn main() {

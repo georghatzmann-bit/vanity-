@@ -382,6 +382,16 @@ export const en: Messages<typeof de> = {
     confidence: 'Confidence {value} %',
     truncated: 'Stopped: too many files in one run.',
     contained: 'Notable contents',
+    trusted: 'Trusted since {date}',
+  },
+  trust: {
+    title: 'Trust list',
+    intro:
+      'Files you trust (checksum + path). If the file changes, the trust no longer applies. Revoking only makes AEGIS stricter.',
+    empty: 'You do not trust any file yet.',
+    revoke: 'Revoke',
+    revoked: 'Trust revoked.',
+    since: 'Since {date}',
   },
   vault: {
     intro:

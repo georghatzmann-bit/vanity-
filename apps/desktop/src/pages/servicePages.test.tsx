@@ -27,6 +27,7 @@ const finding = {
       summaryEn: 'This is the EICAR test file.',
     },
   ],
+  trusted: null,
 };
 
 function proposal(kind = 'In die Quarantäne verschieben'): Proposal {
@@ -57,6 +58,8 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     proposeDelete: vi.fn(() => Promise.resolve(proposal('Endgültig löschen'))),
     decide: vi.fn(() => Promise.resolve({ kind: 'nothing' as const })),
     confirmSecond: vi.fn(() => Promise.resolve({ kind: 'nothing' as const })),
+    listTrust: vi.fn(() => Promise.resolve([])),
+    revokeTrust: vi.fn(() => Promise.resolve()),
     ...overrides,
   };
 }
@@ -154,5 +157,52 @@ describe('Quarantäne-Seite', () => {
     fireEvent.click(within(second).getByRole('button', { name: /Abbrechen/ }));
     await waitFor(() => expect(service.confirmSecond).toHaveBeenCalledTimes(1));
     expect(vi.mocked(service.confirmSecond).mock.calls[0]?.[1]).toBe('decline');
+  });
+});
+
+describe('Vertrauensliste', () => {
+  it('zeigt vertraute Dateien und widerruft nur auf Klick', async () => {
+    const entry = {
+      id: 't1',
+      sha256: 'ab'.repeat(32),
+      path: '/home/x/Spiele/trainer.exe',
+      reason: 'Ein Spiel-Tool (z. B. Trainer oder Mod-Menü).',
+      createdAt: '2026-10-19T10:00:00Z',
+    };
+    const listTrust = vi
+      .fn<ServiceApi['listTrust']>()
+      .mockResolvedValueOnce([entry])
+      .mockResolvedValue([]);
+    const service = fakeService({ listTrust });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/quarantine' });
+    const row = await screen.findByTestId('trust-entry');
+    expect(row).toHaveTextContent('trainer.exe');
+    expect(service.revokeTrust).not.toHaveBeenCalled();
+    fireEvent.click(within(row).getByRole('button', { name: 'Widerrufen' }));
+    await waitFor(() => expect(service.revokeTrust).toHaveBeenCalledWith('t1'));
+    expect(await screen.findByTestId('trust-empty')).toBeInTheDocument();
+  });
+
+  it('Scan zeigt „Vertraut“ ohne die Stufe zu verstecken', async () => {
+    const trustedFinding = {
+      ...finding,
+      risk: 'game' as const,
+      recommendation: 'none' as const,
+      trusted: { id: 't1', reason: 'x', since: '2026-10-19T10:00:00Z' },
+    };
+    const service = fakeService({
+      scan: vi.fn(() =>
+        Promise.resolve({ findings: [trustedFinding], skipped: [], truncated: false }),
+      ),
+    });
+    renderApp({
+      platform: fakePlatform('tauri', undefined, service, ['/home/x']),
+      hash: '#/scan',
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Ordner wählen/ }));
+    expect(await screen.findByTestId('trusted')).toHaveTextContent('Vertraut seit 2026-10-19');
+    expect(
+      within(screen.getByTestId('finding')).queryByRole('button', { name: /Isolieren/ }),
+    ).toBeNull();
   });
 });

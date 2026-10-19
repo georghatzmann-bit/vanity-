@@ -158,3 +158,6 @@ crates/winffi/src/process.rs :: winffi-kill-unassigned-call :: Windows: beendet 
 crates/winffi/src/process.rs :: winffi-resume-child :: Windows-FFI: lässt den eigenen Prüfprozess nach der Job-Zuordnung anlaufen.
 crates/service/src/worker.rs :: service-worker-spawn :: Dienst (Unix/Entwicklung): startet den eigenen Prüfprozess (festes Programm, keine Argumente); unter Windows über aegis-winffi mit eingeschränktem Token.
 crates/service/src/worker.rs :: service-worker-kill :: Dienst (Unix/Entwicklung): beendet nur den eigenen Prüfprozess nach dem Zeitlimit.
+crates/service/src/trust.rs :: service-trust-remove-part :: Dienst: entfernt nur eine liegengebliebene eigene Teil-Datei der Vertrauensliste im Datenordner.
+crates/service/src/trust.rs :: service-trust-create-part :: Dienst: legt die neue Teil-Datei der eigenen Vertrauensliste an (create_new).
+crates/service/src/trust.rs :: service-trust-commit :: Dienst: ersetzt die eigene Vertrauensliste atomar (nur nach der Nutzerentscheidung „Vertrauen“ bzw. Widerruf).

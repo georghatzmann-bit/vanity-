@@ -20,6 +20,7 @@ use aegis_quarantine::OwnProcess;
 
 use crate::handler::Service;
 use crate::transport::{MAX_CONNECTIONS, Slot};
+use crate::trust::TrustStore;
 use crate::worker::{Scanner, WORKER_NAME};
 
 /// Dienst mit Systemuhr und Prüfprotokoll-Datei.
@@ -94,8 +95,10 @@ pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
         ..EngineConfig::default()
     });
     let gate = ConsentGate::new(ConsentConfig::default()).map_err(io::Error::other)?;
+    let trust = TrustStore::open(&data_dir.join("trust.json"))?;
     Ok(Service::new(engine, vault, gate, audit)
         .with_protected(vec![data_dir.to_owned()])
+        .with_trust(trust)
         .with_scanner(Scanner::Worker {
             exe: worker,
             clamav: ClamAv::locate().is_some(),

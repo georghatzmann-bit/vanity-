@@ -17,10 +17,12 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { version as configuredVersion } from '../../src-tauri/tauri.conf.json';
 import { parseAppInfo, previewAppInfo, type AppInfo } from './appInfo.ts';
 import {
+  expectType,
   parseDecision,
   parseProposal,
   parseQuarantine,
   parseScan,
+  parseTrust,
   type ServiceApi,
 } from './service.ts';
 
@@ -173,6 +175,10 @@ function createTauriService(): ServiceApi {
           dialogId,
         }),
       ),
+    listTrust: async () => parseTrust(await invoke<unknown>('service_list_trust')),
+    revokeTrust: async (id) => {
+      expectType(await invoke<unknown>('service_revoke_trust', { id }), 'trust_revoked');
+    },
   };
 }
 

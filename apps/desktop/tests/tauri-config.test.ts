@@ -35,6 +35,8 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-propose-delete': 'Dienst: endgültiges Löschen vorschlagen (zwei Bestätigungen)',
   'allow-service-decide': 'Dienst: Antwort aus dem Freigabe-Dialog (mit Einmal-Nonce)',
   'allow-service-confirm-second': 'Dienst: zweite Bestätigung vor endgültigem Löschen',
+  'allow-service-list-trust': 'Dienst: eigene Vertrauensliste anzeigen (nur lesend)',
+  'allow-service-revoke-trust': 'Dienst: Vertrauens-Eintrag widerrufen (macht AEGIS strenger)',
   'dialog:allow-open': 'Datei-/Ordnerauswahl für Scans (nur Auswahl)',
 };
 

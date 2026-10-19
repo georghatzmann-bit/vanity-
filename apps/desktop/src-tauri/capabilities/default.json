@@ -21,6 +21,8 @@
     "allow-service-propose-delete",
     "allow-service-decide",
     "allow-service-confirm-second",
+    "allow-service-list-trust",
+    "allow-service-revoke-trust",
     "dialog:allow-open"
   ]
 }

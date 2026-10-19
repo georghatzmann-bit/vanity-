@@ -30,6 +30,14 @@ function FindingRow({
             <span className="text-xs text-text-subtle tabular-nums">
               {t('scanner.confidence', { value: String(finding.confidence) })}
             </span>
+            {finding.trusted !== null && (
+              <span
+                className="rounded-full border border-border px-2 py-0.5 text-xs text-text-muted"
+                data-testid="trusted"
+              >
+                {t('scanner.trusted', { date: finding.trusted.since.slice(0, 10) })}
+              </span>
+            )}
           </div>
           <p className="mt-2 text-sm text-text">
             <SafeText value={finding.path} mono breakAll />

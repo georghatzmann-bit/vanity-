@@ -125,3 +125,14 @@ AES-256-GCM in 1-MiB-Blöcken (Nonce = 7-Byte-Präfix + Zähler + Letzter-Block-
 AAD) – große Dateien ohne ganzen Inhalt im Speicher, Abschneiden/Umordnen fällt auf.
 Wiederherstellen schreibt erst eine versteckte Teil-Datei neben dem Ziel, prüft SHA-256 und
 Größe und legt sie erst dann an den ursprünglichen Ort; ein belegtes Ziel wird nicht überschrieben.
+
+## D-028 – Vertrauensliste als JSON statt SQLite (vorerst)
+Die Vertrauensliste ist klein (höchstens 10 000 Einträge) und wird selten geändert. Eine
+JSON-Datei im Datenordner, atomar ersetzt, braucht keinen C-Code (SQLite) im Dienst und
+keine zusätzliche Angriffsfläche. SQLite kommt erst, wenn Datenmengen es verlangen (z. B.
+Zeitleiste mit vielen Funden). Einträge gelten je Konto (SID) und nur für Hash **und** Pfad.
+
+## D-029 – Prüfprozess statt Parsen im Dienst
+Fremde Dateien parst ausschließlich `aegis-scanworker` mit eingeschränktem, vom Nutzer
+abgeleitetem Token, niedriger Integrität und Job-Objekt. Fehlt das Programm, startet der Dienst
+nicht – kein stiller Rückfall auf das Parsen als SYSTEM.

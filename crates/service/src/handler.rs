@@ -18,6 +18,7 @@ use aegis_core::risk::RiskLevel;
 use aegis_core::time::{Duration, OffsetDateTime};
 use aegis_engine::{Engine, Finding};
 
+use crate::trust::{TrustEntry, TrustStore};
 use crate::worker::Scanner;
 use aegis_quarantine::{Entry, UserAccess, Vault};
 
@@ -61,6 +62,7 @@ pub struct Service<C: Clock, W: Durable> {
     second: HashMap<ChallengeId, PendingSecond>,
     recent_proposals: HashMap<Option<String>, Vec<OffsetDateTime>>,
     protected: Vec<PathBuf>,
+    trust: TrustStore,
 }
 
 impl<C: Clock, W: Durable> Service<C, W> {
@@ -77,6 +79,39 @@ impl<C: Clock, W: Durable> Service<C, W> {
             second: HashMap::new(),
             recent_proposals: HashMap::new(),
             protected,
+            trust: TrustStore::in_memory(),
+        }
+    }
+
+    /// Dauerhafte Vertrauensliste (Betrieb).
+    #[must_use]
+    pub fn with_trust(mut self, trust: TrustStore) -> Self {
+        self.trust = trust;
+        self
+    }
+
+    /// Markiert Funde, denen das Konto vertraut (Hash **und** Pfad).
+    pub fn mark_trusted(&self, findings: &mut [Finding], owner: Option<&str>) {
+        for f in findings {
+            let Some(sha) = &f.sha256 else { continue };
+            if let Some(entry) = self.trust.lookup(sha, &f.path, owner) {
+                f.trusted = Some(aegis_engine::TrustMark {
+                    id: entry.id.clone(),
+                    reason: entry.reason.clone(),
+                    since: entry
+                        .created_at
+                        .format(&aegis_core::time::format_description::well_known::Rfc3339)
+                        .unwrap_or_default(),
+                });
+                f.recommendation = aegis_engine::Recommendation::None;
+            }
+        }
+    }
+
+    /// Wie [`Service::mark_trusted`] für eine Scan-Antwort.
+    pub fn mark_trusted_response(&self, response: &mut Response, owner: Option<&str>) {
+        if let Response::ScanReport { report } = response {
+            self.mark_trusted(&mut report.findings, owner);
         }
     }
 
@@ -133,9 +168,23 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 protocol: PROTOCOL_VERSION,
             },
             Request::Scan { paths } => match self.check_paths(&paths) {
-                Ok(()) => scan_as_user(&self.scanner, &paths, user),
+                Ok(()) => {
+                    let mut response = scan_as_user(&self.scanner, &paths, user);
+                    self.mark_trusted_response(&mut response, user.identity().as_deref());
+                    response
+                }
                 Err(e) => Response::error("input", e),
             },
+            Request::ListTrust {} => Response::Trust {
+                entries: self.trust.list(user.identity().as_deref()),
+            },
+            Request::RevokeTrust { id } => {
+                match self.trust.revoke(&id, user.identity().as_deref()) {
+                    Ok(true) => Response::TrustRevoked { id },
+                    Ok(false) => Response::error("unknown", "Eintrag nicht gefunden"),
+                    Err(e) => Response::error("trust", e.to_string()),
+                }
+            }
             Request::ListQuarantine {} => match self.vault.list() {
                 Ok(entries) => {
                     let me = user.identity();
@@ -394,12 +443,66 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Ok(Outcome::Ignored) => Response::NothingDone {
                 decision: Decision::Ignore,
             },
-            Ok(Outcome::Trusted(_grant)) => Response::Trusted {
-                note: "Nichts ausgeführt. Die Vertrauensliste (Hash + Pfad + Grund) folgt in P3."
-                    .into(),
-            },
+            Ok(Outcome::Trusted(grant)) => self.trust_files(&grant, &plan, user),
             Err(e) => Response::error("consent", e.to_string()),
         }
+    }
+
+    /// „Vertrauen“: Die Dateien des Plans (Hash + Pfad, mit den Rechten des Nutzers gelesen)
+    /// kommen auf die Vertrauensliste des Kontos. Sonst wird nichts verändert.
+    fn trust_files(
+        &mut self,
+        grant: &aegis_core::consent::TrustGrant,
+        plan: &ActionPlan,
+        user: &dyn UserAccess,
+    ) -> Response {
+        let owner = user.identity();
+        let now = self.gate.clock().now();
+        let mut entries = Vec::new();
+        let mut skipped = Vec::new();
+        {
+            let scope = user.enter();
+            if scope.is_err() {
+                return Response::error(
+                    "identity",
+                    "Rechte des Nutzers nicht übernehmbar – nichts vertraut",
+                );
+            }
+            for target in grant.targets() {
+                let Target::File { path } = target else {
+                    continue;
+                };
+                let hashed = std::fs::File::open(path)
+                    .and_then(|f| aegis_engine::hash::sha256_reader(std::io::BufReader::new(f)));
+                match hashed {
+                    Ok((sha, _)) => entries.push(TrustEntry {
+                        id: aegis_core::uuid::Uuid::new_v4().hyphenated().to_string(),
+                        sha256: aegis_engine::hash::to_hex(&sha),
+                        path: path.clone(),
+                        reason: escape_text(plan.why()),
+                        created_at: now,
+                        owner: owner.clone(),
+                    }),
+                    Err(e) => {
+                        skipped.push(format!("{}: {e}", escape_text(&path.display().to_string())))
+                    }
+                }
+            }
+        }
+        if let Err(e) = self.trust.add(entries.clone()) {
+            return Response::error(
+                "trust",
+                format!("Vertrauensliste nicht speicherbar: {e} – nichts vertraut"),
+            );
+        }
+        let mut note = format!(
+            "Nichts ausgeführt. {} Datei(en) stehen jetzt auf deiner Vertrauensliste (Hash + Pfad) – jederzeit widerrufbar.",
+            entries.len()
+        );
+        if !skipped.is_empty() {
+            note.push_str(&format!(" Nicht lesbar: {}", skipped.join("; ")));
+        }
+        Response::Trusted { note, entries }
     }
 
     /// Schreibt alle bisherigen Ereignisse (u. a. die Freigabe) und sichert das Protokoll

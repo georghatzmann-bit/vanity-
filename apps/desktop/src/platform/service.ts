@@ -27,6 +27,17 @@ export interface ScanFinding {
   readonly notScannable: string | null;
   /** Auffällige Inhalte von Archiven/Abbildern/Dokumenten. */
   readonly contained: readonly ContainedItem[];
+  /** Vom Nutzer vertraut (Hash + Pfad) – die Stufe bleibt trotzdem sichtbar. */
+  readonly trusted: { readonly id: string; readonly reason: string; readonly since: string } | null;
+}
+
+/** Eintrag der Vertrauensliste. */
+export interface TrustEntry {
+  readonly id: string;
+  readonly sha256: string;
+  readonly path: string;
+  readonly reason: string;
+  readonly createdAt: string;
 }
 
 /** Eine Begründung („Warum?“). */
@@ -107,6 +118,8 @@ export interface ServiceApi {
     decision: ConsentDecision,
     dialogId: string,
   ): Promise<DecisionResult>;
+  listTrust(): Promise<readonly TrustEntry[]>;
+  revokeTrust(id: string): Promise<void>;
 }
 
 type Json = Record<string, unknown>;
@@ -166,6 +179,13 @@ export function parseFinding(value: unknown): ScanFinding {
         summaryDe: str(c['summary_de']),
         summaryEn: str(c['summary_en']),
       })),
+    trusted: isObject(f['trusted'])
+      ? {
+          id: str(f['trusted']['id']),
+          reason: str(f['trusted']['reason']),
+          since: str(f['trusted']['since']),
+        }
+      : null,
   };
 }
 
@@ -191,6 +211,18 @@ export function parseQuarantine(response: unknown): readonly QuarantineEntry[] {
       size: num(e['size']),
       quarantinedAt: str(e['quarantined_at']),
       reason: str(e['reason']),
+    }));
+}
+
+export function parseTrust(response: unknown): readonly TrustEntry[] {
+  return arr(expectType(response, 'trust')['entries'])
+    .filter(isObject)
+    .map((e) => ({
+      id: str(e['id']),
+      sha256: str(e['sha256']),
+      path: str(e['path']),
+      reason: str(e['reason']),
+      createdAt: str(e['created_at']),
     }));
 }
 

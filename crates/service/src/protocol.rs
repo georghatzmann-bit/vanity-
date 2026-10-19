@@ -15,6 +15,8 @@ use aegis_engine::ScanReport;
 use aegis_quarantine::Entry;
 use serde::{Deserialize, Serialize};
 
+use crate::trust::TrustEntry;
+
 /// Protokollversion.
 pub const PROTOCOL_VERSION: u32 = 1;
 /// Größte erlaubte Nachricht (16 MiB).
@@ -36,6 +38,10 @@ pub enum Request {
     ProposeRestore { entry_id: String },
     /// Endgültiges Löschen vorschlagen.
     ProposeDelete { entry_id: String },
+    /// Vertrauensliste des eigenen Kontos.
+    ListTrust {},
+    /// Eintrag der Vertrauensliste widerrufen (macht AEGIS nur strenger – keine Rückfrage).
+    RevokeTrust { id: String },
     /// Antwort des Nutzers im Freigabe-Dialog.
     Decide {
         plan_id: PlanId,
@@ -85,8 +91,15 @@ pub enum Response {
     },
     /// Nichts getan („Nein“ oder „Ignorieren“).
     NothingDone { decision: Decision },
-    /// „Vertrauen“ – nichts ausgeführt; die Vertrauensliste folgt in P3.
-    Trusted { note: String },
+    /// „Vertrauen“ – nichts ausgeführt, die Dateien stehen jetzt auf der Vertrauensliste.
+    Trusted {
+        note: String,
+        entries: Vec<TrustEntry>,
+    },
+    /// Vertrauensliste.
+    Trust { entries: Vec<TrustEntry> },
+    /// Eintrag widerrufen.
+    TrustRevoked { id: String },
     /// Erste Bestätigung für endgültiges Löschen erhalten – jetzt den zweiten Dialog zeigen.
     SecondConfirmationRequired {
         challenge: SecondConfirmationChallenge,

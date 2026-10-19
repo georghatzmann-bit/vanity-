@@ -86,7 +86,12 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                 match (checked, Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS)) {
                     (Err(e), _) => Response::error("input", e),
                     (Ok(()), None) => busy(),
-                    (Ok(()), Some(_slot)) => scan_as_user(&scanner, &paths, user),
+                    (Ok(()), Some(slot)) => {
+                        let mut response = scan_as_user(&scanner, &paths, user);
+                        drop(slot);
+                        lock()?.mark_trusted_response(&mut response, user.identity().as_deref());
+                        response
+                    }
                 }
             }
             Ok(Request::ProposeQuarantine { paths }) => {

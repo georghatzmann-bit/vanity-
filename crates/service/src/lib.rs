@@ -11,6 +11,7 @@ pub mod protocol;
 pub mod scm;
 pub mod server;
 pub mod transport;
+pub mod trust;
 pub mod worker;
 
 pub use handler::Service;

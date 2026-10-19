@@ -36,5 +36,5 @@ pub mod script;
 pub mod traits;
 pub mod yara;
 
-pub use finding::{Category, Contained, Finding, Reason, Recommendation, Source};
+pub use finding::{Category, Contained, Finding, Reason, Recommendation, Source, TrustMark};
 pub use scan::{Engine, EngineConfig, ScanLimits, ScanReport};

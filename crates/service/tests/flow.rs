@@ -358,3 +358,43 @@ fn konten_sind_getrennt() {
     let r = as_user(&b, json!({"type": "propose_delete", "entry_id": id}));
     assert_eq!(r["code"], "quarantine", "{r}");
 }
+
+/// „Vertrauen“: Datei kommt mit Hash + Pfad auf die Vertrauensliste, Scans zeigen sie als
+/// vertraut (Stufe bleibt ehrlich), Widerruf hebt das auf. Nichts an der Datei verändert.
+#[test]
+fn vertrauen_widerrufen() {
+    let mut h = harness();
+    let home = tempfile::tempdir().unwrap();
+    let path = write_fixture(home.path(), "trainer.txt", b"aimbot wallhack no recoil").unwrap();
+    let before = DirSnapshot::capture(home.path()).unwrap();
+    let p = h.send(json!({"type": "propose_quarantine", "paths": [path]}));
+    let r = h.answer(&p, "trust");
+    assert_eq!(r["type"], "trusted", "{r}");
+    assert_eq!(r["entries"].as_array().unwrap().len(), 1);
+    let scan = h.send(json!({"type": "scan", "paths": [path]}));
+    let f = &scan["report"]["findings"][0];
+    assert_eq!(f["risk"], "game_tool");
+    assert!(
+        f["trusted"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("Spiel-Tool"),
+        "{f}"
+    );
+    assert_eq!(f["recommendation"], "none");
+    let list = h.send(json!({"type": "list_trust"}));
+    let id = list["entries"][0]["id"].clone();
+    assert_eq!(
+        h.send(json!({"type": "revoke_trust", "id": id}))["type"],
+        "trust_revoked"
+    );
+    let scan = h.send(json!({"type": "scan", "paths": [path]}));
+    assert!(scan["report"]["findings"][0]["trusted"].is_null());
+    // Geänderter Inhalt = andere Datei: nicht mehr vertraut.
+    let p = h.send(json!({"type": "propose_quarantine", "paths": [path]}));
+    h.answer(&p, "trust");
+    write_fixture(home.path(), "trainer.txt", b"aimbot wallhack no recoil v2").unwrap();
+    let scan = h.send(json!({"type": "scan", "paths": [path]}));
+    assert!(scan["report"]["findings"][0]["trusted"].is_null());
+    let _ = before;
+}

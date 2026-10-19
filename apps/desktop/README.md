@@ -48,6 +48,8 @@ ersetzen, Pfade des Nutzers auslesen, Events an das Backend senden) und auch kei
 | `allow-service-propose-delete`               | App-Befehl `service_propose_delete`: Endgültiges Löschen vorschlagen (nur Vorschlag; braucht danach zwei Bestätigungen).                                                                  |
 | `allow-service-decide`                       | App-Befehl `service_decide`: Antwort aus dem Freigabe-Dialog an den Dienst – gilt nur mit der Einmal-Nonce des Vorschlags.                                                                |
 | `allow-service-confirm-second`               | App-Befehl `service_confirm_second`: Antwort im zweiten Dialog vor endgültigem Löschen (eigene Einmal-Nonce).                                                                             |
+| `allow-service-list-trust`                   | App-Befehl `service_list_trust`: eigene Vertrauensliste anzeigen (Hash + Pfad + Grund, nur lesend).                                                                                       |
+| `allow-service-revoke-trust`                 | App-Befehl `service_revoke_trust`: einen eigenen Vertrauens-Eintrag widerrufen – macht AEGIS nur strenger, verändert keine Dateien.                                                       |
 | `dialog:allow-open`                          | Datei- bzw. Ordnerauswahl für Scans („Datei wählen…“). Nur Auswahl; die App liest/schreibt dabei nichts. `save`, `message`, `ask` usw. bleiben gesperrt.                                  |
 
 Dieselbe Liste steht als `JUSTIFIED_PERMISSIONS` in `tests/tauri-config.test.ts` und als
@@ -88,6 +90,8 @@ echten ACL: jeder Aufruf der Oberfläche läuft, alles andere wird abgelehnt).
 | `invoke('service_propose_delete')`                              | `service_propose_delete`                  | `allow-service-propose-delete`               |
 | `invoke('service_decide')`                                      | `service_decide`                          | `allow-service-decide`                       |
 | `invoke('service_confirm_second')`                              | `service_confirm_second`                  | `allow-service-confirm-second`               |
+| `invoke('service_list_trust')`                                  | `service_list_trust`                      | `allow-service-list-trust`                   |
+| `invoke('service_revoke_trust')`                                | `service_revoke_trust`                    | `allow-service-revoke-trust`                 |
 | `open()` aus `@tauri-apps/plugin-dialog`                        | `plugin:dialog\|open`                     | `dialog:allow-open`                          |
 
 **App-Befehle nur mit Recht.** `src-tauri/build.rs` meldet die App-Befehle über

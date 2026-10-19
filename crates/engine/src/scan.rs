@@ -214,6 +214,7 @@ impl Engine {
             reasons,
             not_scannable,
             contained,
+            trusted: None,
         }
     }
 

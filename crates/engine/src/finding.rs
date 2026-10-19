@@ -134,6 +134,21 @@ pub struct Finding {
     pub not_scannable: Option<String>,
     /// Auffällige Inhalte von Archiven/Abbildern/Dokumenten (höchstens [`MAX_CONTAINED`]).
     pub contained: Vec<Contained>,
+    /// Gesetzt, wenn der Nutzer genau dieser Datei (Hash + Pfad) vertraut – der Dienst trägt
+    /// es aus der Vertrauensliste ein. Die Risikostufe bleibt ehrlich stehen.
+    #[serde(default)]
+    pub trusted: Option<TrustMark>,
+}
+
+/// Hinweis „Vertraut“ an einem Fund.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrustMark {
+    /// Kennung des Eintrags in der Vertrauensliste.
+    pub id: String,
+    /// Grund.
+    pub reason: String,
+    /// Seit (RFC 3339).
+    pub since: String,
 }
 
 impl Finding {
@@ -154,6 +169,7 @@ impl Finding {
             reasons: Vec::new(),
             not_scannable: Some(why.to_owned()),
             contained: Vec::new(),
+            trusted: None,
         }
     }
 }
