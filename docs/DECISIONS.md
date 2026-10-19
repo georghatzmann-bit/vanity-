@@ -155,3 +155,18 @@ eingeschränkten Prüfprozess und melden nur (wie der Wächter). Die Stunde spei
 in UTC; die App rechnet aus der Ortszeit um (Sommerzeit verschiebt um eine Stunde – bewusst
 hingenommen). `freshclam` läuft täglich vom festen ClamAV-Ort, ist abschaltbar und ändert nur
 die ClamAV-Datenbank.
+
+## D-033 – Labor: zwei Stufen, ehrlich benannt
+Stufe 1 ist die Windows Sandbox (eigene, wegwerfbare VM; Netz aus, nur auf ausdrücklichen
+Wunsch an). Gibt es sie nicht (Home) oder ist sie aus, nutzt das Labor Stufe 2: ein
+AppContainer ohne Fähigkeiten (kein Netz, niedrige Integrität) mit Job-Grenzen. Die Oberfläche
+sagt klar, dass Stufe 2 schwächer als eine VM ist (gleicher Kernel und Desktop). Jeder Lauf
+braucht einen eigenen Plan („Im Labor ausführen“, Stufe/Sekunden/Netz im Plan) und „Ja“; das
+Original wird nur gelesen (Kopie mit SHA-256 im Labor-Ordner). Einschalten der Windows Sandbox
+ist ein eigener Plan (nur Administratoren, DISM ohne Neustart).
+
+## D-034 – Bildschirmfotos ohne Lockerung der CSP
+Bilder kommen als PNG-Bytes über IPC und werden per `createImageBitmap` auf ein Canvas
+gezeichnet – `img-src` bleibt `'self'` (kein `data:`/`blob:`). Fotos der Mini-Sandbox macht
+die App (der Dienst läuft in Sitzung 0 und sieht den Desktop nicht), aber nur für die
+Prozess-IDs, die der Dienst für einen laufenden eigenen Lauf nennt.
