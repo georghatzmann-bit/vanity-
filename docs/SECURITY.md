@@ -11,7 +11,10 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
 | Freigabe an Plan-Digest gebunden, einmalig, mit Ablauf | Kein Wiederverwenden, kein Unterschieben eines anderen Plans |
 | Keine Reaktion = Plan verfällt | Standard ist „nichts tun“ |
 | Endgültiges Löschen: zweite getrennte Bestätigung mit Mindestabstand | Kein versehentlicher Doppelklick |
-| `clippy.toml` `disallowed-methods` für verändernde APIs + Allowlist-Test | Jede neue Veränderungsstelle fällt im Review auf |
+| `clippy.toml` `disallowed-methods` für verändernde APIs (std, tokio, tempfile) + Allowlist-Test | Jede neue Veränderungsstelle fällt im Review auf |
+| `ConsentGate::decide`/`confirm_second` ebenfalls gesperrt (Markierung `aegis-consent`) | Im Betrieb darf nur der Pipe-Handler des Dienstes Nutzerantworten annehmen – kein Hintergrundcode „genehmigt sich selbst“ |
+| Einlösen nur am ausgebenden Tor; abgelehnte Einlösungen werden protokolliert | Manipulierte Pläne, fremde Tore und Fristüberschreitungen hinterlassen eine Spur |
+| Mutations-Wächter liest Manifeste über `cargo metadata`/TOML, prüft `.cargo/config`, `cfg(clippy)`, Doctests, `unsafe`-Ausnahmen | Die Sperre lässt sich nicht still per Konfiguration aushebeln |
 | Prüfprotokoll mit Hash-Kette | Nachträgliche Manipulation des Protokolls wird erkannt |
 | „Nichts ohne Ja“-Tests (Zustands-Schnappschuss byte-genau) | Scans/Wächter/Panic ohne Bestätigung ändern nachweislich nichts |
 
@@ -19,6 +22,10 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
 
 - **Kein Kernel-Treiber.** AEGIS erkennt, warnt und isoliert auf Wunsch; es blockiert keine
   Programme vor dem Start. Das steht so in der UI.
+- **Wiederholte Antworten (offen bis P2):** Eine Entscheidung ist an Plan-ID + Digest gebunden,
+  noch nicht an eine Vorschlags-Nonce. Legt der Dienst denselben gespeicherten Plan in einem
+  neuen Tor erneut vor, würde ein wiederholtes „Ja“ angenommen. P2 bindet Antworten im
+  Pipe-Protokoll an eine Nonce, die die UI zurückschickt.
 - **Gleichrangige Schadsoftware:** Läuft Schadcode bereits mit den Rechten des Nutzers, kann er
   theoretisch die UI fernsteuern oder Pipe-Nachrichten senden. Gegenmaßnahmen (geplant):
   Pipe-ACL nur für den interaktiven Nutzer + SYSTEM, Prüfung der Client-Prozess-Identität
@@ -31,12 +38,22 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
 
 ## Desktop-App (Tauri)
 
-- Strikte CSP (`default-src 'self'`, keine Remote-Skripte, keine Frames, `object-src 'none'`).
-  `style-src 'unsafe-inline'` ist nötig für Motion-Inline-Transforms – nur Stile, keine Skripte.
-- `withGlobalTauri: false`, `freezePrototype: true`, Capabilities minimal (`core:default`).
-  Jede zusätzliche Berechtigung wird hier begründet.
-- Keine Remote-Inhalte im App-Fenster, keine CDNs, keine Telemetrie.
-- Installation pro Nutzer (NSIS `currentUser`), Admin nur für den Dienst.
+- Strikte CSP: alles `'self'` (Skripte, Stile, Bilder, Schriften), keine Frames,
+  `object-src 'none'`, kein `unsafe-inline`. Motion setzt nur Inline-`style`-Attribute über das
+  DOM, die CSP nicht betreffen. Der Build bettet keine Dateien als `data:` ein.
+- `withGlobalTauri: false`, `freezePrototype: true` (auch in den E2E-Tests nachgebildet).
+- Capabilities: **keine** (`permissions: []`). Jede künftige Berechtigung wird einzeln als
+  `core:<plugin>:allow-<befehl>` mit Begründung in `apps/desktop/README.md` ergänzt.
+- Navigationswächter (`src-tauri/src/navigation.rs`): Das Fenster darf nur die gebündelte UI
+  laden; externe Seiten werden blockiert. Keine CDNs, keine Telemetrie.
+- Installation pro Nutzer (NSIS `currentUser`, Deutsch/Englisch), Admin nur für den Dienst.
+
+## Lieferkette
+
+- Alle GitHub Actions auf volle Commit-SHAs gepinnt (offizielle Repos, Version im Kommentar).
+- `cargo deny` (Hinweise, Lizenzen – GPL ausgeschlossen, Quellen) und `pnpm audit` laufen bei
+  jedem Push und wöchentlich (`.github/workflows/supply-chain.yml`).
+- Cargo-Aufrufe in CI mit `--locked`, npm mit `--frozen-lockfile`; Clippy auch für Release.
 
 ## Tests mit Schadcode-Ersatz
 
@@ -54,4 +71,4 @@ Prüfung „kein Code-Pfad ändert etwas ohne Freigabe“ ist fester Bestandteil
 
 | Datum | Umfang | Ergebnis |
 | --- | --- | --- |
-| – | – | – |
+| 2026-10-19 | P0: `crates/core` (Freigabe, Protokoll, Mutations-Wächter), Tauri/CSP/CI, Design-System. 4 unabhängige Prüfer + adversarielle Gegenprüfung | 48 Funde bestätigt (0 kritisch, 0 hoch, 15 mittel, 24 niedrig, 9 Kleinigkeiten). 46 behoben, jeweils mit Regressionstest. Offen: Antwort-Nonce (→ P2, siehe Bedrohungsmodell), Meldung bei Startfehler der App (→ P1) |

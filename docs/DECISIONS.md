@@ -33,7 +33,8 @@ Inter Variable (UI) und JetBrains Mono (Hashes/Technik), beide SIL OFL 1.1, übe
 Passt zum vorinstallierten Chromium im Container; in CI identisch. Update bewusst später.
 
 ## D-008 – Tauri-Härtung
-Strikte CSP, `withGlobalTauri: false`, `freezePrototype: true`, minimale Capabilities.
+Strikte CSP ohne `unsafe-inline`, `withGlobalTauri: false`, `freezePrototype: true`, keine
+Capabilities (`permissions: []`) bis ein IPC-Befehl sie braucht, Navigationswächter.
 Installation pro Nutzer (NSIS `currentUser`); der Windows-Dienst bekommt einen eigenen,
 UAC-pflichtigen Installationsschritt.
 
@@ -76,6 +77,6 @@ werden mit `tauri icon` aus `logo-mark.svg` erzeugt.
 nie als `data:` eingebettet (`font-src 'self'`).
 
 ## D-018 – Start-Klang und Autoplay
-Der Start-Klang wird nur gespielt, wenn der AudioContext ohne Nutzergeste starten darf;
-sonst bleibt es still (Chromium protokolliert dann eine Warnung, keinen Fehler). Ob die App
-Autoplay in WebView2 erlauben soll, wird in P1 mit den Einstellungen entschieden.
+Vor der ersten Nutzergeste (`navigator.userActivation`) wird kein AudioContext erzeugt – der
+Start-Klang beim Kaltstart bleibt still, ohne Browser-Warnung. Ob die App Autoplay in WebView2
+erlauben soll, damit der Start-Klang hörbar ist, wird in P1 mit den Einstellungen entschieden.

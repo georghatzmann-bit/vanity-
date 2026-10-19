@@ -1,27 +1,28 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-19 · aktuelle Phase: **P0 – Fundament, Design-Tokens, Logo, Start-Animation**
+Stand: 2026-10-19 · **P0 abgeschlossen** · nächste Phase: **P1 – Shell, Dashboard, Design-System**
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
 | Werkzeug | Gefunden | Bewertung |
 | --- | --- | --- |
-| Rust / Cargo | 1.97.0 (stable) + Ziel `x86_64-pc-windows-msvc` | ok – Windows-Code wird per `cargo clippy --target …` geprüft (ohne Linken) |
+| Rust / Cargo | 1.97.0 (gepinnt) + Ziel `x86_64-pc-windows-msvc` | ok – Windows-Code lokal per `cargo clippy --target …` (ohne Linken) |
 | Node / pnpm | 22.22.0 / 10.28.0 | ok |
 | Tauri CLI | 2.12.3 (npm `@tauri-apps/cli`) | ok |
-| WebKitGTK (Tauri unter Linux) | 2.52.6 nachinstalliert | ok – nur zum Bauen/Testen im Container |
-| WebView2 | **nicht vorhanden** (Linux-Container) | Windows-Teil → GitHub Actions `windows-latest`; Installer lädt WebView2 bei Bedarf nach |
-| MSVC Build Tools / Windows SDK | **nicht vorhanden** | bewusst nicht per `xwin` geladen (Microsoft-Lizenz – deine Entscheidung) → CI |
-| NSIS | nicht vorhanden | Tauri lädt NSIS beim Windows-Build selbst |
+| WebKitGTK (Tauri unter Linux) | 2.52.6 nachinstalliert | ok – App läuft im Container unter Xvfb |
+| WebView2 | nicht vorhanden (Linux-Container) | Windows-Teil → GitHub Actions `windows-latest`; Installer lädt WebView2 bei Bedarf |
+| MSVC Build Tools / Windows SDK | nicht vorhanden | bewusst nicht per `xwin` geladen (Microsoft-Lizenz) → CI |
+| NSIS | nicht vorhanden | Tauri lädt NSIS im Windows-CI-Build selbst |
 | Chromium (Playwright) | 1194 (= Playwright 1.56.1) | ok – Playwright gepinnt |
+| cargo-llvm-cov / cargo-deny | installiert / in CI | Abdeckung bzw. Lieferkette |
 | ClamAV / YARA | nicht installiert | erst ab P2 nötig |
 
 ## Phasen-Übersicht
 
 | Phase | Inhalt | Status |
 | --- | --- | --- |
-| P0 | Fundament, Design-Tokens, Logo, Start-Animation | **in Arbeit** |
-| P1 | Shell, Dashboard, Design-System | offen |
+| P0 | Fundament, Design-Tokens, Logo, Start-Animation | **erledigt** |
+| P1 | Shell, Dashboard, Design-System | als Nächstes |
 | P2 | Dienst + Pipe + Engine-Kern (ClamAV, Hashes, YARA-X, statische Analyse), Quarantäne | offen |
 | P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | offen |
 | P4 | Sandbox Stufe 1+2 + Verhaltensbericht | offen |
@@ -36,31 +37,66 @@ Stand: 2026-10-19 · aktuelle Phase: **P0 – Fundament, Design-Tokens, Logo, St
 | P13 | Setup-Bootstrapper, Uninstaller, Updater, Abschlusstests, deutsches README | offen |
 | P14 | optional: ML-Modell, AMSI-Beobachter, Browser-Sandbox | offen |
 
-## P0 – Plan
+## P0 – erledigt
 
-1. [x] Werkzeuge prüfen, Linux-Abhängigkeiten für Tauri nachinstallieren
+1. [x] Werkzeuge geprüft, Linux-Abhängigkeiten für Tauri nachinstalliert
 2. [x] Monorepo: pnpm-Workspace, Cargo-Workspace (Edition 2024, strikte Lints), Ordnerstruktur
-3. [x] Tauri-2-Grundgerüst `apps/desktop` (strikte CSP, minimale Capabilities, NSIS currentUser)
-4. [x] CLAUDE.md, PROGRESS.md, ARCHITECTURE.md, SECURITY.md, DECISIONS.md, LICENSES.md
-5. [ ] `crates/core`: Goldene Regel als Typ (`ActionPlan`, `ConsentGate`, `Approval`,
-       Doppel-Bestätigung, Ablauf = nichts tun), Prüfprotokoll mit Hash-Kette, Risikostufen,
-       Zustands-Schnappschuss für „Nichts ohne Ja“-Tests, Mutations-Sperre (clippy + Allowlist-Test)
-6. [ ] `packages/ui`: Design-Tokens (dunkel/hell, Risikostufen, Motion), Kontrast-Tests,
-       eigenes SVG-Logo, Start-Animation (~1,5 s, überspringbar, reduzierte Bewegung),
-       dezenter UI-Sound (abschaltbar), Showcase-Seite
-7. [ ] `apps/desktop`: Start-Animation einbinden, App-Icons aus dem Logo, Vitest + Playwright
-       (inkl. „keine Konsolenfehler“ und CSP wie in Tauri)
-8. [x] CI (GitHub Actions): Linux (lint, typecheck, vitest, e2e, clippy, tests) + Windows
-       (clippy, cargo test, Tauri-NSIS-Build)
-9. [ ] Security-Review (separater Agent) für `crates/core` + Tauri-Konfiguration
-10. [ ] Definition of Done P0 prüfen, PROGRESS aktualisieren, Commit + Push
+3. [x] Tauri-2-App: CSP nur `'self'`, keine Capabilities, Navigationswächter, NSIS pro Nutzer (DE/EN)
+4. [x] CLAUDE.md und Docs (ARCHITECTURE, SECURITY, DECISIONS D-001–D-018, LICENSES)
+5. [x] `crates/core`: Goldene Regel als Typen – `ActionPlan`, `ConsentGate`, `Approval` →
+       `ExecutionPermit`, zweite Bestätigung fürs endgültige Löschen, Ablauf = nichts tun,
+       Prüfprotokoll mit Hash-Kette, Risikostufen, `DirSnapshot` für „Nichts ohne Ja“-Tests,
+       EICAR zur Laufzeit, Mutations-Sperre (Clippy + Wächter-Test)
+6. [x] `packages/ui`: Tokens dunkel/hell (WCAG AA geprüft), eigenes SVG-Logo, Start-Animation
+       (~1,5 s, überspringbar, reduzierte Bewegung), WebAudio-Sounds (abschaltbar), Showcase
+7. [x] `apps/desktop`: Start-Animation → Platzhalter-Startseite, Icons aus dem Logo,
+       Vitest + Playwright (CSP wie in Tauri, keine Konsolenfehler, nur lokale Anfragen)
+8. [x] CI: Linux (Frontend, Rust, Windows-Clippy, Release-Clippy) + `windows-latest`
+       (Clippy, Tests, NSIS-Installer als Artefakt) + Lieferkette (cargo-deny, pnpm audit)
+9. [x] Security-Review durch separate Agenten: 48 Funde bestätigt, 46 behoben (siehe SECURITY.md)
+10. [x] Definition of Done P0 geprüft (siehe unten)
+
+### Testergebnisse P0 (2026-10-19)
+
+| Bereich | Ergebnis |
+| --- | --- |
+| Rust (`cargo test --workspace`) | 187 Tests grün (aegis-core 180 inkl. 16 Compile-Fail-Fälle, Proptest, Mutations-Wächter, Doctests; Desktop 7) |
+| Abdeckung aegis-core | 97,7 % Zeilen, 98,7 % Regionen (consent 99,6 %, tokens 100 %, plan 99,9 %, audit 93,4 %) |
+| Vitest | @aegis/ui 154 Tests (99,8 % Zeilen) · @aegis/desktop 46 Tests |
+| Playwright | 11 E2E-Tests grün (Boot, Überspringen, Tastatur, reduzierte Bewegung, CSP, freezePrototype, nur lokale Anfragen) |
+| Clippy `-D warnings` | Linux + Windows-Ziel, Debug + Release, alle Features: 0 Warnungen |
+| GitHub Actions | CI-Lauf grün inkl. `windows-latest` (Tests unter Windows, NSIS-Installer gebaut) |
+
+### Definition of Done – Stand P0
+
+| Kriterium | Stand |
+| --- | --- |
+| Build ohne Warnungen, alle Tests grün | ✅ |
+| ≥ 80 % Abdeckung für kritische Module | ✅ für das, was existiert (Freigabe/Risiko 97–100 %); Krypto, Quarantäne, Panic, Sortierer folgen in ihren Phasen |
+| „Nichts ohne Ja“-Test | Grundlage steht (`DirSnapshot`, Typsystem, Mutations-Sperre); Scan/Wächter/Sandbox/Panic-Läufe werden ab P2 damit geprüft |
+| EICAR erkennen, isolieren, wiederherstellen | P2 (EICAR-Erzeugung zur Laufzeit ist vorbereitet) |
+| Sandbox, Defender-Schalter, Setup.exe | P4 / P8 / P13 |
+| UI flüssig, keine Konsolenfehler | ✅ (Playwright prüft Konsole, CSP, Netz; reale App unter WebKitGTK geprüft) |
+| PROGRESS.md aktuell | ✅ |
+
+## Offen / bekannt
+
+- **Antwort-Nonce** (Review-Fund): Antworten sind an Plan-ID + Digest gebunden, noch nicht an
+  eine Vorschlags-Nonce → wird mit dem Pipe-Protokoll in P2 geschlossen.
+- **Startfehler der App** werden nur auf stderr ausgegeben (unter Windows unsichtbar) → P1
+  (Meldung bzw. Log-Datei über die Mutations-Allowlist).
+- Windows-APIs (`windows-sys`) in die Mutations-Sperre aufnehmen, sobald sie dazukommen (P2).
+- 16-px-Icon: Schild gut erkennbar, die A-Aussparung verschwimmt → eigene 16-px-Variante (P11).
+- Optional: Dependabot für Action-Pins (öffnet automatisch PRs – nur auf deinen Wunsch).
 
 ## Offene Fragen an dich (Richtungsentscheidungen)
 
 - **Projektlizenz** (z. B. proprietär, MIT, GPL-3.0)? Bis dahin: keine Lizenzangabe, `publish = false`.
 - **Code-Signing-Zertifikat** (kostet Geld) – wird vorbereitet, nicht vorausgesetzt (P13).
-- Hinweis: Das Repo ist öffentlich → GitHub Actions (auch `windows-latest`) ist kostenlos. Die CI läuft bei jedem Push auf `main` und `claude/**`.
+- Hinweis: Das Repo ist öffentlich → GitHub Actions (auch `windows-latest`) ist kostenlos.
 
 ## Nächster Schritt
 
-Umsetzung P0 Schritte 5–10.
+P1: App-Shell im G-HUB-Stil (eigene Titelleiste, Navigation, Seitenübergänge), Dashboard mit
+Sicherheits-Score und Status-Ringen, Befehlspalette (Strg+K), Deutsch/Englisch, Hell/Dunkel,
+Einstellungen (Sound, reduzierte Bewegung), Tray-Widget, Komponenten-Bibliothek in `packages/ui`.
