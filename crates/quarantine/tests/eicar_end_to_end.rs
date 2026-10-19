@@ -18,6 +18,30 @@ use aegis_core::time::Duration;
 use aegis_engine::{Category, Engine};
 use aegis_quarantine::{Entry, OwnProcess, Vault};
 
+/// Test-Ordner unter dem langen, tatsächlichen Pfad: Unter Windows liefert der Temp-Ordner
+/// oft Kurznamen (`RUNNER~1`), die die Quarantäne – richtig – als abweichenden Pfad ablehnt.
+/// (Im Betrieb schreibt der Dienst Kurznamen vorher um.)
+struct Home {
+    _dir: tempfile::TempDir,
+    path: std::path::PathBuf,
+}
+
+impl Home {
+    fn new() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let real = std::fs::canonicalize(dir.path()).unwrap();
+        let text = real.to_string_lossy().into_owned();
+        let path = text
+            .strip_prefix(r"\\?\")
+            .map_or(real.clone(), std::path::PathBuf::from);
+        Self { _dir: dir, path }
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
 fn origin() -> DecisionOrigin {
     DecisionOrigin::ui_dialog("test-dialog")
 }
@@ -74,7 +98,7 @@ fn delete_plan(entry: &Entry, clock: &ManualClock) -> ActionPlan {
 
 #[test]
 fn eicar_erkannt_isoliert_wiederhergestellt_geloescht() {
-    let home = tempfile::tempdir().unwrap();
+    let home = Home::new();
     let vault_dir = tempfile::tempdir().unwrap();
     let eicar_path = write_fixture(home.path(), "Downloads/eicar.com", &eicar()).unwrap();
     let clock = ManualClock::default();
@@ -166,7 +190,7 @@ fn eicar_erkannt_isoliert_wiederhergestellt_geloescht() {
 
 #[test]
 fn ohne_ja_bleibt_alles_gleich() {
-    let home = tempfile::tempdir().unwrap();
+    let home = Home::new();
     let vault_dir = tempfile::tempdir().unwrap();
     let eicar_path = write_fixture(home.path(), "eicar.com", &eicar()).unwrap();
     write_fixture(home.path(), "dummy.txt", b"harmlos").unwrap();
@@ -203,7 +227,7 @@ fn ohne_ja_bleibt_alles_gleich() {
 
 #[test]
 fn manipulierter_tresor_und_belegtes_ziel() {
-    let home = tempfile::tempdir().unwrap();
+    let home = Home::new();
     let vault_dir = tempfile::tempdir().unwrap();
     let path = write_fixture(home.path(), "probe.bin", b"Inhalt der Probe").unwrap();
     let clock = ManualClock::default();
@@ -295,7 +319,7 @@ fn manipulierter_tresor_und_belegtes_ziel() {
 #[cfg(unix)]
 #[test]
 fn links_werden_nicht_isoliert() {
-    let home = tempfile::tempdir().unwrap();
+    let home = Home::new();
     let outside = tempfile::tempdir().unwrap();
     let target = write_fixture(outside.path(), "wichtig.txt", b"Nutzerdaten").unwrap();
     let link =
@@ -317,7 +341,7 @@ fn links_werden_nicht_isoliert() {
 
 #[test]
 fn tresor_wieder_oeffnen_und_beschaedigte_daten() {
-    let home = tempfile::tempdir().unwrap();
+    let home = Home::new();
     let vault_dir = tempfile::tempdir().unwrap();
     let path = write_fixture(home.path(), "a.bin", b"Daten").unwrap();
     let clock = ManualClock::default();
@@ -384,7 +408,7 @@ fn tresor_wieder_oeffnen_und_beschaedigte_daten() {
 #[test]
 fn wiederherstellen_folgt_keinem_link_im_ordner() {
     use aegis_core::testing::{create_fixture_symlink, remove_fixture};
-    let home = tempfile::tempdir().unwrap();
+    let home = Home::new();
     let vault_dir = tempfile::tempdir().unwrap();
     let path = write_fixture(home.path(), "a/payload.dll", b"Bytes").unwrap();
     let protected = aegis_core::testing::create_fixture_dir(home.path(), "geschuetzt").unwrap();
@@ -424,7 +448,7 @@ fn wiederherstellen_folgt_keinem_link_im_ordner() {
 #[test]
 fn isolieren_folgt_keinem_link_im_ordner() {
     use aegis_core::testing::create_fixture_symlink;
-    let home = tempfile::tempdir().unwrap();
+    let home = Home::new();
     let vault_dir = tempfile::tempdir().unwrap();
     let real = write_fixture(home.path(), "echt/x.cfg", b"wichtig").unwrap();
     create_fixture_symlink(home.path(), "link", &home.path().join("echt")).unwrap();
@@ -454,7 +478,7 @@ fn isolieren_folgt_keinem_link_im_ordner() {
 /// dem anderen Namen erreichbar.
 #[test]
 fn hardlinks_werden_nicht_isoliert() {
-    let home = tempfile::tempdir().unwrap();
+    let home = Home::new();
     let vault_dir = tempfile::tempdir().unwrap();
     let path = write_fixture(home.path(), "a.bin", b"Daten").unwrap();
     aegis_core::testing::create_fixture_hardlink(home.path(), "b.bin", "a.bin").unwrap();
@@ -481,7 +505,7 @@ fn hardlinks_werden_nicht_isoliert() {
 #[test]
 fn wiederherstellen_legt_keine_ordner_an_und_ueberschreibt_nie() {
     use aegis_core::testing::remove_fixture;
-    let home = tempfile::tempdir().unwrap();
+    let home = Home::new();
     let vault_dir = tempfile::tempdir().unwrap();
     let path = write_fixture(home.path(), "sub/a.txt", b"alt").unwrap();
     let clock = ManualClock::default();
@@ -561,7 +585,7 @@ fn eintraege_gehoeren_dem_konto() {
             Some(self.0.to_owned())
         }
     }
-    let home = tempfile::tempdir().unwrap();
+    let home = Home::new();
     let vault_dir = tempfile::tempdir().unwrap();
     let path = write_fixture(home.path(), "a.txt", b"Daten von A").unwrap();
     let clock = ManualClock::default();

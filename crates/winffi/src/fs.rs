@@ -38,8 +38,8 @@ use windows_sys::Win32::Storage::FileSystem::{
     FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_SEQUENTIAL_SCAN, FILE_NAME_NORMALIZED,
     FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
     FileAttributeTagInfo, FileDispositionInfo, FileDispositionInfoEx, GetFileInformationByHandle,
-    GetFileInformationByHandleEx, GetFinalPathNameByHandleW, OPEN_EXISTING, READ_CONTROL,
-    ReOpenFile, SetFileInformationByHandle, VOLUME_NAME_DOS, WRITE_DAC,
+    GetFileInformationByHandleEx, GetFinalPathNameByHandleW, GetLongPathNameW, OPEN_EXISTING,
+    READ_CONTROL, ReOpenFile, SetFileInformationByHandle, VOLUME_NAME_DOS, WRITE_DAC,
 };
 
 use crate::util::{SecurityDescriptor, own, sid_is, wide};
@@ -129,6 +129,40 @@ fn final_path_wide(handle: HANDLE) -> io::Result<Vec<u16>> {
 /// Handle ungültig.
 pub fn final_path(file: &File) -> io::Result<PathBuf> {
     final_path_wide(file.as_raw_handle()).map(|w| PathBuf::from(OsString::from_wide(&w)))
+}
+
+/// Schreibt Kurznamen (`RUNNER~1`) in die langen Namen um – ohne Links aufzulösen. So zeigt
+/// ein Plan den echten Namen, und der Vergleich mit dem tatsächlichen Pfad passt.
+///
+/// # Errors
+/// Pfad existiert nicht oder ist nicht lesbar.
+pub fn long_path(path: &Path) -> io::Result<PathBuf> {
+    let name = wide(path);
+    let mut buffer = vec![0u16; 1024];
+    loop {
+        // SAFETY: `name` ist nullterminiert; `buffer` hat die angegebene Länge.
+        // aegis-unsafe: winffi-long-path
+        #[allow(unsafe_code)]
+        let len = unsafe {
+            GetLongPathNameW(
+                name.as_ptr(),
+                buffer.as_mut_ptr(),
+                u32::try_from(buffer.len()).unwrap_or(u32::MAX),
+            )
+        };
+        let len = usize::try_from(len).unwrap_or(usize::MAX);
+        if len == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if len < buffer.len() {
+            buffer.truncate(len);
+            return Ok(PathBuf::from(OsString::from_wide(&buffer)));
+        }
+        if len > 64 * 1024 {
+            return Err(io::Error::other("Pfad zu lang"));
+        }
+        buffer.resize(len + 1, 0);
+    }
 }
 
 /// Vergleich ohne Groß-/Kleinschreibung wie im Dateisystem (ordinal, ohne Sonderfaltungen).

@@ -24,7 +24,7 @@ pub mod fs;
 #[cfg(windows)]
 pub use fs::{
     DATA_DIR_SDDL, create_new, create_secure_dir, delete_by_handle, final_path, is_name_surrogate,
-    open_exclusive, owner_is_trusted,
+    long_path, open_exclusive, owner_is_trusted,
 };
 #[cfg(windows)]
 pub use pipe::{

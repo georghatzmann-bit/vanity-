@@ -127,3 +127,4 @@ crates/winffi/src/fs.rs :: winffi-delete-by-handle-ex :: Windows-FFI: setzt File
 crates/winffi/src/fs.rs :: winffi-delete-by-handle-ex-call :: Windows: Löschen über das Handle; nur aus quarantine/restore (ExecutionPermit).
 crates/winffi/src/fs.rs :: winffi-open-for-owner :: Windows-FFI: öffnet ein Objekt im Datenordner nur zum Lesen von Besitzer/Attributen.
 crates/winffi/src/fs.rs :: winffi-open-for-owner-call :: Windows: CreateFileW nur mit READ_CONTROL/Attributen (OPEN_EXISTING) für die Startprüfung des Datenordners.
+crates/winffi/src/fs.rs :: winffi-long-path :: Windows-FFI: schreibt Kurznamen in lange Namen um (nur lesend, löst keine Links auf).

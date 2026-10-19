@@ -140,8 +140,12 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 Err(e) => Response::error("quarantine", e.to_string()),
             },
             Request::ProposeQuarantine { paths } => match self.check_paths(&paths) {
-                Ok(()) => match examine_as_user(&self.engine, &paths, user) {
-                    Ok(findings) => self.propose_quarantine(&paths, &findings, user.identity()),
+                Ok(()) => match long_paths(&paths, user)
+                    .and_then(|paths| Ok((examine_as_user(&self.engine, &paths, user)?, paths)))
+                {
+                    Ok((findings, paths)) => {
+                        self.propose_quarantine(&paths, &findings, user.identity())
+                    }
                     Err(e) => e,
                 },
                 Err(e) => Response::error("input", e),
@@ -558,6 +562,28 @@ fn audit_unavailable() -> Response {
         "audit",
         "Prüfprotokoll nicht schreibbar – aus Sicherheitsgründen wird nichts ausgeführt",
     )
+}
+
+/// Windows: Kurznamen (`RUNNER~1`) in lange Namen umschreiben – mit den Rechten des Nutzers,
+/// ohne Links aufzulösen. Pläne zeigen dann den echten Namen, und die Quarantäne vergleicht
+/// ihn mit dem tatsächlichen Pfad. Nicht vorhandene Pfade bleiben unverändert.
+///
+/// # Errors
+/// Fertige Fehler-Antwort, wenn der Identitätswechsel scheitert.
+pub fn long_paths(paths: &[PathBuf], user: &dyn UserAccess) -> Result<Vec<PathBuf>, Response> {
+    #[cfg(windows)]
+    {
+        let _scope = user.enter().map_err(|e| identity_error(&e))?;
+        Ok(paths
+            .iter()
+            .map(|p| aegis_winffi::long_path(p).unwrap_or_else(|_| p.clone()))
+            .collect())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = user;
+        Ok(paths.to_vec())
+    }
 }
 
 /// Scannt mit den Rechten des Nutzers (sieht nur, was er selbst lesen darf).

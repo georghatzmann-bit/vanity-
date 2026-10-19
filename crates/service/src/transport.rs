@@ -13,7 +13,7 @@ use aegis_core::audit::Durable;
 use aegis_core::consent::Clock;
 use aegis_quarantine::UserAccess;
 
-use crate::handler::{Service, examine_as_user, scan_as_user};
+use crate::handler::{Service, examine_as_user, long_paths, scan_as_user};
 use crate::protocol::{Request, Response, read_frame, write_frame};
 
 /// Höchstzahl gleichzeitiger Verbindungen.
@@ -97,8 +97,10 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                 match (checked, Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS)) {
                     (Err(e), _) => Response::error("input", e),
                     (Ok(()), None) => busy(),
-                    (Ok(()), Some(slot)) => match examine_as_user(&engine, &paths, user) {
-                        Ok(findings) => {
+                    (Ok(()), Some(slot)) => match long_paths(&paths, user)
+                        .and_then(|paths| Ok((examine_as_user(&engine, &paths, user)?, paths)))
+                    {
+                        Ok((findings, paths)) => {
                             drop(slot);
                             lock()?.propose_quarantine(&paths, &findings, user.identity())
                         }
