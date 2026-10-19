@@ -9,7 +9,13 @@
 //! Freigabe-Dialog (Plan des Dienstes). Diese Bibliothek selbst beobachtet und beschreibt nur.
 #![forbid(unsafe_code)]
 
+pub mod detect;
 pub mod entropy;
+#[cfg(windows)]
+pub mod mini;
+#[cfg(windows)]
+pub mod observe;
+pub mod png;
 pub mod report;
 pub mod snapshot;
 pub mod wsb;

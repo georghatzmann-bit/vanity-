@@ -167,7 +167,9 @@ impl Behavior {
             Self::Autostart => "sich im Autostart einzutragen",
             Self::Network => "fremde Server zu kontaktieren",
             Self::EncryptsFiles => "viele Dateien zu verschlüsseln",
-            Self::DeletesBackups => "Sicherungen (Schattenkopien) zu löschen",
+            Self::DeletesBackups => {
+                "Sicherungen (Schattenkopien) oder die Wiederherstellung anzutasten"
+            }
             Self::DropsExecutables => "weitere Programme oder Skripte abzulegen",
             Self::SpawnsInterpreters => "Kommandozeile oder Skript-Interpreter zu starten",
             Self::DeletesFiles => "viele Dateien zu löschen",
@@ -181,7 +183,7 @@ impl Behavior {
             Self::Autostart => "add itself to autostart",
             Self::Network => "contact external servers",
             Self::EncryptsFiles => "encrypt many files",
-            Self::DeletesBackups => "delete backups (shadow copies)",
+            Self::DeletesBackups => "tamper with backups (shadow copies) or recovery",
             Self::DropsExecutables => "drop further programs or scripts",
             Self::SpawnsInterpreters => "start a command line or script interpreter",
             Self::DeletesFiles => "delete many files",
@@ -247,6 +249,8 @@ const BACKUP_DELETION: [&str; 5] = [
     "resize shadowstorage",
 ];
 
+const BACKUP_TOOLS: [&str; 3] = ["vssadmin.exe", "wbadmin.exe", "bcdedit.exe"];
+
 /// Ab so vielen verschlüsselt aussehenden neuen/geänderten Dateien: „verschlüsselt Dateien“.
 pub const ENCRYPTED_FILES: usize = 10;
 /// Ab so vielen gelöschten Dateien: „löscht viele Dateien“.
@@ -306,9 +310,14 @@ impl BehaviorReport {
             .filter_map(|p| p.command_line.as_deref())
             .map(str::to_lowercase)
             .collect();
+        // Befehlszeilen kennt nicht jede Stufe; dann zählt schon der Start der Werkzeuge,
+        // mit denen Schattenkopien und Wiederherstellung abgeschaltet werden.
         if commands
             .iter()
             .any(|c| BACKUP_DELETION.iter().any(|b| c.contains(b)))
+            || self.processes.iter().any(|p| {
+                p.command_line.is_none() && BACKUP_TOOLS.contains(&file_name(&p.image).as_str())
+            })
         {
             behaviors.push(Behavior::DeletesBackups);
         }

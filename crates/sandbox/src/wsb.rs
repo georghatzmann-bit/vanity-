@@ -85,8 +85,14 @@ impl WsbConfig {
     #[must_use]
     pub fn logon_command(&self) -> String {
         format!(
-            r#"{SANDBOX_PROBE_DIR}\{PROBE_EXE} --sample "{SANDBOX_PROBE_DIR}\{}" --out "{SANDBOX_OUTPUT_DIR}" --seconds {}"#,
-            self.sample_name, self.seconds
+            r#"{SANDBOX_PROBE_DIR}\{PROBE_EXE} --sample "{SANDBOX_PROBE_DIR}\{}" --out "{SANDBOX_OUTPUT_DIR}" --seconds {}{} --shutdown"#,
+            self.sample_name,
+            self.seconds,
+            if self.network == Network::Simulated {
+                " --network"
+            } else {
+                ""
+            }
         )
     }
 
@@ -182,17 +188,16 @@ mod tests {
             xml.contains(r#"--sample &quot;C:\AEGIS\Probe\setup.exe&quot;"#),
             "{xml}"
         );
+        assert!(xml.contains("--seconds 60 --shutdown"), "{xml}");
     }
 
     #[test]
     fn netz_nur_wenn_gewaehlt() {
         let mut c = config("a.exe");
         c.network = Network::Simulated;
-        assert!(
-            c.to_xml()
-                .unwrap()
-                .contains("<Networking>Enable</Networking>")
-        );
+        let xml = c.to_xml().unwrap();
+        assert!(xml.contains("<Networking>Enable</Networking>"));
+        assert!(xml.contains("--seconds 60 --network --shutdown"));
     }
 
     #[test]

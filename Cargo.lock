@@ -117,6 +117,8 @@ name = "aegis-sandbox"
 version = "0.1.0"
 dependencies = [
  "aegis-core",
+ "aegis-winffi",
+ "flate2",
  "serde",
  "serde_json",
  "tempfile",

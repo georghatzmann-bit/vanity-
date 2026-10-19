@@ -36,6 +36,9 @@ pub mod identity;
 pub mod sandbox;
 
 #[cfg(windows)]
+pub mod inspect;
+
+#[cfg(windows)]
 pub use fs::{
     DATA_DIR_SDDL, create_new, create_secure_dir, delete_by_handle, ensure_file_at, final_path,
     is_name_surrogate, long_path, open_exclusive, owner_is_trusted,

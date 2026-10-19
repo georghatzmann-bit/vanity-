@@ -11,9 +11,14 @@ authors.workspace = true
 aegis-core = { path = "../core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+flate2 = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+aegis-winffi = { path = "../winffi" }
 
 [dev-dependencies]
 aegis-core = { path = "../core", features = ["testing"] }
+
 tempfile = { workspace = true }
 
 [lints]

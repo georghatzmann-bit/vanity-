@@ -134,7 +134,11 @@ pub fn create_dir_with_sddl(path: &Path, sddl: &str) -> io::Result<()> {
 /// Primär-Token des aktuellen Nutzers (während eines Identitätswechsels: des anfragenden
 /// Nutzers), **nicht** eingeschränkt – die Einschränkung liefert der AppContainer.
 #[derive(Debug)]
-pub struct UserToken(OwnedHandle);
+pub struct UserToken {
+    token: OwnedHandle,
+    /// Token des eigenen Prozesses (kein Identitätswechsel aktiv)?
+    own: bool,
+}
 
 const TOKEN_ACCESS: u32 = TOKEN_QUERY
     | TOKEN_DUPLICATE
@@ -149,6 +153,7 @@ impl UserToken {
     /// Token nicht lesbar.
     pub fn from_current_identity() -> io::Result<Self> {
         let mut source: HANDLE = ptr::null_mut();
+        let mut own_process = false;
         // SAFETY: Pseudo-Handle des Threads; OpenAsSelf = 1; Ausgabezeiger gültig.
         // aegis-unsafe: winffi-lab-thread-token
         #[allow(unsafe_code)]
@@ -165,6 +170,7 @@ impl UserToken {
             if ok == 0 {
                 return Err(io::Error::last_os_error());
             }
+            own_process = true;
         }
         let source = own(source)?;
         let mut primary: HANDLE = ptr::null_mut();
@@ -184,7 +190,10 @@ impl UserToken {
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
-        Ok(Self(own(primary)?))
+        Ok(Self {
+            token: own(primary)?,
+            own: own_process,
+        })
     }
 }
 
@@ -468,7 +477,7 @@ fn spawn_with_sid(
     #[allow(clippy::disallowed_methods)]
     let ok = unsafe {
         CreateProcessAsUserW(
-            token.0.as_raw_handle(),
+            token.token.as_raw_handle(),
             application.as_ptr(),
             line.as_mut_ptr(),
             ptr::null(),
@@ -482,7 +491,36 @@ fn spawn_with_sid(
         )
     };
     if ok == 0 {
-        return Err(io::Error::last_os_error());
+        let err = io::Error::last_os_error();
+        // Ohne SYSTEM (Konsole, Tests) fehlt das Recht, ein Token zuzuweisen. Nur wenn es ohnehin
+        // das eigene Token ist, startet der Prozess stattdessen mit dem geerbten Token – der
+        // AppContainer gilt über die Attributliste genauso.
+        if err.raw_os_error() != Some(1314) || !token.own {
+            return Err(err);
+        }
+        // SAFETY: wie oben, ohne Token-Handle (erbt das eigene Token).
+        // aegis-unsafe: winffi-lab-create-process-own
+        #[allow(unsafe_code)]
+        // Startet die Probe im Labor (eigenes Token, AppContainer) – nur nach Freigabe.
+        // aegis-mutation: winffi-lab-create-process-own-call
+        #[allow(clippy::disallowed_methods)]
+        let ok = unsafe {
+            windows_sys::Win32::System::Threading::CreateProcessW(
+                application.as_ptr(),
+                line.as_mut_ptr(),
+                ptr::null(),
+                ptr::null(),
+                0,
+                CREATE_SUSPENDED | CREATE_NEW_CONSOLE | EXTENDED_STARTUPINFO_PRESENT,
+                ptr::null(),
+                dir.as_ptr(),
+                &raw const info.StartupInfo,
+                &mut process,
+            )
+        };
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
     }
     // SAFETY: CreateProcessAsUserW hat beide Handles neu geliefert; je einmal übernommen.
     // aegis-unsafe: winffi-lab-own-handles
