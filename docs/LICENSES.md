@@ -11,6 +11,9 @@ wird hier **vor** der Nutzung eingetragen (Name, Herkunft, Lizenz, Nutzungsart, 
 | JetBrains Mono | JetBrains via `@fontsource-variable/jetbrains-mono` 5.3.0 | SIL OFL 1.1 | Monospace (Hashes, Pfade) | 2026-10-19 |
 | Tauri 2 | tauri-apps | MIT / Apache-2.0 | App-Rahmen | 2026-10-19 |
 | React 19, Motion, Vite, Tailwind CSS | npm | MIT | UI | 2026-10-19 |
+| tauri-plugin-single-instance 2.5.4 | tauri-apps | MIT / Apache-2.0 | nur eine laufende Instanz | 2026-10-19 |
+| rfd 0.17 | PolyMeilex/rfd | MIT | Fehlerdialog bei Startfehlern (Windows) | 2026-10-19 |
+| axe-core / @axe-core/playwright 4.14 | Deque | MPL-2.0 | nur Tests, nicht ausgeliefert | 2026-10-19 |
 
 Rust- und npm-Abhängigkeiten werden ab P13 automatisch inventarisiert (`cargo about` /
 Lizenz-Report) und hier zusammengefasst.

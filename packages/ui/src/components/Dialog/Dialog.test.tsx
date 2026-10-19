@@ -271,3 +271,144 @@ describe('Dialog', () => {
     expect(seen).toHaveBeenLastCalledWith(document.body);
   });
 });
+
+describe('Dialog – Stapel (Review P1)', () => {
+  it('F3: zwei im selben Durchgang geöffnete Dialoge sperren sich nicht gegenseitig', () => {
+    const onCloseA = vi.fn();
+    const onCloseB = vi.fn();
+    render(
+      <>
+        <Dialog open onClose={onCloseA} title="A" showCloseButton={false}>
+          <button type="button">A-Knopf</button>
+        </Dialog>
+        <Dialog open onClose={onCloseB} title="B" showCloseButton={false}>
+          <button type="button">B-Knopf</button>
+        </Dialog>
+      </>,
+    );
+    const roots = [...document.querySelectorAll('[data-aegis-dialog-root]')];
+    // Nur der obere (zuletzt geöffnete) ist bedienbar, der untere ist inert – nie beide.
+    expect(roots.map((root) => root.hasAttribute('inert'))).toEqual([true, false]);
+    expect(screen.getByRole('button', { name: 'B-Knopf' })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'B-Knopf' }), { key: 'Escape' });
+    expect(onCloseB).toHaveBeenCalledWith('escape');
+    expect(onCloseA).not.toHaveBeenCalled();
+  });
+
+  it('F11: gibt den Hintergrund erst frei, wenn der letzte Dialog schließt – auch in anderer Reihenfolge', () => {
+    function Pair({ lower, upper }: { readonly lower: boolean; readonly upper: boolean }) {
+      const safeRef = useRef<HTMLButtonElement>(null);
+      return (
+        <div data-testid="app">
+          <button type="button">App-Knopf</button>
+          <Dialog open={lower} onClose={vi.fn()} title="Unten" showCloseButton={false}>
+            <button type="button">Unten-Knopf</button>
+          </Dialog>
+          <Dialog
+            open={upper}
+            onClose={vi.fn()}
+            title="Oben"
+            showCloseButton={false}
+            initialFocusRef={safeRef}
+          >
+            <button type="button">Folgenreich</button>
+            <button type="button" ref={safeRef}>
+              Sicher
+            </button>
+          </Dialog>
+        </div>
+      );
+    }
+    const { rerender } = render(<Pair lower upper={false} />);
+    const appRoot = screen.getByTestId('app').parentElement;
+    expect(appRoot).toHaveAttribute('inert');
+    rerender(<Pair lower upper />);
+    // Der untere schließt zuerst – der obere ist noch offen, der App-Inhalt bleibt gesperrt.
+    rerender(<Pair lower={false} upper />);
+    expect(appRoot).toHaveAttribute('inert');
+    const upperRoot = screen
+      .getByRole('dialog', { name: 'Oben' })
+      .closest('[data-aegis-dialog-root]');
+    expect(upperRoot).not.toHaveAttribute('inert');
+
+    // Fokus, der hinausgelangt, kehrt zum Startfokus zurück – nicht zum erstbesten Knopf.
+    act(() => {
+      screen.getByRole('button', { name: 'App-Knopf', hidden: true }).focus();
+    });
+    expect(screen.getByRole('button', { name: 'Sicher' })).toHaveFocus();
+
+    rerender(<Pair lower={false} upper={false} />);
+    expect(appRoot).not.toHaveAttribute('inert');
+  });
+
+  it('meldet, welcher Dialog oben liegt (onStackTopChange)', () => {
+    const lowerTop = vi.fn();
+    const upperTop = vi.fn();
+    function Pair({ upper }: { readonly upper: boolean }) {
+      return (
+        <>
+          <Dialog open onClose={vi.fn()} title="Unten" onStackTopChange={lowerTop} />
+          <Dialog open={upper} onClose={vi.fn()} title="Oben" onStackTopChange={upperTop} />
+        </>
+      );
+    }
+    const { rerender } = render(<Pair upper={false} />);
+    expect(lowerTop.mock.calls).toEqual([[true]]);
+    rerender(<Pair upper />);
+    expect(lowerTop.mock.calls).toEqual([[true], [false]]);
+    expect(upperTop.mock.calls).toEqual([[true]]);
+    rerender(<Pair upper={false} />);
+    expect(upperTop.mock.calls).toEqual([[true], [false]]);
+    expect(lowerTop.mock.calls).toEqual([[true], [false], [true]]);
+  });
+
+  it('F12: ein Klick auf den Hintergrund nimmt den Fokus nicht weg; Escape gilt auch auf body', () => {
+    const onClose = vi.fn();
+    render(
+      <Dialog open onClose={onClose} title="T" closeOnBackdrop={false} showCloseButton={false}>
+        <button type="button">Drinnen</button>
+      </Dialog>,
+    );
+    const backdrop = document.querySelector<HTMLElement>('[data-part="backdrop"]');
+    expect(backdrop).not.toBeNull();
+    // Standardaktion von mousedown (Fokuswechsel auf body) ist unterbunden.
+    expect(fireEvent.mouseDown(backdrop as HTMLElement)).toBe(false);
+    expect(screen.getByRole('button', { name: 'Drinnen' })).toHaveFocus();
+
+    // Fällt der Fokus trotzdem auf body (z. B. weil ein fokussierter Knopf gesperrt wird),
+    // bedeutet Escape weiterhin „schließen“.
+    act(() => {
+      screen.getByRole('button', { name: 'Drinnen' }).blur();
+    });
+    expect(document.body).toHaveFocus();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledWith('escape');
+  });
+
+  it('F12: Escape auf body schließt nur den obersten Dialog und nur einmal', () => {
+    const lowerClose = vi.fn();
+    const upperClose = vi.fn();
+    render(
+      <>
+        <Dialog open onClose={lowerClose} title="Unten" />
+        <Dialog open onClose={upperClose} title="Oben" />
+      </>,
+    );
+    act(() => {
+      (document.activeElement as HTMLElement).blur();
+    });
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(upperClose).toHaveBeenCalledTimes(1);
+    expect(lowerClose).not.toHaveBeenCalled();
+  });
+
+  it('verknüpft zusätzliche Beschreibungen (describedBy)', () => {
+    render(
+      <Dialog open onClose={vi.fn()} title="T" description="Kurz" describedBy="extra">
+        <p id="extra">Mehr dazu</p>
+      </Dialog>,
+    );
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription('Kurz Mehr dazu');
+  });
+});

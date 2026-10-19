@@ -136,8 +136,12 @@ export function SegmentedControl<T extends string>({
             )}
           >
             {selected && (
+              // `layoutDependency`: Die Markierung gleitet nur, wenn sich die Auswahl ändert –
+              // nicht bei jedem Neuzeichnen nach einer Verschiebung der Seite (z. B. Seitenleiste
+              // eingeklappt), sonst hinkte sie ihrem Knopf sichtbar hinterher.
               <motion.span
                 layoutId={layoutId}
+                layoutDependency={current}
                 aria-hidden="true"
                 className="absolute inset-0 rounded-md border border-border-strong bg-surface-3 shadow-bevel"
                 transition={reduced ? { duration: 0 } : springs.snappy}

@@ -1,4 +1,5 @@
-//! Befehl `app_info`: Version, Build-Profil und Plattform für „Über AEGIS“.
+//! Befehl `app_info`: Version, Build-Profil und Plattform für „Über AEGIS“ – und ob „Schließen“
+//! das Fenster in den Infobereich verstecken kann (`trayAvailable`).
 //!
 //! Nur lesend und ohne Netz. Die Angaben werden einmal beim Start erhoben (Version der
 //! App aus `tauri.conf.json`, Rest aus Compiler-Konstanten bzw. dem Betriebssystem) und
@@ -41,11 +42,20 @@ pub struct AppInfo {
     pub arch: String,
     /// Version des Tauri-Crates.
     pub tauri_version: String,
+    /// Gibt es ein Symbol im Infobereich, über das ein verstecktes Fenster zurückkommt
+    /// ([`crate::window::close_to_tray_available`])? Nur dann verspricht die Oberfläche
+    /// „AEGIS läuft im Infobereich weiter“.
+    pub tray_available: bool,
 }
 
 impl AppInfo {
-    /// Setzt die Angaben aus App-Version, Betriebssystem-Version und Compiler-Konstanten zusammen.
-    pub fn new(version: impl Into<String>, os_version: Option<String>) -> Self {
+    /// Setzt die Angaben aus App-Version, Betriebssystem-Version, Infobereich und
+    /// Compiler-Konstanten zusammen.
+    pub fn new(
+        version: impl Into<String>,
+        os_version: Option<String>,
+        tray_available: bool,
+    ) -> Self {
         Self {
             version: version.into(),
             build_profile: BuildProfile::current(),
@@ -53,12 +63,13 @@ impl AppInfo {
             os_version,
             arch: std::env::consts::ARCH.to_owned(),
             tauri_version: tauri::VERSION.to_owned(),
+            tray_available,
         }
     }
 
     /// Erhebt die Angaben für die laufende App (liest nur, verändert nichts).
-    pub fn detect(version: impl Into<String>) -> Self {
-        Self::new(version, os_version())
+    pub fn detect(version: impl Into<String>, tray_available: bool) -> Self {
+        Self::new(version, os_version(), tray_available)
     }
 }
 
@@ -181,7 +192,8 @@ mod tests {
 
     #[test]
     fn json_schluessel_genau_wie_vereinbart() {
-        let value = serde_json::to_value(AppInfo::new("0.1.0", Some("10.0.22631".into()))).unwrap();
+        let value =
+            serde_json::to_value(AppInfo::new("0.1.0", Some("10.0.22631".into()), true)).unwrap();
         let object = value.as_object().unwrap();
         let mut keys: Vec<_> = object.keys().map(String::as_str).collect();
         keys.sort_unstable();
@@ -193,11 +205,13 @@ mod tests {
                 "os",
                 "osVersion",
                 "tauriVersion",
+                "trayAvailable",
                 "version"
             ]
         );
         assert_eq!(value["version"], "0.1.0");
         assert_eq!(value["osVersion"], "10.0.22631");
+        assert_eq!(value["trayAvailable"], true);
         for key in [
             "version",
             "buildProfile",
@@ -212,14 +226,14 @@ mod tests {
 
     #[test]
     fn unbekannte_os_version_ist_null_und_nicht_weggelassen() {
-        let value = serde_json::to_value(AppInfo::new("0.1.0", None)).unwrap();
+        let value = serde_json::to_value(AppInfo::new("0.1.0", None, false)).unwrap();
         assert!(value.as_object().unwrap().contains_key("osVersion"));
         assert!(value["osVersion"].is_null());
     }
 
     #[test]
     fn build_profil_und_plattform_aus_dem_compiler() {
-        let value = serde_json::to_value(AppInfo::new("1.2.3", None)).unwrap();
+        let value = serde_json::to_value(AppInfo::new("1.2.3", None, false)).unwrap();
         let expected = if cfg!(debug_assertions) {
             "debug"
         } else {
@@ -301,7 +315,8 @@ mod tests {
 
     #[test]
     fn erkennung_liefert_plausible_werte() {
-        let info = AppInfo::detect("0.1.0");
+        let info = AppInfo::detect("0.1.0", false);
+        assert!(!info.tray_available);
         if let Some(version) = &info.os_version {
             assert!(!version.is_empty());
             assert!(version.chars().count() <= MAX_OS_VERSION_CHARS);

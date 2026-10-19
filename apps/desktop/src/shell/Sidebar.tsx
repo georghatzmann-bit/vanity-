@@ -1,6 +1,6 @@
 import { IconChevronLeft, IconChevronRight, Tooltip, cx, springs } from '@aegis/ui';
 import { motion } from 'motion/react';
-import { useId, useState, type KeyboardEvent, type Ref } from 'react';
+import { useId, useState, type KeyboardEvent, type ReactElement, type Ref } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { hashFor, routePhases, type RouteId } from '../router/routes.ts';
 import { groupLabels, navGroups, navLabelKey, routeIcons, type NavGroup } from './navigation.ts';
@@ -163,6 +163,9 @@ function NavLink({ route, active, collapsed, tabbable, onFocus, onActivate }: Na
   const phase = routePhases[route];
   const label = t(navLabelKey(route));
   const phaseText = phase === undefined ? undefined : t('phase.comingInShort', { phase });
+  // Zugänglicher Name als *ein* Text („Berichte, folgt in P3“): Getrennte Teile in einer
+  // Flex-Zeile würden Browser mit Leerzeichen dazwischen zusammensetzen („Berichte , folgt …“).
+  const accessibleName = phaseText === undefined ? label : `${label}, ${phaseText}`;
 
   const link = (
     <a
@@ -201,24 +204,21 @@ function NavLink({ route, active, collapsed, tabbable, onFocus, onActivate }: Na
         )}
       />
       {collapsed ? (
-        <span className="sr-only">
-          {label}
-          {phaseText !== undefined && `, ${phaseText}`}
-        </span>
+        <span className="sr-only">{accessibleName}</span>
+      ) : phase === undefined ? (
+        <span className="min-w-0 flex-1 truncate">{label}</span>
       ) : (
         <>
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          {phase !== undefined && (
-            <>
-              <span
-                aria-hidden="true"
-                className="shrink-0 rounded-sm border border-border px-1 font-mono text-[0.625rem] leading-4 text-text-subtle"
-              >
-                {phase}
-              </span>
-              <span className="sr-only">, {phaseText}</span>
-            </>
-          )}
+          <span aria-hidden="true" className="min-w-0 flex-1 truncate">
+            {label}
+          </span>
+          <span
+            aria-hidden="true"
+            className="shrink-0 rounded-sm border border-border px-1 font-mono text-[0.625rem] leading-4 text-text-subtle"
+          >
+            {phase}
+          </span>
+          <span className="sr-only">{accessibleName}</span>
         </>
       )}
     </a>
@@ -227,6 +227,8 @@ function NavLink({ route, active, collapsed, tabbable, onFocus, onActivate }: Na
   if (!collapsed) {
     return link;
   }
+  // Der Tooltip zeigt Sehenden, was der Name schon sagt – als Beschreibung wäre er eine
+  // doppelte Ansage („Scan, folgt in P2“ + „Scan · Folgt in P2“).
   return (
     <Tooltip
       placement="right"
@@ -236,7 +238,20 @@ function NavLink({ route, active, collapsed, tabbable, onFocus, onActivate }: Na
           : `${label} · ${t('phase.comingIn', { phase: phase ?? '' })}`
       }
     >
-      {link}
+      <WithoutDescription>{link}</WithoutDescription>
     </Tooltip>
   );
+}
+
+/**
+ * Nimmt das `aria-describedby` des Tooltips an und reicht es bewusst nicht weiter: Der
+ * Tooltip-Inhalt wiederholt hier nur den zugänglichen Namen.
+ */
+function WithoutDescription({
+  children,
+}: {
+  readonly children: ReactElement;
+  readonly 'aria-describedby'?: string | undefined;
+}) {
+  return children;
 }

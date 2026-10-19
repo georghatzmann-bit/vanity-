@@ -19,6 +19,25 @@
   scroll-behavior: auto !important;
 }
 
+/*
+ * Dieselbe App-Vorgabe für die Tailwind-Varianten `motion-reduce:*` (in @aegis/ui z. B. der
+ * Ladebalken von „Ja, ausführen“, der Schimmer der Skeletons, der Ablauf-Strich der Meldungen).
+ * Sie sind Media-Queries und greifen sonst nur, wenn *Windows* reduzierte Bewegung wünscht –
+ * ein auf 0 ms gekürzter Ladebalken stünde dann als volle Linie da und sähe „bereit“ aus.
+ * Jede in den Quellen benutzte Variante steht hier (geprüft in src/styles.test.ts).
+ */
+:root[data-motion='reduced'] .motion-reduce\:hidden {
+  display: none !important;
+}
+
+:root[data-motion='reduced'] .motion-reduce\:animate-none {
+  animation: none !important;
+}
+
+:root[data-motion='reduced'] .motion-reduce\:transition-none {
+  transition-property: none !important;
+}
+
 /* Die Shell scrollt im Inhaltsbereich, nicht im Dokument. */
 html,
 body {

@@ -46,6 +46,29 @@ describe('SafeText', () => {
     expect(container.firstElementChild).not.toHaveClass('font-mono');
   });
 
+  it('F15: zeigt Leerzeichenfolgen genau (kein Zusammenfassen) und markiert leer gezeichnete Zeichen', () => {
+    const spaced = `C:\\Users\\Beispiel\\report.pdf${' '.repeat(40)}.exe`;
+    const { container, unmount } = render(<SafeText value={spaced} />);
+    const element = container.firstElementChild;
+    // Ohne pre-wrap würde der Browser die 40 Leerzeichen zu einem zusammenfassen.
+    expect(element).toHaveClass('whitespace-pre-wrap');
+    expect(element?.textContent).toBe(spaced);
+    unmount();
+
+    const braille = render(<SafeText value={'report\u2800\u2800\u2800.exe'} />);
+    expect([...braille.container.querySelectorAll('mark')].map((mark) => mark.textContent)).toEqual(
+      ['⟨U+2800⟩', '⟨U+2800⟩', '⟨U+2800⟩'],
+    );
+  });
+
+  it('bricht Fließtext nur bei Bedarf um (breakAll={false})', () => {
+    const { container } = render(
+      <SafeText value="Die Datei wird verschoben." mono={false} breakAll={false} />,
+    );
+    expect(container.firstElementChild).toHaveClass('wrap-anywhere');
+    expect(container.firstElementChild).not.toHaveClass('break-all');
+  });
+
   it('kürzt in der Mitte nur sichtbar', () => {
     const value = `C:\\${'x'.repeat(80)}\\datei.exe`;
     const { container } = render(<SafeText value={value} maxLength={30} />);

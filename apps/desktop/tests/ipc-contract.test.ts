@@ -7,7 +7,8 @@
  *   hat mindestens einen Aufruf (keine ungenutzten Rechte, keine stummen Fensterknöpfe).
  * - Ereignisname und Nutzdaten von `aegis://navigate` sind auf beiden Seiten gleich.
  * - Die JSON-Schlüssel von `app_info` (Rust `AppInfo`, camelCase) sind genau die, die
- *   `parseAppInfo` verlangt.
+ *   `parseAppInfo` verlangt; die Antworten von `hide_to_tray` (Rust `HideOutcome`) versteht
+ *   `parseHideOutcome`.
  *
  * Die Laufzeit-Gegenprobe mit der echten, beim Build aufgelösten ACL steht in
  * `src-tauri/src/main.rs` (`mod ipc`): jeder dieser Aufrufe läuft, alles andere wird abgelehnt.
@@ -15,7 +16,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseAppInfo } from '../src/platform/appInfo.ts';
-import { NAVIGATE_EVENT, parseNavigatePayload } from '../src/platform/platform.ts';
+import {
+  NAVIGATE_EVENT,
+  parseHideOutcome,
+  parseNavigatePayload,
+} from '../src/platform/platform.ts';
 
 const root = new URL('../', import.meta.url);
 
@@ -34,7 +39,6 @@ const TITLE_BAR = 'src/shell/TitleBar.tsx';
  */
 const WINDOW_METHOD_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
   close: ['core:window:allow-close'],
-  hide: ['core:window:allow-hide'],
   isMaximized: ['core:window:allow-is-maximized'],
   listen: ['core:event:allow-listen', 'core:event:allow-unlisten'],
   minimize: ['core:window:allow-minimize'],
@@ -212,14 +216,21 @@ describe('Befehl app_info (Rust AppInfo ↔ parseAppInfo)', () => {
     .map((match) => ({
       key: camelCase(match[1] ?? ''),
       optional: match[2]?.startsWith('Option<'),
+      boolean: match[2] === 'bool',
     }));
 
   /** Eine Antwort, wie Rust sie serialisiert – Schlüssel genau aus dem Rust-Struct. */
   function sample(): Record<string, unknown> {
     return Object.fromEntries(
-      fields.map(({ key }) => [
+      fields.map(({ key, boolean }) => [
         key,
-        key === 'buildProfile' ? 'release' : key === 'osVersion' ? '10.0.26100.4351' : 'x',
+        boolean
+          ? true
+          : key === 'buildProfile'
+            ? 'release'
+            : key === 'osVersion'
+              ? '10.0.26100.4351'
+              : 'x',
       ]),
     );
   }
@@ -244,7 +255,11 @@ describe('Befehl app_info (Rust AppInfo ↔ parseAppInfo)', () => {
       'os',
       'osVersion',
       'tauriVersion',
+      'trayAvailable',
       'version',
+    ]);
+    expect(fields.filter(({ boolean }) => boolean).map(({ key }) => key)).toEqual([
+      'trayAvailable',
     ]);
     // Ergebnis = Rust-Werte unverändert plus die Herkunft „tauri“.
     expect(parseAppInfo(sample())).toEqual({ ...sample(), source: 'tauri' });
@@ -272,5 +287,29 @@ describe('Befehl app_info (Rust AppInfo ↔ parseAppInfo)', () => {
     expect(fields.filter(({ optional }) => optional === true).map(({ key }) => key)).toEqual([
       'osVersion',
     ]);
+  });
+});
+
+describe('Befehl hide_to_tray (Rust HideOutcome ↔ parseHideOutcome)', () => {
+  const source = rustWithoutTests('src-tauri/src/window.rs');
+
+  it('jede Antwort, die Rust liefern kann, versteht die Oberfläche', () => {
+    expect(source).toMatch(/#\[serde\(rename_all = "camelCase"\)\]\s*pub enum HideOutcome \{/);
+    const variants = rustBlock(source, /pub enum HideOutcome \{/)
+      .split('\n')
+      .map((line) => /^\s*(\w+),\s*$/.exec(line)?.[1])
+      .filter((variant) => variant !== undefined)
+      .map((variant) => variant.charAt(0).toLowerCase() + variant.slice(1));
+    expect(variants).toEqual(['hidden', 'noTray']);
+    for (const variant of variants) {
+      expect(parseHideOutcome(variant)).toBe(variant);
+    }
+  });
+
+  it('der Befehl versteckt nur über close_to_tray_available und das Tray-Symbol', () => {
+    const command = rustBlock(source, /pub fn hide_to_tray<R: Runtime>/);
+    expect(command).toMatch(/close_to_tray_available\(/);
+    expect(command).toMatch(/tray_by_id\(tray::TRAY_ID\)/);
+    expect(command).toMatch(/hide_if_tray\(/);
   });
 });

@@ -100,6 +100,52 @@ describe('Übersetzungen – Vollständigkeit', () => {
   });
 });
 
+describe('Übersetzungen – einheitliche Wortwahl', () => {
+  /** Alle einfachen Texte und Mehrzahl-Formen einer Sprache. */
+  const allTexts = (flat: typeof flatDe): string[] =>
+    [...flat.values()].flatMap((value) =>
+      typeof value === 'string' ? [value] : [value.one, value.other],
+    );
+
+  it('„Folgt in …“ im Dashboard-Text wie auf jedem Phasen-Abzeichen', () => {
+    expect(de.pages.dashboard.description).toContain(
+      `„${de.phase.comingIn.replace('{phase}', '…')}“`,
+    );
+    expect(en.pages.dashboard.description).toContain(
+      `“${en.phase.comingIn.replace(' {phase}', '…')}”`,
+    );
+  });
+
+  it('Englisch ohne Leerzeichen vor „…“ (Deutsch mit, wie üblich)', () => {
+    for (const text of allTexts(flatEn)) {
+      expect(text, text).not.toMatch(/\s…/);
+    }
+  });
+
+  it('die Gruppe der Seitenleiste nennt das Modul so, wie es heißt („Tools“)', () => {
+    for (const messages of [de, en]) {
+      expect(messages.nav.groups.privacy.toLowerCase()).toContain(
+        messages.pages.tools.nav.toLowerCase(),
+      );
+      expect(messages.pages.tools.eyebrow).toBe(messages.nav.groups.privacy);
+    }
+  });
+
+  it('der Sprachwechsel in der Palette beginnt in der Sprache der Oberfläche', () => {
+    // Nur der Sprachname (Eigenname) steht in der anderen Sprache (WCAG 3.1.2).
+    expect(de.palette.languageSwitch).toBe(`Sprache: ${de.settings.language.en}`);
+    expect(en.palette.languageSwitch).toBe(`Language: ${en.settings.language.de}`);
+  });
+
+  it('die Klang-Einstellung verspricht keinen Ton beim Start (dort bleibt es still)', () => {
+    // Ohne Nutzergeste spielt die WebView keinen Ton (packages/ui/README.md, „Klang“).
+    expect(de.settings.sound.description).not.toMatch(/beim Start\b/);
+    expect(en.settings.sound.description).not.toMatch(/at start-?up/i);
+    expect(de.settings.sound.description).toMatch(/bleibt es still/);
+    expect(en.settings.sound.description).toMatch(/stays silent/);
+  });
+});
+
 describe('Übersetzer', () => {
   it('liefert Texte der Sprache und setzt Platzhalter ein', () => {
     const deT = createTranslator('de');

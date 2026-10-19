@@ -31,8 +31,17 @@ export interface ConsentParameter {
  * Digest und Frist prüft der Dienst (`ConsentGate`).
  */
 export interface ConsentPlan {
-  /** Plan-ID (`PlanId`). Wechselt sie, beginnt der Dialog von vorn (Sperrzeit, Fokus). */
+  /**
+   * Plan-ID (`PlanId`). Wechselt sie – oder irgendein angezeigter Inhalt –, beginnt der
+   * Dialog von vorn (Sperrzeit, Fokus, neue Antwort).
+   */
   readonly id: string;
+  /**
+   * Plan-Digest bzw. Vorschlags-Nonce aus dem Dienst (optional). Wird unverändert mit der
+   * Antwort zurückgegeben (`ConsentDecisionMeta.digest`), damit die App genau die angezeigte
+   * Fassung beantwortet.
+   */
+  readonly digest?: string | undefined;
   /** Bezeichnung der Aktion, z. B. „In Quarantäne verschieben“ (`ActionKind::label_de`). */
   readonly kindLabel: string;
   /** Schweregrad des Anlasses (UI-Stufe; aus dem Kern per `riskLevelFromCoreId`). */
@@ -58,6 +67,15 @@ export interface ConsentPlan {
  * Nur `execute` führt zu einer Freigabe; alle anderen bedeuten: es wird nichts ausgeführt.
  */
 export type ConsentDecision = 'execute' | 'decline' | 'ignore' | 'trust';
+
+/** Wozu genau geantwortet wurde – die Fassung des Plans, die beim Klick sichtbar war. */
+export interface ConsentDecisionMeta {
+  readonly planId: string;
+  /** `ConsentPlan.digest` der angezeigten Fassung (falls angegeben). */
+  readonly digest: string | undefined;
+  /** Genau der angezeigte Plan. */
+  readonly plan: ConsentPlan;
+}
 
 export const consentDecisions: readonly ConsentDecision[] = [
   'execute',

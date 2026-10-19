@@ -93,3 +93,15 @@ describe('Zeit', () => {
     expect(formatSecondsShort(2000, 'en-US')).toBe('2.0 s');
   });
 });
+
+describe('toEpochMs – Date-Bereich (F14)', () => {
+  it('wertet endliche Zahlen außerhalb des Date-Bereichs als ungültig', () => {
+    expect(toEpochMs(9e15)).toBeNaN();
+    expect(toEpochMs(-9e15)).toBeNaN();
+    expect(toEpochMs(8.64e15)).toBe(8.64e15);
+    expect(toEpochMs(-8.64e15)).toBe(-8.64e15);
+    // Offene Grenzen bleiben erhalten (z. B. „keine Frist“).
+    expect(toEpochMs(Number.POSITIVE_INFINITY)).toBe(Number.POSITIVE_INFINITY);
+    expect(toEpochMs(Number.NEGATIVE_INFINITY)).toBe(Number.NEGATIVE_INFINITY);
+  });
+});

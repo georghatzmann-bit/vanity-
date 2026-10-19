@@ -129,6 +129,11 @@ export interface ToastProviderProps {
   /** Standarddauer in ms (Standard 6000). */
   readonly defaultDuration?: number | undefined;
   readonly labels?: Partial<ToastLabels> | undefined;
+  /**
+   * Abstand der Meldungen vom unteren Fensterrand (Zahl = px, sonst CSS-Länge). Standard
+   * 16 px. Die App setzt ihn, damit Meldungen z. B. eine Statusleiste nicht verdecken.
+   */
+  readonly bottomOffset?: number | string | undefined;
   readonly className?: string | undefined;
 }
 
@@ -147,6 +152,7 @@ export function ToastProvider({
   children,
   defaultDuration = 6000,
   labels,
+  bottomOffset,
   className,
 }: ToastProviderProps) {
   const resolvedLabels = { ...defaultToastLabels, ...labels };
@@ -247,6 +253,11 @@ export function ToastProvider({
           'pointer-events-none fixed right-4 bottom-4 z-[70] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2',
           className,
         )}
+        style={
+          bottomOffset === undefined
+            ? undefined
+            : { bottom: typeof bottomOffset === 'number' ? `${bottomOffset}px` : bottomOffset }
+        }
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
         onFocus={() => setFocused(true)}

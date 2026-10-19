@@ -426,12 +426,13 @@ function ActivityPanel() {
           return (
             <li
               key={entry.id}
-              className="grid grid-cols-[4.5rem_1.75rem_minmax(0,1fr)] items-center gap-3 px-5 py-2.5"
+              // Zeitspalte so breit wie die Uhrzeit (12-Stunden-Format mit „AM“/„PM“ ist länger).
+              className="grid grid-cols-[minmax(4.5rem,max-content)_1.75rem_minmax(0,1fr)] items-center gap-3 px-5 py-2.5"
               data-kind={entry.kind}
             >
               <time
                 dateTime={new Date(entry.at).toISOString()}
-                className="font-mono text-xs text-text-subtle tabular-nums"
+                className="font-mono text-xs whitespace-nowrap text-text-subtle tabular-nums"
               >
                 {time.format(entry.at)}
               </time>
@@ -447,9 +448,13 @@ function ActivityPanel() {
               <p className="min-w-0 truncate text-sm text-text">
                 {describeActivity(t, entry)}
                 {entry.kind === 'app-started' && (
-                  <span className="ml-2 text-xs text-text-subtle">
-                    {entry.platform === 'tauri' ? t('statusbar.desktop') : t('statusbar.preview')}
-                  </span>
+                  // Echtes Leerzeichen davor: sonst hören Screenreader „AEGIS gestartetBrowser-Vorschau“.
+                  <>
+                    {' '}
+                    <span className="ml-1 text-xs text-text-subtle">
+                      {entry.platform === 'tauri' ? t('statusbar.desktop') : t('statusbar.preview')}
+                    </span>
+                  </>
                 )}
               </p>
             </li>

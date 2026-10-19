@@ -25,7 +25,7 @@ export const de = {
   },
   titlebar: {
     label: 'Titelleiste',
-    search: 'Seite oder Befehl suchen …',
+    search: 'Befehl oder Seite suchen …',
     windowControls: 'Fenster',
     minimize: 'Minimieren',
     maximize: 'Maximieren',
@@ -44,7 +44,7 @@ export const de = {
       overview: 'Übersicht',
       protection: 'Schutz',
       system: 'System',
-      privacy: 'Privatsphäre & Werkzeuge',
+      privacy: 'Privatsphäre & Tools',
       app: 'App',
     },
   },
@@ -65,7 +65,7 @@ export const de = {
       title: 'Dashboard',
       eyebrow: 'Übersicht',
       description:
-        'Der Stand deines Schutzes – ehrlich: Was noch nicht gebaut ist, steht hier als „folgt in …“.',
+        'Der Stand deines Schutzes – ehrlich: Was noch nicht gebaut ist, steht hier als „Folgt in …“.',
     },
     scan: {
       nav: 'Scan',
@@ -118,7 +118,7 @@ export const de = {
     tools: {
       nav: 'Tools',
       title: 'Tools',
-      eyebrow: 'Werkzeuge',
+      eyebrow: 'Privatsphäre & Tools',
       tagline: 'Helfer für Windows-Aufgaben nach deinen Regeln',
       summary:
         'Werkzeuge für Windows-Aufgaben wie Aufräumen und Sortieren. Sie handeln nur nach Regeln, die du anlegst und einschaltest – immer mit Vorschau, Protokoll und Rückgängig.',
@@ -268,7 +268,8 @@ export const de = {
     },
     sound: {
       label: 'Klang',
-      description: 'Dezente Töne, zum Beispiel beim Start.',
+      description:
+        'Dezente Töne, etwa beim Einschalten des Klangs und beim erneuten Abspielen der Start-Animation. Beim Öffnen von AEGIS bleibt es still.',
     },
     motion: {
       label: 'Bewegung',
@@ -287,6 +288,8 @@ export const de = {
       label: 'Beim Schließen in den Infobereich',
       description:
         'Der Schließen-Knopf versteckt das Fenster, AEGIS läuft im Infobereich weiter. Alt+F4 beendet AEGIS vollständig.',
+      unavailable:
+        'Hier nicht verfügbar: Es gibt kein Symbol im Infobereich, über das AEGIS zurückkäme. Der Schließen-Knopf beendet AEGIS deshalb vollständig.',
     },
     persistence: {
       memoryOnly:

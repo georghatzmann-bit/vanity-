@@ -1,6 +1,6 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-19 · **P0 abgeschlossen** · nächste Phase: **P1 – Shell, Dashboard, Design-System**
+Stand: 2026-10-19 · **P0 + P1 abgeschlossen** · nächste Phase: **P2 – Dienst, Pipe, Engine-Kern, Quarantäne**
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
@@ -22,8 +22,8 @@ Stand: 2026-10-19 · **P0 abgeschlossen** · nächste Phase: **P1 – Shell, Das
 | Phase | Inhalt | Status |
 | --- | --- | --- |
 | P0 | Fundament, Design-Tokens, Logo, Start-Animation | **erledigt** |
-| P1 | Shell, Dashboard, Design-System | **in Arbeit** |
-| P2 | Dienst + Pipe + Engine-Kern (ClamAV, Hashes, YARA-X, statische Analyse), Quarantäne | offen |
+| P1 | Shell, Dashboard, Design-System | **erledigt** |
+| P2 | Dienst + Pipe + Engine-Kern (ClamAV, Hashes, YARA-X, statische Analyse), Quarantäne | als Nächstes |
 | P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | offen |
 | P4 | Sandbox Stufe 1+2 + Verhaltensbericht | offen |
 | P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | offen |
@@ -83,8 +83,7 @@ Stand: 2026-10-19 · **P0 abgeschlossen** · nächste Phase: **P1 – Shell, Das
 
 - **Antwort-Nonce** (Review-Fund): Antworten sind an Plan-ID + Digest gebunden, noch nicht an
   eine Vorschlags-Nonce → wird mit dem Pipe-Protokoll in P2 geschlossen.
-- **Startfehler der App** werden nur auf stderr ausgegeben (unter Windows unsichtbar) → P1
-  (Meldung bzw. Log-Datei über die Mutations-Allowlist).
+- Manuell auf Windows prüfen: Doppelklick auf Titelleiste, Tray-Symbol, Startzeit mit GPU.
 - Windows-APIs (`windows-sys`) in die Mutations-Sperre aufnehmen, sobald sie dazukommen (P2).
 - 16-px-Icon: Schild gut erkennbar, die A-Aussparung verschwimmt → eigene 16-px-Variante (P11).
 - Optional: Dependabot für Action-Pins (öffnet automatisch PRs – nur auf deinen Wunsch).
@@ -95,22 +94,22 @@ Stand: 2026-10-19 · **P0 abgeschlossen** · nächste Phase: **P1 – Shell, Das
 - **Code-Signing-Zertifikat** (kostet Geld) – wird vorbereitet, nicht vorausgesetzt (P13).
 - Hinweis: Das Repo ist öffentlich → GitHub Actions (auch `windows-latest`) ist kostenlos.
 
-## P1 – Plan (in Arbeit)
+## P1 – erledigt
 
-1. [ ] `packages/ui` Komponenten: Button (Feder-Animation), IconButton, Panel/Card, StatusRing,
+1. [x] `packages/ui` Komponenten: Button (Feder-Animation), IconButton, Panel/Card, StatusRing,
        ScoreGauge, CountUp, RiskBadge, Toggle, SegmentedControl, Tabs, Tooltip, Toast,
        Dialog + **Freigabe-Dialog** (Was? Warum? Was passiert dann? Rückgängig? – Ja, ausführen /
        Nein / Ignorieren / Vertrauen; Standard-Fokus nie auf „Ja“), Befehlspalette, eigene Icons
-2. [ ] Rust-Seite der App: rahmenloses Fenster + eigene Titelleiste (einzeln begründete
+2. [x] Rust-Seite der App: rahmenloses Fenster + eigene Titelleiste (einzeln begründete
        Fenster-Rechte), Tray mit Menü, nur eine Instanz, sichtbare Startfehler, `app_info`
-3. [ ] Shell: Titelleiste, Navigation, Seitenübergänge, Dashboard (ehrliche Zustände – keine
+3. [x] Shell: Titelleiste, Navigation, Seitenübergänge, Dashboard (ehrliche Zustände – keine
        erfundenen Werte), Platzhalterseiten je Modul, Einstellungen (Sprache, Hell/Dunkel,
        Klang, Bewegung, Schließen-Verhalten), Befehlspalette Strg+K, Deutsch/Englisch
-4. [ ] Tests: Vitest, Playwright inkl. axe (Barrierefreiheit) in beiden Themes, Tastatur-Bedienung
-5. [ ] Review (Sicherheit der Fenster-/Tray-Rechte, UI/Barrierefreiheit), Korrekturen, DoD, Commit
+4. [x] Tests: Vitest, Playwright inkl. axe (Barrierefreiheit) in beiden Themes, Tastatur-Bedienung
+5. [x] Review (Sicherheit der Fenster-/Tray-Rechte, UI/Barrierefreiheit), Korrekturen, DoD, Commit
 
 ## Nächster Schritt
 
-P1: App-Shell im G-HUB-Stil (eigene Titelleiste, Navigation, Seitenübergänge), Dashboard mit
-Sicherheits-Score und Status-Ringen, Befehlspalette (Strg+K), Deutsch/Englisch, Hell/Dunkel,
-Einstellungen (Sound, reduzierte Bewegung), Tray-Widget, Komponenten-Bibliothek in `packages/ui`.
+P2: Windows-Dienst `aegis-service` + Named Pipe (ACL, Antwort-Nonce gegen Wiederholung),
+Engine-Kern (Hash-Abgleich, YARA-X, statische PE-Analyse, ClamAV als getrennter Prozess),
+verschlüsselte Quarantäne mit Wiederherstellen, EICAR-Ende-zu-Ende-Test, „Nichts ohne Ja“-Test.

@@ -8,6 +8,7 @@ import {
   createBrowserPlatform,
   detectPlatform,
   listenWhileMounted,
+  parseHideOutcome,
   parseNavigatePayload,
   type Unlisten,
 } from './platform.ts';
@@ -19,6 +20,7 @@ const validInfo = {
   osVersion: '10.0.22631.4317',
   arch: 'x86_64',
   tauriVersion: '2.12.4',
+  trayAvailable: true,
 };
 
 /** Simuliert die Tauri-WebView: `isTauri()` wahr, Hauptfenster „main“, IPC abgefangen. */
@@ -60,7 +62,10 @@ describe('app_info prüfen', () => {
       { ...validInfo, os: undefined },
       { ...validInfo, arch: 'x'.repeat(201) },
       { ...validInfo, osVersion: 10 },
+      { ...validInfo, trayAvailable: 'true' },
+      { ...validInfo, trayAvailable: null },
       Object.fromEntries(Object.entries(validInfo).filter(([key]) => key !== 'osVersion')),
+      Object.fromEntries(Object.entries(validInfo).filter(([key]) => key !== 'trayAvailable')),
     ];
     for (const value of broken) {
       expect(() => parseAppInfo(value), JSON.stringify(value)).toThrow(TypeError);
@@ -76,6 +81,7 @@ describe('app_info prüfen', () => {
       osVersion: null,
       arch: null,
       tauriVersion: null,
+      trayAvailable: false,
     });
     expect(previewAppInfo('1.0.0', false).buildProfile).toBe('release');
   });
@@ -111,7 +117,13 @@ describe('Browser-Vorschau', () => {
 
 describe('Desktop-App (Tauri, IPC nachgebildet)', () => {
   it('Fensterknöpfe rufen genau die freigegebenen Fensterbefehle für „main“ auf', async () => {
-    const calls = mockTauri((command) => (command === 'plugin:window|is_maximized' ? true : null));
+    const calls = mockTauri((command) =>
+      command === 'plugin:window|is_maximized'
+        ? true
+        : command === 'hide_to_tray'
+          ? 'hidden'
+          : null,
+    );
     const platform = detectPlatform();
     expect(platform.kind).toBe('tauri');
     const windowApi = platform.window;
@@ -123,19 +135,33 @@ describe('Desktop-App (Tauri, IPC nachgebildet)', () => {
     await windowApi.minimize();
     await windowApi.toggleMaximize();
     await expect(windowApi.isMaximized()).resolves.toBe(true);
-    await windowApi.hide();
+    await expect(windowApi.hideToTray()).resolves.toBe('hidden');
     await windowApi.close();
 
     expect(calls.map(({ command }) => command)).toEqual([
       'plugin:window|minimize',
       'plugin:window|toggle_maximize',
       'plugin:window|is_maximized',
-      'plugin:window|hide',
+      'hide_to_tray',
       'plugin:window|close',
     ]);
-    for (const { payload } of calls) {
-      expect(payload).toEqual({ label: 'main' });
+    for (const { command, payload } of calls) {
+      // Fensterbefehle nennen das Hauptfenster; hide_to_tray wirkt auf das aufrufende Fenster.
+      expect(payload).toEqual(command === 'hide_to_tray' ? {} : { label: 'main' });
     }
+    // Direkt verstecken (plugin:window|hide) kann die Oberfläche nicht.
+    expect(calls.map(({ command }) => command)).not.toContain('plugin:window|hide');
+  });
+
+  it('hide_to_tray: „noTray“ wird gemeldet, Unbekanntes abgelehnt', async () => {
+    let answer: unknown = 'noTray';
+    mockTauri((command) => (command === 'hide_to_tray' ? answer : null));
+    const windowApi = detectPlatform().window;
+    await expect(windowApi?.hideToTray()).resolves.toBe('noTray');
+    answer = 'hide';
+    await expect(windowApi?.hideToTray()).rejects.toThrow(TypeError);
+    expect(parseHideOutcome('hidden')).toBe('hidden');
+    expect(() => parseHideOutcome(null)).toThrow(TypeError);
   });
 
   it('app_info: Befehl ohne Argumente, Antwort geprüft und zwischengespeichert', async () => {

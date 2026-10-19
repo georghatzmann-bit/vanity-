@@ -17,9 +17,11 @@
  * - Default-Ignorable-Code-Points (z. B. Variantenselektoren, Hangul-Füller, CGJ)
  * - Leerzeichen-Varianten außer U+0020 (NBSP, Geviert-, Schmal-, Ideogramm-Leerzeichen …)
  * - nicht zugewiesene Code-Points und einzelne Surrogate (`Cn`, `Cs`)
+ * - sichtbare Zeichen, die leer gezeichnet werden: U+2800 (leeres Braille-Muster) und
+ *   U+1D159 (Noten-Nullkopf) – sie täuschen sonst Leerraum ohne Hinweis vor
  */
 const INVISIBLE_PATTERN =
-  /[\p{Cc}\p{Cf}\p{Cs}\p{Cn}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]|(?! )\p{Zs}/u;
+  /[\p{Cc}\p{Cf}\p{Cs}\p{Cn}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800\u{1D159}]|(?! )\p{Zs}/u;
 
 /** Schriften mit Leserichtung rechts-nach-links (starke RTL-Zeichen). */
 const RTL_PATTERN =

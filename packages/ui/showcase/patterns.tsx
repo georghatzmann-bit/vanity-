@@ -89,6 +89,7 @@ export function openConsentExample(
 const safetyRules = [
   'Startfokus auf „Nein“ – nie auf „Ja, ausführen“.',
   '„Ja, ausführen“, „Vertrauen“ und „Ignorieren“ sind nach dem Öffnen 600 ms gesperrt (gegen Durchklicken/Doppelklick) – „Nein“ geht sofort.',
+  'Die Sperre beginnt neu bei jeder Planänderung, wenn ein Dialog darüber schließt und wenn das Fenster wieder nach vorn kommt; ein Druck, der schon während der Sperre begann, zählt nicht.',
   'Escape = „Nein“. Klick neben den Dialog tut nichts. Enter löst nie „Ja“ aus.',
   'Höchstens eine Antwort je Öffnen; nach Ablauf der Frist ist alles gesperrt.',
   'Unsichtbare Zeichen in Pfaden erscheinen als ⟨U+202E⟩, lange Pfade sind in der Mitte gekürzt.',

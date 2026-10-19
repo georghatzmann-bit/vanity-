@@ -138,6 +138,22 @@ export function legacySettings(legacySound: string | null): Record<string, unkno
 }
 
 /**
+ * Stammt `version` von einer neueren Version als dieser? Zahlen größer als
+ * `SETTINGS_VERSION` (auch nicht ganzzahlige und ∞) und Versionstexte wie „2“ oder „2.0.1“,
+ * deren Zahl größer ist. Im Zweifel lieber „neuer“ (nie überschreiben) als „kaputt“.
+ */
+export function isNewerVersion(version: unknown): boolean {
+  if (typeof version === 'number') {
+    return version > SETTINGS_VERSION;
+  }
+  if (typeof version === 'string' && /^\s*\d+(?:\.\d+)*\s*$/.test(version)) {
+    const [major = 0, minor = 0] = version.trim().split('.').map(Number);
+    return major > SETTINGS_VERSION || (major === SETTINGS_VERSION && minor > 0);
+  }
+  return false;
+}
+
+/**
  * Wertet den gespeicherten Text aus (`raw` = Inhalt von `aegis.settings`, `legacySound` =
  * Inhalt von `aegis.sound`). Wirft nie – unlesbare Daten ergeben Standardwerte.
  */
@@ -158,17 +174,28 @@ export function parseStoredSettings(
   } catch {
     return { settings: defaultSettings, origin: 'corrupt' };
   }
-  if (!isRecord(parsed) || !isRecord(parsed['settings'])) {
+  if (!isRecord(parsed)) {
     return { settings: defaultSettings, origin: 'corrupt' };
   }
   const version = parsed['version'];
+  // Zuerst die Version: Daten einer neueren AEGIS-Version werden nie überschrieben – egal, wie
+  // sie sonst aussehen (eine neuere Version darf ihr Format ändern, etwa den Container
+  // umbenennen oder Versionen wie 2.5 schreiben). Lesbare Felder werden übernommen.
+  if (isNewerVersion(version)) {
+    const stored = parsed['settings'];
+    return {
+      settings: isRecord(stored) ? sanitizeSettings(stored) : defaultSettings,
+      origin: 'newer',
+    };
+  }
+  // Ab hier: diese oder eine ältere Version – kaputte Form heißt „corrupt“.
+  if (!isRecord(parsed['settings'])) {
+    return { settings: defaultSettings, origin: 'corrupt' };
+  }
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 0) {
     return { settings: defaultSettings, origin: 'corrupt' };
   }
   const stored = parsed['settings'];
-  if (version > SETTINGS_VERSION) {
-    return { settings: sanitizeSettings(stored), origin: 'newer' };
-  }
   if (version < SETTINGS_VERSION) {
     try {
       return { settings: sanitizeSettings(migrate(version, stored)), origin: 'migrated' };

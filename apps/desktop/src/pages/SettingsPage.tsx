@@ -26,6 +26,8 @@ export function SettingsPage() {
   const systemScheme = useSystemColorScheme();
   const systemReduced = useSystemReducedMotion();
   const appInfo = useAppInfo();
+  // Rust meldet kein (verlässliches) Symbol im Infobereich: Schließen beendet AEGIS immer.
+  const trayMissing = appInfo.status === 'ready' && !appInfo.info.trayAvailable;
 
   return (
     <PageBody width="narrow">
@@ -62,15 +64,17 @@ export function SettingsPage() {
               : undefined
           }
         >
-          {() => (
+          {(_labelId, descriptionId) => (
             <SegmentedControl<LanguageSetting>
+              ref={describedBy(descriptionId)}
               label={t('settings.language.label')}
               value={settings.language}
               onValueChange={(language) => update({ language })}
               options={[
                 { value: 'system', label: t('settings.language.system') },
-                { value: 'de', label: t('settings.language.de') },
-                { value: 'en', label: t('settings.language.en') },
+                // Sprachnamen in ihrer eigenen Sprache – Screenreader lesen sie richtig vor.
+                { value: 'de', label: <span lang="de">{t('settings.language.de')}</span> },
+                { value: 'en', label: <span lang="en">{t('settings.language.en')}</span> },
               ]}
             />
           )}
@@ -84,8 +88,9 @@ export function SettingsPage() {
               : undefined
           }
         >
-          {() => (
+          {(_labelId, descriptionId) => (
             <SegmentedControl<ThemeSetting>
+              ref={describedBy(descriptionId)}
               label={t('settings.theme.label')}
               value={settings.theme}
               onValueChange={(theme) => update({ theme })}
@@ -128,8 +133,9 @@ export function SettingsPage() {
               : undefined
           }
         >
-          {() => (
+          {(_labelId, descriptionId) => (
             <SegmentedControl<MotionSetting>
+              ref={describedBy(descriptionId)}
               label={t('settings.motion.label')}
               value={settings.motion}
               onValueChange={(motion) => update({ motion })}
@@ -157,11 +163,16 @@ export function SettingsPage() {
         {platform.window !== null && (
           <SettingRow
             label={t('settings.closeToTray.label')}
-            description={t('settings.closeToTray.description')}
+            description={
+              trayMissing
+                ? t('settings.closeToTray.unavailable')
+                : t('settings.closeToTray.description')
+            }
           >
             {(labelId, descriptionId) => (
               <Toggle
-                checked={settings.closeToTray}
+                checked={settings.closeToTray && !trayMissing}
+                disabled={trayMissing}
                 aria-labelledby={labelId}
                 aria-describedby={descriptionId}
                 onCheckedChange={(closeToTray) => update({ closeToTray })}
@@ -195,6 +206,17 @@ export function SettingsPage() {
   );
 }
 
+/**
+ * Verknüpft die Erklärung einer Zeile mit der Radiogruppe von `SegmentedControl` (die
+ * Komponente reicht `aria-describedby` nicht durch): Screenreader hören beim Ansteuern auch
+ * „„Reduziert“ schaltet Animationen … ab“ und den aufgelösten Wert („System: reduziert“).
+ */
+function describedBy(descriptionId: string) {
+  return (element: HTMLDivElement | null): void => {
+    element?.setAttribute('aria-describedby', descriptionId);
+  };
+}
+
 interface SettingRowProps {
   readonly label: string;
   readonly description: string;
@@ -218,9 +240,13 @@ function SettingRow({ label, description, hint, children }: SettingRowProps) {
         <p id={descriptionId} className="mt-0.5 max-w-lg text-xs text-text-muted">
           {description}
           {hint !== undefined && (
-            <span className="mt-1 block font-mono text-2xs tracking-wide text-text-subtle">
-              {hint}
-            </span>
+            // Echtes Leerzeichen davor: sonst liest die Beschreibung „…Windows.Gerade: Deutsch“.
+            <>
+              {' '}
+              <span className="mt-1 block font-mono text-2xs tracking-wide text-text-subtle">
+                {hint}
+              </span>
+            </>
           )}
         </p>
       </div>

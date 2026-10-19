@@ -4,6 +4,7 @@ import {
   SETTINGS_STORAGE_KEY,
   SETTINGS_VERSION,
   defaultSettings,
+  isNewerVersion,
   migrate,
   parseStoredSettings,
   sanitizeSettings,
@@ -131,8 +132,10 @@ describe('Einstellungen – Laden und Migration', () => {
       '{"version":1}',
       '{"version":1,"settings":[]}',
       '{"version":"1","settings":{}}',
-      '{"version":1.5,"settings":{}}',
+      '{"version":0.5,"settings":{}}',
       '{"version":-1,"settings":{}}',
+      '{"version":true,"settings":{}}',
+      '{"version":"v2","settings":{}}',
     ]) {
       expect(parseStoredSettings(raw, 'off'), raw).toEqual({
         settings: defaultSettings,
@@ -145,6 +148,34 @@ describe('Einstellungen – Laden und Migration', () => {
     expect(
       parseStoredSettings(stored({ theme: 'light', zukunft: true }, SETTINGS_VERSION + 1), null),
     ).toEqual({ settings: { ...defaultSettings, theme: 'light' }, origin: 'newer' });
+  });
+
+  it('neuere Version mit anderem Format bleibt „newer“ (nicht „corrupt“)', () => {
+    for (const raw of [
+      // Container umbenannt, fehlt oder ist kein Objekt.
+      '{"version":2,"prefs":{"theme":"light"}}',
+      '{"version":2}',
+      '{"version":2,"settings":[1,2]}',
+      // Nicht ganzzahlig, unendlich, als Text.
+      '{"version":1.5,"settings":{}}',
+      '{"version":2.5,"settings":{}}',
+      '{"version":1e999,"settings":{}}',
+      '{"version":"2","settings":{}}',
+      '{"version":"1.1","settings":{}}',
+      '{"version":" 3.0.1 ","settings":{}}',
+    ]) {
+      expect(parseStoredSettings(raw, null), raw).toEqual({
+        settings: defaultSettings,
+        origin: 'newer',
+      });
+    }
+    expect(
+      parseStoredSettings('{"version":2.5,"settings":{"theme":"light"}}', null).settings.theme,
+    ).toBe('light');
+    expect(isNewerVersion(SETTINGS_VERSION)).toBe(false);
+    expect(isNewerVersion('1')).toBe(false);
+    expect(isNewerVersion('1.0')).toBe(false);
+    expect(isNewerVersion(null)).toBe(false);
   });
 });
 
@@ -251,6 +282,22 @@ describe('Einstellungs-Speicher', () => {
     expect(store.getSnapshot().persistence).toBe('read-only-newer');
     expect(writes).toEqual([]);
     expect(data.get(SETTINGS_STORAGE_KEY)).toBe(newer);
+  });
+
+  it('neuere Version mit anderem Format wird ebenfalls nie überschrieben', () => {
+    for (const newer of [
+      '{"version":2,"prefs":{"theme":"light"}}',
+      '{"version":"2","settings":{}}',
+      '{"version":2.5,"settings":{}}',
+    ]) {
+      const { storage, data, writes } = memoryStorage({ [SETTINGS_STORAGE_KEY]: newer });
+      const store = createSettingsStore(storage);
+      expect(store.getSnapshot().persistence, newer).toBe('read-only-newer');
+      store.update({ sidebarCollapsed: true });
+      expect(store.getSnapshot().settings.sidebarCollapsed).toBe(true);
+      expect(writes, newer).toEqual([]);
+      expect(data.get(SETTINGS_STORAGE_KEY)).toBe(newer);
+    }
   });
 
   it('kaputte Daten werden beim ersten Speichern durch gültige ersetzt', () => {

@@ -22,12 +22,26 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
     'Doppelklick auf die Titelleiste (Tauris Skript für data-tauri-drag-region)',
   'core:window:allow-is-maximized': 'Symbol des Maximieren-Knopfs passend zum Zustand (lesend)',
   'core:window:allow-start-dragging': 'Fenster an der Titelleiste verschieben',
-  'core:window:allow-hide': 'Schließen-Knopf mit „Beim Schließen in den Infobereich“',
   'core:window:allow-close': 'Schließen-Knopf ohne Infobereich: beendet AEGIS',
   'core:event:allow-listen': 'tauri://resize und aegis://navigate empfangen (nie senden)',
   'core:event:allow-unlisten': 'Empfänger wieder abmelden',
-  'allow-app-info': 'App-Befehl app_info (Version, Build-Profil, Plattform; lesend)',
+  'allow-app-info': 'App-Befehl app_info (Version, Build-Profil, Plattform, Infobereich; lesend)',
+  'allow-hide-to-tray':
+    'App-Befehl hide_to_tray: Schließen-Knopf mit „Beim Schließen in den Infobereich“ – versteckt nur mit Tray-Symbol',
 };
+
+/**
+ * Bewusst nie gewährt: direktes Verstecken (ohne Tray-Symbol bliebe AEGIS unsichtbar ohne
+ * Rückweg – das entscheidet Rust in `hide_to_tray`), Nach-vorn-Holen (nur Rust: Tray, zweiter
+ * Start), Fenster zerstören/anlegen.
+ */
+const NEVER_GRANTED = [
+  'core:window:allow-hide',
+  'core:window:allow-show',
+  'core:window:allow-set-focus',
+  'core:window:allow-destroy',
+  'core:window:allow-create',
+] as const;
 
 interface Capability {
   readonly identifier?: unknown;
@@ -83,6 +97,9 @@ describe('Capabilities (IPC-Rechte)', () => {
         );
       }
       expect(ids).toEqual(Object.keys(JUSTIFIED_PERMISSIONS));
+      for (const id of NEVER_GRANTED) {
+        expect(ids, `${file}: ${id}`).not.toContain(id);
+      }
     }
   });
 });
@@ -97,6 +114,12 @@ describe('App-Fenster', () => {
     const main = readFileSync(new URL('src/main.rs', srcTauri), 'utf8');
     expect(main).toMatch(/^mod navigation;$/m);
     expect(main).toMatch(/\.plugin\(\s*navigation::guard\(/);
+  });
+
+  it('main.rs beendet die App beim Schließen des Hauptfensters (kein unsichtbarer Prozess)', () => {
+    const main = readFileSync(new URL('src/main.rs', srcTauri), 'utf8');
+    const production = main.slice(0, main.indexOf('#[cfg(test)]'));
+    expect(production).toContain('.on_window_event(window::on_window_event)');
   });
 });
 

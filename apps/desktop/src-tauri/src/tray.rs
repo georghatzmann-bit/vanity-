@@ -107,7 +107,9 @@ pub fn action_for_click(button: MouseButton, state: MouseButtonState) -> Option<
 /// Führt eine Aktion aus.
 pub fn perform<R: Runtime>(app: &AppHandle<R>, action: TrayAction) {
     match action {
-        TrayAction::ShowMain => window::reveal_main(app),
+        TrayAction::ShowMain => {
+            window::reveal_main(app);
+        }
         TrayAction::Navigate(page) => {
             // Erst die Seite wechseln, dann zeigen – so erscheint gleich die richtige Seite.
             if let Err(error) =
@@ -261,7 +263,6 @@ mod tests {
 
     #[test]
     fn navigations_nutzdaten_wie_vereinbart() {
-        assert_eq!(NAVIGATE_EVENT, "aegis://navigate");
         assert_eq!(
             serde_json::to_value(NavigatePayload {
                 page: Page::Dashboard
@@ -278,20 +279,57 @@ mod tests {
         );
     }
 
+    /// Empfängt `aegis://navigate` (Name aus dem IPC-Vertrag, nicht aus der Konstante) im
+    /// Fenster `label` und liefert die Nutzdaten als JSON.
+    fn navigate_receiver(
+        app: &tauri::App<tauri::test::MockRuntime>,
+        label: &str,
+    ) -> std::sync::mpsc::Receiver<serde_json::Value> {
+        use tauri::Listener as _;
+        let (tx, rx) = std::sync::mpsc::channel();
+        crate::test_support::window(app, label).listen("aegis://navigate", move |event| {
+            let _ = tx.send(serde_json::from_str(event.payload()).unwrap());
+        });
+        rx
+    }
+
+    /// „Dashboard“/„Einstellungen“ erreichen genau das Hauptfenster mit den vereinbarten
+    /// Nutzdaten – geprüft mit Tauris eigener Ereignis-Verarbeitung (ein ungültiger Name ließe
+    /// `emit_to` scheitern, ein falsches Ziel käme im Hauptfenster nicht an).
     #[test]
-    fn ereignisname_ist_fuer_tauri_gueltig() {
-        // Gleiche Regel wie tauri::event::EventName (sonst schlägt emit_to zur Laufzeit fehl).
-        assert!(
-            NAVIGATE_EVENT
-                .chars()
-                .all(|c| c.is_alphanumeric() || matches!(c, '-' | '/' | ':' | '_'))
+    fn tray_seitenwechsel_erreicht_nur_das_hauptfenster() {
+        let app = crate::test_support::app();
+        let main = navigate_receiver(&app, MAIN_WINDOW_LABEL);
+        let other = navigate_receiver(&app, "fremd");
+        perform(app.handle(), TrayAction::Navigate(Page::Dashboard));
+        perform(app.handle(), TrayAction::Navigate(Page::Settings));
+        assert_eq!(
+            main.try_iter().collect::<Vec<_>>(),
+            [
+                serde_json::json!({ "page": "dashboard" }),
+                serde_json::json!({ "page": "settings" })
+            ]
         );
+        assert_eq!(other.try_iter().count(), 0, "nur an das Hauptfenster");
+        // „AEGIS öffnen“ wechselt keine Seite.
+        perform(app.handle(), TrayAction::ShowMain);
+        assert_eq!(main.try_iter().count(), 0);
         // Eigener Namensraum, nicht der reservierte „tauri://“.
         assert!(!NAVIGATE_EVENT.starts_with("tauri"));
     }
 
     #[test]
-    fn tooltip() {
-        assert_eq!(TOOLTIP, "AEGIS Suite");
+    #[should_panic(expected = "not implemented")]
+    fn beenden_beendet_die_app() {
+        // `AppHandle::exit` ist in der Test-Laufzeit nicht umgesetzt (Panic) – genau der Aufruf.
+        let app = crate::test_support::app();
+        perform(app.handle(), TrayAction::Quit);
+    }
+
+    #[test]
+    fn tooltip_ist_der_produktname() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(config["productName"], TOOLTIP);
     }
 }

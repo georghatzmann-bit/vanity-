@@ -1,10 +1,17 @@
 /** Zeitpunkt als Date, Epoch-Millisekunden oder RFC-3339-Text (wie aus `aegis-core`). */
 export type TimeInput = Date | number | string;
 
-/** Wandelt einen Zeitpunkt in Epoch-Millisekunden; ungültige Angaben ergeben `NaN`. */
+/** Größter darstellbarer Zeitpunkt eines `Date` (±100 Mio. Tage um 1970, ECMAScript). */
+export const MAX_DATE_MS = 8.64e15;
+
+/**
+ * Wandelt einen Zeitpunkt in Epoch-Millisekunden; ungültige Angaben ergeben `NaN` – auch
+ * endliche Zahlen außerhalb des Date-Bereichs (sonst würfe z. B. `toISOString()` beim
+ * Anzeigen). `±Infinity` bleibt erhalten (offene Grenze, z. B. „keine Frist“).
+ */
 export function toEpochMs(value: TimeInput): number {
   if (typeof value === 'number') {
-    return value;
+    return Number.isFinite(value) && Math.abs(value) > MAX_DATE_MS ? Number.NaN : value;
   }
   if (typeof value === 'string') {
     return Date.parse(value);

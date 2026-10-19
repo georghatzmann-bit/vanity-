@@ -42,8 +42,13 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   `object-src 'none'`, kein `unsafe-inline`. Motion setzt nur Inline-`style`-Attribute über das
   DOM, die CSP nicht betreffen. Der Build bettet keine Dateien als `data:` ein.
 - `withGlobalTauri: false`, `freezePrototype: true` (auch in den E2E-Tests nachgebildet).
-- Capabilities: **keine** (`permissions: []`). Jede künftige Berechtigung wird einzeln als
-  `core:<plugin>:allow-<befehl>` mit Begründung in `apps/desktop/README.md` ergänzt.
+- Capabilities: nur einzeln begründete Fenster-/Event-Rechte (Liste und Begründung in
+  `apps/desktop/README.md`), keine `:default`-Bündel. App-Befehle (`app_info`, `hide_to_tray`)
+  brauchen über das AppManifest eine eigene Berechtigung; ein Laufzeit-Test prüft, dass jeder
+  Aufruf der Oberfläche gewährt ist und nichts darüber hinaus. Verstecken in den Infobereich
+  entscheidet Rust (nur wenn das Tray-Symbol existiert – kein unsichtbarer Prozess).
+- Startfehler: eine Zeile in `%LOCALAPPDATA%\AEGIS\logs\startup.log` (keine Links, keine
+  Netzpfade, Steuerzeichen entfernt, Größe begrenzt; Allowlist-Einträge) + Fehlerdialog.
 - Navigationswächter (`src-tauri/src/navigation.rs`): Das Fenster darf nur die gebündelte UI
   laden; externe Seiten werden blockiert. Keine CDNs, keine Telemetrie.
 - Installation pro Nutzer (NSIS `currentUser`, Deutsch/Englisch), Admin nur für den Dienst.
@@ -71,4 +76,5 @@ Prüfung „kein Code-Pfad ändert etwas ohne Freigabe“ ist fester Bestandteil
 
 | Datum | Umfang | Ergebnis |
 | --- | --- | --- |
+| 2026-10-19 | P1: Freigabe-Dialog, Fenster-/Tray-Rechte, Startprotokoll, Einstellungen, Barrierefreiheit, CI. 4 Prüfer + Gegenprüfung (vor Abschluss der Desktop-Korrekturen abgebrochen, Rest selbst geprüft) | 2 hoch (Sperrzeit-Umgehung, gestapelte Dialoge), 7 mittel (u. a. Bidi in Plan-Texten, Fokus bei Seitenwechsel, Windows-CI-Zeitlimit) – behoben mit Tests |
 | 2026-10-19 | P0: `crates/core` (Freigabe, Protokoll, Mutations-Wächter), Tauri/CSP/CI, Design-System. 4 unabhängige Prüfer + adversarielle Gegenprüfung | 48 Funde bestätigt (0 kritisch, 0 hoch, 15 mittel, 24 niedrig, 9 Kleinigkeiten). 46 behoben, jeweils mit Regressionstest. Offen: Antwort-Nonce (→ P2, siehe Bedrohungsmodell), Meldung bei Startfehler der App (→ P1) |

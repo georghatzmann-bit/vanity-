@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConsentDialog, CONSENT_GUARD_MS, type ConsentDialogProps } from './ConsentDialog.tsx';
 import { consentDialogLabelsEn } from './labels.ts';
@@ -7,6 +7,7 @@ import type { ConsentPlan } from './types.ts';
 
 const START = new Date('2026-10-19T12:00:00Z').getTime();
 const RLO = '\u202E';
+const PDF = '\u202C';
 
 function advance(ms: number): void {
   act(() => {
@@ -57,6 +58,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('ConsentDialog – Darstellung des Plans', () => {
@@ -80,11 +82,11 @@ describe('ConsentDialog – Darstellung des Plans', () => {
   it('zeigt die Frist als laufende Uhr und die feste Uhrzeit für Screenreader', () => {
     setup();
     const deadline = document.querySelector('[data-part="deadline"]');
-    expect(deadline).toHaveTextContent('Frist 10:00');
+    expect(deadline).toHaveTextContent('Verfällt in 10:00');
     expect(deadline?.querySelector('time')).toHaveAttribute('aria-hidden', 'true');
     expect(deadline).toHaveTextContent(/Ohne Antwort verfällt die Anfrage um \d\d:\d\d Uhr\./);
     advance(61_000);
-    expect(deadline).toHaveTextContent('Frist 8:59');
+    expect(deadline).toHaveTextContent('Verfällt in 8:59');
     expect(deadline).not.toHaveClass('text-risk-risky');
     advance(8 * 60_000 + 30_000);
     expect(document.querySelector('[data-part="deadline"]')).toHaveClass('text-risk-risky');
@@ -182,7 +184,11 @@ describe('ConsentDialog – Darstellung des Plans', () => {
     });
     expect(screen.getByText('Betroffen (4)')).toBeInTheDocument();
     expect(screen.getByText('Registrierungswert · (Standard)')).toBeInTheDocument();
-    expect(screen.getByText('HKCU\\Software\\Run\\Updater')).toBeInTheDocument();
+    // Schlüssel und Wertname stehen getrennt (Wertnamen dürfen „\“ enthalten).
+    expect(screen.getAllByText('HKCU\\Software\\Run')).toHaveLength(2);
+    expect(screen.getByText('Updater').closest('[data-part="value-name"]')).toHaveTextContent(
+      'Wertname: Updater',
+    );
     expect(screen.getByText('Einstellung')).toBeInTheDocument();
     expect(screen.getByText('realtime.enabled')).toBeInTheDocument();
     expect(document.querySelector('[data-hint="rtl"]')).toHaveTextContent('rechts-nach-links');
@@ -234,7 +240,10 @@ describe('ConsentDialog – Sicherheitsregeln', () => {
     fireEvent.click(yes());
     fireEvent.click(yes());
     expect(onDecision).toHaveBeenCalledTimes(1);
-    expect(onDecision).toHaveBeenCalledWith('execute');
+    expect(onDecision).toHaveBeenCalledWith(
+      'execute',
+      expect.objectContaining({ planId: 'plan-1' }),
+    );
   });
 
   it('meldet höchstens eine Antwort und sperrt danach alle Knöpfe', () => {
@@ -245,7 +254,10 @@ describe('ConsentDialog – Sicherheitsregeln', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ignorieren' }));
     fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' });
     expect(onDecision).toHaveBeenCalledTimes(1);
-    expect(onDecision).toHaveBeenCalledWith('decline');
+    expect(onDecision).toHaveBeenCalledWith(
+      'decline',
+      expect.objectContaining({ planId: 'plan-1' }),
+    );
     for (const name of ['Ja, ausführen', 'Nein', 'Ignorieren', 'Vertrauen']) {
       expect(screen.getByRole('button', { name })).toBeDisabled();
     }
@@ -254,7 +266,10 @@ describe('ConsentDialog – Sicherheitsregeln', () => {
   it('Escape bedeutet „Nein“ (decline)', () => {
     const { onDecision, onDismiss } = setup();
     fireEvent.keyDown(no(), { key: 'Escape' });
-    expect(onDecision).toHaveBeenCalledWith('decline');
+    expect(onDecision).toHaveBeenCalledWith(
+      'decline',
+      expect.objectContaining({ planId: 'plan-1' }),
+    );
     expect(onDismiss).not.toHaveBeenCalled();
   });
 
@@ -279,7 +294,10 @@ describe('ConsentDialog – Sicherheitsregeln', () => {
     fireEvent.keyDown(no(), { key: 'Enter' });
     fireEvent.click(no());
     expect(onDecision).toHaveBeenCalledTimes(1);
-    expect(onDecision).toHaveBeenCalledWith('decline');
+    expect(onDecision).toHaveBeenCalledWith(
+      'decline',
+      expect.objectContaining({ planId: 'plan-1' }),
+    );
   });
 
   it('verwirft gehaltene Tasten (Autorepeat) auf „Ja, ausführen“', () => {
@@ -307,14 +325,20 @@ describe('ConsentDialog – Sicherheitsregeln', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ignorieren' }));
     expect(onDecision).not.toHaveBeenCalled();
     fireEvent.click(no());
-    expect(onDecision).toHaveBeenCalledWith('decline');
+    expect(onDecision).toHaveBeenCalledWith(
+      'decline',
+      expect.objectContaining({ planId: 'plan-1' }),
+    );
   });
 
   it('meldet „Ignorieren“ und „Vertrauen“ und erklärt sie', () => {
     const first = setup();
     advance(CONSENT_GUARD_MS);
     fireEvent.click(screen.getByRole('button', { name: 'Ignorieren' }));
-    expect(first.onDecision).toHaveBeenCalledWith('ignore');
+    expect(first.onDecision).toHaveBeenCalledWith(
+      'ignore',
+      expect.objectContaining({ planId: 'plan-1' }),
+    );
     expect(screen.getByRole('button', { name: 'Ignorieren' })).toHaveAccessibleDescription(
       'Ignorieren: nichts tun und nicht erneut melden.',
     );
@@ -323,7 +347,10 @@ describe('ConsentDialog – Sicherheitsregeln', () => {
     const second = setup();
     advance(CONSENT_GUARD_MS);
     fireEvent.click(screen.getByRole('button', { name: 'Vertrauen' }));
-    expect(second.onDecision).toHaveBeenCalledWith('trust');
+    expect(second.onDecision).toHaveBeenCalledWith(
+      'trust',
+      expect.objectContaining({ planId: 'plan-1' }),
+    );
   });
 
   it('blendet „Ignorieren“ und „Vertrauen“ je Plan aus', () => {
@@ -415,10 +442,12 @@ describe('ConsentDialog – Frist', () => {
     const { unmount } = setup({
       plan: makePlan({ expiresAt: new Date(START + 90_000).toISOString() }),
     });
-    expect(document.querySelector('[data-part="deadline"]')).toHaveTextContent('Frist 1:30');
+    expect(document.querySelector('[data-part="deadline"]')).toHaveTextContent('Verfällt in 1:30');
     unmount();
     setup({ plan: makePlan({ expiresAt: new Date(START + 3_600_000 + 5000) }) });
-    expect(document.querySelector('[data-part="deadline"]')).toHaveTextContent('Frist 1:00:05');
+    expect(document.querySelector('[data-part="deadline"]')).toHaveTextContent(
+      'Verfällt in 1:00:05',
+    );
   });
 });
 
@@ -540,5 +569,334 @@ describe('ConsentDialog – Sitzungen', () => {
     );
     fireEvent.click(button);
     expect(onDecision).not.toHaveBeenCalled();
+  });
+});
+
+describe('ConsentDialog – Härtung (Review P1)', () => {
+  const dialogNamed = (name: string): HTMLElement =>
+    screen.getByRole('alertdialog', { name, hidden: true });
+  const buttonIn = (dialog: HTMLElement, name: string): HTMLElement =>
+    within(dialog).getByRole('button', { name, hidden: true });
+
+  it('F1: zählt keinen Mausklick, dessen Druck noch während der Sperrzeit begann', () => {
+    const { onDecision } = setup();
+    advance(480);
+    // Druck auf den noch gesperrten Knopf …
+    fireEvent.pointerDown(yes());
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Vertrauen' }));
+    advance(210);
+    // … losgelassen erst nach der Sperrzeit: Chromium schickt den Klick an den freigegebenen Knopf.
+    expect(yes()).toBeEnabled();
+    fireEvent.click(yes(), { detail: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Vertrauen' }), { detail: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Ignorieren' }), { detail: 1 });
+    expect(onDecision).not.toHaveBeenCalled();
+
+    // Ein neuer, bewusster Druck nach der Sperrzeit zählt.
+    fireEvent.pointerDown(yes());
+    fireEvent.click(yes(), { detail: 1 });
+    expect(onDecision).toHaveBeenCalledTimes(1);
+    expect(onDecision).toHaveBeenCalledWith(
+      'execute',
+      expect.objectContaining({ planId: 'plan-1' }),
+    );
+  });
+
+  it('F1: ein Zeiger-Klick ohne erkannten Druck zählt nicht – Tastatur (detail 0) schon', () => {
+    const { onDecision } = setup();
+    advance(CONSENT_GUARD_MS);
+    fireEvent.click(yes(), { detail: 1 });
+    expect(onDecision).not.toHaveBeenCalled();
+    fireEvent.click(yes(), { detail: 0 });
+    expect(onDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('F2: ein verdeckter Freigabe-Dialog sperrt neu, sobald er wieder oben liegt (Doppelklick)', () => {
+    const log: string[] = [];
+    function Stack() {
+      const [openA, setOpenA] = useState(true);
+      const [openB, setOpenB] = useState(false);
+      useEffect(() => {
+        const id = setTimeout(() => setOpenB(true), 100);
+        return () => clearTimeout(id);
+      }, []);
+      return (
+        <>
+          <ConsentDialog
+            open={openA}
+            plan={makePlan({ id: 'A', kindLabel: 'Plan A' })}
+            onDecision={(decision) => {
+              log.push(`A:${decision}`);
+              setOpenA(false);
+            }}
+            onDismiss={vi.fn()}
+          />
+          <ConsentDialog
+            open={openB}
+            plan={makePlan({ id: 'B', kindLabel: 'Plan B' })}
+            onDecision={(decision) => {
+              log.push(`B:${decision}`);
+              setOpenB(false);
+            }}
+            onDismiss={vi.fn()}
+          />
+        </>
+      );
+    }
+    render(<Stack />);
+    advance(100);
+    advance(900);
+    const dialogA = dialogNamed('Plan A');
+    const yesA = buttonIn(dialogA, 'Ja, ausführen');
+    const yesB = buttonIn(dialogNamed('Plan B'), 'Ja, ausführen');
+    // A war die ganze Zeit verdeckt – seine Sperrzeit ist nicht verstrichen.
+    expect(yesA).toBeDisabled();
+    expect(yesB).toBeEnabled();
+
+    // Doppelklick auf B: Der zweite Klick landet nach dem Schließen von B auf A.
+    fireEvent.pointerDown(yesB);
+    fireEvent.click(yesB, { detail: 1 });
+    fireEvent.pointerDown(yesA);
+    fireEvent.click(yesA, { detail: 2 });
+    expect(log).toEqual(['B:execute']);
+    expect(yesA).toBeDisabled();
+    expect(buttonIn(dialogA, 'Nein')).toHaveFocus();
+
+    // Erst eine volle Sperrzeit, nachdem A wieder vorn liegt, ist „Ja“ möglich.
+    advance(CONSENT_GUARD_MS - 1);
+    expect(yesA).toBeDisabled();
+    advance(1);
+    expect(yesA).toBeEnabled();
+  });
+
+  it('F4: zeigt fremde Namen auch in „Was genau?“, „Warum?“, Folgen und „Rückgängig“ nur sicher', () => {
+    const name = `Rechnung_Oktober_${RLO}fdp.exe${PDF}`;
+    setup({
+      plan: makePlan({
+        what: `Die Datei „${name}“ wird in die Quarantäne verschoben.`,
+        why: `Signatur in „${name}“ erkannt.`,
+        consequence: `„${name}“ ist danach nicht mehr ausführbar.`,
+        undo: { type: 'reversible', how: `Quarantäne → „${name}“ wiederherstellen.` },
+        parameters: [{ label: `Name ${RLO}x`, value: 'D:\\Archiv' }],
+      }),
+    });
+    for (const part of ['what', 'why', 'consequence']) {
+      const value = document.querySelector(`[data-part="${part}"]`);
+      expect(value?.textContent, part).not.toContain(RLO);
+      expect(value?.querySelector('[aria-hidden="true"]')).toHaveTextContent(
+        'Rechnung_Oktober_⟨U+202E⟩fdp.exe⟨U+202C⟩',
+      );
+      expect(value?.querySelector('[dir="ltr"]')).not.toBeNull();
+      expect(value?.querySelector('[data-hint="invisible"]')).not.toBeNull();
+    }
+    expect(document.querySelector('[data-undo="reversible"]')?.textContent).not.toContain(RLO);
+    expect(screen.getByRole('alertdialog').textContent).not.toMatch(/[\u202C\u202E]/);
+  });
+
+  it('F4: auch die Warnung nicht umkehrbarer Pläne erscheint nur sicher', () => {
+    setup({
+      plan: makePlan({
+        undo: { type: 'irreversible', warning: `„Bericht_${RLO}fdp.exe“ ist danach weg.` },
+      }),
+    });
+    expect(document.querySelector('[data-callout="danger"]')?.textContent).not.toContain(RLO);
+    expect(document.querySelector('[data-undo="irreversible"]')?.textContent).not.toContain(RLO);
+    expect(document.querySelectorAll('[data-callout="danger"] mark')).toHaveLength(1);
+  });
+
+  it('F5: sperrt neu, wenn sich der Inhalt bei gleicher ID ändert, und nennt die beantwortete Fassung', () => {
+    const onDecision = vi.fn();
+    const first = makePlan({ digest: 'digest-1' });
+    const { rerender } = render(
+      <ConsentDialog open plan={first} onDecision={onDecision} onDismiss={vi.fn()} />,
+    );
+    advance(CONSENT_GUARD_MS);
+    expect(yes()).toBeEnabled();
+    expect(document.querySelector('[data-callout="warn"]')).toBeNull();
+
+    const swapped = makePlan({
+      digest: 'digest-2',
+      targets: [{ type: 'file', path: 'C:\\Users\\Beispiel\\Dokumente\\Steuer2025.pdf' }],
+      undo: { type: 'irreversible', warning: 'Die Datei ist danach endgültig weg.' },
+    });
+    rerender(<ConsentDialog open plan={swapped} onDecision={onDecision} onDismiss={vi.fn()} />);
+    expect(yes()).toBeDisabled();
+    expect(document.querySelector('[data-callout="warn"]')).toHaveTextContent('Plan geändert');
+    fireEvent.click(yes());
+    expect(onDecision).not.toHaveBeenCalled();
+    advance(CONSENT_GUARD_MS);
+    fireEvent.click(yes());
+    expect(onDecision).toHaveBeenCalledWith('execute', {
+      planId: 'plan-1',
+      digest: 'digest-2',
+      plan: swapped,
+    });
+  });
+
+  it('F5: A → B → A innerhalb der Sperrzeit von B lässt A nicht sofort frei', () => {
+    const onDecision = vi.fn();
+    const planA = makePlan({ id: 'A' });
+    const planB = makePlan({ id: 'B' });
+    const view = (plan: ConsentPlan) => (
+      <ConsentDialog open plan={plan} onDecision={onDecision} onDismiss={vi.fn()} />
+    );
+    const { rerender } = render(view(planA));
+    advance(CONSENT_GUARD_MS);
+    expect(yes()).toBeEnabled();
+    rerender(view(planB));
+    advance(100);
+    rerender(view(planA));
+    expect(yes()).toBeDisabled();
+    advance(CONSENT_GUARD_MS);
+    expect(yes()).toBeEnabled();
+  });
+
+  it('F6: nach einer Antwort nie „Abgelaufen – es wurde nichts getan“ und kein onExpire', () => {
+    const { onDecision, onExpire } = setup({ plan: makePlan({ expiresAt: START + 2000 }) });
+    advance(CONSENT_GUARD_MS);
+    fireEvent.click(yes());
+    expect(onDecision).toHaveBeenCalledTimes(1);
+    advance(5000);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Abgelaufen – es wurde nichts getan')).toBeNull();
+    expect(onExpire).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-part="answered"]')).toHaveTextContent(
+      'Antwort „Ja, ausführen“ gesendet.',
+    );
+    expect(document.querySelector('[data-part="deadline"]')).toBeNull();
+    for (const name of ['Ja, ausführen', 'Nein', 'Ignorieren', 'Vertrauen']) {
+      expect(screen.getByRole('button', { name })).toBeDisabled();
+    }
+  });
+
+  it('F7: die Sperrzeit verstreicht nicht, solange das Fenster im Hintergrund ist', () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    setup();
+    advance(2000);
+    expect(yes()).toBeDisabled();
+    // Fenster kommt nach vorn: Die Sperrzeit beginnt erst jetzt.
+    hasFocus.mockReturnValue(true);
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    advance(CONSENT_GUARD_MS - 1);
+    expect(yes()).toBeDisabled();
+    advance(1);
+    expect(yes()).toBeEnabled();
+    // Wieder in den Hintergrund und zurück: erneut gesperrt.
+    hasFocus.mockReturnValue(false);
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    expect(yes()).toBeDisabled();
+    hasFocus.mockReturnValue(true);
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(yes()).toBeDisabled();
+    expect(no()).toHaveFocus();
+    advance(CONSENT_GUARD_MS);
+    expect(yes()).toBeEnabled();
+  });
+
+  it('F7: … und nicht, solange die Seite verborgen ist (minimiert, im Tray)', () => {
+    let visibility: DocumentVisibilityState = 'hidden';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    setup();
+    advance(2000);
+    expect(yes()).toBeDisabled();
+    visibility = 'visible';
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(yes()).toBeDisabled();
+    advance(CONSENT_GUARD_MS);
+    expect(yes()).toBeEnabled();
+  });
+
+  it('F9: verwirft gehaltene Tasten auf allen Antwort-Knöpfen (z. B. Enter auf dem Auslöser)', () => {
+    setup();
+    expect(fireEvent.keyDown(no(), { key: 'Enter', repeat: true })).toBe(false);
+    expect(fireEvent.keyDown(no(), { key: ' ', repeat: true })).toBe(false);
+    advance(CONSENT_GUARD_MS);
+    for (const name of ['Vertrauen', 'Ignorieren', 'Ja, ausführen']) {
+      const button = screen.getByRole('button', { name });
+      expect(fireEvent.keyDown(button, { key: 'Enter', repeat: true }), name).toBe(false);
+    }
+    expect(fireEvent.keyDown(no(), { key: 'Enter' })).toBe(true);
+  });
+
+  it('F10: zeigt Schlüssel und Wertname getrennt – mehrdeutige Pfade bleiben unterscheidbar', () => {
+    setup({
+      plan: makePlan({
+        targets: [
+          {
+            type: 'registry_value',
+            key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion',
+            name: 'Run\\OneDrive',
+          },
+          {
+            type: 'registry_value',
+            key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+            name: 'OneDrive',
+          },
+        ],
+      }),
+    });
+    const items = document.querySelectorAll('[data-target-type="registry_value"]');
+    expect(items).toHaveLength(2);
+    expect(items[0]?.textContent).not.toBe(items[1]?.textContent);
+    expect(items[0]?.querySelector('[data-part="value-name"]')).toHaveTextContent(
+      'Wertname: Run\\OneDrive',
+    );
+    expect(items[1]?.querySelector('[data-part="value-name"]')).toHaveTextContent(
+      'Wertname: OneDrive',
+    );
+  });
+
+  it('F13: beschreibt den Dialog und verknüpft „Ja, ausführen“ mit der Warnung', () => {
+    setup({
+      plan: makePlan({
+        severity: 'suspicious',
+        undo: { type: 'irreversible', warning: 'Nicht gespeicherte Daten gehen verloren.' },
+      }),
+    });
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveAccessibleDescription(
+      /Kann nicht rückgängig gemacht werden.*Nicht gespeicherte Daten gehen verloren\..*Die Datei wird verschlüsselt/,
+    );
+    expect(yes()).toHaveAccessibleDescription(/Bestätigen ist gleich möglich\..*Kann nicht/);
+    advance(CONSENT_GUARD_MS);
+    expect(yes()).toHaveAccessibleDescription(
+      'Kann nicht rückgängig gemacht werden Nicht gespeicherte Daten gehen verloren.',
+    );
+  });
+
+  it('F13: ohne Warnung beschreibt „Was genau?“ den Dialog', () => {
+    setup({ plan: makePlan({ severity: 'info' }) });
+    expect(screen.getByRole('alertdialog')).toHaveAccessibleDescription(
+      'Die Datei wird verschlüsselt in die Quarantäne verschoben.',
+    );
+  });
+
+  it('F14: eine Frist außerhalb des Date-Bereichs gilt als ungültig, statt die Anzeige abzuschießen', () => {
+    const { onDecision } = setup({ plan: makePlan({ expiresAt: 9e15 }) });
+    expect(screen.getByRole('alert')).toHaveTextContent('Abgelaufen – es wurde nichts getan');
+    advance(CONSENT_GUARD_MS);
+    fireEvent.click(yes());
+    expect(onDecision).not.toHaveBeenCalled();
+  });
+
+  it('F16: begrenzt riesige Sperrzeiten, statt sofort freizugeben (setTimeout-Überlauf)', () => {
+    setup({ guardMs: Number.MAX_SAFE_INTEGER });
+    advance(10_000);
+    expect(yes()).toBeDisabled();
+  });
+
+  it('F17: nennt bei einer Frist an einem anderen Tag auch das Datum', () => {
+    setup({ plan: makePlan({ expiresAt: START + 36 * 3_600_000 }) });
+    expect(document.querySelector('[data-part="deadline"]')).toHaveTextContent(
+      /Ohne Antwort verfällt die Anfrage am \d\d\.\d\d\.\d{4} um \d\d:\d\d Uhr\./,
+    );
   });
 });

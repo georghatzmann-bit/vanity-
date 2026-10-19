@@ -65,6 +65,14 @@ describe('unsichtbare Zeichen', () => {
     expect(revealed).toMatch(/^a⟨U\+[0-9A-F]{4,6}⟩b$/);
   });
 
+  it.each([
+    ['leeres Braille-Muster (U+2800)', '\u2800'],
+    ['Noten-Nullkopf (U+1D159)', '\u{1D159}'],
+  ])('F15: maskiert sichtbare, aber leer gezeichnete Zeichen: %s', (_name, character) => {
+    expect(hasInvisibleCharacters(`report${character}.exe`)).toBe(true);
+    expect(revealInvisibleCharacters(`a${character}b`)).toMatch(/^a⟨U\+[0-9A-F]{4,6}⟩b$/);
+  });
+
   it('lässt normale Zeichen inklusive Leerzeichen, Umlauten und Pfadzeichen unverändert', () => {
     const value = 'C:\\Users\\Jörg Müller\\Übersicht (2).pdf';
     expect(hasInvisibleCharacters(value)).toBe(false);

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Hauptfenster: nur die Rechte für die eigene Titelleiste (rahmenloses Fenster), Fenster-Ereignisse und app_info. Jede Berechtigung steht einzeln (core:<plugin>:allow-<befehl>, nie ein :default-Bündel) und ist in apps/desktop/README.md begründet.",
+  "description": "Hauptfenster: nur die Rechte für die eigene Titelleiste (rahmenloses Fenster), Fenster-Ereignisse, app_info und hide_to_tray (Verstecken nur mit Symbol im Infobereich). Jede Berechtigung steht einzeln (core:<plugin>:allow-<befehl>, nie ein :default-Bündel) und ist in apps/desktop/README.md begründet.",
   "windows": ["main"],
   "permissions": [
     "core:window:allow-minimize",
@@ -9,10 +9,10 @@
     "core:window:allow-internal-toggle-maximize",
     "core:window:allow-is-maximized",
     "core:window:allow-start-dragging",
-    "core:window:allow-hide",
     "core:window:allow-close",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
-    "allow-app-info"
+    "allow-app-info",
+    "allow-hide-to-tray"
   ]
 }

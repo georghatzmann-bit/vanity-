@@ -80,3 +80,22 @@ nie als `data:` eingebettet (`font-src 'self'`).
 Vor der ersten Nutzergeste (`navigator.userActivation`) wird kein AudioContext erzeugt – der
 Start-Klang beim Kaltstart bleibt still, ohne Browser-Warnung. Ob die App Autoplay in WebView2
 erlauben soll, damit der Start-Klang hörbar ist, wird in P1 mit den Einstellungen entschieden.
+
+## D-019 – Eigener Router und eigenes i18n
+Hash-Router und typisiertes i18n (de als Quelle, en typgeprüft) ohne Fremdabhängigkeit.
+Einstellungen unter `aegis.settings` (v1) im localStorage; Daten einer neueren Version werden
+nie überschrieben.
+
+## D-020 – Freigabe-Dialog: Schutz vor versehentlichem „Ja“
+Fokus startet auf „Nein“, Esc = Nein, kein Schließen-X, Klick daneben tut nichts. „Ja“,
+„Vertrauen“ und „Ignorieren“ sind nach dem Öffnen (und bei Planwechsel/Wechsel des obersten
+Dialogs) 600 ms gesperrt; ein Druck, der während der Sperre beginnt, zählt nicht. Endgültiges
+Löschen: zweiter Dialog mit Countdown statt Bestätigungswort.
+
+## D-021 – Schließen und Infobereich
+Ob in den Infobereich versteckt wird, entscheidet Rust (`hide_to_tray`) – nur wenn das
+Tray-Symbol existiert. Alt+F4/Taskleiste beenden AEGIS immer. Der Schutz-Dienst (ab P2) läuft
+unabhängig von der Oberfläche.
+
+## D-022 – Fehlerdialog über `rfd`
+Statt eigenem `unsafe`-FFI (MessageBoxW) nutzt die App `rfd` (MIT) – weniger eigenes unsafe.
