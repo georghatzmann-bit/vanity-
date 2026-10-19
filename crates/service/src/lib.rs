@@ -1,5 +1,11 @@
-//! Windows-Dienst aegis-service (P2): Wächter, Scans, Zeitpläne, Named-Pipe-Server mit Zugriffsliste.
+//! Windows-Dienst `aegis-service`: Scans, Quarantäne, Freigabe-Tor und Prüfprotokoll.
 //!
-//! Platzhalter aus Phase P0 – die Umsetzung folgt in der angegebenen Phase.
-//! Jede Funktion, die etwas verändert, verlangt eine `aegis_core::consent::Approval`.
+//! - [`protocol`] – Nachrichten zwischen Oberfläche und Dienst,
+//! - [`handler`] – Verarbeitung; einzige Stelle, die Nutzerantworten annimmt.
 #![forbid(unsafe_code)]
+
+pub mod handler;
+pub mod protocol;
+
+pub use handler::Service;
+pub use protocol::{Request, Response};

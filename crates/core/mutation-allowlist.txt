@@ -72,3 +72,5 @@ crates/quarantine/src/lib.rs :: quarantine-remove-original :: Quarantäne: entfe
 crates/quarantine/src/lib.rs :: quarantine-restore-create-parent :: Quarantäne: legt beim Wiederherstellen den fehlenden ursprünglichen Ordner an; nur aus restore(ExecutionPermit).
 crates/quarantine/src/lib.rs :: quarantine-remove-restore-part :: Quarantäne: verwirft die eigene, unfertige Wiederherstellungs-Teildatei.
 crates/quarantine/src/lib.rs :: quarantine-restore-commit :: Quarantäne: legt die geprüfte Datei an den freien ursprünglichen Ort; nur aus restore(ExecutionPermit), überschreibt nie.
+crates/service/src/handler.rs :: service-pipe-decide :: Dienst: einzige Stelle im Betrieb, die die Antwort aus dem Freigabe-Dialog der Oberfläche annimmt – erst nach Prüfung der Einmal-Nonce des Vorschlags; der Plan stammt vom Dienst selbst.
+crates/service/src/handler.rs :: service-pipe-confirm-second :: Dienst: nimmt die zweite, getrennte Bestätigung vor endgültigem Löschen an – nur mit eigener Einmal-Nonce der Rückfrage.

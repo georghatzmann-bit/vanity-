@@ -110,6 +110,16 @@ version = "0.1.0"
 [[package]]
 name = "aegis-service"
 version = "0.1.0"
+dependencies = [
+ "aegis-core",
+ "aegis-engine",
+ "aegis-quarantine",
+ "getrandom 0.4.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "aegis-tools"
