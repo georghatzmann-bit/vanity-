@@ -66,6 +66,11 @@ impl ServerConfig {
     }
 }
 
+/// Unterordner des Labors im Datenordner. Seine Lauf-Ordner enthalten auch Dateien, die die
+/// Probe bzw. die Windows Sandbox geschrieben hat – die Besitzerprüfung beim Start steigt
+/// deshalb nicht hinein (der Ordner selbst wird geprüft, sein Inhalt verworfen).
+const LAB_DIR: &str = "labor";
+
 /// Baut den Dienst-Zustand auf.
 ///
 /// # Errors
@@ -77,6 +82,11 @@ pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
     let audit_dir = data_dir.join("audit");
     secure_dir(&audit_dir)?;
     secure_dir(&data_dir.join("quarantine"))?;
+    // Labor: eigener Ordner; Reste früherer Läufe (auch vom Nutzer/Labor geschriebene Berichte)
+    // werden beim Start verworfen.
+    let lab_dir = data_dir.join(LAB_DIR);
+    secure_lab_dir(&lab_dir)?;
+    crate::lab::cleanup_stale(&lab_dir);
     let audit_path = audit_dir.join("audit.jsonl");
     let audit = open_audit(&audit_path)?;
 
@@ -102,7 +112,8 @@ pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
         .with_protected(vec![data_dir.to_owned()])
         .with_trust(trust)
         .with_history(history)
-        .with_settings(settings);
+        .with_settings(settings)
+        .with_lab(crate::lab::Lab::new(Some(lab_dir)));
     service.watch().attach_history(service.history());
     Ok(service.with_scanner(Scanner::Worker {
         exe: worker,
@@ -405,12 +416,26 @@ fn secure_dir(dir: &Path) -> io::Result<()> {
                     ),
                 ));
             }
-            if depth < 3 && std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_dir()) {
+            let lab = depth == 0 && path.file_name().is_some_and(|n| n == LAB_DIR);
+            if !lab && depth < 3 && std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_dir()) {
                 stack.push((path, depth + 1));
             }
         }
     }
     Ok(())
+}
+
+/// Labor-Ordner: wie `secure_dir`, aber ohne Prüfung des Inhalts (Reste früherer Läufe
+/// gehören teils dem Nutzer und werden danach verworfen).
+#[cfg(windows)]
+fn secure_lab_dir(dir: &Path) -> io::Result<()> {
+    crate::transport::windows::create_secure_dir(dir)
+}
+
+/// Unix: `secure_dir` prüft keine Inhalte.
+#[cfg(unix)]
+fn secure_lab_dir(dir: &Path) -> io::Result<()> {
+    secure_dir(dir)
 }
 
 /// Unix (Entwicklung): Ordner nur für den Eigentümer; vorhandene Ordner müssen echte

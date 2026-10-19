@@ -565,3 +565,90 @@ fn spawn_with_sid(
         pid: process.dwProcessId,
     })
 }
+
+/// Startet ein festes Systemprogramm (z. B. `WindowsSandbox.exe`) als der Nutzer des Tokens
+/// in seiner Sitzung – ohne vererbte Handles. Nur nach Freigabe aufrufen.
+///
+/// # Errors
+/// Start fehlgeschlagen.
+pub fn spawn_as_user(token: &UserToken, exe: &Path, argument: &Path) -> io::Result<()> {
+    let mut desktop = wide(r"winsta0\default");
+    let info = windows_sys::Win32::System::Threading::STARTUPINFOW {
+        cb: u32::try_from(size_of::<windows_sys::Win32::System::Threading::STARTUPINFOW>())
+            .unwrap_or(0),
+        lpDesktop: desktop.as_mut_ptr(),
+        ..Default::default()
+    };
+    let application = wide(exe);
+    let mut line: Vec<u16> = Vec::new();
+    for part in [exe, argument] {
+        if !line.is_empty() {
+            line.push(u16::from(b' '));
+        }
+        line.push(u16::from(b'"'));
+        line.extend(part.as_os_str().encode_wide());
+        line.push(u16::from(b'"'));
+    }
+    line.push(0);
+    let mut process = PROCESS_INFORMATION::default();
+    // SAFETY: Alle Zeiger zeigen auf lebende, nullterminierte Puffer bzw. Strukturen; keine
+    // Handles werden vererbt.
+    // aegis-unsafe: winffi-spawn-as-user
+    #[allow(unsafe_code)]
+    // Startet die Windows Sandbox für einen freigegebenen Labor-Lauf als der Nutzer.
+    // aegis-mutation: winffi-spawn-as-user-call
+    #[allow(clippy::disallowed_methods)]
+    let mut ok = unsafe {
+        CreateProcessAsUserW(
+            token.token.as_raw_handle(),
+            application.as_ptr(),
+            line.as_mut_ptr(),
+            ptr::null(),
+            ptr::null(),
+            0,
+            0,
+            ptr::null(),
+            ptr::null(),
+            &raw const info,
+            &mut process,
+        )
+    };
+    if ok == 0 {
+        let err = io::Error::last_os_error();
+        if err.raw_os_error() != Some(1314) || !token.own {
+            return Err(err);
+        }
+        // SAFETY: wie oben, mit dem eigenen Token (Konsole, Tests).
+        // aegis-unsafe: winffi-spawn-as-user-own
+        #[allow(unsafe_code)]
+        // Startet die Windows Sandbox mit dem eigenen Token (ohne SYSTEM) – nur nach Freigabe.
+        // aegis-mutation: winffi-spawn-as-user-own-call
+        #[allow(clippy::disallowed_methods)]
+        let own_ok = unsafe {
+            windows_sys::Win32::System::Threading::CreateProcessW(
+                application.as_ptr(),
+                line.as_mut_ptr(),
+                ptr::null(),
+                ptr::null(),
+                0,
+                0,
+                ptr::null(),
+                ptr::null(),
+                &raw const info,
+                &mut process,
+            )
+        };
+        ok = own_ok;
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    // SAFETY: beide Handles neu geliefert; je einmal übernommen und sofort geschlossen.
+    // aegis-unsafe: winffi-spawn-as-user-handles
+    #[allow(unsafe_code)]
+    unsafe {
+        drop(OwnedHandle::from_raw_handle(process.hProcess));
+        drop(OwnedHandle::from_raw_handle(process.hThread));
+    }
+    Ok(())
+}

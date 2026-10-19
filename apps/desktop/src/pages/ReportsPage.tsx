@@ -15,7 +15,7 @@ type Filter = 'all' | 'scans' | 'watch' | 'decisions' | 'system';
 
 const filterKinds: Readonly<Record<Filter, readonly HistoryKind[] | null>> = {
   all: null,
-  scans: ['scan', 'schedule'],
+  scans: ['scan', 'schedule', 'lab'],
   watch: ['watch'],
   decisions: ['action', 'decision'],
   system: ['update'],

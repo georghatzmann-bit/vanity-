@@ -456,6 +456,7 @@ export const de = {
       watch: 'Wächter',
       schedule: 'Geplanter Scan',
       update: 'Update',
+      lab: 'Labor',
     },
   },
   schedule: {

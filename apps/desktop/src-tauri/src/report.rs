@@ -56,6 +56,8 @@ fn kind_label(kind: &str, en: bool) -> &'static str {
         ("schedule", true) => "Scheduled scan",
         ("update", false) => "Update",
         ("update", true) => "Update",
+        ("lab", false) => "Labor",
+        ("lab", true) => "Lab",
         (_, false) => "Ereignis",
         (_, true) => "Event",
     }

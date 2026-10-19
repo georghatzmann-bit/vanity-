@@ -625,3 +625,46 @@ fn verlauf_zeitplan_und_update() {
     );
     assert_unchanged(&before, &DirSnapshot::capture(home.path()).unwrap());
 }
+
+#[test]
+fn labor_vorschlag_prueft_eingaben() {
+    let mut h = harness();
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_fixture(dir.path(), "probe.txt", b"harmlos").unwrap();
+    let before = DirSnapshot::capture(dir.path()).unwrap();
+    let propose = |h: &mut Harness, stage: &str, seconds: u32, network: bool| {
+        h.send(json!({
+            "type": "propose_lab_run", "path": path, "stage": stage,
+            "seconds": seconds, "network": network
+        }))
+    };
+
+    assert_eq!(propose(&mut h, "kernel", 30, false)["code"], "input");
+    assert_eq!(propose(&mut h, "mini_sandbox", 3, false)["code"], "input");
+    assert_eq!(propose(&mut h, "mini_sandbox", 601, false)["code"], "input");
+    assert_eq!(
+        propose(&mut h, "mini_sandbox", 30, true)["code"],
+        "input",
+        "Netzwerk nur in der Windows Sandbox"
+    );
+    let status = h.send(json!({"type": "lab_status"}));
+    assert_eq!(status["type"], "lab", "{status}");
+    assert!(status["runs"].as_array().unwrap().is_empty());
+    assert_eq!(status["mini_available"], cfg!(windows));
+    assert_eq!(
+        h.send(json!({"type": "lab_screenshot", "run_id": "1", "name": "bild-01.png"}))["code"],
+        "lab"
+    );
+
+    let mini = propose(&mut h, "mini_sandbox", 30, false);
+    if cfg!(windows) {
+        assert_eq!(mini["type"], "proposal", "{mini}");
+        let p = &mini["proposal"]["plan"];
+        assert_eq!(p["kind"], "run_in_sandbox");
+        assert_eq!(p["parameters"]["lab_stage"], "mini_sandbox");
+        assert_eq!(h.answer(&mini, "decline")["type"], "nothing_done");
+    } else {
+        assert_eq!(mini["code"], "sandbox", "{mini}");
+    }
+    assert_unchanged(&before, &DirSnapshot::capture(dir.path()).unwrap());
+}

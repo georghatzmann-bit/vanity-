@@ -72,6 +72,21 @@ pub struct Service<C: Clock, W: Durable> {
     watch: Arc<WatchShared>,
     history: Arc<Mutex<History>>,
     settings: SettingsStore,
+    lab: Arc<crate::lab::Lab>,
+}
+
+/// Einstellung „Windows-Feature Windows Sandbox“.
+pub const SANDBOX_FEATURE_SETTING: &str = "windows.feature.Containers-DisposableClientVM";
+
+/// Wahl für einen Labor-Lauf (aus der Anfrage; der Dienst prüft sie).
+#[derive(Debug, Clone)]
+pub struct LabOptions {
+    /// Stufe (`windows_sandbox` | `mini_sandbox`).
+    pub stage: String,
+    /// Beobachtungszeit.
+    pub seconds: u32,
+    /// Netzwerk (nur Stufe 1).
+    pub network: bool,
 }
 
 /// Arbeit, die der Zeitplaner außerhalb der Sperre erledigt.
@@ -101,6 +116,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             watch: WatchShared::new(),
             history: Arc::new(Mutex::new(History::in_memory())),
             settings: SettingsStore::in_memory(),
+            lab: crate::lab::Lab::new(None),
         }
     }
 
@@ -130,6 +146,322 @@ impl<C: Clock, W: Durable> Service<C, W> {
     pub fn with_settings(mut self, settings: SettingsStore) -> Self {
         self.settings = settings;
         self
+    }
+
+    /// Labor mit eigenem Ordner im Datenbereich (Betrieb).
+    #[must_use]
+    pub fn with_lab(mut self, lab: Arc<crate::lab::Lab>) -> Self {
+        self.lab = lab;
+        self
+    }
+
+    /// Das Labor (Tests, Diagnose).
+    #[must_use]
+    pub fn lab(&self) -> Arc<crate::lab::Lab> {
+        Arc::clone(&self.lab)
+    }
+
+    /// Schlägt einen Labor-Lauf vor; `findings` stammen aus [`examine_as_user`].
+    pub fn propose_lab_run(
+        &mut self,
+        path: &Path,
+        findings: &[Finding],
+        options: &LabOptions,
+        owner: Option<String>,
+    ) -> Response {
+        use crate::lab::LabStage;
+        let Some(stage) = LabStage::from_param(&options.stage) else {
+            return Response::error("input", "Unbekannte Labor-Stufe");
+        };
+        if !(5..=600).contains(&options.seconds) {
+            return Response::error("input", "Beobachtungszeit 5–600 Sekunden");
+        }
+        if options.network && stage != LabStage::WindowsSandbox {
+            return Response::error("input", "Netzwerk gibt es nur in der Windows Sandbox");
+        }
+        if stage == LabStage::WindowsSandbox {
+            let status = aegis_sandbox::detect::status();
+            if !status.enabled {
+                return Response::error("sandbox", status.message_de());
+            }
+        } else if !cfg!(windows) {
+            return Response::error("sandbox", "Die Mini-Sandbox gibt es nur unter Windows");
+        }
+        if let Err(e) = self.check_paths(&[path.to_path_buf()]) {
+            return Response::error("input", e);
+        }
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        if stage == LabStage::WindowsSandbox
+            && let Err(e) = aegis_sandbox::wsb::check_sample_name(&name)
+        {
+            return Response::error("input", e);
+        }
+        let worst = findings.iter().max_by_key(|f| f.risk);
+        let severity = worst.map_or(RiskLevel::Info, |f| f.risk.max(RiskLevel::Info));
+        let (label, consequence) = match stage {
+            LabStage::WindowsSandbox => (
+                "Windows Sandbox",
+                format!(
+                    "Eine Kopie startet in der Windows Sandbox (eigene, wegwerfbare VM), {}. AEGIS zeichnet Prozesse, Dateien, Autostart-Einträge, Verbindungsversuche und Bildschirmfotos auf; danach schließt sich die Sandbox.",
+                    if options.network {
+                        "MIT Netzwerk – das Programm kann ins Internet"
+                    } else {
+                        "ohne Netzwerk"
+                    }
+                ),
+            ),
+            LabStage::MiniSandbox => (
+                "Mini-Sandbox",
+                "Eine Kopie startet in der Mini-Sandbox (AppContainer ohne Netzwerk, niedrige Integrität, begrenzte Rechenzeit und Prozesse). Schwächer als eine VM: gleicher Kernel und Desktop. AEGIS zeichnet Prozesse, Dateien und Autostart-Versuche auf und beendet danach alle Prozesse des Laufs.".to_owned(),
+            ),
+        };
+        let why = worst.filter(|f| f.risk > RiskLevel::Clean).map_or_else(
+            || "Von dir ausgewählt, um das Verhalten abgeschottet zu beobachten.".to_owned(),
+            |f| f.summary_de.clone(),
+        );
+        let plan = ActionPlan::builder(ActionKind::RunInSandbox)
+            .target(Target::file(path))
+            .what(format!(
+                "{} im Labor ({label}) {} Sekunden lang starten und beobachten",
+                quoted(&name),
+                options.seconds
+            ))
+            .why(why)
+            .consequence(consequence)
+            .undo(UndoHint::reversible(
+                "Das Labor wird nach dem Lauf verworfen; die Originaldatei bleibt unverändert.",
+            ))
+            .severity(severity)
+            .parameter(param::LAB_STAGE, stage.as_param())
+            .parameter(param::LAB_SECONDS, options.seconds.to_string())
+            .parameter(
+                param::LAB_NETWORK,
+                if options.network { "on" } else { "off" },
+            )
+            .build(self.gate.clock().now());
+        let hashes = findings
+            .iter()
+            .filter_map(|f| f.sha256.clone().map(|h| (f.path.clone(), h)))
+            .collect();
+        match plan {
+            Ok(plan) => self.register(plan, owner, hashes),
+            Err(e) => Response::error("plan", e.to_string()),
+        }
+    }
+
+    fn propose_enable_sandbox(&mut self, user: &dyn UserAccess) -> Response {
+        if !user.is_admin() {
+            return Response::error(
+                "admin",
+                "Die Windows Sandbox einschalten können nur Administratoren (AEGIS als Administrator starten).",
+            );
+        }
+        let status = aegis_sandbox::detect::status();
+        if !status.supported || status.enabled {
+            return Response::error("sandbox", status.message_de());
+        }
+        let plan = ActionPlan::builder(ActionKind::ChangeSetting)
+            .target(Target::setting(SANDBOX_FEATURE_SETTING))
+            .parameter(param::VALUE, "on")
+            .what("Windows-Feature „Windows Sandbox“ einschalten")
+            .why("Damit das Labor unbekannte Programme in einer eigenen, wegwerfbaren VM prüfen kann (Stufe 1).")
+            .consequence("Windows lädt und installiert das Feature (DISM). Danach ist ein Neustart nötig; erst dann steht die Windows Sandbox bereit.")
+            .undo(UndoHint::reversible(
+                "Über „Windows-Features aktivieren oder deaktivieren“ wieder ausschalten (Neustart nötig).",
+            ))
+            .severity(RiskLevel::Info)
+            .build(self.gate.clock().now());
+        match plan {
+            Ok(plan) => self.register(plan, user.identity(), HashMap::new()),
+            Err(e) => Response::error("plan", e.to_string()),
+        }
+    }
+
+    /// Startet einen freigegebenen Labor-Lauf im Hintergrund.
+    fn start_lab(
+        &mut self,
+        permit: aegis_core::consent::ExecutionPermit,
+        user: &dyn UserAccess,
+    ) -> Response {
+        use crate::lab::{LabStage, LabStart, MAX_ACTIVE};
+        let fail =
+            |this: &mut Self, permit: aegis_core::consent::ExecutionPermit, message: String| {
+                let event = permit.complete(aegis_core::audit::ExecutionResult::Failed {
+                    message: message.clone(),
+                });
+                this.record(event);
+                Response::error("lab", format!("{message} – nichts gestartet"))
+            };
+        let Ok(plan) = permit.ensure_kind(ActionKind::RunInSandbox).cloned() else {
+            return fail(self, permit, "Falsche Aktion".into());
+        };
+        let Some(Target::File { path }) = plan.targets().first().cloned() else {
+            return fail(self, permit, "Kein Ziel".into());
+        };
+        let stage = plan
+            .parameter(param::LAB_STAGE)
+            .and_then(LabStage::from_param)
+            .unwrap_or(LabStage::MiniSandbox);
+        let seconds = plan
+            .parameter(param::LAB_SECONDS)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(60);
+        let network = plan.parameter(param::LAB_NETWORK) == Some("on");
+        if self.lab.active() >= MAX_ACTIVE {
+            return fail(self, permit, "Es laufen schon zwei Labor-Läufe".into());
+        }
+        // Original mit den Rechten des Nutzers öffnen (nur lesen, ohne Links).
+        let opened = {
+            let scope = user.enter();
+            match scope {
+                Err(e) => Err(format!("Rechte des Nutzers nicht übernehmbar: {e}")),
+                Ok(_scope) => {
+                    #[cfg(windows)]
+                    let token = aegis_winffi::sandbox::UserToken::from_current_identity()
+                        .map_err(|e| e.to_string());
+                    #[cfg(not(windows))]
+                    let token: Result<(), String> = Ok(());
+                    aegis_engine::scan::open_regular(&path)
+                        .map_err(|e| format!("Datei nicht lesbar: {e}"))
+                        .and_then(|(file, meta)| {
+                            if meta.len() > crate::lab::MAX_SAMPLE {
+                                Err("Datei ist zu groß für das Labor".into())
+                            } else {
+                                token.map(|t| (file, t))
+                            }
+                        })
+                }
+            }
+        };
+        let (file, token) = match opened {
+            Ok(v) => v,
+            Err(message) => return fail(self, permit, message),
+        };
+        #[cfg(not(windows))]
+        let () = token;
+        let id = aegis_core::uuid::Uuid::new_v4().hyphenated().to_string();
+        let history = Arc::clone(&self.history);
+        let owner = user.identity();
+        let sample_name = path
+            .file_name()
+            .map_or_else(|| "probe".to_owned(), |n| n.to_string_lossy().into_owned());
+        self.lab.start(
+            LabStart {
+                id,
+                sample: file,
+                sample_name,
+                stage,
+                seconds,
+                network,
+                owner: owner.clone(),
+                #[cfg(windows)]
+                token,
+            },
+            move |run| {
+                let (risk, title, detail) = match &run.state {
+                    crate::lab::LabState::Done { assessment, .. } => (
+                        Some(assessment.risk),
+                        format!("Labor – {}: {}", run.sample, assessment.summary_de),
+                        String::new(),
+                    ),
+                    crate::lab::LabState::Failed { message } => (
+                        None,
+                        format!("Labor – {}: nicht möglich", run.sample),
+                        message.clone(),
+                    ),
+                    _ => (None, format!("Labor – {}", run.sample), String::new()),
+                };
+                lock_history(&history).add(
+                    OffsetDateTime::now_utc(),
+                    NewEntry {
+                        kind: HistoryKind::Lab,
+                        risk,
+                        title,
+                        detail,
+                        paths: vec![path],
+                        owner,
+                        scope: None,
+                    },
+                );
+            },
+        );
+        let result = aegis_core::audit::ExecutionResult::Succeeded;
+        let event = permit.complete(result.clone());
+        self.record(event);
+        if self.audit.sync().is_err() {
+            self.audit_failed = true;
+        }
+        Response::Executed {
+            kind: ActionKind::RunInSandbox,
+            result,
+            entries: Vec::new(),
+            failures: Vec::new(),
+        }
+    }
+
+    /// Schaltet die Windows Sandbox ein (DISM, im Hintergrund) – nur mit Erlaubnis.
+    fn enable_sandbox_feature(
+        &mut self,
+        permit: aegis_core::consent::ExecutionPermit,
+        user: &dyn UserAccess,
+    ) -> Response {
+        let is_feature = permit
+            .ensure_kind(ActionKind::ChangeSetting)
+            .is_ok_and(|plan| {
+                plan.targets()
+                    .iter()
+                    .all(|t| matches!(t, Target::Setting { id } if id == SANDBOX_FEATURE_SETTING))
+                    && plan.parameter(param::VALUE) == Some("on")
+            });
+        if !is_feature || !user.is_admin() {
+            let event = permit.complete(aegis_core::audit::ExecutionResult::Failed {
+                message: "Diese Einstellung ändert der Dienst nicht".into(),
+            });
+            self.record(event);
+            return Response::error(
+                "unsupported",
+                "Diese Einstellung wird nicht unterstützt – nichts geändert",
+            );
+        }
+        let history = Arc::clone(&self.history);
+        let owner = user.identity();
+        std::thread::spawn(move || {
+            let result = crate::lab::enable_windows_sandbox();
+            let (title, detail) = match result {
+                Ok(()) => (
+                    "Windows Sandbox eingeschaltet – bitte neu starten".to_owned(),
+                    String::new(),
+                ),
+                Err(e) => ("Windows Sandbox nicht eingeschaltet".to_owned(), e),
+            };
+            lock_history(&history).add(
+                OffsetDateTime::now_utc(),
+                NewEntry {
+                    kind: HistoryKind::Action,
+                    risk: None,
+                    title,
+                    detail,
+                    paths: Vec::new(),
+                    owner,
+                    scope: None,
+                },
+            );
+        });
+        let result = aegis_core::audit::ExecutionResult::Succeeded;
+        let event = permit.complete(result.clone());
+        self.record(event);
+        if self.audit.sync().is_err() {
+            self.audit_failed = true;
+        }
+        Response::Executed {
+            kind: ActionKind::ChangeSetting,
+            result,
+            entries: Vec::new(),
+            failures: Vec::new(),
+        }
     }
 
     /// Der Verlauf (auch der Wächter schreibt hinein).
@@ -511,6 +843,50 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 }
             }
             Request::GetSchedule {} => self.schedule_response(user),
+            Request::LabStatus {} => Response::Lab {
+                sandbox: aegis_sandbox::detect::status(),
+                mini_available: cfg!(windows),
+                runs: self.lab.runs_of(user.identity().as_deref()),
+            },
+            Request::LabScreenshot { run_id, name } => {
+                use base64::Engine as _;
+                match self
+                    .lab
+                    .screenshot(user.identity().as_deref(), &run_id, &name)
+                {
+                    Ok(png) => Response::LabScreenshot {
+                        png_base64: base64::engine::general_purpose::STANDARD.encode(png),
+                    },
+                    Err(e) => Response::error("lab", e),
+                }
+            }
+            Request::ProposeEnableSandbox {} => self.propose_enable_sandbox(user),
+            Request::ProposeLabRun {
+                path,
+                stage,
+                seconds,
+                network,
+            } => {
+                let paths = [path];
+                match self.check_paths(&paths) {
+                    Ok(()) => match long_paths(&paths, user)
+                        .map(|paths| (examine_as_user(&self.scanner, &paths, user), paths))
+                    {
+                        Ok((findings, paths)) => self.propose_lab_run(
+                            &paths[0],
+                            &findings,
+                            &LabOptions {
+                                stage,
+                                seconds,
+                                network,
+                            },
+                            user.identity(),
+                        ),
+                        Err(e) => e,
+                    },
+                    Err(e) => Response::error("input", e),
+                }
+            }
             Request::SetSchedule {
                 enabled,
                 every_days,
@@ -943,6 +1319,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
         let result = match plan.kind() {
             ActionKind::Quarantine => self.vault.quarantine(permit, user),
             ActionKind::Restore => self.vault.restore(permit, user),
+            ActionKind::RunInSandbox => return self.start_lab(permit, user),
+            ActionKind::ChangeSetting => return self.enable_sandbox_feature(permit, user),
             other => {
                 // Andere Arten führt dieser Dienst (noch) nicht aus; die Erlaubnis verfällt.
                 let event = permit.complete(aegis_core::audit::ExecutionResult::Failed {

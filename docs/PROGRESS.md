@@ -177,4 +177,12 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 
 P4: Labor – Stufe 1 (Windows Sandbox mit Sonde, Einschalten nach Bestätigung), Stufe 2
 (Mini-Sandbox im AppContainer), Verhaltensbericht mit Einschätzung, Labor-Seite (Drag & Drop,
-Angebot für unbekannte Downloads – nie automatisch). Grundlagen (P4.1) stehen bereits.
+Angebot für unbekannte Downloads – nie automatisch).
+
+- ✅ P4.1: `aegis-sandbox` (`.wsb`, Sonde, Mini-Sandbox, Beobachtung, Bericht + Einschätzung, PNG),
+  `aegis-winffi` (AppContainer, Job, Registry/Prozesse/TCP lesen, Bildschirmfotos).
+- ✅ P4.2: Dienst – Labor-Lauf nur über Vorschlag + „Ja“ (`RunInSandbox`, Stufe/Sekunden/Netz im
+  Plan), Kopie mit SHA-256 im eigenen Labor-Ordner (Original unverändert), Stufe 1 als Nutzer
+  gestartet, Stufe 2 im AppContainer; Windows Sandbox einschalten nur Admin + Bestätigung (DISM);
+  Reste beim Start verworfen; Verlaufsart „Labor“.
+- ⏳ P4.3: Labor-Seite in der App, Angebot für unbekannte Downloads, Review, DoD.

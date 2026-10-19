@@ -68,6 +68,8 @@ pub enum HistoryKind {
     Schedule,
     /// Signatur-Update.
     Update,
+    /// Labor-Lauf (Verhaltensbericht).
+    Lab,
 }
 
 /// Ein Eintrag.

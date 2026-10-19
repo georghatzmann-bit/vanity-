@@ -452,6 +452,7 @@ export const en: Messages<typeof de> = {
       watch: 'Guard',
       schedule: 'Scheduled scan',
       update: 'Update',
+      lab: 'Lab',
     },
   },
   schedule: {

@@ -115,6 +115,40 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                     },
                 }
             }
+            Ok(Request::ProposeLabRun {
+                path,
+                stage,
+                seconds,
+                network,
+            }) => {
+                let paths = [path];
+                let (scanner, checked) = {
+                    let guard = lock()?;
+                    (guard.scanner(), guard.check_paths(&paths))
+                };
+                match (checked, Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS)) {
+                    (Err(e), _) => Response::error("input", e),
+                    (Ok(()), None) => busy(),
+                    (Ok(()), Some(slot)) => match long_paths(&paths, user)
+                        .map(|paths| (examine_as_user(&scanner, &paths, user), paths))
+                    {
+                        Ok((findings, paths)) => {
+                            drop(slot);
+                            lock()?.propose_lab_run(
+                                &paths[0],
+                                &findings,
+                                &crate::handler::LabOptions {
+                                    stage,
+                                    seconds,
+                                    network,
+                                },
+                                user.identity(),
+                            )
+                        }
+                        Err(response) => response,
+                    },
+                }
+            }
             Ok(request) => lock()?.handle(request, user),
             Err(e) => Response::error("invalid", format!("Ungültige Anfrage: {e}")),
         };

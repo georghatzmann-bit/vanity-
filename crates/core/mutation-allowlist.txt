@@ -244,3 +244,11 @@ crates/winffi/src/identity.rs :: winffi-logon-local-service :: Windows-FFI: Toke
 crates/winffi/src/process.rs :: winffi-assign-helper-job :: Windows-FFI: ordnet den eigenen Hilfsprozess freshclam einem Job zu (Ende mit dem Dienst bzw. beim Zeitlimit, Grenzen).
 crates/winffi/src/pipe.rs :: winffi-admins-sid :: Windows-FFI: SID der Administratoren-Gruppe (für die Rollenprüfung).
 crates/winffi/src/pipe.rs :: winffi-check-admin :: Windows-FFI: prüft, ob der Pipe-Client erhöhter Administrator ist (nur lesend).
+crates/winffi/src/sandbox.rs :: winffi-spawn-as-user :: Windows-FFI: startet ein festes Systemprogramm als Nutzer (ohne vererbte Handles).
+crates/winffi/src/sandbox.rs :: winffi-spawn-as-user-call :: Labor: startet WindowsSandbox.exe für einen freigegebenen Labor-Lauf (Stufe 1) als der anfragende Nutzer.
+crates/winffi/src/sandbox.rs :: winffi-spawn-as-user-own :: Windows-FFI: wie oben mit eigenem Token (Konsole/Tests ohne SYSTEM).
+crates/winffi/src/sandbox.rs :: winffi-spawn-as-user-own-call :: Labor: startet WindowsSandbox.exe ohne SYSTEM-Rechte mit dem eigenen Token – nur nach Freigabe.
+crates/winffi/src/sandbox.rs :: winffi-spawn-as-user-handles :: Windows-FFI: übernimmt und schließt die Prozess-Handles.
+crates/service/src/lab.rs :: service-lab-create :: Labor: legt nach Freigabe des Labor-Laufs neue Dateien im eigenen Labor-Ordner an (Kopie der Probe, Sonde, .wsb) – nie überschreiben.
+crates/service/src/lab.rs :: service-lab-cleanup :: Labor: verwirft nach dem Lauf den eigenen Labor-Ordner (Kopie der Probe und was sie dort schrieb) – nur unter dem Labor-Ordner, Links werden nicht verfolgt.
+crates/service/src/lab.rs :: service-lab-enable-feature :: Labor: schaltet nach Freigabe eines Administrators das Windows-Feature „Windows Sandbox“ per DISM ein (fester Pfad, feste Argumente, kein Neustart).

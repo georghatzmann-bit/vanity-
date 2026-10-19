@@ -61,6 +61,19 @@ pub enum Request {
     },
     /// ClamAV-Signaturen täglich aktualisieren (Netzwerk) an/aus.
     SetClamavUpdate { on: bool },
+    /// Labor: Zustand der Windows Sandbox und eigene Läufe (nur lesend).
+    LabStatus {},
+    /// Labor-Lauf vorschlagen – der Dienst prüft die Datei selbst und formuliert den Plan.
+    ProposeLabRun {
+        path: PathBuf,
+        stage: String,
+        seconds: u32,
+        network: bool,
+    },
+    /// Bildschirmfoto eines eigenen Labor-Laufs (Stufe 1).
+    LabScreenshot { run_id: String, name: String },
+    /// Windows Sandbox einschalten vorschlagen (nur Administratoren; Neustart nötig).
+    ProposeEnableSandbox {},
     /// Antwort des Nutzers im Freigabe-Dialog.
     Decide {
         plan_id: PlanId,
@@ -130,6 +143,15 @@ pub enum Response {
         #[serde(flatten)]
         info: Box<ScheduleInfo>,
     },
+    /// Labor.
+    Lab {
+        sandbox: aegis_sandbox::detect::SandboxStatus,
+        /// Gibt es die Mini-Sandbox (Windows)?
+        mini_available: bool,
+        runs: Vec<crate::lab::LabRun>,
+    },
+    /// Bildschirmfoto (PNG, Base64).
+    LabScreenshot { png_base64: String },
     /// Meldungen und Zustand des Echtzeit-Wächters.
     Watch {
         events: Vec<WatchEvent>,

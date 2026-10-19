@@ -60,6 +60,15 @@ pub mod param {
     /// Typ des neuen Werts bei Registrierungswerten (Pflicht, sobald ein
     /// [`super::Target::RegistryValue`] im Plan steht): einer von [`REGISTRY_VALUE_TYPES`].
     pub const VALUE_TYPE: &str = "value_type";
+    /// Stufe eines Labor-Laufs ([`super::ActionKind::RunInSandbox`], Pflicht): einer von
+    /// [`LAB_STAGES`].
+    pub const LAB_STAGE: &str = "lab_stage";
+    /// Erlaubte Werte für [`LAB_STAGE`].
+    pub const LAB_STAGES: [&str; 2] = ["windows_sandbox", "mini_sandbox"];
+    /// Beobachtungszeit eines Labor-Laufs in Sekunden (Pflicht, 5–600).
+    pub const LAB_SECONDS: &str = "lab_seconds";
+    /// Netzwerk im Labor (Pflicht): `off` oder `on` (`on` nur in der Windows Sandbox).
+    pub const LAB_NETWORK: &str = "lab_network";
     /// Erlaubte Werte für [`VALUE_TYPE`].
     pub const REGISTRY_VALUE_TYPES: [&str; 6] = [
         "REG_SZ",
@@ -967,6 +976,40 @@ impl ActionPlan {
                         required_parameter(&plan, param::VALUE_TYPE)?;
                     }
                     _ => {}
+                }
+            }
+            ActionKind::RunInSandbox => {
+                if plan.targets.len() != 1 {
+                    return Err(PlanError::ExactlyOneTarget { kind: plan.kind });
+                }
+                let invalid = |key: &str, reason| PlanError::InvalidParameter {
+                    key: key.to_owned(),
+                    reason,
+                };
+                let stage = required_parameter(&plan, param::LAB_STAGE)?;
+                if !param::LAB_STAGES.contains(&stage) {
+                    return Err(invalid(
+                        param::LAB_STAGE,
+                        "unbekannte Stufe (erlaubt: windows_sandbox, mini_sandbox)",
+                    ));
+                }
+                let seconds = required_parameter(&plan, param::LAB_SECONDS)?;
+                if !seconds.parse::<u32>().is_ok_and(|s| (5..=600).contains(&s)) {
+                    return Err(invalid(
+                        param::LAB_SECONDS,
+                        "Beobachtungszeit 5–600 Sekunden",
+                    ));
+                }
+                match required_parameter(&plan, param::LAB_NETWORK)? {
+                    "off" => {}
+                    "on" if stage == "windows_sandbox" => {}
+                    "on" => {
+                        return Err(invalid(
+                            param::LAB_NETWORK,
+                            "Netzwerk gibt es nur in der Windows Sandbox",
+                        ));
+                    }
+                    _ => return Err(invalid(param::LAB_NETWORK, "erlaubt: off, on")),
                 }
             }
             ActionKind::Restore if plan.parameter(param::DESTINATION).is_some() => {

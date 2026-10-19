@@ -118,7 +118,7 @@ export interface WatchState {
 }
 
 /** Art eines Verlaufseintrags. */
-export type HistoryKind = 'scan' | 'action' | 'decision' | 'watch' | 'schedule' | 'update';
+export type HistoryKind = 'scan' | 'action' | 'decision' | 'watch' | 'schedule' | 'update' | 'lab';
 
 /** Eintrag des Verlaufs (Bericht/Zeitleiste). */
 export interface HistoryEntry {
@@ -332,6 +332,7 @@ const historyKinds: readonly HistoryKind[] = [
   'watch',
   'schedule',
   'update',
+  'lab',
 ];
 
 export function parseHistory(response: unknown): HistoryState {

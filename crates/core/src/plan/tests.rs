@@ -901,3 +901,35 @@ fn rename_rejects_names_with_windows_side_effects() {
         assert!(b.build(T0).is_ok(), "{good:?}");
     }
 }
+
+#[test]
+fn labor_lauf_braucht_gueltige_parameter() {
+    let ok = sample_plan_builder(ActionKind::RunInSandbox);
+    assert!(
+        ok.clone()
+            .build(crate::time::OffsetDateTime::UNIX_EPOCH)
+            .is_ok()
+    );
+    for (key, value) in [
+        (param::LAB_STAGE, "vm"),
+        (param::LAB_SECONDS, "4"),
+        (param::LAB_SECONDS, "601"),
+        (param::LAB_SECONDS, "x"),
+        (param::LAB_NETWORK, "on"),
+        (param::LAB_NETWORK, "vielleicht"),
+    ] {
+        let b = ok.clone().parameter(key, value);
+        assert!(
+            matches!(
+                b.build(crate::time::OffsetDateTime::UNIX_EPOCH),
+                Err(PlanError::InvalidParameter { .. })
+            ),
+            "{key}={value}"
+        );
+    }
+    let net = ok
+        .clone()
+        .parameter(param::LAB_STAGE, "windows_sandbox")
+        .parameter(param::LAB_NETWORK, "on");
+    assert!(net.build(crate::time::OffsetDateTime::UNIX_EPOCH).is_ok());
+}
