@@ -445,9 +445,6 @@ pub fn spawn_restricted(
     info.lpAttributeList = list.as_ptr();
     let application = wide(exe);
     let mut line = command_line(exe, args);
-    // Fester, für jedes Token lesbarer Arbeitsordner (der des Aufrufers kann für das
-    // eingeschränkte Token unlesbar sein – dann scheitert der Start mit 0xC0000142).
-    let directory = crate::accounts::system_dir().map(|d| wide(&d))?;
     let mut process = PROCESS_INFORMATION::default();
     // SAFETY: Alle Zeiger zeigen auf lebende, nullterminierte Puffer bzw. Strukturen; die
     // Handle-Liste begrenzt die Vererbung auf die beiden Kind-Enden; der Prozess startet
@@ -466,10 +463,11 @@ pub fn spawn_restricted(
             ptr::null(),
             1,
             // Ohne Konsole (DETACHED_PROCESS): Ein- und Ausgabe laufen nur über die Pipes; so
-            // muss kein Konsolen-Host für das eingeschränkte Token entstehen.
+            // muss kein Konsolen-Host für das eingeschränkte Token entstehen (bei Tokens aus
+            // dem Identitätswechsel über die Pipe scheiterte das mit 0xC0000142).
             CREATE_SUSPENDED | DETACHED_PROCESS | EXTENDED_STARTUPINFO_PRESENT,
             ptr::null(),
-            directory.as_ptr(),
+            ptr::null(),
             &raw const info.StartupInfo,
             &mut process,
         )
