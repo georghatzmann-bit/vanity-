@@ -14,9 +14,9 @@
 //! - **Endgültig löschen** (`DeletePermanently`): nur mit zweiter Bestätigung.
 //! - Es wird **nie automatisch** gelöscht – auch nicht nach Fristen.
 //!
-//! Ehrliche Grenze: Der Schlüssel liegt als Datei im Tresor-Ordner, dessen Zugriff der Dienst
-//! auf SYSTEM/Administratoren beschränkt. Eine DPAPI-Bindung ist geplant (P5, siehe
-//! `docs/SECURITY.md`) – bis dahin schützt nur die Zugriffsliste.
+//! Schlüssel: liegt im Tresor-Ordner (nur SYSTEM/Administratoren), unter Windows zusätzlich
+//! per DPAPI an diesen Rechner gebunden – ein kopierter Ordner ist anderswo nicht lesbar.
+//! Ehrliche Grenze: Administratoren dieses Rechners können ihn auspacken.
 #![forbid(unsafe_code)]
 
 pub mod crypto;
@@ -139,15 +139,17 @@ impl Vault {
         let key_path = dir.join(KEY_FILE);
         let key = match std::fs::read(&key_path) {
             Ok(bytes) => {
-                let arr: [u8; 32] = bytes
-                    .as_slice()
-                    .try_into()
-                    .map_err(|_| QuarantineError::BadKey)?;
-                zeroize::Zeroizing::new(arr)
+                let bytes = zeroize::Zeroizing::new(bytes);
+                let (key, legacy) = decode_key(&bytes)?;
+                if legacy && cfg!(windows) {
+                    // Alter, ungeschützter Schlüssel: geschützt neu schreiben (Rechner-Bindung).
+                    upgrade_key_file(dir, &key_path, &key)?;
+                }
+                key
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
                 let key = crypto::new_key()?;
-                write_new_file(&key_path, key.as_ref())?;
+                write_new_file(&key_path, &encode_key(&key)?)?;
                 key
             }
             Err(e) => return Err(e.into()),
@@ -545,6 +547,65 @@ fn hex(bytes: &[u8; 32]) -> String {
 // ---------------------------------------------------------------------------------------
 // Verändernde Aufrufe – jeder einzeln markiert und in crates/core/mutation-allowlist.txt.
 // ---------------------------------------------------------------------------------------
+
+/// Kennung eines per DPAPI (Rechner) geschützten Schlüssels.
+const KEY_MAGIC: &[u8] = b"AEGISK2\n";
+
+/// Schlüsseldatei schreiben: unter Windows an den Rechner gebunden (DPAPI), sonst roh (der
+/// Ordner ist nur für den Dienst lesbar).
+fn encode_key(key: &crypto::Key) -> Result<zeroize::Zeroizing<Vec<u8>>, QuarantineError> {
+    #[cfg(windows)]
+    {
+        let mut out = KEY_MAGIC.to_vec();
+        out.extend(
+            aegis_winffi::dpapi::protect_machine(key.as_ref()).map_err(QuarantineError::Io)?,
+        );
+        Ok(zeroize::Zeroizing::new(out))
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(zeroize::Zeroizing::new(key.to_vec()))
+    }
+}
+
+/// Schlüsseldatei lesen; `true` = alte, ungeschützte Form.
+fn decode_key(bytes: &[u8]) -> Result<(crypto::Key, bool), QuarantineError> {
+    let to_key = |raw: &[u8]| -> Result<crypto::Key, QuarantineError> {
+        let arr: [u8; 32] = raw.try_into().map_err(|_| QuarantineError::BadKey)?;
+        Ok(zeroize::Zeroizing::new(arr))
+    };
+    if let Some(blob) = bytes.strip_prefix(KEY_MAGIC) {
+        #[cfg(windows)]
+        {
+            let raw = zeroize::Zeroizing::new(
+                aegis_winffi::dpapi::unprotect(blob).map_err(|_| QuarantineError::BadKey)?,
+            );
+            return Ok((to_key(&raw)?, false));
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = blob;
+            return Err(QuarantineError::BadKey);
+        }
+    }
+    Ok((to_key(bytes)?, true))
+}
+
+/// Ersetzt einen alten, ungeschützten Schlüssel durch die geschützte Form (erst prüfen, dann
+/// atomar ersetzen – der Schlüssel geht nie verloren).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn upgrade_key_file(dir: &Path, key_path: &Path, key: &crypto::Key) -> Result<(), QuarantineError> {
+    let fresh = dir.join(format!("{KEY_FILE}.neu"));
+    remove_own_file(&fresh)?;
+    let encoded = encode_key(key)?;
+    let (check, legacy) = decode_key(&encoded)?;
+    if legacy || check.as_ref() != key.as_ref() {
+        return Err(QuarantineError::BadKey);
+    }
+    write_new_file(&fresh, &encoded)?;
+    commit_own_file(&fresh, key_path)?;
+    Ok(())
+}
 
 fn create_vault_dir(dir: &Path) -> io::Result<()> {
     let mut builder = std::fs::DirBuilder::new();

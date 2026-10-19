@@ -623,3 +623,27 @@ fn eintraege_gehoeren_dem_konto() {
         .unwrap();
     assert_eq!(std::fs::read(&path).unwrap(), b"Daten von A");
 }
+
+#[test]
+fn schluessel_unter_windows_an_den_rechner_gebunden() {
+    let dir = tempfile::tempdir().unwrap();
+    // Alter, ungeschützter Schlüssel (32 Byte) wird beim Öffnen übernommen.
+    aegis_core::testing::write_fixture(dir.path(), "vault.key", &[7u8; 32]).unwrap();
+    drop(aegis_quarantine::Vault::open(dir.path()).unwrap());
+    let bytes = std::fs::read(dir.path().join("vault.key")).unwrap();
+    if cfg!(windows) {
+        assert!(bytes.starts_with(b"AEGISK2\n"), "geschützt neu geschrieben");
+        assert!(
+            !bytes.windows(32).any(|w| w == [7u8; 32]),
+            "kein Klartext-Schlüssel"
+        );
+    } else {
+        assert_eq!(bytes, [7u8; 32]);
+    }
+    // Erneut öffnen geht (geschützte Form wird gelesen).
+    drop(aegis_quarantine::Vault::open(dir.path()).unwrap());
+    // Beschädigter Schlüssel: Fehler statt neuem Schlüssel (Einträge blieben sonst unlesbar).
+    let broken = tempfile::tempdir().unwrap();
+    aegis_core::testing::write_fixture(broken.path(), "vault.key", b"AEGISK2\nkaputt").unwrap();
+    assert!(aegis_quarantine::Vault::open(broken.path()).is_err());
+}

@@ -71,10 +71,12 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Dienst-Zustands), 64 offene Vorschläge, 60 Vorschläge/Minute, 256 KiB Pfade pro Anfrage,
   Rahmen werden schrittweise gelesen. ClamAV: nur feste Installationsorte (nicht `PATH`),
   Inhalt über die Standardeingabe, Zeitlimit 120 s.
-- **Quarantäne-Schlüssel:** liegt als Datei `vault.key` im Datenordner, geschützt nur durch die
-  DACL (SYSTEM + Administratoren). Die Verschlüsselung verhindert, dass Funde versehentlich
-  ausgeführt oder von anderen Scannern gemeldet werden – nicht, dass ein Admin sie liest.
-  DPAPI-Bindung (Maschinenschlüssel) ist für P5 vorgesehen.
+- **Quarantäne-Schlüssel:** liegt als Datei `vault.key` im Datenordner (DACL: SYSTEM +
+  Administratoren), unter Windows seit P5 zusätzlich per DPAPI an den Rechner gebunden
+  (`CRYPTPROTECT_LOCAL_MACHINE`, eigene Entropie); ein alter, roher Schlüssel wird beim Start
+  geprüft umgeschrieben. Die Verschlüsselung verhindert, dass Funde versehentlich ausgeführt,
+  von anderen Scannern gemeldet oder auf einem anderen Rechner gelesen werden – nicht, dass ein
+  Admin dieses Rechners sie liest.
 - **Parser im Kindprozess (P3.2):** Fremde Dateien parst nur `aegis-scanworker` – unter Windows
   mit eingeschränktem Token des anfragenden Nutzers (keine Privilegien, Admin-Gruppen nur
   „deny“), **niedriger Integrität**, in einem Job-Objekt (2 GiB Speicher, höchstens 2 Prozesse,

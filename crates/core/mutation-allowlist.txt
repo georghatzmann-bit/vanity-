@@ -272,3 +272,6 @@ crates/winffi/src/inspect.rs :: winffi-window-hung :: Windows-FFI: überspringt 
 crates/winffi/src/system.rs :: winffi-own-token-account :: Windows-FFI: eigenes Prozess-Token nur zum Abfragen.
 crates/winffi/src/system.rs :: winffi-lookup-account :: Windows-FFI: Kontoname zur SID (Sonde prüft, dass sie in der Windows Sandbox läuft).
 crates/service/src/lab.rs :: service-lab-dism-timeout :: Labor: beendet nur das selbst gestartete DISM nach 30 Minuten (Frist des freigegebenen Plans „Windows Sandbox einschalten“).
+crates/winffi/src/dpapi.rs :: winffi-dpapi-take :: Windows-FFI: kopiert das DPAPI-Ergebnis, nullt und gibt den Puffer frei.
+crates/winffi/src/dpapi.rs :: winffi-dpapi-protect :: Windows-FFI: CryptProtectData (Rechner-Bereich) für den AEGIS-Quarantäne-Schlüssel.
+crates/winffi/src/dpapi.rs :: winffi-dpapi-unprotect :: Windows-FFI: CryptUnprotectData für den AEGIS-Quarantäne-Schlüssel.

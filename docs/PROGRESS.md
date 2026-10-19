@@ -84,7 +84,7 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 
 - Manuell auf Windows prüfen: Doppelklick auf Titelleiste, Tray-Symbol, Startzeit mit GPU.
 - ClamAV-Installation im Setup (P13).
-- Quarantäne-Schlüssel per DPAPI (Maschine) binden statt nur Ordner-ACL (P5).
+- ✅ Quarantäne-Schlüssel per DPAPI (Maschine) gebunden (P5.1).
 - Pipe: Identität des Client-Prozesses prüfen (Pfad + Signatur, braucht Code-Signing → P13).
   Bis dahin begrenzt der Identitätswechsel alles auf die Rechte des anfragenden Nutzers.
 - Sicherheits-Score bleibt „noch nicht bewertet“, bis die Systemprüfungen (P6) da sind.
