@@ -74,6 +74,7 @@ impl RestrictedToken {
     /// Token nicht lesbar oder nicht einschränkbar.
     pub fn from_current_identity() -> io::Result<Self> {
         let mut source: HANDLE = ptr::null_mut();
+        let mut own_process = false;
         // SAFETY: Pseudo-Handle des Threads; OpenAsSelf = 1; `source` ist ein Ausgabezeiger.
         // aegis-unsafe: winffi-thread-token-for-child
         #[allow(unsafe_code)]
@@ -90,26 +91,35 @@ impl RestrictedToken {
             if ok == 0 {
                 return Err(io::Error::last_os_error());
             }
+            own_process = true;
         }
         let source = own(source)?;
-        let mut primary: HANDLE = ptr::null_mut();
-        // SAFETY: `source` ist ein gültiges Token mit TOKEN_DUPLICATE; Ausgabezeiger gültig.
-        // aegis-unsafe: winffi-duplicate-token
-        #[allow(unsafe_code)]
-        let ok = unsafe {
-            DuplicateTokenEx(
-                source.as_raw_handle(),
-                TOKEN_ACCESS,
-                ptr::null(),
-                SecurityImpersonation,
-                TokenPrimary,
-                &mut primary,
-            )
+        // Eigenes Prozess-Token direkt einschränken: Nur ein unmittelbar abgeleitetes
+        // („Kind“-)Token darf ohne Sonderrecht einem neuen Prozess zugewiesen werden
+        // (Konsolenbetrieb, CI). Das Thread-Token (Identitätswechsel) muss erst zum
+        // Primär-Token werden.
+        let primary = if own_process {
+            source
+        } else {
+            let mut primary: HANDLE = ptr::null_mut();
+            // SAFETY: `source` ist ein gültiges Token mit TOKEN_DUPLICATE; Ausgabezeiger gültig.
+            // aegis-unsafe: winffi-duplicate-token
+            #[allow(unsafe_code)]
+            let ok = unsafe {
+                DuplicateTokenEx(
+                    source.as_raw_handle(),
+                    TOKEN_ACCESS,
+                    ptr::null(),
+                    SecurityImpersonation,
+                    TokenPrimary,
+                    &mut primary,
+                )
+            };
+            if ok == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            own(primary)?
         };
-        if ok == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let primary = own(primary)?;
         let mut restricted: HANDLE = ptr::null_mut();
         // SAFETY: `primary` ist gültig; keine SID-/Privilegien-Listen (Zähler 0, Zeiger null).
         // aegis-unsafe: winffi-restrict-token
