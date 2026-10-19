@@ -34,6 +34,7 @@ const APP_COMMANDS: &[&str] = &[
     "service_propose_baits",
     "service_set_protected_folders",
     "service_backup_status",
+    "service_hardening_status",
     "service_propose_backup",
     "service_propose_backup_restore",
     "service_propose_backup_export",

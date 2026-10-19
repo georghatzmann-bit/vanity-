@@ -27,8 +27,8 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 | P2 | Dienst + Pipe + Engine-Kern (ClamAV, Hashes, YARA-X, statische Analyse), Quarantäne | **erledigt** |
 | P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | **erledigt** |
 | P4 | Sandbox Stufe 1+2 + Verhaltensbericht | **erledigt** (Windows-CI wird bestätigt) |
-| P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | in Arbeit (Review) |
-| P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | offen |
+| P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | **erledigt** |
+| P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | in Arbeit |
 | P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | offen |
 | P8 | Defender-Schalter | offen |
 | P9 | Tresor + Erweiterung | offen |
@@ -100,6 +100,24 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
   deinen eigenen Schlüssel und senden Hashes ins Netz – nur abschaltbar und erst nach deinem
   Ja. Bis dahin: lokale Hash-Listen (eigene Dateien).
 - Hinweis: Das Repo ist öffentlich → GitHub Actions (auch `windows-latest`) ist kostenlos.
+
+## P6 – Härtung & Systemzustand
+
+1. [x] P6.1 Sicherheits-Score: zwölf gewichtete Prüfungen (Updates, Secure Boot, TPM, BitLocker,
+       UAC, SMBv1, Remotedesktop, Gastkonto, Firewall, Virenschutz, Proxy/DNS/Hosts, Ports),
+       Fakten nur lesend (Registrierung, WMI, Hosts-Datei, Port-Tabellen) außerhalb der
+       Dienst-Sperre; „unbekannt“ zählt nicht, ohne genug Bewertbares kein Score. Seite „Härtung“
+       mit Verlauf je Tag, Dashboard zeigt den Score.
+2. [ ] P6.2 Beheben mit Vorschau, Rückgängig und „Ja“ (UAC, SMBv1, RDP/NLA, Gastkonto,
+       Firewall, Proxy; sonst Windows-Einstellungen öffnen).
+3. [ ] P6.3 Persistenz-Check (Run-Schlüssel, Autostart-Ordner, Aufgaben, Dienste, WMI, IFEO,
+       AppInit, COM, Browser-Erweiterungen).
+4. [ ] P6.4 Treiber-Check gegen eine Liste verwundbarer Treiber (Lizenz vorher prüfen).
+5. [ ] P6.5 Software-Updates über winget (Installieren nur nach „Ja“).
+6. [ ] P6.6 Kamera/Mikrofon-Wächter, Zwischenablage (Krypto-Adressen, opt-in), USB-Geräte.
+7. [ ] P6.7 Sicherheits-Review (separater Agent), Doku, DoD.
+
+**Nächster Schritt:** P6.2 Beheben mit Plan.
 
 ## P5 – Schutz-Werkzeuge
 

@@ -511,6 +511,13 @@ pub async fn service_backup_status() -> Result<Value, String> {
     send(json!({ "type": "backup_status" })).await
 }
 
+/// Härtung: Systemzustand lesen und bewerten (nur lesend). `fresh`: neu prüfen statt ein
+/// bis zu 10 Minuten altes Ergebnis.
+#[tauri::command]
+pub async fn service_hardening_status(fresh: bool) -> Result<Value, String> {
+    send(json!({ "type": "hardening_status", "fresh": fresh })).await
+}
+
 /// Rückfall-Kopien ein-/ausschalten vorschlagen – nur nach „Ja“.
 #[tauri::command]
 pub async fn service_propose_backup(on: bool, quota_mb: u64) -> Result<Value, String> {

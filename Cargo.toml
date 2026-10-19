@@ -68,6 +68,8 @@ tar = { version = "0.4.46", default-features = false }
 # Echtzeit-Wächter (P3): Dateiänderungen (ReadDirectoryChangesW/inotify) und Prozessstarts (ETW).
 notify = { version = "8.2.0", default-features = false }
 ferrisetw = "1.2.0"
+# Härtung (P6): WMI-Abfragen (nur lesend) – BitLocker, TPM, Defender, Sicherheitscenter.
+wmi = { version = "0.18.4", default-features = false }
 # Quarantäne (P2): AES-256-GCM, Zufall aus dem Betriebssystem.
 aes-gcm = "0.11.1"
 argon2 = { version = "0.6.0", default-features = false, features = ["alloc"] }

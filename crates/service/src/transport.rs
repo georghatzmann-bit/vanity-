@@ -25,6 +25,9 @@ static RUNNING_SCANS: AtomicUsize = AtomicUsize::new(0);
 /// Höchstzahl gleichzeitiger Passwort-Ableitungen (Argon2id, je 64 MiB) des Datei-Safes.
 pub const MAX_PARALLEL_KDF: usize = 2;
 static RUNNING_KDF: AtomicUsize = AtomicUsize::new(0);
+/// Höchstzahl gleichzeitiger Härtungs-Prüfungen (WMI/Registrierung, einige Sekunden).
+pub const MAX_PARALLEL_FACTS: usize = 1;
+static RUNNING_FACTS: AtomicUsize = AtomicUsize::new(0);
 
 /// Zählt eine belegte Stelle, gibt sie beim Verwerfen frei.
 #[derive(Debug)]
@@ -219,6 +222,25 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                         guard.record_emergency(&response, user);
                         response
                     }
+                }
+            }
+            // Härtung: Systemfakten außerhalb der Dienst-Sperre lesen (WMI dauert).
+            Ok(Request::HardeningStatus { fresh }) => {
+                let cached = if fresh {
+                    None
+                } else {
+                    lock()?.hardening_cached(user)
+                };
+                match cached {
+                    Some(response) => response,
+                    None => match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {
+                        None => busy(),
+                        Some(slot) => {
+                            let facts = crate::handler::hardening::collect_facts(user);
+                            drop(slot);
+                            lock()?.hardening_finish(facts, user)
+                        }
+                    },
                 }
             }
             // Bildschirmfoto außerhalb der Dienst-Sperre lesen (die Datei kann warten lassen).

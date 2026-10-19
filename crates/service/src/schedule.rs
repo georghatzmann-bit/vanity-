@@ -100,6 +100,19 @@ pub struct ServiceSettings {
     /// Konto, das das Netz getrennt hat (darf es – neben Administratoren – wieder verbinden).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panic_by: Option<String>,
+    /// Score-Verlauf der Härtung (je Tag, höchstens 90).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hardening: Vec<ScorePoint>,
+}
+
+/// Sicherheits-Score eines Tages (Härtung, P6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScorePoint {
+    /// Tag (`JJJJ-MM-TT`).
+    pub date: String,
+    /// Score 0–100.
+    pub value: u8,
 }
 
 /// Rückfall-Kopien eines Kontos (eingeschaltet per Plan).
@@ -150,6 +163,7 @@ impl Default for ServiceSettings {
             panic_by: None,
             protected: Vec::new(),
             backup: Vec::new(),
+            hardening: Vec::new(),
         }
     }
 }

@@ -39,6 +39,7 @@
     "allow-service-propose-baits",
     "allow-service-set-protected-folders",
     "allow-service-backup-status",
+    "allow-service-hardening-status",
     "allow-service-propose-backup",
     "allow-service-propose-backup-restore",
     "allow-service-propose-backup-export",

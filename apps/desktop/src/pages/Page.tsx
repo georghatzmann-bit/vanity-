@@ -1,6 +1,7 @@
 import type { RouteId } from '../router/routes.ts';
 import { AboutPage } from './AboutPage.tsx';
 import { DashboardPage } from './DashboardPage.tsx';
+import { HardeningPage } from './HardeningPage.tsx';
 import { LabPage } from './LabPage.tsx';
 import { ModulePage } from './ModulePage.tsx';
 import { QuarantinePage } from './QuarantinePage.tsx';
@@ -31,6 +32,8 @@ export function Page({ route }: { readonly route: RouteId }) {
       return <LabPage />;
     case 'safe':
       return <SafePage />;
+    case 'hardening':
+      return <HardeningPage />;
     default:
       return <ModulePage route={route} />;
   }

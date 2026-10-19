@@ -33,7 +33,7 @@ import { useShell } from '../shell/ShellContext.tsx';
 import { modifierKeys } from '../shell/shortcuts.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 
-/** Bauplan laut docs/PROGRESS.md: P0–P3 erledigt, P4 in Arbeit. */
+/** Bauplan laut docs/PROGRESS.md: P0–P5 erledigt, P6 in Arbeit. */
 export const buildPhases = [
   'P0',
   'P1',
@@ -51,7 +51,7 @@ export const buildPhases = [
   'P13',
 ] as const;
 type BuildPhase = (typeof buildPhases)[number];
-export const CURRENT_PHASE: BuildPhase = 'P4';
+export const CURRENT_PHASE: BuildPhase = 'P6';
 const currentIndex = buildPhases.indexOf(CURRENT_PHASE);
 const LAST_PHASE: BuildPhase = 'P13';
 
@@ -257,8 +257,33 @@ function HonestyNotes() {
   );
 }
 
+/** Score der Härtung (gemerktes Ergebnis des Dienstes; in der Vorschau: keiner). */
+function useHardeningScore(): number | null {
+  const service = usePlatform().service;
+  const [score, setScore] = useState<number | null>(null);
+  useEffect(() => {
+    if (service === null) {
+      return undefined;
+    }
+    let active = true;
+    service.hardeningStatus(false).then(
+      (s) => {
+        if (active) {
+          setScore(s.score);
+        }
+      },
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, [service]);
+  return score;
+}
+
 function ScorePanel() {
   const { t } = useT();
+  const score = useHardeningScore();
   return (
     <Panel
       eyebrow={t('dashboard.score.eyebrow')}
@@ -267,7 +292,7 @@ function ScorePanel() {
     >
       <div className="flex justify-center pt-1">
         <ScoreGauge
-          value={null}
+          value={score}
           size={184}
           label={t('dashboard.score.label')}
           unavailableText={t('dashboard.score.unavailable')}

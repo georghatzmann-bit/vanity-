@@ -66,6 +66,7 @@ ersetzen, Pfade des Nutzers auslesen, Events an das Backend senden) und auch kei
 | `allow-service-propose-baits`                | App-Befehl `service_propose_baits`: Köderdateien anlegen/entfernen vorschlagen – angelegt bzw. gelöscht wird nur nach „Ja“.                                                                                            |
 | `allow-service-set-protected-folders`        | App-Befehl `service_set_protected_folders`: eigene Schutzordner der Ransomware-Erkennung setzen (höchstens 20, nur Ordner, die das Konto selbst lesen darf). Nur Beobachtung – an den Ordnern ändert sich nichts.      |
 | `allow-service-backup-status`                | App-Befehl `service_backup_status`: Zustand, Belegung und neueste Versionen der eigenen Rückfall-Kopien. Nur lesend.                                                                                                   |
+| `allow-service-hardening-status`             | App-Befehl `service_hardening_status`: Systemzustand (Updates, Secure Boot, TPM, BitLocker, UAC, SMBv1, Remotedesktop, Gastkonto, Firewall, Virenschutz, Netzwerk, Ports) und Sicherheits-Score. Nur lesend.           |
 | `allow-service-propose-backup`               | App-Befehl `service_propose_backup`: Rückfall-Kopien ein- (mit Speichergrenze) bzw. ausschalten vorschlagen – gilt erst nach „Ja“.                                                                                     |
 | `allow-service-propose-backup-restore`       | App-Befehl `service_propose_backup_restore`: eine Version zurückholen vorschlagen – neu angelegt nach „Ja“, nie überschrieben.                                                                                         |
 | `allow-service-propose-backup-export`        | App-Befehl `service_propose_backup_export`: neueste Versionen in einen gewählten Ordner (z. B. externes Laufwerk) exportieren vorschlagen – nach „Ja“, nie überschreibend.                                             |
@@ -142,6 +143,7 @@ echten ACL: jeder Aufruf der Oberfläche läuft, alles andere wird abgelehnt).
 | `invoke('service_propose_baits')`                               | `service_propose_baits`                   | `allow-service-propose-baits`                |
 | `invoke('service_set_protected_folders')`                       | `service_set_protected_folders`           | `allow-service-set-protected-folders`        |
 | `invoke('service_backup_status')`                               | `service_backup_status`                   | `allow-service-backup-status`                |
+| `invoke('service_hardening_status')`                            | `service_hardening_status`                | `allow-service-hardening-status`             |
 | `invoke('service_propose_backup')`                              | `service_propose_backup`                  | `allow-service-propose-backup`               |
 | `invoke('service_propose_backup_restore')`                      | `service_propose_backup_restore`          | `allow-service-propose-backup-restore`       |
 | `invoke('service_propose_backup_export')`                       | `service_propose_backup_export`           | `allow-service-propose-backup-export`        |

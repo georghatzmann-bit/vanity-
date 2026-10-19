@@ -845,6 +845,36 @@ fn panic_button_nur_als_vorschlag() {
 }
 
 #[test]
+fn haertung_nur_lesend_mit_ehrlichem_score() {
+    let mut h = harness();
+    let r = h.send(json!({"type": "hardening_status"}));
+    assert_eq!(r["type"], "hardening", "{r}");
+    let state = &r["state"];
+    assert_eq!(state["checks"].as_array().unwrap().len(), 12);
+    if cfg!(windows) {
+        assert_eq!(state["available"], true);
+    } else {
+        // Ohne Windows ist nichts lesbar: kein erfundener Score, alles „unbekannt“.
+        assert_eq!(state["available"], false);
+        assert!(state["score"]["value"].is_null(), "{r}");
+        assert!(
+            state["checks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|c| c["status"] == "unknown")
+        );
+        assert!(state["history"].as_array().unwrap().is_empty());
+    }
+    // Ohne „neu prüfen“ kommt das gemerkte Ergebnis (10 Minuten), danach ein neues.
+    let again = h.send(json!({"type": "hardening_status"}));
+    assert_eq!(again["state"]["checked_at"], state["checked_at"]);
+    h.clock.advance(aegis_core::time::Duration::minutes(11));
+    let later = h.send(json!({"type": "hardening_status"}));
+    assert_ne!(later["state"]["checked_at"], state["checked_at"]);
+}
+
+#[test]
 fn speicher_scan_nur_lesend() {
     let mut h = harness();
     let r = h.send(json!({"type": "memory_scan"}));

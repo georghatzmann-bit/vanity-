@@ -25,6 +25,7 @@ wird hier **vor** der Nutzung eingetragen (Name, Herkunft, Lizenz, Nutzungsart, 
 | notify 8.2 (+ notify-types) | notify-rs | CC0-1.0; MIT/Apache-2.0 | Echtzeit-Wächter: Dateiänderungen (P3) | 2026-10-19 |
 | ferrisetw 1.2 (+ windows 0.62) | n4r1b / Microsoft | MIT/Apache-2.0 | Echtzeit-Wächter: Programmstarts über ETW (P3) | 2026-10-19 |
 | argon2 0.6 (+ blake2, password-hash) | RustCrypto | MIT/Apache-2.0 | Datei-Safe: Schlüssel aus dem Passwort (Argon2id, P5) | 2026-10-19 |
+| wmi 0.18 (+ futures 0.3) | ohadravid / rust-lang | MIT/Apache-2.0 | Härtung: WMI-Abfragen nur lesend (BitLocker, TPM, Defender, Sicherheitscenter, Updates; P6) | 2026-10-19 |
 | axe-core / @axe-core/playwright 4.14 | Deque | MPL-2.0 | nur Tests, nicht ausgeliefert | 2026-10-19 |
 
 Rust- und npm-Abhängigkeiten werden ab P13 automatisch inventarisiert (`cargo about` /

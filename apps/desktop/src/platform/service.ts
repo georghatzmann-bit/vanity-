@@ -345,6 +345,68 @@ export interface BackupState {
   readonly recent: readonly BackupVersion[];
 }
 
+/** Prüfungen der Härtung (stabile Kennungen des Dienstes). */
+export const hardeningCheckIds = [
+  'updates',
+  'secure_boot',
+  'tpm',
+  'bit_locker',
+  'uac',
+  'smb1',
+  'rdp',
+  'guest',
+  'firewall',
+  'antivirus',
+  'network',
+  'ports',
+] as const;
+export type HardeningCheckId = (typeof hardeningCheckIds)[number];
+export type CheckStatus = 'pass' | 'warn' | 'fail' | 'unknown';
+export const fixKinds = [
+  'enable_uac',
+  'disable_smb1',
+  'disable_rdp',
+  'enable_rdp_nla',
+  'disable_guest',
+  'enable_firewall',
+  'disable_proxy',
+  'open_settings',
+] as const;
+export type FixKind = (typeof fixKinds)[number];
+
+/** Ergebnis einer Härtungs-Prüfung. */
+export interface HardeningCheck {
+  readonly id: HardeningCheckId;
+  readonly status: CheckStatus;
+  readonly weight: number;
+  readonly summaryDe: string;
+  readonly summaryEn: string;
+  /** Möglicher Schritt zum Beheben (immer als eigener Plan mit „Ja“). */
+  readonly fix: FixKind | null;
+}
+
+/** Lauschender Port. */
+export interface ListeningPort {
+  readonly port: number;
+  readonly protocol: string;
+  readonly allInterfaces: boolean;
+  readonly program: string | null;
+}
+
+/** Härtung & Sicherheits-Score. */
+export interface HardeningState {
+  /** Liest der Dienst die Fakten auf diesem System (Windows)? */
+  readonly available: boolean;
+  /** 0–100 oder `null`, wenn zu wenig bewertbar war. */
+  readonly score: number | null;
+  readonly checks: readonly HardeningCheck[];
+  readonly history: readonly { readonly date: string; readonly value: number }[];
+  readonly checkedAt: string;
+  readonly osVersion: string | null;
+  readonly dnsServers: readonly string[];
+  readonly listening: readonly ListeningPort[] | null;
+}
+
 /** Ransomware-Schutz des Kontos. */
 export interface RansomState {
   /** Angelegte Köderdateien. */
@@ -432,6 +494,11 @@ export interface ServiceApi {
   ransomStatus(): Promise<RansomState>;
   /** Rückfall-Kopien: Zustand (nur lesend). */
   backupStatus(): Promise<BackupState>;
+  /**
+   * Härtung: Systemzustand lesen und bewerten (nur lesend, dauert einige Sekunden). Ohne
+   * `fresh` darf der Dienst ein bis zu 10 Minuten altes Ergebnis liefern.
+   */
+  hardeningStatus(fresh: boolean): Promise<HardeningState>;
   /** Rückfall-Kopien ein- (`true`, Grenze in MiB) bzw. ausschalten vorschlagen. */
   proposeBackup(on: boolean, quotaMb: number): Promise<Proposal>;
   /** Version zurückholen vorschlagen. */
@@ -862,6 +929,58 @@ export function parseBackup(response: unknown): BackupState {
         size: num(v['size']),
         storedAt: str(v['stored_at']),
       })),
+  };
+}
+
+export function parseHardening(response: unknown): HardeningState {
+  const s = expectType(response, 'hardening')['state'];
+  const st = isObject(s) ? s : {};
+  const score = isObject(st['score']) ? st['score'] : {};
+  const facts = isObject(st['facts']) ? st['facts'] : {};
+  const statuses: readonly CheckStatus[] = ['pass', 'warn', 'fail', 'unknown'];
+  const isCheckId = (v: unknown): v is HardeningCheckId =>
+    (hardeningCheckIds as readonly unknown[]).includes(v);
+  const isFix = (v: unknown): v is FixKind => (fixKinds as readonly unknown[]).includes(v);
+  const isStatus = (v: unknown): v is CheckStatus => (statuses as readonly unknown[]).includes(v);
+  const listening = facts['listening'];
+  return {
+    available: st['available'] === true,
+    score: typeof score['value'] === 'number' ? score['value'] : null,
+    checks: arr(st['checks'])
+      .filter(isObject)
+      .flatMap((c) => {
+        const id = c['id'];
+        const status = c['status'];
+        const fix = c['fix'];
+        return isCheckId(id)
+          ? [
+              {
+                id,
+                status: isStatus(status) ? status : 'unknown',
+                weight: num(c['weight']),
+                summaryDe: str(c['summary_de']),
+                summaryEn: str(c['summary_en']),
+                fix: isFix(fix) ? fix : null,
+              },
+            ]
+          : [];
+      }),
+    history: arr(st['history'])
+      .filter(isObject)
+      .map((p) => ({ date: str(p['date']), value: num(p['value']) })),
+    checkedAt: str(st['checked_at']),
+    osVersion: typeof facts['os_version'] === 'string' ? facts['os_version'] : null,
+    dnsServers: arr(facts['dns_servers']).filter((d): d is string => typeof d === 'string'),
+    listening: Array.isArray(listening)
+      ? arr(listening)
+          .filter(isObject)
+          .map((l) => ({
+            port: num(l['port']),
+            protocol: str(l['protocol']),
+            allInterfaces: l['all_interfaces'] === true,
+            program: typeof l['program'] === 'string' ? l['program'] : null,
+          }))
+      : null,
   };
 }
 

@@ -28,6 +28,7 @@ use aegis_quarantine::{Entry, UserAccess, Vault};
 use crate::protocol::{PROTOCOL_VERSION, Proposal, Request, Response};
 
 pub mod backup;
+pub mod hardening;
 mod safe;
 
 /// Höchstzahl Pfade pro Anfrage.
@@ -85,6 +86,8 @@ pub struct Service<C: Clock, W: Durable> {
     backup_runs: backup::BackupRuns,
     /// Aufgeschobene lange Arbeit nach einem „Ja“ (nur innerhalb einer Anfrage gesetzt).
     deferred: Option<backup::Deferred>,
+    /// Letztes Härtungs-Ergebnis je Konto (Proxy ist je Konto).
+    hardening_cache: HashMap<Option<String>, (OffsetDateTime, hardening::HardeningState)>,
 }
 
 /// Einstellung „Windows-Feature Windows Sandbox“.
@@ -161,6 +164,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             backup_dir: None,
             backup_runs: backup::BackupRuns::default(),
             deferred: None,
+            hardening_cache: HashMap::new(),
         }
     }
 
@@ -1626,6 +1630,14 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Request::RansomStatus {} => self.ransom_status(user),
             Request::SetProtectedFolders { folders } => self.set_protected(folders, user),
             Request::BackupStatus {} => self.backup_status(user),
+            // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
+            Request::HardeningStatus { fresh } => match self.hardening_cached(user) {
+                Some(cached) if !fresh => cached,
+                _ => {
+                    let facts = hardening::collect_facts(user);
+                    self.hardening_finish(facts, user)
+                }
+            },
             Request::ProposeBackup { on, quota_mb } => self.propose_backup(on, quota_mb, user),
             Request::ProposeBackupRestore { id } => self.propose_backup_restore(&id, user),
             Request::ProposeBackupPrune { days } => self.propose_backup_prune(days, user),

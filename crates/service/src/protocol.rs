@@ -82,6 +82,12 @@ pub enum Request {
     RansomStatus {},
     /// Rückfall-Kopien: Zustand und neueste Versionen (nur lesend).
     BackupStatus {},
+    /// Härtung: Systemzustand lesen und bewerten (nur lesend, dauert einige Sekunden).
+    /// Ohne `fresh` darf der Dienst ein bis zu 10 Minuten altes Ergebnis liefern.
+    HardeningStatus {
+        #[serde(default)]
+        fresh: bool,
+    },
     /// Rückfall-Kopien ein- (`on`, Grenze in MiB) bzw. ausschalten vorschlagen.
     ProposeBackup { on: bool, quota_mb: u64 },
     /// Eine Version zurückholen vorschlagen.
@@ -273,6 +279,10 @@ pub enum Response {
     /// Rückfall-Kopien des Kontos.
     Backup {
         state: Box<crate::handler::backup::BackupState>,
+    },
+    /// Härtung & Sicherheits-Score.
+    Hardening {
+        state: Box<crate::handler::hardening::HardeningState>,
     },
     /// Datei-Safe des Kontos.
     Safe {

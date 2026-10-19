@@ -18,7 +18,7 @@ const pages = [
   { nav: 'Quarantäne', route: 'quarantine', heading: 'Quarantäne', phase: null },
   { nav: 'Datei-Safe', route: 'safe', heading: 'Datei-Safe', phase: null },
   { nav: 'Labor', route: 'lab', heading: 'Labor', phase: null },
-  { nav: 'Härtung', route: 'hardening', heading: 'Härtung', phase: 'P6' },
+  { nav: 'Härtung', route: 'hardening', heading: 'Härtung', phase: null },
   { nav: 'Netzwerk', route: 'network', heading: 'Netzwerk', phase: 'P7' },
   { nav: 'Tresor', route: 'vault', heading: 'Tresor', phase: 'P9' },
   { nav: 'Tools', route: 'tools', heading: 'Tools', phase: 'P10' },
@@ -195,9 +195,9 @@ test.describe('Navigation', () => {
     await waitForHome(page);
     await page.getByRole('button', { name: 'Navigation einklappen' }).click();
     await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');
-    const hardening = navigation(page).getByRole('link', { name: 'Härtung, folgt in P6' });
-    await hardening.hover();
-    await expect(page.getByRole('tooltip')).toHaveText('Härtung · Folgt in P6');
+    const network = navigation(page).getByRole('link', { name: 'Netzwerk, folgt in P7' });
+    await network.hover();
+    await expect(page.getByRole('tooltip')).toHaveText('Netzwerk · Folgt in P7');
     await page.reload();
     await waitForHome(page);
     await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');
@@ -289,7 +289,7 @@ test.describe('Einstellungen bleiben erhalten', () => {
     await waitForHome(page);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(
-      page.getByText('Not rated yet – the system checks are coming in P6.'),
+      page.getByText('Not rated yet – the check runs on the “Hardening” page (Windows only).'),
     ).toBeVisible();
     await expect(page.getByTestId('honesty-kernel')).toContainText('AEGIS has no kernel driver.');
   });

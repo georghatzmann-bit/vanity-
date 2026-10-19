@@ -247,6 +247,15 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Prüfprotokoll (die Freigabe ist an sie gebunden); der Verlauf nennt nur Anzahlen. Wer das
   Konto oder den Dienst kontrolliert, während der Safe entsperrt ist, kann mitlesen; ein
   vergessenes Passwort kann niemand ersetzen.
+- **Härtung / Sicherheits-Score (P6.1):** nur lesend – Registrierung (HKLM, für den Proxy nur
+  der Zweig des anfragenden Kontos), WMI (BitLocker/TPM mit verschlüsselten Aufrufen, Defender,
+  Sicherheitscenter, Updates, Gastkonto), Hosts-Datei (am tatsächlichen Ort aus `DataBasePath`,
+  höchstens 1 MiB) und Port-Tabellen. Läuft außerhalb der Dienst-Sperre (höchstens eine Prüfung
+  gleichzeitig); ein Ergebnis gilt je Konto 10 Minuten, „Neu prüfen“ liest frisch. Die
+  WMI-Bibliothek richtet COM im Dienst beim ersten Aufruf prozessweit ein (Standard-Sicherheit,
+  Identitätswechsel-Stufe „Impersonate“) – sonst nutzt der Dienst kein COM. Was nicht lesbar
+  ist, bleibt „unbekannt“ und zählt nicht; liegt weniger als die Hälfte der Gewichte vor, gibt
+  es keinen Score (D-043). Behoben wird hier nichts – das kommt als eigener Plan (P6.2).
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.

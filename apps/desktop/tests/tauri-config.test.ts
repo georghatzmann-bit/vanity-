@@ -57,6 +57,7 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-set-protected-folders':
     'Dienst: eigene Schutzordner der Ransomware-Erkennung setzen (nur Beobachtung)',
   'allow-service-backup-status': 'Dienst: Zustand der eigenen Rückfall-Kopien (nur lesend)',
+  'allow-service-hardening-status': 'Dienst: Systemzustand und Sicherheits-Score (nur lesend)',
   'allow-service-propose-backup':
     'Dienst: Rückfall-Kopien ein-/ausschalten vorschlagen (nur nach „Ja“)',
   'allow-service-propose-backup-restore':

@@ -17,7 +17,8 @@ use windows_sys::Win32::Graphics::Gdi::{
     SelectObject,
 };
 use windows_sys::Win32::NetworkManagement::IpHelper::{
-    GetExtendedTcpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCPROW_OWNER_PID, TCP_TABLE_OWNER_PID_ALL,
+    GetExtendedTcpTable, GetExtendedUdpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCPROW_OWNER_PID,
+    MIB_UDP6ROW_OWNER_PID, MIB_UDPROW_OWNER_PID, TCP_TABLE_OWNER_PID_ALL, UDP_TABLE_OWNER_PID,
 };
 use windows_sys::Win32::Storage::Xps::PrintWindow;
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
@@ -410,6 +411,140 @@ pub fn tcp_connections() -> io::Result<Vec<TcpConnection>> {
         }
     }
     Ok(out)
+}
+
+fn udp_table(family: u32) -> io::Result<Vec<u8>> {
+    let mut size = 0u32;
+    // SAFETY: Größenabfrage mit null-Puffer.
+    // aegis-unsafe: winffi-udp-size
+    #[allow(unsafe_code)]
+    let _ = unsafe {
+        GetExtendedUdpTable(
+            ptr::null_mut(),
+            &mut size,
+            0,
+            family,
+            UDP_TABLE_OWNER_PID,
+            0,
+        )
+    };
+    for _ in 0..4 {
+        let mut buffer = vec![0u8; usize::try_from(size).unwrap_or(0) + 4096];
+        let mut len = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
+        // SAFETY: Puffer der angegebenen Länge.
+        // aegis-unsafe: winffi-udp-table
+        #[allow(unsafe_code)]
+        let status = unsafe {
+            GetExtendedUdpTable(
+                buffer.as_mut_ptr().cast(),
+                &mut len,
+                0,
+                family,
+                UDP_TABLE_OWNER_PID,
+                0,
+            )
+        };
+        if status == 0 {
+            buffer.truncate(usize::try_from(len).unwrap_or(0));
+            return Ok(buffer);
+        }
+        size = len;
+    }
+    Err(io::Error::other("UDP-Tabelle nicht lesbar"))
+}
+
+/// Ein lauschender Port.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Listener {
+    /// Port.
+    pub port: u16,
+    /// `tcp` oder `udp`.
+    pub protocol: &'static str,
+    /// Auf allen Schnittstellen (0.0.0.0 bzw. ::) – also von außen erreichbar?
+    pub all_interfaces: bool,
+    /// Prozess.
+    pub pid: u32,
+}
+
+fn table_rows(buffer: &[u8], row: usize) -> impl Iterator<Item = &[u8]> {
+    let count = buffer
+        .get(..4)
+        .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    let count = usize::try_from(count)
+        .unwrap_or(0)
+        .min(buffer.len().saturating_sub(4) / row.max(1));
+    (0..count).map(move |i| &buffer[4 + i * row..4 + (i + 1) * row])
+}
+
+fn u32_at(row: &[u8], o: usize) -> u32 {
+    u32::from_le_bytes([row[o], row[o + 1], row[o + 2], row[o + 3]])
+}
+
+/// Lauschende TCP-Ports und gebundene UDP-Ports (IPv4 + IPv6), nur lesend.
+///
+/// # Errors
+/// Keine der Tabellen lesbar.
+pub fn listening_ports() -> io::Result<Vec<Listener>> {
+    const AF_INET: u32 = 2;
+    const AF_INET6: u32 = 23;
+    const LISTEN: u32 = 2;
+    let mut out = BTreeSet::new();
+    let mut any = false;
+    if let Ok(v4) = tcp_table(AF_INET) {
+        any = true;
+        // dwState, dwLocalAddr, dwLocalPort, dwRemoteAddr, dwRemotePort, dwOwningPid
+        for row in table_rows(&v4, size_of::<MIB_TCPROW_OWNER_PID>()) {
+            if u32_at(row, 0) == LISTEN {
+                out.insert(Listener {
+                    port: port(u32_at(row, 8)),
+                    protocol: "tcp",
+                    all_interfaces: u32_at(row, 4) == 0,
+                    pid: u32_at(row, 20),
+                });
+            }
+        }
+    }
+    if let Ok(v6) = tcp_table(AF_INET6) {
+        any = true;
+        for row in table_rows(&v6, size_of::<MIB_TCP6ROW_OWNER_PID>()) {
+            if u32_at(row, 48) == LISTEN {
+                out.insert(Listener {
+                    port: port(u32_at(row, 20)),
+                    protocol: "tcp",
+                    all_interfaces: row[..16].iter().all(|b| *b == 0),
+                    pid: u32_at(row, 52),
+                });
+            }
+        }
+    }
+    if let Ok(v4) = udp_table(AF_INET) {
+        any = true;
+        // dwLocalAddr, dwLocalPort, dwOwningPid
+        for row in table_rows(&v4, size_of::<MIB_UDPROW_OWNER_PID>()) {
+            out.insert(Listener {
+                port: port(u32_at(row, 4)),
+                protocol: "udp",
+                all_interfaces: u32_at(row, 0) == 0,
+                pid: u32_at(row, 8),
+            });
+        }
+    }
+    if let Ok(v6) = udp_table(AF_INET6) {
+        any = true;
+        // ucLocalAddr[16], dwLocalScopeId, dwLocalPort, dwOwningPid
+        for row in table_rows(&v6, size_of::<MIB_UDP6ROW_OWNER_PID>()) {
+            out.insert(Listener {
+                port: port(u32_at(row, 20)),
+                protocol: "udp",
+                all_interfaces: row[..16].iter().all(|b| *b == 0),
+                pid: u32_at(row, 24),
+            });
+        }
+    }
+    if !any {
+        return Err(io::Error::other("Port-Tabellen nicht lesbar"));
+    }
+    Ok(out.into_iter().collect())
 }
 
 // ---------------------------------------------------------------------------------------

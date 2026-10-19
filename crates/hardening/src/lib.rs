@@ -10,6 +10,7 @@
 #![forbid(unsafe_code)]
 
 pub mod checks;
+pub mod collect;
 pub mod facts;
 
 pub use checks::{CheckId, CheckResult, CheckStatus, FixKind, Score, evaluate, score};

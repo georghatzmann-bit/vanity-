@@ -229,3 +229,12 @@ würde. Der Index ist ein Zeilenprotokoll (eine Zeile je Version, angehängt): e
 einmal, beschädigte Zeilen kosten nur diese Version, und Ausdünnen schreibt ihn neu und räumt
 verwaiste Kopien mit auf. Export und Ausdünnen laufen nach dem „Ja“ außerhalb der Dienst-Sperre,
 Sicherungsläufe in einem eigenen Faden, der beim Beenden des Dienstes zwischen Dateien abbricht.
+
+## D-043 – Sicherheits-Score: ehrlich statt schön
+
+Status: angenommen (P6.1). Zwölf feste Prüfungen mit Gewichten (Summe 100); „in Ordnung“ zählt
+voll, „verbesserbar“ halb, „Risiko“ nichts. Was der Dienst nicht lesen kann, ist „unbekannt“ und
+fällt aus der Rechnung – statt als gut oder schlecht geraten zu werden. Liegen weniger als 50
+Gewichtspunkte vor, gibt es keinen Score („Kein Messwert“). Die Fakten liest der Dienst (SYSTEM,
+nur lesend), weil BitLocker/TPM ohne erhöhte Rechte nicht lesbar sind; die App bleibt ohne
+Admin-Rechte. Verlauf: ein Wert je Tag, 90 Tage, im Einstellungsspeicher des Dienstes.

@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 describe('Dashboard – ehrlich', () => {
-  it('Score ohne Wert: kein Messgerät, „–“ und die ehrliche Begründung (P6)', () => {
+  it('Score ohne Wert: kein Messgerät, „–“ und die ehrliche Begründung', () => {
     renderApp();
     const panel = screen.getByTestId('score-panel');
     expect(within(panel).queryByRole('meter')).toBeNull();
@@ -33,7 +33,9 @@ describe('Dashboard – ehrlich', () => {
       'none',
     );
     expect(
-      within(panel).getByText('Noch nicht bewertet – die Systemprüfungen folgen in P6.'),
+      within(panel).getByText(
+        'Noch nicht bewertet – die Prüfung läuft auf der Seite „Härtung“ (nur unter Windows).',
+      ),
     ).toBeInTheDocument();
     expect(within(panel).queryByText(/\d+\s*von 100/)).toBeNull();
   });

@@ -12,6 +12,7 @@ import type {
   SafeState,
   RansomState,
   BackupState,
+  HardeningState,
   EmergencyResult,
   Proposal,
   ScheduleState,
@@ -109,6 +110,7 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     proposeProcessAction: vi.fn(() => Promise.resolve(proposal('Prozess beenden'))),
     ransomStatus: vi.fn(() => Promise.resolve(ransomState())),
     backupStatus: vi.fn(() => Promise.resolve(backupState())),
+    hardeningStatus: vi.fn(() => Promise.resolve(hardeningState())),
     proposeBackup: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBackupRestore: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopie zurückholen'))),
     proposeBackupExport: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopien exportieren'))),
@@ -192,6 +194,48 @@ function backupState(over: Partial<BackupState> = {}): BackupState {
     note: null,
     folders: [],
     recent: [],
+    ...over,
+  };
+}
+
+function hardeningState(over: Partial<HardeningState> = {}): HardeningState {
+  return {
+    available: true,
+    score: 72,
+    checks: [
+      {
+        id: 'updates',
+        status: 'pass',
+        weight: 15,
+        summaryDe: 'Letztes Update vor 3 Tagen.',
+        summaryEn: 'Last update 3 days ago.',
+        fix: null,
+      },
+      {
+        id: 'smb1',
+        status: 'fail',
+        weight: 7,
+        summaryDe: 'SMBv1 ist an.',
+        summaryEn: 'SMBv1 is on.',
+        fix: 'disable_smb1',
+      },
+      {
+        id: 'tpm',
+        status: 'unknown',
+        weight: 5,
+        summaryDe: 'Nicht lesbar – zählt nicht in den Score.',
+        summaryEn: 'Not readable.',
+        fix: null,
+      },
+    ],
+    history: [
+      { date: '2026-10-18', value: 65 },
+      { date: '2026-10-19', value: 72 },
+    ],
+    checkedAt: '2026-10-19T12:00:00Z',
+    osVersion: '10.0.22631.4317',
+    dnsServers: [],
+    listening: [{ port: 3389, protocol: 'tcp', allInterfaces: true, program: 'svchost.exe' }],
     ...over,
   };
 }
@@ -1012,5 +1056,53 @@ describe('Rückfall-Kopien', () => {
     );
     fireEvent.click(within(panel).getByRole('button', { name: /exportieren/ }));
     await waitFor(() => expect(service.proposeBackupExport).toHaveBeenCalledWith('E:\\'));
+  });
+});
+
+describe('Härtung', () => {
+  it('zeigt Score, Prüfungen und Verlauf – nur lesend, „unbekannt“ ehrlich', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/hardening' });
+    const checks = await screen.findByTestId('hardening-checks');
+    expect(service.hardeningStatus).toHaveBeenCalledWith(false);
+    const smb = within(checks).getByTestId('hardening-check-smb1');
+    expect(smb).toHaveAttribute('data-status', 'fail');
+    expect(smb).toHaveTextContent('Risiko');
+    expect(smb).toHaveTextContent('Vorschlag: SMBv1 abschalten.');
+    expect(within(checks).getByTestId('hardening-check-tpm')).toHaveTextContent('Unbekannt');
+    expect(screen.getByTestId('hardening-rated')).toHaveTextContent('2 von 3 Prüfungen bewertet');
+    expect(screen.getByRole('img', { name: /Score-Verlauf/ })).toBeInTheDocument();
+    expect(screen.getByTestId('hardening-details')).toHaveTextContent('3389');
+    fireEvent.click(screen.getByRole('button', { name: 'Neu prüfen' }));
+    await waitFor(() => expect(service.hardeningStatus).toHaveBeenLastCalledWith(true));
+    expect(service.decide).not.toHaveBeenCalled();
+  });
+
+  it('ohne Windows: kein Score, ehrlicher Hinweis', async () => {
+    const service = fakeService({
+      hardeningStatus: vi.fn(() =>
+        Promise.resolve(hardeningState({ available: false, score: null, history: [] })),
+      ),
+    });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/hardening' });
+    expect(
+      await screen.findByText(
+        'Die Prüfung liest Windows-Einstellungen und läuft nur unter Windows.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('hardening-details')).toBeNull();
+  });
+
+  it('Dashboard zeigt den gemerkten Score des Dienstes', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/dashboard' });
+    const panel = screen.getByTestId('score-panel');
+    await waitFor(() =>
+      expect(within(panel).getByRole('meter', { name: 'Sicherheits-Score' })).toHaveAttribute(
+        'aria-valuenow',
+        '72',
+      ),
+    );
+    expect(service.hardeningStatus).toHaveBeenCalledWith(false);
   });
 });
