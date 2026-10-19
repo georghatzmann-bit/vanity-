@@ -4,7 +4,7 @@
  * blendet die Meldung nur in dieser Sitzung aus. Gaming-Modus pausiert Prüfungen und
  * Hinweise (endet spätestens nach 4 Stunden von selbst).
  */
-import { Button, Panel, RiskBadge, SafeText, Toggle } from '@aegis/ui';
+import { Button, Panel, RiskBadge, SafeText, Toggle, useToast } from '@aegis/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
@@ -26,12 +26,16 @@ function EventRow({
   onTrust,
   onIgnore,
   onProcess,
+  recent,
+  onFreeze,
 }: {
   readonly event: WatchEvent;
   readonly onIsolate: () => void;
   readonly onTrust: () => void;
   readonly onIgnore: () => void;
   readonly onProcess: (action: 'terminate' | 'suspend' | 'resume') => void;
+  readonly recent: readonly string[];
+  readonly onFreeze: (program: string) => void;
 }) {
   const { t, language, locale } = useT();
   const [open, setOpen] = useState(false);
@@ -60,17 +64,22 @@ function EventRow({
       {event.kind === 'process' && (
         <p className="mt-1 text-xs text-text-subtle">{t('realtime.processNote')}</p>
       )}
+      {event.kind === 'ransomware' && <RansomAlarm recent={recent} onFreeze={onFreeze} />}
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant={f.risk === 'dangerous' ? 'danger' : 'secondary'}
-          onClick={onIsolate}
-        >
-          {t('realtime.isolate')}
-        </Button>
-        <Button size="sm" variant="secondary" onClick={onTrust}>
-          {t('realtime.trust')}
-        </Button>
+        {event.kind !== 'ransomware' && (
+          <>
+            <Button
+              size="sm"
+              variant={f.risk === 'dangerous' ? 'danger' : 'secondary'}
+              onClick={onIsolate}
+            >
+              {t('realtime.isolate')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={onTrust}>
+              {t('realtime.trust')}
+            </Button>
+          </>
+        )}
         {event.kind === 'process' && (
           <>
             <Button
@@ -121,63 +130,183 @@ function EventRow({
   );
 }
 
-/** Ransomware-Schutz: Köderdateien anlegen/entfernen (nur über den Freigabe-Dialog). */
-function RansomPanel({
-  service,
-  start,
-  version,
+/** Ransomware-Alarm: kürzlich gestartete eigene Programme einfrieren (nur als Vorschlag). */
+function RansomAlarm({
+  recent,
+  onFreeze,
 }: {
-  readonly service: ServiceApi;
-  readonly start: (load: () => ReturnType<ServiceApi['proposeBaits']>) => void;
-  readonly version: number;
+  readonly recent: readonly string[];
+  readonly onFreeze: (program: string) => void;
 }) {
   const { t } = useT();
-  const [state, setState] = useState<RansomState | null>(null);
-  useEffect(() => {
-    let active = true;
-    service.ransomStatus().then(
-      (s) => {
-        if (active) {
-          setState(s);
-        }
-      },
-      () => undefined,
-    );
-    return () => {
-      active = false;
-    };
-  }, [service, version]);
+  return (
+    <div
+      className="mt-3 rounded-lg border border-danger/60 bg-danger/10 p-3"
+      role="group"
+      aria-label={t('ransom.alarmTitle')}
+      data-testid="ransom-alarm"
+    >
+      <p className="text-sm font-medium text-text">{t('ransom.alarmTitle')}</p>
+      <p className="mt-1 text-xs text-text-subtle">{t('ransom.alarmHint')}</p>
+      {recent.length === 0 ? (
+        <p className="mt-2 text-sm text-text-muted">{t('ransom.noRecent')}</p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {recent.map((program) => (
+            <li key={program} className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 flex-1 text-sm text-text">
+                <SafeText value={program} mono breakAll />
+              </span>
+              <Button size="sm" variant="danger" onClick={() => onFreeze(program)}>
+                {t('ransom.freeze')}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Ransomware-Schutz: Köderdateien (nur über den Freigabe-Dialog), geschützte Ordner (nur
+ * Beobachtung) und der Windows-„Überwachte Ordnerzugriff“ (nur erklären und öffnen).
+ */
+function RansomPanel({
+  service,
+  state,
+  start,
+  onChange,
+}: {
+  readonly service: ServiceApi;
+  readonly state: RansomState | null;
+  readonly start: (load: () => ReturnType<ServiceApi['proposeBaits']>) => void;
+  readonly onChange: (state: RansomState) => void;
+}) {
+  const { t } = useT();
+  const platform = usePlatform();
+  const toast = useToast();
   const count = state?.baits.length ?? 0;
+  const fail = (error: unknown) =>
+    toast.show({
+      tone: 'danger',
+      title: t('consentFlow.error'),
+      description: error instanceof Error ? error.message : String(error),
+    });
+  const saveFolders = async (folders: readonly string[]) => {
+    try {
+      onChange(await service.setProtectedFolders(folders));
+    } catch (error) {
+      fail(error);
+    }
+  };
+  const addFolder = async () => {
+    if (platform.pickPaths === null || state === null) {
+      return;
+    }
+    const picked = await platform.pickPaths('folder');
+    if (picked.length > 0) {
+      await saveFolders([...state.folders, ...picked.filter((p) => !state.folders.includes(p))]);
+    }
+  };
+  const cfa = state?.controlledFolderAccess ?? null;
   return (
     <Panel title={t('ransom.title')} description={t('ransom.honest')}>
-      <div className="space-y-3" data-testid="ransom-panel">
-        <p className="text-sm text-text">
-          {count > 0 ? t('ransom.baitsOn', { count: String(count) }) : t('ransom.baitsOff')}
-        </p>
-        <p className="text-sm text-text-muted">{t('ransom.burst')}</p>
-        <p className="text-xs text-text-subtle">{t('panic.hint')}</p>
-        <div className="flex flex-wrap gap-2">
+      <div className="space-y-4" data-testid="ransom-panel">
+        <div className="space-y-2">
+          <p className="text-sm text-text">
+            {count > 0 ? t('ransom.baitsOn', { count: String(count) }) : t('ransom.baitsOff')}
+          </p>
+          <p className="text-sm text-text-muted">{t('ransom.burst')}</p>
+          <p className="text-sm text-text-muted">{t('ransom.entropy')}</p>
+          <p className="text-xs text-text-subtle">{t('panic.hint')}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => start(() => service.proposeBaits(true))}
+            >
+              {t('ransom.addBaits')}
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => start(() => service.proposePanic(true))}
+            >
+              {t('panic.button')}
+            </Button>
+            {count > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => start(() => service.proposeBaits(false))}
+              >
+                {t('ransom.removeBaits')}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2" data-testid="ransom-folders">
+          <h3 className="text-sm font-medium text-text">{t('ransom.foldersTitle')}</h3>
+          <p className="text-xs text-text-subtle">{t('ransom.foldersHint')}</p>
+          <ul className="space-y-1">
+            {(state?.defaultFolders ?? []).map((f) => (
+              <li key={f} className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
+                <SafeText value={f} mono breakAll />
+                <span className="rounded-sm border border-border px-1 text-2xs text-text-subtle">
+                  {t('ransom.standard')}
+                </span>
+              </li>
+            ))}
+            {(state?.folders ?? []).map((f) => (
+              <li key={f} className="flex flex-wrap items-center gap-2 text-sm text-text">
+                <SafeText value={f} mono breakAll />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={t('ransom.removeFolder', { path: f })}
+                  onClick={() => void saveFolders((state?.folders ?? []).filter((x) => x !== f))}
+                >
+                  ×
+                </Button>
+              </li>
+            ))}
+          </ul>
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => start(() => service.proposeBaits(true))}
+            disabled={platform.pickPaths === null || state === null}
+            onClick={() => void addFolder()}
           >
-            {t('ransom.addBaits')}
+            {t('ransom.addFolder')}
           </Button>
-          <Button
-            size="sm"
-            variant="danger"
-            onClick={() => start(() => service.proposePanic(true))}
-          >
-            {t('panic.button')}
-          </Button>
-          {count > 0 && (
+        </div>
+
+        <div className="space-y-2" data-testid="ransom-cfa">
+          <h3 className="text-sm font-medium text-text">{t('ransom.cfaTitle')}</h3>
+          <p className="text-sm text-text-muted">
+            {cfa === 'on'
+              ? t('ransom.cfaOn')
+              : cfa === 'audit'
+                ? t('ransom.cfaAudit')
+                : cfa === 'off'
+                  ? t('ransom.cfaOff')
+                  : t('ransom.cfaUnknown')}
+          </p>
+          <p className="text-xs text-text-subtle">{t('ransom.cfaExplain')}</p>
+          {platform.openWindowsSecurity !== null && (
             <Button
               size="sm"
-              variant="ghost"
-              onClick={() => start(() => service.proposeBaits(false))}
+              variant="secondary"
+              onClick={() => {
+                const open = platform.openWindowsSecurity;
+                if (open !== null) {
+                  open().catch(fail);
+                }
+              }}
             >
-              {t('ransom.removeBaits')}
+              {t('ransom.cfaOpen')}
             </Button>
           )}
         </div>
@@ -234,10 +363,29 @@ export function RealtimePage() {
   }, [service]);
 
   const [ransomVersion, setRansomVersion] = useState(0);
+  const [ransom, setRansom] = useState<RansomState | null>(null);
   const flow = useConsentFlow(service, () => {
     void refresh();
     setRansomVersion((v) => v + 1);
   });
+  const hasAlarm = (state?.events ?? []).some((e) => e.kind === 'ransomware');
+  useEffect(() => {
+    if (service === null) {
+      return;
+    }
+    let active = true;
+    service.ransomStatus().then(
+      (r) => {
+        if (active) {
+          setRansom(r);
+        }
+      },
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, [service, ransomVersion, hasAlarm]);
 
   const setGaming = (on: boolean) => {
     if (service === null) {
@@ -299,8 +447,9 @@ export function RealtimePage() {
           </Panel>
           <RansomPanel
             service={service}
+            state={ransom}
             start={(load) => void flow.start(load)}
-            version={ransomVersion}
+            onChange={setRansom}
           />
           <Panel title={t('realtime.events')} description={t('realtime.eventsHint')}>
             {state !== null && events.length === 0 && (
@@ -322,6 +471,10 @@ export function RealtimePage() {
                     }}
                     onProcess={(action) =>
                       void flow.start(() => service.proposeProcessAction(e.path, action))
+                    }
+                    recent={ransom?.recent ?? []}
+                    onFreeze={(program) =>
+                      void flow.start(() => service.proposeProcessAction(program, 'suspend'))
                     }
                   />
                 ))}

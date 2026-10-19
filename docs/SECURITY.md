@@ -170,8 +170,18 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Änderungen/Umbenennungen/Löschungen in kurzer Zeit im eigenen Profil (je Profil gezählt,
   laute Ordner wie Temp/AppData unterhalb des Profils ausgenommen). Pausen getrennt:
   Massenänderungen je Profil 10 min, Köder je Datei – ein anderer Köder warnt sofort; neue
-  Köder machen bekannte nicht unscharf. Ehrlich: ohne Treiber erst, wenn der Angriff läuft;
-  Gegenmaßnahmen (Netz trennen, Beenden, Isolieren) nur nach „Ja“.
+  Köder machen bekannte nicht unscharf. **Geschützte Ordner (P5.9):** Desktop, Dokumente,
+  Bilder und eigene Ordner (höchstens 20; nur Ordner, die das Konto selbst lesen kann – sonst
+  bekäme es Dateinamen aus fremden Ordnern gemeldet) werden nur für diese Erkennung
+  beobachtet, nicht jede Datei geprüft. **Entropie:** Bei geänderten, sonst „lesbaren“ Dateien
+  (Text, CSV, alte Office-Formate …) und Umbenennungen auf ungewöhnliche Endungen misst der
+  eingeschränkte Prüfprozess die Entropie der ersten 64 KiB – mit den Rechten des angemeldeten
+  Profil-Besitzers, sonst gar nicht; höchstens 40 Stichproben je Profil und 20 s. Wirken 8
+  Dateien in 2 min wie verschlüsselt, warnt AEGIS („Gefährlich“). Im Alarm bietet AEGIS an,
+  kürzlich (30 min) gestartete eigene Programme **einzufrieren** (anhalten, Plan + „Ja“).
+  Windows „Überwachter Ordnerzugriff“ wird nur gelesen, erklärt und die Windows-Sicherheit
+  geöffnet – einschalten tut der Nutzer selbst. Ehrlich: ohne Treiber erst, wenn der Angriff
+  läuft; Gegenmaßnahmen (Einfrieren, Netz trennen, Beenden, Isolieren) nur nach „Ja“.
 - **Notfall „Netz trennen“ (P5.4):** legt zwei feste Sperrregeln der Windows-Firewall an
   (`netsh` vom festen Systempfad, feste Argumente, Zeitlimit 30 s); scheitert ein Schritt,
   werden angelegte Regeln sofort wieder entfernt. „Wieder verbinden“ ist ein eigener Plan,

@@ -42,7 +42,14 @@ pub struct WorkerRequest {
     /// Speicherbereiche (Speicher-Scan): statt Pfaden geprüft, nur YARA/EICAR.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub memory: Vec<MemoryBlock>,
+    /// Nur die Entropie der Dateianfänge messen (Ransomware-Erkennung): Antwort ist eine
+    /// Liste `[Wert | null]` in der Reihenfolge der Pfade.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub entropy: bool,
 }
+
+/// Höchstzahl Dateien je Entropie-Anfrage.
+pub const MAX_ENTROPY_FILES: usize = 200;
 
 /// Ein gelesener Speicherbereich für den Prüfprozess.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,6 +108,7 @@ impl Scanner {
                     files_only: false,
                     clamav: *clamav,
                     memory: Vec::new(),
+                    entropy: false,
                 },
                 user,
                 SCAN_TIMEOUT,
@@ -129,6 +137,7 @@ impl Scanner {
                     files_only: true,
                     clamav: *clamav,
                     memory: Vec::new(),
+                    entropy: false,
                 },
                 user,
                 EXAMINE_TIMEOUT,
@@ -143,6 +152,47 @@ impl Scanner {
     ///
     /// # Errors
     /// Wie [`Scanner::scan`].
+    /// Entropie der Dateianfänge (nur lesen) – mit den Rechten von `user`, im Prüfprozess.
+    ///
+    /// # Errors
+    /// Prüfprozess nicht startbar, abgestürzt oder Antwort unlesbar.
+    pub fn entropy(
+        &self,
+        paths: &[PathBuf],
+        user: &dyn UserAccess,
+    ) -> Result<Vec<Option<f64>>, String> {
+        let paths = &paths[..paths.len().min(MAX_ENTROPY_FILES)];
+        match self {
+            Self::InProcess(_) => {
+                let _scope = user.enter().map_err(identity)?;
+                Ok(paths
+                    .iter()
+                    .map(|p| aegis_engine::entropy::sample_file(p))
+                    .collect())
+            }
+            Self::Worker { exe, .. } => {
+                let raw = run_raw(
+                    exe,
+                    &WorkerRequest {
+                        paths: paths.to_vec(),
+                        files_only: true,
+                        clamav: false,
+                        memory: Vec::new(),
+                        entropy: true,
+                    },
+                    user,
+                    EXAMINE_TIMEOUT,
+                )?;
+                let values: Vec<Option<f64>> =
+                    serde_json::from_slice(&raw).map_err(|e| format!("Antwort unlesbar: {e}"))?;
+                if values.len() != paths.len() {
+                    return Err("Antwort passt nicht zur Anfrage".into());
+                }
+                Ok(values)
+            }
+        }
+    }
+
     pub fn scan_memory(
         &self,
         blocks: Vec<MemoryBlock>,
@@ -166,6 +216,7 @@ impl Scanner {
                     files_only: true,
                     clamav: false,
                     memory: blocks,
+                    entropy: false,
                 },
                 user,
                 EXAMINE_TIMEOUT,
@@ -224,6 +275,18 @@ fn run(
     user: &dyn UserAccess,
     timeout: Duration,
 ) -> Result<ScanReport, String> {
+    let output = run_raw(exe, request, user, timeout)?;
+    serde_json::from_slice(&output)
+        .map_err(|e| format!("Ungültiger Bericht des Prüfprozesses: {e}"))
+}
+
+/// Startet den Prüfprozess und liefert seine Ausgabe (höchstens [`MAX_REPORT`] Byte).
+fn run_raw(
+    exe: &Path,
+    request: &WorkerRequest,
+    user: &dyn UserAccess,
+    timeout: Duration,
+) -> Result<Vec<u8>, String> {
     let body = serde_json::to_vec(request).map_err(|e| e.to_string())?;
     let mut child = spawn(exe, user).map_err(|e| format!("Prüfprozess nicht startbar: {e}"))?;
     let stdin = child.take_stdin();
@@ -265,8 +328,7 @@ fn run(
     if output.len() as u64 > MAX_REPORT {
         return Err("Bericht des Prüfprozesses zu groß".into());
     }
-    serde_json::from_slice(&output)
-        .map_err(|e| format!("Ungültiger Bericht des Prüfprozesses: {e}"))
+    Ok(output)
 }
 
 #[cfg(windows)]

@@ -37,6 +37,8 @@
     "allow-service-propose-process-action",
     "allow-service-ransom-status",
     "allow-service-propose-baits",
+    "allow-service-set-protected-folders",
+    "allow-open-windows-security",
     "allow-service-memory-scan",
     "allow-service-emergency-scan",
     "allow-service-propose-restore-many",

@@ -428,6 +428,7 @@ fn waechter_meldungen_ueber_das_protokoll() {
             folders: vec![(home.path().to_path_buf(), Some(home.path().to_path_buf()))],
             profile_roots: Vec::new(),
             exclude: Vec::new(),
+            protected: Vec::new(),
             removable: false,
             processes: false,
             settle: std::time::Duration::from_millis(100),
@@ -1114,4 +1115,53 @@ fn notfall_scan_nur_lesend_dann_sammel_isolieren_und_alles_rueckgaengig() {
         send(json!({"type": "propose_restore_many", "entry_ids": []}))["code"],
         "input"
     );
+}
+
+#[test]
+fn eigene_schutzordner_nur_lesbare_ordner_und_nur_beobachtung() {
+    struct Account(std::path::PathBuf);
+    impl aegis_quarantine::UserAccess for Account {
+        fn enter(&self) -> std::io::Result<aegis_quarantine::UserScope> {
+            Ok(aegis_quarantine::UserScope::unchanged())
+        }
+        fn identity(&self) -> Option<String> {
+            Some("S-1-SCHUTZ".into())
+        }
+        fn profile(&self) -> Option<std::path::PathBuf> {
+            Some(self.0.clone())
+        }
+    }
+    let mut h = harness();
+    let home = tempfile::tempdir().unwrap();
+    let fotos = aegis_core::testing::create_fixture_dir(home.path(), "Fotos").unwrap();
+    let datei = write_fixture(home.path(), "notiz.txt", b"x").unwrap();
+    let before = DirSnapshot::capture(home.path()).unwrap();
+    let a = Account(home.path().to_path_buf());
+    let mut send = |v: Value| {
+        let req: Request = serde_json::from_value(v).unwrap();
+        serde_json::to_value(h.service.handle(req, &a)).unwrap()
+    };
+    let status = send(json!({"type": "ransom_status"}));
+    assert_eq!(status["type"], "ransom", "{status}");
+    assert_eq!(status["default_folders"].as_array().unwrap().len(), 3);
+    assert!(status["folders"].as_array().unwrap().is_empty());
+    let set = send(json!({"type": "set_protected_folders", "folders": [fotos]}));
+    assert_eq!(set["folders"].as_array().unwrap().len(), 1, "{set}");
+    assert_eq!(
+        send(json!({"type": "set_protected_folders", "folders": [datei]}))["code"],
+        "input",
+        "Datei statt Ordner"
+    );
+    assert_eq!(
+        send(json!({"type": "set_protected_folders", "folders": [home.path().join("fehlt")]}))["code"],
+        "input"
+    );
+    let many: Vec<_> = (0..21).map(|_| fotos.clone()).collect();
+    assert_eq!(
+        send(json!({"type": "set_protected_folders", "folders": many}))["code"],
+        "input"
+    );
+    let cleared = send(json!({"type": "set_protected_folders", "folders": []}));
+    assert!(cleared["folders"].as_array().unwrap().is_empty());
+    assert_unchanged(&before, &DirSnapshot::capture(home.path()).unwrap());
 }

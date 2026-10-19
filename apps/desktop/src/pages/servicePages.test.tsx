@@ -10,6 +10,7 @@ import type {
   LabRun,
   LabState,
   SafeState,
+  RansomState,
   EmergencyResult,
   Proposal,
   ScheduleState,
@@ -105,7 +106,10 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     labScreenshot: vi.fn(() => Promise.resolve(new Uint8Array([137, 80, 78, 71]))),
     labCaptureWindows: vi.fn(() => Promise.resolve([])),
     proposeProcessAction: vi.fn(() => Promise.resolve(proposal('Prozess beenden'))),
-    ransomStatus: vi.fn(() => Promise.resolve({ baits: [] })),
+    ransomStatus: vi.fn(() => Promise.resolve(ransomState())),
+    setProtectedFolders: vi.fn((folders: readonly string[]) =>
+      Promise.resolve(ransomState({ folders })),
+    ),
     panicStatus: vi.fn(() => Promise.resolve({ since: null, available: true })),
     memoryScan: vi.fn(() =>
       Promise.resolve({
@@ -167,6 +171,17 @@ function emergencyResult(): EmergencyResult {
     ],
     memory: [{ pid: 7, program: 'C:\\x\\t.exe' }],
     update: 'Signatur-Update angestoßen',
+  };
+}
+
+function ransomState(over: Partial<RansomState> = {}): RansomState {
+  return {
+    baits: [],
+    defaultFolders: ['C:\\Users\\a\\Desktop', 'C:\\Users\\a\\Documents'],
+    folders: [],
+    recent: ['C:\\Users\\a\\Downloads\\setup.exe'],
+    controlledFolderAccess: 'off',
+    ...over,
   };
 }
 
@@ -872,5 +887,57 @@ describe('Notfall-Scan (Panic-Button)', () => {
     expect(summary).toHaveTextContent('1 Datei(en) isoliert');
     fireEvent.click(within(summary).getByRole('button', { name: /Alles rückgängig/ }));
     await waitFor(() => expect(service.proposeRestoreMany).toHaveBeenCalledWith(['q-1']));
+  });
+});
+
+describe('Ransomware-Schutz – Ordner, Alarm, Windows', () => {
+  it('Schutzordner hinzufügen und entfernen (nur Beobachtung, keine Freigabe nötig)', async () => {
+    const service = fakeService();
+    renderApp({
+      platform: fakePlatform('tauri', undefined, service, ['D:\\Fotos']),
+      hash: '#/realtime',
+    });
+    const folders = await screen.findByTestId('ransom-folders');
+    expect(folders).toHaveTextContent('Documents');
+    fireEvent.click(within(folders).getByRole('button', { name: /Ordner hinzufügen/ }));
+    await waitFor(() => expect(service.setProtectedFolders).toHaveBeenCalledWith(['D:\\Fotos']));
+    fireEvent.click(
+      await within(folders).findByRole('button', { name: /Nicht mehr schützen: D:\\Fotos/ }),
+    );
+    await waitFor(() => expect(service.setProtectedFolders).toHaveBeenLastCalledWith([]));
+    expect(service.decide).not.toHaveBeenCalled();
+  });
+
+  it('Alarm bietet Einfrieren kürzlich gestarteter Programme nur als Vorschlag an', async () => {
+    const alarm = {
+      seq: 9,
+      at: '2026-10-19T12:00:00Z',
+      kind: 'ransomware' as const,
+      path: 'C:\\Users\\a\\Documents\\brief.txt',
+      finding: { ...finding, risk: 'dangerous' as const },
+    };
+    const service = fakeService({
+      watchPoll: vi.fn(() => Promise.resolve(watchState([alarm]))),
+    });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/realtime' });
+    const box = await screen.findByTestId('ransom-alarm');
+    expect(box).toHaveTextContent('setup.exe');
+    fireEvent.click(within(box).getByRole('button', { name: /Einfrieren/ }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeProcessAction).toHaveBeenCalledWith(
+      'C:\\Users\\a\\Downloads\\setup.exe',
+      'suspend',
+    );
+    expect(service.decide).not.toHaveBeenCalled();
+  });
+
+  it('Überwachter Ordnerzugriff: nur erklären und Windows-Sicherheit öffnen', async () => {
+    const service = fakeService();
+    const platform = fakePlatform('tauri', undefined, service);
+    renderApp({ platform, hash: '#/realtime' });
+    const cfa = await screen.findByTestId('ransom-cfa');
+    await waitFor(() => expect(cfa).toHaveTextContent('Ist ausgeschaltet'));
+    fireEvent.click(within(cfa).getByRole('button', { name: 'Windows-Sicherheit öffnen' }));
+    expect(platform.openWindowsSecurity).toHaveBeenCalled();
   });
 });

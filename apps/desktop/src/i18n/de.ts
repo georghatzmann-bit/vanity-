@@ -506,6 +506,28 @@ export const de = {
       'Außerdem achtet der Wächter auf viele Änderungen, Löschungen oder Umbenennungen auf ungewöhnliche Endungen in kurzer Zeit.',
     addBaits: 'Köder anlegen …',
     removeBaits: 'Köder entfernen …',
+    entropy:
+      'Und: Werden viele normalerweise lesbare Dateien (Text, CSV, alte Office-Formate …) plötzlich zu zufällig wirkenden Daten, warnt AEGIS – typisch für Verschlüsselung.',
+    foldersTitle: 'Geschützte Ordner',
+    foldersHint:
+      'In diesen Ordnern achtet AEGIS auf Ransomware-Muster (nur Beobachtung – an den Ordnern ändert sich nichts).',
+    standard: 'Standard',
+    addFolder: 'Ordner hinzufügen …',
+    removeFolder: 'Nicht mehr schützen: {path}',
+    cfaTitle: 'Windows: Überwachter Ordnerzugriff',
+    cfaOn:
+      'Ist eingeschaltet – Windows blockiert unbekannte Programme beim Schreiben in geschützte Ordner.',
+    cfaAudit: 'Läuft im Prüfmodus – Windows protokolliert nur, blockiert aber nicht.',
+    cfaOff: 'Ist ausgeschaltet.',
+    cfaUnknown: 'Zustand unbekannt (z. B. anderes Virenschutzprogramm aktiv).',
+    cfaExplain:
+      'Diese Windows-Funktion kann – anders als AEGIS ohne Treiber – Schreibzugriffe wirklich verhindern. Sie kann aber auch harmlose Programme stören. Einschalten kannst nur du, in der Windows-Sicherheit.',
+    cfaOpen: 'Windows-Sicherheit öffnen',
+    alarmTitle: 'Ransomware-Alarm: Programme einfrieren?',
+    alarmHint:
+      'Diese Programme hast du in den letzten 30 Minuten gestartet. Einfrieren hält ein Programm an (es kann danach fortgesetzt werden) – erst nach deiner Bestätigung.',
+    freeze: 'Einfrieren …',
+    noRecent: 'Keine kürzlich gestarteten Programme bekannt.',
   },
   lab: {
     intro:

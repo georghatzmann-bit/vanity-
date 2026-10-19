@@ -156,8 +156,9 @@ pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
     // Echtzeit-Wächter: meldet nur (Prüfung im eingeschränkten Prüfprozess); der eigene
     // Datenordner wird nie geprüft. Startet er nicht, läuft der Dienst trotzdem – der Status
     // zeigt das an.
-    let watch_config =
+    let mut watch_config =
         crate::watch::WatchConfig::default_for_platform(vec![config.data_dir.clone()]);
+    watch_config.protected.extend(service.protected_folders());
     if let Err(e) = crate::watch::start(
         watch_config,
         service.scanner(),

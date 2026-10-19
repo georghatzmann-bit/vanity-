@@ -181,6 +181,13 @@ trennende Konto und Administratoren, damit Schadsoftware in einem anderen Konto 
 nicht aufheben kann. Der eigentliche **Panic-Button** der Spezifikation ist der Notfall-Scan
 (D-039).
 
+## D-040 – Geschützte Ordner nur beobachten, nicht prüfen
+Dokumente, Bilder und eigene Schutzordner werden nur für die Ransomware-Erkennung beobachtet
+(Köder, Massenänderungen, Entropie-Stichproben) – nicht jede geänderte Datei wird geprüft;
+das bliebe bei großen Ordnern zu teuer. Geprüft werden weiter Downloads, Desktop, Temp,
+Wechseldatenträger und Programmstarts. Eigene Schutzordner sind eine Einstellung (wie der
+Zeitplan), kein Plan: Sie ändern nur, was AEGIS beobachtet, nicht die Ordner.
+
 ## D-039 – Panic-Button = Notfall-Scan
 Laut Spezifikation (Modul G) ist der Panic-Button ein sofortiger, nur lesender Notfall-Scan mit
 anschließendem Sammel-Isolieren (vorausgewählt nur „Gefährlich“) und „Alles rückgängig“. Er

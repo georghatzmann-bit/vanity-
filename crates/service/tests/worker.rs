@@ -121,3 +121,30 @@ fn speicher_wird_im_pruefprozess_geprueft() {
     assert!(findings[0].path.to_string_lossy().contains("@ 0x1000"));
     assert!(findings[1].risk <= RiskLevel::Info);
 }
+
+#[test]
+fn entropie_wird_im_pruefprozess_gemessen() {
+    let dir = tempfile::tempdir().unwrap();
+    let text = write_fixture(
+        dir.path(),
+        "notiz.txt",
+        "Einkaufsliste: Brot, Milch, Käse. ".repeat(300).as_bytes(),
+    )
+    .unwrap();
+    let mut noise = Vec::with_capacity(65536);
+    let mut x: u32 = 88_172_645;
+    for _ in 0..65536 {
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        noise.push(x.to_le_bytes()[1]);
+    }
+    let enc = write_fixture(dir.path(), "notiz.txt.crypt", &noise).unwrap();
+    let missing = dir.path().join("fehlt.txt");
+    let values = worker()
+        .entropy(&[text, enc, missing], &OwnProcess)
+        .unwrap();
+    assert!(values[0].unwrap() < 5.0, "{values:?}");
+    assert!(values[1].unwrap() > 7.5, "{values:?}");
+    assert_eq!(values[2], None);
+}

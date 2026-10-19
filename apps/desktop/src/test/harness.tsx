@@ -118,6 +118,7 @@ export function fakePlatform(
     },
     service: kind === 'tauri' ? service : null,
     pickPaths: kind === 'tauri' ? vi.fn(() => Promise.resolve(picked)) : null,
+    openWindowsSecurity: kind === 'tauri' ? vi.fn(() => Promise.resolve()) : null,
   };
 }
 

@@ -327,6 +327,14 @@ export interface SafeState {
 export interface RansomState {
   /** Angelegte Köderdateien. */
   readonly baits: readonly string[];
+  /** Standard-Schutzordner (Desktop, Dokumente, Bilder). */
+  readonly defaultFolders: readonly string[];
+  /** Eigene Schutzordner. */
+  readonly folders: readonly string[];
+  /** Kürzlich gestartete eigene Programme (zum Einfrieren im Alarm). */
+  readonly recent: readonly string[];
+  /** Windows „Überwachter Ordnerzugriff“. */
+  readonly controlledFolderAccess: 'on' | 'off' | 'audit' | null;
 }
 
 /** Fehler des Dienstes (es wurde nichts ausgeführt, sofern nicht anders gesagt). */
@@ -400,6 +408,8 @@ export interface ServiceApi {
   proposeSafeRetrieve(id: string): Promise<Proposal>;
   /** Ransomware-Schutz: eigene Köderdateien (nur lesend). */
   ransomStatus(): Promise<RansomState>;
+  /** Eigene Schutzordner setzen (nur Beobachtung). */
+  setProtectedFolders(folders: readonly string[]): Promise<RansomState>;
   /** Köderdateien anlegen (`true`) bzw. entfernen vorschlagen. */
   proposeBaits(on: boolean): Promise<Proposal>;
   /** Laufende Prozesse eines Programms beenden/anhalten/fortsetzen vorschlagen. */
@@ -799,10 +809,15 @@ export function parseSafe(response: unknown): SafeState {
 }
 
 export function parseRansom(response: unknown): RansomState {
+  const r = expectType(response, 'ransom');
+  const strings = (v: unknown) => arr(v).filter((b): b is string => typeof b === 'string');
+  const cfa = r['controlled_folder_access'];
   return {
-    baits: arr(expectType(response, 'ransom')['baits']).filter(
-      (b): b is string => typeof b === 'string',
-    ),
+    baits: strings(r['baits']),
+    defaultFolders: strings(r['default_folders']),
+    folders: strings(r['folders']),
+    recent: strings(r['recent']),
+    controlledFolderAccess: cfa === 'on' || cfa === 'off' || cfa === 'audit' ? cfa : null,
   };
 }
 

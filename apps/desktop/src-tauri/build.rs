@@ -32,6 +32,8 @@ const APP_COMMANDS: &[&str] = &[
     "service_propose_process_action",
     "service_ransom_status",
     "service_propose_baits",
+    "service_set_protected_folders",
+    "open_windows_security",
     "service_memory_scan",
     "service_emergency_scan",
     "service_propose_restore_many",

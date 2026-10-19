@@ -680,6 +680,123 @@ impl<C: Clock, W: Durable> Service<C, W> {
         self.watch.ransom().set_canaries(all);
     }
 
+    /// Zustand des Ransomware-Schutzes für das Konto.
+    pub fn ransom_status(&self, user: &dyn UserAccess) -> Response {
+        let owner = user.identity();
+        let default_folders = user.profile().map_or_else(Vec::new, |p| {
+            let p = crate::watch::long_name(p);
+            std::iter::once("Desktop")
+                .chain(crate::watch::PROTECTED_FOLDERS)
+                .map(|f| p.join(f))
+                .collect()
+        });
+        Response::Ransom {
+            baits: self.baits_of(owner.as_deref()),
+            default_folders,
+            folders: self
+                .settings
+                .get()
+                .protected
+                .iter()
+                .find(|s| s.owner == owner)
+                .map_or_else(Vec::new, |s| s.folders.clone()),
+            recent: self.watch.recent_starts_of(owner.as_deref()),
+            controlled_folder_access: controlled_folder_access(),
+        }
+    }
+
+    /// Alle eigenen Schutzordner (für den Start des Wächters).
+    #[must_use]
+    pub fn protected_folders(&self) -> Vec<(PathBuf, Option<PathBuf>)> {
+        self.settings
+            .get()
+            .protected
+            .iter()
+            .flat_map(|s| s.folders.iter().map(|f| (f.clone(), s.profile.clone())))
+            .collect()
+    }
+
+    /// Setzt die eigenen Schutzordner (nur Beobachtung – verändert nichts an den Ordnern).
+    /// Jeder Ordner muss für das Konto selbst lesbar sein: Der Wächter meldet dem Konto
+    /// Dateinamen daraus, also nur aus Ordnern, die es ohnehin sehen darf.
+    pub fn set_protected(&mut self, folders: Vec<PathBuf>, user: &dyn UserAccess) -> Response {
+        const MAX_PROTECTED: usize = 20;
+        if folders.len() > MAX_PROTECTED {
+            return Response::error("input", format!("Höchstens {MAX_PROTECTED} Ordner"));
+        }
+        if !folders.is_empty()
+            && let Err(e) = self.check_paths(&folders)
+        {
+            return Response::error("input", e);
+        }
+        let folders = match long_paths(&folders, user) {
+            Ok(f) => f,
+            Err(e) => return e,
+        };
+        {
+            let _scope = match user.enter() {
+                Ok(s) => s,
+                Err(e) => return Response::error("identity", e.to_string()),
+            };
+            for f in &folders {
+                let meta = std::fs::symlink_metadata(f);
+                if !meta.is_ok_and(|m| m.is_dir()) || std::fs::read_dir(f).is_err() {
+                    return Response::error(
+                        "input",
+                        format!(
+                            "{} ist kein (für dich lesbarer) Ordner",
+                            escape_text(&f.display().to_string())
+                        ),
+                    );
+                }
+                if f.parent().is_none() {
+                    return Response::error(
+                        "input",
+                        "Ganze Laufwerke lassen sich nicht schützen – bitte einen Ordner wählen",
+                    );
+                }
+            }
+        }
+        let owner = user.identity();
+        let profile = user.profile().map(crate::watch::long_name);
+        let old: Vec<PathBuf> = self
+            .settings
+            .get()
+            .protected
+            .iter()
+            .find(|s| s.owner == owner)
+            .map_or_else(Vec::new, |s| s.folders.clone());
+        let mut unique: Vec<PathBuf> = Vec::new();
+        for f in folders {
+            if !unique.iter().any(|u| crate::paths::same_path(u, &f)) {
+                unique.push(f);
+            }
+        }
+        let saved = self.settings.update(|s| {
+            s.protected.retain(|p| p.owner != owner);
+            if !unique.is_empty() {
+                s.protected.push(crate::schedule::ProtectedSet {
+                    owner: owner.clone(),
+                    profile: profile.clone(),
+                    folders: unique.clone(),
+                });
+            }
+        });
+        if let Err(e) = saved {
+            return Response::error("settings", e.to_string());
+        }
+        let still: Vec<(PathBuf, Option<PathBuf>)> = self.protected_folders();
+        for f in old {
+            if !still.iter().any(|(s, _)| crate::paths::same_path(s, &f)) {
+                self.watch.unprotect(&f);
+            }
+        }
+        for f in unique {
+            self.watch.protect(f, profile.clone());
+        }
+        self.ransom_status(user)
+    }
+
     /// Schlägt vor, Köderdateien anzulegen (`on`) bzw. zu entfernen.
     pub fn propose_baits(&mut self, on: bool, user: &dyn UserAccess) -> Response {
         use aegis_quarantine::bait::{BAIT_SETTING, bait_paths};
@@ -1431,9 +1548,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Request::ProposeProcessAction { program, action } => {
                 self.propose_process_action(&program, &action, user)
             }
-            Request::RansomStatus {} => Response::Ransom {
-                baits: self.baits_of(user.identity().as_deref()),
-            },
+            Request::RansomStatus {} => self.ransom_status(user),
+            Request::SetProtectedFolders { folders } => self.set_protected(folders, user),
             Request::ProposeBaits { on } => self.propose_baits(on, user),
             Request::MemoryScan {} => {
                 let mut response = memory_scan(&self.scanner, user);
@@ -2386,6 +2502,38 @@ fn new_nonce() -> Option<String> {
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Windows „Überwachter Ordnerzugriff“ (Defender): `on`, `off`, `audit` oder unbekannt.
+fn controlled_folder_access() -> Option<String> {
+    #[cfg(windows)]
+    {
+        use aegis_winffi::inspect::{Hive, read_values};
+        const KEYS: [&str; 2] = [
+            r"SOFTWARE\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\Controlled Folder Access",
+            r"SOFTWARE\Microsoft\Windows Defender\Windows Defender Exploit Guard\Controlled Folder Access",
+        ];
+        for key in KEYS {
+            if let Some(v) = read_values(&Hive::LocalMachine, key)
+                .into_iter()
+                .find(|v| v.name.eq_ignore_ascii_case("EnableControlledFolderAccess"))
+            {
+                return Some(
+                    match v.data.as_str() {
+                        "1" => "on",
+                        "2" | "3" | "4" => "audit",
+                        _ => "off",
+                    }
+                    .to_owned(),
+                );
+            }
+        }
+        None
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
 }
 
 /// Höchstwerte des Speicher-Scans.

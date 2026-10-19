@@ -91,9 +91,23 @@ pub struct ServiceSettings {
     /// Panic-Button aktiv seit (RFC 3339); `None` = Netz normal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panic_since: Option<String>,
+    /// Eigene Schutzordner je Konto.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub protected: Vec<ProtectedSet>,
     /// Konto, das das Netz getrennt hat (darf es – neben Administratoren – wieder verbinden).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panic_by: Option<String>,
+}
+
+/// Eigene Schutzordner eines Kontos (Ransomware-Erkennung).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProtectedSet {
+    /// Konto (SID).
+    pub owner: Option<String>,
+    /// Profil des Kontos (Meldungen gehören dorthin).
+    pub profile: Option<PathBuf>,
+    /// Ordner.
+    pub folders: Vec<PathBuf>,
 }
 
 /// Köderdateien eines Kontos.
@@ -118,6 +132,7 @@ impl Default for ServiceSettings {
             baits: Vec::new(),
             panic_since: None,
             panic_by: None,
+            protected: Vec::new(),
         }
     }
 }

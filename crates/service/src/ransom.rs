@@ -7,6 +7,9 @@
 //!   Zeichen (niemand sonst hat einen Grund, sie anzufassen).
 //! - **Massenänderungen:** Viele Änderungen, Umbenennungen auf neue Endungen oder Löschungen in
 //!   kurzer Zeit innerhalb eines Profils (Temp und App-Daten ausgenommen).
+//! - **Hohe Entropie:** Werden viele Dateien, die normalerweise „lesbar“ sind (Text, CSV, alte
+//!   Office-Formate, BMP …), plötzlich zu zufällig wirkenden Daten, ist das typisch für
+//!   Verschlüsselung. Gemessen wird stichprobenartig im eingeschränkten Prüfprozess.
 //!
 //! Ehrlich: Das ist eine Heuristik ohne Kernel-Treiber. Sie kann Fehlalarme geben (z. B. große
 //! Kopier- oder Synchronisationsvorgänge) und erkennt Angriffe erst, wenn sie schon laufen.
@@ -39,6 +42,13 @@ pub enum Signal {
         /// Die Köderdatei.
         path: PathBuf,
     },
+    /// Viele normalerweise lesbare Dateien wurden zu zufällig wirkenden Daten.
+    Encrypting {
+        /// Ein Beispiel-Pfad.
+        example: PathBuf,
+        /// Betroffene Dateien im Zeitfenster.
+        count: usize,
+    },
     /// Viele Änderungen in kurzer Zeit.
     Burst {
         /// Ein Beispiel-Pfad.
@@ -64,11 +74,43 @@ pub const REMOVED_LIMIT: usize = 80;
 /// Ein anderer Köder warnt auch während der Pause sofort.
 pub const ALERT_PAUSE: Duration = Duration::from_secs(10 * 60);
 
+/// Ab dieser Entropie (Bit/Byte) gilt eine Stichprobe als „wie verschlüsselt“.
+pub const ENTROPY_HIGH: f64 = 7.5;
+/// So viele „wie verschlüsselt“ gewordene Dateien im Zeitfenster lösen eine Warnung aus.
+pub const ENCRYPTED_LIMIT: usize = 8;
+/// Zeitfenster für die Entropie-Warnung (Messung kommt mit Verzögerung).
+pub const ENTROPY_WINDOW: Duration = Duration::from_secs(120);
+
+/// Formate, die normalerweise **keine** hohe Entropie haben (nicht komprimiert).
+const LOW_ENTROPY_EXTENSIONS: &[&str] = &[
+    "txt", "csv", "tsv", "log", "md", "rtf", "doc", "xls", "ppt", "html", "htm", "xml", "json",
+    "yaml", "yml", "svg", "bmp", "wav", "sql", "ini", "cfg", "eml", "tex", "ps", "eps", "vcf",
+    "ics",
+];
+
+/// Lohnt sich eine Entropie-Stichprobe für diese Änderung? Geänderte Dateien in sonst
+/// „lesbaren“ Formaten und Umbenennungen auf ungewöhnliche Endungen.
+#[must_use]
+pub fn wants_entropy(change: FileChange, path: &Path, scope: Option<&Path>) -> bool {
+    if is_noisy(path, scope) {
+        return false;
+    }
+    match change {
+        FileChange::Modified => {
+            extension(path).is_some_and(|e| LOW_ENTROPY_EXTENSIONS.contains(&e.as_str()))
+        }
+        FileChange::Renamed => extension(path).is_some() && !is_common_extension(path),
+        _ => false,
+    }
+}
+
 #[derive(Debug, Default)]
 struct Window {
     events: VecDeque<(Instant, FileChange, Option<String>)>,
     last_burst: Option<Instant>,
     canary_alerts: HashMap<PathBuf, Instant>,
+    high_entropy: VecDeque<Instant>,
+    last_encrypting: Option<Instant>,
 }
 
 /// Zustand des Ransomware-Wächters.
@@ -287,13 +329,55 @@ impl RansomGuard {
     }
 }
 
+impl RansomGuard {
+    /// Ergebnis einer Entropie-Stichprobe; liefert eine Warnung, wenn genug Dateien im
+    /// Zeitfenster „wie verschlüsselt“ wirken (höchstens eine je Profil in [`ALERT_PAUSE`]).
+    pub fn observe_entropy(
+        &self,
+        path: &Path,
+        scope: Option<&Path>,
+        entropy: f64,
+        now: Instant,
+    ) -> Option<Signal> {
+        if entropy < ENTROPY_HIGH {
+            return None;
+        }
+        let mut windows = lock(&self.windows);
+        if windows.len() > 1000 {
+            windows.clear();
+        }
+        let window = windows.entry(scope.map(Path::to_path_buf)).or_default();
+        window.high_entropy.push_back(now);
+        while window
+            .high_entropy
+            .front()
+            .is_some_and(|t| now.duration_since(*t) > ENTROPY_WINDOW)
+        {
+            window.high_entropy.pop_front();
+        }
+        let paused = window
+            .last_encrypting
+            .is_some_and(|t| now.duration_since(t) < ALERT_PAUSE);
+        if paused || window.high_entropy.len() < ENCRYPTED_LIMIT {
+            return None;
+        }
+        let count = window.high_entropy.len();
+        window.last_encrypting = Some(now);
+        window.high_entropy.clear();
+        Some(Signal::Encrypting {
+            example: path.to_path_buf(),
+            count,
+        })
+    }
+}
+
 impl Signal {
     /// Warnung für den Wächter (nur Beobachtung, keine Aktion).
     #[must_use]
     pub fn finding(&self) -> aegis_engine::Finding {
         use aegis_core::risk::RiskLevel;
-        let advice_de = "AEGIS hat nichts verändert. Wenn du das nicht selbst warst: Panic-Button (Netz trennen) und das verdächtige Programm beenden – beides nach deiner Bestätigung.";
-        let advice_en = "AEGIS changed nothing. If this was not you: use the panic button (disconnect network) and terminate the suspicious program – both after your confirmation.";
+        let advice_de = "AEGIS hat nichts verändert. Wenn du das nicht selbst warst: kürzlich gestartete Programme einfrieren (anhalten), Netz trennen und das verdächtige Programm beenden – alles nach deiner Bestätigung.";
+        let advice_en = "AEGIS changed nothing. If this was not you: freeze (suspend) recently started programs, disconnect the network and terminate the suspicious program – all after your confirmation.";
         match self {
             Self::Canary { path } => aegis_engine::Finding::behavior_alert(
                 path.clone(),
@@ -304,6 +388,21 @@ impl Signal {
                     "ransom.canary".into(),
                     "Köderdatei angefasst – normale Programme haben dafür keinen Grund.".into(),
                     "Bait file touched – normal programs have no reason to do that.".into(),
+                )],
+            ),
+            Self::Encrypting { example, count } => aegis_engine::Finding::behavior_alert(
+                example.clone(),
+                RiskLevel::Dangerous,
+                format!(
+                    "Ransomware-Verdacht: {count} normalerweise lesbare Dateien wirken in kurzer Zeit wie verschlüsselt (sehr hohe Entropie). {advice_de}"
+                ),
+                format!(
+                    "Ransomware suspected: {count} normally readable files suddenly look encrypted (very high entropy). {advice_en}"
+                ),
+                vec![(
+                    "ransom.entropy".into(),
+                    "Viele Text-/Office-/Bilddateien wurden zu zufällig wirkenden Daten.".into(),
+                    "Many text/office/image files turned into random-looking data.".into(),
                 )],
             ),
             Self::Burst {
@@ -440,6 +539,58 @@ mod tests {
         for i in 0..100 {
             let p = PathBuf::from(format!("/home/a/Bilder/{i}.e{i}"));
             assert_eq!(g.observe(FileChange::Renamed, &p, Some(scope), t), None);
+        }
+    }
+
+    #[test]
+    fn hohe_entropie_vieler_lesbarer_dateien() {
+        let g = RansomGuard::new();
+        let t = Instant::now();
+        let scope = Path::new("/home/a");
+        assert!(wants_entropy(
+            FileChange::Modified,
+            Path::new("/home/a/Dokumente/a.txt"),
+            Some(scope)
+        ));
+        assert!(!wants_entropy(
+            FileChange::Modified,
+            Path::new("/home/a/Bilder/a.jpg"),
+            Some(scope)
+        ));
+        assert!(wants_entropy(
+            FileChange::Renamed,
+            Path::new("/home/a/Dokumente/a.txt.locked"),
+            Some(scope)
+        ));
+        assert!(!wants_entropy(
+            FileChange::Modified,
+            Path::new("/home/a/AppData/x.txt"),
+            Some(scope)
+        ));
+        // Niedrige Werte zählen nicht.
+        for i in 0..50 {
+            let p = PathBuf::from(format!("/home/a/Dokumente/{i}.txt"));
+            assert_eq!(g.observe_entropy(&p, Some(scope), 4.2, t), None);
+        }
+        let mut signal = None;
+        for i in 0..ENCRYPTED_LIMIT {
+            let p = PathBuf::from(format!("/home/a/Dokumente/{i}.txt"));
+            signal = g.observe_entropy(&p, Some(scope), 7.98, t);
+        }
+        assert!(
+            matches!(signal, Some(Signal::Encrypting { count, .. }) if count == ENCRYPTED_LIMIT)
+        );
+        assert_eq!(
+            signal.unwrap().finding().risk,
+            aegis_core::risk::RiskLevel::Dangerous
+        );
+        // Danach Pause; über das Zeitfenster verteilt löst es nicht aus.
+        let p = PathBuf::from("/home/a/Dokumente/x.txt");
+        assert_eq!(g.observe_entropy(&p, Some(scope), 7.99, t), None);
+        let other = RansomGuard::new();
+        for i in 0..ENCRYPTED_LIMIT as u64 {
+            let at = t + ENTROPY_WINDOW * u32::try_from(i).unwrap();
+            assert_eq!(other.observe_entropy(&p, Some(scope), 7.99, at), None);
         }
     }
 

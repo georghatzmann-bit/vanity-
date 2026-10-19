@@ -499,6 +499,27 @@ export const en: Messages<typeof de> = {
       'The guard also watches for many changes, deletions or renames to unusual extensions within a short time.',
     addBaits: 'Create bait files…',
     removeBaits: 'Remove bait files…',
+    entropy:
+      'And: if many normally readable files (text, CSV, old Office formats…) suddenly turn into random-looking data, AEGIS warns – typical for encryption.',
+    foldersTitle: 'Protected folders',
+    foldersHint:
+      'In these folders AEGIS watches for ransomware patterns (observation only – nothing about the folders changes).',
+    standard: 'Default',
+    addFolder: 'Add folder…',
+    removeFolder: 'Stop protecting: {path}',
+    cfaTitle: 'Windows: Controlled folder access',
+    cfaOn: 'Is on – Windows blocks unknown programs from writing to protected folders.',
+    cfaAudit: 'Runs in audit mode – Windows only logs, it does not block.',
+    cfaOff: 'Is off.',
+    cfaUnknown: 'State unknown (e.g. another antivirus is active).',
+    cfaExplain:
+      'Unlike AEGIS without a driver, this Windows feature can actually prevent writes. It can also disturb harmless programs. Only you can turn it on, in Windows Security.',
+    cfaOpen: 'Open Windows Security',
+    alarmTitle: 'Ransomware alarm: freeze programs?',
+    alarmHint:
+      'You started these programs within the last 30 minutes. Freezing suspends a program (it can be resumed later) – only after your confirmation.',
+    freeze: 'Freeze…',
+    noRecent: 'No recently started programs known.',
   },
   lab: {
     intro:

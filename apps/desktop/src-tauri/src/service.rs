@@ -505,6 +505,18 @@ pub async fn service_propose_safe_retrieve(id: String) -> Result<Value, String> 
     send(json!({ "type": "propose_safe_retrieve", "id": id })).await
 }
 
+/// Eigene Schutzordner setzen (nur Beobachtung; höchstens 20, leer = keine).
+#[tauri::command]
+pub async fn service_set_protected_folders(folders: Vec<String>) -> Result<Value, String> {
+    if !folders.is_empty() {
+        check_paths(&folders)?;
+    }
+    if folders.len() > 20 {
+        return Err("Höchstens 20 Ordner.".into());
+    }
+    send(json!({ "type": "set_protected_folders", "folders": folders })).await
+}
+
 /// Ransomware-Schutz: eigene Köderdateien (nur lesend).
 #[tauri::command]
 pub async fn service_ransom_status() -> Result<Value, String> {

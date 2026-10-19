@@ -54,6 +54,10 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-ransom-status': 'Dienst: eigene Köderdateien des Ransomware-Schutzes (nur lesend)',
   'allow-service-propose-baits':
     'Dienst: Köderdateien anlegen/entfernen vorschlagen (nur nach „Ja“)',
+  'allow-service-set-protected-folders':
+    'Dienst: eigene Schutzordner der Ransomware-Erkennung setzen (nur Beobachtung)',
+  'allow-open-windows-security':
+    'Windows-Sicherheit „Ransomware-Schutz“ öffnen (fester Aufruf, ändert nichts)',
   'allow-service-memory-scan': 'Dienst: Speicher-Scan eigener Programme (nur lesend)',
   'allow-service-emergency-scan':
     'Dienst: Notfall-Scan (Autostarts, Downloads, Temp, AppData, Programme; nur lesend)',

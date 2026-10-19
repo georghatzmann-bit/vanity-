@@ -23,6 +23,20 @@ fn main() {
     let Ok(request) = serde_json::from_slice::<WorkerRequest>(&input) else {
         std::process::exit(2);
     };
+    if request.entropy {
+        // Nur Entropie der Dateianfänge (Ransomware-Erkennung) – keine Regeln nötig.
+        let values: Vec<Option<f64>> = request
+            .paths
+            .iter()
+            .take(aegis_service::worker::MAX_ENTROPY_FILES)
+            .map(|p| aegis_engine::entropy::sample_file(p))
+            .collect();
+        let mut out = std::io::stdout().lock();
+        if serde_json::to_writer(&mut out, &values).is_err() || out.flush().is_err() {
+            std::process::exit(4);
+        }
+        return;
+    }
     let Ok(rules) = YaraRules::builtin() else {
         std::process::exit(3);
     };

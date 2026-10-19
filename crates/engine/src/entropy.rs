@@ -24,9 +24,54 @@ pub fn shannon(bytes: &[u8]) -> f64 {
         .sum()
 }
 
+/// Größe der Stichprobe am Dateianfang.
+pub const SAMPLE_BYTES: u64 = 64 * 1024;
+/// Kleinere Dateien sagen über die Entropie zu wenig aus.
+pub const MIN_SAMPLE_BYTES: usize = 4096;
+
+/// Entropie der ersten [`SAMPLE_BYTES`] einer Datei (nur lesen); `None` bei zu kleinen oder
+/// nicht lesbaren Dateien. Für die Ransomware-Erkennung: verschlüsselte Inhalte liegen nahe 8.
+#[must_use]
+pub fn sample_file(path: &std::path::Path) -> Option<f64> {
+    use std::io::Read as _;
+    let file = std::fs::File::open(path).ok()?;
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
+    let mut data = Vec::new();
+    file.take(SAMPLE_BYTES).read_to_end(&mut data).ok()?;
+    (data.len() >= MIN_SAMPLE_BYTES).then(|| shannon(&data))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::shannon;
+    use super::{sample_file, shannon};
+
+    #[test]
+    fn stichprobe() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = aegis_core::testing::write_fixture(
+            dir.path(),
+            "brief.txt",
+            "Sehr geehrte Damen und Herren, ".repeat(400).as_bytes(),
+        )
+        .unwrap();
+        assert!(sample_file(&text).unwrap() < 5.0);
+        let mut noise = Vec::with_capacity(65536);
+        let mut x: u32 = 2_463_534_242;
+        for _ in 0..65536 {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            noise.push(x.to_le_bytes()[0]);
+        }
+        let enc =
+            aegis_core::testing::write_fixture(dir.path(), "brief.txt.locked", &noise).unwrap();
+        assert!(sample_file(&enc).unwrap() > 7.5);
+        let small = aegis_core::testing::write_fixture(dir.path(), "klein.txt", b"kurz").unwrap();
+        assert_eq!(sample_file(&small), None);
+        assert_eq!(sample_file(dir.path()), None);
+    }
 
     #[test]
     fn grenzen() {

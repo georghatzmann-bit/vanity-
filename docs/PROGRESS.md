@@ -113,7 +113,15 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
        Prüfprozess, nur Meldung.
 6. [x] P5.6 Datei-Safe: Argon2id + AES-256-GCM, Anlegen/Hineinlegen/Herausholen nur per Plan,
        Passwort nie gespeichert, Sperre nach 10 min bzw. Fehlversuchen; eigene Seite.
-7. [ ] P5.7 Sicherheits-Review (separater Agent), Korrekturen, Doku, DoD.
+7. [x] P5.7 Sicherheits-Review (separater Agent): 0 kritisch/hoch, 3 mittel, 6 niedrig,
+       3 Kleinigkeiten – alle behoben.
+8. [x] P5.8 Notfall-Scan (der Panic-Button der Spezifikation) mit Sammel-Isolieren und
+       „Alles rückgängig“; Dashboard/Befehlspalette starten ihn.
+9. [x] P5.9 Ransomware-Ergänzungen: geschützte Ordner (Dokumente/Bilder/eigene – vorher wurden
+       Köder in Dokumente/Bilder nicht beobachtet), Entropie-Stichproben im Prüfprozess,
+       „Einfrieren“ im Alarm, Windows „Überwachter Ordnerzugriff“ erklären/öffnen.
+10. [ ] P5.10 Rückfall-Kopien (Opt-in, versioniert) + Wiederherstellen.
+11. [ ] P5.11 Nachprüfung der neuen Teile (separater Agent), DoD.
 
 **Nächster Schritt:** Review-Funde beheben, dann P6 (Härtung, Persistenz, Treiber-Check,
 Kamera/Mikro/Zwischenablage/USB-Wächter).

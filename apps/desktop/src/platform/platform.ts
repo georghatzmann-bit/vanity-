@@ -98,6 +98,8 @@ export interface Platform {
   readonly pickPaths: ((kind: 'files' | 'folder') => Promise<readonly string[]>) | null;
   /** Auf das Fenster gezogene Dateien (Drag & Drop). In der Vorschau kommt nie ein Ereignis. */
   onFileDrop(handler: (event: FileDropEvent) => void): Promise<Unlisten>;
+  /** Windows-Sicherheit „Ransomware-Schutz“ öffnen (ändert nichts). `null` in der Vorschau. */
+  readonly openWindowsSecurity: (() => Promise<void>) | null;
 }
 
 /** Wandelt das Ergebnis des Auswahldialogs in eine Pfadliste. */
@@ -170,6 +172,7 @@ export function createTauriPlatform(): Platform {
           handler({ type: 'leave' });
         }
       }),
+    openWindowsSecurity: () => invoke<undefined>('open_windows_security'),
   };
 }
 
@@ -242,6 +245,8 @@ function createTauriService(): ServiceApi {
     proposeSafeRetrieve: async (id) =>
       parseProposal(await invoke<unknown>('service_propose_safe_retrieve', { id })),
     ransomStatus: async () => parseRansom(await invoke<unknown>('service_ransom_status')),
+    setProtectedFolders: async (folders) =>
+      parseRansom(await invoke<unknown>('service_set_protected_folders', { folders })),
     proposeBaits: async (on) =>
       parseProposal(await invoke<unknown>('service_propose_baits', { on })),
     proposeProcessAction: async (program, action) =>
@@ -271,6 +276,7 @@ export function createBrowserPlatform(info: AppInfo): Platform {
     service: null,
     pickPaths: null,
     onFileDrop: () => Promise.resolve(() => undefined),
+    openWindowsSecurity: null,
   };
 }
 

@@ -141,7 +141,24 @@ pub struct WatchShared {
     profiles: Mutex<Vec<PathBuf>>,
     /// Ransomware-Erkennung (nur Warnungen).
     ransom: crate::ransom::RansomGuard,
+    /// Geschützte Ordner – nur für die Ransomware-Erkennung beobachtet (ohne jede Datei zu
+    /// prüfen): (Ordner, Profil des Besitzers).
+    protected: Mutex<Vec<(PathBuf, Option<PathBuf>)>>,
+    /// Wartende Entropie-Stichproben (Pfad, Profil) und ihre Rate je Profil.
+    entropy_queue: Mutex<VecDeque<(PathBuf, Option<PathBuf>)>>,
+    entropy_rate: Mutex<HashMap<Option<PathBuf>, VecDeque<Instant>>>,
+    /// Zuletzt gestartete Programme: (Zeit, Programm, Konto) – für „Einfrieren“ im Alarm.
+    recent_starts: Mutex<VecDeque<(Instant, PathBuf, Option<String>)>>,
+    /// Die Dateiüberwachung (zum späteren Hinzufügen geschützter Ordner).
+    watcher: Mutex<Option<Arc<Mutex<notify::RecommendedWatcher>>>>,
 }
+
+/// Höchstzahl wartender Entropie-Stichproben.
+const ENTROPY_QUEUE: usize = 500;
+/// Höchstzahl Stichproben je Profil im Zeitfenster der Ransomware-Erkennung.
+const ENTROPY_PER_WINDOW: usize = 40;
+/// So lange gelten Programmstarts als „kürzlich“.
+pub const RECENT_STARTS: Duration = Duration::from_secs(30 * 60);
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -253,9 +270,127 @@ impl WatchShared {
         path: &Path,
         scope: Option<PathBuf>,
     ) {
-        if let Some(signal) = self
-            .ransom
-            .observe(change, path, scope.as_deref(), Instant::now())
+        let now = Instant::now();
+        if crate::ransom::wants_entropy(change, path, scope.as_deref()) {
+            let mut rate = lock(&self.entropy_rate);
+            if rate.len() > 1000 {
+                rate.clear();
+            }
+            let times = rate.entry(scope.clone()).or_default();
+            while times
+                .front()
+                .is_some_and(|t| now.duration_since(*t) > crate::ransom::WINDOW)
+            {
+                times.pop_front();
+            }
+            let mut queue = lock(&self.entropy_queue);
+            if times.len() < ENTROPY_PER_WINDOW && queue.len() < ENTROPY_QUEUE {
+                times.push_back(now);
+                queue.push_back((path.to_path_buf(), scope.clone()));
+            }
+        }
+        if let Some(signal) = self.ransom.observe(change, path, scope.as_deref(), now) {
+            let finding = signal.finding();
+            self.push(
+                WatchKind::Ransomware,
+                path.to_path_buf(),
+                scope,
+                None,
+                finding,
+            );
+        }
+    }
+
+    /// Beobachtet `dir` zusätzlich für die Ransomware-Erkennung (Köder, Massenänderungen,
+    /// Entropie) – geprüft wird dort nicht jede Datei. `profile`: Besitzer (für Meldungen).
+    pub fn protect(&self, dir: PathBuf, profile: Option<PathBuf>) -> bool {
+        use notify::Watcher as _;
+        let dir = long_name(dir);
+        {
+            let list = lock(&self.protected);
+            if list.iter().any(|(d, _)| same_path(d, &dir)) {
+                return true;
+            }
+        }
+        let watched = lock(&self.watcher).as_ref().is_some_and(|w| {
+            lock(w)
+                .watch(&dir, notify::RecursiveMode::Recursive)
+                .is_ok()
+        });
+        let mut list = lock(&self.protected);
+        if list.len() < 2000 {
+            list.push((dir, profile.map(long_name)));
+        }
+        watched
+    }
+
+    /// Beendet die zusätzliche Beobachtung von `dir`.
+    pub fn unprotect(&self, dir: &Path) {
+        use notify::Watcher as _;
+        let dir = long_name(dir.to_path_buf());
+        let mut list = lock(&self.protected);
+        let before = list.len();
+        list.retain(|(d, _)| !same_path(d, &dir));
+        if list.len() != before
+            && let Some(w) = lock(&self.watcher).as_ref()
+        {
+            let _ = lock(w).unwatch(&dir);
+        }
+    }
+
+    /// Liegt `path` in einem geschützten Ordner? Liefert dessen Profil.
+    fn protected_scope(&self, path: &Path) -> Option<Option<PathBuf>> {
+        lock(&self.protected)
+            .iter()
+            .find(|(d, _)| is_within(path, d))
+            .map(|(_, p)| p.clone())
+    }
+
+    /// Ein Programm wurde gestartet (für „Einfrieren“ im Ransomware-Alarm).
+    pub fn record_start(&self, program: PathBuf, owner: Option<String>) {
+        let now = Instant::now();
+        let mut starts = lock(&self.recent_starts);
+        while starts
+            .front()
+            .is_some_and(|(t, ..)| now.duration_since(*t) > RECENT_STARTS)
+            || starts.len() >= 1000
+        {
+            starts.pop_front();
+        }
+        starts.push_back((now, program, owner));
+    }
+
+    /// Kürzlich gestartete Programme eines Kontos (neueste zuerst, je Programm einmal).
+    #[must_use]
+    pub fn recent_starts_of(&self, owner: Option<&str>) -> Vec<PathBuf> {
+        let now = Instant::now();
+        let mut out: Vec<PathBuf> = Vec::new();
+        for (t, program, by) in lock(&self.recent_starts).iter().rev() {
+            if now.duration_since(*t) > RECENT_STARTS || by.as_deref() != owner {
+                continue;
+            }
+            if !out.iter().any(|p| same_path(p, program)) {
+                out.push(program.clone());
+            }
+            if out.len() >= 20 {
+                break;
+            }
+        }
+        out
+    }
+
+    /// Nimmt bis zu `max` wartende Entropie-Stichproben.
+    fn take_entropy(&self, max: usize) -> Vec<(PathBuf, Option<PathBuf>)> {
+        let mut queue = lock(&self.entropy_queue);
+        let n = queue.len().min(max);
+        queue.drain(..n).collect()
+    }
+
+    /// Ergebnis einer Entropie-Stichprobe.
+    pub fn observe_entropy(&self, path: &Path, scope: Option<PathBuf>, entropy: f64) {
+        if let Some(signal) =
+            self.ransom
+                .observe_entropy(path, scope.as_deref(), entropy, Instant::now())
         {
             let finding = signal.finding();
             self.push(
@@ -368,6 +503,8 @@ pub struct WatchConfig {
     pub profile_roots: Vec<PathBuf>,
     /// Ordner, die nie geprüft werden (AEGIS-Datenordner).
     pub exclude: Vec<PathBuf>,
+    /// Geschützte Ordner (nur Ransomware-Erkennung): (Ordner, Profil).
+    pub protected: Vec<(PathBuf, Option<PathBuf>)>,
     /// Wechseldatenträger und neue Profile mit überwachen (Windows).
     pub removable: bool,
     /// Prozessstarts beobachten (Windows, ETW).
@@ -390,6 +527,9 @@ pub enum ScanIdentity {
 /// Unterordner eines Profils, die der Wächter beobachtet.
 #[cfg(windows)]
 const PROFILE_FOLDERS: [&str; 3] = ["Downloads", "Desktop", r"AppData\Local\Temp"];
+
+/// Standard-Schutzordner je Profil (Ransomware-Erkennung; Desktop wird ohnehin beobachtet).
+pub const PROTECTED_FOLDERS: [&str; 2] = ["Documents", "Pictures"];
 
 /// Wurzel der Nutzerprofile.
 #[cfg(windows)]
@@ -424,6 +564,8 @@ impl WatchConfig {
         let mut folders = Vec::new();
         #[cfg_attr(not(windows), allow(unused_mut))]
         let mut profile_roots = Vec::new();
+        #[cfg_attr(not(windows), allow(unused_mut))]
+        let mut protected = Vec::new();
         #[cfg(windows)]
         {
             let users = users_root();
@@ -432,6 +574,12 @@ impl WatchConfig {
                     let dir = profile.join(sub);
                     if dir.is_dir() {
                         folders.push((dir, Some(profile.clone())));
+                    }
+                }
+                for sub in PROTECTED_FOLDERS {
+                    let dir = profile.join(sub);
+                    if dir.is_dir() {
+                        protected.push((dir, Some(profile.clone())));
                     }
                 }
             }
@@ -450,6 +598,7 @@ impl WatchConfig {
             folders,
             profile_roots,
             exclude,
+            protected,
             removable: cfg!(windows),
             processes: cfg!(windows),
             settle: Duration::from_secs(2),
@@ -476,6 +625,10 @@ struct ScopeMap {
 }
 
 impl ScopeMap {
+    fn in_scan_folder(&self, path: &Path) -> bool {
+        self.folders.iter().any(|(d, _)| is_within(path, d))
+    }
+
     fn scope_of(&self, path: &Path) -> Option<PathBuf> {
         profile_of(path, &self.profile_roots).or_else(|| {
             self.folders
@@ -560,7 +713,10 @@ pub fn start(
                     change
                 };
                 let path = long_name(path.clone());
-                file_shared.observe_change(change, &path, scopes.scope_of(&path));
+                let scope = scopes
+                    .scope_of(&path)
+                    .or_else(|| file_shared.protected_scope(&path).flatten());
+                file_shared.observe_change(change, &path, scope);
             }
         }
         if !matches!(
@@ -570,6 +726,12 @@ pub fn start(
             return;
         }
         for path in event.paths {
+            // Geschützte Ordner dienen nur der Ransomware-Erkennung – dort wird nicht jede
+            // Datei geprüft (außer sie liegt zugleich in einem geprüften Ordner).
+            let long = long_name(path.clone());
+            if file_shared.protected_scope(&long).is_some() && !scopes.in_scan_folder(&long) {
+                continue;
+            }
             offer(&file_tx, &file_shared, (path, WatchKind::File, None));
         }
     })
@@ -595,6 +757,16 @@ pub fn start(
         };
     }
     let watcher = Arc::new(Mutex::new(watcher));
+    *lock(&shared.watcher) = Some(Arc::clone(&watcher));
+    for (dir, profile) in std::mem::take(&mut config.protected) {
+        shared.protect(dir, profile);
+    }
+    spawn_entropy(
+        config.identity,
+        Arc::clone(&scanner),
+        Arc::clone(&shared),
+        Arc::clone(&stop),
+    );
     if config.removable {
         spawn_poller(Arc::clone(&watcher), Arc::clone(&shared), Arc::clone(&stop));
     }
@@ -604,6 +776,49 @@ pub fn start(
         scan_loop(&config, &rx, &scanner, &shared, &stop);
     });
     Ok(())
+}
+
+/// Misst wartende Entropie-Stichproben im Prüfprozess – mit den Rechten des Profil-Besitzers
+/// (angemeldet), sonst gar nicht; nie mit den Rechten des Dienstes.
+fn spawn_entropy(
+    identity: ScanIdentity,
+    scanner: Arc<Scanner>,
+    shared: Arc<WatchShared>,
+    stop: Arc<AtomicBool>,
+) {
+    std::thread::spawn(move || {
+        while !stop.load(Ordering::SeqCst) {
+            let batch = shared.take_entropy(crate::worker::MAX_ENTROPY_FILES);
+            if batch.is_empty() {
+                std::thread::sleep(Duration::from_millis(500));
+                continue;
+            }
+            let mut groups: HashMap<Option<PathBuf>, Vec<PathBuf>> = HashMap::new();
+            for (path, scope) in batch {
+                let group = groups.entry(scope).or_default();
+                if !group.iter().any(|p| same_path(p, &path)) {
+                    group.push(path);
+                }
+            }
+            for (scope, paths) in groups {
+                let background = crate::worker::BackgroundAccess {
+                    profile: scope.clone(),
+                    require_owner: true,
+                };
+                let access: &dyn aegis_quarantine::UserAccess = match identity {
+                    ScanIdentity::Background => &background,
+                    ScanIdentity::OwnProcess => &aegis_quarantine::OwnProcess,
+                };
+                if let Ok(values) = scanner.entropy(&paths, access) {
+                    for (path, value) in paths.iter().zip(values) {
+                        if let Some(v) = value {
+                            shared.observe_entropy(path, scope.clone(), v);
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 /// Wechseldatenträger kommen und gehen; neue Nutzerprofile werden nachträglich beobachtet.
@@ -649,6 +864,12 @@ fn spawn_poller(
                                 .is_ok()
                         {
                             lock(&shared.status).folders.push(dir);
+                        }
+                    }
+                    for sub in PROTECTED_FOLDERS {
+                        let dir = profile.join(sub);
+                        if dir.is_dir() {
+                            shared.protect(dir, Some(profile.clone()));
                         }
                     }
                     shared.add_profiles([profile]);
@@ -703,6 +924,7 @@ fn start_process_watch(
             };
             if let Ok(path) = aegis_winffi::process_image_path(pid) {
                 let owner = aegis_winffi::process_user_sid(pid).ok();
+                cb_shared.record_start(path.clone(), owner.clone());
                 offer(&tx, &cb_shared, (path, WatchKind::Process, owner));
             }
         })
@@ -1053,6 +1275,7 @@ mod tests {
             folders: vec![(dir.path().to_path_buf(), None)],
             profile_roots: Vec::new(),
             exclude: Vec::new(),
+            protected: Vec::new(),
             removable: false,
             processes: false,
             settle: Duration::from_millis(100),
@@ -1084,5 +1307,70 @@ mod tests {
             dir.path().join("probe.com").exists(),
             "Wächter verändert nichts"
         );
+    }
+
+    #[test]
+    fn geschuetzter_ordner_erkennt_verschluesselung_ohne_dateien_zu_pruefen() {
+        let dir = tempfile::tempdir().unwrap();
+        let docs = dir.path().join("Dokumente");
+        for i in 0..12 {
+            aegis_core::testing::write_fixture(
+                dir.path(),
+                &format!("Dokumente/brief{i}.txt"),
+                "Liebe Grüße aus dem Urlaub. ".repeat(400).as_bytes(),
+            )
+            .unwrap();
+        }
+        let shared = WatchShared::new();
+        let stop = Arc::new(AtomicBool::new(false));
+        let config = WatchConfig {
+            folders: Vec::new(),
+            profile_roots: Vec::new(),
+            exclude: Vec::new(),
+            protected: vec![(docs.clone(), Some(dir.path().to_path_buf()))],
+            removable: false,
+            processes: false,
+            settle: Duration::from_millis(100),
+            identity: ScanIdentity::OwnProcess,
+        };
+        let engine = aegis_engine::Engine::with_builtin_rules().unwrap();
+        start(
+            config,
+            Arc::new(Scanner::InProcess(Arc::new(engine))),
+            Arc::clone(&shared),
+            Arc::clone(&stop),
+        )
+        .unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        // Harmloser „Verschlüsselungs-Simulator“: überschreibt die eigenen Testdateien mit
+        // Pseudo-Zufallsdaten (kein echter Schadcode).
+        let mut x: u32 = 2_654_435_761;
+        for i in 0..12 {
+            let noise: Vec<u8> = (0..8192)
+                .map(|_| {
+                    x ^= x << 13;
+                    x ^= x >> 17;
+                    x ^= x << 5;
+                    x.to_le_bytes()[2]
+                })
+                .collect();
+            aegis_core::testing::write_fixture(
+                dir.path(),
+                &format!("Dokumente/brief{i}.txt"),
+                &noise,
+            )
+            .unwrap();
+        }
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut events = Vec::new();
+        while Instant::now() < deadline && events.is_empty() {
+            std::thread::sleep(Duration::from_millis(100));
+            events = shared.events_after(0, Viewer::All);
+        }
+        stop.store(true, Ordering::SeqCst);
+        assert_eq!(events.len(), 1, "{events:?}");
+        assert_eq!(events[0].kind, WatchKind::Ransomware);
+        assert_eq!(events[0].finding.risk, RiskLevel::Dangerous);
+        assert!(events[0].finding.summary_de.contains("verschlüsselt"));
     }
 }

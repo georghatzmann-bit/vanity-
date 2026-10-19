@@ -9,6 +9,7 @@ mod service;
 mod startup_error;
 mod tray;
 mod window;
+mod winsec;
 
 use navigation::NavigationPolicy;
 use tauri::{Manager, RunEvent};
@@ -71,6 +72,8 @@ fn main() {
             service::service_propose_process_action,
             service::service_ransom_status,
             service::service_propose_baits,
+            service::service_set_protected_folders,
+            winsec::open_windows_security,
             service::service_memory_scan,
             service::service_emergency_scan,
             service::service_propose_restore_many,
@@ -161,6 +164,8 @@ mod test_support {
                 crate::service::service_propose_process_action,
                 crate::service::service_ransom_status,
                 crate::service::service_propose_baits,
+                crate::service::service_set_protected_folders,
+                crate::winsec::open_windows_security,
                 crate::service::service_memory_scan,
                 crate::service::service_emergency_scan,
                 crate::service::service_propose_restore_many,
@@ -196,7 +201,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 47] = [
+    const EXPECTED_PERMISSIONS: [&str; 49] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -230,6 +235,8 @@ mod tests {
         "allow-service-propose-process-action",
         "allow-service-ransom-status",
         "allow-service-propose-baits",
+        "allow-service-set-protected-folders",
+        "allow-open-windows-security",
         "allow-service-memory-scan",
         "allow-service-emergency-scan",
         "allow-service-propose-restore-many",
@@ -510,6 +517,8 @@ mod tests {
                 ("service_propose_enable_sandbox", json!({})),
                 ("service_ransom_status", json!({})),
                 ("service_propose_baits", json!({ "on": false })),
+                ("service_set_protected_folders", json!({ "folders": [] })),
+                ("open_windows_security", json!({})),
                 ("service_memory_scan", json!({})),
                 ("service_emergency_scan", json!({})),
                 ("service_propose_restore_many", json!({ "entryIds": ["x"] })),

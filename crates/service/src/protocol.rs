@@ -80,6 +80,8 @@ pub enum Request {
     ProposeProcessAction { program: PathBuf, action: String },
     /// Ransomware-Schutz: eigene Köderdateien (nur lesend).
     RansomStatus {},
+    /// Eigene Schutzordner setzen (nur Beobachtung, verändert nichts; höchstens 20).
+    SetProtectedFolders { folders: Vec<PathBuf> },
     /// Köderdateien anlegen (`on`) bzw. entfernen vorschlagen.
     ProposeBaits { on: bool },
     /// Speicher-Scan der eigenen laufenden Programme (nur lesend).
@@ -232,7 +234,18 @@ pub enum Response {
         regions: usize,
     },
     /// Ransomware-Schutz des Kontos.
-    Ransom { baits: Vec<PathBuf> },
+    Ransom {
+        /// Angelegte Köderdateien.
+        baits: Vec<PathBuf>,
+        /// Standard-Schutzordner des Profils (Dokumente, Bilder, Desktop).
+        default_folders: Vec<PathBuf>,
+        /// Eigene Schutzordner.
+        folders: Vec<PathBuf>,
+        /// Kürzlich gestartete eigene Programme (für „Einfrieren“).
+        recent: Vec<PathBuf>,
+        /// Windows „Überwachter Ordnerzugriff“: `on` | `off` | `audit` | `None` (unbekannt).
+        controlled_folder_access: Option<String>,
+    },
     /// Panic-Button: aktiv seit (RFC 3339) bzw. `None`.
     Panic {
         since: Option<String>,
