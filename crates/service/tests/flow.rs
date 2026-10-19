@@ -851,7 +851,7 @@ fn haertung_nur_lesend_mit_ehrlichem_score() {
     let r = h.send(json!({"type": "hardening_status"}));
     assert_eq!(r["type"], "hardening", "{r}");
     let state = &r["state"];
-    assert_eq!(state["checks"].as_array().unwrap().len(), 12);
+    assert_eq!(state["checks"].as_array().unwrap().len(), 13);
     if cfg!(windows) {
         assert_eq!(state["available"], true);
     } else {
@@ -1511,6 +1511,40 @@ fn haertung_beheben_und_rueckgaengig_nur_nach_ja() {
     assert_eq!(fake.applied.lock().unwrap().len(), 2);
     let status = h.send(json!({"type": "hardening_status", "fresh": true}));
     assert!(status["state"]["undo"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn treiber_sperrliste_nur_nach_ja_und_nur_als_admin() {
+    let (mut h, fake) = harden_harness();
+    fake.state.lock().unwrap().driver_blocklist = Some(false);
+    let r = h.send_as(
+        json!({"type": "propose_hardening_fix", "fix": "enable_driver_blocklist"}),
+        &Standard,
+    );
+    assert_eq!(r["code"], "admin", "{r}");
+    let p = h.send(json!({"type": "propose_hardening_fix", "fix": "enable_driver_blocklist"}));
+    assert_eq!(p["type"], "proposal", "{p}");
+    assert!(
+        p["proposal"]["plan"]["consequence"]
+            .as_str()
+            .unwrap()
+            .contains("Neustart")
+    );
+    assert_eq!(h.answer(&p, "decline")["type"], "nothing_done");
+    assert!(
+        fake.applied.lock().unwrap().is_empty(),
+        "Nein ändert nichts"
+    );
+    let p = h.send(json!({"type": "propose_hardening_fix", "fix": "enable_driver_blocklist"}));
+    let done = h.answer(&p, "execute");
+    assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    let applied = fake.applied.lock().unwrap();
+    assert_eq!(applied.len(), 1);
+    assert!(
+        applied[0]
+            .describe()
+            .ends_with("VulnerableDriverBlocklistEnable = 1 (DWORD)")
+    );
 }
 
 #[test]

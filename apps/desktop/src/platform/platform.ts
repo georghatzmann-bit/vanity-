@@ -108,7 +108,8 @@ export interface Platform {
 }
 
 /** Einstellungsseiten, die AEGIS öffnen darf. */
-export type WindowsSettingsPage = 'windows_update' | 'device_encryption' | 'virus_protection';
+export type WindowsSettingsPage =
+  'windows_update' | 'device_encryption' | 'virus_protection' | 'core_isolation';
 
 /** Wandelt das Ergebnis des Auswahldialogs in eine Pfadliste. */
 export function toPathList(selection: unknown): readonly string[] {

@@ -84,7 +84,7 @@ impl Raw {
         }
     }
 
-    fn dword(value: u32) -> Self {
+    pub(super) fn dword(value: u32) -> Self {
         Self {
             kind: 4,
             bytes: value.to_le_bytes().to_vec(),
@@ -255,6 +255,7 @@ pub fn fix_name(fix: FixKind) -> &'static str {
         FixKind::DisableGuest => "disable_guest",
         FixKind::EnableFirewall => "enable_firewall",
         FixKind::DisableProxy => "disable_proxy",
+        FixKind::EnableDriverBlocklist => "enable_driver_blocklist",
         FixKind::OpenSettings => "open_settings",
     }
 }
@@ -270,6 +271,7 @@ pub fn parse_fix(name: &str) -> Option<FixKind> {
         FixKind::DisableGuest,
         FixKind::EnableFirewall,
         FixKind::DisableProxy,
+        FixKind::EnableDriverBlocklist,
         FixKind::OpenSettings,
     ]
     .into_iter()
@@ -423,6 +425,18 @@ pub fn fix_steps(fix: FixKind, sid: Option<&str>, state: &FixState) -> Result<Ve
                 Ok(steps)
             }
         }
+        FixKind::EnableDriverBlocklist if state.driver_policy => Err(
+            "Die Treiber-Regeln sind per Gruppenrichtlinie (Device Guard) festgelegt – AEGIS ändert keine Richtlinien.".into(),
+        ),
+        FixKind::EnableDriverBlocklist => match state.driver_blocklist {
+            Some(false) => Ok(vec![machine(
+                r"SYSTEM\CurrentControlSet\Control\CI\Config",
+                "VulnerableDriverBlocklistEnable",
+                1,
+            )]),
+            Some(true) => Err("Die Sperrliste für verwundbare Treiber ist bereits an.".into()),
+            None => Err("Stand der Sperrliste nicht lesbar.".into()),
+        },
         FixKind::OpenSettings => {
             Err("Dieser Punkt wird in den Windows-Einstellungen geändert – AEGIS öffnet sie nur.".into())
         }
@@ -489,6 +503,11 @@ fn texts(fix: FixKind) -> Texts {
             what: "Proxy deines Kontos abschalten",
             why: "Ein eingetragener Proxy kann deinen Datenverkehr umleiten und mitlesen – Schadsoftware nutzt das.",
             consequence: "Programme verbinden sich wieder direkt. Brauchst du den Proxy (z. B. Firma), stell ihn danach wieder ein oder mach diesen Schritt rückgängig.",
+        },
+        FixKind::EnableDriverBlocklist => Texts {
+            what: "Microsoft-Sperrliste für verwundbare Treiber einschalten",
+            why: "Angreifer laden alte, verwundbare Treiber, um sich Kernel-Rechte zu verschaffen und Schutzprogramme abzuschalten. Die Sperrliste von Microsoft verhindert das Laden bekannter Fälle.",
+            consequence: "Windows lädt Treiber von der Sperrliste nicht mehr – wirkt nach einem Neustart. Sehr selten braucht ein altes Gerät einen gesperrten Treiber; dann hilft ein Hersteller-Update oder „Rückgängig“.",
         },
         FixKind::OpenSettings => Texts {
             what: "Windows-Einstellungen öffnen",
@@ -1224,6 +1243,22 @@ mod tests {
         assert!(fw[0].describe().contains("Privat"));
         let guest = fix_steps(FixKind::DisableGuest, None, &state()).unwrap();
         assert_eq!(guest[0].describe(), "Gastkonto „Gast“: deaktivieren");
+        let mut st = state();
+        assert!(fix_steps(FixKind::EnableDriverBlocklist, None, &st).is_err());
+        st.driver_blocklist = Some(false);
+        assert_eq!(
+            fix_steps(FixKind::EnableDriverBlocklist, None, &st).unwrap()[0].describe(),
+            r"HKLM\SYSTEM\CurrentControlSet\Control\CI\Config\VulnerableDriverBlocklistEnable = 1 (DWORD)"
+        );
+        st.driver_policy = true;
+        assert!(fix_steps(FixKind::EnableDriverBlocklist, None, &st).is_err());
+        st.driver_policy = false;
+        st.driver_blocklist = Some(true);
+        assert!(fix_steps(FixKind::EnableDriverBlocklist, None, &st).is_err());
+        assert_eq!(
+            parse_fix("enable_driver_blocklist"),
+            Some(FixKind::EnableDriverBlocklist)
+        );
     }
 
     #[test]

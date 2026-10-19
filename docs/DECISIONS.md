@@ -259,3 +259,19 @@ Rückgängig gemerkt. Dateien im Autostart-Ordner gehen den bekannten Weg über 
 Winlogon, WMI-Abos, COM-Einträge und Browser-Erweiterungen zeigt AEGIS mit Erklärung an,
 ändert sie aber nicht selbst (zu leicht zu beschädigen bzw. Sache des Browsers).
 
+## D-046 – Treiber-Check: LOLDrivers gebündelt, Boot-Treiber nie anfassen
+
+Status: angenommen (P6.4). Kernel-Treiber sind ein Teil des Persistenz-Checks (Art `driver`):
+Dienst-Einträge mit Typ 1/2 plus geladene Treiber ohne Eintrag (`EnumDeviceDrivers`). Abgleich mit
+der LOLDrivers-Liste (Apache-2.0) über SHA-256 der Datei **und** Authenticode-Hash (findet neu
+signierte Fassungen); die Liste ist gebündelt (≈ 400 KB, kein Netz zur Laufzeit) und wird mit
+`scripts/update-loldrivers.mjs` erneuert – später über die signierten Updates (P13). Treiber im
+Windows-Ordner prüft nur der Listenabgleich (Hunderte Systemdateien), andere zusätzlich der
+Prüfprozess. Deaktivieren (Start = 4, wirkt nach Neustart, mit Rückgängig) bietet AEGIS nur für
+Treiber mit Start „automatisch“/„manuell“ an; Boot-/System-Treiber nie, weil Windows sonst evtl.
+nicht mehr startet – dort empfiehlt AEGIS Hersteller-Update bzw. Deinstallation. Neue Score-Prüfung
+„Schutz vor verwundbaren Treibern“ (Gewicht 4; Updates, Secure Boot, Firewall, Virenschutz je 1
+weniger): Speicher-Integrität an = in Ordnung; nur Microsoft-Sperrliste = verbesserbar (öffnet
+Kernisolierung); Sperrliste aus = Risiko mit Plan `VulnerableDriverBlocklistEnable = 1`
+(nicht, wenn eine Device-Guard-Richtlinie die Treiber-Regeln festlegt).
+

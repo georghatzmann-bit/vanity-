@@ -143,6 +143,27 @@ pub struct SystemFacts {
     pub hosts: Option<Vec<HostsEntry>>,
     /// Lauschende Ports.
     pub listening: Option<Vec<ListeningPort>>,
+    /// Schutz vor verwundbaren Treibern.
+    #[serde(default)]
+    pub driver_protection: Option<DriverProtection>,
+}
+
+/// Schutz vor verwundbaren Treibern (`None` = unbekannt).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DriverProtection {
+    /// Speicher-Integrität (HVCI) aktiv?
+    pub hvci: Option<bool>,
+    /// Microsoft-Sperrliste für verwundbare Treiber wirksam?
+    pub blocklist: Option<bool>,
+}
+
+/// Ist die Sperrliste wirksam? Ohne Wert gilt sie ab Windows 11 22H2 (Build 22621) als an.
+#[must_use]
+pub fn blocklist_effective(value: Option<u32>, build: Option<u32>) -> Option<bool> {
+    match value {
+        Some(v) => Some(v != 0),
+        None => build.map(|b| b >= 22621),
+    }
 }
 
 /// Liest die Hosts-Datei (Text): Einträge ohne Kommentare, höchstens 10 000.

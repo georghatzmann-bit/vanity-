@@ -359,6 +359,7 @@ export const hardeningCheckIds = [
   'antivirus',
   'network',
   'ports',
+  'driver_protection',
 ] as const;
 export type HardeningCheckId = (typeof hardeningCheckIds)[number];
 export type CheckStatus = 'pass' | 'warn' | 'fail' | 'unknown';
@@ -370,6 +371,7 @@ export const fixKinds = [
   'disable_guest',
   'enable_firewall',
   'disable_proxy',
+  'enable_driver_blocklist',
   'open_settings',
 ] as const;
 export type FixKind = (typeof fixKinds)[number];
@@ -425,6 +427,7 @@ export const autorunKinds = [
   'wmi_consumer',
   'com_object',
   'browser_extension',
+  'driver',
 ] as const;
 export type AutorunKind = (typeof autorunKinds)[number];
 
@@ -443,6 +446,13 @@ export interface AutorunEntry {
   readonly missing: boolean;
   /** `disable` (Plan) oder `quarantine` (Datei im Autostart-Ordner). */
   readonly action: 'disable' | 'quarantine' | null;
+  /** Starttyp (Dienste/Treiber): 0 Boot, 1 System, 2 automatisch, 3 manuell, 4 aus. */
+  readonly start: number | null;
+  /** Treffer in der Liste verwundbarer bzw. bösartiger Treiber. */
+  readonly knownDriver: {
+    readonly category: 'malicious' | 'vulnerable';
+    readonly file: string;
+  } | null;
 }
 
 /** Persistenz-Check. */
@@ -452,6 +462,14 @@ export interface PersistenceState {
   readonly filesChecked: number;
   readonly admin: boolean;
   readonly undo: readonly { readonly id: string; readonly fix: string; readonly at: string }[];
+  /** Geprüfte Treiberdateien. */
+  readonly driversChecked: number;
+  /** Gebündelte Treiberliste (Quelle, Einträge, Stand). */
+  readonly driverList: {
+    readonly source: string;
+    readonly entries: number;
+    readonly date: string | null;
+  };
 }
 
 /** Ransomware-Schutz des Kontos. */
@@ -1043,10 +1061,21 @@ export function parseHardening(response: unknown): HardeningState {
   };
 }
 
+function parseKnownDriver(v: unknown): AutorunEntry['knownDriver'] {
+  if (!isObject(v)) {
+    return null;
+  }
+  const category = v['category'];
+  return category === 'malicious' || category === 'vulnerable'
+    ? { category, file: str(v['file']) }
+    : null;
+}
+
 export function parsePersistence(response: unknown): PersistenceState {
   const r = expectType(response, 'persistence');
   const st = isObject(r['state']) ? r['state'] : {};
   const isKind = (v: unknown): v is AutorunKind => (autorunKinds as readonly unknown[]).includes(v);
+  const list = isObject(st['driver_list']) ? st['driver_list'] : {};
   return {
     available: st['available'] === true,
     entries: arr(st['entries'])
@@ -1071,12 +1100,20 @@ export function parsePersistence(response: unknown): PersistenceState {
                 file: typeof e['file'] === 'string' ? e['file'] : null,
                 missing: e['missing'] === true,
                 action: action === 'disable' || action === 'quarantine' ? action : null,
+                start: typeof e['start'] === 'number' ? e['start'] : null,
+                knownDriver: parseKnownDriver(e['known_driver']),
               },
             ]
           : [];
       }),
     filesChecked: num(st['files_checked']),
     admin: st['admin'] === true,
+    driversChecked: num(st['drivers_checked']),
+    driverList: {
+      source: str(list['source']),
+      entries: num(list['entries']),
+      date: typeof list['date'] === 'string' ? list['date'] : null,
+    },
     undo: arr(r['undo'])
       .filter(isObject)
       .map((u) => ({ id: str(u['id']), fix: str(u['fix']), at: str(u['at']) })),

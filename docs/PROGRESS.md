@@ -117,12 +117,15 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
        IFEO, AppInit, WMI-Abos, COM, Browser-Erweiterungen – bewertet (Merkmale + Prüfprozess),
        Deaktivieren per Plan mit Rückgängig, Autostart-Dateien über die Quarantäne (D-045).
        Außerdem P6-Review (P6.1/P6.2) umgesetzt: 0 kritisch/hoch, 3 mittel, Rest niedrig.
-4. [ ] P6.4 Treiber-Check gegen eine Liste verwundbarer Treiber (Lizenz vorher prüfen).
+4. [x] P6.4 Treiber-Check: Treiber-Dienste + geladene Treiber gegen LOLDrivers (Apache-2.0,
+       gebündelt, SHA-256 + Authenticode), Deaktivieren nur automatisch/manuell startender
+       Treiber per Plan; neue Score-Prüfung „Schutz vor verwundbaren Treibern“ (Speicher-
+       Integrität, Microsoft-Sperrliste – einschalten per Plan) (D-046).
 5. [ ] P6.5 Software-Updates über winget (Installieren nur nach „Ja“).
 6. [ ] P6.6 Kamera/Mikrofon-Wächter, Zwischenablage (Krypto-Adressen, opt-in), USB-Geräte.
 7. [ ] P6.7 Sicherheits-Review (separater Agent), Doku, DoD.
 
-**Nächster Schritt:** P6.4 Treiber-Check.
+**Nächster Schritt:** P6.5 Software-Updates über winget.
 
 ## P5 – Schutz-Werkzeuge
 

@@ -32,23 +32,26 @@ pub enum CheckId {
     Network,
     /// Offene Ports.
     Ports,
+    /// Schutz vor verwundbaren Treibern (Speicher-Integrität, Microsoft-Sperrliste).
+    DriverProtection,
 }
 
 impl CheckId {
     /// Alle Prüfungen mit Gewicht (Summe 100).
-    pub const ALL: [(Self, u8); 12] = [
-        (Self::Updates, 15),
-        (Self::SecureBoot, 8),
+    pub const ALL: [(Self, u8); 13] = [
+        (Self::Updates, 14),
+        (Self::SecureBoot, 7),
         (Self::Tpm, 5),
         (Self::BitLocker, 10),
         (Self::Uac, 10),
         (Self::Smb1, 7),
         (Self::Rdp, 7),
         (Self::Guest, 5),
-        (Self::Firewall, 12),
-        (Self::Antivirus, 12),
+        (Self::Firewall, 11),
+        (Self::Antivirus, 11),
         (Self::Network, 5),
         (Self::Ports, 4),
+        (Self::DriverProtection, 4),
     ];
 
     /// Gewicht im Score.
@@ -93,6 +96,8 @@ pub enum FixKind {
     EnableFirewall,
     /// Proxy der eigenen Sitzung abschalten.
     DisableProxy,
+    /// Microsoft-Sperrliste für verwundbare Treiber einschalten (Registrierung, Neustart).
+    EnableDriverBlocklist,
     /// Windows-Einstellung öffnen (AEGIS ändert dort nichts selbst).
     OpenSettings,
 }
@@ -633,7 +638,44 @@ pub fn evaluate(f: &SystemFacts) -> Vec<CheckResult> {
 
     out.push(network(f));
     out.push(ports(f));
+    out.push(driver_protection(f));
     out
+}
+
+/// Speicher-Integrität (HVCI) und Microsoft-Sperrliste für verwundbare Treiber.
+fn driver_protection(f: &SystemFacts) -> CheckResult {
+    use CheckStatus::{Fail, Pass, Warn};
+    let id = CheckId::DriverProtection;
+    let Some(p) = f.driver_protection else {
+        return unknown(id);
+    };
+    match (p.hvci, p.blocklist) {
+        (Some(true), _) => result(
+            id,
+            Pass,
+            "Speicher-Integrität (Kernisolierung) ist an – Windows lädt bekannte verwundbare Treiber nicht.",
+            "Memory integrity (core isolation) is on – Windows does not load known vulnerable drivers.",
+        ),
+        (_, Some(true)) => with_fix(
+            result(
+                id,
+                Warn,
+                "Die Microsoft-Sperrliste für verwundbare Treiber ist an, die Speicher-Integrität aus. Einschalten unter Windows-Sicherheit → Gerätesicherheit → Kernisolierung (ältere Treiber können dann ggf. nicht mehr laden).",
+                "The Microsoft vulnerable driver blocklist is on, memory integrity is off. Turn it on in Windows Security → Device security → Core isolation (older drivers may then fail to load).",
+            ),
+            FixKind::OpenSettings,
+        ),
+        (_, Some(false)) => with_fix(
+            result(
+                id,
+                Fail,
+                "Die Microsoft-Sperrliste für verwundbare Treiber ist aus – Angreifer können alte, verwundbare Treiber laden und damit Schutzprogramme abschalten.",
+                "The Microsoft vulnerable driver blocklist is off – attackers can load old, vulnerable drivers and use them to disable security software.",
+            ),
+            FixKind::EnableDriverBlocklist,
+        ),
+        (_, None) => unknown(id),
+    }
 }
 
 /// Score aus den Ergebnissen: Pass = volle, Warn = halbe Punkte; „unbekannt“ zählt nicht.
@@ -670,7 +712,8 @@ pub fn score(results: &[CheckResult]) -> Score {
 mod tests {
     use super::*;
     use crate::facts::{
-        AntivirusState, FirewallState, HostsEntry, ListeningPort, ProxyState, RdpState, TpmState,
+        AntivirusState, DriverProtection, FirewallState, HostsEntry, ListeningPort, ProxyState,
+        RdpState, TpmState, blocklist_effective,
     };
 
     fn good() -> SystemFacts {
@@ -714,6 +757,10 @@ mod tests {
                 all_interfaces: true,
                 program: None,
             }]),
+            driver_protection: Some(DriverProtection {
+                hvci: Some(true),
+                blocklist: Some(true),
+            }),
         }
     }
 
@@ -767,8 +814,16 @@ mod tests {
         });
         f.guest_enabled = Some(true);
         f.firewall.public = Some(false);
+        f.driver_protection = Some(DriverProtection {
+            hvci: Some(false),
+            blocklist: Some(false),
+        });
         let r = evaluate(&f);
         let get = |id| r.iter().find(|c| c.id == id).unwrap();
+        assert_eq!(
+            get(CheckId::DriverProtection).fix,
+            Some(FixKind::EnableDriverBlocklist)
+        );
         assert_eq!(get(CheckId::Uac).fix, Some(FixKind::EnableUac));
         assert_eq!(get(CheckId::Smb1).status, CheckStatus::Fail);
         assert_eq!(get(CheckId::Rdp).fix, Some(FixKind::EnableRdpNla));
@@ -835,5 +890,39 @@ mod tests {
         for a in ["8.8.8.8", "2001:4860:4860::8888", "kein-ip"] {
             assert!(!is_local_address(a), "{a}");
         }
+    }
+
+    #[test]
+    fn treiberschutz() {
+        let status = |hvci, blocklist| {
+            let mut f = good();
+            f.driver_protection = Some(DriverProtection { hvci, blocklist });
+            let r = evaluate(&f)
+                .into_iter()
+                .find(|c| c.id == CheckId::DriverProtection)
+                .unwrap();
+            (r.status, r.fix)
+        };
+        assert_eq!(status(Some(true), Some(false)), (CheckStatus::Pass, None));
+        assert_eq!(
+            status(Some(false), Some(true)),
+            (CheckStatus::Warn, Some(FixKind::OpenSettings))
+        );
+        assert_eq!(
+            status(None, Some(false)),
+            (CheckStatus::Fail, Some(FixKind::EnableDriverBlocklist))
+        );
+        assert_eq!(status(Some(false), None).0, CheckStatus::Unknown);
+        let mut f = good();
+        f.driver_protection = None;
+        assert!(
+            evaluate(&f)
+                .iter()
+                .any(|c| c.id == CheckId::DriverProtection && c.status == CheckStatus::Unknown)
+        );
+        assert_eq!(blocklist_effective(Some(0), Some(26100)), Some(false));
+        assert_eq!(blocklist_effective(None, Some(22621)), Some(true));
+        assert_eq!(blocklist_effective(None, Some(19045)), Some(false));
+        assert_eq!(blocklist_effective(None, None), None);
     }
 }

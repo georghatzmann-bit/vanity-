@@ -153,6 +153,10 @@ pub struct FixState {
     pub rdp: Option<crate::facts::RdpState>,
     /// Ist der Firewall-Dienst (MpsSvc) deaktiviert? Dann hilft Einschalten per `netsh` nicht.
     pub firewall_service_disabled: bool,
+    /// Wirkt die Microsoft-Sperrliste für verwundbare Treiber?
+    pub driver_blocklist: Option<bool>,
+    /// Legt eine Gruppenrichtlinie (Device Guard) die Treiber-Regeln fest?
+    pub driver_policy: bool,
 }
 
 /// `DefaultConnectionSettings` (WinINet): Version, Zähler, Merker (0x02 Proxy, 0x04 Skript) …
@@ -193,8 +197,8 @@ mod windows {
         is_defender, parse_installed_on, parse_name_servers, tpm_state, uac_level,
     };
     use crate::facts::{
-        AntivirusState, BitLockerState, FirewallState, ListeningPort, ProxyState, RdpState,
-        SystemFacts, TpmState, parse_hosts,
+        AntivirusState, BitLockerState, DriverProtection, FirewallState, ListeningPort, ProxyState,
+        RdpState, SystemFacts, TpmState, blocklist_effective, parse_hosts,
     };
     use crate::persistence::{Autorun, AutorunKind};
 
@@ -260,6 +264,64 @@ mod windows {
         let build = value(&hklm, key, "CurrentBuild")?;
         let ubr = dword(&hklm, key, "UBR").unwrap_or(0);
         Some(format!("{major}.{minor}.{}.{ubr}", build.trim()))
+    }
+
+    fn build_number() -> Option<u32> {
+        value(
+            &Hive::LocalMachine,
+            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+            "CurrentBuild",
+        )
+        .and_then(|b| b.trim().parse().ok())
+    }
+
+    /// Wirkt die Sperrliste (Wert `VulnerableDriverBlocklistEnable`, sonst Standard je Build)?
+    fn driver_blocklist() -> Option<bool> {
+        let value = dword(
+            &Hive::LocalMachine,
+            r"SYSTEM\CurrentControlSet\Control\CI\Config",
+            "VulnerableDriverBlocklistEnable",
+        );
+        blocklist_effective(value, build_number())
+    }
+
+    /// Speicher-Integrität: laufend laut Device Guard (WMI), sonst laut Registrierung.
+    fn hvci() -> Option<bool> {
+        let running = query(
+            r"root\Microsoft\Windows\DeviceGuard",
+            "SELECT SecurityServicesRunning FROM Win32_DeviceGuard",
+            false,
+        )
+        .ok()
+        .and_then(|rows| {
+            let row = rows.into_iter().next()?;
+            match row.get("SecurityServicesRunning")? {
+                Variant::Array(items) => Some(items.iter().any(|v| {
+                    matches!(
+                        v,
+                        Variant::UI4(2) | Variant::I4(2) | Variant::UI1(2) | Variant::UI2(2)
+                    )
+                })),
+                Variant::Null | Variant::Empty => Some(false),
+                _ => None,
+            }
+        });
+        running.or_else(|| {
+            dword(
+                &Hive::LocalMachine,
+                r"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity",
+                "Enabled",
+            )
+            .map(|v| v == 1)
+        })
+    }
+
+    fn driver_protection() -> Option<DriverProtection> {
+        let p = DriverProtection {
+            hvci: hvci(),
+            blocklist: driver_blocklist(),
+        };
+        (p.hvci.is_some() || p.blocklist.is_some()).then_some(p)
     }
 
     fn secure_boot() -> Option<bool> {
@@ -657,6 +719,16 @@ mod windows {
                     .and_then(|v| super::connections_without_proxy(&v.bytes));
                 }
             }
+            FixKind::EnableDriverBlocklist => {
+                state.driver_blocklist = driver_blocklist();
+                state.driver_policy =
+                    read_values(&hklm, r"SOFTWARE\Policies\Microsoft\Windows\DeviceGuard")
+                        .iter()
+                        .any(|v| {
+                            v.name.eq_ignore_ascii_case("ConfigCIPolicyFilePath")
+                                || v.name.eq_ignore_ascii_case("DeployConfigCIPolicy")
+                        });
+            }
             FixKind::OpenSettings => {}
         }
         state
@@ -853,6 +925,67 @@ mod windows {
         }
     }
 
+    /// Kernel- und Dateisystem-Treiber aus den Dienst-Einträgen plus geladene Treiber ohne
+    /// Eintrag (nur lesend).
+    fn drivers(out: &mut Vec<Autorun>) {
+        let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        let hklm = Hive::LocalMachine;
+        let base = r"SYSTEM\CurrentControlSet\Services";
+        let mut known: Vec<String> = Vec::new();
+        for name in read_subkeys(&hklm, base).into_iter().take(3000) {
+            let values = read_values(&hklm, &format!(r"{base}\{name}"));
+            let get = |n: &str| {
+                values
+                    .iter()
+                    .find(|v| v.name.eq_ignore_ascii_case(n))
+                    .map(|v| v.data.clone())
+            };
+            let kind = get("Type")
+                .and_then(|s| s.trim().parse::<u32>().ok())
+                .unwrap_or(0);
+            // 0x1 Kernel-Treiber, 0x2 Dateisystem-Treiber.
+            if kind & 0x3 == 0 || kind & 0x30 != 0 {
+                continue;
+            }
+            let start = get("Start").and_then(|s| s.trim().parse::<u32>().ok());
+            let image = get("ImagePath");
+            let command = crate::drivers::driver_path(image.as_deref(), &name, &root)
+                .or(image)
+                .unwrap_or_default();
+            known.push(command.to_ascii_lowercase());
+            out.push(
+                Autorun::new(
+                    AutorunKind::Driver,
+                    true,
+                    format!(r"HKLM\{base}"),
+                    name,
+                    command,
+                    start != Some(4),
+                )
+                .with_start(start),
+            );
+        }
+        if let Ok(loaded) = aegis_winffi::inspect::loaded_drivers() {
+            for kernel in loaded.into_iter().take(2000) {
+                let Some(path) = crate::drivers::kernel_path(&kernel, &root) else {
+                    continue;
+                };
+                if known.contains(&path.to_ascii_lowercase()) {
+                    continue;
+                }
+                let file = path.rsplit('\\').next().unwrap_or(&path).to_owned();
+                out.push(Autorun::new(
+                    AutorunKind::Driver,
+                    true,
+                    "Geladen (ohne Dienst-Eintrag)",
+                    file,
+                    path,
+                    true,
+                ));
+            }
+        }
+    }
+
     fn winlogon(hive: &Hive, machine: bool, label: &str, out: &mut Vec<Autorun>) {
         let key = r"Software\Microsoft\Windows NT\CurrentVersion\Winlogon";
         for v in read_values(hive, key) {
@@ -957,6 +1090,7 @@ mod windows {
             AutorunKind::ScheduledTask,
             AutorunKind::Service,
             AutorunKind::WmiConsumer,
+            AutorunKind::Driver,
         ] {
             out.extend(machine_autoruns_of(kind));
         }
@@ -991,6 +1125,7 @@ mod windows {
             }
             AutorunKind::Service => services(&mut out),
             AutorunKind::WmiConsumer => wmi_consumers(&mut out),
+            AutorunKind::Driver => drivers(&mut out),
             AutorunKind::ComObject | AutorunKind::BrowserExtension => {}
         }
         out.truncate(MAX_AUTORUNS);
@@ -1046,6 +1181,7 @@ mod windows {
             dns_servers: dns_servers(),
             hosts: hosts(),
             listening: listening(),
+            driver_protection: driver_protection(),
         }
     }
 }

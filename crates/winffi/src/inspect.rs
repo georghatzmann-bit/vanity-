@@ -453,6 +453,47 @@ fn udp_table(family: u32) -> io::Result<Vec<u8>> {
     Err(io::Error::other("UDP-Tabelle nicht lesbar"))
 }
 
+/// Dateipfade der geladenen Kernel-Treiber in Kernel-Schreibweise (z. B. `\SystemRoot\…`),
+/// nur lesend. Braucht Administrator- bzw. Dienstrechte.
+///
+/// # Errors
+/// Liste nicht lesbar.
+pub fn loaded_drivers() -> io::Result<Vec<String>> {
+    use windows_sys::Win32::System::ProcessStatus::{EnumDeviceDrivers, GetDeviceDriverFileNameW};
+    let word = size_of::<*mut core::ffi::c_void>();
+    let mut bases: Vec<*mut core::ffi::c_void> = vec![ptr::null_mut(); 1024];
+    for _ in 0..4 {
+        let bytes = u32::try_from(bases.len() * word).unwrap_or(u32::MAX);
+        let mut needed = 0u32;
+        // SAFETY: Puffer mit `bytes` Bytes; `needed` ist ein gültiger Zeiger.
+        // aegis-unsafe: winffi-drivers-enum
+        #[allow(unsafe_code)]
+        let ok = unsafe { EnumDeviceDrivers(bases.as_mut_ptr(), bytes, &mut needed) };
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let count = usize::try_from(needed).unwrap_or(0) / word;
+        if count <= bases.len() {
+            bases.truncate(count);
+            let mut out = BTreeSet::new();
+            for base in bases.into_iter().filter(|b| !b.is_null()) {
+                let mut name = [0u16; 1024];
+                // SAFETY: Puffer von 1024 Zeichen; `base` stammt aus `EnumDeviceDrivers`.
+                // aegis-unsafe: winffi-drivers-name
+                #[allow(unsafe_code)]
+                let len = unsafe { GetDeviceDriverFileNameW(base, name.as_mut_ptr(), 1024) };
+                let len = usize::try_from(len).unwrap_or(0).min(name.len());
+                if len > 0 {
+                    out.insert(String::from_utf16_lossy(&name[..len]));
+                }
+            }
+            return Ok(out.into_iter().collect());
+        }
+        bases = vec![ptr::null_mut(); count + 64];
+    }
+    Err(io::Error::other("Treiberliste nicht lesbar"))
+}
+
 /// Ein lauschender Port.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Listener {

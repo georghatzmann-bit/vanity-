@@ -512,7 +512,7 @@ pub async fn service_backup_status() -> Result<Value, String> {
 }
 
 /// Erlaubte Schritte der Härtung (wie im Dienst).
-const HARDENING_FIXES: [&str; 7] = [
+const HARDENING_FIXES: [&str; 8] = [
     "enable_uac",
     "disable_smb1",
     "disable_rdp",
@@ -520,6 +520,7 @@ const HARDENING_FIXES: [&str; 7] = [
     "disable_guest",
     "enable_firewall",
     "disable_proxy",
+    "enable_driver_blocklist",
 ];
 
 /// Härtung: einen Punkt beheben vorschlagen – nur nach „Ja“.

@@ -255,12 +255,20 @@ function persistenceState(): PersistenceState {
     file: null,
     missing: false,
     action: null,
+    start: null,
+    knownDriver: null,
   } as const;
   return {
     available: true,
     filesChecked: 3,
     admin: false,
     undo: [],
+    driversChecked: 412,
+    driverList: {
+      source: 'LOLDrivers (loldrivers.io, Apache-2.0)',
+      entries: 2256,
+      date: '2026-10-19',
+    },
     entries: [
       {
         ...base,
@@ -294,6 +302,20 @@ function persistenceState(): PersistenceState {
         command: 'C:\\Windows\\System32\\spoolsv.exe',
         risk: 'clean',
         action: 'disable',
+      },
+      {
+        ...base,
+        id: 'd1',
+        kind: 'driver',
+        machine: true,
+        location: 'HKLM\\SYSTEM\\CurrentControlSet\\Services',
+        name: 'RTCore64',
+        command: 'C:\\Program Files\\Tool\\RTCore64.sys',
+        risk: 'suspicious',
+        reasons: [{ de: 'Bekannt verwundbarer Treiber.', en: 'Known vulnerable driver.' }],
+        action: 'disable',
+        start: 3,
+        knownDriver: { category: 'vulnerable', file: 'RTCore64.sys' },
       },
     ],
   };
@@ -1223,9 +1245,18 @@ describe('Härtung', () => {
     expect(service.persistenceStatus).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Autostarts prüfen' }));
     const entries = await within(panel).findByTestId('persistence-entries');
-    expect(within(entries).getAllByTestId('persistence-entry')).toHaveLength(2);
+    const shown = within(entries).getAllByTestId('persistence-entry');
+    expect(shown).toHaveLength(3);
     expect(entries).toHaveTextContent('PowerShell mit verschlüsseltem Befehl.');
-    fireEvent.click(within(entries).getByRole('button', { name: 'Deaktivieren …' }));
+    // Verwundbarer Treiber: markiert, Liste mit Quelle und Stand genannt.
+    const driver = shown.find((e) => e.getAttribute('data-kind') === 'driver') as HTMLElement;
+    expect(driver).toHaveTextContent('Verwundbarer Treiber');
+    expect(within(panel).getByTestId('persistence-driver-list')).toHaveTextContent(
+      '412 Treiber abgeglichen mit LOLDrivers (loldrivers.io, Apache-2.0) (2256 Einträge, Stand 2026-10-19)',
+    );
+    expect(within(driver).getByRole('button', { name: 'Deaktivieren …' })).toBeDisabled();
+    const run = shown.find((e) => e.getAttribute('data-kind') === 'run') as HTMLElement;
+    fireEvent.click(within(run).getByRole('button', { name: 'Deaktivieren …' }));
     await screen.findByRole('alertdialog');
     expect(service.proposeAutorunDisable).toHaveBeenCalledWith('a1');
     fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Nein' }));
@@ -1237,7 +1268,7 @@ describe('Härtung', () => {
       within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Nein' }),
     );
     // Alle zeigen: auch Dienste; rechnerweite nur mit Administratorrechten.
-    fireEvent.click(within(panel).getByRole('radio', { name: 'Alle (3)' }));
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Alle (4)' }));
     const spooler = within(panel)
       .getAllByTestId('persistence-entry')
       .find((e) => e.getAttribute('data-kind') === 'service');

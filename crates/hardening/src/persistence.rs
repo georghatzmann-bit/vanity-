@@ -1,6 +1,6 @@
 //! Persistenz-Check (P6.3): Wo sich Programme für den nächsten Start festsetzen – Run-Schlüssel,
 //! Autostart-Ordner, geplante Aufgaben, Dienste, Winlogon, IFEO, AppInit, WMI-Abos, eigene
-//! COM-Einträge und Browser-Erweiterungen.
+//! COM-Einträge, Browser-Erweiterungen und Kernel-Treiber (P6.4, Abgleich in [`crate::drivers`]).
 //!
 //! Hier stehen nur die Daten und die **rein textbasierte** Bewertung (testbar überall). Gelesen
 //! wird unter Windows in [`crate::collect`] bzw. im Dienst (Nutzerordner mit Nutzerrechten).
@@ -37,6 +37,8 @@ pub enum AutorunKind {
     ComObject,
     /// Browser-Erweiterung (Chrome/Edge).
     BrowserExtension,
+    /// Kernel- bzw. Dateisystem-Treiber (Dienst-Eintrag oder nur geladen).
+    Driver,
 }
 
 /// Ein gefundener Autostart-Eintrag (so, wie er gelesen wurde).
@@ -56,6 +58,10 @@ pub struct Autorun {
     pub command: String,
     /// Aktiv? (In Windows deaktivierte Einträge bleiben sichtbar.)
     pub enabled: bool,
+    /// Starttyp eines Dienstes bzw. Treibers (0 Boot, 1 System, 2 automatisch, 3 manuell,
+    /// 4 deaktiviert) – nicht Teil der Kennung.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<u32>,
 }
 
 /// FNV-1a (64 Bit) – nur für stabile Kennungen, nicht für Sicherheit.
@@ -94,7 +100,15 @@ impl Autorun {
             name,
             command,
             enabled,
+            start: None,
         }
+    }
+
+    /// Mit Starttyp.
+    #[must_use]
+    pub fn with_start(mut self, start: Option<u32>) -> Self {
+        self.start = start;
+        self
     }
 }
 

@@ -581,6 +581,7 @@ export const de = {
       antivirus: 'Virenschutz',
       network: 'Proxy, DNS und Hosts-Datei',
       ports: 'Offene Ports',
+      driver_protection: 'Schutz vor verwundbaren Treibern',
     },
     fix: {
       enable_uac: 'Vorschlag: Benutzerkontensteuerung auf „Standard“ stellen.',
@@ -591,6 +592,8 @@ export const de = {
       enable_firewall: 'Vorschlag: Firewall für alle Netzwerkprofile einschalten.',
       disable_proxy:
         'Vorschlag: Proxy prüfen und abschalten, wenn du ihn nicht selbst eingerichtet hast.',
+      enable_driver_blocklist:
+        'Vorschlag: Microsoft-Sperrliste für verwundbare Treiber einschalten (wirkt nach einem Neustart).',
       open_settings: 'Vorschlag: in den Windows-Einstellungen prüfen.',
     },
     fixHint:
@@ -612,6 +615,7 @@ export const de = {
       disable_guest: 'Gastkonto deaktiviert',
       enable_firewall: 'Firewall eingeschaltet',
       disable_proxy: 'Proxy abgeschaltet',
+      enable_driver_blocklist: 'Sperrliste für verwundbare Treiber eingeschaltet',
       open_settings: 'Windows-Einstellungen geöffnet',
     },
     historyTitle: 'Verlauf',
@@ -628,7 +632,7 @@ export const de = {
   persistence: {
     title: 'Autostart & Persistenz',
     intro:
-      'Wo sich Programme für den nächsten Start festsetzen: Autostart-Schlüssel und -Ordner, geplante Aufgaben, Dienste, Winlogon, IFEO, AppInit, WMI-Abos, eigene COM-Einträge und Browser-Erweiterungen. Die Programmdateien prüft AEGIS im Prüfprozess.',
+      'Wo sich Programme für den nächsten Start festsetzen: Autostart-Schlüssel und -Ordner, geplante Aufgaben, Dienste, Winlogon, IFEO, AppInit, WMI-Abos, eigene COM-Einträge, Browser-Erweiterungen und Treiber. Die Programmdateien prüft AEGIS im Prüfprozess, Treiber gleicht es mit einer Liste bekannt verwundbarer und bösartiger Treiber ab.',
     check: 'Autostarts prüfen',
     recheck: 'Neu prüfen',
     notYet: 'Noch nicht geprüft – das dauert einige Sekunden.',
@@ -637,6 +641,11 @@ export const de = {
     notable: 'Wichtige',
     all: 'Alle ({count})',
     filesChecked: '{count} Programmdateien geprüft',
+    driverList: '{count} Treiber abgeglichen mit {source} ({entries} Einträge, Stand {date})',
+    knownDriver: {
+      malicious: 'Bösartiger Treiber',
+      vulnerable: 'Verwundbarer Treiber',
+    },
     empty: 'Nichts Auffälliges gefunden.',
     disabled: 'in Windows deaktiviert',
     disable: 'Deaktivieren …',
@@ -654,6 +663,7 @@ export const de = {
       wmi_consumer: 'WMI-Abo',
       com_object: 'COM-Eintrag',
       browser_extension: 'Browser-Erweiterung',
+      driver: 'Treiber',
     },
   },
   lab: {

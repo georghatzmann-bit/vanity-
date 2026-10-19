@@ -289,6 +289,14 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Ausführen wird der Eintrag neu gelesen und muss unverändert sein. Dateien im Autostart-Ordner
   werden über die Quarantäne isoliert. Winlogon, WMI-Abos, COM und Erweiterungen werden nur
   erklärt.
+- **Treiber-Check (P6.4):** liest Treiber-Dienste (Typ 1/2) und geladene Treiber
+  (`EnumDeviceDrivers`, nur lesend), hasht die Dateien mit den Rechten des Kontos (höchstens
+  2000 Dateien, je 64 MiB) und gleicht SHA-256 + Authenticode-Hash mit der gebündelten
+  LOLDrivers-Liste ab. Pfade aus `ImagePath` werden nur in Laufwerks-Pfade ohne `..` übersetzt
+  (`\Device\…`, UNC → nicht geprüft). Deaktivieren nur für Start 2/3 (Plan, Start = 4,
+  Rückgängig); Boot/System nie. Sperrliste einschalten ist ein Härtungs-Plan (Admin, Neustart);
+  Device-Guard-Richtlinien werden nicht geändert. Grenze: Ein Angreifer mit Kernel-Rechten kann
+  die Anzeige fälschen – der Check findet bekannte Fälle, er beweist keine Sauberkeit.
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.

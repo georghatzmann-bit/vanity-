@@ -234,6 +234,8 @@ crates/winffi/src/inspect.rs :: winffi-tcp-size :: Windows-FFI (Labor-Bericht, n
 crates/winffi/src/inspect.rs :: winffi-tcp-table :: Windows-FFI (Labor-Bericht, nur lesend): Registrierung lesen, Prozesse/TCP-Verbindungen auflisten oder Bildschirmfotos der Labor-Fenster in eigenen Speicher kopieren – verändert nichts am System.
 crates/winffi/src/inspect.rs :: winffi-udp-size :: Windows-FFI (Härtung, nur lesend): Tabelle der gebundenen UDP-Ports in eigenen Speicher lesen – verändert nichts am System.
 crates/winffi/src/inspect.rs :: winffi-udp-table :: Windows-FFI (Härtung, nur lesend): Tabelle der gebundenen UDP-Ports in eigenen Speicher lesen – verändert nichts am System.
+crates/winffi/src/inspect.rs :: winffi-drivers-enum :: Windows-FFI (Treiber-Check, nur lesend): Basisadressen der geladenen Treiber in eigenen Speicher lesen – verändert nichts am System.
+crates/winffi/src/inspect.rs :: winffi-drivers-name :: Windows-FFI (Treiber-Check, nur lesend): Dateipfad eines geladenen Treibers in eigenen Puffer lesen – verändert nichts am System.
 crates/winffi/src/registry.rs :: winffi-registry-close :: Windows-FFI (Härtung): schließt einen selbst geöffneten Registrierungsschlüssel.
 crates/winffi/src/registry.rs :: winffi-registry-open-read :: Windows-FFI (Härtung): öffnet einen Schlüssel nur zum Lesen (Stand für „Rückgängig“ merken).
 crates/winffi/src/registry.rs :: winffi-registry-query :: Windows-FFI (Härtung): liest einen Wert roh in eigenen Speicher (nur lesend).

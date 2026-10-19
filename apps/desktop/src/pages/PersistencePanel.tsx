@@ -131,6 +131,16 @@ export function PersistencePanel({
                 {t('persistence.filesChecked', { count: String(state.filesChecked) })}
               </span>
             </div>
+            {state.driverList.entries > 0 && (
+              <p className="text-xs text-text-subtle" data-testid="persistence-driver-list">
+                {t('persistence.driverList', {
+                  count: String(state.driversChecked),
+                  source: state.driverList.source,
+                  entries: String(state.driverList.entries),
+                  date: state.driverList.date ?? '–',
+                })}
+              </p>
+            )}
             {shown.length === 0 ? (
               <p className="text-sm text-text-muted">{t('persistence.empty')}</p>
             ) : (
@@ -152,6 +162,15 @@ export function PersistencePanel({
                           {t(`persistence.kinds.${e.kind}`)}
                           {e.enabled ? '' : ` · ${t('persistence.disabled')}`}
                         </span>
+                        {e.knownDriver !== null && (
+                          <RiskBadge
+                            level={
+                              e.knownDriver.category === 'malicious' ? 'dangerous' : 'suspicious'
+                            }
+                            size="sm"
+                            label={t(`persistence.knownDriver.${e.knownDriver.category}`)}
+                          />
+                        )}
                         <RiskBadge level={e.risk} size="sm" />
                       </div>
                       <p className="mt-1 text-xs text-text-muted">

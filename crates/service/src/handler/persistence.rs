@@ -8,6 +8,9 @@
 //!   IFEO-`Debugger` entfernen, `AppInit_DLLs` nicht mehr laden. Dateien im Autostart-Ordner
 //!   werden über die Quarantäne isoliert (eigener Plan). Winlogon, WMI-Abos, COM-Einträge und
 //!   Browser-Erweiterungen werden nur erklärt.
+//! - Treiber (P6.4): Abgleich mit der LOLDrivers-Liste (SHA-256 und Authenticode-Hash).
+//!   Deaktiviert werden nur Treiber mit Starttyp „automatisch“ oder „manuell“ – Boot- und
+//!   System-Treiber nie (Windows startet sonst evtl. nicht mehr).
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -17,6 +20,7 @@ use aegis_core::consent::Clock;
 use aegis_core::plan::{ActionKind, ActionPlan, Target, UndoHint, param};
 use aegis_core::risk::RiskLevel;
 use aegis_engine::Finding;
+use aegis_hardening::drivers::{DriverCategory, DriverHashes, KnownDriver, MAX_DRIVER_BYTES};
 use aegis_hardening::persistence::{Autorun, AutorunKind, Flag, assess};
 use aegis_quarantine::UserAccess;
 use serde::Serialize;
@@ -33,6 +37,10 @@ pub const AUTORUN_SETTING: &str = "hardening.autorun";
 const MAX_FILES: usize = 400;
 /// Höchstzahl Browser-Erweiterungen.
 const MAX_EXTENSIONS: usize = 300;
+/// Höchstzahl geprüfter Treiberdateien je Durchlauf.
+const MAX_DRIVERS: usize = 2000;
+/// Schlüssel der Dienst- und Treiber-Einträge.
+const SERVICES: &str = r"HKLM\SYSTEM\CurrentControlSet\Services";
 
 /// Begründung (Deutsch, Englisch).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -61,6 +69,30 @@ pub struct AutorunView {
     pub finding: Option<Finding>,
     /// Möglicher Schritt: `disable` (Plan) oder `quarantine` (Datei im Autostart-Ordner).
     pub action: Option<&'static str>,
+    /// Treffer in der Liste verwundbarer bzw. bösartiger Treiber.
+    pub known_driver: Option<KnownDriver>,
+}
+
+/// Angaben zur gebündelten Treiberliste.
+#[derive(Debug, Clone, Serialize)]
+pub struct DriverListInfo {
+    /// Quelle.
+    pub source: &'static str,
+    /// Einträge.
+    pub entries: usize,
+    /// Stand (`JJJJ-MM-TT`).
+    pub date: Option<String>,
+}
+
+impl DriverListInfo {
+    fn bundled() -> Self {
+        let list = aegis_hardening::drivers::list();
+        Self {
+            source: "LOLDrivers (loldrivers.io, Apache-2.0)",
+            entries: list.len(),
+            date: list.date().map(str::to_owned),
+        }
+    }
 }
 
 /// Zustand für die Oberfläche.
@@ -74,6 +106,10 @@ pub struct PersistenceState {
     pub files_checked: usize,
     /// Darf das Konto rechnerweite Einträge deaktivieren?
     pub admin: bool,
+    /// Geprüfte Treiberdateien.
+    pub drivers_checked: usize,
+    /// Gebündelte Treiberliste.
+    pub driver_list: DriverListInfo,
 }
 
 fn kind_name(kind: AutorunKind) -> String {
@@ -92,6 +128,10 @@ fn files_of(entry: &Autorun, env: &PathEnv) -> Vec<PathBuf> {
     match entry.kind {
         AutorunKind::BrowserExtension => Vec::new(),
         AutorunKind::StartupFolder => vec![PathBuf::from(&entry.command)],
+        AutorunKind::Driver if entry.command.as_bytes().get(1) == Some(&b':') => {
+            vec![PathBuf::from(&entry.command)]
+        }
+        AutorunKind::Driver => Vec::new(),
         AutorunKind::AppInit => entry
             .command
             .split([',', ' '])
@@ -120,6 +160,7 @@ fn view(
     entry: Autorun,
     file: Option<PathBuf>,
     checked: &HashMap<PathBuf, (bool, Option<Finding>)>,
+    known_driver: Option<KnownDriver>,
 ) -> AutorunView {
     let (mut risk, flags) = assess(&entry);
     let mut reasons: Vec<Reason> = flags.into_iter().map(reason).collect();
@@ -162,6 +203,9 @@ fn view(
             en: format!("File check: {}", f.summary_en),
         });
     }
+    if entry.kind == AutorunKind::Driver {
+        driver_reasons(&entry, known_driver.as_ref(), &mut risk, &mut reasons);
+    }
     let action = match entry.kind {
         AutorunKind::Run
         | AutorunKind::RunOnce
@@ -170,6 +214,7 @@ fn view(
         | AutorunKind::Ifeo => Some("disable"),
         AutorunKind::ScheduledTask | AutorunKind::AppInit if entry.enabled => Some("disable"),
         AutorunKind::StartupFolder if !missing => Some("quarantine"),
+        AutorunKind::Driver if driver_disableable(&entry) => Some("disable"),
         _ => None,
     };
     AutorunView {
@@ -180,6 +225,68 @@ fn view(
         missing,
         finding,
         action,
+        known_driver,
+    }
+}
+
+/// Darf AEGIS den Treiber deaktivieren? Nur Dienst-Einträge mit Start „automatisch“ (2) oder
+/// „manuell“ (3).
+fn driver_disableable(entry: &Autorun) -> bool {
+    entry.location == SERVICES && matches!(entry.start, Some(2 | 3))
+}
+
+/// Begründungen eines Treibers (Listentreffer, Ort, Starttyp).
+fn driver_reasons(
+    entry: &Autorun,
+    known: Option<&KnownDriver>,
+    risk: &mut RiskLevel,
+    reasons: &mut Vec<Reason>,
+) {
+    if let Some(k) = known {
+        match k.category {
+            DriverCategory::Malicious => {
+                *risk = RiskLevel::Dangerous;
+                reasons.push(Reason {
+                    de: format!(
+                        "Bekannter bösartiger Treiber ({}, Liste LOLDrivers).",
+                        k.file
+                    ),
+                    en: format!("Known malicious driver ({}, LOLDrivers list).", k.file),
+                });
+            }
+            DriverCategory::Vulnerable => {
+                *risk = (*risk).max(RiskLevel::Suspicious);
+                reasons.push(Reason {
+                    de: format!(
+                        "Bekannt verwundbarer Treiber ({}, Liste LOLDrivers): Angreifer können ihn missbrauchen, um Schutzprogramme abzuschalten. Hersteller-Update installieren oder die zugehörige Software entfernen.",
+                        k.file
+                    ),
+                    en: format!(
+                        "Known vulnerable driver ({}, LOLDrivers list): attackers can abuse it to disable security software. Install a vendor update or remove the related software.",
+                        k.file
+                    ),
+                });
+            }
+        }
+        if k.loads_despite_hvci {
+            reasons.push(Reason {
+                de: "Lädt laut Liste auch bei eingeschalteter Speicher-Integrität.".into(),
+                en: "According to the list it loads even with memory integrity on.".into(),
+            });
+        }
+        if matches!(entry.start, Some(0 | 1)) {
+            reasons.push(Reason {
+                de: "Start beim Hochfahren (Boot/System) – AEGIS deaktiviert solche Treiber nicht selbst, weil Windows sonst evtl. nicht mehr startet.".into(),
+                en: "Starts at boot (boot/system) – AEGIS does not disable such drivers itself, because Windows might no longer start.".into(),
+            });
+        }
+    }
+    if entry.location != SERVICES {
+        *risk = (*risk).max(RiskLevel::Info);
+        reasons.push(Reason {
+            de: "Geladen, aber ohne Dienst-Eintrag – z. B. von einem Programm direkt geladen oder der Eintrag wurde danach entfernt.".into(),
+            en: "Loaded but without a service entry – e.g. loaded directly by a program, or the entry was removed afterwards.".into(),
+        });
     }
 }
 
@@ -258,6 +365,7 @@ pub fn collect(scanner: &Scanner, user: &dyn UserAccess) -> PersistenceState {
     // Nutzerordner und Dateien nur mit den Rechten des Kontos.
     let mut checked: HashMap<PathBuf, (bool, Option<Finding>)> = HashMap::new();
     let mut files: BTreeMap<String, Option<PathBuf>> = BTreeMap::new();
+    let mut driver_hashes: HashMap<PathBuf, Option<DriverHashes>> = HashMap::new();
     if let Ok(_scope) = user.enter() {
         if let Some(p) = &profile {
             let startup = p.join(r"AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup");
@@ -287,13 +395,35 @@ pub fn collect(scanner: &Scanner, user: &dyn UserAccess) -> PersistenceState {
             {
                 let missing = std::fs::symlink_metadata(f).is_err();
                 checked.insert(f.clone(), (missing, None));
+                if entry.kind == AutorunKind::Driver
+                    && !missing
+                    && driver_hashes.len() < MAX_DRIVERS
+                {
+                    driver_hashes.insert(f.clone(), hash_driver(f));
+                }
             }
             files.insert(entry.id.clone(), file);
         }
     }
+    let drivers_checked = driver_hashes.values().filter(|h| h.is_some()).count();
+    let known: HashMap<PathBuf, KnownDriver> = driver_hashes
+        .into_iter()
+        .filter_map(|(path, hashes)| {
+            let hit = aegis_hardening::drivers::list().lookup(&hashes?)?.clone();
+            Some((path, hit))
+        })
+        .collect();
+    // Treiber im Windows-Ordner prüft nur der Listenabgleich (Hunderte Systemdateien).
+    let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    let driver_files: std::collections::HashSet<PathBuf> = entries
+        .iter()
+        .filter(|e| e.kind == AutorunKind::Driver)
+        .filter(|e| aegis_hardening::drivers::in_system_root(&e.command, &root))
+        .filter_map(|e| files.get(&e.id).cloned().flatten())
+        .collect();
     let to_scan: Vec<PathBuf> = checked
         .iter()
-        .filter(|(_, (missing, _))| !missing)
+        .filter(|(p, (missing, _))| !missing && !driver_files.contains(*p))
         .map(|(p, _)| p.clone())
         .take(MAX_FILES)
         .collect();
@@ -309,7 +439,8 @@ pub fn collect(scanner: &Scanner, user: &dyn UserAccess) -> PersistenceState {
         .into_iter()
         .map(|e| {
             let file = files.get(&e.id).cloned().flatten();
-            view(e, file, &checked)
+            let hit = file.as_ref().and_then(|f| known.get(f)).cloned();
+            view(e, file, &checked, hit)
         })
         .collect();
     views.sort_by(|a, b| {
@@ -323,7 +454,22 @@ pub fn collect(scanner: &Scanner, user: &dyn UserAccess) -> PersistenceState {
         entries: views,
         files_checked,
         admin: user.is_admin(),
+        drivers_checked,
+        driver_list: DriverListInfo::bundled(),
     }
+}
+
+/// Prüfsummen einer Treiberdatei (im Identitätswechsel aufrufen; höchstens
+/// [`MAX_DRIVER_BYTES`]).
+fn hash_driver(path: &Path) -> Option<DriverHashes> {
+    let file = std::fs::File::open(path).ok()?;
+    let mut bytes = Vec::new();
+    std::io::Read::read_to_end(
+        &mut std::io::Read::take(file, MAX_DRIVER_BYTES + 1),
+        &mut bytes,
+    )
+    .ok()?;
+    (u64::try_from(bytes.len()).ok()? <= MAX_DRIVER_BYTES).then(|| DriverHashes::of(&bytes))
 }
 
 trait KindOrder {
@@ -345,6 +491,7 @@ impl KindOrder for AutorunKind {
             Self::Service => 9,
             Self::ComObject => 10,
             Self::BrowserExtension => 11,
+            Self::Driver => 12,
         }
     }
 }
@@ -370,6 +517,15 @@ fn plausible_task(path: &str) -> bool {
         && path.chars().count() <= 260
         && !path.contains("..")
         && !path.chars().any(|c| c.is_control() || c == '"')
+}
+
+/// Dienstname: ohne `\`, `/`, Steuerzeichen; höchstens 256 Zeichen.
+fn plausible_service(name: &str) -> bool {
+    !name.is_empty()
+        && name.chars().count() <= 256
+        && !name
+            .chars()
+            .any(|c| c.is_control() || c == '\\' || c == '/')
 }
 
 /// Die Schritte zum Deaktivieren (rein – testbar).
@@ -403,6 +559,22 @@ pub fn disable_steps(entry: &Autorun, sid: Option<&str>) -> Result<Vec<Step>, St
                 bytes: 4u32.to_le_bytes().to_vec(),
             }),
         }]),
+        AutorunKind::Driver if entry.location != SERVICES => Err(
+            "Dieser Treiber hat keinen Dienst-Eintrag – AEGIS kann ihn nicht deaktivieren.".into(),
+        ),
+        AutorunKind::Driver => match entry.start {
+            Some(0 | 1) => Err(
+                "Boot- und System-Treiber deaktiviert AEGIS nicht – Windows startet sonst evtl. nicht mehr. Bitte Hersteller-Update installieren oder die Software deinstallieren.".into(),
+            ),
+            Some(4) => Err("Der Treiber ist bereits deaktiviert.".into()),
+            Some(2 | 3) if plausible_service(&entry.name) => Ok(vec![Step::Registry {
+                place: Place::Machine,
+                key: format!(r"SYSTEM\CurrentControlSet\Services\{}", entry.name),
+                name: "Start".into(),
+                value: Some(Raw::dword(4)),
+            }]),
+            _ => Err("Unbekannter Starttyp – AEGIS ändert ihn nicht.".into()),
+        },
         AutorunKind::Ifeo => {
             let (place, key) = registry_place(&entry.location, sid)?;
             Ok(vec![Step::Registry {
@@ -509,9 +681,26 @@ impl<C: Clock, W: Durable> Service<C, W> {
         for step in &steps {
             builder = builder.target(Target::other(step.describe()));
         }
+        let driver = view.entry.kind == AutorunKind::Driver;
+        let effect = if driver {
+            format!(
+                "Der Treiber {} wird ab dem nächsten Neustart nicht mehr geladen (bis dahin bleibt er aktiv). Geräte oder Programme, die ihn brauchen, funktionieren dann evtl. nicht mehr. Die Treiberdatei bleibt unverändert.",
+                super::quoted(&view.entry.command)
+            )
+        } else {
+            format!(
+                "Das Programm startet nicht mehr automatisch ({}). Die Programmdatei selbst bleibt unverändert.",
+                super::quoted(&view.entry.command)
+            )
+        };
         let plan = builder
             .what(format!(
-                "Autostart-Eintrag deaktivieren: {}",
+                "{}: {}",
+                if driver {
+                    "Treiber deaktivieren"
+                } else {
+                    "Autostart-Eintrag deaktivieren"
+                },
                 super::quoted(&view.entry.name)
             ))
             .why(if view.risk >= RiskLevel::Suspicious {
@@ -520,8 +709,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 "Von dir gewählt – z. B. weil du das Programm beim Start nicht brauchst."
             })
             .consequence(format!(
-                "Das Programm startet nicht mehr automatisch ({}). Die Programmdatei selbst bleibt unverändert. Geändert wird genau: {}.",
-                super::quoted(&view.entry.command),
+                "{effect} Geändert wird genau: {}.",
                 steps
                     .iter()
                     .map(Step::describe)
@@ -643,11 +831,97 @@ mod tests {
         assert_eq!(files.len(), 1);
         let mut checked = HashMap::new();
         checked.insert(files[0].clone(), (true, None));
-        let v = view(e, files.first().cloned(), &checked);
+        let v = view(e, files.first().cloned(), &checked, None);
         assert!(v.missing);
         assert_eq!(v.risk, RiskLevel::Suspicious);
         assert_eq!(v.action, Some("disable"));
         assert!(v.reasons.iter().any(|r| r.de.contains("fehlt")));
+    }
+
+    fn driver(start: Option<u32>, location: &str) -> Autorun {
+        Autorun::new(
+            AutorunKind::Driver,
+            true,
+            location,
+            "RTCore64",
+            r"C:\Program Files\Tool\RTCore64.sys",
+            start != Some(4),
+        )
+        .with_start(start)
+    }
+
+    #[test]
+    fn treiber_nur_automatisch_oder_manuell_deaktivieren() {
+        for start in [Some(2), Some(3)] {
+            let steps = disable_steps(&driver(start, SERVICES), None).unwrap();
+            assert_eq!(
+                steps[0].describe(),
+                r"HKLM\SYSTEM\CurrentControlSet\Services\RTCore64\Start = 4 (DWORD)"
+            );
+            assert!(driver_disableable(&driver(start, SERVICES)));
+        }
+        for start in [Some(0), Some(1), Some(4), Some(9), None] {
+            assert!(
+                disable_steps(&driver(start, SERVICES), None).is_err(),
+                "{start:?}"
+            );
+            assert!(!driver_disableable(&driver(start, SERVICES)));
+        }
+        let loaded = driver(Some(3), "Geladen (ohne Dienst-Eintrag)");
+        assert!(disable_steps(&loaded, None).is_err());
+        let mut odd = driver(Some(3), SERVICES);
+        odd.name = r"a\..\b".into();
+        assert!(disable_steps(&odd, None).is_err());
+    }
+
+    #[test]
+    fn treiber_aus_der_liste_werden_markiert() {
+        let checked = HashMap::new();
+        let known = |category| KnownDriver {
+            category,
+            loads_despite_hvci: true,
+            id: "x".into(),
+            file: "RTCore64.sys".into(),
+        };
+        let v = view(
+            driver(Some(3), SERVICES),
+            None,
+            &checked,
+            Some(known(DriverCategory::Vulnerable)),
+        );
+        assert_eq!(v.risk, RiskLevel::Suspicious);
+        assert_eq!(v.action, Some("disable"));
+        assert!(v.reasons.iter().any(|r| r.de.contains("verwundbar")));
+        assert!(
+            v.reasons
+                .iter()
+                .any(|r| r.de.contains("Speicher-Integrität"))
+        );
+        let v = view(
+            driver(Some(0), SERVICES),
+            None,
+            &checked,
+            Some(known(DriverCategory::Malicious)),
+        );
+        assert_eq!(v.risk, RiskLevel::Dangerous);
+        assert_eq!(v.action, None);
+        assert!(v.reasons.iter().any(|r| r.de.contains("Boot/System")));
+        let v = view(
+            driver(Some(3), "Geladen (ohne Dienst-Eintrag)"),
+            None,
+            &checked,
+            None,
+        );
+        assert_eq!(v.risk, RiskLevel::Info);
+        let plain = view(driver(Some(1), SERVICES), None, &checked, None);
+        assert_eq!(plain.risk, RiskLevel::Clean);
+        assert!(plain.reasons.is_empty());
+        // Nur Pfade mit Laufwerk werden als Datei geprüft.
+        let env = PathEnv::for_profile(None);
+        assert_eq!(files_of(&driver(Some(3), SERVICES), &env).len(), 1);
+        let mut raw = driver(Some(3), SERVICES);
+        raw.command = r"\Device\HarddiskVolume2\x.sys".into();
+        assert!(files_of(&raw, &env).is_empty());
     }
 
     #[test]
@@ -657,6 +931,10 @@ mod tests {
             Some((AutorunKind::Run, "0123456789abcdef"))
         );
         assert_eq!(parse_value("run:../x"), None);
+        assert_eq!(
+            parse_value("driver:0123456789abcdef"),
+            Some((AutorunKind::Driver, "0123456789abcdef"))
+        );
         assert_eq!(parse_value("format:0123456789abcdef"), None);
     }
 }

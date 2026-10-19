@@ -573,6 +573,7 @@ export const en: Messages<typeof de> = {
       antivirus: 'Antivirus',
       network: 'Proxy, DNS and hosts file',
       ports: 'Open ports',
+      driver_protection: 'Vulnerable driver protection',
     },
     fix: {
       enable_uac: 'Suggestion: set User Account Control to “default”.',
@@ -583,6 +584,8 @@ export const en: Messages<typeof de> = {
       enable_firewall: 'Suggestion: turn on the firewall for all network profiles.',
       disable_proxy:
         'Suggestion: check the proxy and turn it off if you did not set it up yourself.',
+      enable_driver_blocklist:
+        'Suggestion: turn on the Microsoft vulnerable driver blocklist (takes effect after a restart).',
       open_settings: 'Suggestion: check in Windows Settings.',
     },
     fixHint:
@@ -604,6 +607,7 @@ export const en: Messages<typeof de> = {
       disable_guest: 'Guest account disabled',
       enable_firewall: 'Firewall turned on',
       disable_proxy: 'Proxy turned off',
+      enable_driver_blocklist: 'Vulnerable driver blocklist turned on',
       open_settings: 'Windows Settings opened',
     },
     historyTitle: 'History',
@@ -620,7 +624,7 @@ export const en: Messages<typeof de> = {
   persistence: {
     title: 'Autostart & persistence',
     intro:
-      'Where programs settle in for the next start: autostart keys and folders, scheduled tasks, services, Winlogon, IFEO, AppInit, WMI subscriptions, your own COM entries and browser extensions. AEGIS checks the program files in its scanning process.',
+      'Where programs settle in for the next start: autostart keys and folders, scheduled tasks, services, Winlogon, IFEO, AppInit, WMI subscriptions, your own COM entries, browser extensions and drivers. AEGIS checks the program files in its scanning process and compares drivers against a list of known vulnerable and malicious drivers.',
     check: 'Check autostarts',
     recheck: 'Check again',
     notYet: 'Not checked yet – this takes a few seconds.',
@@ -629,6 +633,11 @@ export const en: Messages<typeof de> = {
     notable: 'Important',
     all: 'All ({count})',
     filesChecked: '{count} program files checked',
+    driverList: '{count} drivers compared with {source} ({entries} entries, as of {date})',
+    knownDriver: {
+      malicious: 'Malicious driver',
+      vulnerable: 'Vulnerable driver',
+    },
     empty: 'Nothing noticeable found.',
     disabled: 'disabled in Windows',
     disable: 'Disable…',
@@ -646,6 +655,7 @@ export const en: Messages<typeof de> = {
       wmi_consumer: 'WMI subscription',
       com_object: 'COM entry',
       browser_extension: 'Browser extension',
+      driver: 'Driver',
     },
   },
   lab: {

@@ -36,6 +36,7 @@ const settingsPage: Readonly<Partial<Record<HardeningCheckId, WindowsSettingsPag
   updates: 'windows_update',
   bit_locker: 'device_encryption',
   antivirus: 'virus_protection',
+  driver_protection: 'core_isolation',
 };
 
 /** Nur der Proxy betrifft allein das eigene Konto – alles andere den ganzen PC. */
