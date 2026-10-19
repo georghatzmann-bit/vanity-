@@ -20,6 +20,7 @@ use aegis_quarantine::OwnProcess;
 
 use crate::handler::Service;
 use crate::transport::{MAX_CONNECTIONS, Slot};
+use crate::worker::{Scanner, WORKER_NAME};
 
 /// Dienst mit Systemuhr und Prüfprotokoll-Datei.
 pub type LiveService = Service<SystemClock, File>;
@@ -79,13 +80,26 @@ pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
     let audit = open_audit(&audit_path)?;
 
     let vault = Vault::open(&data_dir.join("quarantine")).map_err(io::Error::other)?;
+    // Fremde Dateien parst nur der eingeschränkte Prüfprozess – ohne ihn startet der Dienst
+    // nicht (kein stiller Rückfall auf das Parsen im Dienst).
+    let worker = Scanner::locate_worker().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Prüfprogramm {WORKER_NAME} fehlt neben dem Dienst – Installation reparieren"),
+        )
+    })?;
+    // Die eingebauten Regeln werden schon hier geprüft (Fehler beim Start statt beim Scan).
     let engine = Engine::new(EngineConfig {
         yara: Some(YaraRules::builtin().map_err(io::Error::other)?),
-        clamav: ClamAv::locate(),
         ..EngineConfig::default()
     });
     let gate = ConsentGate::new(ConsentConfig::default()).map_err(io::Error::other)?;
-    Ok(Service::new(engine, vault, gate, audit).with_protected(vec![data_dir.to_owned()]))
+    Ok(Service::new(engine, vault, gate, audit)
+        .with_protected(vec![data_dir.to_owned()])
+        .with_scanner(Scanner::Worker {
+            exe: worker,
+            clamav: ClamAv::locate().is_some(),
+        }))
 }
 
 fn open_audit(path: &Path) -> io::Result<AuditLog<File>> {

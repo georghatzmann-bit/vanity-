@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use aegis_core::risk::RiskLevel;
@@ -92,7 +92,7 @@ pub struct Engine {
 }
 
 /// Übersprungener Pfad mit Grund.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Skipped {
     /// Pfad.
     pub path: PathBuf,
@@ -101,7 +101,7 @@ pub struct Skipped {
 }
 
 /// Ergebnis eines Laufs.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ScanReport {
     /// Alle geprüften Dateien.
     pub findings: Vec<Finding>,

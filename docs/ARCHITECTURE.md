@@ -88,12 +88,15 @@ Vorbesetzen durch Fremde). Unter Linux (nur Entwicklung) ein Unix-Socket im Zust
 - `%LOCALAPPDATA%\AEGIS\` (Nutzer): UI-Einstellungen, Tresor-Datei, Layouts.
 - SQLite (`rusqlite`) für Funde, Zeitleiste, Whitelist (Hash + Pfad + Grund + Datum).
 
-## Prozessisolation fremder Dateien (geplant, P3)
+## Prozessisolation fremder Dateien (P3.2)
 
 Parser für PE/Office/PDF/LNK/Archive laufen in Kindprozessen mit eingeschränktem Token,
 niedriger Integrität, Job-Objekt (CPU/RAM/Zeit, keine Kindprozesse) und ohne Netz.
 Ergebnis als JSON über eine anonyme Pipe; Absturz eines Parsers = Befund „nicht prüfbar“.
-Stand P2: PE-Analyse und YARA-X laufen noch im Dienstprozess (mit Größenlimits).
+Umgesetzt als `aegis-scanworker` (`crates/service/src/bin`, Anbindung in `worker.rs`, FFI in
+`crates/winffi/src/process.rs`): Anfrage/Bericht als JSON über Standardein-/-ausgabe, Token vom
+anfragenden Nutzer abgeleitet und eingeschränkt, niedrige Integrität, Job-Objekt, Zeitlimit.
+Noch offen: kein Netz (AppContainer, P4).
 
 ## Build & Verteilung
 

@@ -128,3 +128,33 @@ crates/winffi/src/fs.rs :: winffi-delete-by-handle-ex-call :: Windows: Löschen 
 crates/winffi/src/fs.rs :: winffi-open-for-owner :: Windows-FFI: öffnet ein Objekt im Datenordner nur zum Lesen von Besitzer/Attributen.
 crates/winffi/src/fs.rs :: winffi-open-for-owner-call :: Windows: CreateFileW nur mit READ_CONTROL/Attributen (OPEN_EXISTING) für die Startprüfung des Datenordners.
 crates/winffi/src/fs.rs :: winffi-long-path :: Windows-FFI: schreibt Kurznamen in lange Namen um (nur lesend, löst keine Links auf).
+crates/winffi/src/process.rs :: winffi-thread-token-for-child :: Windows-FFI: liest das Token der aktuellen Identität (anfragender Nutzer) nur, um daraus ein eingeschränktes Token für den Prüfprozess abzuleiten.
+crates/winffi/src/process.rs :: winffi-process-token-for-child :: Windows-FFI: liest das eigene Prozess-Token (ohne Identitätswechsel) für ein eingeschränktes Prüfprozess-Token.
+crates/winffi/src/process.rs :: winffi-duplicate-token :: Windows-FFI: kopiert das Token als Primär-Token (Voraussetzung für einen Kindprozess).
+crates/winffi/src/process.rs :: winffi-restrict-token :: Windows-FFI: schränkt das Token ein (keine Privilegien, Admin-Gruppen nur deny).
+crates/winffi/src/process.rs :: winffi-low-integrity-sid :: Windows-FFI: legt die SID „niedrige Integrität“ an.
+crates/winffi/src/process.rs :: winffi-sid-length :: Windows-FFI: liest die Länge der eigenen SID.
+crates/winffi/src/process.rs :: winffi-set-integrity :: Windows: setzt die Integrität des eigenen, neuen Prüfprozess-Tokens auf niedrig (kein Nutzer-/Systemobjekt).
+crates/winffi/src/process.rs :: winffi-low-integrity-sid-free :: Windows-FFI: gibt die SID genau einmal frei.
+crates/winffi/src/process.rs :: winffi-child-wait :: Windows-FFI: wartet auf den eigenen Prüfprozess.
+crates/winffi/src/process.rs :: winffi-child-exit-code :: Windows-FFI: liest den Rückgabewert des eigenen Prüfprozesses.
+crates/winffi/src/process.rs :: winffi-terminate-job :: Windows-FFI: beendet den eigenen Job (Zeitlimit).
+crates/winffi/src/process.rs :: winffi-terminate-job-call :: Windows: beendet nur den eigenen Prüfprozess-Job (inkl. dessen ClamAV) nach Zeitlimit – nie Nutzerprozesse.
+crates/winffi/src/process.rs :: winffi-create-pipe :: Windows-FFI: legt anonyme Pipes zum eigenen Prüfprozess an.
+crates/winffi/src/process.rs :: winffi-no-inherit :: Windows-FFI: verhindert, dass die eigenen Pipe-Enden vererbt werden.
+crates/winffi/src/process.rs :: winffi-attr-size :: Windows-FFI: Größenabfrage der Attributliste.
+crates/winffi/src/process.rs :: winffi-attr-init :: Windows-FFI: initialisiert die Attributliste im eigenen Puffer.
+crates/winffi/src/process.rs :: winffi-attr-update :: Windows-FFI: begrenzt die Vererbung auf genau die beiden Pipe-Enden des Kindes.
+crates/winffi/src/process.rs :: winffi-attr-delete :: Windows-FFI: löscht die Attributliste genau einmal.
+crates/winffi/src/process.rs :: winffi-create-job :: Windows-FFI: legt einen anonymen Job für den Prüfprozess an.
+crates/winffi/src/process.rs :: winffi-job-limits :: Windows-FFI: setzt Speicher-, Prozess- und Beenden-beim-Schließen-Grenzen des eigenen Jobs.
+crates/winffi/src/process.rs :: winffi-job-ui :: Windows-FFI: sperrt UI-Zugriffe (Zwischenablage, Desktop …) im eigenen Job.
+crates/winffi/src/process.rs :: winffi-create-restricted-process :: Windows-FFI: startet den eigenen Prüfprozess angehalten mit eingeschränktem Token.
+crates/winffi/src/process.rs :: winffi-create-restricted-process-call :: Windows: startet nur den eigenen Prüfprozess bzw. ClamAV (feste Programme, feste Argumente) – kein Nutzerprogramm.
+crates/winffi/src/process.rs :: winffi-own-process-handles :: Windows-FFI: übernimmt Prozess-/Thread-Handle des eigenen Kindes.
+crates/winffi/src/process.rs :: winffi-assign-job :: Windows-FFI: ordnet den angehaltenen Prüfprozess seinem Job zu.
+crates/winffi/src/process.rs :: winffi-kill-unassigned :: Windows-FFI: beendet den eigenen, noch angehaltenen Prüfprozess, falls die Job-Zuordnung scheitert.
+crates/winffi/src/process.rs :: winffi-kill-unassigned-call :: Windows: beendet nur den eigenen, nie gelaufenen Prüfprozess (Job-Zuordnung gescheitert).
+crates/winffi/src/process.rs :: winffi-resume-child :: Windows-FFI: lässt den eigenen Prüfprozess nach der Job-Zuordnung anlaufen.
+crates/service/src/worker.rs :: service-worker-spawn :: Dienst (Unix/Entwicklung): startet den eigenen Prüfprozess (festes Programm, keine Argumente); unter Windows über aegis-winffi mit eingeschränktem Token.
+crates/service/src/worker.rs :: service-worker-kill :: Dienst (Unix/Entwicklung): beendet nur den eigenen Prüfprozess nach dem Zeitlimit.

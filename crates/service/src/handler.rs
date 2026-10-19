@@ -17,6 +17,8 @@ use aegis_core::plan::{ActionKind, ActionPlan, PlanId, Target, UndoHint, param};
 use aegis_core::risk::RiskLevel;
 use aegis_core::time::{Duration, OffsetDateTime};
 use aegis_engine::{Engine, Finding};
+
+use crate::worker::Scanner;
 use aegis_quarantine::{Entry, UserAccess, Vault};
 
 use crate::protocol::{PROTOCOL_VERSION, Proposal, Request, Response};
@@ -50,7 +52,7 @@ struct Pending {
 
 /// Zustand des Dienstes.
 pub struct Service<C: Clock, W: Durable> {
-    engine: Arc<Engine>,
+    scanner: Arc<Scanner>,
     vault: Vault,
     gate: ConsentGate<C>,
     audit: AuditLog<W>,
@@ -66,7 +68,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
     pub fn new(engine: Engine, vault: Vault, gate: ConsentGate<C>, audit: AuditLog<W>) -> Self {
         let protected = vec![vault.dir().to_path_buf()];
         Self {
-            engine: Arc::new(engine),
+            scanner: Arc::new(Scanner::InProcess(Arc::new(engine))),
             vault,
             gate,
             audit,
@@ -85,10 +87,17 @@ impl<C: Clock, W: Durable> Service<C, W> {
         self
     }
 
-    /// Die Engine – für Scans **außerhalb** der Sperre des Dienst-Zustands.
+    /// Prüfung im eingeschränkten Prüfprozess statt im Dienst (Betrieb).
     #[must_use]
-    pub fn engine(&self) -> Arc<Engine> {
-        Arc::clone(&self.engine)
+    pub fn with_scanner(mut self, scanner: Scanner) -> Self {
+        self.scanner = Arc::new(scanner);
+        self
+    }
+
+    /// Der Prüfer – für Scans **außerhalb** der Sperre des Dienst-Zustands.
+    #[must_use]
+    pub fn scanner(&self) -> Arc<Scanner> {
+        Arc::clone(&self.scanner)
     }
 
     /// Prüft Pfade einer Anfrage (für Aufrufer, die außerhalb der Sperre scannen).
@@ -124,7 +133,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 protocol: PROTOCOL_VERSION,
             },
             Request::Scan { paths } => match self.check_paths(&paths) {
-                Ok(()) => scan_as_user(&self.engine, &paths, user),
+                Ok(()) => scan_as_user(&self.scanner, &paths, user),
                 Err(e) => Response::error("input", e),
             },
             Request::ListQuarantine {} => match self.vault.list() {
@@ -141,7 +150,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             },
             Request::ProposeQuarantine { paths } => match self.check_paths(&paths) {
                 Ok(()) => match long_paths(&paths, user)
-                    .and_then(|paths| Ok((examine_as_user(&self.engine, &paths, user)?, paths)))
+                    .map(|paths| (examine_as_user(&self.scanner, &paths, user), paths))
                 {
                     Ok((findings, paths)) => {
                         self.propose_quarantine(&paths, &findings, user.identity())
@@ -586,29 +595,35 @@ pub fn long_paths(paths: &[PathBuf], user: &dyn UserAccess) -> Result<Vec<PathBu
     }
 }
 
-/// Scannt mit den Rechten des Nutzers (sieht nur, was er selbst lesen darf).
-pub fn scan_as_user(engine: &Engine, paths: &[PathBuf], user: &dyn UserAccess) -> Response {
-    match user.enter() {
-        Ok(_scope) => Response::ScanReport {
-            report: Box::new(engine.scan_paths(paths)),
+/// Scannt mit den Rechten des Nutzers (sieht nur, was er selbst lesen darf) – im Betrieb im
+/// eingeschränkten Prüfprozess.
+pub fn scan_as_user(scanner: &Scanner, paths: &[PathBuf], user: &dyn UserAccess) -> Response {
+    match scanner.scan(paths, user) {
+        Ok(report) => Response::ScanReport {
+            report: Box::new(report),
         },
-        Err(e) => identity_error(&e),
+        Err(e) => Response::error("scan", e),
     }
 }
 
-/// Prüft Dateien für einen Vorschlag mit den Rechten des Nutzers.
-///
-/// # Errors
-/// Fertige Fehler-Antwort, wenn der Identitätswechsel scheitert.
+/// Prüft Dateien für einen Vorschlag mit den Rechten des Nutzers. Scheitert die Prüfung
+/// (z. B. Absturz des Prüfprozesses an einer bösartig aufgebauten Datei), darf der Nutzer
+/// trotzdem isolieren: Die Dateien gelten dann als „nicht prüfbar“.
+#[must_use]
 pub fn examine_as_user(
-    engine: &Engine,
+    scanner: &Scanner,
     paths: &[PathBuf],
     user: &dyn UserAccess,
-) -> Result<Vec<Finding>, Response> {
-    let _scope = user.enter().map_err(|e| identity_error(&e))?;
-    Ok(paths.iter().map(|p| engine.scan_file(p)).collect())
+) -> Vec<Finding> {
+    scanner.examine(paths, user).unwrap_or_else(|e| {
+        paths
+            .iter()
+            .map(|p| Finding::unscannable(p.clone(), &e))
+            .collect()
+    })
 }
 
+#[cfg(windows)]
 fn identity_error(e: &std::io::Error) -> Response {
     Response::error(
         "identity",

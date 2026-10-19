@@ -79,26 +79,26 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
         };
         let response = match serde_json::from_slice::<Request>(&payload) {
             Ok(Request::Scan { paths }) => {
-                let (engine, checked) = {
+                let (scanner, checked) = {
                     let guard = lock()?;
-                    (guard.engine(), guard.check_paths(&paths))
+                    (guard.scanner(), guard.check_paths(&paths))
                 };
                 match (checked, Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS)) {
                     (Err(e), _) => Response::error("input", e),
                     (Ok(()), None) => busy(),
-                    (Ok(()), Some(_slot)) => scan_as_user(&engine, &paths, user),
+                    (Ok(()), Some(_slot)) => scan_as_user(&scanner, &paths, user),
                 }
             }
             Ok(Request::ProposeQuarantine { paths }) => {
-                let (engine, checked) = {
+                let (scanner, checked) = {
                     let guard = lock()?;
-                    (guard.engine(), guard.check_paths(&paths))
+                    (guard.scanner(), guard.check_paths(&paths))
                 };
                 match (checked, Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS)) {
                     (Err(e), _) => Response::error("input", e),
                     (Ok(()), None) => busy(),
                     (Ok(()), Some(slot)) => match long_paths(&paths, user)
-                        .and_then(|paths| Ok((examine_as_user(&engine, &paths, user)?, paths)))
+                        .map(|paths| (examine_as_user(&scanner, &paths, user), paths))
                     {
                         Ok((findings, paths)) => {
                             drop(slot);

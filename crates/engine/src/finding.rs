@@ -7,10 +7,10 @@
 use std::path::PathBuf;
 
 use aegis_core::risk::{Confidence, RiskLevel};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Woher eine Begründung stammt.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum Source {
     /// EICAR-Testdatei.
@@ -34,7 +34,7 @@ pub enum Source {
 }
 
 /// Grobe Einordnung des Fundes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Category {
     /// Nichts Auffälliges.
@@ -54,7 +54,7 @@ pub enum Category {
 }
 
 /// Empfohlene Aktion – nur eine Empfehlung, ausgeführt wird nichts ohne Freigabe.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Recommendation {
     /// Nichts zu tun.
@@ -66,7 +66,7 @@ pub enum Recommendation {
 }
 
 /// Wie stark eine Begründung wirkt.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Weight {
     /// Eindeutig: Stufe steht fest (z. B. Signatur-Treffer).
@@ -79,7 +79,7 @@ pub enum Weight {
 }
 
 /// Eine einzelne Begründung („Warum?“-Ansicht).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Reason {
     /// Stabiler Code, z. B. `pe.packed.upx`.
     pub code: String,
@@ -108,7 +108,7 @@ impl Reason {
 }
 
 /// Ergebnis für eine Datei.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Finding {
     /// Geprüfter Pfad.
     pub path: PathBuf,
@@ -136,8 +136,30 @@ pub struct Finding {
     pub contained: Vec<Contained>,
 }
 
+impl Finding {
+    /// Ergebnis für eine Datei, die nicht geprüft werden konnte (z. B. Prüfprozess
+    /// abgestürzt). Stufe „Info“ mit Empfehlung „ansehen“ – nie „sauber“.
+    #[must_use]
+    pub fn unscannable(path: PathBuf, why: &str) -> Self {
+        Self {
+            path,
+            sha256: None,
+            size: 0,
+            risk: RiskLevel::Info,
+            confidence: confidence(0),
+            category: Category::Info,
+            summary_de: "Diese Datei konnte nicht geprüft werden.".into(),
+            summary_en: "This file could not be checked.".into(),
+            recommendation: Recommendation::Review,
+            reasons: Vec::new(),
+            not_scannable: Some(why.to_owned()),
+            contained: Vec::new(),
+        }
+    }
+}
+
 /// Auffälliger Inhalt eines Containers (Archiv, Abbild, Office-Datei).
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contained {
     /// Pfad im Container, verschachtelt mit `/` (z. B. `a.zip/b.7z/c.exe`).
     pub name: String,

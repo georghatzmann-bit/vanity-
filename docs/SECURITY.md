@@ -64,8 +64,6 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   werden wie im Dateisystem verglichen (`CompareStringOrdinal`, UTF-16).
 - **Datenordner-Inhalt:** Beim Start müssen auch alle vorhandenen Dateien im Datenordner SYSTEM
   oder den Administratoren gehören und dürfen keine Links sein.
-- **ClamAV läuft noch als SYSTEM** (bekommt nur den Inhalt über die Standardeingabe). Der Start
-  mit eingeschränktem Token zusammen mit den Parser-Kindprozessen folgt in P3.2.
 - **Kein Sicherheitsgrenze:** Die Ablehnung von Pfaden im Datenordner ist ein Textvergleich
   (Kurznamen, Abzweigungen umgehen ihn); den Schutz liefern Identitätswechsel und die
   Zugriffsliste SYSTEM/Administratoren.
@@ -77,8 +75,15 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   DACL (SYSTEM + Administratoren). Die Verschlüsselung verhindert, dass Funde versehentlich
   ausgeführt oder von anderen Scannern gemeldet werden – nicht, dass ein Admin sie liest.
   DPAPI-Bindung (Maschinenschlüssel) ist für P5 vorgesehen.
-- **Parser im Dienstprozess (bis P3):** goblin und YARA-X laufen noch im Dienst (Größenlimits,
-  Zeitlimit für YARA). Die Auslagerung in Kindprozesse folgt in P3.
+- **Parser im Kindprozess (P3.2):** Fremde Dateien parst nur `aegis-scanworker` – unter Windows
+  mit eingeschränktem Token des anfragenden Nutzers (keine Privilegien, Admin-Gruppen nur
+  „deny“), **niedriger Integrität**, in einem Job-Objekt (2 GiB Speicher, höchstens 2 Prozesse,
+  keine Zwischenablage/Desktop-Zugriffe, Ende mit dem Dienst) und mit Zeitlimit. ClamAV läuft
+  als Kind dieses Prozesses mit denselben Grenzen (nicht mehr als SYSTEM). Absturz oder
+  Zeitüberschreitung = „nicht prüfbar“, der Nutzer kann trotzdem isolieren. Ohne das
+  Prüfprogramm startet der Dienst nicht. Grenze: Netzwerk sperrt erst die AppContainer-
+  Sandbox (P4). Konsolenbetrieb ohne SYSTEM (Entwicklung/CI) nutzt das eigene, eingeschränkte
+  Token.
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.
