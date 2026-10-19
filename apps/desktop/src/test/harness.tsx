@@ -10,6 +10,7 @@ import { createAppServices } from '../app/createServices.ts';
 import type { AppServices } from '../app/services.tsx';
 import { previewAppInfo, type AppInfo } from '../platform/appInfo.ts';
 import type {
+  FileDropEvent,
   HideOutcome,
   NavigateTarget,
   Platform,
@@ -34,8 +35,10 @@ export interface FakePlatform extends Platform {
   emitNavigate(target: NavigateTarget): void;
   /** Simuliert eine Größenänderung (z. B. nach Maximieren). */
   emitResized(): void;
-  /** Wie viele Empfänger gerade angemeldet sind. */
+  /** Wie viele Empfänger gerade angemeldet sind (Tray, Fenstergröße). */
   listenerCount(): number;
+  /** Simuliert Drag & Drop von Dateien auf das Fenster. */
+  emitFileDrop(event: FileDropEvent): void;
 }
 
 export const desktopInfo: AppInfo = {
@@ -58,6 +61,7 @@ export function fakePlatform(
 ): FakePlatform {
   const navigateHandlers = new Set<(target: NavigateTarget) => void>();
   const resizeHandlers = new Set<() => void>();
+  const dropHandlers = new Set<(event: FileDropEvent) => void>();
   let maximized = false;
   const windowMock: FakeWindowApi | null =
     kind === 'tauri'
@@ -101,6 +105,17 @@ export function fakePlatform(
       }
     },
     listenerCount: () => navigateHandlers.size + resizeHandlers.size,
+    onFileDrop(handler): Promise<Unlisten> {
+      dropHandlers.add(handler);
+      return Promise.resolve(() => {
+        dropHandlers.delete(handler);
+      });
+    },
+    emitFileDrop(event) {
+      for (const handler of dropHandlers) {
+        handler(event);
+      }
+    },
     service: kind === 'tauri' ? service : null,
     pickPaths: kind === 'tauri' ? vi.fn(() => Promise.resolve(picked)) : null,
   };

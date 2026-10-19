@@ -157,6 +157,96 @@ export interface ScheduleState {
   } | null;
 }
 
+/** Labor-Stufe: 1 = Windows Sandbox (eigene VM), 2 = Mini-Sandbox (AppContainer). */
+export type LabStage = 'windows_sandbox' | 'mini_sandbox';
+
+/** Zustand der Windows Sandbox auf diesem Rechner. */
+export interface SandboxStatus {
+  readonly enabled: boolean;
+  readonly supported: boolean;
+  readonly edition: string;
+}
+
+/** Art einer beobachteten Änderung. */
+export type LabChange = 'created' | 'modified' | 'deleted';
+
+/** Beobachtetes Verhalten (Einschätzung). */
+export type LabBehavior =
+  | 'autostart'
+  | 'network'
+  | 'encrypts_files'
+  | 'deletes_backups'
+  | 'drops_executables'
+  | 'spawns_interpreters'
+  | 'deletes_files';
+
+/** Verhaltensbericht eines Laufs (nur Beobachtungen). */
+export interface LabReport {
+  readonly sha256: string | null;
+  readonly end:
+    | { readonly type: 'exited'; readonly code: number }
+    | { readonly type: 'timed_out' }
+    | { readonly type: 'failed'; readonly message: string };
+  readonly processes: readonly {
+    readonly pid: number;
+    readonly parent: number;
+    readonly image: string;
+    readonly commandLine: string | null;
+  }[];
+  readonly files: readonly {
+    readonly path: string;
+    readonly change: LabChange;
+    readonly size: number;
+    readonly entropy: number | null;
+  }[];
+  readonly registry: readonly {
+    readonly key: string;
+    readonly value: string;
+    readonly change: LabChange;
+    readonly data: string | null;
+  }[];
+  readonly network: readonly {
+    readonly remote: string;
+    readonly port: number;
+    readonly blocked: boolean;
+  }[];
+  readonly screenshots: readonly string[];
+  readonly notes: readonly string[];
+}
+
+/** Einschätzung eines Laufs. */
+export interface LabAssessment {
+  readonly risk: RiskLevel;
+  readonly behaviors: readonly LabBehavior[];
+  readonly summaryDe: string;
+  readonly summaryEn: string;
+}
+
+/** Zustand eines Laufs. */
+export type LabRunState =
+  | { readonly state: 'preparing' }
+  | { readonly state: 'running' }
+  | { readonly state: 'waiting_for_sandbox' }
+  | { readonly state: 'done'; readonly report: LabReport; readonly assessment: LabAssessment }
+  | { readonly state: 'failed'; readonly message: string };
+
+/** Ein eigener Labor-Lauf. */
+export interface LabRun {
+  readonly id: string;
+  readonly sample: string;
+  readonly stage: LabStage;
+  readonly seconds: number;
+  readonly started: string;
+  readonly state: LabRunState;
+}
+
+/** Labor: Sandbox-Zustand und eigene Läufe (neueste zuerst). */
+export interface LabState {
+  readonly sandbox: SandboxStatus;
+  readonly miniAvailable: boolean;
+  readonly runs: readonly LabRun[];
+}
+
 /** Fehler des Dienstes (es wurde nichts ausgeführt, sofern nicht anders gesagt). */
 export class ServiceError extends Error {
   constructor(
@@ -195,6 +285,21 @@ export interface ServiceApi {
   setClamavUpdate(on: boolean): Promise<ScheduleState>;
   /** Bericht als HTML speichern (Ort wählt der Nutzer im Dialog); `null` = abgebrochen. */
   exportReport(english: boolean): Promise<string | null>;
+  /** Labor: Zustand und eigene Läufe (nur lesend). */
+  labStatus(): Promise<LabState>;
+  /** Labor-Lauf vorschlagen – gestartet wird nur nach „Ja“ im Freigabe-Dialog. */
+  proposeLabRun(
+    path: string,
+    stage: LabStage,
+    seconds: number,
+    network: boolean,
+  ): Promise<Proposal>;
+  /** „Windows Sandbox einschalten“ vorschlagen (nur Administratoren). */
+  proposeEnableSandbox(): Promise<Proposal>;
+  /** Bildschirmfoto eines eigenen Laufs der Windows Sandbox (PNG-Bytes). */
+  labScreenshot(runId: string, name: string): Promise<Uint8Array>;
+  /** Fensterfotos eines laufenden Mini-Sandbox-Laufs (PNG-Bytes; leer, wenn keine). */
+  labCaptureWindows(runId: string): Promise<readonly Uint8Array[]>;
 }
 
 type Json = Record<string, unknown>;
@@ -380,10 +485,140 @@ export function parseSchedule(response: unknown): ScheduleState {
   };
 }
 
+/** Base64 → Bytes (Bilder des Dienstes bzw. der App). */
+export function decodeBase64(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+const labBehaviors: readonly LabBehavior[] = [
+  'autostart',
+  'network',
+  'encrypts_files',
+  'deletes_backups',
+  'drops_executables',
+  'spawns_interpreters',
+  'deletes_files',
+];
+
+function labChange(value: unknown): LabChange {
+  return value === 'modified' || value === 'deleted' ? value : 'created';
+}
+
+function parseLabReport(value: unknown): LabReport {
+  const r = isObject(value) ? value : {};
+  const end = isObject(r['end']) ? r['end'] : {};
+  return {
+    sha256: typeof r['sha256'] === 'string' ? r['sha256'] : null,
+    end:
+      end['type'] === 'exited'
+        ? { type: 'exited', code: num(end['code']) }
+        : end['type'] === 'timed_out'
+          ? { type: 'timed_out' }
+          : { type: 'failed', message: str(end['message']) },
+    processes: arr(r['processes'])
+      .filter(isObject)
+      .map((p) => ({
+        pid: num(p['pid']),
+        parent: num(p['parent']),
+        image: str(p['image']),
+        commandLine: typeof p['command_line'] === 'string' ? p['command_line'] : null,
+      })),
+    files: arr(r['files'])
+      .filter(isObject)
+      .map((f) => ({
+        path: str(f['path']),
+        change: labChange(f['change']),
+        size: num(f['size']),
+        entropy: typeof f['entropy'] === 'number' ? f['entropy'] : null,
+      })),
+    registry: arr(r['registry'])
+      .filter(isObject)
+      .map((g) => ({
+        key: str(g['key']),
+        value: str(g['value']),
+        change: labChange(g['change']),
+        data: typeof g['data'] === 'string' ? g['data'] : null,
+      })),
+    network: arr(r['network'])
+      .filter(isObject)
+      .map((n) => ({
+        remote: str(n['remote']),
+        port: num(n['port']),
+        blocked: n['blocked'] === true,
+      })),
+    screenshots: arr(r['screenshots']).filter((s): s is string => typeof s === 'string'),
+    notes: arr(r['notes']).filter((s): s is string => typeof s === 'string'),
+  };
+}
+
+function parseLabRunState(value: unknown): LabRunState {
+  const s = isObject(value) ? value : {};
+  switch (s['state']) {
+    case 'preparing':
+      return { state: 'preparing' };
+    case 'running':
+      return { state: 'running' };
+    case 'waiting_for_sandbox':
+      return { state: 'waiting_for_sandbox' };
+    case 'done': {
+      const a = isObject(s['assessment']) ? s['assessment'] : {};
+      return {
+        state: 'done',
+        report: parseLabReport(s['report']),
+        assessment: {
+          risk: riskLevelFromCoreId(str(a['risk'])) ?? 'info',
+          behaviors: arr(a['behaviors']).flatMap((b) => labBehaviors.filter((k) => k === b)),
+          summaryDe: str(a['summary_de']),
+          summaryEn: str(a['summary_en']),
+        },
+      };
+    }
+    default:
+      return { state: 'failed', message: str(s['message'], 'Unbekannter Zustand.') };
+  }
+}
+
+export function parseLab(response: unknown): LabState {
+  const r = expectType(response, 'lab');
+  const s = isObject(r['sandbox']) ? r['sandbox'] : {};
+  return {
+    sandbox: {
+      enabled: s['enabled'] === true,
+      supported: s['supported'] === true,
+      edition: str(s['edition']),
+    },
+    miniAvailable: r['mini_available'] === true,
+    runs: arr(r['runs'])
+      .filter(isObject)
+      .map((run) => ({
+        id: str(run['id']),
+        sample: str(run['sample']),
+        stage:
+          run['stage'] === 'windows_sandbox'
+            ? ('windows_sandbox' as const)
+            : ('mini_sandbox' as const),
+        seconds: num(run['seconds']),
+        started: str(run['started']),
+        state: parseLabRunState(run['state']),
+      })),
+  };
+}
+
+export function parseLabScreenshot(response: unknown): Uint8Array {
+  return decodeBase64(str(expectType(response, 'lab_screenshot')['png_base64']));
+}
+
 const kindLabels: Readonly<Record<string, string>> = {
   quarantine: 'In die Quarantäne verschieben',
   restore: 'Aus der Quarantäne wiederherstellen',
   delete_permanently: 'Endgültig löschen',
+  run_in_sandbox: 'Im Labor ausführen',
+  change_setting: 'Einstellung ändern',
 };
 
 /** Wandelt den Vorschlag des Dienstes in die Form des Freigabe-Dialogs. */
@@ -409,7 +644,11 @@ export function parseProposal(response: unknown): Proposal {
       severity: riskLevelFromCoreId(str(plan['severity'])) ?? 'info',
       targets: arr(plan['targets'])
         .filter(isObject)
-        .map((t) => ({ type: 'file' as const, path: str(t['path']) })),
+        .map((t) =>
+          t['type'] === 'setting'
+            ? { type: 'setting' as const, id: str(t['id']) }
+            : { type: 'file' as const, path: str(t['path']) },
+        ),
       what: str(plan['what']),
       why: str(plan['why']),
       consequence: str(plan['consequence']),

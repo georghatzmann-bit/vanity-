@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
 import type { WatchEvent, WatchState } from '../platform/service.ts';
+import { isLabCandidate, offerToLab } from './labCandidate.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
 import { useConsentFlow } from './useConsentFlow.tsx';
@@ -64,6 +65,11 @@ function EventRow({
         <Button size="sm" variant="secondary" onClick={onTrust}>
           {t('realtime.trust')}
         </Button>
+        {event.kind === 'file' && isLabCandidate(event.path) && (
+          <Button size="sm" variant="secondary" onClick={() => offerToLab(event.path)}>
+            {t('lab.offer')}
+          </Button>
+        )}
         <Button size="sm" variant="ghost" onClick={onIgnore}>
           {t('realtime.ignore')}
         </Button>

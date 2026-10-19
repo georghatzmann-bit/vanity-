@@ -43,6 +43,12 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-get-schedule': 'Dienst: eigener Zeitplan und Update-Einstellung (nur lesend)',
   'allow-service-set-schedule': 'Dienst: geplanten Scan setzen (prüft und meldet nur)',
   'allow-service-set-clamav-update': 'Dienst: tägliches ClamAV-Signatur-Update an/aus',
+  'allow-service-lab-status': 'Dienst: Labor-Zustand und eigene Läufe (nur lesend)',
+  'allow-service-propose-lab-run': 'Dienst: Labor-Lauf vorschlagen (Start nur nach „Ja“)',
+  'allow-service-lab-screenshot': 'Dienst: Bildschirmfoto eines eigenen Laufs (nur lesend)',
+  'allow-service-propose-enable-sandbox':
+    'Dienst: „Windows Sandbox einschalten“ vorschlagen (nur Admin, nur nach „Ja“)',
+  'allow-lab-capture-windows': 'Fensterfotos eines eigenen Mini-Sandbox-Laufs (nur lesend)',
   'allow-export-report':
     'Bericht als HTML speichern – Inhalt aus Rust, Ort nur über den Speichern-Dialog',
   'dialog:allow-open': 'Datei-/Ordnerauswahl für Scans (nur Auswahl)',

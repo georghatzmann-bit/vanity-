@@ -39,7 +39,6 @@ describe('routes', () => {
   it('kennt die zwölf Seiten und die Phasen der fehlenden Module (docs/PROGRESS.md)', () => {
     expect(routeIds).toHaveLength(12);
     expect(routePhases).toEqual({
-      lab: 'P4',
       hardening: 'P6',
       network: 'P7',
       vault: 'P9',

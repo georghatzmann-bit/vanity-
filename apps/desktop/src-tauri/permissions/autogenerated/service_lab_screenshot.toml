@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-lab-screenshot"
+description = "Enables the service_lab_screenshot command without any pre-configured scope."
+commands.allow = ["service_lab_screenshot"]
+
+[[permission]]
+identifier = "deny-service-lab-screenshot"
+description = "Denies the service_lab_screenshot command without any pre-configured scope."
+commands.deny = ["service_lab_screenshot"]

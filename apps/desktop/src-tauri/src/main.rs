@@ -63,6 +63,11 @@ fn main() {
             service::service_get_schedule,
             service::service_set_schedule,
             service::service_set_clamav_update,
+            service::service_lab_status,
+            service::service_propose_lab_run,
+            service::service_lab_screenshot,
+            service::service_propose_enable_sandbox,
+            service::lab_capture_windows,
             report::export_report
         ])
         .on_window_event(window::on_window_event)
@@ -133,6 +138,11 @@ mod test_support {
                 crate::service::service_get_schedule,
                 crate::service::service_set_schedule,
                 crate::service::service_set_clamav_update,
+                crate::service::service_lab_status,
+                crate::service::service_propose_lab_run,
+                crate::service::service_lab_screenshot,
+                crate::service::service_propose_enable_sandbox,
+                crate::service::lab_capture_windows,
                 crate::report::export_report
             ])
             .build(tauri::generate_context!(test = true))
@@ -156,7 +166,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 27] = [
+    const EXPECTED_PERMISSIONS: [&str; 32] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -182,6 +192,11 @@ mod tests {
         "allow-service-get-schedule",
         "allow-service-set-schedule",
         "allow-service-set-clamav-update",
+        "allow-service-lab-status",
+        "allow-service-propose-lab-run",
+        "allow-service-lab-screenshot",
+        "allow-service-propose-enable-sandbox",
+        "allow-lab-capture-windows",
         "allow-export-report",
         "dialog:allow-open",
     ];
@@ -437,6 +452,17 @@ mod tests {
                     json!({ "enabled": false, "everyDays": 7, "hourUtc": 9 }),
                 ),
                 ("service_set_clamav_update", json!({ "on": true })),
+                ("service_lab_status", json!({})),
+                (
+                    "service_propose_lab_run",
+                    json!({ "path": "/aegis-test/gibt-es-nicht", "stage": "mini_sandbox", "seconds": 30, "network": false }),
+                ),
+                (
+                    "service_lab_screenshot",
+                    json!({ "runId": "r", "name": "bild-01.png" }),
+                ),
+                ("service_propose_enable_sandbox", json!({})),
+                ("lab_capture_windows", json!({ "runId": "r" })),
                 ("export_report", json!({ "english": false })),
                 // Zuletzt: schließt das Testfenster.
                 ("plugin:window|close", json!({})),

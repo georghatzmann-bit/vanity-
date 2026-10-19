@@ -53,7 +53,9 @@ name = "aegis-desktop"
 version = "0.1.0"
 dependencies = [
  "aegis-core",
+ "aegis-sandbox",
  "aegis-winffi",
+ "base64 0.22.1",
  "rfd 0.17.2",
  "serde",
  "serde_json",

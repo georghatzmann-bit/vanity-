@@ -34,7 +34,7 @@ const ADAPTER = 'src/platform/platform.ts';
 const TITLE_BAR = 'src/shell/TitleBar.tsx';
 
 /**
- * Methode des Hauptfensters (`getCurrentWindow()`) → Rechte. `onResized`/`listen` melden
+ * Methode des Hauptfensters (`getCurrentWindow()`) → Rechte. `onResized`/`onDragDropEvent`/`listen` melden
  * einen Empfänger an (`listen`) und geben eine Abmeldung zurück (`unlisten`).
  */
 const WINDOW_METHOD_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
@@ -42,6 +42,7 @@ const WINDOW_METHOD_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
   isMaximized: ['core:window:allow-is-maximized'],
   listen: ['core:event:allow-listen', 'core:event:allow-unlisten'],
   minimize: ['core:window:allow-minimize'],
+  onDragDropEvent: ['core:event:allow-listen', 'core:event:allow-unlisten'],
   onResized: ['core:event:allow-listen', 'core:event:allow-unlisten'],
   toggleMaximize: ['core:window:allow-toggle-maximize'],
 };

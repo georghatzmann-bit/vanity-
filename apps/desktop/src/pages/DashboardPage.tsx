@@ -32,7 +32,7 @@ import { useShell } from '../shell/ShellContext.tsx';
 import { modifierKeys } from '../shell/shortcuts.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 
-/** Bauplan laut docs/PROGRESS.md: P0–P2 erledigt, P3 in Arbeit. */
+/** Bauplan laut docs/PROGRESS.md: P0–P3 erledigt, P4 in Arbeit. */
 export const buildPhases = [
   'P0',
   'P1',
@@ -50,7 +50,7 @@ export const buildPhases = [
   'P13',
 ] as const;
 type BuildPhase = (typeof buildPhases)[number];
-export const CURRENT_PHASE: BuildPhase = 'P3';
+export const CURRENT_PHASE: BuildPhase = 'P4';
 const currentIndex = buildPhases.indexOf(CURRENT_PHASE);
 const LAST_PHASE: BuildPhase = 'P13';
 

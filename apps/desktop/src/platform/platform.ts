@@ -23,6 +23,9 @@ import {
   parseQuarantine,
   parseScan,
   parseHistory,
+  parseLab,
+  parseLabScreenshot,
+  decodeBase64,
   parseSchedule,
   parseTrust,
   parseWatch,
@@ -51,6 +54,12 @@ export function parseHideOutcome(value: unknown): HideOutcome {
   }
   throw new TypeError('hide_to_tray: unerwartete Antwort.');
 }
+
+/** Dateien, die auf das Fenster gezogen werden (nur Pfade – gelesen wird dabei nichts). */
+export type FileDropEvent =
+  | { readonly type: 'enter' }
+  | { readonly type: 'leave' }
+  | { readonly type: 'drop'; readonly paths: readonly string[] };
 
 /** Fenstersteuerung der eigenen Titelleiste (rahmenloses Fenster). */
 export interface WindowApi {
@@ -81,6 +90,8 @@ export interface Platform {
   readonly service: ServiceApi | null;
   /** Datei-/Ordnerauswahl; leere Liste bei Abbruch. `null` in der Vorschau. */
   readonly pickPaths: ((kind: 'files' | 'folder') => Promise<readonly string[]>) | null;
+  /** Auf das Fenster gezogene Dateien (Drag & Drop). In der Vorschau kommt nie ein Ereignis. */
+  onFileDrop(handler: (event: FileDropEvent) => void): Promise<Unlisten>;
 }
 
 /** Wandelt das Ergebnis des Auswahldialogs in eine Pfadliste. */
@@ -142,6 +153,17 @@ export function createTauriPlatform(): Platform {
           kind === 'folder' ? { directory: true } : { multiple: true, directory: false },
         ),
       ),
+    onFileDrop: (handler) =>
+      current.onDragDropEvent((event) => {
+        const p = event.payload;
+        if (p.type === 'drop') {
+          handler({ type: 'drop', paths: toPathList(p.paths) });
+        } else if (p.type === 'enter') {
+          handler({ type: 'enter' });
+        } else if (p.type === 'leave') {
+          handler({ type: 'leave' });
+        }
+      }),
   };
 }
 
@@ -191,6 +213,21 @@ function createTauriService(): ServiceApi {
     setClamavUpdate: async (on) =>
       parseSchedule(await invoke<unknown>('service_set_clamav_update', { on })),
     exportReport: async (english) => invoke<string | null>('export_report', { english }),
+    labStatus: async () => parseLab(await invoke<unknown>('service_lab_status')),
+    proposeLabRun: async (path, stage, seconds, network) =>
+      parseProposal(
+        await invoke<unknown>('service_propose_lab_run', { path, stage, seconds, network }),
+      ),
+    proposeEnableSandbox: async () =>
+      parseProposal(await invoke<unknown>('service_propose_enable_sandbox')),
+    labScreenshot: async (runId, name) =>
+      parseLabScreenshot(await invoke<unknown>('service_lab_screenshot', { runId, name })),
+    labCaptureWindows: async (runId) => {
+      const shots = await invoke<unknown>('lab_capture_windows', { runId });
+      return Array.isArray(shots)
+        ? shots.filter((s): s is string => typeof s === 'string').map(decodeBase64)
+        : [];
+    },
   };
 }
 
@@ -203,6 +240,7 @@ export function createBrowserPlatform(info: AppInfo): Platform {
     onNavigate: () => Promise.resolve(() => undefined),
     service: null,
     pickPaths: null,
+    onFileDrop: () => Promise.resolve(() => undefined),
   };
 }
 

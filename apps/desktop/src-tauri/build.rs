@@ -24,6 +24,11 @@ const APP_COMMANDS: &[&str] = &[
     "service_get_schedule",
     "service_set_schedule",
     "service_set_clamav_update",
+    "service_lab_status",
+    "service_propose_lab_run",
+    "service_lab_screenshot",
+    "service_propose_enable_sandbox",
+    "lab_capture_windows",
     "export_report",
 ];
 

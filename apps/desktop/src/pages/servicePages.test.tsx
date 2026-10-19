@@ -6,6 +6,8 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   HistoryEntry,
+  LabRun,
+  LabState,
   Proposal,
   ScheduleState,
   ServiceApi,
@@ -92,7 +94,21 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     ),
     setClamavUpdate: vi.fn((on: boolean) => Promise.resolve(scheduleState({ clamavUpdate: on }))),
     exportReport: vi.fn(() => Promise.resolve('/home/x/AEGIS-Bericht.html')),
+    labStatus: vi.fn(() => Promise.resolve(labState())),
+    proposeLabRun: vi.fn(() => Promise.resolve(proposal('Im Labor ausführen'))),
+    proposeEnableSandbox: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    labScreenshot: vi.fn(() => Promise.resolve(new Uint8Array([137, 80, 78, 71]))),
+    labCaptureWindows: vi.fn(() => Promise.resolve([])),
     ...overrides,
+  };
+}
+
+function labState(over: Partial<LabState> = {}): LabState {
+  return {
+    sandbox: { enabled: true, supported: true, edition: 'Professional' },
+    miniAvailable: true,
+    runs: [],
+    ...over,
   };
 }
 
@@ -398,5 +414,163 @@ describe('Zeitplan', () => {
     await waitFor(() => expect(vi.mocked(service.setSchedule).mock.calls[1]?.[1]).toBe(1));
     fireEvent.click(within(panel).getByRole('switch', { name: /ClamAV-Signaturen/ }));
     await waitFor(() => expect(service.setClamavUpdate).toHaveBeenCalledWith(false));
+  });
+});
+
+describe('Labor', () => {
+  const sample = 'C:\\Users\\a\\Downloads\\setup.exe';
+  const done: LabRun = {
+    id: 'r1',
+    sample: 'setup.exe',
+    stage: 'windows_sandbox',
+    seconds: 60,
+    started: '2026-10-19T12:00:00Z',
+    state: {
+      state: 'done',
+      report: {
+        sha256: 'ab'.repeat(32),
+        end: { type: 'timed_out' },
+        processes: [{ pid: 7, parent: 1, image: 'C:\\AEGIS\\Probe\\setup.exe', commandLine: null }],
+        files: [{ path: 'C:\\Users\\x\\a.locked', change: 'created', size: 10, entropy: 7.9 }],
+        registry: [
+          {
+            key: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+            value: 'Updater',
+            change: 'created',
+            data: 'C:\\x.exe',
+          },
+        ],
+        network: [],
+        screenshots: ['bild-01.png'],
+        notes: [],
+      },
+      assessment: {
+        risk: 'dangerous',
+        behaviors: ['autostart'],
+        summaryDe: 'Dieses Programm versucht, sich im Autostart einzutragen.',
+        summaryEn: 'This program tries to add itself to autostart.',
+      },
+    },
+  };
+
+  it('Vorschau ohne Dienst: ehrlicher Hinweis', async () => {
+    renderApp({ platform: fakePlatform('browser'), hash: '#/lab' });
+    expect(await screen.findByTestId('service-preview')).toBeInTheDocument();
+  });
+
+  it('Datei per Drag & Drop, Stufe/Dauer wählen – gestartet wird nur über den Freigabe-Dialog', async () => {
+    const service = fakeService();
+    const platform = fakePlatform('tauri', undefined, service);
+    renderApp({ platform, hash: '#/lab' });
+    expect(await screen.findByTestId('lab-status')).toHaveTextContent('Windows Sandbox ist bereit');
+    const start = screen.getByRole('button', { name: /Im Labor starten/ });
+    expect(start).toBeDisabled();
+    act(() => platform.emitFileDrop({ type: 'enter' }));
+    expect(screen.getByTestId('lab-drop')).toHaveAttribute('data-dragging', 'true');
+    act(() => platform.emitFileDrop({ type: 'drop', paths: [sample] }));
+    expect(screen.getByTestId('lab-path')).toHaveTextContent('setup.exe');
+    expect(screen.getByTestId('lab-drop')).toHaveAttribute('data-dragging', 'false');
+
+    fireEvent.click(screen.getByRole('radio', { name: '120 s' }));
+    fireEvent.click(screen.getByRole('switch', { name: /Netzwerk im Labor/ }));
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('alertdialog');
+    expect(service.proposeLabRun).toHaveBeenCalledWith(sample, 'windows_sandbox', 120, true);
+    expect(service.decide).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Nein' }));
+    await waitFor(() => expect(service.decide).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(service.decide).mock.calls[0]?.[1]).toBe('decline');
+  });
+
+  it('Mini-Sandbox: ehrlicher Hinweis, Netzwerk gesperrt', async () => {
+    const service = fakeService({
+      labStatus: vi.fn(() =>
+        Promise.resolve(
+          labState({ sandbox: { enabled: false, supported: false, edition: 'Core' } }),
+        ),
+      ),
+    });
+    const platform = fakePlatform('tauri', undefined, service, [sample]);
+    renderApp({ platform, hash: '#/lab' });
+    expect(await screen.findByTestId('lab-status')).toHaveTextContent('keine Windows Sandbox');
+    expect(screen.getByRole('radio', { name: 'Windows Sandbox' })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: 'Mini-Sandbox' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByText(/Mini-Sandbox: gleicher Kernel/)).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /Netzwerk im Labor/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Windows Sandbox einschalten/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Datei wählen/ }));
+    expect(await screen.findByTestId('lab-path')).toHaveTextContent('setup.exe');
+    fireEvent.click(screen.getByRole('button', { name: /Im Labor starten/ }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeLabRun).toHaveBeenCalledWith(sample, 'mini_sandbox', 60, false);
+  });
+
+  it('Windows Sandbox einschalten nur als Vorschlag', async () => {
+    const service = fakeService({
+      labStatus: vi.fn(() =>
+        Promise.resolve(labState({ sandbox: { enabled: false, supported: true, edition: 'Pro' } })),
+      ),
+    });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/lab' });
+    fireEvent.click(await screen.findByRole('button', { name: /Windows Sandbox einschalten/ }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeEnableSandbox).toHaveBeenCalledTimes(1);
+    expect(service.decide).not.toHaveBeenCalled();
+  });
+
+  it('Bericht: Einschätzung, Verhalten, Dateien, Registrierung, Bildschirmfotos', async () => {
+    const failed: LabRun = {
+      ...done,
+      id: 'r2',
+      sample: 'tool.exe',
+      stage: 'mini_sandbox',
+      state: { state: 'failed', message: 'Nur unter Windows' },
+    };
+    const service = fakeService({
+      labStatus: vi.fn(() => Promise.resolve(labState({ runs: [failed, done] }))),
+    });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/lab' });
+    const runs = await screen.findAllByTestId('lab-run');
+    expect(runs).toHaveLength(2);
+    expect(runs[0]).toHaveTextContent('Nicht möglich: Nur unter Windows');
+    const report = within(runs[1] as HTMLElement).getByTestId('lab-report');
+    expect(report).toHaveTextContent('versucht, sich im Autostart einzutragen');
+    expect(report).toHaveTextContent('Beobachtungszeit abgelaufen');
+    expect(report).toHaveTextContent('Dateien (1)');
+    expect(report).toHaveTextContent('sieht verschlüsselt aus');
+    expect(report).toHaveTextContent('Registrierung (Autostart) (1)');
+    expect(report).toHaveTextContent('Verbindungsversuche (0)');
+    fireEvent.click(
+      within(runs[1] as HTMLElement).getByRole('button', { name: /1 Bildschirmfotos/ }),
+    );
+    await waitFor(() => expect(service.labScreenshot).toHaveBeenCalledWith('r1', 'bild-01.png'));
+    expect(service.decide).not.toHaveBeenCalled();
+  });
+
+  it('Wächter bietet für Programme das Labor an – nur Vormerken, kein Start', async () => {
+    const service = fakeService({
+      watchPoll: vi.fn(() =>
+        Promise.resolve(
+          watchState([
+            {
+              seq: 9,
+              at: '2026-10-19T12:00:00Z',
+              kind: 'file',
+              path: sample,
+              finding: { ...finding, path: sample, risk: 'suspicious' },
+            },
+          ]),
+        ),
+      ),
+    });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/realtime' });
+    const row = await screen.findByTestId('watch-event');
+    fireEvent.click(within(row).getByRole('button', { name: /Im Labor prüfen/ }));
+    await waitFor(() => expect(window.location.hash).toBe('#/lab'));
+    expect(await screen.findByTestId('lab-path')).toHaveTextContent('setup.exe');
+    expect(service.proposeLabRun).not.toHaveBeenCalled();
   });
 });

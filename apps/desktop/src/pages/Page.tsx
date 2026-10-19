@@ -1,6 +1,7 @@
 import type { RouteId } from '../router/routes.ts';
 import { AboutPage } from './AboutPage.tsx';
 import { DashboardPage } from './DashboardPage.tsx';
+import { LabPage } from './LabPage.tsx';
 import { ModulePage } from './ModulePage.tsx';
 import { QuarantinePage } from './QuarantinePage.tsx';
 import { RealtimePage } from './RealtimePage.tsx';
@@ -25,6 +26,8 @@ export function Page({ route }: { readonly route: RouteId }) {
       return <RealtimePage />;
     case 'reports':
       return <ReportsPage />;
+    case 'lab':
+      return <LabPage />;
     default:
       return <ModulePage route={route} />;
   }

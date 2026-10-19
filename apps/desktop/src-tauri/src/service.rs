@@ -326,6 +326,130 @@ pub async fn service_set_clamav_update(on: bool) -> Result<Value, String> {
     send(json!({ "type": "set_clamav_update", "on": on })).await
 }
 
+/// Labor-Stufen (wie `aegis_core::plan::param::LAB_STAGES`).
+const LAB_STAGES: [&str; 2] = ["windows_sandbox", "mini_sandbox"];
+
+/// Anfrage „Im Labor ausführen vorschlagen“ (der Dienst prüft erneut und formuliert den Plan).
+pub fn propose_lab_run_request(
+    path: &str,
+    stage: &str,
+    seconds: u32,
+    network: bool,
+) -> Result<Value, String> {
+    check_paths(&[path.to_owned()])?;
+    if !LAB_STAGES.contains(&stage) {
+        return Err("Unbekannte Labor-Stufe.".into());
+    }
+    if !(5..=600).contains(&seconds) {
+        return Err("Beobachtungszeit 5–600 Sekunden.".into());
+    }
+    if network && stage != "windows_sandbox" {
+        return Err("Netzwerk gibt es nur in der Windows Sandbox.".into());
+    }
+    Ok(json!({
+        "type": "propose_lab_run", "path": path, "stage": stage,
+        "seconds": seconds, "network": network,
+    }))
+}
+
+/// Name eines Bildschirmfotos (`bild-NN.png`, wie die Sonde sie schreibt).
+fn check_screenshot_name(name: &str) -> Result<(), String> {
+    let ok = name.len() <= 32
+        && name.ends_with(".png")
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        && !name.starts_with('.');
+    if ok {
+        Ok(())
+    } else {
+        Err("Ungültiger Bildname.".into())
+    }
+}
+
+/// Labor: Zustand der Windows Sandbox und eigene Läufe (nur lesend).
+#[tauri::command]
+pub async fn service_lab_status() -> Result<Value, String> {
+    send(json!({ "type": "lab_status" })).await
+}
+
+/// Labor-Lauf vorschlagen – gestartet wird nur nach „Ja“ im Freigabe-Dialog.
+#[tauri::command]
+pub async fn service_propose_lab_run(
+    path: String,
+    stage: String,
+    seconds: u32,
+    network: bool,
+) -> Result<Value, String> {
+    send(propose_lab_run_request(&path, &stage, seconds, network)?).await
+}
+
+/// Bildschirmfoto eines eigenen Laufs der Windows Sandbox (PNG, Base64).
+#[tauri::command]
+pub async fn service_lab_screenshot(run_id: String, name: String) -> Result<Value, String> {
+    check_id(&run_id)?;
+    check_screenshot_name(&name)?;
+    send(json!({ "type": "lab_screenshot", "run_id": run_id, "name": name })).await
+}
+
+/// „Windows Sandbox einschalten“ vorschlagen (nur Administratoren, nur nach „Ja“).
+#[tauri::command]
+pub async fn service_propose_enable_sandbox() -> Result<Value, String> {
+    send(json!({ "type": "propose_enable_sandbox" })).await
+}
+
+/// Höchstzahl Fensterfotos je Abruf.
+#[cfg(windows)]
+const MAX_WINDOW_SHOTS: usize = 4;
+
+/// Fensterfotos eines laufenden Mini-Sandbox-Laufs (Stufe 2). Die Probe läuft auf dem
+/// Desktop des Nutzers; der Dienst (Sitzung 0) sieht ihn nicht – deshalb fotografiert die App
+/// (nur lesend). Die Prozess-IDs nennt der Dienst für den eigenen Lauf, nie die Oberfläche.
+#[tauri::command]
+pub async fn lab_capture_windows(run_id: String) -> Result<Vec<String>, String> {
+    check_id(&run_id)?;
+    let status = send(json!({ "type": "lab_status" })).await?;
+    let pids = running_pids(&status, &run_id);
+    if pids.is_empty() {
+        return Ok(Vec::new());
+    }
+    tauri::async_runtime::spawn_blocking(move || capture(&pids))
+        .await
+        .map_err(|e| format!("Interner Fehler: {e}"))
+}
+
+/// Prozess-IDs eines laufenden Laufs aus der Antwort `lab` des Dienstes.
+pub fn running_pids(status: &Value, run_id: &str) -> Vec<u32> {
+    status["runs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|r| r["id"] == run_id && r["stage"] == "mini_sandbox")
+        .filter(|r| r["state"]["state"] == "running")
+        .and_then(|r| r["state"]["pids"].as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|p| p.as_u64().and_then(|p| u32::try_from(p).ok()))
+        .filter(|p| *p != 0)
+        .take(64)
+        .collect()
+}
+
+#[cfg(windows)]
+fn capture(pids: &[u32]) -> Vec<String> {
+    use base64::Engine as _;
+    aegis_winffi::inspect::capture_windows(pids, MAX_WINDOW_SHOTS)
+        .into_iter()
+        .filter_map(|c| aegis_sandbox::png::encode_bgra(c.width, c.height, &c.bgra).ok())
+        .map(|png| base64::engine::general_purpose::STANDARD.encode(png))
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn capture(_pids: &[u32]) -> Vec<String> {
+    Vec::new()
+}
+
 /// Antwort im zweiten Dialog weiterreichen.
 #[tauri::command]
 pub async fn service_confirm_second(
@@ -360,6 +484,29 @@ mod tests {
         assert!(decide_request("a", "b", "c", "execute_now", "d").is_err());
         assert!(decide_request("a b", "b", "c", "decline", "d").is_err());
         assert!(confirm_second_request("a", "b", "trust", &"x".repeat(200)).is_err());
+        assert!(propose_lab_run_request(&abs, "mini_sandbox", 30, false).is_ok());
+        assert!(propose_lab_run_request(&abs, "windows_sandbox", 600, true).is_ok());
+        assert!(propose_lab_run_request(&abs, "mini_sandbox", 30, true).is_err());
+        assert!(propose_lab_run_request(&abs, "kernel", 30, false).is_err());
+        assert!(propose_lab_run_request(&abs, "mini_sandbox", 4, false).is_err());
+        assert!(propose_lab_run_request("relativ", "mini_sandbox", 30, false).is_err());
+        assert!(check_screenshot_name("bild-01.png").is_ok());
+        assert!(check_screenshot_name("../x.png").is_err());
+        assert!(check_screenshot_name("bild.exe").is_err());
+    }
+
+    #[test]
+    fn fensterfotos_nur_fuer_laufende_eigene_mini_laeufe() {
+        let status = json!({ "runs": [
+            { "id": "a", "stage": "mini_sandbox", "state": { "state": "running", "pids": [12, 0, 13] } },
+            { "id": "b", "stage": "windows_sandbox", "state": { "state": "running", "pids": [14] } },
+            { "id": "c", "stage": "mini_sandbox", "state": { "state": "preparing" } },
+        ]});
+        assert_eq!(running_pids(&status, "a"), vec![12, 13]);
+        assert!(running_pids(&status, "b").is_empty());
+        assert!(running_pids(&status, "c").is_empty());
+        assert!(running_pids(&status, "x").is_empty());
+        assert!(running_pids(&json!({}), "a").is_empty());
     }
 
     #[test]

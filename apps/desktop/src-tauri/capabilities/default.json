@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Hauptfenster: nur die Rechte für die eigene Titelleiste (rahmenloses Fenster), Fenster-Ereignisse, app_info und hide_to_tray (Verstecken nur mit Symbol im Infobereich), die Dienst-Befehle (Prüfen, Quarantäne, Freigabe-Antworten – ausgeführt wird nur im Dienst nach „Ja“) und die Datei-/Ordnerauswahl. Jede Berechtigung steht einzeln (core:<plugin>:allow-<befehl>, nie ein :default-Bündel) und ist in apps/desktop/README.md begründet.",
+  "description": "Hauptfenster: nur die Rechte für die eigene Titelleiste (rahmenloses Fenster), Fenster-Ereignisse, app_info und hide_to_tray (Verstecken nur mit Symbol im Infobereich), die Dienst-Befehle (Prüfen, Quarantäne, Labor, Freigabe-Antworten – ausgeführt wird nur im Dienst nach „Ja“) die Fensterfotos eigener Mini-Sandbox-Läufe (nur lesend) und die Datei-/Ordnerauswahl. Jede Berechtigung steht einzeln (core:<plugin>:allow-<befehl>, nie ein :default-Bündel) und ist in apps/desktop/README.md begründet.",
   "windows": ["main"],
   "permissions": [
     "core:window:allow-minimize",
@@ -29,6 +29,11 @@
     "allow-service-get-schedule",
     "allow-service-set-schedule",
     "allow-service-set-clamav-update",
+    "allow-service-lab-status",
+    "allow-service-propose-lab-run",
+    "allow-service-lab-screenshot",
+    "allow-service-propose-enable-sandbox",
+    "allow-lab-capture-windows",
     "allow-export-report",
     "dialog:allow-open"
   ]

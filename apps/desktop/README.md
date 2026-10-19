@@ -56,6 +56,11 @@ ersetzen, Pfade des Nutzers auslesen, Events an das Backend senden) und auch kei
 | `allow-service-get-schedule`                 | App-Befehl `service_get_schedule`: eigener Zeitplan und Update-Einstellung anzeigen. Nur lesend.                                                                                                  |
 | `allow-service-set-schedule`                 | App-Befehl `service_set_schedule`: geplanten Scan des eigenen Profils setzen (1/7/30 Tage, Stunde) – geplante Scans prüfen und melden nur.                                                        |
 | `allow-service-set-clamav-update`            | App-Befehl `service_set_clamav_update`: tägliches ClamAV-Signatur-Update (Netzwerk) an/aus.                                                                                                       |
+| `allow-service-lab-status`                   | App-Befehl `service_lab_status`: Zustand der Windows Sandbox und eigene Labor-Läufe samt Bericht. Nur lesend.                                                                                     |
+| `allow-service-propose-lab-run`              | App-Befehl `service_propose_lab_run`: Labor-Lauf vorschlagen (Stufe, Sekunden, Netz) – der Dienst formuliert den Plan, gestartet wird nur nach „Ja“.                                              |
+| `allow-service-lab-screenshot`               | App-Befehl `service_lab_screenshot`: Bildschirmfoto eines eigenen Laufs der Windows Sandbox (nur im Bericht genannte Namen). Nur lesend.                                                          |
+| `allow-service-propose-enable-sandbox`       | App-Befehl `service_propose_enable_sandbox`: „Windows Sandbox einschalten“ vorschlagen – nur Administratoren, nur nach „Ja“.                                                                      |
+| `allow-lab-capture-windows`                  | App-Befehl `lab_capture_windows`: Fensterfotos eines laufenden eigenen Mini-Sandbox-Laufs (Prozess-IDs nennt der Dienst). Nur lesend.                                                             |
 | `allow-export-report`                        | App-Befehl `export_report`: Verlauf als HTML-Bericht speichern. Inhalt erzeugt Rust (maskiert, ohne Skripte); den Ort wählt der Nutzer im Speichern-Dialog – die Oberfläche gibt keinen Pfad vor. |
 | `dialog:allow-open`                          | Datei- bzw. Ordnerauswahl für Scans („Datei wählen…“). Nur Auswahl; die App liest/schreibt dabei nichts. `save`, `message`, `ask` usw. bleiben gesperrt.                                          |
 
@@ -105,6 +110,11 @@ echten ACL: jeder Aufruf der Oberfläche läuft, alles andere wird abgelehnt).
 | `invoke('service_get_schedule')`                                | `service_get_schedule`                    | `allow-service-get-schedule`                 |
 | `invoke('service_set_schedule')`                                | `service_set_schedule`                    | `allow-service-set-schedule`                 |
 | `invoke('service_set_clamav_update')`                           | `service_set_clamav_update`               | `allow-service-set-clamav-update`            |
+| `invoke('service_lab_status')`                                  | `service_lab_status`                      | `allow-service-lab-status`                   |
+| `invoke('service_propose_lab_run')`                             | `service_propose_lab_run`                 | `allow-service-propose-lab-run`              |
+| `invoke('service_lab_screenshot')`                              | `service_lab_screenshot`                  | `allow-service-lab-screenshot`               |
+| `invoke('service_propose_enable_sandbox')`                      | `service_propose_enable_sandbox`          | `allow-service-propose-enable-sandbox`       |
+| `invoke('lab_capture_windows')`                                 | `lab_capture_windows`                     | `allow-lab-capture-windows`                  |
 | `invoke('export_report')`                                       | `export_report`                           | `allow-export-report`                        |
 | `open()` aus `@tauri-apps/plugin-dialog`                        | `plugin:dialog\|open`                     | `dialog:allow-open`                          |
 

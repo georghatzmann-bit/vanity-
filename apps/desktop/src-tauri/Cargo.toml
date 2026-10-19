@@ -25,6 +25,9 @@ time = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 aegis-winffi = { workspace = true }
+# Nur PNG-Kodierung der Fensterfotos der Mini-Sandbox (Labor, Stufe 2).
+aegis-sandbox = { workspace = true }
+base64 = { workspace = true }
 rfd = { workspace = true }
 windows-version = { workspace = true }
 
