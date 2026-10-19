@@ -315,3 +315,46 @@ fn pfadregeln_und_grenzen() {
     }
     assert!(codes.iter().any(|c| c == "errorbusy"), "{codes:?}");
 }
+
+/// Re-Review N3/N4: Vorschläge und Quarantäne-Einträge gehören dem anfragenden Konto – ein
+/// anderes Konto kann weder antworten noch die Einträge sehen.
+#[test]
+fn konten_sind_getrennt() {
+    struct Account(&'static str);
+    impl aegis_quarantine::UserAccess for Account {
+        fn enter(&self) -> std::io::Result<aegis_quarantine::UserScope> {
+            Ok(aegis_quarantine::UserScope::unchanged())
+        }
+        fn identity(&self) -> Option<String> {
+            Some(self.0.to_owned())
+        }
+    }
+    let mut h = harness();
+    let home = tempfile::tempdir().unwrap();
+    let path = write_fixture(home.path(), "a.txt", b"a").unwrap();
+    let mut as_user = |who: &Account, v: Value| {
+        let req: Request = serde_json::from_value(v).unwrap();
+        serde_json::to_value(h.service.handle(req, who)).unwrap()
+    };
+    let (a, b) = (Account("S-1-A"), Account("S-1-B"));
+    let p = as_user(&a, json!({"type": "propose_quarantine", "paths": [path]}));
+    let answer = |p: &Value| {
+        json!({
+            "type": "decide", "plan_id": p["proposal"]["ticket"]["id"],
+            "digest": p["proposal"]["ticket"]["digest"], "nonce": p["proposal"]["nonce"],
+            "decision": "execute", "dialog_id": "d"
+        })
+    };
+    // B kennt Nonce und Plan (z. B. mitgelesen) – darf aber nicht antworten.
+    assert_eq!(as_user(&b, answer(&p))["code"], "unknown");
+    assert!(path.exists());
+    let p = as_user(&a, json!({"type": "propose_quarantine", "paths": [path]}));
+    let r = as_user(&a, answer(&p));
+    assert_eq!(r["type"], "executed", "{r}");
+    let id = r["entries"][0]["id"].clone();
+    let listed = |v: Value| v["entries"].as_array().map_or(0, Vec::len);
+    assert_eq!(listed(as_user(&a, json!({"type": "list_quarantine"}))), 1);
+    assert_eq!(listed(as_user(&b, json!({"type": "list_quarantine"}))), 0);
+    let r = as_user(&b, json!({"type": "propose_delete", "entry_id": id}));
+    assert_eq!(r["code"], "quarantine", "{r}");
+}

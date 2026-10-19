@@ -37,6 +37,15 @@ struct PendingSecond {
     plan: ActionPlan,
     nonce: String,
     created: OffsetDateTime,
+    owner: Option<String>,
+}
+
+/// Offener Vorschlag: Plan, Einmal-Nonce und das Konto, das ihn angefordert hat (nur dieses
+/// darf antworten).
+struct Pending {
+    plan: ActionPlan,
+    nonce: String,
+    owner: Option<String>,
 }
 
 /// Zustand des Dienstes.
@@ -46,9 +55,9 @@ pub struct Service<C: Clock, W: Durable> {
     gate: ConsentGate<C>,
     audit: AuditLog<W>,
     audit_failed: bool,
-    proposals: HashMap<PlanId, (ActionPlan, String)>,
+    proposals: HashMap<PlanId, Pending>,
     second: HashMap<ChallengeId, PendingSecond>,
-    recent_proposals: Vec<OffsetDateTime>,
+    recent_proposals: HashMap<Option<String>, Vec<OffsetDateTime>>,
     protected: Vec<PathBuf>,
 }
 
@@ -64,7 +73,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             audit_failed: false,
             proposals: HashMap::new(),
             second: HashMap::new(),
-            recent_proposals: Vec::new(),
+            recent_proposals: HashMap::new(),
             protected,
         }
     }
@@ -119,21 +128,29 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 Err(e) => Response::error("input", e),
             },
             Request::ListQuarantine {} => match self.vault.list() {
-                Ok(entries) => Response::Quarantine { entries },
+                Ok(entries) => {
+                    let me = user.identity();
+                    Response::Quarantine {
+                        entries: entries
+                            .into_iter()
+                            .filter(|e| e.visible_to(me.as_deref()))
+                            .collect(),
+                    }
+                }
                 Err(e) => Response::error("quarantine", e.to_string()),
             },
             Request::ProposeQuarantine { paths } => match self.check_paths(&paths) {
                 Ok(()) => match examine_as_user(&self.engine, &paths, user) {
-                    Ok(findings) => self.propose_quarantine(&paths, &findings),
+                    Ok(findings) => self.propose_quarantine(&paths, &findings, user.identity()),
                     Err(e) => e,
                 },
                 Err(e) => Response::error("input", e),
             },
             Request::ProposeRestore { entry_id } => {
-                self.propose_entry(ActionKind::Restore, &entry_id)
+                self.propose_entry(ActionKind::Restore, &entry_id, user)
             }
             Request::ProposeDelete { entry_id } => {
-                self.propose_entry(ActionKind::DeletePermanently, &entry_id)
+                self.propose_entry(ActionKind::DeletePermanently, &entry_id, user)
             }
             Request::Decide {
                 plan_id,
@@ -147,7 +164,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 nonce,
                 decision,
                 dialog_id,
-            } => self.confirm_second(challenge_id, &nonce, decision, &dialog_id),
+            } => self.confirm_second(challenge_id, &nonce, decision, &dialog_id, user),
         };
         self.flush_gate_events();
         response
@@ -167,24 +184,36 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
-    fn register(&mut self, plan: ActionPlan) -> Response {
+    fn register(&mut self, plan: ActionPlan, owner: Option<String>) -> Response {
         let now = self.gate.clock().now();
-        self.recent_proposals
-            .retain(|t| now - *t < Duration::minutes(1));
-        if self.proposals.len() >= MAX_OPEN_PROPOSALS
-            || self.recent_proposals.len() >= MAX_PROPOSALS_PER_MINUTE
-        {
+        for times in self.recent_proposals.values_mut() {
+            times.retain(|t| now - *t < Duration::minutes(1));
+        }
+        self.recent_proposals.retain(|_, times| !times.is_empty());
+        let open_of_owner = self.proposals.values().filter(|p| p.owner == owner).count();
+        let recent_of_owner = self.recent_proposals.get(&owner).map_or(0, Vec::len);
+        // Grenzen je Konto: Ein Nutzer kann die Freigaben anderer nicht blockieren.
+        if open_of_owner >= MAX_OPEN_PROPOSALS || recent_of_owner >= MAX_PROPOSALS_PER_MINUTE {
             return Response::error(
                 "busy",
                 "Zu viele offene Vorschläge – bitte zuerst die vorhandenen beantworten",
             );
         }
-        self.recent_proposals.push(now);
         match self.gate.propose(plan.clone()) {
             Ok(ticket) => match new_nonce() {
                 Some(nonce) => {
-                    self.proposals
-                        .insert(ticket.id, (plan.clone(), nonce.clone()));
+                    self.recent_proposals
+                        .entry(owner.clone())
+                        .or_default()
+                        .push(now);
+                    self.proposals.insert(
+                        ticket.id,
+                        Pending {
+                            plan: plan.clone(),
+                            nonce: nonce.clone(),
+                            owner,
+                        },
+                    );
                     Response::Proposal {
                         proposal: Box::new(Proposal {
                             plan,
@@ -204,7 +233,12 @@ impl<C: Clock, W: Durable> Service<C, W> {
 
     /// Legt einen Quarantäne-Vorschlag an; `findings` stammen aus [`examine_as_user`]
     /// (außerhalb der Sperre geprüft).
-    pub fn propose_quarantine(&mut self, paths: &[PathBuf], findings: &[Finding]) -> Response {
+    pub fn propose_quarantine(
+        &mut self,
+        paths: &[PathBuf],
+        findings: &[Finding],
+        owner: Option<String>,
+    ) -> Response {
         if paths.is_empty() {
             return Response::error("input", "Keine Datei ausgewählt");
         }
@@ -248,14 +282,23 @@ impl<C: Clock, W: Durable> Service<C, W> {
             .severity(severity)
             .build(self.gate.clock().now());
         match plan {
-            Ok(plan) => self.register(plan),
+            Ok(plan) => self.register(plan, owner),
             Err(e) => Response::error("plan", e.to_string()),
         }
     }
 
-    fn propose_entry(&mut self, kind: ActionKind, entry_id: &str) -> Response {
+    fn propose_entry(
+        &mut self,
+        kind: ActionKind,
+        entry_id: &str,
+        user: &dyn UserAccess,
+    ) -> Response {
+        let owner = user.identity();
         let entry = match self.vault.entry(entry_id) {
-            Ok(e) => e,
+            Ok(e) if e.visible_to(owner.as_deref()) => e,
+            Ok(_) => {
+                return Response::error("quarantine", "Dieser Eintrag gehört einem anderen Konto");
+            }
             Err(e) => return Response::error("quarantine", e.to_string()),
         };
         let name = quoted(&entry.original_path.display().to_string());
@@ -279,7 +322,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 .undo(UndoHint::irreversible("Kann nicht rückgängig gemacht werden."))
         };
         match builder.build(self.gate.clock().now()) {
-            Ok(plan) => self.register(plan),
+            Ok(plan) => self.register(plan, owner),
             Err(e) => Response::error("plan", e.to_string()),
         }
     }
@@ -294,12 +337,21 @@ impl<C: Clock, W: Durable> Service<C, W> {
         user: &dyn UserAccess,
     ) -> Response {
         // Nonce zuerst: unbekannte oder wiederholte Antworten erreichen das Tor gar nicht.
-        let Some((plan, expected)) = self.proposals.remove(&plan_id) else {
+        let Some(pending) = self
+            .proposals
+            .remove(&plan_id)
+            .filter(|p| p.owner == user.identity())
+        else {
             return Response::error(
                 "unknown",
                 "Unbekannter oder bereits beantworteter Vorschlag – nichts ausgeführt",
             );
         };
+        let Pending {
+            plan,
+            nonce: expected,
+            ..
+        } = pending;
         if !constant_time_eq(expected.as_bytes(), nonce.as_bytes()) {
             return Response::error(
                 "nonce",
@@ -366,6 +418,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                             plan: plan.clone(),
                             nonce: nonce.clone(),
                             created: self.gate.clock().now(),
+                            owner: user.identity(),
                         },
                     );
                     Response::SecondConfirmationRequired { challenge, nonce }
@@ -436,8 +489,13 @@ impl<C: Clock, W: Durable> Service<C, W> {
         nonce: &str,
         decision: Decision,
         dialog_id: &str,
+        user: &dyn UserAccess,
     ) -> Response {
-        let Some(pending) = self.second.remove(&challenge_id) else {
+        let Some(pending) = self
+            .second
+            .remove(&challenge_id)
+            .filter(|p| p.owner == user.identity())
+        else {
             return Response::error(
                 "unknown",
                 "Unbekannte oder bereits beantwortete Rückfrage – nichts gelöscht",
@@ -471,7 +529,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                         drop(permit);
                         return audit_unavailable();
                     }
-                    let result = self.vault.delete_permanently(permit);
+                    let result = self.vault.delete_permanently(permit, user);
                     self.report(ActionKind::DeletePermanently, result)
                 }
                 Err(e) => Response::error("consent", e.to_string()),

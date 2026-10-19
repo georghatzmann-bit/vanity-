@@ -6,20 +6,25 @@ use std::io;
 use std::os::windows::io::{AsRawHandle, OwnedHandle};
 use std::ptr;
 
-use windows_sys::Win32::Foundation::{ERROR_NO_TOKEN, ERROR_PIPE_CONNECTED, HANDLE};
-use windows_sys::Win32::Security::{RevertToSelf, TOKEN_QUERY, WinLocalSystemSid};
+use windows_sys::Win32::Foundation::{ERROR_NO_TOKEN, ERROR_PIPE_CONNECTED, HANDLE, LocalFree};
+use windows_sys::Win32::Security::Authorization::{
+    ConvertSidToStringSidW, GetSecurityInfo, SE_KERNEL_OBJECT,
+};
+use windows_sys::Win32::Security::{
+    OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, RevertToSelf, TOKEN_QUERY,
+    WinLocalSystemSid,
+};
 use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX};
 use windows_sys::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeServerProcessId, ImpersonateNamedPipeClient,
-    PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
-    PIPE_WAIT,
+    ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeServerSessionId,
+    ImpersonateNamedPipeClient, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
+    PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
 };
 use windows_sys::Win32::System::Threading::{
-    GetCurrentThread, OpenProcess, OpenProcessToken, OpenThreadToken,
-    PROCESS_QUERY_LIMITED_INFORMATION,
+    GetCurrentProcess, GetCurrentThread, OpenProcessToken, OpenThreadToken,
 };
 
-use crate::util::{SecurityDescriptor, own, token_user_is, wide};
+use crate::util::{SecurityDescriptor, own, sid_is, token_user, token_user_is, wide};
 
 /// Name der Pipe des Dienstes.
 pub const PIPE_NAME: &str = r"\\.\pipe\aegis-service";
@@ -37,7 +42,14 @@ pub const PIPE_SDDL: &str = "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x12019b;;;IU)";
 /// # Errors
 /// Name belegt, Zugriffsliste ungültig.
 pub fn create_instance(name: &str, first: bool) -> io::Result<OwnedHandle> {
-    let sd = SecurityDescriptor::from_sddl(PIPE_SDDL)?;
+    // Läuft der Dienst als SYSTEM, gehört die Pipe ausdrücklich SYSTEM – daran erkennt die App
+    // den echten Dienst (ein normales Programm kann SYSTEM nicht als Besitzer eintragen).
+    let sddl = if current_process_is_system()? {
+        format!("O:SY{PIPE_SDDL}")
+    } else {
+        PIPE_SDDL.to_owned()
+    };
+    let sd = SecurityDescriptor::from_sddl(&sddl)?;
     let attributes = sd.attributes();
     let name = wide(name);
     let open_mode = PIPE_ACCESS_DUPLEX
@@ -105,11 +117,17 @@ impl Drop for Impersonation {
 }
 
 /// Wechselt den aktuellen Thread auf die Identität des Pipe-Clients. Vorher muss mindestens
-/// eine Nachricht gelesen worden sein (Windows-Vorgabe).
+/// eine Nachricht gelesen worden sein (Windows-Vorgabe). Verschachteln ist nicht erlaubt:
+/// Das Beenden würde sonst stillschweigend zur eigenen Identität zurückkehren.
 ///
 /// # Errors
-/// Client erlaubt keinen Identitätswechsel oder Pipe ungültig.
+/// Client erlaubt keinen Identitätswechsel, Pipe ungültig oder bereits gewechselt.
 pub fn impersonate_client(pipe: &File) -> io::Result<Impersonation> {
+    if thread_is_impersonating()? {
+        return Err(io::Error::other(
+            "Identitätswechsel ist bereits aktiv – verschachteln nicht erlaubt",
+        ));
+    }
     // SAFETY: `pipe` ist ein gültiges Server-Ende einer verbundenen Named Pipe.
     // aegis-unsafe: winffi-impersonate-client
     #[allow(unsafe_code)]
@@ -155,36 +173,133 @@ pub enum ServerIdentity {
     Other,
 }
 
-/// Prüft (als Client, **vor** dem ersten Senden), unter welchem Konto der Server läuft.
-/// Ein Programm, das den Pipe-Namen besetzt, um Antworten abzufangen, läuft nicht als SYSTEM.
+/// Prüft (als Client, **vor** dem ersten Senden), ob der echte Dienst antwortet: Die Pipe muss
+/// SYSTEM gehören (das kann nur ein SYSTEM-Prozess eintragen) und in Sitzung 0 laufen. Das
+/// klappt auch für normale Nutzer (anders als ein Blick in das Token des Server-Prozesses).
 ///
 /// # Errors
-/// Prozess des Servers nicht abfragbar.
+/// Pipe nicht abfragbar.
 pub fn server_identity(pipe: &File) -> io::Result<ServerIdentity> {
-    let mut pid = 0u32;
-    // SAFETY: `pipe` ist ein gültiges Client-Ende einer Named Pipe; `pid` ist gültig.
-    // aegis-unsafe: winffi-pipe-server-pid
+    let mut owner: PSID = ptr::null_mut();
+    let mut sd: PSECURITY_DESCRIPTOR = ptr::null_mut();
+    // SAFETY: `pipe` ist ein gültiges Client-Handle mit READ_CONTROL; Ausgabezeiger gültig;
+    // `owner` zeigt in `sd`, das per LocalFree (SecurityDescriptor) freigegeben wird.
+    // aegis-unsafe: winffi-pipe-owner
     #[allow(unsafe_code)]
-    let ok = unsafe { GetNamedPipeServerProcessId(pipe.as_raw_handle(), &mut pid) };
+    let status = unsafe {
+        GetSecurityInfo(
+            pipe.as_raw_handle(),
+            SE_KERNEL_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            &mut owner,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &mut sd,
+        )
+    };
+    if status != 0 {
+        return Err(io::Error::from_raw_os_error(
+            i32::try_from(status).unwrap_or(i32::MAX),
+        ));
+    }
+    let sd = SecurityDescriptor(sd);
+    let system_owned = sid_is(owner, &[WinLocalSystemSid]);
+    drop(sd);
+    let mut session = u32::MAX;
+    // SAFETY: `pipe` ist ein gültiges Client-Ende; `session` ein gültiger Ausgabezeiger.
+    // aegis-unsafe: winffi-pipe-server-session
+    #[allow(unsafe_code)]
+    let ok = unsafe { GetNamedPipeServerSessionId(pipe.as_raw_handle(), &mut session) };
     if ok == 0 {
         return Err(io::Error::last_os_error());
     }
-    // SAFETY: Nur Abfrage-Recht; das Handle wird sofort übernommen und geschlossen.
-    // aegis-unsafe: winffi-open-server-process
-    #[allow(unsafe_code)]
-    let process = own(unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) })?;
+    Ok(if system_owned && session == 0 {
+        ServerIdentity::LocalSystem
+    } else {
+        ServerIdentity::Other
+    })
+}
+
+/// Läuft dieser Prozess als SYSTEM?
+///
+/// # Errors
+/// Eigenes Token nicht lesbar.
+pub fn current_process_is_system() -> io::Result<bool> {
     let mut token: HANDLE = ptr::null_mut();
-    // SAFETY: `process` ist ein gültiges Prozess-Handle; `token` ein gültiger Ausgabezeiger.
-    // aegis-unsafe: winffi-open-server-token
+    // SAFETY: GetCurrentProcess liefert ein Pseudo-Handle; `token` ist ein gültiger
+    // Ausgabezeiger; das Token wird sofort übernommen.
+    // aegis-unsafe: winffi-open-own-token
     #[allow(unsafe_code)]
-    let ok = unsafe { OpenProcessToken(process.as_raw_handle(), TOKEN_QUERY, &mut token) };
+    let ok = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) };
     if ok == 0 {
         return Err(io::Error::last_os_error());
     }
     let token = own(token)?;
-    if token_user_is(token.as_raw_handle(), &[WinLocalSystemSid])? {
-        Ok(ServerIdentity::LocalSystem)
-    } else {
-        Ok(ServerIdentity::Other)
+    token_user_is(token.as_raw_handle(), &[WinLocalSystemSid])
+}
+
+/// Trennt eine Verbindung von der Server-Seite (z. B. nach Leerlauf); ein blockiertes Lesen
+/// im Verbindungs-Thread endet dann mit einem Fehler.
+///
+/// # Errors
+/// Pipe ungültig.
+pub fn disconnect(pipe: &File) -> io::Result<()> {
+    // SAFETY: `pipe` ist ein gültiges Server-Ende einer Named Pipe.
+    // aegis-unsafe: winffi-pipe-disconnect
+    #[allow(unsafe_code)]
+    let ok = unsafe { DisconnectNamedPipe(pipe.as_raw_handle()) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
     }
+    Ok(())
+}
+
+/// Die SID des Pipe-Clients als Text (`S-1-5-21-…`) – für Eigentum an Quarantäne-Einträgen und
+/// Grenzen je Nutzer. Wechselt dafür kurz die Identität.
+///
+/// # Errors
+/// Identitätswechsel oder Abfrage nicht möglich.
+pub fn client_sid(pipe: &File) -> io::Result<String> {
+    let as_client = impersonate_client(pipe)?;
+    let mut token: HANDLE = ptr::null_mut();
+    // SAFETY: Pseudo-Handle des Threads; OpenAsSelf = 1 (Zugriffsprüfung gegen das eigene
+    // Konto); `token` ist ein gültiger Ausgabezeiger.
+    // aegis-unsafe: winffi-open-client-token
+    #[allow(unsafe_code)]
+    let ok = unsafe { OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, 1, &mut token) };
+    drop(as_client);
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let token = own(token)?;
+    token_user(token.as_raw_handle(), sid_to_string)?
+}
+
+fn sid_to_string(sid: PSID) -> io::Result<String> {
+    let mut text: *mut u16 = ptr::null_mut();
+    // SAFETY: `sid` ist eine gültige SID (lebt im Puffer des Aufrufers); `text` erhält einen
+    // mit LocalAlloc angelegten, nullterminierten Text, der unten genau einmal freigegeben wird.
+    // aegis-unsafe: winffi-sid-to-string
+    #[allow(unsafe_code)]
+    let ok = unsafe { ConvertSidToStringSidW(sid, &mut text) };
+    if ok == 0 || text.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+    let mut len = 0usize;
+    // SAFETY: `text` ist nullterminiert (Vertrag von ConvertSidToStringSidW); gelesen wird bis
+    // zur Null, höchstens 256 Zeichen (SIDs sind deutlich kürzer).
+    // aegis-unsafe: winffi-sid-text-read
+    #[allow(unsafe_code)]
+    let units = unsafe {
+        while len < 256 && *text.add(len) != 0 {
+            len += 1;
+        }
+        std::slice::from_raw_parts(text, len).to_vec()
+    };
+    // SAFETY: `text` stammt von ConvertSidToStringSidW (LocalAlloc) und wird genau einmal frei.
+    // aegis-unsafe: winffi-sid-text-free
+    #[allow(unsafe_code)]
+    let _ = unsafe { LocalFree(text.cast()) };
+    Ok(String::from_utf16_lossy(&units))
 }

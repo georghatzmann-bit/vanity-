@@ -64,10 +64,12 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
     stream: &mut S,
     user: &dyn UserAccess,
 ) -> io::Result<()> {
-    let lock = || {
-        service
+    // Eine Panik in einer anderen Verbindung soll den Dienst nicht für alle sperren: Der
+    // Zustand bleibt konsistent, weil jede Änderung vollständig unter der Sperre geschieht.
+    let lock = || -> io::Result<_> {
+        Ok(service
             .lock()
-            .map_err(|_| io::Error::other("Dienst-Zustand beschädigt"))
+            .unwrap_or_else(std::sync::PoisonError::into_inner))
     };
     loop {
         let payload = match read_frame(stream) {
@@ -98,7 +100,7 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                     (Ok(()), Some(slot)) => match examine_as_user(&engine, &paths, user) {
                         Ok(findings) => {
                             drop(slot);
-                            lock()?.propose_quarantine(&paths, &findings)
+                            lock()?.propose_quarantine(&paths, &findings, user.identity())
                         }
                         Err(response) => response,
                     },
@@ -159,8 +161,9 @@ pub mod windows {
 
     use aegis_quarantine::{UserAccess, UserScope};
     pub use aegis_winffi::{
-        DATA_DIR_SDDL, PIPE_NAME, PIPE_SDDL, ServerIdentity, accept, create_instance,
-        create_secure_dir, impersonate_client, server_identity, thread_is_impersonating,
+        DATA_DIR_SDDL, PIPE_NAME, PIPE_SDDL, ServerIdentity, accept, client_sid, create_instance,
+        create_secure_dir, disconnect, impersonate_client, owner_is_trusted, server_identity,
+        thread_is_impersonating,
     };
 
     /// `SECURITY_IMPERSONATION` (Stufe 2 « 16): Der Dienst darf mit den Rechten des Clients
@@ -184,13 +187,36 @@ pub mod windows {
         file
     }
 
-    /// Nutzerdateien mit den Rechten des Pipe-Clients anfassen.
+    /// Nutzerdateien mit den Rechten des Pipe-Clients anfassen; Kennung = SID des Clients.
     #[derive(Debug)]
-    pub struct PipeClient<'a>(pub &'a File);
+    pub struct PipeClient<'a> {
+        pipe: &'a File,
+        sid: std::sync::OnceLock<Option<String>>,
+    }
+
+    impl<'a> PipeClient<'a> {
+        /// Client einer verbundenen Pipe.
+        #[must_use]
+        pub fn new(pipe: &'a File) -> Self {
+            Self {
+                pipe,
+                sid: std::sync::OnceLock::new(),
+            }
+        }
+    }
 
     impl UserAccess for PipeClient<'_> {
         fn enter(&self) -> io::Result<UserScope> {
-            Ok(UserScope::holding(impersonate_client(self.0)?))
+            Ok(UserScope::holding(impersonate_client(self.pipe)?))
+        }
+
+        fn identity(&self) -> Option<String> {
+            // Ohne lesbare SID: eine Kennung, die zu keinem Eintrag passt (nichts sichtbar).
+            self.sid
+                .get_or_init(|| {
+                    Some(client_sid(self.pipe).unwrap_or_else(|_| "unbekannt".to_owned()))
+                })
+                .clone()
         }
     }
 }

@@ -109,6 +109,11 @@ pub fn sid_is(sid: PSID, kinds: &[WELL_KNOWN_SID_TYPE]) -> bool {
 
 /// Ist der Benutzer des Tokens eine der angegebenen bekannten SIDs?
 pub fn token_user_is(token: HANDLE, kinds: &[WELL_KNOWN_SID_TYPE]) -> io::Result<bool> {
+    token_user(token, |sid| sid_is(sid, kinds))
+}
+
+/// Ruft `f` mit der SID des Token-Benutzers auf (die SID lebt nur während des Aufrufs).
+pub fn token_user<T>(token: HANDLE, f: impl FnOnce(PSID) -> T) -> io::Result<T> {
     // TOKEN_USER + SID passen sicher in 256 Byte (SID ≤ 68 Byte); u64-Ausrichtung.
     let mut buffer = [0u64; 32];
     let mut needed = 0u32;
@@ -133,5 +138,5 @@ pub fn token_user_is(token: HANDLE, kinds: &[WELL_KNOWN_SID_TYPE]) -> io::Result
     // aegis-unsafe: winffi-token-user-read
     #[allow(unsafe_code)]
     let user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
-    Ok(sid_is(user.User.Sid, kinds))
+    Ok(f(user.User.Sid))
 }

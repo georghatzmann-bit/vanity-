@@ -458,7 +458,7 @@ impl Engine {
                     continue;
                 }
             };
-            if meta.file_type().is_symlink() || is_reparse_point(&meta) {
+            if meta.file_type().is_symlink() || is_reparse_point(&path, &meta) {
                 report.skipped.push(Skipped {
                     path,
                     reason: "Verknüpfung (Link) – nicht verfolgt".into(),
@@ -501,15 +501,18 @@ impl Engine {
     }
 }
 
+/// Nur echte Links/Abzweigungen werden nicht verfolgt; komprimierte Systemdateien (WOF),
+/// Deduplizierung und Cloud-Platzhalter sind normale Dateien und werden geprüft.
 #[cfg(windows)]
-fn is_reparse_point(meta: &std::fs::Metadata) -> bool {
+fn is_reparse_point(path: &Path, meta: &std::fs::Metadata) -> bool {
     use std::os::windows::fs::MetadataExt;
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
     meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+        && aegis_winffi::is_name_surrogate(path).unwrap_or(true)
 }
 
 #[cfg(not(windows))]
-fn is_reparse_point(_meta: &std::fs::Metadata) -> bool {
+fn is_reparse_point(_path: &Path, _meta: &std::fs::Metadata) -> bool {
     false
 }
 

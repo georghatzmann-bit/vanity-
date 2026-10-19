@@ -47,6 +47,12 @@ pub trait UserAccess {
     /// # Errors
     /// Identitätswechsel nicht möglich – dann wird nichts angefasst.
     fn enter(&self) -> io::Result<UserScope>;
+
+    /// Kennung des anfragenden Kontos (Windows: SID). `None` = eigener Prozess (Tests,
+    /// Entwicklung) – dann gibt es keine Trennung nach Konten.
+    fn identity(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Ohne Identitätswechsel: der eigene Prozess ist der Nutzer (Tests, Werkzeuge).

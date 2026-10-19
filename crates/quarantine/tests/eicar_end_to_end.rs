@@ -157,7 +157,7 @@ fn eicar_erkannt_isoliert_wiederhergestellt_geloescht() {
     )
     .unwrap();
     let deleted = vault
-        .delete_permanently(second.redeem(&plan, &mut gate).unwrap())
+        .delete_permanently(second.redeem(&plan, &mut gate).unwrap(), &OwnProcess)
         .unwrap();
     assert!(deleted.failures.is_empty());
     assert!(vault.list().unwrap().is_empty());
@@ -254,7 +254,10 @@ fn manipulierter_tresor_und_belegtes_ziel() {
     // Falsche Planart / fehlende Parameter / falsches Ziel werden abgelehnt.
     assert!(
         vault
-            .delete_permanently(approve(&mut gate, &restore_plan(&entry, &clock)))
+            .delete_permanently(
+                approve(&mut gate, &restore_plan(&entry, &clock)),
+                &OwnProcess
+            )
             .is_err()
     );
     let wrong = ActionPlan::builder(ActionKind::Restore)
@@ -543,4 +546,56 @@ fn schluessel_nur_fuer_eigentuemer() {
     let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode(&dir.join("vault.key")), 0o600);
     assert_eq!(mode(&dir), 0o700);
+}
+
+/// Re-Review N4: Einträge gehören dem Konto, das isoliert hat – ein anderes Konto kann sie
+/// weder wiederherstellen noch endgültig löschen.
+#[test]
+fn eintraege_gehoeren_dem_konto() {
+    struct Account(&'static str);
+    impl aegis_quarantine::UserAccess for Account {
+        fn enter(&self) -> std::io::Result<aegis_quarantine::UserScope> {
+            Ok(aegis_quarantine::UserScope::unchanged())
+        }
+        fn identity(&self) -> Option<String> {
+            Some(self.0.to_owned())
+        }
+    }
+    let home = tempfile::tempdir().unwrap();
+    let vault_dir = tempfile::tempdir().unwrap();
+    let path = write_fixture(home.path(), "a.txt", b"Daten von A").unwrap();
+    let clock = ManualClock::default();
+    let mut gate = ConsentGate::with_clock(clock.clone(), ConsentConfig::default()).unwrap();
+    let vault = Vault::open(vault_dir.path()).unwrap();
+    let entry = vault
+        .quarantine(
+            approve(&mut gate, &quarantine_plan(&path, &clock)),
+            &Account("S-1-A"),
+        )
+        .unwrap()
+        .entries
+        .remove(0);
+    assert_eq!(entry.owner.as_deref(), Some("S-1-A"));
+    assert!(entry.visible_to(Some("S-1-A")));
+    assert!(!entry.visible_to(Some("S-1-B")));
+    assert!(!entry.visible_to(None));
+    let out = vault
+        .restore(
+            approve(&mut gate, &restore_plan(&entry, &clock)),
+            &Account("S-1-B"),
+        )
+        .unwrap();
+    assert!(
+        out.failures[0].1.contains("anderen Konto"),
+        "{:?}",
+        out.failures
+    );
+    assert!(!path.exists());
+    vault
+        .restore(
+            approve(&mut gate, &restore_plan(&entry, &clock)),
+            &Account("S-1-A"),
+        )
+        .unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), b"Daten von A");
 }

@@ -23,27 +23,58 @@ pub mod fs;
 
 #[cfg(windows)]
 pub use fs::{
-    DATA_DIR_SDDL, create_new, create_secure_dir, delete_by_handle, final_path, open_exclusive,
+    DATA_DIR_SDDL, create_new, create_secure_dir, delete_by_handle, final_path, is_name_surrogate,
+    open_exclusive, owner_is_trusted,
 };
 #[cfg(windows)]
 pub use pipe::{
-    Impersonation, PIPE_NAME, PIPE_SDDL, ServerIdentity, accept, create_instance,
-    impersonate_client, server_identity, thread_is_impersonating,
+    Impersonation, PIPE_NAME, PIPE_SDDL, ServerIdentity, accept, client_sid, create_instance,
+    disconnect, impersonate_client, server_identity, thread_is_impersonating,
 };
 
-/// Vergleicht den von Windows gelieferten tatsächlichen Pfad (`\\?\C:\…`) mit dem
-/// angefragten (`C:\…`), ohne Groß-/Kleinschreibung. Netzwerk- und Gerätepfade gelten nie
-/// als gleich. Rein (ohne FFI), damit es überall getestet werden kann.
+/// Vergleicht den von Windows gelieferten tatsächlichen Pfad (`\\?\C:\…`, UTF-16) mit dem
+/// angefragten (`C:\…`). `equal_ignore_case` vergleicht zwei UTF-16-Folgen ohne
+/// Groß-/Kleinschreibung (unter Windows `CompareStringOrdinal` – wie NTFS, ohne
+/// Unicode-Sonderfälle wie „ß“ → „SS“). Netzwerk- und Gerätepfade gelten nie als gleich.
+/// Rein (ohne FFI), damit es überall getestet werden kann.
 #[must_use]
-pub fn final_path_matches(actual: &str, requested: &str) -> bool {
-    let Some(actual) = actual.strip_prefix(r"\\?\") else {
+pub fn final_path_matches_with(
+    actual: &[u16],
+    requested: &[u16],
+    equal_ignore_case: impl Fn(&[u16], &[u16]) -> bool,
+) -> bool {
+    let units = |s: &str| s.encode_utf16().collect::<Vec<u16>>();
+    let Some(rest) = actual.strip_prefix(units(r"\\?\").as_slice()) else {
         return false;
     };
-    if actual.starts_with(r"UNC\") || requested.starts_with(r"\\") {
+    if rest.starts_with(&units(r"UNC\")) || requested.starts_with(&units(r"\\")) {
         return false;
     }
-    let fold = |s: &str| s.trim_end_matches('\\').to_uppercase();
-    fold(actual) == fold(requested)
+    equal_ignore_case(trim_backslashes(rest), trim_backslashes(requested))
+}
+
+fn trim_backslashes(mut s: &[u16]) -> &[u16] {
+    while let [head @ .., last] = s
+        && *last == u16::from(b'\\')
+    {
+        s = head;
+    }
+    s
+}
+
+/// Wie [`final_path_matches_with`] mit einfachem ASCII-Vergleich (Tests, Diagnose).
+#[must_use]
+pub fn final_path_matches(actual: &str, requested: &str) -> bool {
+    let a: Vec<u16> = actual.encode_utf16().collect();
+    let r: Vec<u16> = requested.encode_utf16().collect();
+    final_path_matches_with(&a, &r, |x, y| {
+        x.len() == y.len()
+            && x.iter().zip(y).all(|(a, b)| {
+                let fold =
+                    |c: u16| u8::try_from(c).map_or(c, |b| u16::from(b.to_ascii_uppercase()));
+                fold(*a) == fold(*b)
+            })
+    })
 }
 
 #[cfg(test)]
@@ -66,5 +97,8 @@ mod tests {
         ));
         assert!(!final_path_matches(r"\\?\UNC\srv\s\x", r"\\srv\s\x"));
         assert!(!final_path_matches(r"\\?\C:\a\b", r"C:\a\b\c"));
+        // Keine Unicode-Sonderfaltung: „straße“ ist nicht „STRASSE“.
+        assert!(!final_path_matches(r"\\?\C:\strasse", r"C:\straße"));
+        assert!(final_path_matches(r"\\?\C:\a\", r"C:\a"));
     }
 }

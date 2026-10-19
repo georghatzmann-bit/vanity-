@@ -3,6 +3,8 @@
 use std::fs::File;
 use std::io::{self, BufReader};
 use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -119,8 +121,14 @@ pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
 
 static CONNECTIONS: AtomicUsize = AtomicUsize::new(0);
 
+/// Wie lange eine Verbindung höchstens auf die nächste Anfrage warten darf.
+#[cfg(windows)]
+const IDLE_LIMIT_SECS: u64 = 30;
+
 /// Bedient den Endpunkt mit einem vorhandenen Dienst-Zustand. Fehler einzelner Verbindungen
-/// (z. B. sofort wieder getrennte Clients) beenden den Dienst nicht.
+/// (z. B. sofort wieder getrennte Clients) beenden den Dienst nicht. Es gibt immer eine
+/// freie Instanz, bevor eine andere freigegeben wird – so kann niemand den Namen in einer
+/// Lücke übernehmen. Wartet eine Verbindung zu lange auf eine Anfrage, wird sie getrennt.
 ///
 /// # Errors
 /// Endpunkt belegt oder nicht anlegbar.
@@ -130,38 +138,108 @@ pub fn serve<W: Durable + Send + 'static>(
     service: &Arc<Mutex<Service<SystemClock, W>>>,
     stop: &Arc<AtomicBool>,
 ) -> io::Result<()> {
-    use crate::transport::windows::{PipeClient, accept, create_instance};
+    use crate::transport::windows::{accept, create_instance};
     // Die erste Instanz muss exklusiv gelingen – sonst hat jemand den Namen besetzt.
-    let mut instance = Some(create_instance(endpoint, true)?);
+    let mut current = create_instance(endpoint, true)?;
     while !stop.load(Ordering::SeqCst) {
-        let current = match instance.take() {
-            Some(i) => i,
-            None => match create_instance(endpoint, false) {
-                Ok(i) => i,
-                Err(_) => {
+        // Ersatz zuerst anlegen, dann erst die aktuelle Instanz verbrauchen.
+        let next = loop {
+            match create_instance(endpoint, false) {
+                Ok(i) => break i,
+                Err(_) if !stop.load(Ordering::SeqCst) => {
                     std::thread::sleep(std::time::Duration::from_millis(200));
-                    continue;
                 }
-            },
+                Err(e) => return Err(e),
+            }
         };
-        let Ok(connection) = accept(current) else {
-            continue;
-        };
+        let accepted = accept(std::mem::replace(&mut current, next));
         if stop.load(Ordering::SeqCst) {
             break;
         }
+        let Ok(connection) = accepted else {
+            continue;
+        };
         let Some(slot) = Slot::try_take(&CONNECTIONS, MAX_CONNECTIONS) else {
             continue; // Verbindung wird sofort wieder geschlossen.
         };
         let service = Arc::clone(service);
         std::thread::spawn(move || {
             let _slot = slot;
-            let mut stream = &connection;
-            let _ =
-                crate::transport::serve_connection(&service, &mut stream, &PipeClient(&connection));
+            serve_pipe_connection(&service, connection);
         });
     }
     Ok(())
+}
+
+/// Eine Verbindung mit Leerlauf-Wächter bedienen.
+#[cfg(windows)]
+fn serve_pipe_connection<W: Durable>(
+    service: &Mutex<Service<SystemClock, W>>,
+    connection: std::fs::File,
+) {
+    use crate::transport::windows::{PipeClient, disconnect};
+    let connection = Arc::new(connection);
+    let waiting_since = Arc::new(AtomicU64::new(0));
+    let done = Arc::new(AtomicBool::new(false));
+    let watchdog = {
+        let (connection, waiting_since, done) = (
+            Arc::clone(&connection),
+            Arc::clone(&waiting_since),
+            Arc::clone(&done),
+        );
+        std::thread::spawn(move || {
+            while !done.load(Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                let since = waiting_since.load(Ordering::SeqCst);
+                if since != 0 && now_secs().saturating_sub(since) > IDLE_LIMIT_SECS {
+                    let _ = disconnect(&connection);
+                    break;
+                }
+            }
+        })
+    };
+    let mut stream = IdleTracked {
+        file: &connection,
+        waiting_since: &waiting_since,
+    };
+    let _ = crate::transport::serve_connection(service, &mut stream, &PipeClient::new(&connection));
+    done.store(true, Ordering::SeqCst);
+    let _ = watchdog.join();
+}
+
+#[cfg(windows)]
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// Merkt sich, seit wann auf Daten gewartet wird (für den Leerlauf-Wächter).
+#[cfg(windows)]
+struct IdleTracked<'a> {
+    file: &'a std::fs::File,
+    waiting_since: &'a AtomicU64,
+}
+
+#[cfg(windows)]
+impl io::Read for IdleTracked<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.waiting_since
+            .store(now_secs().max(1), Ordering::SeqCst);
+        let result = io::Read::read(&mut self.file, buf);
+        self.waiting_since.store(0, Ordering::SeqCst);
+        result
+    }
+}
+
+#[cfg(windows)]
+impl io::Write for IdleTracked<'_> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        io::Write::write(&mut self.file, buf)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        io::Write::flush(&mut self.file)
+    }
 }
 
 /// Bedient den Endpunkt mit einem vorhandenen Dienst-Zustand.
@@ -202,10 +280,35 @@ where
 // Verändernde Aufrufe – nur AEGIS-eigene Daten, jeweils markiert.
 // ---------------------------------------------------------------------------------------
 
-/// Windows: mit Zugriffsliste anlegen bzw. Besitzer/Links prüfen (`aegis-winffi`).
+/// Windows: mit Zugriffsliste anlegen bzw. Besitzer/Links prüfen (`aegis-winffi`); auch alle
+/// vorhandenen Inhalte müssen SYSTEM/Administratoren gehören und dürfen keine Links sein
+/// (sonst könnte ein früher hineingelegter Schlüssel oder Eintrag eines Nutzers verwendet
+/// werden).
 #[cfg(windows)]
 fn secure_dir(dir: &Path) -> io::Result<()> {
-    crate::transport::windows::create_secure_dir(dir)
+    use crate::transport::windows::{create_secure_dir, owner_is_trusted};
+    create_secure_dir(dir)?;
+    let mut stack = vec![(dir.to_owned(), 0usize)];
+    let mut checked = 0usize;
+    while let Some((current, depth)) = stack.pop() {
+        for item in std::fs::read_dir(&current)? {
+            let path = item?.path();
+            checked += 1;
+            if checked > 200_000 || !owner_is_trusted(&path)? {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!(
+                        "{} gehört nicht SYSTEM/Administratoren oder ist ein Link – der Dienst startet nicht (bitte prüfen)",
+                        path.display()
+                    ),
+                ));
+            }
+            if depth < 3 && std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_dir()) {
+                stack.push((path, depth + 1));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Unix (Entwicklung): Ordner nur für den Eigentümer; vorhandene Ordner müssen echte

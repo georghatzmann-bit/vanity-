@@ -95,9 +95,6 @@ crates/winffi/src/util.rs :: winffi-token-user-read :: Windows-FFI: liest die TO
 crates/winffi/src/pipe.rs :: winffi-revert-to-self :: Windows-FFI: beendet den Identitätswechsel (bei Fehler Prozessabbruch).
 crates/winffi/src/pipe.rs :: winffi-impersonate-client :: Windows-FFI: übernimmt die Identität des Pipe-Clients, damit Nutzerdateien nur mit dessen Rechten angefasst werden.
 crates/winffi/src/pipe.rs :: winffi-open-thread-token :: Windows-FFI: fragt ab, ob der Thread gerade eine fremde Identität nutzt (nur lesend, Tests/Diagnose).
-crates/winffi/src/pipe.rs :: winffi-pipe-server-pid :: Windows-FFI: liest die Prozess-ID des Pipe-Servers (Client prüft, ob wirklich der Dienst antwortet).
-crates/winffi/src/pipe.rs :: winffi-open-server-process :: Windows-FFI: öffnet den Server-Prozess nur zum Abfragen (PROCESS_QUERY_LIMITED_INFORMATION).
-crates/winffi/src/pipe.rs :: winffi-open-server-token :: Windows-FFI: öffnet das Token des Server-Prozesses nur zum Abfragen (TOKEN_QUERY).
 crates/winffi/src/fs.rs :: winffi-file-info-zeroed :: Windows-FFI: nullinitialisiert eine reine Datenstruktur.
 crates/winffi/src/fs.rs :: winffi-file-info :: Windows-FFI: liest Attribute und Hardlink-Zahl über das Handle (nur lesend).
 crates/winffi/src/fs.rs :: winffi-final-path :: Windows-FFI: liest den tatsächlichen Pfad eines Handles (erkennt Abzweigungen in Zwischenordnern).
@@ -108,10 +105,25 @@ crates/winffi/src/fs.rs :: winffi-delete-by-handle-call :: Windows: markiert ein
 crates/winffi/src/fs.rs :: winffi-create-secure-dir-call :: Windows: legt AEGIS-eigene Datenordner direkt mit Zugriffsliste SYSTEM/Administratoren an.
 crates/winffi/src/fs.rs :: winffi-open-existing-dir-call :: Windows: öffnet den vorhandenen AEGIS-Datenordner ohne Abzweigungen zu folgen, um Besitzer zu prüfen und die Zugriffsliste zu setzen.
 crates/winffi/src/fs.rs :: winffi-read-owner :: Windows-FFI: liest den Besitzer des AEGIS-Datenordners (nur lesend).
-crates/winffi/src/fs.rs :: winffi-open-exclusive-call :: Windows: öffnet die Nutzerdatei nur (OPEN_EXISTING) mit Lösch-Recht; das Löschen selbst erfolgt erst nach Freigabe.
 crates/winffi/src/fs.rs :: winffi-delete-by-handle :: Windows-FFI: setzt FileDispositionInfo auf dem eigenen, exklusiv geöffneten Handle.
 crates/winffi/src/fs.rs :: winffi-create-secure-dir :: Windows-FFI: CreateDirectoryW mit fester Sicherheitsbeschreibung.
 crates/winffi/src/fs.rs :: winffi-open-existing-dir :: Windows-FFI: CreateFileW für den vorhandenen Datenordner (nur Prüfen/ACL setzen).
 crates/core/src/testing.rs :: testing-fixture-hardlink :: Test-Hilfe (Feature "testing"): legt einen zweiten Namen für eine vorhandene Fixture-Datei innerhalb des Test-Ordners an.
 crates/core/src/testing.rs :: testing-fixture-set-mode :: Test-Hilfe (Feature "testing", nur Unix): setzt die Rechte einer Fixture-Datei im Test-Ordner (z. B. harmloses Ersatzprogramm ausführbar).
 crates/engine/src/clamav.rs :: engine-clamav-timeout :: Engine: beendet nur den eigenen, hängenden ClamAV-Prozess nach dem Zeitlimit – nie Nutzerprozesse.
+crates/winffi/src/pipe.rs :: winffi-pipe-owner :: Windows-FFI: liest den Besitzer der Pipe (Client prüft, ob der echte Dienst – SYSTEM – antwortet).
+crates/winffi/src/pipe.rs :: winffi-pipe-server-session :: Windows-FFI: liest die Sitzung des Pipe-Servers (Dienst läuft in Sitzung 0).
+crates/winffi/src/pipe.rs :: winffi-open-own-token :: Windows-FFI: öffnet das eigene Prozess-Token nur zum Abfragen (läuft der Dienst als SYSTEM?).
+crates/winffi/src/pipe.rs :: winffi-pipe-disconnect :: Windows: trennt eine eigene Pipe-Verbindung nach Leerlauf (keine Nutzerdaten).
+crates/winffi/src/pipe.rs :: winffi-open-client-token :: Windows-FFI: liest das Token des Pipe-Clients während des Identitätswechsels (nur Abfrage).
+crates/winffi/src/pipe.rs :: winffi-sid-to-string :: Windows-FFI: wandelt die Client-SID in Text.
+crates/winffi/src/pipe.rs :: winffi-sid-text-read :: Windows-FFI: liest den nullterminierten SID-Text (höchstens 256 Zeichen).
+crates/winffi/src/pipe.rs :: winffi-sid-text-free :: Windows-FFI: gibt den SID-Text genau einmal frei.
+crates/winffi/src/fs.rs :: winffi-tag-info :: Windows-FFI: liest Attribute und Analysepunkt-Tag über das Handle (nur lesend).
+crates/winffi/src/fs.rs :: winffi-compare-ordinal :: Windows-FFI: vergleicht zwei Pfade wie das Dateisystem (nur lesend).
+crates/winffi/src/fs.rs :: winffi-open-attributes :: Windows-FFI: öffnet ein Objekt nur zum Lesen der Attribute, ohne Links zu folgen.
+crates/winffi/src/fs.rs :: winffi-open-attributes-call :: Windows: CreateFileW nur mit FILE_READ_ATTRIBUTES (OPEN_EXISTING), alle Freigaben gesetzt.
+crates/winffi/src/fs.rs :: winffi-delete-by-handle-ex :: Windows-FFI: setzt FileDispositionInfoEx (auch schreibgeschützt) auf dem eigenen, exklusiv geöffneten Handle.
+crates/winffi/src/fs.rs :: winffi-delete-by-handle-ex-call :: Windows: Löschen über das Handle; nur aus quarantine/restore (ExecutionPermit).
+crates/winffi/src/fs.rs :: winffi-open-for-owner :: Windows-FFI: öffnet ein Objekt im Datenordner nur zum Lesen von Besitzer/Attributen.
+crates/winffi/src/fs.rs :: winffi-open-for-owner-call :: Windows: CreateFileW nur mit READ_CONTROL/Attributen (OPEN_EXISTING) für die Startprüfung des Datenordners.

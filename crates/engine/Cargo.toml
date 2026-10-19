@@ -21,6 +21,9 @@ thiserror = { workspace = true }
 yara-x = { workspace = true }
 zip = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+aegis-winffi = { workspace = true }
+
 [dev-dependencies]
 aegis-core = { workspace = true, features = ["testing"] }
 flate2 = { workspace = true }

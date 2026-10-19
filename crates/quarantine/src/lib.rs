@@ -83,6 +83,23 @@ pub struct Entry {
     pub plan_id: String,
     /// „Was genau?“ aus dem Plan (Grund).
     pub reason: String,
+    /// Konto, das isoliert hat (Windows: SID). Nur dieses Konto sieht den Eintrag und darf
+    /// ihn wiederherstellen oder löschen. `None` bei Einträgen ohne Kontotrennung.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+}
+
+impl Entry {
+    /// Darf das Konto `identity` diesen Eintrag sehen und bearbeiten?
+    #[must_use]
+    pub fn visible_to(&self, identity: Option<&str>) -> bool {
+        match (&self.owner, identity) {
+            (Some(owner), Some(id)) => owner == id,
+            // Ohne Kontotrennung (eigener Prozess) bzw. alte Einträge: nur ohne Kennung.
+            (None, None) => true,
+            (Some(_), None) | (None, Some(_)) => false,
+        }
+    }
 }
 
 /// Ergebnis einer Operation – für Prüfprotokoll, Rückgängig und Anzeige.
@@ -278,6 +295,7 @@ impl Vault {
             quarantined_at: now,
             plan_id: plan_id.to_owned(),
             reason: reason.to_owned(),
+            owner: user.identity(),
         };
         let json = serde_json::to_vec_pretty(&entry)
             .map_err(|e| QuarantineError::BadEntry(e.to_string()))?;
@@ -316,7 +334,13 @@ impl Vault {
         let plan = permit.ensure_kind(ActionKind::Restore)?;
         let (entry, target) =
             self.planned_entry(plan.parameter(param::QUARANTINE_ID), plan.targets())?;
-        let result = self.restore_one(&entry, &target, user);
+        let result = if entry.visible_to(user.identity().as_deref()) {
+            self.restore_one(&entry, &target, user)
+        } else {
+            Err(QuarantineError::InvalidPlan(
+                "Eintrag gehört einem anderen Konto".into(),
+            ))
+        };
         let (entries, failures) = match result {
             Ok(()) => (vec![entry], vec![]),
             Err(e) => (vec![], vec![(target, e.to_string())]),
@@ -351,7 +375,9 @@ impl Vault {
         target: &Path,
         user: &dyn UserAccess,
     ) -> Result<(), QuarantineError> {
-        if userfs::occupied(target) {
+        // Mit den Rechten des Nutzers nachsehen (nichts über fremde Ordner verraten).
+        let occupied = user.enter().map(|_scope| userfs::occupied(target))?;
+        if occupied {
             return Err(QuarantineError::InvalidPlan(format!(
                 "Am ursprünglichen Ort liegt bereits etwas ({}) – es wird nichts überschrieben",
                 target.display()
@@ -429,8 +455,13 @@ impl Vault {
     /// Bestätigung**, Parameter `quarantine_id`).
     ///
     /// # Errors
-    /// Falsche Planart, fehlende zweite Bestätigung, Parameter/Ziel passen nicht.
-    pub fn delete_permanently(&self, permit: ExecutionPermit) -> Result<Outcome, QuarantineError> {
+    /// Falsche Planart, fehlende zweite Bestätigung, Parameter/Ziel passen nicht, Eintrag
+    /// gehört einem anderen Konto.
+    pub fn delete_permanently(
+        &self,
+        permit: ExecutionPermit,
+        user: &dyn UserAccess,
+    ) -> Result<Outcome, QuarantineError> {
         let plan = permit.ensure_kind(ActionKind::DeletePermanently)?;
         if permit.second_confirmation().is_none() {
             return Err(QuarantineError::InvalidPlan(
@@ -439,6 +470,11 @@ impl Vault {
         }
         let (entry, target) =
             self.planned_entry(plan.parameter(param::QUARANTINE_ID), plan.targets())?;
+        if !entry.visible_to(user.identity().as_deref()) {
+            return Err(QuarantineError::InvalidPlan(
+                "Eintrag gehört einem anderen Konto".into(),
+            ));
+        }
         let result = remove_own_file(&self.container_path(&entry.id))
             .and_then(|()| remove_own_file(&self.meta_path(&entry.id)));
         let (entries, failures) = match result {

@@ -97,3 +97,11 @@ lto = "thin"
 codegen-units = 1
 strip = "symbols"
 panic = "abort"
+
+# Entwicklung/Tests: nur Zeilen-Infos für eigene Crates, keine Debug-Infos für Fremd-Crates.
+# Jede Test-Binärdatei enthält YARA-X/wasmtime – mit voller Debug-Info wären es Gigabytes.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false

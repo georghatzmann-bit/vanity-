@@ -44,12 +44,31 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Code-Signing (P13); optional Windows-Hello/UAC für besonders folgenreiche Aktionen.
   Admin-Schadsoftware kann AEGIS grundsätzlich aushebeln.
 - **Pipe:** Interaktive Nutzer dürfen lesen/schreiben, aber **keine eigenen Server-Instanzen**
-  anlegen (`0x12019b` statt `GRGW`). Die App prüft vor dem ersten Senden, dass der Server als
-  SYSTEM läuft, und erlaubt nur den Identitätswechsel auf Stufe „Impersonation“.
+  anlegen (`0x12019b` statt `GRGW`). Der Dienst trägt SYSTEM als Besitzer der Pipe ein
+  (`O:SY`); die App prüft vor dem ersten Senden Besitzer und Sitzung 0 – das kann ein normales
+  Programm nicht vortäuschen und funktioniert auch für Standardnutzer. Es gibt immer eine
+  freie Instanz, bevor eine andere freigegeben wird (keine Lücke zum Übernehmen des Namens).
+- **Konten getrennt:** Vorschläge, zweite Rückfragen und Quarantäne-Einträge gehören dem Konto
+  (SID), das sie angefordert hat. Nur dieses Konto sieht, beantwortet, stellt wieder her oder
+  löscht. Grenzen gelten je Konto. Ein Programm **desselben** Kontos kann Vorschläge
+  anfordern und beantworten (Nonce mitlesen) – es könnte dieselben Dateien aber ohnehin
+  selbst verändern; die Prüfung der Client-Identität folgt mit Code-Signing (P13).
 - **Datenordner:** wird mit Zugriffsliste angelegt; ein vorhandener Ordner muss SYSTEM oder den
   Administratoren gehören und darf kein Link sein – sonst startet der Dienst nicht.
 - **Protokoll vor Ausführung:** Freigabe-Ereignisse werden geschrieben und mit `sync_data`
   gesichert, **bevor** etwas verändert wird; gelingt das nicht, verfällt die Freigabe.
+- **Leerlauf:** Verbindungen, die länger als 30 s auf eine Anfrage warten, trennt der Dienst.
+- **Analysepunkte:** Nur Links/Abzweigungen (Namens-Ersatz) gelten als Link; komprimierte
+  Systemdateien, Deduplizierung und Cloud-Platzhalter werden geprüft und können isoliert
+  werden. Schreibgeschützte Dateien werden über `FileDispositionInfoEx` entfernt. Pfade
+  werden wie im Dateisystem verglichen (`CompareStringOrdinal`, UTF-16).
+- **Datenordner-Inhalt:** Beim Start müssen auch alle vorhandenen Dateien im Datenordner SYSTEM
+  oder den Administratoren gehören und dürfen keine Links sein.
+- **ClamAV läuft noch als SYSTEM** (bekommt nur den Inhalt über die Standardeingabe). Der Start
+  mit eingeschränktem Token zusammen mit den Parser-Kindprozessen folgt in P3.2.
+- **Kein Sicherheitsgrenze:** Die Ablehnung von Pfaden im Datenordner ist ein Textvergleich
+  (Kurznamen, Abzweigungen umgehen ihn); den Schutz liefern Identitätswechsel und die
+  Zugriffsliste SYSTEM/Administratoren.
 - **Überlastung:** höchstens 16 Verbindungen, 2 gleichzeitige Scans (außerhalb der Sperre des
   Dienst-Zustands), 64 offene Vorschläge, 60 Vorschläge/Minute, 256 KiB Pfade pro Anfrage,
   Rahmen werden schrittweise gelesen. ClamAV: nur feste Installationsorte (nicht `PATH`),
@@ -108,6 +127,7 @@ Prüfung „kein Code-Pfad ändert etwas ohne Freigabe“ ist fester Bestandteil
 
 | Datum | Umfang | Ergebnis |
 | --- | --- | --- |
+| 2026-10-19 | P2.5-Nachprüfung (separater Agent): Korrekturen + neue Fehler im FFI | Alte Funde geschlossen bzw. teilweise; neu: 1 hoch (Server-Prüfung für Standardnutzer kaputt → Pipe-Besitzer), 6 mittel (Namenslücke, Leerlauf/Grenzen je Konto, Einträge ohne Konto, schreibgeschützt, Analysepunkte, ClamAV als SYSTEM → P3.2), 5 niedrig. Behoben (außer ClamAV-Token → P3.2, Pfad-Textvergleich nur dokumentiert), Tests ergänzt |
 | 2026-10-19 | P2: Quarantäne, Dienst/Pipe, winffi, Engine-Anbindung, App-Client. 1 Prüfer, 4 Funde per Test nachgestellt | 1 kritisch (jeder Nutzer konnte über den SYSTEM-Dienst ohne UI isolieren/wiederherstellen → Identitätswechsel + Pfadregeln), 3 hoch (Links in Zwischenordnern/Überschreiben, Pipe-Instanzen durch Nutzer, vorab angelegter Datenordner), 3 mittel (Ausführung trotz Protokollausfall, Überlastung, ClamAV über PATH), 2 niedrig (Bidi in Plan-Texten, Unix-Rechte, fehlende Sperren). Alle behoben, Regressionstests in `crates/quarantine/tests`, `crates/service/tests`, Windows-Test für Identitätswechsel |
 | 2026-10-19 | P1: Freigabe-Dialog, Fenster-/Tray-Rechte, Startprotokoll, Einstellungen, Barrierefreiheit, CI. 4 Prüfer + Gegenprüfung (vor Abschluss der Desktop-Korrekturen abgebrochen, Rest selbst geprüft) | 2 hoch (Sperrzeit-Umgehung, gestapelte Dialoge), 7 mittel (u. a. Bidi in Plan-Texten, Fokus bei Seitenwechsel, Windows-CI-Zeitlimit) – behoben mit Tests |
 | 2026-10-19 | P0: `crates/core` (Freigabe, Protokoll, Mutations-Wächter), Tauri/CSP/CI, Design-System. 4 unabhängige Prüfer + adversarielle Gegenprüfung | 48 Funde bestätigt (0 kritisch, 0 hoch, 15 mittel, 24 niedrig, 9 Kleinigkeiten). 46 behoben, jeweils mit Regressionstest. Offen: Antwort-Nonce (→ P2, siehe Bedrohungsmodell), Meldung bei Startfehler der App (→ P1) |
