@@ -135,7 +135,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
     /// denen das Konto vertraut, werden nicht gemeldet.
     fn watch_poll(&self, after: u64, user: &dyn UserAccess) -> Response {
         let owner = user.identity();
-        let profile = user.profile();
+        let profile = user.profile().map(crate::watch::long_name);
         let viewer = match (&owner, &profile) {
             (None, _) => Viewer::All,
             (Some(_), Some(p)) => Viewer::Profile(p),
@@ -743,8 +743,14 @@ pub fn long_paths(paths: &[PathBuf], user: &dyn UserAccess) -> Result<Vec<PathBu
 
 /// Scannt mit den Rechten des Nutzers (sieht nur, was er selbst lesen darf) – im Betrieb im
 /// eingeschränkten Prüfprozess.
+/// Kurznamen (8.3) werden vorher wie beim Vorschlag in lange Namen umgeschrieben – so passen
+/// Funde zur Vertrauensliste und zeigen den echten Namen.
 pub fn scan_as_user(scanner: &Scanner, paths: &[PathBuf], user: &dyn UserAccess) -> Response {
-    match scanner.scan(paths, user) {
+    let paths = match long_paths(paths, user) {
+        Ok(p) => p,
+        Err(response) => return response,
+    };
+    match scanner.scan(&paths, user) {
         Ok(report) => Response::ScanReport {
             report: Box::new(report),
         },

@@ -297,6 +297,14 @@ pub fn start(
     stop: Arc<AtomicBool>,
 ) -> io::Result<()> {
     use notify::Watcher as _;
+    // Alles in langen Namen vergleichen (Ereignisse, Profile, Ausnahmen).
+    let mut config = config;
+    config.folders = config
+        .folders
+        .into_iter()
+        .map(|(dir, scope)| (long_name(dir), scope.map(long_name)))
+        .collect();
+    config.exclude = config.exclude.into_iter().map(long_name).collect();
     let (tx, rx) = mpsc::channel::<(PathBuf, WatchKind)>();
     let file_tx = Mutex::new(tx.clone());
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
@@ -447,6 +455,19 @@ fn start_process_watch(
     false
 }
 
+/// Kurznamen (8.3) in lange Namen umschreiben – Meldungen zeigen den echten Namen und passen
+/// zur Vertrauensliste und zum Vorschlag (der ebenfalls lange Namen verwendet).
+pub(crate) fn long_name(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        aegis_winffi::long_path(&path).unwrap_or(path)
+    }
+    #[cfg(not(windows))]
+    {
+        path
+    }
+}
+
 /// Kennzeichen einer Datei, um sie nicht doppelt zu prüfen.
 fn fingerprint(path: &Path) -> Option<(SystemTime, u64)> {
     let meta = std::fs::symlink_metadata(path).ok()?;
@@ -469,6 +490,7 @@ fn scan_loop(
     let mut seen: HashMap<PathBuf, (SystemTime, u64)> = HashMap::new();
     while !stop.load(Ordering::SeqCst) {
         while let Ok((path, kind)) = rx.recv_timeout(Duration::from_millis(250)) {
+            let path = long_name(path);
             if config.exclude.iter().any(|d| starts_with(&path, d)) {
                 continue;
             }
