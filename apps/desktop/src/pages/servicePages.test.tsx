@@ -5,6 +5,8 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
+  DefenderState,
+  DefenderStatus,
   HistoryEntry,
   LabReport,
   LabRun,
@@ -77,6 +79,41 @@ function watchState(events: WatchState['events'] = []): WatchState {
     pending: 0,
     dropped: 0,
     note: null,
+  };
+}
+
+function defenderState(
+  status: Partial<DefenderStatus> = {},
+  options: Partial<DefenderState['options']> = {},
+): DefenderState {
+  return {
+    status: {
+      available: true,
+      service: true,
+      antivirus: true,
+      realtime: true,
+      cloud: true,
+      tamper: false,
+      runningMode: 'Normal',
+      signatureAgeDays: 0,
+      policyRealtimeOff: false,
+      reportOnly: false,
+      ...status,
+    },
+    admin: true,
+    options: {
+      realtime_off: null,
+      realtime_on: 'already_there',
+      report_only_on: null,
+      report_only_off: 'already_there',
+      ...options,
+    },
+    log: [
+      {
+        at: '2026-10-19T10:00:00Z',
+        title: 'Microsoft Defender: Echtzeitschutz ausschalten – erledigt',
+      },
+    ],
   };
 }
 
@@ -200,6 +237,8 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
       }),
     ),
     proposeFirewallBlock: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    defenderStatus: vi.fn(() => Promise.resolve(defenderState())),
+    proposeDefender: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     devicesStatus: vi.fn(() =>
       Promise.resolve({
         available: true,
@@ -1522,5 +1561,51 @@ describe('Härtung', () => {
     );
     expect(key).toHaveValue('');
     expect(JSON.stringify({ ...window.localStorage })).not.toContain('0123456789abcdef');
+  });
+
+  it('Defender: Schalter nur als Vorschlag, danach echter Stand', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/defender' });
+    const status = await screen.findByTestId('defender-status');
+    expect(status).toHaveTextContent('Echtzeitschutz');
+    expect(screen.getByTestId('defender-log')).toHaveTextContent('Echtzeitschutz ausschalten');
+    expect(screen.queryByTestId('defender-tamper')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Echtzeitschutz AUS/ }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeDefender).toHaveBeenCalledWith('realtime_off');
+    expect(service.decide).not.toHaveBeenCalled();
+  });
+
+  it('Defender: Manipulationsschutz an → nur Anleitung, Schalter gesperrt', async () => {
+    const service = fakeService({
+      defenderStatus: vi.fn(() =>
+        Promise.resolve(
+          defenderState({ tamper: true }, { realtime_off: 'tamper', report_only_on: 'tamper' }),
+        ),
+      ),
+    });
+    const platform = fakePlatform('tauri', undefined, service);
+    renderApp({ platform, hash: '#/defender' });
+    const guide = await screen.findByTestId('defender-tamper');
+    expect(guide).toHaveTextContent('Manipulationsschutz');
+    expect(screen.getByRole('button', { name: /Echtzeitschutz AUS/ })).toBeDisabled();
+    expect(screen.getByTestId('defender-switch')).toHaveTextContent('AEGIS umgeht ihn nicht');
+    fireEvent.click(within(guide).getByRole('button', { name: 'Windows-Sicherheit öffnen' }));
+    expect(platform.openWindowsSettings).toHaveBeenCalledWith('defender_settings');
+    expect(service.proposeDefender).not.toHaveBeenCalled();
+  });
+
+  it('Defender: aus → „Wieder AN“ mit einem Klick', async () => {
+    const service = fakeService({
+      defenderStatus: vi.fn(() =>
+        Promise.resolve(
+          defenderState({ realtime: false }, { realtime_off: 'already_there', realtime_on: null }),
+        ),
+      ),
+    });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/defender' });
+    fireEvent.click(await screen.findByRole('button', { name: /wieder AN/ }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeDefender).toHaveBeenCalledWith('realtime_on');
   });
 });

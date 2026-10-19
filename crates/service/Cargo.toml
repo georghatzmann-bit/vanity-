@@ -10,6 +10,7 @@ authors.workspace = true
 [dependencies]
 aegis-core = { workspace = true }
 aegis-engine = { workspace = true }
+aegis-defender-switch = { workspace = true }
 aegis-hardening = { workspace = true }
 aegis-netwatch = { workspace = true }
 aegis-quarantine = { workspace = true }

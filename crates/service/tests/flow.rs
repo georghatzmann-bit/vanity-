@@ -1428,6 +1428,19 @@ impl HardenSystem for FakeSystem {
                 program,
                 present: !present,
             },
+            Step::Defender { command } => Step::Defender {
+                command: match command {
+                    aegis_defender_switch::Command::Realtime { enabled } => {
+                        aegis_defender_switch::Command::Realtime { enabled: !enabled }
+                    }
+                    aegis_defender_switch::Command::ThreatAction { level, .. } => {
+                        aegis_defender_switch::Command::ThreatAction {
+                            level,
+                            action: None,
+                        }
+                    }
+                },
+            },
         })
     }
 
@@ -1712,4 +1725,75 @@ fn netzwerk_und_firewall_nur_lesend() {
     if !cfg!(windows) {
         assert_eq!(r["state"]["available"], false);
     }
+}
+
+#[test]
+fn defender_schalter_nur_nach_ja_admin_und_nie_gegen_manipulationsschutz() {
+    use aegis_defender_switch::{Command, DefenderStatus};
+    let (mut h, fake) = harden_harness();
+    let on = DefenderStatus {
+        available: true,
+        service: Some(true),
+        antivirus: Some(true),
+        realtime: Some(true),
+        cloud: Some(true),
+        tamper: Some(false),
+        running_mode: Some("Normal".into()),
+        ..DefenderStatus::default()
+    };
+    // Ohne frisch gelesenen Status gibt es keinen Vorschlag.
+    let r = h.send(json!({"type": "propose_defender", "change": "realtime_off"}));
+    assert_eq!(r["code"], "status", "{r}");
+    // Manipulationsschutz an: kein Plan, nur der Hinweis.
+    let tamper = DefenderStatus {
+        tamper: Some(true),
+        ..on.clone()
+    };
+    let state = serde_json::to_value(h.service.defender_finish(tamper, &OwnProcess)).unwrap();
+    assert_eq!(state["type"], "defender", "{state}");
+    let r = h.send(json!({"type": "propose_defender", "change": "realtime_off"}));
+    assert_eq!(r["code"], "tamper", "{r}");
+    // Nur Administratoren, nur bekannte Änderungen.
+    h.service.defender_finish(on.clone(), &OwnProcess);
+    let r = h.send_as(
+        json!({"type": "propose_defender", "change": "realtime_off"}),
+        &Standard,
+    );
+    assert_eq!(r["code"], "admin", "{r}");
+    let r = h.send(json!({"type": "propose_defender", "change": "firewall_off"}));
+    assert_eq!(r["code"], "input", "{r}");
+    let r = h.send(json!({"type": "propose_defender", "change": "realtime_on"}));
+    assert_eq!(r["code"], "already", "{r}");
+    // Vorschlag, „Nein“ → nichts; dann „Ja“ → genau ein Defender-Befehl.
+    let p = h.send(json!({"type": "propose_defender", "change": "realtime_off"}));
+    assert_eq!(p["type"], "proposal", "{p}");
+    assert_eq!(p["proposal"]["plan"]["severity"], "dangerous", "{p}");
+    assert_eq!(h.answer(&p, "decline")["type"], "nothing_done");
+    assert!(fake.applied.lock().unwrap().is_empty());
+    h.service.defender_finish(on.clone(), &OwnProcess);
+    let p = h.send(json!({"type": "propose_defender", "change": "realtime_off"}));
+    let done = h.answer(&p, "execute");
+    assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    assert_eq!(
+        fake.applied.lock().unwrap().as_slice(),
+        &[Step::Defender {
+            command: Command::Realtime { enabled: false }
+        }]
+    );
+    // Nach der Ausführung gilt der alte Status nicht mehr – erst neu lesen.
+    let r = h.send(json!({"type": "propose_defender", "change": "realtime_on"}));
+    assert_eq!(r["code"], "status", "{r}");
+    // Rückgängig ist gemerkt, Protokoll zeigt die Umschaltung.
+    let status = h.send(json!({"type": "hardening_status", "fresh": true}));
+    let undo = status["state"]["undo"].as_array().unwrap().clone();
+    assert!(undo[0]["fix"].as_str().unwrap().starts_with("defender:"));
+    let state = serde_json::to_value(h.service.defender_finish(on, &OwnProcess)).unwrap();
+    let log = state["state"]["log"].as_array().unwrap();
+    assert!(
+        log[0]["title"]
+            .as_str()
+            .unwrap()
+            .starts_with("Microsoft Defender: Echtzeitschutz ausschalten"),
+        "{state}"
+    );
 }

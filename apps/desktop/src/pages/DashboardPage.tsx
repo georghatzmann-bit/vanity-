@@ -51,7 +51,7 @@ export const buildPhases = [
   'P13',
 ] as const;
 type BuildPhase = (typeof buildPhases)[number];
-export const CURRENT_PHASE: BuildPhase = 'P6';
+export const CURRENT_PHASE: BuildPhase = 'P8';
 const currentIndex = buildPhases.indexOf(CURRENT_PHASE);
 const LAST_PHASE: BuildPhase = 'P13';
 
@@ -60,7 +60,7 @@ const modules = [
   { id: 'signatures', phase: null },
   { id: 'realtime', phase: null },
   { id: 'ransomware', phase: null },
-  { id: 'network', phase: 'P7' },
+  { id: 'network', phase: null },
 ] as const;
 
 interface LiveModule {
@@ -70,7 +70,9 @@ interface LiveModule {
 }
 
 /** Echte Zustände von Engine und Wächter (alle 10 s vom Dienst; in der Vorschau: keine). */
-function useLiveModules(): Readonly<Record<'signatures' | 'realtime' | 'ransomware', LiveModule>> {
+function useLiveModules(): Readonly<
+  Record<'signatures' | 'realtime' | 'ransomware' | 'network', LiveModule>
+> {
   const { t } = useT();
   const service = usePlatform().service;
   const [live, setLive] = useState<{
@@ -122,7 +124,7 @@ function useLiveModules(): Readonly<Record<'signatures' | 'realtime' | 'ransomwa
       stateLabel: t('dashboard.modules.unavailable'),
       sublabel: t('dashboard.modules.previewOnly'),
     };
-    return { signatures: preview, realtime: preview, ransomware: preview };
+    return { signatures: preview, realtime: preview, ransomware: preview, network: preview };
   }
   if (live.reachable !== true) {
     const unknown: LiveModule = {
@@ -131,7 +133,7 @@ function useLiveModules(): Readonly<Record<'signatures' | 'realtime' | 'ransomwa
         live.reachable === false ? t('dashboard.modules.down') : t('dashboard.modules.checking'),
       sublabel: live.reachable === false ? t('dashboard.modules.downHint') : '',
     };
-    return { signatures: unknown, realtime: unknown, ransomware: unknown };
+    return { signatures: unknown, realtime: unknown, ransomware: unknown, network: unknown };
   }
   const watch = live.watch;
   return {
@@ -165,6 +167,11 @@ function useLiveModules(): Readonly<Record<'signatures' | 'realtime' | 'ransomwa
                 ? t('dashboard.modules.withBaits', { count: String(live.baits) })
                 : t('dashboard.modules.noBaits'),
           },
+    network: {
+      state: 'ok',
+      stateLabel: t('dashboard.modules.ready'),
+      sublabel: t('dashboard.modules.networkHint'),
+    },
   };
 }
 

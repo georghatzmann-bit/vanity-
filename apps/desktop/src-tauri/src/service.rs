@@ -588,6 +588,28 @@ pub async fn service_firewall_status() -> Result<Value, String> {
     send(json!({ "type": "firewall_status" })).await
 }
 
+/// Defender-Schalter: Status von Microsoft Defender (nur lesend).
+#[tauri::command]
+pub async fn service_defender_status() -> Result<Value, String> {
+    send(json!({ "type": "defender_status" })).await
+}
+
+/// Defender-Änderung vorschlagen – nur feste Kennungen, nur nach „Ja“ im Dienst.
+#[tauri::command]
+pub async fn service_propose_defender(change: String) -> Result<Value, String> {
+    if ![
+        "realtime_off",
+        "realtime_on",
+        "report_only_on",
+        "report_only_off",
+    ]
+    .contains(&change.as_str())
+    {
+        return Err("Unbekannte Änderung.".to_owned());
+    }
+    send(json!({ "type": "propose_defender", "change": change })).await
+}
+
 /// AEGIS-Firewall-Regel für ein Programm anlegen (`block`) bzw. entfernen vorschlagen – nur
 /// nach „Ja“.
 #[tauri::command]

@@ -47,6 +47,10 @@ dependencies = [
 [[package]]
 name = "aegis-defender-switch"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "aegis-desktop"
@@ -94,6 +98,7 @@ name = "aegis-hardening"
 version = "0.1.0"
 dependencies = [
  "aegis-core",
+ "aegis-defender-switch",
  "aegis-winffi",
  "serde",
  "serde_json",
@@ -145,6 +150,7 @@ name = "aegis-service"
 version = "0.1.0"
 dependencies = [
  "aegis-core",
+ "aegis-defender-switch",
  "aegis-engine",
  "aegis-hardening",
  "aegis-netwatch",

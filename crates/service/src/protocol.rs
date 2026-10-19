@@ -106,6 +106,11 @@ pub enum Request {
     FirewallStatus {},
     /// AEGIS-Firewall-Regel für ein Programm anlegen (`block`) bzw. entfernen – nur nach „Ja“.
     ProposeFirewallBlock { program: String, block: bool },
+    /// Defender-Schalter: Status von Microsoft Defender (nur lesend).
+    DefenderStatus {},
+    /// Defender-Änderung vorschlagen (`realtime_off`, `realtime_on`, `report_only_on`,
+    /// `report_only_off`) – nur nach „Ja“, nur Administratoren.
+    ProposeDefender { change: String },
     /// Ein Paket aus der letzten Abfrage aktualisieren vorschlagen – nur nach „Ja“.
     ProposeSoftwareUpdate { id: String },
     /// Rückfall-Kopien ein- (`on`, Grenze in MiB) bzw. ausschalten vorschlagen.
@@ -311,6 +316,10 @@ pub enum Response {
     /// Firewall-Übersicht.
     Firewall {
         state: Box<crate::handler::network::FirewallState>,
+    },
+    /// Defender-Schalter.
+    Defender {
+        state: Box<crate::handler::defender::DefenderState>,
     },
     /// Geräte & Privatsphäre.
     Devices {

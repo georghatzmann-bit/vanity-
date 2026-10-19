@@ -159,6 +159,11 @@ pub enum Step {
         /// Anlegen (sonst entfernen)?
         present: bool,
     },
+    /// Microsoft Defender über `Set-/Remove-MpPreference` (fester Befehl, P8).
+    Defender {
+        /// Befehl.
+        command: aegis_defender_switch::Command,
+    },
 }
 
 const FIREWALL_PROFILES: [&str; 3] = ["domainprofile", "privateprofile", "publicprofile"];
@@ -222,6 +227,7 @@ impl Step {
                 program,
                 present: false,
             } => format!("Windows-Firewall: Regel „{name}“ ({program}) entfernen"),
+            Self::Defender { command } => command.describe(),
         }
     }
 
@@ -755,7 +761,54 @@ mod sys {
                 program: program.clone(),
                 present: !present,
             },
+            Step::Defender { command } => Step::Defender {
+                command: defender_before(command)?,
+            },
         })
+    }
+
+    /// Befehl, der den jetzigen Stand von Defender wiederherstellt.
+    fn defender_before(
+        command: &aegis_defender_switch::Command,
+    ) -> Result<aegis_defender_switch::Command, String> {
+        use aegis_defender_switch::Command;
+        Ok(match *command {
+            Command::Realtime { enabled } => Command::Realtime { enabled: !enabled },
+            Command::ThreatAction { level, .. } => {
+                let status = aegis_hardening::collect::defender_status();
+                if !status.available {
+                    return Err("Defender-Einstellungen nicht lesbar".into());
+                }
+                Command::ThreatAction {
+                    level,
+                    action: status.actions.get(level),
+                }
+            }
+        })
+    }
+
+    /// Führt einen Defender-Befehl aus und liest danach den echten Stand nach.
+    fn defender_apply(command: &aegis_defender_switch::Command) -> Result<(), String> {
+        let script = command
+            .powershell()
+            .ok_or_else(|| "Unbekannte Defender-Aktion".to_owned())?;
+        run(
+            r"WindowsPowerShell\v1.0\powershell.exe",
+            &[
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &script,
+            ],
+        )?;
+        let status = aegis_hardening::collect::defender_status();
+        match aegis_defender_switch::verify(command, &status) {
+            Some(false) => Err(
+                "Windows hat die Änderung nicht übernommen (Manipulationsschutz, Richtlinie oder anderes Antivirenprogramm) – der echte Stand ist unverändert.".into(),
+            ),
+            _ => Ok(()),
+        }
     }
 
     fn tool(name: &str) -> Result<PathBuf, String> {
@@ -767,7 +820,8 @@ mod sys {
     /// Startet ein Windows-Werkzeug vom festen Systemort (höchstens 30 s).
     fn run(exe: &str, args: &[&str]) -> Result<(), String> {
         let path = tool(exe)?;
-        // Führt einen Schritt eines freigegebenen Härtungs-Plans aus (netsh, net bzw. schtasks
+        // Führt einen Schritt eines freigegebenen Härtungs-Plans aus (netsh, net, schtasks bzw.
+        // PowerShell für Set-/Remove-MpPreference
         // am festen Systemort, Argumente aus dem Plan).
         // aegis-mutation: service-harden-tool
         #[allow(clippy::disallowed_methods)]
@@ -889,6 +943,7 @@ mod sys {
                     &format!("name={name}"),
                 ],
             ),
+            Step::Defender { command } => defender_apply(command),
         }
     }
 }
@@ -1169,10 +1224,15 @@ impl<C: Clock, W: Durable> Service<C, W> {
             .targets()
             .iter()
             .any(|t| matches!(t, Target::Setting { id } if id == super::network::BLOCK_SETTING));
+        let defender = plan.targets().iter().any(
+            |t| matches!(t, Target::Setting { id } if id == super::defender::DEFENDER_SETTING),
+        );
         let owner = user.identity();
         let system = Arc::clone(&self.harden_system);
         // Schritte neu bestimmen – sie müssen genau denen im Plan entsprechen.
-        let steps: Result<(Vec<Step>, Option<String>), String> = if block {
+        let steps: Result<(Vec<Step>, Option<String>), String> = if defender {
+            super::defender::defender_steps(value).map(|s| (s, Some(format!("defender:{value}"))))
+        } else if block {
             super::network::block_steps(value).map(|s| {
                 let program = value
                     .rsplit('\\')

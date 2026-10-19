@@ -303,6 +303,13 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   nur als Plan mit „Ja“ (Administrator): fester Name `AEGIS-Block-…`, Programmpfad geprüft
   (Laufwerk, `.exe`, ohne `"`, `..`, `/`, `|`), Argumente einzeln an `netsh` aus dem
   Systemordner; die Prüfsumme bindet die Schritte. Entfernt werden nur AEGIS-Regeln.
+- **Defender-Schalter (P8):** nur dokumentierte Cmdlets mit festem Wortlaut (keine Eingaben im
+  Befehl), PowerShell aus `System32` mit `-NoProfile -NonInteractive`, nur Administratoren,
+  nur nach „Ja“, nur aus frischem Status; Manipulationsschutz an → kein Plan zum Abschalten.
+  Nach dem Befehl wird der echte Stand nachgelesen (sonst „fehlgeschlagen“). Nur Virenschutz –
+  Firewall, SmartScreen, Windows Update und Exploit-Schutz fasst der Schalter nicht an (die
+  Befehlsliste ist geschlossen, Test). Grenze: Wer Administrator ist, kann Defender ohnehin
+  selbst abschalten; AEGIS macht das nur transparent und protokolliert.
 - **Leck-Check (P7.5):** k-Anonymität – an die App und an HIBP gehen nur fünf Hex-Zeichen des
   SHA-1-Werts (Test prüft, dass das Passwort den Aufruf nicht erreicht), Antwort mit Füll-Einträgen.
   E-Mail nur mit eigenem Schlüssel, nicht gespeichert, Feld nach der Abfrage geleert. Eingaben

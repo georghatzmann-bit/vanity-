@@ -91,6 +91,14 @@ export const de = {
       summary:
         'Startet unbekannte Programme abgeschottet (Windows-Sandbox oder Mini-Sandbox) und zeigt in einem Verhaltensbericht, was sie versuchen.',
     },
+    defender: {
+      nav: 'Defender',
+      title: 'Defender-Schalter',
+      eyebrow: 'System',
+      tagline: 'Microsoft Defender transparent ein- und ausschalten',
+      summary:
+        'Zeigt Echtzeit-, Cloud- und Manipulationsschutz von Microsoft Defender und schaltet sie nur über dokumentierte Wege um – nach deinem Ja, nie heimlich.',
+    },
     network: {
       nav: 'Netzwerk',
       title: 'Netzwerk',
@@ -205,9 +213,10 @@ export const de = {
       realtime: 'Echtzeit-Wächter',
       ransomware: 'Ransomware-Schutz',
       network: 'Netzwerk-Schutz',
+      networkHint: 'Verbindungen, Firewall, Heimnetz, Web-Schutz',
       withBaits: '{count} Köder + Massenänderungen',
       noBaits: 'Ohne Köder – nur Massenänderungen',
-      footer: 'Gebaute Module zeigen ihren echten Zustand; der Netzwerk-Schutz folgt.',
+      footer: 'Die Module zeigen ihren echten Zustand, wie der Dienst ihn meldet.',
     },
     build: {
       eyebrow: 'Aufbau',
@@ -667,6 +676,65 @@ export const de = {
       browser_extension: 'Browser-Erweiterung',
       driver: 'Treiber',
     },
+  },
+  defender: {
+    intro:
+      'Ein ehrlicher Ersatz für „Defender Control“: AEGIS schaltet Microsoft Defender nur über die dokumentierten Befehle von Windows (Set-MpPreference) um, immer mit Vorschau, deinem Ja und Protokoll. Den Manipulationsschutz umgeht AEGIS nie.',
+    refresh: 'Status neu lesen',
+    loading: 'Lese den Status von Microsoft Defender …',
+    unavailable:
+      'Microsoft Defender ist auf diesem PC nicht erreichbar (nicht installiert, entfernt oder nur unter Windows).',
+    statusTitle: 'Aktueller Stand (von Windows gemeldet)',
+    on: 'an',
+    off: 'aus',
+    unknown: 'unbekannt',
+    item: {
+      realtime: 'Echtzeitschutz',
+      service: 'Defender-Dienst',
+      cloud: 'Cloud-Schutz',
+      tamper: 'Manipulationsschutz',
+      signatures: 'Signaturen',
+      mode: 'Betriebsart',
+      reportOnly: 'Funde nur melden',
+    },
+    signatureAge: '{days} Tage alt',
+    switchTitle: 'Schalter',
+    turnOff: 'Defender-Echtzeitschutz AUS …',
+    turnOn: 'Defender-Echtzeitschutz wieder AN',
+    offWarning:
+      'Solange der Echtzeitschutz aus ist, prüft Windows neue Dateien nicht. AEGIS warnt weiter, kann Programme aber nicht vor dem Start blockieren. Windows schaltet den Echtzeitschutz oft nach einiger Zeit von selbst wieder ein.',
+    reportOnlyOn: 'Funde nur melden …',
+    reportOnlyOff: 'Standardaktionen wiederherstellen',
+    reportOnlyHint:
+      'Defender meldet Funde dann nur, statt sie selbst zu entfernen – du entscheidest. Cloud- und Manipulationsschutz können das übersteuern; AEGIS zeigt danach den echten Stand.',
+    adminOnly: 'Umschalten geht nur mit Administratorrechten, weil es den ganzen PC betrifft.',
+    elevation:
+      'Eine eigene UAC-Abfrage gibt es nicht: Der AEGIS-Dienst läuft bereits mit Systemrechten. Dafür prüft er, dass du Administrator bist, und handelt nur nach deinem ausdrücklichen Ja.',
+    blocked: {
+      unavailable: 'Defender ist nicht erreichbar.',
+      tamper: 'Der Manipulationsschutz ist an – AEGIS umgeht ihn nicht.',
+      passive:
+        'Ein anderes Antivirenprogramm ist aktiv; Defender läuft nur passiv. Den Echtzeitschutz steuert dann das andere Programm.',
+      policy:
+        'Eine Gruppenrichtlinie schaltet den Echtzeitschutz ab. AEGIS ändert keine Richtlinien.',
+      already_there: 'Bereits so eingestellt.',
+    },
+    tamperTitle: 'Manipulationsschutz ausschalten (nur du selbst)',
+    tamperSteps1: 'Windows-Sicherheit öffnen (Knopf unten).',
+    tamperSteps2: '„Viren- & Bedrohungsschutz“ → „Einstellungen verwalten“.',
+    tamperSteps3: '„Manipulationsschutz“ auf „Aus“ stellen und die Windows-Abfrage bestätigen.',
+    tamperSteps4: 'Hier „Status neu lesen“ – danach kannst du umschalten.',
+    tamperSteps5:
+      'Wichtig: Schalte den Manipulationsschutz danach wieder ein – er schützt Defender vor Schadsoftware.',
+    openSecurity: 'Windows-Sicherheit öffnen',
+    afterTitle: 'Ergebnis',
+    afterOk: 'Windows meldet jetzt den gewünschten Stand.',
+    afterNotApplied:
+      'Windows meldet den alten Stand – die Änderung wurde nicht übernommen (z. B. durch Manipulationsschutz oder Richtlinie).',
+    logTitle: 'Protokoll der Umschaltungen',
+    logEmpty: 'Noch keine Umschaltung.',
+    scope:
+      'AEGIS fasst hier nur den Virenschutz an – nie Firewall, SmartScreen, Windows Update oder Exploit-Schutz.',
   },
   network: {
     intro:

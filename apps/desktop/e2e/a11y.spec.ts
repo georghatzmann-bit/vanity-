@@ -18,6 +18,7 @@ const routes = [
   'quarantine',
   'lab',
   'hardening',
+  'defender',
   'network',
   'vault',
   'tools',

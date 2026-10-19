@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-propose-defender"
+description = "Enables the service_propose_defender command without any pre-configured scope."
+commands.allow = ["service_propose_defender"]
+
+[[permission]]
+identifier = "deny-service-propose-defender"
+description = "Denies the service_propose_defender command without any pre-configured scope."
+commands.deny = ["service_propose_defender"]

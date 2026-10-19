@@ -30,7 +30,7 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 | P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | **erledigt** |
 | P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | erledigt |
 | P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | erledigt |
-| P8 | Defender-Schalter | offen |
+| P8 | Defender-Schalter | in Arbeit |
 | P9 | Tresor + Erweiterung | offen |
 | P10 | Tools 1–11 | offen |
 | P11 | Tools 12–22 + Animations-Feinschliff | offen |
@@ -171,7 +171,19 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 nach „Ja“; Web-Schutz-Erweiterung mit Listen, Warnseite, Hinweisen und E2E-Tests; Heimnetz nur im
 eigenen LAN/WLAN; Leck-Check mit k-Anonymität; alle Prüfungen grün.
 
-**Nächster Schritt:** P8 Defender-Schalter.
+## P8 – Defender-Schalter
+
+1. [x] P8.1 `crates/defender-switch` (rein): Status einordnen, Änderungen (Echtzeitschutz aus/an,
+       Funde nur melden/Standard), feste `Set-/Remove-MpPreference`-Befehle, Sperre bei
+       Manipulationsschutz, passivem Defender, Richtlinie; Nachprüfung nach dem Befehl.
+2. [x] P8.2 Dienst: Status per WMI außerhalb der Sperre, Vorschlag nur aus frischem Status, nur
+       Administratoren, Ausführung über den Härtungs-Weg (Rückgängig), danach echter Stand;
+       Protokoll aus dem Verlauf (D-053).
+3. [x] P8.3 App: Seite „Defender-Schalter“ (Stand, großer Schalter, „Wieder AN“ mit einem Klick,
+       nur melden, Anleitung Manipulationsschutz + Windows-Sicherheit öffnen, Protokoll).
+4. [ ] P8.4 Sicherheits-Review, Doku, DoD.
+
+**Nächster Schritt:** P8.4 Sicherheits-Review.
 
 ## P5 – Schutz-Werkzeuge
 

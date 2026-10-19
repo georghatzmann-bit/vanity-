@@ -11,6 +11,7 @@ export const routeIds = [
   'lab',
   'network',
   'hardening',
+  'defender',
   'vault',
   'tools',
   'quarantine',

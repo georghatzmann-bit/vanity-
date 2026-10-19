@@ -91,6 +91,14 @@ export const en: Messages<typeof de> = {
       summary:
         'Runs unknown programs in isolation (Windows Sandbox or a mini sandbox) and shows in a behavior report what they attempt.',
     },
+    defender: {
+      nav: 'Defender',
+      title: 'Defender switch',
+      eyebrow: 'System',
+      tagline: 'Turn Microsoft Defender on and off transparently',
+      summary:
+        'Shows Microsoft Defender’s real-time, cloud and tamper protection and switches them only through documented ways – after your yes, never secretly.',
+    },
     network: {
       nav: 'Network',
       title: 'Network',
@@ -205,9 +213,10 @@ export const en: Messages<typeof de> = {
       realtime: 'Real-time guard',
       ransomware: 'Ransomware protection',
       network: 'Network protection',
+      networkHint: 'Connections, firewall, home network, web shield',
       withBaits: '{count} baits + mass changes',
       noBaits: 'No baits – mass changes only',
-      footer: 'Built modules show their real state; network protection follows.',
+      footer: 'The modules show their real state as reported by the service.',
     },
     build: {
       eyebrow: 'Under construction',
@@ -659,6 +668,64 @@ export const en: Messages<typeof de> = {
       browser_extension: 'Browser extension',
       driver: 'Driver',
     },
+  },
+  defender: {
+    intro:
+      'An honest replacement for “Defender Control”: AEGIS switches Microsoft Defender only through Windows’ documented commands (Set-MpPreference), always with a preview, your yes and a log. AEGIS never bypasses tamper protection.',
+    refresh: 'Read status again',
+    loading: 'Reading the Microsoft Defender status…',
+    unavailable:
+      'Microsoft Defender is not reachable on this PC (not installed, removed or Windows only).',
+    statusTitle: 'Current state (as reported by Windows)',
+    on: 'on',
+    off: 'off',
+    unknown: 'unknown',
+    item: {
+      realtime: 'Real-time protection',
+      service: 'Defender service',
+      cloud: 'Cloud protection',
+      tamper: 'Tamper protection',
+      signatures: 'Signatures',
+      mode: 'Running mode',
+      reportOnly: 'Only report detections',
+    },
+    signatureAge: '{days} days old',
+    switchTitle: 'Switch',
+    turnOff: 'Defender real-time protection OFF…',
+    turnOn: 'Turn Defender real-time protection back ON',
+    offWarning:
+      'While real-time protection is off, Windows does not check new files. AEGIS keeps warning but cannot block programs before they start. Windows often turns real-time protection back on by itself after a while.',
+    reportOnlyOn: 'Only report detections…',
+    reportOnlyOff: 'Restore default actions',
+    reportOnlyHint:
+      'Defender then only reports detections instead of removing them itself – you decide. Cloud and tamper protection can override this; AEGIS shows the real state afterwards.',
+    adminOnly: 'Switching requires administrator rights because it affects the whole PC.',
+    elevation:
+      'There is no separate UAC prompt: the AEGIS service already runs with system rights. Instead it checks that you are an administrator and acts only on your explicit yes.',
+    blocked: {
+      unavailable: 'Defender is not reachable.',
+      tamper: 'Tamper protection is on – AEGIS does not bypass it.',
+      passive:
+        'Another antivirus program is active; Defender only runs passively. That program controls real-time protection.',
+      policy: 'A group policy turns real-time protection off. AEGIS does not change policies.',
+      already_there: 'Already set like this.',
+    },
+    tamperTitle: 'Turn off tamper protection (only you can)',
+    tamperSteps1: 'Open Windows Security (button below).',
+    tamperSteps2: '“Virus & threat protection” → “Manage settings”.',
+    tamperSteps3: 'Set “Tamper Protection” to “Off” and confirm the Windows prompt.',
+    tamperSteps4: 'Press “Read status again” here – then you can switch.',
+    tamperSteps5:
+      'Important: turn tamper protection back on afterwards – it protects Defender from malware.',
+    openSecurity: 'Open Windows Security',
+    afterTitle: 'Result',
+    afterOk: 'Windows now reports the requested state.',
+    afterNotApplied:
+      'Windows reports the old state – the change was not applied (e.g. due to tamper protection or a policy).',
+    logTitle: 'Log of switches',
+    logEmpty: 'No switch yet.',
+    scope:
+      'AEGIS only touches antivirus here – never the firewall, SmartScreen, Windows Update or exploit protection.',
   },
   network: {
     intro:

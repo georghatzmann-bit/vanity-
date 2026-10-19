@@ -368,3 +368,19 @@ nur Port 443, keine Weiterleitungen, TLS 1.2/1.3, Antwort höchstens 2 MiB) stat
 zusätzliche TLS-Bibliothek; die CSP der App bleibt ohne fremde Ziele. Namensnennung (CC BY 4.0)
 steht in der App.
 
+## D-053 – Defender-Schalter: nur Set-MpPreference, Manipulationsschutz nie umgehen
+
+Status: angenommen (P8). Umgeschaltet wird nur der Virenschutz und nur über die dokumentierten
+Cmdlets `Set-MpPreference -DisableRealtimeMonitoring` bzw. `-…ThreatDefaultAction NoAction` und
+`Remove-MpPreference` (feste Befehle aus dem Plan, PowerShell aus `System32`, ohne Profil). Keine
+Gruppenrichtlinien schreiben, keine Dienste anfassen, kein TrustedInstaller, kein abgesicherter
+Modus. Ist der Manipulationsschutz an, gibt es keinen Plan zum Abschalten – nur die Anleitung und
+„Windows-Sicherheit öffnen“. Statt einer UAC-Abfrage (der Dienst hat bereits Systemrechte)
+verlangt der Dienst Administratorrechte des Anfragenden und ein ausdrückliches „Ja“; ein Vorschlag
+entsteht nur aus einem höchstens 10 Minuten alten, gerade gelesenen Status, der danach verworfen
+wird. Nach jedem Befehl liest der Dienst den echten Stand; hat Windows ihn nicht übernommen, gilt
+der Schritt als fehlgeschlagen. „Wieder einschalten“ ist immer ein eigener Ein-Klick-Vorschlag
+(auch bei Manipulationsschutz), zusätzlich gibt es „Rückgängig“. Jede Umschaltung steht im
+Prüfprotokoll und im Verlauf (Protokoll auf der Seite). Passiver Defender (anderes Antivirus) und
+eine Richtlinie, die den Echtzeitschutz abschaltet, werden ehrlich gemeldet statt umgangen.
+

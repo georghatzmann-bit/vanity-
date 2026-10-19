@@ -28,6 +28,7 @@ use aegis_quarantine::{Entry, UserAccess, Vault};
 use crate::protocol::{PROTOCOL_VERSION, Proposal, Request, Response};
 
 pub mod backup;
+pub mod defender;
 pub mod devices;
 pub mod harden;
 pub mod hardening;
@@ -99,6 +100,8 @@ pub struct Service<C: Clock, W: Durable> {
     persistence_cache: HashMap<Option<String>, Vec<persistence::AutorunView>>,
     /// Verlauf der Netzwerkziele je Konto (nur im Speicher, seit Dienststart).
     net_history: HashMap<Option<String>, aegis_netwatch::conn::History>,
+    /// Zuletzt gelesener Defender-Status (für Vorschläge, kurz gültig).
+    defender_status: Option<(OffsetDateTime, aegis_defender_switch::DefenderStatus)>,
     /// Paketverwaltung für Software-Updates (Tests: Ersatz).
     packages: Arc<dyn updates::PackageManager>,
     /// Letzte Liste verfügbarer Updates (rechnerweit; Grundlage für Vorschläge).
@@ -185,6 +188,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             persistence_cache: HashMap::new(),
             packages: Arc::new(updates::Winget),
             net_history: HashMap::new(),
+            defender_status: None,
             updates: None,
             harden_system: Arc::new(harden::RealSystem),
             machine_facts: None,
@@ -1681,6 +1685,9 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 self.propose_firewall_block(&program, block, user)
             }
             // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
+            Request::DefenderStatus {} => self.defender_finish(defender::read_status(), user),
+            Request::ProposeDefender { change } => self.propose_defender(&change, user),
+            // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
             Request::HardeningStatus { fresh } => match self.hardening_cached(user) {
                 Some(cached) if !fresh => cached,
                 _ => {
@@ -2320,7 +2327,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                     matches!(t, Target::Setting { id } if id == aegis_quarantine::backup::BACKUP_SETTING)
                 });
                 let harden = plan.targets().iter().any(|t| {
-                    matches!(t, Target::Setting { id } if id == harden::FIX_SETTING || id == harden::UNDO_SETTING || id == persistence::AUTORUN_SETTING || id == network::BLOCK_SETTING)
+                    matches!(t, Target::Setting { id } if id == harden::FIX_SETTING || id == harden::UNDO_SETTING || id == persistence::AUTORUN_SETTING || id == network::BLOCK_SETTING || id == defender::DEFENDER_SETTING)
                 });
                 return if bait {
                     self.apply_baits(permit, user)

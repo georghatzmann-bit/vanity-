@@ -36,6 +36,7 @@ import {
   parseUpdates,
   parseDevices,
   parseFirewall,
+  parseDefender,
   parseNetwork,
   parseSafe,
   parseEmergency,
@@ -153,7 +154,11 @@ export function parseClipboardSwap(payload: unknown): ClipboardSwap | null {
 
 /** Einstellungsseiten, die AEGIS öffnen darf. */
 export type WindowsSettingsPage =
-  'windows_update' | 'device_encryption' | 'virus_protection' | 'core_isolation';
+  | 'windows_update'
+  | 'device_encryption'
+  | 'virus_protection'
+  | 'core_isolation'
+  | 'defender_settings';
 
 /** Wandelt das Ergebnis des Auswahldialogs in eine Pfadliste. */
 export function toPathList(selection: unknown): readonly string[] {
@@ -331,6 +336,9 @@ function createTauriService(): ServiceApi {
     firewallStatus: async () => parseFirewall(await invoke<unknown>('service_firewall_status')),
     proposeFirewallBlock: async (program, block) =>
       parseProposal(await invoke<unknown>('service_propose_firewall_block', { program, block })),
+    defenderStatus: async () => parseDefender(await invoke<unknown>('service_defender_status')),
+    proposeDefender: async (change) =>
+      parseProposal(await invoke<unknown>('service_propose_defender', { change })),
     proposeBackup: async (on, quotaMb) =>
       parseProposal(await invoke<unknown>('service_propose_backup', { on, quotaMb })),
     proposeBackupRestore: async (id) =>

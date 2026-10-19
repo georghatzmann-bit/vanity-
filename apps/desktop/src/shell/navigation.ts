@@ -5,6 +5,7 @@ import {
   IconLab,
   IconLock,
   IconNetwork,
+  IconPower,
   IconQuarantine,
   IconReport,
   IconSafe,
@@ -28,7 +29,7 @@ export interface NavGroup {
 export const navGroups: readonly NavGroup[] = [
   { id: 'overview', routes: ['dashboard', 'reports'] },
   { id: 'protection', routes: ['scan', 'realtime', 'quarantine', 'safe', 'lab'] },
-  { id: 'system', routes: ['hardening', 'network'] },
+  { id: 'system', routes: ['hardening', 'defender', 'network'] },
   { id: 'privacy', routes: ['vault', 'tools'] },
   { id: 'app', routes: ['settings', 'about'] },
 ];
@@ -40,6 +41,7 @@ export const routeIcons: Readonly<Record<RouteId, IconComponent>> = {
   lab: IconLab,
   network: IconNetwork,
   hardening: IconLock,
+  defender: IconPower,
   vault: IconKey,
   tools: IconTools,
   quarantine: IconQuarantine,

@@ -78,6 +78,9 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
     'Dienst: Kamera-/Mikrofon-Nutzung, Tastaturen und USB-Laufwerke lesen (nur lesend)',
   'allow-service-network-status': 'Dienst: Verbindungen je Programm und Verlauf lesen (nur lesend)',
   'allow-service-firewall-status': 'Dienst: Firewall-Regeln lesen (nur lesend)',
+  'allow-service-defender-status': 'Defender-Schalter (P8): Status von Microsoft Defender lesen',
+  'allow-service-propose-defender':
+    'Defender-Schalter (P8): Änderung nur als Plan mit Ja, nur feste Kennungen',
   'allow-service-propose-firewall-block':
     'Dienst: AEGIS-Regel „Netz für Programm sperren“ vorschlagen (erst nach „Ja“)',
   'allow-service-software-updates':

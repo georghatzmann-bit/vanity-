@@ -51,6 +51,8 @@
     "allow-service-devices-status",
     "allow-service-network-status",
     "allow-service-firewall-status",
+    "allow-service-defender-status",
+    "allow-service-propose-defender",
     "allow-service-propose-firewall-block",
     "allow-service-software-updates",
     "allow-service-propose-software-update",

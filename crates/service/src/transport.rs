@@ -312,6 +312,17 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                     }
                 }
             }
+            // Defender-Status (WMI) außerhalb der Dienst-Sperre.
+            Ok(Request::DefenderStatus {}) => {
+                match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {
+                    None => busy(),
+                    Some(slot) => {
+                        let status = crate::handler::defender::read_status();
+                        drop(slot);
+                        lock()?.defender_finish(status, user)
+                    }
+                }
+            }
             // Geräte (WMI) außerhalb der Dienst-Sperre.
             Ok(Request::DevicesStatus {}) => {
                 match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {

@@ -19,6 +19,7 @@ const pages = [
   { nav: 'Datei-Safe', route: 'safe', heading: 'Datei-Safe', phase: null },
   { nav: 'Labor', route: 'lab', heading: 'Labor', phase: null },
   { nav: 'Härtung', route: 'hardening', heading: 'Härtung', phase: null },
+  { nav: 'Defender', route: 'defender', heading: 'Defender-Schalter', phase: null },
   { nav: 'Netzwerk', route: 'network', heading: 'Netzwerk', phase: null },
   { nav: 'Tresor', route: 'vault', heading: 'Tresor', phase: 'P9' },
   { nav: 'Tools', route: 'tools', heading: 'Tools', phase: 'P10' },

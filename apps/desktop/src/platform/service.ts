@@ -537,6 +537,45 @@ export interface FirewallState {
   readonly admin: boolean;
 }
 
+/** Änderungen des Defender-Schalters. */
+export const defenderChanges = [
+  'realtime_off',
+  'realtime_on',
+  'report_only_on',
+  'report_only_off',
+] as const;
+export type DefenderChange = (typeof defenderChanges)[number];
+export const defenderBlocks = [
+  'unavailable',
+  'tamper',
+  'passive',
+  'policy',
+  'already_there',
+] as const;
+export type DefenderBlock = (typeof defenderBlocks)[number];
+
+/** Zustand von Microsoft Defender (vom Dienst gelesen). */
+export interface DefenderStatus {
+  readonly available: boolean;
+  readonly service: boolean | null;
+  readonly antivirus: boolean | null;
+  readonly realtime: boolean | null;
+  readonly cloud: boolean | null;
+  readonly tamper: boolean | null;
+  readonly runningMode: string | null;
+  readonly signatureAgeDays: number | null;
+  readonly policyRealtimeOff: boolean;
+  readonly reportOnly: boolean;
+}
+
+/** Defender-Schalter: Status, mögliche Änderungen, Protokoll. */
+export interface DefenderState {
+  readonly status: DefenderStatus;
+  readonly admin: boolean;
+  readonly options: Readonly<Record<DefenderChange, DefenderBlock | null>>;
+  readonly log: readonly { readonly at: string; readonly title: string }[];
+}
+
 /** Kamera-/Mikrofon-Nutzung laut Windows. */
 export interface CapabilityUse {
   readonly capability: 'webcam' | 'microphone';
@@ -697,6 +736,10 @@ export interface ServiceApi {
   firewallStatus(): Promise<FirewallState>;
   /** AEGIS-Regel „Netz für Programm sperren“ anlegen (`block`) bzw. entfernen vorschlagen. */
   proposeFirewallBlock(program: string, block: boolean): Promise<Proposal>;
+  /** Defender-Schalter: Status von Microsoft Defender (nur lesend). */
+  defenderStatus(): Promise<DefenderState>;
+  /** Defender-Änderung vorschlagen (nur Administratoren, nur nach „Ja“). */
+  proposeDefender(change: DefenderChange): Promise<Proposal>;
   /** Rückfall-Kopien ein- (`true`, Grenze in MiB) bzw. ausschalten vorschlagen. */
   proposeBackup(on: boolean, quotaMb: number): Promise<Proposal>;
   /** Version zurückholen vorschlagen. */
@@ -1319,6 +1362,53 @@ export function parseFirewall(response: unknown): FirewallState {
     notable: arr(st['notable']).filter(isObject).map(parseRule),
     aegis: arr(st['aegis']).filter(isObject).map(parseRule),
     admin: st['admin'] === true,
+  };
+}
+
+export function parseDefender(response: unknown): DefenderState {
+  const r = expectType(response, 'defender');
+  const st = isObject(r['state']) ? r['state'] : {};
+  const s = isObject(st['status']) ? st['status'] : {};
+  const flag = (v: unknown) => (typeof v === 'boolean' ? v : null);
+  const actions = isObject(s['actions']) ? s['actions'] : {};
+  const reportOnly = ['low', 'moderate', 'high', 'severe'].every((k) => actions[k] === 9);
+  const options = Object.fromEntries(defenderChanges.map((c) => [c, 'unavailable'])) as Record<
+    DefenderChange,
+    DefenderBlock | null
+  >;
+  for (const entry of arr(st['options'])) {
+    if (Array.isArray(entry)) {
+      const [change, blocked] = entry as unknown[];
+      if ((defenderChanges as readonly unknown[]).includes(change)) {
+        options[change as DefenderChange] =
+          blocked === null
+            ? null
+            : (defenderBlocks as readonly unknown[]).includes(blocked)
+              ? (blocked as DefenderBlock)
+              : 'unavailable';
+      }
+    }
+  }
+  return {
+    status: {
+      available: s['available'] === true,
+      service: flag(s['service']),
+      antivirus: flag(s['antivirus']),
+      realtime: flag(s['realtime']),
+      cloud: flag(s['cloud']),
+      tamper: flag(s['tamper']),
+      runningMode: typeof s['running_mode'] === 'string' ? s['running_mode'].slice(0, 40) : null,
+      signatureAgeDays:
+        typeof s['signature_age_days'] === 'number' ? s['signature_age_days'] : null,
+      policyRealtimeOff: s['policy_realtime_off'] === true,
+      reportOnly,
+    },
+    admin: st['admin'] === true,
+    options,
+    log: arr(st['log'])
+      .filter(isObject)
+      .slice(0, 20)
+      .map((e) => ({ at: str(e['at']).slice(0, 40), title: str(e['title']).slice(0, 300) })),
   };
 }
 

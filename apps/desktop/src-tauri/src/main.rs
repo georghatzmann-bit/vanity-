@@ -92,6 +92,8 @@ fn main() {
             service::service_devices_status,
             service::service_network_status,
             service::service_firewall_status,
+            service::service_defender_status,
+            service::service_propose_defender,
             service::service_propose_firewall_block,
             service::service_software_updates,
             service::service_propose_software_update,
@@ -205,6 +207,8 @@ mod test_support {
                 crate::service::service_devices_status,
                 crate::service::service_network_status,
                 crate::service::service_firewall_status,
+                crate::service::service_defender_status,
+                crate::service::service_propose_defender,
                 crate::service::service_propose_firewall_block,
                 crate::service::service_software_updates,
                 crate::service::service_propose_software_update,
@@ -249,7 +253,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 70] = [
+    const EXPECTED_PERMISSIONS: [&str; 72] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -297,6 +301,8 @@ mod tests {
         "allow-service-devices-status",
         "allow-service-network-status",
         "allow-service-firewall-status",
+        "allow-service-defender-status",
+        "allow-service-propose-defender",
         "allow-service-propose-firewall-block",
         "allow-service-software-updates",
         "allow-service-propose-software-update",
@@ -606,6 +612,11 @@ mod tests {
                 ("service_devices_status", json!({})),
                 ("service_network_status", json!({})),
                 ("service_firewall_status", json!({})),
+                ("service_defender_status", json!({})),
+                (
+                    "service_propose_defender",
+                    json!({ "change": "realtime_on" }),
+                ),
                 (
                     "service_propose_firewall_block",
                     json!({ "program": "x", "block": true }),

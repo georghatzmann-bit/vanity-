@@ -180,8 +180,8 @@ pub fn connections_without_proxy(blob: &[u8]) -> Option<Vec<u8>> {
 
 #[cfg(windows)]
 pub use self::windows::{
-    capability_uses, collect, devices, fix_state, machine_autorun_named, machine_autoruns,
-    machine_autoruns_of, profile_sids, proxy_of, user_registry_autoruns,
+    capability_uses, collect, defender_status, devices, fix_state, machine_autorun_named,
+    machine_autoruns, machine_autoruns_of, profile_sids, proxy_of, user_registry_autoruns,
 };
 
 #[cfg(windows)]
@@ -608,6 +608,50 @@ mod windows {
             }
             Err(_) => None,
         }
+    }
+
+    /// Zustand von Microsoft Defender für den Defender-Schalter (P8) – nur lesend (WMI und
+    /// Gruppenrichtlinie in der Registrierung).
+    pub fn defender_status() -> aegis_defender_switch::DefenderStatus {
+        use aegis_defender_switch::{DefenderStatus, ThreatActions};
+        let mut status = DefenderStatus::default();
+        let namespace = r"ROOT\Microsoft\Windows\Defender";
+        if let Ok(rows) = query(
+            namespace,
+            "SELECT AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled, IsTamperProtected, AMRunningMode, AntivirusSignatureAge FROM MSFT_MpComputerStatus",
+            false,
+        ) && let Some(r) = rows.first()
+        {
+            status.available = true;
+            status.service = v_bool(r, "AMServiceEnabled");
+            status.antivirus = v_bool(r, "AntivirusEnabled");
+            status.realtime = v_bool(r, "RealTimeProtectionEnabled");
+            status.tamper = v_bool(r, "IsTamperProtected");
+            status.running_mode =
+                v_string(r, "AMRunningMode").map(|m| m.chars().take(40).collect());
+            status.signature_age_days = v_u32(r, "AntivirusSignatureAge");
+        }
+        if let Ok(rows) = query(
+            namespace,
+            "SELECT MAPSReporting, LowThreatDefaultAction, ModerateThreatDefaultAction, HighThreatDefaultAction, SevereThreatDefaultAction FROM MSFT_MpPreference",
+            false,
+        ) && let Some(r) = rows.first()
+        {
+            status.cloud = v_u32(r, "MAPSReporting").map(|v| v != 0);
+            let action = |name: &str| v_u32(r, name).and_then(|v| u8::try_from(v).ok());
+            status.actions = ThreatActions {
+                low: action("LowThreatDefaultAction"),
+                moderate: action("ModerateThreatDefaultAction"),
+                high: action("HighThreatDefaultAction"),
+                severe: action("SevereThreatDefaultAction"),
+            };
+        }
+        status.policy_realtime_off = dword(
+            &Hive::LocalMachine,
+            r"SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection",
+            "DisableRealtimeMonitoring",
+        ) == Some(1);
+        status
     }
 
     fn antivirus() -> AntivirusState {

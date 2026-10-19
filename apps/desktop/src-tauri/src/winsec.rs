@@ -29,11 +29,13 @@ pub fn open_windows_security() -> Result<(), String> {
 }
 
 /// Feste Einstellungsseiten, die die Seite „Härtung“ öffnen darf.
-const SETTINGS_PAGES: [(&str, &str); 4] = [
+const SETTINGS_PAGES: [(&str, &str); 5] = [
     ("windows_update", "ms-settings:windowsupdate"),
     ("device_encryption", "ms-settings:deviceencryption"),
     ("virus_protection", "windowsdefender://threat/"),
     ("core_isolation", "windowsdefender://coreisolation/"),
+    // Einstellungen „Viren- & Bedrohungsschutz“ (dort schaltet der Nutzer den Manipulationsschutz).
+    ("defender_settings", "windowsdefender://threatsettings/"),
 ];
 
 /// Adresse einer erlaubten Einstellungsseite (sonst `None`).
