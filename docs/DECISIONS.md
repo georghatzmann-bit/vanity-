@@ -42,3 +42,40 @@ Vorläufiger Tauri-Identifier (keine Domain registriert). Änderung vor dem erst
 
 ## D-010 – Projektlizenz offen
 Rechtliche Entscheidung des Nutzers. Bis dahin keine Lizenzangabe, `publish = false`/`private`.
+
+## D-011 – Ausführende Funktionen nehmen `ExecutionPermit`, nicht `Approval`
+Die Erlaubnis enthält eine Kopie des freigegebenen Plans; Ausführer lesen Ziele und Parameter
+nur daraus. So kann man einer Ausführung keinen anderen Plan unterschieben.
+
+## D-012 – Versiegelte Uhr
+`redeem` prüft Fristen mit der Uhr des Tors statt mit einem übergebenen Zeitpunkt. `Clock` ist
+versiegelt: außerhalb von `aegis-core` gibt es nur `SystemClock` (und `ManualClock` im
+Test-Feature). Produktionscode kann Fristen nicht mit erfundenen Zeiten umgehen.
+
+## D-013 – Plan-Parameter sind Teil des Digests
+`ActionPlan` hat eine sortierte Parameter-Tabelle (z. B. `destination`, `new_name`). Ohne sie
+müssten Ausführer Werte von außerhalb des freigegebenen Plans nehmen.
+
+## D-014 – Freigabe-Tor ohne I/O
+`ConsentGate` sammelt Audit-Ereignisse; der Dienst holt sie ab und schreibt das Protokoll.
+Der Kern bleibt deterministisch und ohne Dateizugriff testbar.
+
+## D-015 – Mutations-Sperre per Clippy + Allowlist-Test
+Statt einer reinen Konvention sperrt `clippy.toml` verändernde std-APIs. `OpenOptions::open`
+bleibt erlaubt (Lesen braucht es), gesperrt sind die Schreib-/Anlege-/Kürz-Schalter.
+Ausnahmen brauchen Markierung + Eintrag in `crates/core/mutation-allowlist.txt`.
+
+## D-016 – Design-Quellen
+`tokens.css` ist die Quelle, `tokens.ts` wird per Test dagegen geprüft. Logo-Assets
+(`packages/ui/assets/*.svg`) erzeugt `scripts/export-logo.mjs` aus `geometry.ts`; App-Icons
+werden mit `tauri icon` aus `logo-mark.svg` erzeugt.
+
+## D-017 – CSP-Einzelquelle und lokale Schriften
+`tauri.conf.json` ist die einzige CSP-Quelle; `vite preview` sendet dieselbe Richtlinie
+(`apps/desktop/src/csp.ts`), damit Playwright unter App-Bedingungen testet. Schriften werden
+nie als `data:` eingebettet (`font-src 'self'`).
+
+## D-018 – Start-Klang und Autoplay
+Der Start-Klang wird nur gespielt, wenn der AudioContext ohne Nutzergeste starten darf;
+sonst bleibt es still (Chromium protokolliert dann eine Warnung, keinen Fehler). Ob die App
+Autoplay in WebView2 erlauben soll, wird in P1 mit den Einstellungen entschieden.

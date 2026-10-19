@@ -35,19 +35,30 @@
 
 ## Ablauf einer verändernden Aktion (Goldene Regel)
 
-1. Ein Modul erkennt etwas (z. B. Fund) und erzeugt einen **`ActionPlan`**:
-   Was genau (Ziele), Warum, Was passiert dann, Rückgängig-Weg, Schweregrad.
-2. `ConsentGate::propose(plan)` legt ihn als „ausstehend“ ab (Frist, Standard: nichts tun) und
-   liefert eine **Plan-ID + Digest** (SHA-256 über die kanonische Plan-Darstellung).
+1. Ein Modul erkennt etwas (z. B. Fund) und erzeugt über den validierenden Builder einen
+   **`ActionPlan`**: Art, Ziele, Was genau, Warum, Was passiert dann, Rückgängig-Weg,
+   Schweregrad und – falls nötig – Parameter (z. B. Zielordner beim Verschieben).
+2. `ConsentGate::propose(plan)` legt ihn als „ausstehend“ ab (Frist 10 min, Standard: nichts
+   tun) und liefert ein `ProposalTicket` mit **Plan-ID + Digest** (SHA-256 über eine
+   versionierte, längenpräfixierte Binärkodierung; Plan-IDs werden nie zweimal angenommen).
 3. Die UI zeigt den Plan; der Nutzer wählt **Ja, ausführen / Nein / Ignorieren / Vertrauen**.
-4. Nur „Ja“ ergibt über `ConsentGate::decide(id, digest, decision)` eine **`Approval`**
-   (nicht kopierbar, nicht klonbar, einmalig, an den Digest gebunden, mit Ablaufzeit).
-5. Das Modul führt mit `execute(plan, approval)` aus; die `Approval` wird dabei verbraucht.
-   Jede Ausführung schreibt ins **Prüfprotokoll** und erzeugt einen **Rückgängig-Eintrag**.
-6. Endgültiges Löschen verlangt zusätzlich eine zweite, getrennte Bestätigung
-   (`PermanentDeleteApproval`, frühestens nach einer Mindestwartezeit).
+4. `ConsentGate::decide(id, &digest, decision, origin)` verbraucht den Plan bei **jeder**
+   Antwort. Nur „Ja“ ergibt `Outcome::Approved(Approval)`, nur „Vertrauen“ ein `TrustGrant`.
+   Eine `Approval` ist nicht kopier-, klon- oder (de)serialisierbar, einmalig, an den Digest
+   gebunden und läuft nach 2 min ab.
+5. `approval.redeem(&plan, gate.clock())` tauscht sie gegen eine **`ExecutionPermit`**, die den
+   freigegebenen Plan enthält. Ausführende Funktionen nehmen die Erlaubnis als Wert und lesen
+   ihre Ziele nur aus `permit.plan()`. Danach `permit.complete(result)` → `AuditEvent`.
+6. Endgültiges Löschen: Eine normale `Approval` lässt sich dafür nicht einlösen.
+   `request_second_confirmation(&approval)` liefert eine Rückfrage, die frühestens nach 1,5 s
+   und höchstens 2 min mit `confirm_second(..)` und „Ja, ausführen“ zu einer
+   `PermanentDeleteApproval` wird. Jede andere Antwort verbraucht beides.
+7. Das Tor macht selbst kein I/O: Es sammelt Audit-Ereignisse, die der Dienst mit
+   `take_audit_events()` abholt und an das **Prüfprotokoll** (`AuditLog`, Hash-Kette) anhängt.
+   Jede Ausführung erzeugt zusätzlich einen **Rückgängig-Eintrag** (`UndoRecord`).
 
-Abgelaufene oder unbeantwortete Pläne verfallen ohne Wirkung.
+Abgelaufene oder unbeantwortete Pläne verfallen ohne Wirkung (`expire_stale()`).
+Fristen prüft eine versiegelte `Clock` – im Betrieb gibt es nur die Systemuhr.
 
 ## Datenhaltung (geplant)
 

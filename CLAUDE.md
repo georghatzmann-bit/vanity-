@@ -10,17 +10,21 @@ Fortschritt: `docs/PROGRESS.md` · Architektur: `docs/ARCHITECTURE.md` · Sicher
 Der Schutzbereich verändert, verschiebt, beendet oder löscht **nichts** ohne ausdrückliche
 Bestätigung des Nutzers. Ohne „Ja“ nur: scannen, melden, erklären.
 
-- Jede verändernde Funktion verlangt eine `aegis_core::consent::Approval` **als Wert**
-  (wird verbraucht). Eine `Approval` entsteht nur in `ConsentGate::decide` aus einer
+- Jede verändernde Funktion verlangt eine `aegis_core::consent::ExecutionPermit` **als Wert**
+  und liest ihre Ziele nur aus `permit.plan()`. Die Erlaubnis entsteht nur über
+  `approval.redeem(&plan, gate.clock())`; eine `Approval` nur in `ConsentGate::decide` aus der
   Nutzerentscheidung „Ja, ausführen“ für genau diesen Plan (Digest-gebunden, einmalig, läuft ab).
+  Nach der Ausführung: `permit.complete(result)` → Audit-Ereignis.
 - Vor jeder Aktion ein `ActionPlan`: Was genau? Warum? Was passiert dann? Rückgängig wie?
   Antworten: Ja, ausführen / Nein / Ignorieren / Vertrauen. Keine Reaktion = nichts tun.
 - Endgültiges Löschen: zweite, getrennte Bestätigung (`PermanentDeleteApproval`).
   Kein automatisches Löschen, auch nicht nach Fristen – nur Erinnerungen.
 - Gilt auch für „Gefährlich“, Echtzeit-Wächter, Panic-Button, Hintergrundprozesse.
-- Verändernde std-/Windows-APIs sind per `clippy.toml` (`disallowed-methods`) gesperrt.
-  Ausnahmen nur mit `#[allow(clippy::disallowed_methods)]` **und** Eintrag in
-  `crates/core/mutation-allowlist.txt` (wird per Test erzwungen, Security-Review prüft).
+- Verändernde std-APIs sind per `clippy.toml` (`disallowed-methods`) gesperrt (Windows-APIs
+  werden ergänzt, sobald `windows`/`windows-sys` dazukommen). Ausnahme nur mit eng gesetztem
+  `#[allow(clippy::disallowed_methods)]` + Markierung `// aegis-mutation: <kennung>` +
+  Eintrag in `crates/core/mutation-allowlist.txt` (Test `mutation_guard` erzwingt das).
+  Testcode legt Dateien nur über `aegis_core::testing` an (Feature `testing`, nur dev-deps).
 - Tools (Modul J) handeln nur nach vom Nutzer angelegten und aktivierten Regeln –
   immer mit Vorschau, Protokoll, Rückgängig.
 
