@@ -68,6 +68,7 @@ fn main() {
             service::service_lab_screenshot,
             service::service_lab_report,
             service::service_propose_enable_sandbox,
+            service::service_propose_process_action,
             service::lab_capture_windows,
             report::export_report
         ])
@@ -144,6 +145,7 @@ mod test_support {
                 crate::service::service_lab_screenshot,
                 crate::service::service_lab_report,
                 crate::service::service_propose_enable_sandbox,
+                crate::service::service_propose_process_action,
                 crate::service::lab_capture_windows,
                 crate::report::export_report
             ])
@@ -168,7 +170,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 33] = [
+    const EXPECTED_PERMISSIONS: [&str; 34] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -199,6 +201,7 @@ mod tests {
         "allow-service-lab-screenshot",
         "allow-service-lab-report",
         "allow-service-propose-enable-sandbox",
+        "allow-service-propose-process-action",
         "allow-lab-capture-windows",
         "allow-export-report",
         "dialog:allow-open",
@@ -466,6 +469,10 @@ mod tests {
                 ),
                 ("service_lab_report", json!({ "runId": "r" })),
                 ("service_propose_enable_sandbox", json!({})),
+                (
+                    "service_propose_process_action",
+                    json!({ "program": "/aegis-test/x", "action": "suspend" }),
+                ),
                 ("lab_capture_windows", json!({ "runId": "r" })),
                 ("export_report", json!({ "english": false })),
                 // Zuletzt: schließt das Testfenster.

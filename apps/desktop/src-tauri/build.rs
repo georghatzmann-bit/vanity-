@@ -29,6 +29,7 @@ const APP_COMMANDS: &[&str] = &[
     "service_lab_screenshot",
     "service_lab_report",
     "service_propose_enable_sandbox",
+    "service_propose_process_action",
     "lab_capture_windows",
     "export_report",
 ];

@@ -298,6 +298,11 @@ export interface ServiceApi {
     seconds: number,
     network: boolean,
   ): Promise<Proposal>;
+  /** Laufende Prozesse eines Programms beenden/anhalten/fortsetzen vorschlagen. */
+  proposeProcessAction(
+    program: string,
+    action: 'terminate' | 'suspend' | 'resume',
+  ): Promise<Proposal>;
   /** „Windows Sandbox einschalten“ vorschlagen (nur Administratoren). */
   proposeEnableSandbox(): Promise<Proposal>;
   /** Vollständiger Verhaltensbericht eines eigenen, fertigen Laufs (nur lesend). */
@@ -628,6 +633,9 @@ const kindLabels: Readonly<Record<string, string>> = {
   restore: 'Aus der Quarantäne wiederherstellen',
   delete_permanently: 'Endgültig löschen',
   run_in_sandbox: 'Im Labor ausführen',
+  terminate_process: 'Prozess beenden',
+  suspend_process: 'Prozess anhalten',
+  resume_process: 'Prozess fortsetzen',
   change_setting: 'Einstellung ändern',
 };
 
@@ -658,7 +666,9 @@ export function parseProposal(response: unknown): Proposal {
         .map((t) =>
           t['type'] === 'setting'
             ? { type: 'setting' as const, id: str(t['id']) }
-            : { type: 'file' as const, path: str(t['path']) },
+            : t['type'] === 'process'
+              ? { type: 'process' as const, pid: num(t['pid']), image_path: str(t['image_path']) }
+              : { type: 'file' as const, path: str(t['path']) },
         ),
       what: str(plan['what']),
       why: str(plan['why']),

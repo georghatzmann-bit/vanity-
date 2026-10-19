@@ -392,6 +392,25 @@ pub async fn service_lab_screenshot(run_id: String, name: String) -> Result<Valu
     send(json!({ "type": "lab_screenshot", "run_id": run_id, "name": name })).await
 }
 
+/// Anfrage „Prozesse eines Programms beenden/anhalten/fortsetzen vorschlagen“ – die
+/// Prozesse sucht der Dienst selbst (nur eigene des Kontos).
+pub fn propose_process_request(program: &str, action: &str) -> Result<Value, String> {
+    check_paths(&[program.to_owned()])?;
+    if !matches!(action, "terminate" | "suspend" | "resume") {
+        return Err("Unbekannte Aktion.".into());
+    }
+    Ok(json!({ "type": "propose_process_action", "program": program, "action": action }))
+}
+
+/// Prozess-Aktion vorschlagen – ausgeführt wird nur nach „Ja“ im Freigabe-Dialog.
+#[tauri::command]
+pub async fn service_propose_process_action(
+    program: String,
+    action: String,
+) -> Result<Value, String> {
+    send(propose_process_request(&program, &action)?).await
+}
+
 /// „Windows Sandbox einschalten“ vorschlagen (nur Administratoren, nur nach „Ja“).
 #[tauri::command]
 pub async fn service_propose_enable_sandbox() -> Result<Value, String> {
@@ -510,6 +529,9 @@ mod tests {
         assert!(propose_lab_run_request(&abs, "mini_sandbox", 4, false).is_err());
         assert!(propose_lab_run_request("relativ", "mini_sandbox", 30, false).is_err());
         assert!(check_screenshot_name("bild-01.png").is_ok());
+        assert!(propose_process_request(&abs, "terminate").is_ok());
+        assert!(propose_process_request(&abs, "kill -9").is_err());
+        assert!(propose_process_request("a.exe", "suspend").is_err());
         assert!(check_screenshot_name("../x.png").is_err());
         assert!(check_screenshot_name("bild.exe").is_err());
     }

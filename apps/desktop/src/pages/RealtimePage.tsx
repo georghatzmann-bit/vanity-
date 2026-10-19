@@ -25,11 +25,13 @@ function EventRow({
   onIsolate,
   onTrust,
   onIgnore,
+  onProcess,
 }: {
   readonly event: WatchEvent;
   readonly onIsolate: () => void;
   readonly onTrust: () => void;
   readonly onIgnore: () => void;
+  readonly onProcess: (action: 'terminate' | 'suspend' | 'resume') => void;
 }) {
   const { t, language, locale } = useT();
   const [open, setOpen] = useState(false);
@@ -65,6 +67,23 @@ function EventRow({
         <Button size="sm" variant="secondary" onClick={onTrust}>
           {t('realtime.trust')}
         </Button>
+        {event.kind === 'process' && (
+          <>
+            <Button
+              size="sm"
+              variant={f.risk === 'dangerous' ? 'danger' : 'secondary'}
+              onClick={() => onProcess('terminate')}
+            >
+              {t('realtime.terminate')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => onProcess('suspend')}>
+              {t('realtime.suspend')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => onProcess('resume')}>
+              {t('realtime.resume')}
+            </Button>
+          </>
+        )}
         {event.kind === 'file' && isLabCandidate(event.path) && (
           <Button size="sm" variant="secondary" onClick={() => offerToLab(event.path)}>
             {t('lab.offer')}
@@ -223,6 +242,9 @@ export function RealtimePage() {
                       ignored.add(e.seq);
                       setIgnoredCount(ignored.size);
                     }}
+                    onProcess={(action) =>
+                      void flow.start(() => service.proposeProcessAction(e.path, action))
+                    }
                   />
                 ))}
               </ul>

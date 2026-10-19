@@ -76,6 +76,8 @@ pub enum Request {
     LabReport { run_id: String },
     /// Windows Sandbox einschalten vorschlagen (nur Administratoren; Neustart nötig).
     ProposeEnableSandbox {},
+    /// Laufende Prozesse eines Programms beenden/anhalten/fortsetzen vorschlagen.
+    ProposeProcessAction { program: PathBuf, action: String },
     /// Antwort des Nutzers im Freigabe-Dialog.
     Decide {
         plan_id: PlanId,

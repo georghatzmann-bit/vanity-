@@ -275,3 +275,14 @@ crates/service/src/lab.rs :: service-lab-dism-timeout :: Labor: beendet nur das 
 crates/winffi/src/dpapi.rs :: winffi-dpapi-take :: Windows-FFI: kopiert das DPAPI-Ergebnis, nullt und gibt den Puffer frei.
 crates/winffi/src/dpapi.rs :: winffi-dpapi-protect :: Windows-FFI: CryptProtectData (Rechner-Bereich) für den AEGIS-Quarantäne-Schlüssel.
 crates/winffi/src/dpapi.rs :: winffi-dpapi-unprotect :: Windows-FFI: CryptUnprotectData für den AEGIS-Quarantäne-Schlüssel.
+crates/winffi/src/control.rs :: winffi-control-open-process :: Windows-FFI: öffnet den Prozess aus dem Plan (im Identitätswechsel: Windows prüft die Rechte des Nutzers).
+crates/winffi/src/control.rs :: winffi-control-critical :: Windows-FFI: kritische Systemprozesse werden nie angefasst.
+crates/winffi/src/control.rs :: winffi-control-terminate :: Windows-FFI: TerminateProcess auf das geprüfte Handle.
+crates/winffi/src/control.rs :: winffi-control-terminate-call :: Prozess beenden nur nach Freigabe des Plans „Prozess beenden“ (Permit), Programm und ID geprüft.
+crates/winffi/src/control.rs :: winffi-control-open-thread :: Windows-FFI: öffnet Threads des geprüften Prozesses.
+crates/winffi/src/control.rs :: winffi-control-suspend :: Windows-FFI: SuspendThread.
+crates/winffi/src/control.rs :: winffi-control-suspend-call :: Prozess anhalten nur nach Freigabe des Plans „Prozess anhalten“ (Permit), rückgängig über „Fortsetzen“.
+crates/winffi/src/control.rs :: winffi-control-resume :: Windows-FFI: ResumeThread (setzt einen angehaltenen Prozess fort).
+crates/winffi/src/control.rs :: winffi-control-thread-snapshot :: Windows-FFI: Schnappschuss der Threads (nur lesen).
+crates/winffi/src/control.rs :: winffi-control-thread-first :: Windows-FFI: erster Thread des Schnappschusses.
+crates/winffi/src/control.rs :: winffi-control-thread-next :: Windows-FFI: nächster Thread des Schnappschusses.

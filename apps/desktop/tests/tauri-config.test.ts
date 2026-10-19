@@ -49,6 +49,8 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-lab-report': 'Dienst: Verhaltensbericht eines eigenen Laufs (nur lesend)',
   'allow-service-propose-enable-sandbox':
     'Dienst: „Windows Sandbox einschalten“ vorschlagen (nur Admin, nur nach „Ja“)',
+  'allow-service-propose-process-action':
+    'Dienst: Programm beenden/anhalten/fortsetzen vorschlagen (nur nach „Ja“)',
   'allow-lab-capture-windows': 'Fensterfotos eines eigenen Mini-Sandbox-Laufs (nur lesend)',
   'allow-export-report':
     'Bericht als HTML speichern – Inhalt aus Rust, Ort nur über den Speichern-Dialog',

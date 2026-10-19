@@ -508,6 +508,147 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
+    /// Schlägt vor, laufende Prozesse eines Programms zu beenden, anzuhalten oder fortzusetzen.
+    /// Der Dienst sucht die Prozesse selbst (nur eigene des Kontos; Administratoren auch
+    /// fremde) und nennt jede Prozess-ID samt Programm im Plan.
+    pub fn propose_process_action(
+        &mut self,
+        program: &Path,
+        action: &str,
+        user: &dyn UserAccess,
+    ) -> Response {
+        let kind = match action {
+            "terminate" => ActionKind::TerminateProcess,
+            "suspend" => ActionKind::SuspendProcess,
+            "resume" => ActionKind::ResumeProcess,
+            _ => return Response::error("input", "Unbekannte Aktion (terminate, suspend, resume)"),
+        };
+        if !program.is_absolute() {
+            return Response::error("input", "Programmpfad muss absolut sein");
+        }
+        let targets = match running_processes_of(program, user) {
+            Ok(t) if t.is_empty() => {
+                return Response::error(
+                    "process",
+                    "Kein laufender Prozess dieses Programms (deines Kontos) gefunden",
+                );
+            }
+            Ok(t) => t,
+            Err(e) => return Response::error("process", e),
+        };
+        let name = quoted(&program.display().to_string());
+        let count = targets.len();
+        let mut builder = ActionPlan::builder(kind)
+            .why("Von dir gewählt – z. B. nach einer Meldung des Echtzeit-Wächters.")
+            .severity(RiskLevel::RiskyTool);
+        for (pid, image) in targets {
+            builder = builder.target(Target::process(pid, image));
+        }
+        let builder = match kind {
+            ActionKind::TerminateProcess => builder
+                .what(format!("{name} beenden ({count} Prozess(e))"))
+                .consequence("Das Programm wird sofort beendet; ungespeicherte Daten darin gehen verloren. Dateien bleiben unverändert.")
+                .undo(UndoHint::irreversible(
+                    "Ein beendetes Programm lässt sich nur neu starten.",
+                )),
+            ActionKind::SuspendProcess => builder
+                .what(format!("{name} anhalten ({count} Prozess(e))"))
+                .consequence("Das Programm friert ein und tut nichts mehr, bis du es fortsetzt oder beendest.")
+                .undo(UndoHint::reversible("Über „Fortsetzen“ läuft es weiter.")),
+            _ => builder
+                .what(format!("{name} fortsetzen ({count} Prozess(e))"))
+                .consequence("Das angehaltene Programm läuft weiter.")
+                .undo(UndoHint::reversible("Erneut „Anhalten“.")),
+        };
+        match builder.build(self.gate.clock().now()) {
+            Ok(plan) => self.register(plan, user.identity(), HashMap::new()),
+            Err(e) => Response::error("plan", e.to_string()),
+        }
+    }
+
+    /// Führt eine freigegebene Prozess-Aktion aus – je Ziel im Identitätswechsel des Nutzers
+    /// (Windows prüft selbst, ob er den Prozess anfassen darf), mit Prüfung von ID und Programm.
+    fn control_processes(
+        &mut self,
+        permit: aegis_core::consent::ExecutionPermit,
+        user: &dyn UserAccess,
+    ) -> Response {
+        let plan = permit.plan().clone();
+        let mut failures = Vec::new();
+        let mut done = 0usize;
+        for target in plan.targets() {
+            let Target::Process { pid, image_path } = target else {
+                failures.push((PathBuf::new(), "Kein Prozess-Ziel".to_owned()));
+                continue;
+            };
+            let result = match user.enter() {
+                Ok(_scope) => control_one(*pid, image_path, plan.kind()),
+                Err(e) => Err(format!("Rechte des Nutzers nicht übernehmbar: {e}")),
+            };
+            match result {
+                Ok(()) => done += 1,
+                Err(message) => {
+                    failures.push((image_path.clone(), format!("PID {pid}: {message}")))
+                }
+            }
+        }
+        let result = if failures.is_empty() {
+            aegis_core::audit::ExecutionResult::Succeeded
+        } else if done > 0 {
+            aegis_core::audit::ExecutionResult::PartiallySucceeded {
+                message: format!(
+                    "{} von {} nicht möglich",
+                    failures.len(),
+                    done + failures.len()
+                ),
+            }
+        } else {
+            aegis_core::audit::ExecutionResult::Failed {
+                message: failures.first().map_or_else(String::new, |f| f.1.clone()),
+            }
+        };
+        let event = permit.complete(result.clone());
+        self.record(event);
+        if self.audit.sync().is_err() {
+            self.audit_failed = true;
+        }
+        self.add_history(NewEntry {
+            kind: HistoryKind::Action,
+            risk: None,
+            title: format!(
+                "{} – {}",
+                plan.what(),
+                if failures.is_empty() {
+                    "erledigt"
+                } else {
+                    "teilweise/nicht möglich"
+                }
+            ),
+            detail: failures
+                .iter()
+                .map(|f| f.1.clone())
+                .collect::<Vec<_>>()
+                .join("; "),
+            paths: plan
+                .targets()
+                .iter()
+                .filter_map(|t| match t {
+                    Target::Process { image_path, .. } => Some(image_path.clone()),
+                    _ => None,
+                })
+                .take(1)
+                .collect(),
+            owner: user.identity(),
+            scope: None,
+        });
+        Response::Executed {
+            kind: plan.kind(),
+            result,
+            entries: Vec::new(),
+            failures,
+        }
+    }
+
     /// Der Verlauf (auch der Wächter schreibt hinein).
     #[must_use]
     pub fn history(&self) -> Arc<Mutex<History>> {
@@ -906,6 +1047,9 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 }
             }
             Request::ProposeEnableSandbox {} => self.propose_enable_sandbox(user),
+            Request::ProposeProcessAction { program, action } => {
+                self.propose_process_action(&program, &action, user)
+            }
             Request::ProposeLabRun {
                 path,
                 stage,
@@ -1392,6 +1536,11 @@ impl<C: Clock, W: Durable> Service<C, W> {
             ActionKind::Quarantine => self.vault.quarantine(permit, user),
             ActionKind::Restore => self.vault.restore(permit, user),
             ActionKind::RunInSandbox => return self.start_lab(permit, user),
+            ActionKind::TerminateProcess
+            | ActionKind::SuspendProcess
+            | ActionKind::ResumeProcess => {
+                return self.control_processes(permit, user);
+            }
             ActionKind::ChangeSetting => return self.enable_sandbox_feature(permit, user),
             other => {
                 // Andere Arten führt dieser Dienst (noch) nicht aus; die Erlaubnis verfällt.
@@ -1726,6 +1875,56 @@ fn new_nonce() -> Option<String> {
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Laufende Prozesse eines Programms, die das Konto anfassen darf: eigene; Administratoren alle.
+#[cfg(windows)]
+fn running_processes_of(
+    program: &Path,
+    user: &dyn UserAccess,
+) -> Result<Vec<(u32, PathBuf)>, String> {
+    let me = user.identity();
+    let admin = user.is_admin();
+    let all = aegis_winffi::inspect::processes().map_err(|e| e.to_string())?;
+    Ok(all
+        .into_iter()
+        .filter(|p| p.pid != std::process::id())
+        .filter_map(|p| {
+            let image = aegis_winffi::system::process_image_path(p.pid).ok()?;
+            if !crate::paths::same_path(&image, program) {
+                return None;
+            }
+            let owner = aegis_winffi::system::process_user_sid(p.pid).ok();
+            (admin || (owner.is_some() && owner == me)).then_some((p.pid, image))
+        })
+        .take(32)
+        .collect())
+}
+
+#[cfg(not(windows))]
+fn running_processes_of(
+    _program: &Path,
+    _user: &dyn UserAccess,
+) -> Result<Vec<(u32, PathBuf)>, String> {
+    Err("Prozess-Aktionen gibt es nur unter Windows".into())
+}
+
+/// Eine Prozess-Aktion (im Identitätswechsel aufrufen).
+#[cfg(windows)]
+fn control_one(pid: u32, image: &Path, kind: ActionKind) -> Result<(), String> {
+    use aegis_winffi::control::{ProcessAction, control_process};
+    let action = match kind {
+        ActionKind::TerminateProcess => ProcessAction::Terminate,
+        ActionKind::SuspendProcess => ProcessAction::Suspend,
+        ActionKind::ResumeProcess => ProcessAction::Resume,
+        _ => return Err("Keine Prozess-Aktion".into()),
+    };
+    control_process(pid, image, action).map_err(|e| e.to_string())
+}
+
+#[cfg(not(windows))]
+fn control_one(_pid: u32, _image: &Path, _kind: ActionKind) -> Result<(), String> {
+    Err("Prozess-Aktionen gibt es nur unter Windows".into())
 }
 
 #[cfg(test)]

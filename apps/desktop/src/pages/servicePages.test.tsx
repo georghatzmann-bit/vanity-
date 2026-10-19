@@ -102,6 +102,7 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     labReport: vi.fn(() => Promise.reject(new Error('kein Bericht'))),
     labScreenshot: vi.fn(() => Promise.resolve(new Uint8Array([137, 80, 78, 71]))),
     labCaptureWindows: vi.fn(() => Promise.resolve([])),
+    proposeProcessAction: vi.fn(() => Promise.resolve(proposal('Prozess beenden'))),
     ...overrides,
   };
 }
@@ -582,5 +583,36 @@ describe('Labor', () => {
     await waitFor(() => expect(window.location.hash).toBe('#/lab'));
     expect(await screen.findByTestId('lab-path')).toHaveTextContent('setup.exe');
     expect(service.proposeLabRun).not.toHaveBeenCalled();
+  });
+});
+
+describe('Prozess-Aktionen', () => {
+  it('Programmstart: Beenden nur über den Freigabe-Dialog, ohne „Vertrauen“', async () => {
+    const service = fakeService({
+      watchPoll: vi.fn(() =>
+        Promise.resolve(
+          watchState([
+            {
+              seq: 3,
+              at: '2026-10-19T12:00:00Z',
+              kind: 'process',
+              path: 'C:\\Users\\a\\Downloads\\tool.exe',
+              finding: { ...finding, risk: 'suspicious' },
+            },
+          ]),
+        ),
+      ),
+    });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/realtime' });
+    const row = await screen.findByTestId('watch-event');
+    fireEvent.click(within(row).getByRole('button', { name: /Beenden/ }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(service.proposeProcessAction).toHaveBeenCalledWith(
+      'C:\\Users\\a\\Downloads\\tool.exe',
+      'terminate',
+    );
+    expect(within(dialog).queryByRole('button', { name: /Vertrauen/ })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Nein' }));
+    await waitFor(() => expect(vi.mocked(service.decide).mock.calls[0]?.[1]).toBe('decline'));
   });
 });

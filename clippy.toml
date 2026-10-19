@@ -127,6 +127,7 @@ disallowed-methods = [
   { path = "windows_sys::Win32::Storage::FileSystem::WriteFile", reason = "Goldene Regel: Windows-Dateisystem verändern nur mit Freigabe bzw. als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },
   { path = "windows_sys::Win32::Storage::FileSystem::CreateHardLinkW", reason = "Goldene Regel: Windows-Dateisystem verändern nur mit Freigabe bzw. als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },
   { path = "windows_sys::Win32::Storage::FileSystem::CreateSymbolicLinkW", reason = "Goldene Regel: Windows-Dateisystem verändern nur mit Freigabe bzw. als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },
+  { path = "windows_sys::Win32::System::Threading::SuspendThread", reason = "Goldene Regel: Prozesse anhalten nur mit Freigabe (mutation-allowlist.txt)", allow-invalid = true },
   { path = "windows_sys::Win32::System::Threading::TerminateProcess", reason = "Goldene Regel: Prozesse starten/beenden nur mit Freigabe bzw. als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },
   { path = "windows_sys::Win32::System::Threading::CreateProcessW", reason = "Goldene Regel: Prozesse starten/beenden nur mit Freigabe bzw. als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },
   { path = "windows_sys::Win32::System::Threading::CreateProcessAsUserW", reason = "Goldene Regel: Prozesse starten/beenden nur mit Freigabe bzw. als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },

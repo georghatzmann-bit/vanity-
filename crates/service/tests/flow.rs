@@ -678,3 +678,25 @@ fn labor_vorschlag_prueft_eingaben() {
     }
     assert_unchanged(&before, &DirSnapshot::capture(dir.path()).unwrap());
 }
+
+#[test]
+fn prozess_aktionen_nur_als_vorschlag() {
+    let mut h = harness();
+    let bad = h.send(
+        json!({"type": "propose_process_action", "program": "/x/a.exe", "action": "explode"}),
+    );
+    assert_eq!(bad["code"], "input");
+    let rel = h
+        .send(json!({"type": "propose_process_action", "program": "a.exe", "action": "terminate"}));
+    assert_eq!(rel["code"], "input");
+    let none = h.send(json!({
+        "type": "propose_process_action",
+        "program": if cfg!(windows) { r"C:\gibt\es\nicht.exe" } else { "/gibt/es/nicht" },
+        "action": "terminate"
+    }));
+    assert_eq!(none["code"], "process", "{none}");
+    // Den eigenen Prozess (AEGIS) bietet der Dienst nie an.
+    let me = std::env::current_exe().unwrap();
+    let own = h.send(json!({"type": "propose_process_action", "program": me, "action": "suspend"}));
+    assert_eq!(own["code"], "process", "{own}");
+}

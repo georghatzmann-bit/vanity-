@@ -219,6 +219,8 @@ function createTauriService(): ServiceApi {
       parseProposal(
         await invoke<unknown>('service_propose_lab_run', { path, stage, seconds, network }),
       ),
+    proposeProcessAction: async (program, action) =>
+      parseProposal(await invoke<unknown>('service_propose_process_action', { program, action })),
     proposeEnableSandbox: async () =>
       parseProposal(await invoke<unknown>('service_propose_enable_sandbox')),
     labReport: async (runId) =>
