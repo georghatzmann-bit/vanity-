@@ -6,6 +6,10 @@
 
 pub mod handler;
 pub mod protocol;
+#[cfg(windows)]
+pub mod scm;
+pub mod server;
+pub mod transport;
 
 pub use handler::Service;
 pub use protocol::{Request, Response};

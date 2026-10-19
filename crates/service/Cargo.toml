@@ -20,5 +20,10 @@ thiserror = { workspace = true }
 aegis-core = { workspace = true, features = ["testing"] }
 tempfile = { workspace = true }
 
+
+[target.'cfg(windows)'.dependencies]
+aegis-winffi = { workspace = true }
+windows-service = { workspace = true }
+
 [lints]
 workspace = true

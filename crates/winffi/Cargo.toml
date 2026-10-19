@@ -1,0 +1,21 @@
+[package]
+name = "aegis-winffi"
+description = "Einzige Stelle mit unsafe: kleine, markierte Windows-FFI-Hüllen (Named Pipe mit Zugriffsliste, Ordner-ACL)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Storage_FileSystem",
+  "Win32_System_IO",
+  "Win32_System_Pipes",
+] }
+
+[lints]
+workspace = true

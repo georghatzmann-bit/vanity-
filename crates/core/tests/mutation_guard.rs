@@ -132,6 +132,9 @@ const REQUIRED_DISALLOWED: &[&str] = &[
     "tempfile::Builder::tempdir_in",
 ];
 
+/// Bibliotheken, die `unsafe` (nur markiert) enthalten dürfen – ausschließlich Windows-FFI.
+const UNSAFE_FFI_CRATES: &[&str] = &["aegis-winffi"];
+
 /// Crates mit verändernden APIs: Hängt ein Mitglied direkt davon ab, muss `clippy.toml`
 /// Pfade dieses Crates sperren (sonst fiele jeder Aufruf durch das Raster).
 const MUTATION_CAPABLE_CRATES: &[&str] = &[
@@ -1718,7 +1721,13 @@ fn check_workspace(root: &Path) -> Vec<String> {
                     "lib" | "rlib" | "dylib" | "cdylib" | "staticlib"
                 )
             });
-            if is_lib && dir.starts_with(root.join("crates")) {
+            // Einzige Ausnahme: das FFI-Crate für Windows-Aufrufe. Dort ist `unsafe` nur mit
+            // `// aegis-unsafe:`-Markierung + Allowlist-Eintrag + `// SAFETY:` erlaubt (wie
+            // überall); alle anderen Bibliotheken bleiben `forbid(unsafe_code)`.
+            if is_lib
+                && dir.starts_with(root.join("crates"))
+                && !UNSAFE_FFI_CRATES.contains(&package.name.as_str())
+            {
                 let tokens = tokenize(&lex(&fs::read_to_string(src).unwrap()).code);
                 let forbids = attributes(&tokens)
                     .iter()
