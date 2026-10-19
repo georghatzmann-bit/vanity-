@@ -702,6 +702,83 @@ export const de = {
       empty: 'Noch keine Ziele aufgezeichnet.',
       seen: 'zuerst {first}, zuletzt {last}, {count}×',
     },
+    lan: {
+      title: 'Heimnetz',
+      intro:
+        'Findet Geräte in deinem eigenen Heimnetz (nur dein privates Subnetz) und gibt Hinweise zu Router und WLAN. AEGIS pingt dafür die Adressen und prüft bei jedem Gerät, ob wenige bekannte Dienste antworten – ohne Anmeldung, ohne Passwörter, ohne etwas zu ändern.',
+      scan: 'Heimnetz prüfen',
+      rescan: 'Erneut prüfen',
+      scanning: 'Prüfe … (bis zu 30 Sekunden)',
+      notYet: 'Noch nicht geprüft.',
+      preview: 'Den Heimnetz-Scanner gibt es nur in der installierten App.',
+      reason: {
+        windows_only: 'Der Heimnetz-Scanner läuft nur unter Windows.',
+        no_private_network:
+          'Kein privates Heimnetz gefunden (z. B. nur Mobilfunk) – es wurde nichts geprüft.',
+        error: 'Die Prüfung ist fehlgeschlagen.',
+      },
+      summary: '{network} · {count} Geräte · {scanned} Adressen geprüft',
+      limited: 'Großes Netz: Nur die Adressen im /24-Bereich um deinen PC wurden geprüft.',
+      router: 'Router',
+      thisPc: 'dieser PC',
+      newDevice: 'Neu',
+      privateMac: 'zufällige MAC (Handy/Tablet?)',
+      ports: 'Offen: {ports}',
+      devicesTitle: 'Geräte',
+      hintsTitle: 'Hinweise',
+      hintsNone: 'Keine Auffälligkeiten gefunden.',
+      wifiTitle: 'WLAN',
+      upnpOn: 'UPnP am Router: an',
+      upnpOff: 'UPnP am Router: keine Antwort',
+      severity: {
+        info: 'Hinweis',
+        warn: 'Warnung',
+        danger: 'Gefahr',
+      },
+      security: {
+        open: 'offen (ohne Verschlüsselung)',
+        wep: 'WEP (unsicher)',
+        wpa: 'WPA (veraltet)',
+        wpa2: 'WPA2',
+        wpa3: 'WPA3',
+        owe: 'Enhanced Open',
+        enterprise: 'WPA-Enterprise',
+        unknown: 'unbekannt',
+      },
+      hint: {
+        router_telnet:
+          'Der Router nimmt Telnet-Verbindungen an (Port 23). Telnet überträgt Passwörter unverschlüsselt und ist ein häufiges Einfallstor – in der Router-Oberfläche abschalten.',
+        router_ftp:
+          'Der Router bietet FTP an (Port 21) – unverschlüsselt. Abschalten, wenn du es nicht brauchst.',
+        router_http_only:
+          'Die Router-Oberfläche ist nur unverschlüsselt (HTTP) erreichbar. Im WLAN könnte jemand das Router-Passwort mitlesen – HTTPS einschalten, falls der Router es kann.',
+        router_upnp:
+          'UPnP ist am Router an: Programme im Heimnetz können selbst Ports nach außen öffnen – auch Schadsoftware. Abschalten, wenn kein Spiel oder Gerät es braucht.',
+        device_telnet:
+          'Ein Gerät nimmt Telnet an (Port 23) – oft schlecht geschützte Kameras oder IoT-Geräte. Standardpasswort ändern und Firmware aktualisieren.',
+        device_rdp:
+          'Remotedesktop (RDP, Port 3389) ist offen. Nur eingeschaltet lassen, wenn du es nutzt – und nie ins Internet freigeben.',
+        device_vnc: 'VNC-Fernsteuerung (Port 5900) ist offen – nur mit starkem Passwort nutzen.',
+        device_smb:
+          'Datei- und Druckerfreigabe (SMB) ist offen – normal für PCs und NAS, aber prüfe, was freigegeben ist.',
+        wifi_open:
+          'Dein WLAN ist offen (ohne Verschlüsselung). Jeder in Reichweite kann mitlesen – WPA2 oder WPA3 einschalten.',
+        wifi_wep: 'Dein WLAN nutzt WEP – in Minuten zu knacken. Auf WPA2 oder WPA3 umstellen.',
+        wifi_wpa: 'Dein WLAN nutzt das alte WPA. Auf WPA2 oder besser WPA3 umstellen.',
+        wifi_tkip:
+          'Dein WLAN nutzt die veraltete TKIP-Verschlüsselung. Im Router auf AES (CCMP) umstellen.',
+        wifi_wpa2:
+          'Dein WLAN nutzt WPA2 – gut. Wenn Router und Geräte es können, ist WPA3 noch besser.',
+      },
+      basicsTitle: 'Gute Router-Gewohnheiten',
+      basic1: 'Router-Firmware aktuell halten (automatische Updates einschalten).',
+      basic2: 'Router-Passwort ändern, wenn noch das ab Werk gesetzte gilt.',
+      basic3: 'WPS abschalten.',
+      basic4: 'Gastnetz für Besuch und smarte Geräte nutzen.',
+      basic5: 'Fernzugriff auf den Router aus dem Internet abschalten, wenn du ihn nicht brauchst.',
+      honest:
+        'Ehrlich: AEGIS sieht nur, was im Netz antwortet – Geräte mit eigener Firewall bleiben eventuell unsichtbar. Einstellungen am Router änderst du selbst in dessen Oberfläche; AEGIS meldet sich dort nie an.',
+    },
     web: {
       title: 'Web-Schutz (Browser-Erweiterung)',
       intro:

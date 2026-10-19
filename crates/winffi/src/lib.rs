@@ -45,6 +45,9 @@ pub mod sandbox;
 pub mod inspect;
 
 #[cfg(windows)]
+pub mod lan;
+
+#[cfg(windows)]
 pub mod dpapi;
 
 #[cfg(windows)]

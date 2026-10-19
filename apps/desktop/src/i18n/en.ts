@@ -694,6 +694,82 @@ export const en: Messages<typeof de> = {
       empty: 'No destinations recorded yet.',
       seen: 'first {first}, last {last}, {count}×',
     },
+    lan: {
+      title: 'Home network',
+      intro:
+        'Finds devices in your own home network (only your private subnet) and gives hints about your router and Wi-Fi. AEGIS pings the addresses and checks whether a few well-known services answer on each device – without logging in, without passwords, without changing anything.',
+      scan: 'Check home network',
+      rescan: 'Check again',
+      scanning: 'Checking… (up to 30 seconds)',
+      notYet: 'Not checked yet.',
+      preview: 'The home network scanner is only available in the installed app.',
+      reason: {
+        windows_only: 'The home network scanner only runs on Windows.',
+        no_private_network:
+          'No private home network found (e.g. mobile data only) – nothing was checked.',
+        error: 'The check failed.',
+      },
+      summary: '{network} · {count} devices · {scanned} addresses checked',
+      limited: 'Large network: only the addresses in the /24 range around your PC were checked.',
+      router: 'Router',
+      thisPc: 'this PC',
+      newDevice: 'New',
+      privateMac: 'random MAC (phone/tablet?)',
+      ports: 'Open: {ports}',
+      devicesTitle: 'Devices',
+      hintsTitle: 'Hints',
+      hintsNone: 'Nothing unusual found.',
+      wifiTitle: 'Wi-Fi',
+      upnpOn: 'UPnP on the router: on',
+      upnpOff: 'UPnP on the router: no answer',
+      severity: {
+        info: 'Hint',
+        warn: 'Warning',
+        danger: 'Danger',
+      },
+      security: {
+        open: 'open (no encryption)',
+        wep: 'WEP (insecure)',
+        wpa: 'WPA (outdated)',
+        wpa2: 'WPA2',
+        wpa3: 'WPA3',
+        owe: 'Enhanced Open',
+        enterprise: 'WPA Enterprise',
+        unknown: 'unknown',
+      },
+      hint: {
+        router_telnet:
+          'The router accepts Telnet connections (port 23). Telnet sends passwords unencrypted and is a common way in – turn it off in the router settings.',
+        router_ftp:
+          'The router offers FTP (port 21) – unencrypted. Turn it off if you do not need it.',
+        router_http_only:
+          'The router settings are only reachable unencrypted (HTTP). Someone on the Wi-Fi could read the router password – turn on HTTPS if the router supports it.',
+        router_upnp:
+          'UPnP is on: programs in your home network can open ports to the internet by themselves – malware too. Turn it off unless a game or device needs it.',
+        device_telnet:
+          'A device accepts Telnet (port 23) – often poorly protected cameras or IoT devices. Change the default password and update the firmware.',
+        device_rdp:
+          'Remote Desktop (RDP, port 3389) is open. Only keep it on if you use it – and never expose it to the internet.',
+        device_vnc: 'VNC remote control (port 5900) is open – only use it with a strong password.',
+        device_smb:
+          'File and printer sharing (SMB) is open – normal for PCs and NAS, but check what is shared.',
+        wifi_open:
+          'Your Wi-Fi is open (no encryption). Anyone in range can listen in – turn on WPA2 or WPA3.',
+        wifi_wep: 'Your Wi-Fi uses WEP – cracked within minutes. Switch to WPA2 or WPA3.',
+        wifi_wpa: 'Your Wi-Fi uses old WPA. Switch to WPA2 or better WPA3.',
+        wifi_tkip: 'Your Wi-Fi uses outdated TKIP encryption. Switch the router to AES (CCMP).',
+        wifi_wpa2:
+          'Your Wi-Fi uses WPA2 – good. If your router and devices support it, WPA3 is even better.',
+      },
+      basicsTitle: 'Good router habits',
+      basic1: 'Keep the router firmware up to date (turn on automatic updates).',
+      basic2: 'Change the router password if the factory default is still set.',
+      basic3: 'Turn off WPS.',
+      basic4: 'Use a guest network for visitors and smart devices.',
+      basic5: 'Turn off remote access to the router from the internet if you do not need it.',
+      honest:
+        'To be honest: AEGIS only sees what answers on the network – devices with their own firewall may stay invisible. You change router settings yourself in its interface; AEGIS never logs in there.',
+    },
     web: {
       title: 'Web Shield (browser extension)',
       intro:

@@ -10,6 +10,7 @@ const APP_COMMANDS: &[&str] = &[
     "app_info",
     "hide_to_tray",
     "clipboard_guard",
+    "home_network_scan",
     "service_scan",
     "service_list_quarantine",
     "service_propose_quarantine",

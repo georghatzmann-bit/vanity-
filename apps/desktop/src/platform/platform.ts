@@ -16,6 +16,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { version as configuredVersion } from '../../src-tauri/tauri.conf.json';
 import { parseAppInfo, previewAppInfo, type AppInfo } from './appInfo.ts';
+import { parseLanReport, type LanReport } from './lan.ts';
 import {
   expectType,
   parseDecision,
@@ -116,6 +117,8 @@ export interface Platform {
   readonly clipboardGuard: ((enabled: boolean) => Promise<boolean>) | null;
   /** Meldung des Zwischenablage-Wächters (ausgetauschte Krypto-Adresse). */
   onClipboardSwap(handler: (swap: ClipboardSwap) => void): Promise<Unlisten>;
+  /** Heimnetz prüfen (nur eigenes privates Subnetz, nur lesend). `null` in der Vorschau. */
+  readonly homeNetworkScan: (() => Promise<LanReport>) | null;
 }
 
 /** Ausgetauschte Krypto-Adresse (gekürzt). */
@@ -227,6 +230,7 @@ export function createTauriPlatform(): Platform {
           handler(swap);
         }
       }),
+    homeNetworkScan: () => invoke<unknown>('home_network_scan').then(parseLanReport),
   };
 }
 
@@ -361,6 +365,7 @@ export function createBrowserPlatform(info: AppInfo): Platform {
     openWindowsSettings: null,
     clipboardGuard: null,
     onClipboardSwap: () => Promise.resolve(() => undefined),
+    homeNetworkScan: null,
   };
 }
 

@@ -53,6 +53,7 @@ name = "aegis-desktop"
 version = "0.1.0"
 dependencies = [
  "aegis-core",
+ "aegis-netwatch",
  "aegis-sandbox",
  "aegis-winffi",
  "base64 0.22.1",

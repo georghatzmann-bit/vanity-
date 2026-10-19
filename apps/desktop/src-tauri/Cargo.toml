@@ -22,6 +22,8 @@ tauri-plugin-dialog = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 time = { workspace = true }
+# Heimnetz-Scanner: reine Einordnung (Subnetz, Hinweise).
+aegis-netwatch = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 aegis-winffi = { workspace = true }

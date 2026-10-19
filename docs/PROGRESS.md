@@ -159,11 +159,12 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
        Punycode, Passwort ohne HTTPS), Download-Hinweise; Optionen-Seite; Unit- und
        Chromium-E2E-Tests (inkl. axe). App: Abschnitt „Web-Schutz“ mit Anleitung und DoH-Hinweis
        (D-050).
-4. [ ] P7.4 Heimnetz-Scanner (nur eigenes Subnetz) + Router-Hinweise.
+4. [x] P7.4 Heimnetz-Scanner in der App (nur eigenes privates Subnetz, Ping + ARP + zehn
+       Dienste + UPnP + WLAN-Sicherheit), Hinweise zu Router/WLAN, neue Geräte (D-051).
 5. [ ] P7.5 Leck-Check (HIBP Range, k-Anonymität; E-Mail nur mit eigenem Schlüssel).
 6. [ ] P7.6 Sicherheits-Review, Doku, DoD.
 
-**Nächster Schritt:** P7.4 Heimnetz-Scanner.
+**Nächster Schritt:** P7.5 Leck-Check.
 
 ## P5 – Schutz-Werkzeuge
 

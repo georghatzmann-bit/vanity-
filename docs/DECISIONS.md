@@ -338,3 +338,20 @@ ohne Eingaben zu lesen. Downloads werden nur per Benachrichtigung markiert, nie 
 gelöscht (Goldene Regel). DoH stellt AEGIS nicht um – die App zeigt nur, wo man es einschaltet.
 Bis zur Veröffentlichung in den Erweiterungs-Stores wird die Erweiterung „entpackt“ geladen (P13
 legt den Ordner mit aus); die App sagt das offen.
+
+## D-051 – Heimnetz-Scanner in der App, nur eigenes privates Subnetz
+
+Status: angenommen (P7.4). Der Scan braucht keine Administratorrechte und läuft deshalb in der
+App (Nutzerrechte), nicht im Dienst – nur auf Knopfdruck. Geprüft wird ausschließlich das eigene
+private Subnetz (RFC 1918) der Schnittstelle mit Standard-Gateway; ist es größer als /22, nur das
+/24 um die eigene Adresse. Ablauf: ICMP-Echo an jede Adresse (64 Threads, 600 ms), Nachbartabelle
+(ARP) für MAC-Adressen, bei höchstens 64 Geräten je ein TCP-Verbindungsversuch auf zehn bekannte
+Ports (FTP, SSH, Telnet, HTTP/HTTPS, NetBIOS, SMB, RDP, VNC, 8080 – sofort wieder geschlossen,
+nichts gesendet), eine SSDP-Suche (UPnP am Router) und die WLAN-Sicherheit der aktuellen
+Verbindung (WLAN-API, nur lesend). Daraus entstehen Hinweise (Telnet/FTP am Router, Oberfläche
+nur HTTP, UPnP an, RDP/VNC/Telnet an Geräten, offenes/WEP/WPA/TKIP-WLAN). Keine Anmeldung, kein
+Passwort-Probieren, keine Herstellerlisten (MAC-Hersteller würde eine Lizenzprüfung brauchen).
+„Neu“ heißt: MAC (sonst Adresse) war beim letzten Scan auf diesem PC nicht dabei – gemerkt im
+Speicher der App (WebView), der erste Scan ist Grundlinie. Router-Einstellungen ändert der Nutzer
+selbst.
+

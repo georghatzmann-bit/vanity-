@@ -7,6 +7,7 @@ mod app_info;
 // verfügbar“).
 #[cfg_attr(not(windows), allow(dead_code))]
 mod clipboard_guard;
+mod home_network;
 mod navigation;
 mod report;
 mod service;
@@ -54,6 +55,7 @@ fn main() {
             app_info::app_info,
             window::hide_to_tray,
             clipboard_guard::clipboard_guard,
+            home_network::home_network_scan,
             service::service_scan,
             service::service_list_quarantine,
             service::service_propose_quarantine,
@@ -164,6 +166,7 @@ mod test_support {
                 crate::app_info::app_info,
                 crate::window::hide_to_tray,
                 crate::clipboard_guard::clipboard_guard,
+                crate::home_network::home_network_scan,
                 crate::service::service_scan,
                 crate::service::service_list_quarantine,
                 crate::service::service_propose_quarantine,
@@ -241,7 +244,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 67] = [
+    const EXPECTED_PERMISSIONS: [&str; 68] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -253,6 +256,7 @@ mod tests {
         "allow-app-info",
         "allow-hide-to-tray",
         "allow-clipboard-guard",
+        "allow-home-network-scan",
         "allow-service-scan",
         "allow-service-list-quarantine",
         "allow-service-propose-quarantine",
@@ -509,6 +513,7 @@ mod tests {
                 ("plugin:window|start_dragging", json!({})),
                 ("hide_to_tray", json!({})),
                 ("clipboard_guard", json!({ "enabled": false })),
+                ("home_network_scan", json!({})),
                 (
                     "plugin:event|listen",
                     json!({

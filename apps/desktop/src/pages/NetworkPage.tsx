@@ -14,6 +14,7 @@ import type {
   NetworkState,
   ServiceApi,
 } from '../platform/service.ts';
+import { HomeNetworkPanel } from './HomeNetworkPanel.tsx';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
 import { useConsentFlow } from './useConsentFlow.tsx';
@@ -513,6 +514,7 @@ export function NetworkPage() {
           />
         </>
       )}
+      <HomeNetworkPanel />
       <WebShieldPanel />
       {flow.dialogs}
     </PageBody>

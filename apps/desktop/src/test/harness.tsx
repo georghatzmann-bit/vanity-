@@ -17,6 +17,7 @@ import type {
   Unlisten,
   WindowApi,
 } from '../platform/platform.ts';
+import { parseLanReport, type LanReport } from '../platform/lan.ts';
 import type { ServiceApi } from '../platform/service.ts';
 import { SETTINGS_STORAGE_KEY, SETTINGS_VERSION, type Settings } from '../settings/schema.ts';
 import type { StorageLike } from '../settings/store.ts';
@@ -122,8 +123,45 @@ export function fakePlatform(
     openWindowsSettings: kind === 'tauri' ? vi.fn(() => Promise.resolve()) : null,
     clipboardGuard: kind === 'tauri' ? vi.fn(() => Promise.resolve(true)) : null,
     onClipboardSwap: () => Promise.resolve(() => undefined),
+    homeNetworkScan: kind === 'tauri' ? vi.fn(() => Promise.resolve(sampleLanReport)) : null,
   };
 }
+
+/** Beispiel-Ergebnis des Heimnetz-Scanners (Router mit Telnet, ein PC mit RDP, WLAN WPA2). */
+export const sampleLanReport: LanReport = parseLanReport({
+  available: true,
+  network: '192.168.178.0/24',
+  address: '192.168.178.20',
+  gateway: '192.168.178.1',
+  scanned: 253,
+  limited: false,
+  devices: [
+    {
+      ip: '192.168.178.1',
+      mac: '3C:A6:2F:00:00:01',
+      gateway: true,
+      rtt_ms: 2,
+      open_ports: [23, 80],
+    },
+    { ip: '192.168.178.20', this_device: true, open_ports: [] },
+    {
+      ip: '192.168.178.30',
+      mac: '0A:11:22:33:44:55',
+      private_mac: true,
+      rtt_ms: 9,
+      open_ports: [3389],
+    },
+  ],
+  wifi: [{ ssid: 'Heimnetz', security: 'wpa2', tkip: false }],
+  upnp: true,
+  hints: [
+    { id: 'router_telnet', severity: 'danger', target: '192.168.178.1' },
+    { id: 'router_http_only', severity: 'warn', target: '192.168.178.1' },
+    { id: 'device_rdp', severity: 'warn', target: '192.168.178.30' },
+    { id: 'router_upnp', severity: 'warn', target: '192.168.178.1' },
+    { id: 'wifi_wpa2', severity: 'info', target: 'Heimnetz' },
+  ],
+});
 
 /** Speicher im Arbeitsspeicher (optional mit Fehlern beim Schreiben). */
 export function memoryStorage(initial: Record<string, string> = {}) {

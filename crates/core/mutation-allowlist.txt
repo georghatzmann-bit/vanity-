@@ -340,3 +340,24 @@ crates/winffi/src/memory.rs :: winffi-memory-module-next :: Windows-FFI: nächst
 crates/winffi/src/memory.rs :: winffi-memory-open-process :: Windows-FFI: öffnet einen Prozess nur zum Lesen (im Identitätswechsel des Nutzers).
 crates/winffi/src/memory.rs :: winffi-memory-query :: Windows-FFI: VirtualQueryEx (Speicherbereiche abfragen).
 crates/winffi/src/memory.rs :: winffi-memory-read :: Windows-FFI: ReadProcessMemory in einen eigenen Puffer (nur lesen).
+crates/winffi/src/lan.rs :: winffi-lan-sockaddr :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-lan-row :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-lan-free :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-lan-routes :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-lan-routes-head :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-lan-addresses :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-lan-addresses-head :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-lan-neighbors :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-lan-neighbors-head :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-icmp-open :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-icmp-echo :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-icmp-reply :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-icmp-close :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-wlan-open :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-wlan-enum :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-wlan-list :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-wlan-query :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-wlan-attributes :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-wlan-free-data :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-wlan-free-list :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
+crates/winffi/src/lan.rs :: winffi-wlan-close :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.

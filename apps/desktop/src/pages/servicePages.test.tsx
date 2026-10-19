@@ -1474,4 +1474,26 @@ describe('Härtung', () => {
     expect(web).toHaveTextContent('nur ein Vorschlag');
     expect(within(web).queryByRole('button')).toBeNull();
   });
+
+  it('Heimnetz: Scan nur auf Knopfdruck, Hinweise und neue Geräte', async () => {
+    window.localStorage.removeItem('aegis.lan.known');
+    const platform = fakePlatform('tauri', undefined, fakeService());
+    renderApp({ platform, hash: '#/network' });
+    const panel = await screen.findByTestId('home-network');
+    expect(platform.homeNetworkScan).not.toHaveBeenCalled();
+    expect(panel).toHaveTextContent('Noch nicht geprüft.');
+    fireEvent.click(screen.getByRole('button', { name: 'Heimnetz prüfen' }));
+    const hints = await within(panel).findByTestId('lan-hints');
+    expect(hints).toHaveTextContent('Telnet');
+    expect(hints).toHaveTextContent('UPnP');
+    expect(within(panel).getByTestId('lan-summary')).toHaveTextContent('3 Geräte');
+    const devices = within(panel).getAllByTestId('lan-device');
+    expect(devices[0]).toHaveTextContent('Router');
+    // Erster Scan: Grundlinie, nichts ist „neu“.
+    expect(within(panel).queryByText('Neu')).toBeNull();
+    window.localStorage.setItem('aegis.lan.known', JSON.stringify(['3C:A6:2F:00:00:01']));
+    fireEvent.click(screen.getByRole('button', { name: 'Erneut prüfen' }));
+    await waitFor(() => expect(within(panel).getAllByText('Neu')).toHaveLength(1));
+    expect(panel).toHaveTextContent('UPnP am Router: an');
+  });
 });

@@ -31,6 +31,8 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
     'App-Befehl hide_to_tray: Schließen-Knopf mit „Beim Schließen in den Infobereich“ – versteckt nur mit Tray-Symbol',
   'allow-clipboard-guard':
     'App-Befehl clipboard_guard: Zwischenablage-Wächter ein/aus (opt-in, liest nur, verändert nie)',
+  'allow-home-network-scan':
+    'Heimnetz-Scanner (P7.4): nur eigenes privates Subnetz, nur lesend, auf Knopfdruck',
   'allow-service-scan': 'Dienst: Dateien/Ordner prüfen (nur lesend)',
   'allow-service-list-quarantine': 'Dienst: Quarantäne anzeigen (nur lesend)',
   'allow-service-propose-quarantine': 'Dienst: Isolieren vorschlagen (ausgeführt erst nach Ja)',

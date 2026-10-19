@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-home-network-scan"
+description = "Enables the home_network_scan command without any pre-configured scope."
+commands.allow = ["home_network_scan"]
+
+[[permission]]
+identifier = "deny-home-network-scan"
+description = "Denies the home_network_scan command without any pre-configured scope."
+commands.deny = ["home_network_scan"]

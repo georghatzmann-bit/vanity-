@@ -15,6 +15,7 @@
     "allow-app-info",
     "allow-hide-to-tray",
     "allow-clipboard-guard",
+    "allow-home-network-scan",
     "allow-service-scan",
     "allow-service-list-quarantine",
     "allow-service-propose-quarantine",

@@ -303,6 +303,12 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   nur als Plan mit „Ja“ (Administrator): fester Name `AEGIS-Block-…`, Programmpfad geprüft
   (Laufwerk, `.exe`, ohne `"`, `..`, `/`, `|`), Argumente einzeln an `netsh` aus dem
   Systemordner; die Prüfsumme bindet die Schritte. Entfernt werden nur AEGIS-Regeln.
+- **Heimnetz-Scanner (P7.4):** in der App mit Nutzerrechten, nur auf Knopfdruck, nur das eigene
+  private Subnetz (RFC 1918, höchstens /22, sonst /24 um die eigene Adresse) – nie fremde oder
+  öffentliche Netze. Nur Ping, ARP-Tabelle, TCP-Verbindungsaufbau auf zehn feste Ports (ohne
+  Daten), eine SSDP-Suche und die WLAN-Sicherheit (lesend). Ergebnisse bleiben auf dem PC; der
+  Parser im Frontend begrenzt Längen und Mengen. Grenze: Geräte mit eigener Firewall bleiben
+  eventuell unsichtbar.
 - **Web-Schutz-Erweiterung (P7.3):** Manifest V3, Rechte nur `declarativeNetRequest`,
   `storage`, `webNavigation`, `downloads`, `notifications`, `alarms` (+ Host-Zugriff für die
   Umleitung und das Laden der Listen) – kein `history`, `cookies`, `tabs`, `scripting`,
