@@ -17,7 +17,9 @@ use windows_sys::Win32::Foundation::{
     ERROR_NO_TOKEN, HANDLE, LocalFree, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Security::Authorization::{ConvertSidToStringSidW, ConvertStringSidToSidW};
-use windows_sys::Win32::Security::Isolation::DeriveAppContainerSidFromAppContainerName;
+use windows_sys::Win32::Security::Isolation::{
+    CreateAppContainerProfile, DeriveAppContainerSidFromAppContainerName,
+};
 use windows_sys::Win32::Security::{
     DuplicateTokenEx, FreeSid, PSID, SECURITY_CAPABILITIES, SecurityImpersonation,
     TOKEN_ADJUST_DEFAULT, TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE,
@@ -60,6 +62,54 @@ pub struct LabLimits {
     pub processes: u32,
     /// CPU-Obergrenze in Prozent (1–100).
     pub cpu_percent: u32,
+}
+
+/// `HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)`.
+const HR_ALREADY_EXISTS: i32 = 0x8007_00B7_u32 as i32;
+
+/// Legt das AppContainer-Profil des Labors für das aktuelle Konto (bzw. das per
+/// Identitätswechsel übernommene) an, falls es fehlt. Ohne Profil fehlt der Objekt-Ordner des
+/// AppContainers, und `CreateProcess` meldet „Datei nicht gefunden“. Das Profil hat keine
+/// Fähigkeiten (kein Netz, keine Bibliotheken); es gehört AEGIS und bleibt bestehen.
+///
+/// # Errors
+/// Profil nicht anlegbar.
+pub fn ensure_appcontainer_profile(name: &str) -> io::Result<()> {
+    let text = wide(name);
+    let display = wide("AEGIS Labor");
+    let description = wide("AEGIS Labor – Mini-Sandbox ohne Fähigkeiten");
+    let mut sid: PSID = ptr::null_mut();
+    // SAFETY: alle Texte nullterminiert; keine Fähigkeiten (Zeiger null, Anzahl 0); `sid`
+    // erhält bei Erfolg eine mit FreeSid freizugebende SID.
+    // aegis-unsafe: winffi-create-appcontainer-profile
+    #[allow(unsafe_code)]
+    // Legt das AEGIS-eigene AppContainer-Profil des Labors an (Registrierung + Ordner des
+    // Profils, ohne Fähigkeiten) – nur vor einem freigegebenen Labor-Lauf.
+    // aegis-mutation: winffi-create-appcontainer-profile-call
+    #[allow(clippy::disallowed_methods)]
+    let hr = unsafe {
+        CreateAppContainerProfile(
+            text.as_ptr(),
+            display.as_ptr(),
+            description.as_ptr(),
+            ptr::null(),
+            0,
+            &mut sid,
+        )
+    };
+    if hr >= 0 {
+        if !sid.is_null() {
+            // SAFETY: SID von CreateAppContainerProfile; genau einmal freigeben.
+            // aegis-unsafe: winffi-appcontainer-profile-sid-free
+            #[allow(unsafe_code)]
+            let _ = unsafe { FreeSid(sid) };
+        }
+        return Ok(());
+    }
+    if hr == HR_ALREADY_EXISTS {
+        return Ok(());
+    }
+    Err(io::Error::from_raw_os_error(hr))
 }
 
 /// SID eines AppContainers als Text (`S-1-15-2-…`), abgeleitet aus dem Namen.

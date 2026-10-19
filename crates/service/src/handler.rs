@@ -319,6 +319,26 @@ impl<C: Clock, W: Durable> Service<C, W> {
             match scope {
                 Err(e) => Err(format!("Rechte des Nutzers nicht übernehmbar: {e}")),
                 Ok(_scope) => {
+                    // Mini-Sandbox: AppContainer-Profil für dieses Konto anlegen (fehlt es,
+                    // scheitert der Start); misslingt es hier, versucht es der Dienst unten.
+                    #[cfg(windows)]
+                    let profile = (stage == LabStage::MiniSandbox).then(|| {
+                        aegis_winffi::sandbox::ensure_appcontainer_profile(
+                            aegis_winffi::sandbox::LAB_APPCONTAINER,
+                        )
+                    });
+                    #[cfg(windows)]
+                    if let Some(Err(_)) = profile {
+                        let _ = std::thread::scope(|s| {
+                            // Eigener Thread ohne Identitätswechsel: Profil im Dienstkonto.
+                            s.spawn(|| {
+                                aegis_winffi::sandbox::ensure_appcontainer_profile(
+                                    aegis_winffi::sandbox::LAB_APPCONTAINER,
+                                )
+                            })
+                            .join()
+                        });
+                    }
                     #[cfg(windows)]
                     let token = aegis_winffi::sandbox::UserToken::from_current_identity()
                         .map_err(|e| e.to_string());

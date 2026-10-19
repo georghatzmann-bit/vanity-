@@ -8,7 +8,10 @@ use std::path::PathBuf;
 use aegis_sandbox::mini::{MiniRun, run};
 use aegis_sandbox::report::{Change, RunEnd};
 use aegis_winffi::inspect::Hive;
-use aegis_winffi::sandbox::{LAB_APPCONTAINER, UserToken, appcontainer_sid, create_dir_with_sddl};
+use aegis_winffi::sandbox::{
+    LAB_APPCONTAINER, UserToken, appcontainer_sid, create_dir_with_sddl,
+    ensure_appcontainer_profile,
+};
 
 fn simulator() -> Vec<u8> {
     let exe = std::env::current_exe().unwrap();
@@ -19,6 +22,7 @@ fn simulator() -> Vec<u8> {
 #[test]
 fn simulator_laeuft_isoliert_und_bericht_listet_dateien() {
     let temp = tempfile::tempdir().unwrap();
+    ensure_appcontainer_profile(LAB_APPCONTAINER).unwrap();
     let sid = appcontainer_sid(LAB_APPCONTAINER).unwrap();
     assert!(sid.starts_with("S-1-15-2-"), "{sid}");
     let work = temp.path().join("labor");

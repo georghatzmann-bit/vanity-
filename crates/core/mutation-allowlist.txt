@@ -252,3 +252,6 @@ crates/winffi/src/sandbox.rs :: winffi-spawn-as-user-handles :: Windows-FFI: üb
 crates/service/src/lab.rs :: service-lab-create :: Labor: legt nach Freigabe des Labor-Laufs neue Dateien im eigenen Labor-Ordner an (Kopie der Probe, Sonde, .wsb) – nie überschreiben.
 crates/service/src/lab.rs :: service-lab-cleanup :: Labor: verwirft nach dem Lauf den eigenen Labor-Ordner (Kopie der Probe und was sie dort schrieb) – nur unter dem Labor-Ordner, Links werden nicht verfolgt.
 crates/service/src/lab.rs :: service-lab-enable-feature :: Labor: schaltet nach Freigabe eines Administrators das Windows-Feature „Windows Sandbox“ per DISM ein (fester Pfad, feste Argumente, kein Neustart).
+crates/winffi/src/sandbox.rs :: winffi-create-appcontainer-profile-call :: Labor: legt das AEGIS-eigene AppContainer-Profil (ohne Fähigkeiten) an, das CreateProcess für die Mini-Sandbox braucht – nur vor einem freigegebenen Lauf bzw. im Test.
+crates/winffi/src/sandbox.rs :: winffi-create-appcontainer-profile :: Windows-FFI: CreateAppContainerProfile mit nullterminierten Texten, ohne Fähigkeiten.
+crates/winffi/src/sandbox.rs :: winffi-appcontainer-profile-sid-free :: Windows-FFI: gibt die SID des angelegten Profils frei.
