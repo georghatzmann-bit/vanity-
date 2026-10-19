@@ -2,7 +2,6 @@
 //! eingelinkt). AEGIS ruft `clamdscan` (schnell, mit laufendem clamd) oder `clamscan` auf und
 //! wertet nur die Ausgabe aus. Der Aufruf verändert nichts: ohne `--remove`/`--move`.
 
-use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -103,8 +102,8 @@ impl ClamAv {
     /// an ClamAV weiter. Bricht nach dem Zeitlimit ab.
     #[must_use]
     pub fn scan(&self, target: &Path) -> ClamResult {
-        match File::open(target) {
-            Ok(file) => self.scan_reader(file),
+        match crate::scan::open_regular(target) {
+            Ok((file, _)) => self.scan_reader(file),
             Err(e) => ClamResult::Error(format!("Datei nicht lesbar: {e}")),
         }
     }

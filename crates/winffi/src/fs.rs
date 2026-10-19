@@ -194,6 +194,15 @@ fn ensure_same_path(handle: HANDLE, requested: &Path) -> io::Result<()> {
     }
 }
 
+/// Prüft an einem bereits geöffneten Handle, dass es genau `requested` ist – nicht über einen
+/// Link oder eine Abzweigung (auch in Zwischenordnern) erreicht.
+///
+/// # Errors
+/// Pfad weicht ab oder Handle ungültig.
+pub fn ensure_file_at(file: &File, requested: &Path) -> io::Result<()> {
+    ensure_same_path(file.as_raw_handle(), requested)
+}
+
 /// Öffnet ein Objekt nur zum Lesen der Attribute, ohne Analysepunkten zu folgen.
 fn open_attributes(path: &Path, directory: bool) -> io::Result<OwnedHandle> {
     let name = wide(path);

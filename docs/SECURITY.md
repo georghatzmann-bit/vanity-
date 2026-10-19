@@ -93,7 +93,14 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   wartende Dateien (Überlauf wird gezählt und angezeigt). Meldungen sieht nur das Konto, in
   dessen Profil die Datei liegt (Profilordner des Pipe-Clients); gemeinsame Orte (USB,
   Programme-Ordner) sehen alle. Vertraute Dateien (Hash + Pfad) werden nicht gemeldet.
-  Isolieren/Vertrauen nur über Vorschlag + Freigabe-Dialog. **Gaming-Modus** pausiert Prüfen
+  Isolieren/Vertrauen nur über Vorschlag + Freigabe-Dialog. **Rechte (Review P3-1):** Der
+  Wächter und geplante Scans lesen nie mit den Rechten des Dienstes: Dateien eines Profils mit
+  dem Token der angemeldeten Sitzung des Profil-Besitzers, sonst (USB, Programme, Besitzer
+  nicht angemeldet) mit einem „nur Nutzer“-Token (SYSTEM/Administratoren nur deny,
+  eingeschränkt auf Everyone/Authentifizierte/Benutzer/RESTRICTED). Ein Link in einem
+  Nutzerordner führt damit nicht zu fremden Dateien. Zusätzlich öffnet die Engine Dateien
+  so, dass ein Austausch gegen einen Link zwischen Prüfen und Öffnen erkannt wird
+  (Windows: tatsächlicher Pfad am Handle; Unix: Gerät + Inode). **Gaming-Modus** pausiert Prüfen
   und Hinweise rechnerweit und endet spätestens nach 4 Stunden von selbst; danach wird
   nachgeprüft. Grenze: Neue Profile werden erst nach einem Dienst-Neustart überwacht.
 - **Verlauf, Zeitpläne, Updates (P3.5):** Der Verlauf (Berichte) enthält nur Zusammenfassungen

@@ -1,5 +1,17 @@
-//! Labor (P4): Windows-Sandbox-Konfiguration (.wsb) und Mini-Sandbox (eingeschränktes Token, Job-Objekt, AppContainer).
+//! Labor (P4): unbekannte Programme abgeschottet ausprobieren und ihr Verhalten erklären.
 //!
-//! Platzhalter aus Phase P0 – die Umsetzung folgt in der angegebenen Phase.
-//! Jede Funktion, die etwas verändert, verlangt eine `aegis_core::consent::Approval`.
+//! - [`wsb`] – Stufe 1: Konfiguration der Windows Sandbox (Netz, Zwischenablage, Drucker,
+//!   Audio/Kamera aus; Probe nur lesbar).
+//! - [`report`] – Verhaltensbericht und verständliche Einschätzung.
+//! - [`snapshot`], [`entropy`] – Vorher/Nachher-Vergleich und Entropie geschriebener Dateien.
+//!
+//! Ein Labor-Lauf startet ein fremdes Programm – das geschieht nur nach „Ja, ausführen“ im
+//! Freigabe-Dialog (Plan des Dienstes). Diese Bibliothek selbst beobachtet und beschreibt nur.
 #![forbid(unsafe_code)]
+
+pub mod entropy;
+pub mod report;
+pub mod snapshot;
+pub mod wsb;
+
+pub use report::{Assessment, Behavior, BehaviorReport, RunEnd, Stage};

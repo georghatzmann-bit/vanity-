@@ -66,3 +66,32 @@ fn absturz_des_pruefprozesses_ist_nicht_pruefbar() {
             .contains("abgebrochen")
     );
 }
+
+/// Hintergrundprüfungen lesen nie mit den Rechten des Dienstes: Ohne angemeldeten
+/// Profil-Besitzer gilt das „nur Nutzer“-Token – eine Datei, die nur ihr Besitzer lesen darf
+/// (Temp-Ordner des Kontos), bleibt unlesbar; allgemein lesbare Dateien werden geprüft.
+#[cfg(windows)]
+#[test]
+fn hintergrund_liest_nur_was_alle_nutzer_lesen_duerfen() {
+    use aegis_service::worker::BackgroundAccess;
+    let home = tempfile::tempdir().unwrap();
+    let private = write_fixture(home.path(), "eicar.com", &eicar()).unwrap();
+    let shared = BackgroundAccess { profile: None };
+    let findings = worker()
+        .examine(std::slice::from_ref(&private), &shared)
+        .unwrap();
+    assert!(
+        findings[0].not_scannable.is_some(),
+        "privat: {:?}",
+        findings[0]
+    );
+    assert!(findings[0].risk < RiskLevel::Dangerous);
+    let windir =
+        std::env::var_os("SystemRoot").map_or_else(|| PathBuf::from(r"C:\Windows"), PathBuf::from);
+    let public = windir.join(r"System32\drivers\etc\hosts");
+    let findings = worker().examine(&[public], &shared).unwrap();
+    assert!(findings[0].not_scannable.is_none(), "{:?}", findings[0]);
+    // Mit eigenen Rechten lesbar (Gegenprobe).
+    let own = worker().examine(&[private], &OwnProcess).unwrap();
+    assert_eq!(own[0].risk, RiskLevel::Dangerous);
+}

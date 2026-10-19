@@ -142,7 +142,8 @@ pub fn sample_plan_builder(kind: ActionKind) -> ActionPlanBuilder {
         | ActionKind::Restore
         | ActionKind::DeletePermanently
         | ActionKind::AddTrust
-        | ActionKind::RemoveTrust => ActionPlan::builder(kind).target(file),
+        | ActionKind::RemoveTrust
+        | ActionKind::RunInSandbox => ActionPlan::builder(kind).target(file),
         ActionKind::MoveFile => ActionPlan::builder(kind).target(file).parameter(
             param::DESTINATION,
             test_path("Sortiert").display().to_string(),

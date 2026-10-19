@@ -170,3 +170,41 @@ crates/winffi/src/system.rs :: winffi-drive-type :: Windows-FFI: liest den Laufw
 crates/winffi/src/pipe.rs :: winffi-open-client-token-profile :: Windows-FFI: liest das Client-Token während des Identitätswechsels (Profilordner bestimmen).
 crates/winffi/src/pipe.rs :: winffi-profile-dir :: Windows-FFI: liest den Profilordner des Clients (nur lesend).
 apps/desktop/src-tauri/src/report.rs :: desktop-report-write :: App: schreibt den erzeugten HTML-Bericht an den Ort, den der Nutzer im Speichern-Dialog selbst gewählt hat (Windows fragt vor dem Überschreiben).
+crates/winffi/src/identity.rs :: winffi-impersonate-token :: Windows-FFI: Identitätswechsel für Hintergrundprüfungen (Profil-Besitzer bzw. „nur Nutzer“-Token) – nie mit SYSTEM-Rechten lesen.
+crates/winffi/src/identity.rs :: winffi-identity-profile-dir :: Windows-FFI: liest den Profilordner eines Sitzungs-Tokens (nur lesend).
+crates/winffi/src/identity.rs :: winffi-wts-sessions :: Windows-FFI: listet Anmeldesitzungen (nur lesend).
+crates/winffi/src/identity.rs :: winffi-wts-sessions-slice :: Windows-FFI: liest die gelieferte Sitzungsliste.
+crates/winffi/src/identity.rs :: winffi-wts-free :: Windows-FFI: gibt die Sitzungsliste frei.
+crates/winffi/src/identity.rs :: winffi-wts-user-token :: Windows-FFI: Token einer angemeldeten Sitzung (um mit den Rechten des Profil-Besitzers zu prüfen).
+crates/winffi/src/identity.rs :: winffi-well-known-sid :: Windows-FFI: erzeugt bekannte SIDs für das „nur Nutzer“-Token.
+crates/winffi/src/identity.rs :: winffi-shared-reader-process-token :: Windows-FFI: öffnet das eigene Prozess-Token zum Ableiten des „nur Nutzer“-Tokens.
+crates/winffi/src/identity.rs :: winffi-shared-reader-token :: Windows-FFI: leitet das „nur Nutzer“-Token ab (SYSTEM/Administratoren nur deny, eingeschränkt auf Everyone/Benutzer).
+crates/winffi/src/sandbox.rs :: winffi-derive-appcontainer-sid :: Windows-FFI: leitet die SID des Labor-AppContainers aus dem Namen ab (nur Berechnung).
+crates/winffi/src/sandbox.rs :: winffi-appcontainer-sid-text :: Windows-FFI: SID als Text.
+crates/winffi/src/sandbox.rs :: winffi-appcontainer-sid-read :: Windows-FFI: liest den SID-Text.
+crates/winffi/src/sandbox.rs :: winffi-appcontainer-sid-free :: Windows-FFI: gibt SID und Text frei.
+crates/winffi/src/sandbox.rs :: winffi-create-lab-dir :: Windows-FFI: legt einen neuen Labor-Ordner mit fester Zugriffsliste an.
+crates/winffi/src/sandbox.rs :: winffi-create-lab-dir-call :: Labor: neuer, eigener Ordner im AEGIS-Datenbereich für einen freigegebenen Labor-Lauf (nie vorhandene Ordner).
+crates/winffi/src/sandbox.rs :: winffi-lab-thread-token :: Windows-FFI: Thread-Token des anfragenden Nutzers für den Labor-Start.
+crates/winffi/src/sandbox.rs :: winffi-lab-process-token :: Windows-FFI: eigenes Prozess-Token (Entwicklung ohne Identitätswechsel).
+crates/winffi/src/sandbox.rs :: winffi-lab-duplicate-token :: Windows-FFI: Primär-Token für den Labor-Start.
+crates/winffi/src/sandbox.rs :: winffi-lab-wait :: Windows-FFI: wartet auf das Labor-Programm.
+crates/winffi/src/sandbox.rs :: winffi-lab-exit-code :: Windows-FFI: liest den Rückgabewert.
+crates/winffi/src/sandbox.rs :: winffi-lab-job-pids :: Windows-FFI: listet die Prozesse des Labor-Jobs (nur lesend).
+crates/winffi/src/sandbox.rs :: winffi-lab-terminate :: Windows-FFI: beendet den eigenen Labor-Job.
+crates/winffi/src/sandbox.rs :: winffi-lab-terminate-call :: Labor: beendet nach Ablauf der Beobachtungszeit nur die Prozesse des eigenen, freigegebenen Labor-Laufs.
+crates/winffi/src/sandbox.rs :: winffi-lab-job-info :: Windows-FFI: setzt Grenzen des eigenen Labor-Jobs.
+crates/winffi/src/sandbox.rs :: winffi-lab-create-job :: Windows-FFI: legt den Labor-Job an.
+crates/winffi/src/sandbox.rs :: winffi-lab-attr-size :: Windows-FFI: Größe der Attributliste.
+crates/winffi/src/sandbox.rs :: winffi-lab-attr-init :: Windows-FFI: Attributliste anlegen.
+crates/winffi/src/sandbox.rs :: winffi-lab-attr-update :: Windows-FFI: AppContainer ohne Fähigkeiten in die Attributliste.
+crates/winffi/src/sandbox.rs :: winffi-lab-attr-delete :: Windows-FFI: Attributliste löschen.
+crates/winffi/src/sandbox.rs :: winffi-lab-sid-parse :: Windows-FFI: AppContainer-SID aus Text.
+crates/winffi/src/sandbox.rs :: winffi-lab-sid-free :: Windows-FFI: SID freigeben.
+crates/winffi/src/sandbox.rs :: winffi-lab-create-process :: Windows-FFI: startet die Probe im AppContainer (angehalten, ohne vererbte Handles).
+crates/winffi/src/sandbox.rs :: winffi-lab-create-process-call :: Labor: startet die Probe nur nach der Freigabe „Im Labor ausführen“ (Plan des Dienstes, Permit) im AppContainer ohne Netz.
+crates/winffi/src/sandbox.rs :: winffi-lab-own-handles :: Windows-FFI: übernimmt Prozess-/Thread-Handles.
+crates/winffi/src/sandbox.rs :: winffi-lab-assign-job :: Windows-FFI: ordnet die Probe dem Labor-Job zu.
+crates/winffi/src/sandbox.rs :: winffi-lab-kill-unassigned :: Windows-FFI: beendet die nie gelaufene Probe, wenn sie keinem Job zugeordnet werden konnte.
+crates/winffi/src/sandbox.rs :: winffi-lab-kill-unassigned-call :: Labor: beendet nur die eigene, angehaltene Probe ohne Job (Sicherheit vor Ausführung ohne Grenzen).
+crates/winffi/src/sandbox.rs :: winffi-lab-resume :: Windows-FFI: lässt die Probe im Job anlaufen.

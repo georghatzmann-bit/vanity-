@@ -206,7 +206,8 @@ fn targets_must_match_kind() {
                 | ActionKind::Restore
                 | ActionKind::DeletePermanently
                 | ActionKind::MoveFile
-                | ActionKind::RenameFile => matches!(target, Target::File { .. }),
+                | ActionKind::RenameFile
+                | ActionKind::RunInSandbox => matches!(target, Target::File { .. }),
                 ActionKind::SuspendProcess
                 | ActionKind::ResumeProcess
                 | ActionKind::TerminateProcess => matches!(target, Target::Process { .. }),

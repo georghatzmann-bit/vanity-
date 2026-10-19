@@ -326,11 +326,14 @@ pub enum ActionKind {
     AddTrust,
     /// Ziel aus der Vertrauensliste entfernen.
     RemoveTrust,
+    /// Datei im Labor (Windows Sandbox bzw. Mini-Sandbox) starten und beobachten. Die Datei
+    /// selbst bleibt unverändert; das Labor wird danach verworfen.
+    RunInSandbox,
 }
 
 impl ActionKind {
     /// Alle bekannten Arten.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Quarantine,
         Self::Restore,
         Self::DeletePermanently,
@@ -342,6 +345,7 @@ impl ActionKind {
         Self::RenameFile,
         Self::AddTrust,
         Self::RemoveTrust,
+        Self::RunInSandbox,
     ];
 
     /// Stabile Kennung (identisch mit der serde-Darstellung, Teil der Prüfsumme).
@@ -359,6 +363,7 @@ impl ActionKind {
             Self::RenameFile => "rename_file",
             Self::AddTrust => "add_trust",
             Self::RemoveTrust => "remove_trust",
+            Self::RunInSandbox => "run_in_sandbox",
         }
     }
 
@@ -377,6 +382,7 @@ impl ActionKind {
             Self::RenameFile => "Datei umbenennen",
             Self::AddTrust => "Als vertrauenswürdig markieren",
             Self::RemoveTrust => "Vertrauen entziehen",
+            Self::RunInSandbox => "Im Labor ausführen",
         }
     }
 
@@ -395,6 +401,7 @@ impl ActionKind {
             Self::RenameFile => "Rename file",
             Self::AddTrust => "Mark as trusted",
             Self::RemoveTrust => "Remove trust",
+            Self::RunInSandbox => "Run in the lab",
         }
     }
 
@@ -420,7 +427,8 @@ impl ActionKind {
             | Self::Restore
             | Self::DeletePermanently
             | Self::MoveFile
-            | Self::RenameFile => matches!(target, Target::File { .. }),
+            | Self::RenameFile
+            | Self::RunInSandbox => matches!(target, Target::File { .. }),
             Self::SuspendProcess | Self::ResumeProcess | Self::TerminateProcess => {
                 matches!(target, Target::Process { .. })
             }

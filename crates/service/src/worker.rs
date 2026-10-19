@@ -120,6 +120,32 @@ impl Scanner {
     }
 }
 
+/// Identität für Prüfungen **ohne** anfragenden Nutzer (Wächter, geplante Scans): Rechte
+/// des Profil-Besitzers, wenn er angemeldet ist, sonst ein „nur Nutzer“-Token. Der Dienst
+/// liest fremde Dateien so nie mit seinen eigenen (SYSTEM-)Rechten – ein Link in einem
+/// Nutzerordner führt nicht zu Dateien, die dieser Nutzer nicht lesen darf.
+#[derive(Debug, Clone, Default)]
+pub struct BackgroundAccess {
+    /// Profilordner, zu dem die Dateien gehören (`None` = gemeinsamer Ort).
+    pub profile: Option<PathBuf>,
+}
+
+impl UserAccess for BackgroundAccess {
+    fn enter(&self) -> io::Result<aegis_quarantine::UserScope> {
+        #[cfg(windows)]
+        {
+            Ok(aegis_quarantine::UserScope::holding(
+                aegis_winffi::impersonate_for_background(self.profile.as_deref())?,
+            ))
+        }
+        #[cfg(not(windows))]
+        {
+            // Unix (nur Entwicklung): der Dienst läuft dort als normaler Nutzer.
+            Ok(aegis_quarantine::UserScope::unchanged())
+        }
+    }
+}
+
 fn identity(e: io::Error) -> String {
     format!("Rechte des Nutzers nicht übernehmbar ({e}) – nichts geprüft")
 }

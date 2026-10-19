@@ -104,6 +104,15 @@ pub struct Impersonation {
     _not_send: std::marker::PhantomData<*const ()>,
 }
 
+impl Impersonation {
+    /// Wächter für einen eben begonnenen Identitätswechsel (nur innerhalb dieses Crates).
+    pub(crate) fn started() -> Self {
+        Self {
+            _not_send: std::marker::PhantomData,
+        }
+    }
+}
+
 impl Drop for Impersonation {
     fn drop(&mut self) {
         // SAFETY: Keine Argumente; setzt nur das Thread-Token zurück.

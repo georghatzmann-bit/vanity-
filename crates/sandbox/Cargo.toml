@@ -1,6 +1,6 @@
 [package]
 name = "aegis-sandbox"
-description = "Labor (P4): Windows-Sandbox-Konfiguration (.wsb) und Mini-Sandbox (eingeschränktes Token, Job-Objekt, AppContainer)."
+description = "Labor (P4): Windows-Sandbox-Konfiguration (.wsb), Mini-Sandbox und Verhaltensbericht."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,13 @@ publish.workspace = true
 authors.workspace = true
 
 [dependencies]
+aegis-core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+aegis-core = { path = "../core", features = ["testing"] }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

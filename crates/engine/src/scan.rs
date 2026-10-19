@@ -524,13 +524,36 @@ struct ReadResult {
     truncated: bool,
 }
 
-/// Liest bis `limit` Byte in den Speicher und hasht die ganze Datei in einem Durchgang.
-fn read_and_hash(path: &Path, limit: u64) -> io::Result<ReadResult> {
+/// Öffnet eine reguläre Datei nur zum Lesen – **ohne** Links zu folgen, auch nicht, wenn
+/// der Pfad zwischen Prüfen und Öffnen ausgetauscht wird: Nach dem Öffnen wird am Handle
+/// geprüft, dass es genau diese Datei ist (Windows: tatsächlicher Pfad; Unix: Gerät + Inode).
+///
+/// # Errors
+/// Keine reguläre Datei, Link oder nicht lesbar.
+pub fn open_regular(path: &Path) -> io::Result<(File, std::fs::Metadata)> {
     let meta = std::fs::symlink_metadata(path)?;
     if !meta.is_file() {
         return Err(io::Error::other("keine reguläre Datei"));
     }
-    let mut file = File::open(path)?;
+    let file = File::open(path)?;
+    #[cfg(windows)]
+    aegis_winffi::ensure_file_at(&file, path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let opened = file.metadata()?;
+        if opened.dev() != meta.dev() || opened.ino() != meta.ino() || !opened.is_file() {
+            return Err(io::Error::other(
+                "Datei wurde zwischen Prüfen und Öffnen ausgetauscht – nicht geprüft",
+            ));
+        }
+    }
+    Ok((file, meta))
+}
+
+/// Liest bis `limit` Byte in den Speicher und hasht die ganze Datei in einem Durchgang.
+fn read_and_hash(path: &Path, limit: u64) -> io::Result<ReadResult> {
+    let (mut file, meta) = open_regular(path)?;
     let mut hasher = Sha256::new();
     let mut head = Vec::with_capacity(usize::try_from(meta.len().min(limit)).unwrap_or(0));
     let mut buf = vec![0u8; 64 * 1024];

@@ -430,6 +430,7 @@ fn waechter_meldungen_ueber_das_protokoll() {
             removable: false,
             processes: false,
             settle: std::time::Duration::from_millis(100),
+            identity: aegis_service::watch::ScanIdentity::OwnProcess,
         },
         h.service.scanner(),
         h.service.watch(),

@@ -21,7 +21,6 @@ use std::time::{Duration, Instant, SystemTime};
 use aegis_core::risk::RiskLevel;
 use aegis_core::time::OffsetDateTime;
 use aegis_engine::Finding;
-use aegis_quarantine::OwnProcess;
 use serde::Serialize;
 
 use crate::worker::Scanner;
@@ -271,6 +270,17 @@ pub struct WatchConfig {
     pub processes: bool,
     /// Ruhezeit, bevor eine Datei geprüft wird (Schreiben abgeschlossen).
     pub settle: Duration,
+    /// Mit welchen Rechten geprüft wird.
+    pub identity: ScanIdentity,
+}
+
+/// Rechte für Prüfungen des Wächters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanIdentity {
+    /// Betrieb: Profil-Besitzer bzw. „nur Nutzer“-Token, nie der Dienst selbst.
+    Background,
+    /// Nur Tests und Konsolenbetrieb als normaler Nutzer: der eigene Prozess.
+    OwnProcess,
 }
 
 impl WatchConfig {
@@ -317,6 +327,7 @@ impl WatchConfig {
             removable: cfg!(windows),
             processes: cfg!(windows),
             settle: Duration::from_secs(2),
+            identity: ScanIdentity::Background,
         }
     }
 }
@@ -514,6 +525,9 @@ fn fingerprint(path: &Path) -> Option<(SystemTime, u64)> {
     })
 }
 
+/// Dateien eines Profils (bzw. gemeinsamer Orte) für einen Prüflauf.
+type ScopeGroup = (Option<PathBuf>, Vec<(PathBuf, WatchKind)>);
+
 fn scan_loop(
     config: &WatchConfig,
     rx: &Receiver<(PathBuf, WatchKind)>,
@@ -566,21 +580,38 @@ fn scan_loop(
         if batch.is_empty() {
             continue;
         }
-        let paths: Vec<PathBuf> = batch.iter().map(|(p, _)| p.clone()).collect();
-        let Ok(findings) = scanner.examine(&paths, &OwnProcess) else {
-            continue;
-        };
-        for ((path, kind), finding) in batch.into_iter().zip(findings) {
-            if finding.risk > RiskLevel::Info {
-                // Gehört die Datei (auch ein gestartetes Programm) zu einem Profil, sieht sie
-                // nur dieses Konto; sonst ist sie gemeinsam (USB, Programme-Ordner).
-                let scope = config
-                    .folders
-                    .iter()
-                    .filter_map(|(_, scope)| scope.as_ref())
-                    .find(|profile| starts_with(&path, profile))
-                    .cloned();
-                shared.push(kind, path, scope, finding);
+        // Gehört die Datei (auch ein gestartetes Programm) zu einem Profil, sieht sie nur
+        // dieses Konto, und geprüft wird mit dessen Rechten; sonst ist sie gemeinsam (USB,
+        // Programme-Ordner) und wird mit einem „nur Nutzer“-Token gelesen – nie als SYSTEM.
+        let mut groups: Vec<ScopeGroup> = Vec::new();
+        for (path, kind) in batch {
+            let scope = config
+                .folders
+                .iter()
+                .filter_map(|(_, scope)| scope.as_ref())
+                .find(|profile| starts_with(&path, profile))
+                .cloned();
+            match groups.iter_mut().find(|(s, _)| *s == scope) {
+                Some((_, items)) => items.push((path, kind)),
+                None => groups.push((scope, vec![(path, kind)])),
+            }
+        }
+        for (scope, items) in groups {
+            let paths: Vec<PathBuf> = items.iter().map(|(p, _)| p.clone()).collect();
+            let background = crate::worker::BackgroundAccess {
+                profile: scope.clone(),
+            };
+            let access: &dyn aegis_quarantine::UserAccess = match config.identity {
+                ScanIdentity::Background => &background,
+                ScanIdentity::OwnProcess => &aegis_quarantine::OwnProcess,
+            };
+            let Ok(findings) = scanner.examine(&paths, access) else {
+                continue;
+            };
+            for ((path, kind), finding) in items.into_iter().zip(findings) {
+                if finding.risk > RiskLevel::Info {
+                    shared.push(kind, path, scope.clone(), finding);
+                }
             }
         }
     }
@@ -645,6 +676,7 @@ mod tests {
             removable: false,
             processes: false,
             settle: Duration::from_millis(100),
+            identity: ScanIdentity::OwnProcess,
         };
         let engine = aegis_engine::Engine::with_builtin_rules().unwrap();
         start(

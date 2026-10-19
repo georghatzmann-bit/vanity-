@@ -15,6 +15,7 @@ use aegis_engine::yara::YaraRules;
 use aegis_engine::{Engine, EngineConfig};
 use aegis_quarantine::Vault;
 
+#[cfg(unix)]
 use aegis_quarantine::OwnProcess;
 
 use crate::handler::Service;
@@ -178,7 +179,12 @@ fn spawn_scheduler(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
                     .map(|f| schedule.profile.join(f))
                     .filter(|p| p.is_dir())
                     .collect();
-                let result = scanner.scan(&folders, &OwnProcess);
+                // Mit den Rechten des Profil-Besitzers (angemeldet), sonst „nur Nutzer“ – nie
+                // mit den Rechten des Dienstes.
+                let access = crate::worker::BackgroundAccess {
+                    profile: Some(schedule.profile.clone()),
+                };
+                let result = scanner.scan(&folders, &access);
                 lock().record_scheduled(schedule, result);
             }
             if work.update {

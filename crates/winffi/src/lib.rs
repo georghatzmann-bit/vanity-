@@ -7,7 +7,9 @@
 //! - [`pipe`]: Named Pipe mit Zugriffsliste, Identitätswechsel auf den Client, Prüfung der
 //!   Server-Identität,
 //! - [`fs`]: Dateien ohne Links öffnen/anlegen/löschen (Quarantäne mit Nutzerrechten),
-//!   geschützte Ordner anlegen.
+//!   geschützte Ordner anlegen,
+//! - [`process`]: eingeschränkte Prüfprozesse, [`identity`]: Identitäten für Prüfungen im
+//!   Hintergrund, [`sandbox`]: Mini-Sandbox (AppContainer) des Labors.
 //!
 //! Auf anderen Systemen ist das Crate leer.
 #![deny(unsafe_code)]
@@ -28,9 +30,19 @@ pub mod process;
 pub mod system;
 
 #[cfg(windows)]
+pub mod identity;
+
+#[cfg(windows)]
+pub mod sandbox;
+
+#[cfg(windows)]
 pub use fs::{
-    DATA_DIR_SDDL, create_new, create_secure_dir, delete_by_handle, final_path, is_name_surrogate,
-    long_path, open_exclusive, owner_is_trusted,
+    DATA_DIR_SDDL, create_new, create_secure_dir, delete_by_handle, ensure_file_at, final_path,
+    is_name_surrogate, long_path, open_exclusive, owner_is_trusted,
+};
+#[cfg(windows)]
+pub use identity::{
+    impersonate_for_background, impersonate_profile_owner, impersonate_shared_reader,
 };
 #[cfg(windows)]
 pub use pipe::{
