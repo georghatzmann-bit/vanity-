@@ -12,7 +12,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    // Showcase-Tests prüfen die Referenz-Einbindung (z. B. inert während der Start-Animation);
+    // die Abdeckungsschwelle gilt weiterhin nur für das Paket selbst (src/).
+    include: ['src/**/*.test.{ts,tsx}', 'showcase/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],

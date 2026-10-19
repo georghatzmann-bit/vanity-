@@ -32,7 +32,10 @@ import {
 export interface BootSequenceProps {
   /** Wird genau einmal aufgerufen – nach natürlichem Ende, Überspringen oder Obergrenze. */
   readonly onComplete: () => void;
-  /** Zeitfaktor (1 = ≈ 1,5 s). Begrenzt auf 0–2,5; 0 = sofort fertig. */
+  /**
+   * Zeitfaktor (1 = ≈ 1,5 s). Begrenzt auf 0–2,5; 0 = sofort fertig. Bei „Bewegung
+   * reduzieren“ höchstens 1 – die Blende bleibt dann bei ≤ 300 ms.
+   */
   readonly durationScale?: number;
   /** Beschriftung des Überspringen-Buttons. */
   readonly skipLabel?: string;
@@ -61,7 +64,10 @@ function reach(target: BootPhase): (current: BootPhase) => BootPhase {
  * - Kein Fokus-Diebstahl beim Start und keine Fokusfalle: Escape, Enter und Leertaste
  *   überspringen global. Das erste Tab führt zum sichtbaren Button „Überspringen“ (auch wenn
  *   der Fokus noch in der verdeckten App liegt), danach gilt die normale Tab-Reihenfolge.
- *   Empfehlung: App-Inhalt bis onComplete `inert` halten und danach den Fokus setzen.
+ * - Pflicht für Einbindende: den App-Inhalt bis onComplete `inert` und `aria-hidden` halten.
+ *   Die DOM-Reihenfolge allein reicht nicht – sonst führt Tab nach „Überspringen“ auf
+ *   verdeckte Elemente (WCAG 2.4.11) und Screenreader lesen die Seite dahinter. Den Fokus
+ *   erst setzen, wenn `inert` aufgehoben ist (z. B. in einem Effekt nach onComplete).
  * - Bei „Bewegung reduzieren“: kein Zeichnen, kein Lichtstreifen – statisches Logo mit
  *   kurzer Deckkraft-Blende (≤ 300 ms).
  *
@@ -86,6 +92,9 @@ export function BootSequence({
   const layerRef = useRef<HTMLDivElement>(null);
   const skipButtonRef = useRef<HTMLButtonElement>(null);
   const scale = normalizeDurationScale(durationScale);
+  // Bei „Bewegung reduzieren“ darf der Faktor nur verkürzen (0 = sofort), nie strecken:
+  // die Deckkraft-Blende bleibt bei ≤ 300 ms gesamt.
+  const timelineScale = reducedMotion ? Math.min(scale, 1) : scale;
   const done = phase === 'done';
 
   const finish = useEffectEvent(() => {
@@ -101,10 +110,10 @@ export function BootSequence({
     if (skipping) {
       return undefined;
     }
-    return runTimeline(reducedMotion ? reducedBootTimeline : bootTimeline, scale, (next) =>
+    return runTimeline(reducedMotion ? reducedBootTimeline : bootTimeline, timelineScale, (next) =>
       setPhase(reach(next)),
     );
-  }, [skipping, reducedMotion, scale]);
+  }, [skipping, reducedMotion, timelineScale]);
 
   // Überspringen: kurze Blende, dann fertig.
   useEffect(() => {

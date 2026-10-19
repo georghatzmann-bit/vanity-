@@ -251,6 +251,24 @@ describe('BootSequence – reduzierte Bewegung', () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it('bleibt auch mit durationScale > 1 bei ≤ 300 ms (die Blende wird nicht gestreckt)', () => {
+    mockMatchMedia(true);
+    const onComplete = vi.fn();
+    render(<BootSequence onComplete={onComplete} durationScale={2.5} sound={false} />);
+    advance(250);
+    expect(layer()).toHaveAttribute('data-phase', 'exit');
+    advance(100);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('ist mit durationScale = 0 auch dann sofort fertig', () => {
+    mockMatchMedia(true);
+    const onComplete = vi.fn();
+    render(<BootSequence onComplete={onComplete} durationScale={0} sound={false} />);
+    advance(50);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
   it('lässt sich auch dann überspringen', () => {
     mockMatchMedia(true);
     const onComplete = vi.fn();

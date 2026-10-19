@@ -26,14 +26,17 @@ pnpm --filter @aegis/ui check-logo     # nur prüfen (Exit-Code 1 bei Abweichung
 - `tokens.ts` – typisierter Spiegel (Farben, Schatten, Radien, Schriften, Typo-Skala,
   Dauern in ms, Bézier-Tupel, Motion-Federn `snappy`/`gentle`).
 - `contrast.ts` – WCAG-Leuchtdichte und Kontrastverhältnis.
-- `tokens.test.ts` – erzwingt 1 : 1-Gleichheit von CSS und TS und WCAG AA in beiden Themes.
+- `tokens.test.ts` – erzwingt 1 : 1-Gleichheit von CSS und TS und WCAG AA in beiden Themes:
+  `text`, `text-muted` und `text-subtle` ≥ 4,5 : 1 auf `bg` und allen Flächen (`surface-1/2/3`,
+  auch für 11–12-px-Beschriftungen), `focus` und `border-strong` ≥ 3 : 1 auf allen Flächen
+  (WCAG 1.4.11), Status- und Risikofarben ≥ 4,5 : 1.
 
 | Token                                             | Dunkel                            | Hell                              |
 | ------------------------------------------------- | --------------------------------- | --------------------------------- |
 | bg                                                | `#07090c`                         | `#f5f7fa`                         |
 | surface-1 / 2 / 3                                 | `#0d1116` / `#131820` / `#1a212b` | `#ffffff` / `#f0f3f7` / `#e6ebf1` |
-| border / border-strong                            | `#232c38` / `#56637a`             | `#d5dce5` / `#7c899b`             |
-| text / muted / subtle                             | `#e7edf4` / `#9ba8b7` / `#6e7a89` | `#0b1220` / `#475467` / `#6b7789` |
+| border / border-strong                            | `#232c38` / `#5d6b84`             | `#d5dce5` / `#7b8899`             |
+| text / muted / subtle                             | `#e7edf4` / `#9ba8b7` / `#7b8999` | `#0b1220` / `#475467` / `#606b7b` |
 | accent / accent-strong / on-accent                | `#22d3ee` / `#67e8f9` / `#031418` | `#0b6a84` / `#0a5368` / `#ffffff` |
 | success / warn / danger                           | `#34d399` / `#fbbf24` / `#f87171` | `#05704f` / `#a04a06` / `#b91c1c` |
 | Risiko: Sauber / Info / Spiel-Tool/Cheat          | `#34d399` / `#60a5fa` / `#a78bfa` | `#05704f` / `#1d4ed8` / `#6d28d9` |
@@ -67,19 +70,31 @@ aus eigenen geometrischen Versalien (Pfade, keine Schriftabhängigkeit).
 - Phasen per JS-Takt (`requestAnimationFrame`), Motion stellt nur dar → mit Fake-Timern testbar.
 - Überspringen: Klick, `Esc`, `Enter`, Leertaste oder Button „Überspringen“ (150 ms Blende).
 - Harte Obergrenze 4 s per Timer (greift z. B., wenn rAF im minimierten Fenster pausiert).
-- „Bewegung reduzieren“: statisches Logo, nur Deckkraft, ≤ 300 ms.
+- „Bewegung reduzieren“: statisches Logo, nur Deckkraft, ≤ 300 ms (`durationScale` kann hier
+  nur verkürzen, nicht strecken).
 - Animiert werden nur `transform`/`opacity` und die Strich-Länge in SVG-Masken.
 - Barrierefreiheit: Statusregion „AEGIS wird gestartet“, Grafik `aria-hidden`, keine
-  Fokusfalle und kein Fokus-Diebstahl. Die Komponente vor dem App-Inhalt rendern (oder den
-  Inhalt bis `onComplete` `inert` halten) und nach `onComplete` den Fokus sinnvoll setzen.
+  Fokusfalle und kein Fokus-Diebstahl.
+- **Pflicht für Einbindende:** den App-Inhalt bis `onComplete` `inert` und `aria-hidden` halten.
+  Die Komponente nur vor dem Inhalt zu rendern reicht nicht – sonst erreicht Tab nach
+  „Überspringen“ verdeckte Elemente (WCAG 2.4.11) und Screenreader lesen die Seite dahinter.
+  Den Fokus erst nach dem Aufheben von `inert` setzen (Effekt nach `onComplete`, siehe
+  `apps/desktop/src/App.tsx` und `showcase/Showcase.tsx`).
 
 ## Klang (`src/sound`)
 
 `createUiSound()` / `getUiSound()` → `bootChime()`, `click()`, `alert()` – WebAudio-Synth ohne
 Dateien, sehr leise. Schalter `setSoundEnabled`/`isSoundEnabled`/`useSoundEnabled`
 (localStorage `aegis.sound` = `on`/`off`, Standard an, Speicherfehler werden abgefangen).
-Ohne WebAudio oder bei Autoplay-Sperre bleibt es still; nichts wird nachgeholt. Chromium
-meldet eine gesperrte Wiedergabe ohne Nutzergeste selbst als Konsolen-Warnung (kein Fehler).
+Ohne WebAudio oder bei Autoplay-Sperre bleibt es still; nichts wird nachgeholt. Meldet die
+Umgebung `navigator.userActivation`, entsteht vor der ersten Nutzergeste gar kein AudioContext
+(kein „suspended“ hängender Kontext, keine Chromium-Konsolenwarnung) – der Start-Klang beim
+App-Start bleibt daher still, der erste Klang nach einer Geste geht nicht verloren. Ein
+gesperrter Kontext wird in einer laufenden Geste fortgesetzt und der Klang trotzdem gespielt.
+Soll der Start-Klang in der App hörbar sein, müsste das WebView die Autoplay-Sperre
+ausdrücklich aufheben (z. B. `--autoplay-policy=no-user-gesture-required` in
+`additionalBrowserArgs`) – bewusst nicht gesetzt. `volume` wird auf 0–1 begrenzt; ungültige
+Werte (NaN, ±∞) ergeben den Standard 0,6.
 
 ## Showcase
 

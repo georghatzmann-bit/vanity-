@@ -4,8 +4,16 @@ import { isSoundEnabled } from './preference.ts';
  * Winziger WebAudio-Synthesizer für dezente UI-Klänge – ohne Audiodateien.
  *
  * Grundsätze: sehr leise, kurze weiche Hüllkurven, keine Wiederholungen. Fehlt WebAudio
- * oder blockiert die Autoplay-Richtlinie den AudioContext („suspended“), passiert still
- * nichts: Klänge werden nicht nachgeholt (ein verspäteter Start-Klang wäre irritierend).
+ * oder blockiert die Autoplay-Richtlinie den AudioContext, passiert still nichts: Klänge
+ * werden nicht nachgeholt (ein verspäteter Start-Klang wäre irritierend).
+ *
+ * Autoplay (über `navigator.userActivation`, falls vorhanden):
+ * - Gab es auf der Seite noch keine Nutzergeste, wird gar kein AudioContext angelegt. Ein
+ *   so früh erzeugter Kontext bliebe „suspended“ und verschluckte sonst auch den ersten
+ *   Klang der späteren Geste (Chromium warnt zudem in der Konsole).
+ * - Ist der Kontext „suspended“, läuft aber gerade eine Nutzergeste (z. B. im Klick-Handler),
+ *   wird fortgesetzt und der Klang trotzdem eingeplant – er beginnt, sobald der Kontext
+ *   läuft. Ohne aktive Geste wird nur das Fortsetzen angestoßen, nichts nachgeholt.
  */
 export interface UiSound {
   /** Weicher, aufsteigender Zweiklang für den App-Start. */
@@ -17,13 +25,50 @@ export interface UiSound {
 }
 
 export interface UiSoundOptions {
-  /** Gesamtlautstärke 0–1 (Standard 0,6 – die Klänge selbst sind bereits leise). */
+  /**
+   * Gesamtlautstärke 0–1 (Standard 0,6 – die Klänge selbst sind bereits leise). Werte
+   * außerhalb werden begrenzt; ungültige Werte (NaN, ±∞) ergeben den Standard.
+   */
   readonly volume?: number;
   /** Schalter-Abfrage; Standard: globale Einstellung (isSoundEnabled). */
   readonly isEnabled?: () => boolean;
 }
 
 type AudioContextConstructor = new () => AudioContext;
+
+/** Standard-Gesamtlautstärke. */
+const DEFAULT_VOLUME = 0.6;
+
+/** Begrenzt die Lautstärke auf 0–1; fehlende oder nicht endliche Werte → Standard. */
+function normalizeVolume(volume: number | undefined): number {
+  if (volume === undefined || !Number.isFinite(volume)) {
+    return DEFAULT_VOLUME;
+  }
+  return Math.min(1, Math.max(0, volume));
+}
+
+/** Ausschnitt aus `navigator.userActivation` (HTML „User Activation“). */
+interface UserActivationState {
+  /** Gab es auf der Seite schon eine Nutzergeste (klebrige Aktivierung)? */
+  readonly hasBeenActive: boolean;
+  /** Läuft gerade eine Nutzergeste (vorübergehende Aktivierung, z. B. im Klick-Handler)? */
+  readonly isActive: boolean;
+}
+
+/** `undefined`, wenn die Umgebung die Nutzer-Aktivierung nicht meldet (dann wie bisher). */
+function userActivation(): UserActivationState | undefined {
+  const scope = globalThis as { navigator?: { userActivation?: UserActivationState } };
+  return scope.navigator?.userActivation;
+}
+
+/** Schließt einen AudioContext, ohne zu werfen (Aufräumen nach Fehlern). */
+function closeQuietly(context: AudioContext): void {
+  try {
+    Promise.resolve(context.close()).catch(() => undefined);
+  } catch {
+    // Bereits geschlossen oder close() fehlt: nichts weiter zu tun.
+  }
+}
 
 function resolveAudioContext(): AudioContextConstructor | undefined {
   const scope = globalThis as {
@@ -100,7 +145,7 @@ const ALERT: readonly ToneSpec[] = [
 
 /** Erzeugt einen UI-Synthesizer. Der AudioContext entsteht erst beim ersten Klang. */
 export function createUiSound(options: UiSoundOptions = {}): UiSound {
-  const volume = Math.min(1, Math.max(0, options.volume ?? 0.6));
+  const volume = normalizeVolume(options.volume);
   const isEnabled = options.isEnabled ?? isSoundEnabled;
   let context: AudioContext | null = null;
   let output: AudioNode | null = null;
@@ -119,21 +164,33 @@ export function createUiSound(options: UiSoundOptions = {}): UiSound {
       return null;
     }
     const created = new AudioContextCtor();
-    // Sanfter Tiefpass gegen Härte, darüber die Gesamtlautstärke.
-    const filter = created.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 4200;
-    const master = created.createGain();
-    master.gain.value = volume;
-    filter.connect(master);
-    master.connect(created.destination);
-    context = created;
-    output = filter;
-    return { context, output };
+    try {
+      // Sanfter Tiefpass gegen Härte, darüber die Gesamtlautstärke.
+      const filter = created.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 4200;
+      const master = created.createGain();
+      master.gain.value = volume;
+      filter.connect(master);
+      master.connect(created.destination);
+      context = created;
+      output = filter;
+      return { context, output };
+    } catch (error) {
+      // Aufbau gescheitert: den schon erzeugten Kontext nicht verwaist offen lassen.
+      closeQuietly(created);
+      throw error;
+    }
   };
 
   const play = (tones: readonly ToneSpec[]): void => {
     if (!isEnabled()) {
+      return;
+    }
+    const activation = userActivation();
+    if (activation?.hasBeenActive === false) {
+      // Noch keine Nutzergeste: Die Autoplay-Richtlinie ließe den Kontext nicht starten.
+      // Keinen anlegen – er bliebe „suspended“ und verschluckte den nächsten Klang.
       return;
     }
     try {
@@ -141,11 +198,16 @@ export function createUiSound(options: UiSoundOptions = {}): UiSound {
       if (audio === null) {
         return;
       }
-      if (audio.context.state !== 'running') {
-        // Autoplay-Sperre: nur das Fortsetzen anstoßen, nichts nachholen.
-        if (audio.context.state === 'suspended') {
-          Promise.resolve(audio.context.resume()).catch(() => undefined);
+      const { state } = audio.context;
+      if (state === 'suspended') {
+        Promise.resolve(audio.context.resume()).catch(() => undefined);
+        // In einer Nutzergeste gelingt das Fortsetzen sofort: trotzdem einplanen (die Töne
+        // beginnen, sobald der Kontext läuft). Ohne aktive Geste nichts nachholen.
+        if (activation?.isActive !== true) {
+          return;
         }
+      } else if (state !== 'running') {
+        // Geschlossen oder vom System unterbrochen: still bleiben.
         return;
       }
       const start = audio.context.currentTime + 0.01;

@@ -152,18 +152,23 @@ describe('tokens.css ↔ tokens.ts (eine Quelle der Wahrheit)', () => {
 
 describe('WCAG-AA-Kontrast in beiden Themes', () => {
   const surfaces = ['bg', 'surface-1', 'surface-2', 'surface-3'] as const satisfies ColorToken[];
+  const textTokens = ['text', 'text-muted', 'text-subtle'] as const satisfies ColorToken[];
 
   describe.each(themeNames)('Theme „%s“', (theme) => {
     const c = themes[theme].colors;
     const ratio = (fg: ColorToken, bg: ColorToken): number => contrastRatio(c[fg], c[bg]);
 
-    it.each(surfaces)('text und text-muted auf %s ≥ 4,5', (surface) => {
-      expect(ratio('text', surface)).toBeGreaterThanOrEqual(4.5);
-      expect(ratio('text-muted', surface)).toBeGreaterThanOrEqual(4.5);
+    // Alle drei Text-Tokens tragen auch 11–12-px-Beschriftungen (keine „große Schrift“),
+    // daher gilt überall die volle AA-Schwelle 4,5 : 1 – auf jeder Fläche, nicht nur auf bg.
+    it.each(surfaces)('text, text-muted und text-subtle auf %s ≥ 4,5', (surface) => {
+      for (const token of textTokens) {
+        expect(ratio(token, surface), `${token} auf ${surface}`).toBeGreaterThanOrEqual(4.5);
+      }
     });
 
-    it('text-subtle auf bg ≥ 3,0', () => {
-      expect(ratio('text-subtle', 'bg')).toBeGreaterThanOrEqual(3);
+    it.each(surfaces)('Text-Hierarchie auf %s: text > text-muted > text-subtle', (surface) => {
+      expect(ratio('text', surface)).toBeGreaterThan(ratio('text-muted', surface));
+      expect(ratio('text-muted', surface)).toBeGreaterThan(ratio('text-subtle', surface));
     });
 
     it('accent auf bg ≥ 4,5 und on-accent auf accent/accent-strong ≥ 4,5', () => {
@@ -186,12 +191,14 @@ describe('WCAG-AA-Kontrast in beiden Themes', () => {
       },
     );
 
-    it('Fokusring und kräftige Rahmen erfüllen 3 : 1 (WCAG 1.4.11)', () => {
-      for (const surface of surfaces) {
-        expect(ratio('focus', surface)).toBeGreaterThanOrEqual(3);
-      }
-      expect(ratio('border-strong', 'bg')).toBeGreaterThanOrEqual(3);
-      expect(ratio('border-strong', 'surface-1')).toBeGreaterThanOrEqual(3);
+    // border-strong umrandet Bedienelemente (Eingabefelder, Schalter, Checkboxen) – auch auf
+    // erhöhten Flächen (surface-2/3); deshalb wie der Fokusring gegen jede Fläche prüfen.
+    it.each(surfaces)('Fokusring und kräftige Rahmen auf %s ≥ 3 : 1 (WCAG 1.4.11)', (surface) => {
+      expect(ratio('focus', surface), `focus auf ${surface}`).toBeGreaterThanOrEqual(3);
+      expect(
+        ratio('border-strong', surface),
+        `border-strong auf ${surface}`,
+      ).toBeGreaterThanOrEqual(3);
     });
   });
 });

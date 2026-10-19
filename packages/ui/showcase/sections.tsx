@@ -61,6 +61,12 @@ const swatchGroups: readonly {
         name: 'Rahmen kräftig',
         checks: [
           { label: 'auf Hintergrund', foreground: 'border-strong', background: 'bg', minimum: 3 },
+          {
+            label: 'auf Fläche 3',
+            foreground: 'border-strong',
+            background: 'surface-3',
+            minimum: 3,
+          },
         ],
       },
       { token: 'border', name: 'Rahmen (Haarlinie)', checks: [] },
@@ -89,8 +95,16 @@ const swatchGroups: readonly {
       {
         token: 'text-subtle',
         name: 'Text dezent',
+        // Dezenter Text trägt kleine Beschriftungen (11–12 px) → volle AA-Schwelle 4,5 : 1;
+        // Fläche 3 ist in beiden Themes der ungünstigste Fall.
         checks: [
-          { label: 'auf Hintergrund', foreground: 'text-subtle', background: 'bg', minimum: 3 },
+          { label: 'auf Hintergrund', foreground: 'text-subtle', background: 'bg', minimum: 4.5 },
+          {
+            label: 'auf Fläche 3',
+            foreground: 'text-subtle',
+            background: 'surface-3',
+            minimum: 4.5,
+          },
         ],
       },
     ],

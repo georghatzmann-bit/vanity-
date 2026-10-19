@@ -18,7 +18,17 @@ interface FakeAudio {
 }
 
 class FakeParam {
-  value = 0;
+  #value = 0;
+  get value(): number {
+    return this.#value;
+  }
+  set value(next: number) {
+    // Wie im Browser (WebIDL `float`): nicht endliche Werte werfen einen TypeError.
+    if (!Number.isFinite(next)) {
+      throw new TypeError('The provided float value is non-finite.');
+    }
+    this.#value = next;
+  }
   setValueAtTime = vi.fn();
   exponentialRampToValueAtTime = vi.fn();
 }
@@ -50,22 +60,36 @@ class FakeAudioContext {
   currentTime = 1;
   destination = new FakeNode();
   oscillators: FakeOscillator[] = [];
+  /** Alle Verstärker; der erste ist die Gesamtlautstärke (master). */
+  gains: FakeGain[] = [];
   resume = vi.fn(() => Promise.resolve());
+  close = vi.fn(() => {
+    this.state = 'closed';
+    return Promise.resolve();
+  });
   createOscillator = vi.fn(() => {
     const oscillator = new FakeOscillator();
     this.oscillators.push(oscillator);
     return oscillator;
   });
-  createGain = vi.fn(() => new FakeGain());
+  createGain = vi.fn(() => {
+    const gain = new FakeGain();
+    this.gains.push(gain);
+    return gain;
+  });
   createBiquadFilter = vi.fn(() => new FakeFilter());
 }
 
-function installFakeAudio(state: AudioContextState = 'running'): FakeAudio {
+function installFakeAudio(
+  state: AudioContextState | (() => AudioContextState) = 'running',
+  setup?: (context: FakeAudioContext) => void,
+): FakeAudio {
   const instances: FakeAudioContext[] = [];
   class Ctor extends FakeAudioContext {
     constructor() {
       super();
-      this.state = state;
+      this.state = typeof state === 'function' ? state() : state;
+      setup?.(this);
       instances.push(this);
     }
   }
@@ -73,11 +97,47 @@ function installFakeAudio(state: AudioContextState = 'running'): FakeAudio {
   return { instances, Ctor };
 }
 
+interface FakeActivation {
+  hasBeenActive: boolean;
+  isActive: boolean;
+}
+
+/** Bildet `navigator.userActivation` nach (fehlt in jsdom); veränderbar während des Tests. */
+function stubUserActivation(initial: FakeActivation): FakeActivation {
+  const activation = { ...initial };
+  Object.defineProperty(navigator, 'userActivation', {
+    configurable: true,
+    get: () => activation,
+  });
+  return activation;
+}
+
+/**
+ * Wie Chromiums Autoplay-Richtlinie: Ein Kontext startet nur nach einer Nutzergeste
+ * („running“), sonst entsteht er „suspended“; resume() gelingt erst mit Geste.
+ */
+function installChromiumLikeAudio(activation: FakeActivation): FakeAudio {
+  const allowed = (): boolean => activation.hasBeenActive || activation.isActive;
+  return installFakeAudio(
+    () => (allowed() ? 'running' : 'suspended'),
+    (context) => {
+      context.resume.mockImplementation(() => {
+        if (!allowed()) {
+          return new Promise<void>(() => undefined);
+        }
+        context.state = 'running';
+        return Promise.resolve();
+      });
+    },
+  );
+}
+
 beforeEach(() => {
   localStorage.clear();
 });
 
 afterEach(() => {
+  Reflect.deleteProperty(navigator, 'userActivation');
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -234,6 +294,110 @@ describe('UI-Synthesizer', () => {
     expect(() => sound.click()).not.toThrow();
     // Nach dem ersten Fehlschlag kein erneuter Versuch.
     expect(attempts).toBe(1);
+  });
+
+  it('legt ohne bisherige Nutzergeste keinen AudioContext an (Autoplay-Sperre)', async () => {
+    stubUserActivation({ hasBeenActive: false, isActive: false });
+    const audio = installFakeAudio('suspended');
+    const { synth } = await loadModules();
+    const sound = synth.createUiSound();
+    sound.bootChime();
+    sound.alert();
+    // Kein „suspended“ hängender Kontext (und damit auch keine Chromium-Konsolenwarnung).
+    expect(audio.instances).toHaveLength(0);
+  });
+
+  it('verschluckt nach gesperrtem Start-Klang nicht den ersten Klang einer Nutzergeste', async () => {
+    const activation = stubUserActivation({ hasBeenActive: false, isActive: false });
+    const audio = installChromiumLikeAudio(activation);
+    const { synth } = await loadModules();
+    const sound = synth.createUiSound();
+    sound.bootChime(); // beim Laden, vor jeder Geste: still
+    activation.hasBeenActive = true;
+    activation.isActive = true; // im Klick-Handler
+    sound.click();
+    const oscillators = audio.instances.flatMap((context) => context.oscillators);
+    expect(oscillators).toHaveLength(1);
+  });
+
+  it('plant bei gesperrtem Kontext während einer Nutzergeste trotzdem ein', async () => {
+    stubUserActivation({ hasBeenActive: true, isActive: true });
+    const audio = installFakeAudio('suspended');
+    const { synth } = await loadModules();
+    synth.createUiSound().click();
+    const context = audio.instances[0];
+    expect(context?.resume).toHaveBeenCalledTimes(1);
+    // Die Töne beginnen, sobald der Kontext läuft (das Fortsetzen gelingt in der Geste).
+    expect(context?.oscillators).toHaveLength(1);
+  });
+
+  it('holt ohne aktive Nutzergeste nichts nach – auch nach einer früheren Geste', async () => {
+    stubUserActivation({ hasBeenActive: true, isActive: false });
+    const audio = installFakeAudio('suspended');
+    const { synth } = await loadModules();
+    synth.createUiSound().alert();
+    const context = audio.instances[0];
+    expect(context?.resume).toHaveBeenCalledTimes(1);
+    expect(context?.createOscillator).not.toHaveBeenCalled();
+  });
+
+  it('spielt nach einer Nutzergeste normal (laufender Kontext)', async () => {
+    stubUserActivation({ hasBeenActive: true, isActive: false });
+    const audio = installFakeAudio('running');
+    const { synth } = await loadModules();
+    synth.createUiSound().alert();
+    expect(audio.instances[0]?.oscillators).toHaveLength(2);
+  });
+
+  it.each([
+    [Number.NaN, 0.6],
+    [Number.POSITIVE_INFINITY, 0.6],
+    [Number.NEGATIVE_INFINITY, 0.6],
+    [2, 1],
+    [-1, 0],
+    [0.25, 0.25],
+  ])(
+    'Lautstärke %s → %s (ungültig = Standard, sonst auf 0–1 begrenzt)',
+    async (volume, expected) => {
+      const audio = installFakeAudio();
+      const { synth } = await loadModules();
+      const sound = synth.createUiSound({ volume });
+      sound.click();
+      sound.click();
+      const context = audio.instances[0];
+      expect(audio.instances).toHaveLength(1);
+      expect(context?.gains[0]?.gain.value).toBe(expected);
+      expect(context?.oscillators).toHaveLength(2);
+    },
+  );
+
+  it('schließt den AudioContext, wenn der Aufbau der Knoten scheitert, und bleibt still', async () => {
+    const audio = installFakeAudio('running', (context) => {
+      context.createBiquadFilter.mockImplementation(() => {
+        throw new Error('kein Filter');
+      });
+    });
+    const { synth } = await loadModules();
+    const sound = synth.createUiSound();
+    expect(() => sound.click()).not.toThrow();
+    expect(() => sound.alert()).not.toThrow();
+    expect(audio.instances).toHaveLength(1);
+    expect(audio.instances[0]?.close).toHaveBeenCalledTimes(1);
+    expect(audio.instances[0]?.oscillators).toHaveLength(0);
+  });
+
+  it('übersteht auch ein werfendes close() beim Aufräumen', async () => {
+    const audio = installFakeAudio('running', (context) => {
+      context.createGain.mockImplementation(() => {
+        throw new Error('kein Verstärker');
+      });
+      context.close.mockImplementation(() => {
+        throw new Error('schon zu');
+      });
+    });
+    const { synth } = await loadModules();
+    expect(() => synth.createUiSound().click()).not.toThrow();
+    expect(audio.instances[0]?.close).toHaveBeenCalledTimes(1);
   });
 
   it('nutzt webkitAudioContext als Rückfall und teilt eine gemeinsame Instanz', async () => {
