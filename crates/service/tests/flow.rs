@@ -398,3 +398,96 @@ fn vertrauen_widerrufen() {
     assert!(scan["report"]["findings"][0]["trusted"].is_null());
     let _ = before;
 }
+
+/// Echtzeit-Wächter: meldet Funde nur dem passenden Konto, vertraute Dateien gar nicht;
+/// Gaming-Modus wird angezeigt. Der Wächter verändert nichts.
+#[test]
+fn waechter_meldungen_ueber_das_protokoll() {
+    use aegis_service::watch::{WatchConfig, start};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    struct Account(&'static str, Option<std::path::PathBuf>);
+    impl aegis_quarantine::UserAccess for Account {
+        fn enter(&self) -> std::io::Result<aegis_quarantine::UserScope> {
+            Ok(aegis_quarantine::UserScope::unchanged())
+        }
+        fn identity(&self) -> Option<String> {
+            Some(self.0.to_owned())
+        }
+        fn profile(&self) -> Option<std::path::PathBuf> {
+            self.1.clone()
+        }
+    }
+
+    let mut h = harness();
+    let home = tempfile::tempdir().unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    start(
+        WatchConfig {
+            folders: vec![(home.path().to_path_buf(), Some(home.path().to_path_buf()))],
+            exclude: Vec::new(),
+            removable: false,
+            processes: false,
+            settle: std::time::Duration::from_millis(100),
+        },
+        h.service.scanner(),
+        h.service.watch(),
+        Arc::clone(&stop),
+    )
+    .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    write_fixture(home.path(), "eicar.com", &eicar()).unwrap();
+    let trainer = write_fixture(home.path(), "trainer.txt", b"aimbot wallhack no recoil").unwrap();
+    let before = DirSnapshot::capture(home.path()).unwrap();
+
+    let owner = Account("S-1-A", Some(home.path().to_path_buf()));
+    let poll = |h: &mut Harness, who: &Account| {
+        let req: Request =
+            serde_json::from_value(json!({"type": "watch_poll", "after": 0})).unwrap();
+        serde_json::to_value(h.service.handle(req, who)).unwrap()
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    let mut r = poll(&mut h, &owner);
+    while std::time::Instant::now() < deadline && r["events"].as_array().unwrap().len() < 2 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        r = poll(&mut h, &owner);
+    }
+    assert_eq!(r["type"], "watch");
+    assert_eq!(r["events"].as_array().unwrap().len(), 2, "{r}");
+    assert_eq!(r["status"]["active"], true);
+    // Anderes Profil bzw. unbekanntes Profil: nichts davon sichtbar.
+    let other = Account("S-1-B", Some(std::path::PathBuf::from("/anderes/profil")));
+    assert!(
+        poll(&mut h, &other)["events"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        poll(&mut h, &Account("S-1-C", None))["events"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+
+    // „Vertrauen“ für das Spiel-Tool → wird nicht mehr gemeldet (Konto ohne Trennung = OwnProcess).
+    let p = h.send(json!({"type": "propose_quarantine", "paths": [trainer]}));
+    assert_eq!(h.answer(&p, "trust")["type"], "trusted");
+    let events = h.send(json!({"type": "watch_poll", "after": 0}));
+    let events = events["events"].as_array().unwrap();
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert!(events[0]["path"].as_str().unwrap().ends_with("eicar.com"));
+
+    let g = h.send(json!({"type": "set_gaming", "on": true}));
+    assert_eq!(g["status"]["gaming"], true);
+    assert!(g["events"].as_array().unwrap().is_empty());
+    assert!(g["gaming_left"].as_u64().unwrap() > 3 * 60 * 60);
+    assert_eq!(
+        h.send(json!({"type": "set_gaming", "on": false}))["status"]["gaming"],
+        false
+    );
+
+    stop.store(true, Ordering::SeqCst);
+    assert_unchanged(&before, &DirSnapshot::capture(home.path()).unwrap());
+}

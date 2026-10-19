@@ -37,6 +37,8 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-confirm-second': 'Dienst: zweite Bestätigung vor endgültigem Löschen',
   'allow-service-list-trust': 'Dienst: eigene Vertrauensliste anzeigen (nur lesend)',
   'allow-service-revoke-trust': 'Dienst: Vertrauens-Eintrag widerrufen (macht AEGIS strenger)',
+  'allow-service-watch-poll': 'Dienst: Meldungen des Echtzeit-Wächters abholen (nur lesend)',
+  'allow-service-set-gaming': 'Dienst: Gaming-Modus an/aus (pausiert nur Hinweise, max. 4 h)',
   'dialog:allow-open': 'Datei-/Ordnerauswahl für Scans (nur Auswahl)',
 };
 

@@ -23,6 +23,8 @@
     "allow-service-confirm-second",
     "allow-service-list-trust",
     "allow-service-revoke-trust",
+    "allow-service-watch-poll",
+    "allow-service-set-gaming",
     "dialog:allow-open"
   ]
 }

@@ -387,6 +387,38 @@ export const de = {
     contained: 'Auffällige Inhalte',
     trusted: 'Vertraut seit {date}',
   },
+  realtime: {
+    intro:
+      'Beobachtet Downloads, Desktop, Temp und Wechseldatenträger sowie Programmstarts. Funde werden gemeldet – isoliert oder vertraut wird nur nach deinem Ja.',
+    honest:
+      'Ehrlich: Ohne Kernel-Treiber warnt AEGIS, sobald eine Datei auftaucht oder ein Programm startet – es blockiert nichts vor dem Start.',
+    status: 'Zustand',
+    active: 'Wächter läuft.',
+    inactive: 'Wächter läuft nicht.',
+    folders: '{count} Orte überwacht',
+    processesOn: 'Programmstarts werden beobachtet',
+    processesOff: 'Programmstarts werden nicht beobachtet',
+    dropped:
+      '{count} Dateien wegen Überlastung nicht geprüft – bitte einen manuellen Scan starten.',
+    gaming: 'Gaming-Modus',
+    gamingHint:
+      'Pausiert Prüfungen und Hinweise, z. B. während eines Spiels. Endet spätestens nach 4 Stunden; danach wird nachgeprüft.',
+    gamingLeft:
+      'An – endet in spätestens {minutes} Minuten. Was solange ankommt, wird danach geprüft.',
+    events: 'Meldungen',
+    eventsHint: 'Neueste zuerst. Jede Aktion fragt vorher nach.',
+    none: 'Keine Meldungen. Alles ruhig.',
+    kindFile: 'Neue oder geänderte Datei',
+    kindProcess: 'Programmstart',
+    processNote: 'Das Programm läuft bereits – AEGIS kann es nicht vorab stoppen.',
+    isolate: 'Isolieren …',
+    trust: 'Vertrauen …',
+    ignore: 'Ignorieren',
+    more: 'Mehr Infos',
+    toastTitle: 'Echtzeit-Wächter: {count} neue Meldung(en)',
+    toastHint: 'Nichts wurde verändert. Sieh dir die Meldung an und entscheide selbst.',
+    toastShow: 'Anzeigen',
+  },
   trust: {
     title: 'Vertrauensliste',
     intro:

@@ -16,6 +16,7 @@ use aegis_quarantine::Entry;
 use serde::{Deserialize, Serialize};
 
 use crate::trust::TrustEntry;
+use crate::watch::{WatchEvent, WatchStatus};
 
 /// Protokollversion.
 pub const PROTOCOL_VERSION: u32 = 1;
@@ -42,6 +43,10 @@ pub enum Request {
     ListTrust {},
     /// Eintrag der Vertrauensliste widerrufen (macht AEGIS nur strenger – keine Rückfrage).
     RevokeTrust { id: String },
+    /// Meldungen des Echtzeit-Wächters nach Nummer `after` abholen (nur lesend).
+    WatchPoll { after: u64 },
+    /// Gaming-Modus an/aus (keine Prüfungen und Hinweise; endet spätestens nach 4 h).
+    SetGaming { on: bool },
     /// Antwort des Nutzers im Freigabe-Dialog.
     Decide {
         plan_id: PlanId,
@@ -100,6 +105,13 @@ pub enum Response {
     Trust { entries: Vec<TrustEntry> },
     /// Eintrag widerrufen.
     TrustRevoked { id: String },
+    /// Meldungen und Zustand des Echtzeit-Wächters.
+    Watch {
+        events: Vec<WatchEvent>,
+        status: WatchStatus,
+        /// Restdauer des Gaming-Modus (Sekunden).
+        gaming_left: Option<u64>,
+    },
     /// Erste Bestätigung für endgültiges Löschen erhalten – jetzt den zweiten Dialog zeigen.
     SecondConfirmationRequired {
         challenge: SecondConfirmationChallenge,

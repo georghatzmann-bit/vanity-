@@ -132,7 +132,23 @@ fn open_audit(path: &Path) -> io::Result<AuditLog<File>> {
 /// # Errors
 /// Start fehlgeschlagen (Endpunkt belegt, Daten nicht lesbar …).
 pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
-    let service = Arc::new(Mutex::new(build_service(&config.data_dir)?));
+    let service = build_service(&config.data_dir)?;
+    // Echtzeit-Wächter: meldet nur (Prüfung im eingeschränkten Prüfprozess); der eigene
+    // Datenordner wird nie geprüft. Startet er nicht, läuft der Dienst trotzdem – der Status
+    // zeigt das an.
+    let watch_config =
+        crate::watch::WatchConfig::default_for_platform(vec![config.data_dir.clone()]);
+    if let Err(e) = crate::watch::start(
+        watch_config,
+        service.scanner(),
+        service.watch(),
+        Arc::clone(stop),
+    ) {
+        service
+            .watch()
+            .note_failure(&format!("Echtzeit-Wächter nicht gestartet: {e}"));
+    }
+    let service = Arc::new(Mutex::new(service));
     serve(&config.endpoint, &service, stop)
 }
 

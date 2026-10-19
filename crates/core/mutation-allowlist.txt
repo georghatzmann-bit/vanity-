@@ -161,3 +161,9 @@ crates/service/src/worker.rs :: service-worker-kill :: Dienst (Unix/Entwicklung)
 crates/service/src/trust.rs :: service-trust-remove-part :: Dienst: entfernt nur eine liegengebliebene eigene Teil-Datei der Vertrauensliste im Datenordner.
 crates/service/src/trust.rs :: service-trust-create-part :: Dienst: legt die neue Teil-Datei der eigenen Vertrauensliste an (create_new).
 crates/service/src/trust.rs :: service-trust-commit :: Dienst: ersetzt die eigene Vertrauensliste atomar (nur nach der Nutzerentscheidung „Vertrauen“ bzw. Widerruf).
+crates/winffi/src/system.rs :: winffi-open-process-query :: Windows-FFI: öffnet einen Prozess nur zum Abfragen (Programmpfad für den Echtzeit-Wächter).
+crates/winffi/src/system.rs :: winffi-process-image-name :: Windows-FFI: liest den Programmpfad eines Prozesses (nur lesend).
+crates/winffi/src/system.rs :: winffi-logical-drives :: Windows-FFI: liest die Laufwerksliste (nur lesend).
+crates/winffi/src/system.rs :: winffi-drive-type :: Windows-FFI: liest den Laufwerkstyp (Wechseldatenträger erkennen).
+crates/winffi/src/pipe.rs :: winffi-open-client-token-profile :: Windows-FFI: liest das Client-Token während des Identitätswechsels (Profilordner bestimmen).
+crates/winffi/src/pipe.rs :: winffi-profile-dir :: Windows-FFI: liest den Profilordner des Clients (nur lesend).

@@ -19,6 +19,7 @@ import { isDialogOpen, isTextInput } from './shortcuts.ts';
 import { Sidebar } from './Sidebar.tsx';
 import { StatusBar } from './StatusBar.tsx';
 import { TitleBar } from './TitleBar.tsx';
+import { useWatchNotifier } from './useWatchNotifier.ts';
 
 export interface ShellProps {
   /** `false`, solange die Start-Animation liegt: dann `inert` und vor Hilfsmitteln verborgen. */
@@ -48,6 +49,8 @@ export function Shell({ ready, bootCount, preferences, onReplayBoot }: ShellProp
   const mainRef = useRef<HTMLElement>(null);
   /** Ziel des letzten Klicks in der Seitenleiste (nur dieser Wechsel lässt den Fokus dort). */
   const sidebarTarget = useRef<RouteId | null>(null);
+
+  useWatchNotifier(ready, route);
 
   const shell = useMemo<ShellActions>(
     () => ({ openPalette: () => setPaletteOpen(true), replayBoot: onReplayBoot, headingRef }),

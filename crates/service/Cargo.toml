@@ -12,6 +12,7 @@ aegis-core = { workspace = true }
 aegis-engine = { workspace = true }
 aegis-quarantine = { workspace = true }
 getrandom = { workspace = true }
+notify = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -23,6 +24,7 @@ tempfile = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 aegis-winffi = { workspace = true }
+ferrisetw = { workspace = true }
 windows-service = { workspace = true }
 
 [lints]

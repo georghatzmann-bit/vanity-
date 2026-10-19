@@ -19,6 +19,7 @@ use aegis_core::time::{Duration, OffsetDateTime};
 use aegis_engine::{Engine, Finding};
 
 use crate::trust::{TrustEntry, TrustStore};
+use crate::watch::{Viewer, WatchShared};
 use crate::worker::Scanner;
 use aegis_quarantine::{Entry, UserAccess, Vault};
 
@@ -63,6 +64,7 @@ pub struct Service<C: Clock, W: Durable> {
     recent_proposals: HashMap<Option<String>, Vec<OffsetDateTime>>,
     protected: Vec<PathBuf>,
     trust: TrustStore,
+    watch: Arc<WatchShared>,
 }
 
 impl<C: Clock, W: Durable> Service<C, W> {
@@ -80,6 +82,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             recent_proposals: HashMap::new(),
             protected,
             trust: TrustStore::in_memory(),
+            watch: WatchShared::new(),
         }
     }
 
@@ -88,6 +91,19 @@ impl<C: Clock, W: Durable> Service<C, W> {
     pub fn with_trust(mut self, trust: TrustStore) -> Self {
         self.trust = trust;
         self
+    }
+
+    /// Zustand des Echtzeit-Wächters (Betrieb: derselbe, den der Wächter füllt).
+    #[must_use]
+    pub fn with_watch(mut self, watch: Arc<WatchShared>) -> Self {
+        self.watch = watch;
+        self
+    }
+
+    /// Der gemeinsame Zustand des Wächters.
+    #[must_use]
+    pub fn watch(&self) -> Arc<WatchShared> {
+        Arc::clone(&self.watch)
     }
 
     /// Markiert Funde, denen das Konto vertraut (Hash **und** Pfad).
@@ -112,6 +128,28 @@ impl<C: Clock, W: Durable> Service<C, W> {
     pub fn mark_trusted_response(&self, response: &mut Response, owner: Option<&str>) {
         if let Response::ScanReport { report } = response {
             self.mark_trusted(&mut report.findings, owner);
+        }
+    }
+
+    /// Meldungen des Wächters für dieses Konto: eigenes Profil + gemeinsame Orte; Dateien,
+    /// denen das Konto vertraut, werden nicht gemeldet.
+    fn watch_poll(&self, after: u64, user: &dyn UserAccess) -> Response {
+        let owner = user.identity();
+        let profile = user.profile();
+        let viewer = match (&owner, &profile) {
+            (None, _) => Viewer::All,
+            (Some(_), Some(p)) => Viewer::Profile(p),
+            (Some(_), None) => Viewer::SharedOnly,
+        };
+        let mut events = self.watch.events_after(after, viewer);
+        for event in &mut events {
+            self.mark_trusted(std::slice::from_mut(&mut event.finding), owner.as_deref());
+        }
+        events.retain(|e| e.finding.trusted.is_none());
+        Response::Watch {
+            events,
+            status: self.watch.status(),
+            gaming_left: self.watch.gaming_left(),
         }
     }
 
@@ -184,6 +222,11 @@ impl<C: Clock, W: Durable> Service<C, W> {
                     Ok(false) => Response::error("unknown", "Eintrag nicht gefunden"),
                     Err(e) => Response::error("trust", e.to_string()),
                 }
+            }
+            Request::WatchPoll { after } => self.watch_poll(after, user),
+            Request::SetGaming { on } => {
+                self.watch.set_gaming(on);
+                self.watch_poll(u64::MAX, user)
             }
             Request::ListQuarantine {} => match self.vault.list() {
                 Ok(entries) => {

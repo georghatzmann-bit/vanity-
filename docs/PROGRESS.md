@@ -83,12 +83,12 @@ Stand: 2026-10-19 · **P0–P2 abgeschlossen** · nächste Phase: **P3 – Echtz
 ## Offen / bekannt
 
 - Manuell auf Windows prüfen: Doppelklick auf Titelleiste, Tray-Symbol, Startzeit mit GPU.
-- Parser (goblin, YARA-X) in Kindprozesse mit niedriger Integrität + Job-Objekt auslagern (P3).
 - ClamAV-Signaturen aktualisieren (`freshclam`) und Zeitpläne (P3); ClamAV-Installation im Setup (P13).
 - Quarantäne-Schlüssel per DPAPI (Maschine) binden statt nur Ordner-ACL (P5).
 - Pipe: Identität des Client-Prozesses prüfen (Pfad + Signatur, braucht Code-Signing → P13).
   Bis dahin begrenzt der Identitätswechsel alles auf die Rechte des anfragenden Nutzers.
-- „Vertrauen“ legt noch keinen Whitelist-Eintrag an – der Dienst meldet das ehrlich (P3).
+- Dashboard zeigt Module/Score noch als „folgt“ – auf echte Zustände umstellen (P3.5).
+- Wächter: neue Nutzerprofile erst nach Dienst-Neustart überwacht.
 - 16-px-Icon: Schild gut erkennbar, die A-Aussparung verschwimmt → eigene 16-px-Variante (P11).
 - Optional: Dependabot für Action-Pins (öffnet automatisch PRs – nur auf deinen Wunsch).
 
@@ -143,8 +143,24 @@ Stand: 2026-10-19 · **P0–P2 abgeschlossen** · nächste Phase: **P3 – Echtz
 | `pnpm check` + E2E grün | ✅ lokal; CI Linux + Windows |
 | Review dokumentiert | ✅ `docs/SECURITY.md` → Review-Protokoll |
 
+## P3 – in Arbeit
+
+1. [x] P3.1 Engine: Skripte, Office-Makros, PDF, LNK, ISO, Archive (zip/7z/cab/gz/tar) rekursiv
+       mit Budget gegen Zip-Bomben; Merkmals-Kombination („Gefährlich“ erst ab zwei
+       Schadmerkmalen); Spiel-Tool-/Cheat-Logik (nur melden); Authenticode als Entlastung.
+2. [x] P3.2 Prüfprozess `aegis-scanworker`: eingeschränktes Token, niedrige Integrität,
+       Job-Objekt, Zeitlimits; ClamAV als dessen Kind.
+3. [x] P3.3 Vertrauensliste (Hash + Pfad + Grund + Datum, je Konto, widerrufbar) aus der
+       Entscheidung „Vertrauen“; Anzeige in Scan und Quarantäne.
+4. [x] P3.4 Echtzeit-Wächter: Downloads/Desktop/Temp je Profil, Wechseldatenträger,
+       Programmstarts (ETW); Meldungen je Konto, Gaming-Modus (max. 4 h), Hinweise in der App
+       mit Isolieren / Vertrauen (Freigabe-Dialog) / Ignorieren / Mehr Infos.
+5. [ ] P3.5 Berichte & Zeitleiste, Export (HTML, Drucken als PDF), Zeitpläne, `freshclam`;
+       Dashboard mit echten Zuständen.
+6. [ ] P3.6 Sicherheits-Review P3 (separater Agent), Korrekturen, DoD.
+
 ## Nächster Schritt
 
-P3: Echtzeit-Wächter (notify; ETW wo ohne Treiber möglich), Whitelist (Hash + Pfad + Grund +
-Datum, SQLite) für „Vertrauen“, Parser in Kindprozessen, Dokument-/Skript-/Archiv-Analyse
-(Limits gegen Zip-Bomben), Cheat-Logik-Erkennung (nur melden), Berichte (Export), Zeitpläne.
+P3.5: Berichte & Zeitleiste (aus dem Prüfprotokoll und den Wächter-Meldungen), Export als HTML
+bzw. Drucken als PDF, Zeitpläne für Scans (nur prüfen/melden), ClamAV-Signaturen aktualisieren
+(`freshclam`, abschaltbar), Dashboard mit echten Zuständen. Danach P3.6 Review.

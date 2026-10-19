@@ -4,7 +4,7 @@
  */
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Proposal, ServiceApi } from '../platform/service.ts';
+import type { Proposal, ServiceApi, WatchState } from '../platform/service.ts';
 import { disposeApps, fakePlatform, renderApp } from '../test/harness.tsx';
 
 const finding = {
@@ -49,6 +49,20 @@ function proposal(kind = 'In die Quarantäne verschieben'): Proposal {
   };
 }
 
+function watchState(events: WatchState['events'] = []): WatchState {
+  return {
+    events,
+    active: true,
+    folders: ['C:\\Users\\a\\Downloads'],
+    processes: true,
+    gaming: false,
+    gamingLeft: null,
+    pending: 0,
+    dropped: 0,
+    note: null,
+  };
+}
+
 function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
   return {
     scan: vi.fn(() => Promise.resolve({ findings: [finding], skipped: [], truncated: false })),
@@ -60,6 +74,10 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     confirmSecond: vi.fn(() => Promise.resolve({ kind: 'nothing' as const })),
     listTrust: vi.fn(() => Promise.resolve([])),
     revokeTrust: vi.fn(() => Promise.resolve()),
+    watchPoll: vi.fn(() => Promise.resolve(watchState())),
+    setGaming: vi.fn((on: boolean) =>
+      Promise.resolve({ ...watchState(), gaming: on, gamingLeft: on ? 14_400 : null }),
+    ),
     ...overrides,
   };
 }
@@ -204,5 +222,68 @@ describe('Vertrauensliste', () => {
     expect(
       within(screen.getByTestId('finding')).queryByRole('button', { name: /Isolieren/ }),
     ).toBeNull();
+  });
+});
+
+describe('Echtzeit-Wächter', () => {
+  const event = {
+    seq: 7,
+    at: '2026-10-19T10:00:00Z',
+    kind: 'file' as const,
+    path: finding.path,
+    finding,
+  };
+
+  it('Vorschau ohne Dienst: ehrlicher Hinweis', async () => {
+    renderApp({ platform: fakePlatform('browser'), hash: '#/realtime' });
+    expect(await screen.findByTestId('service-preview')).toBeInTheDocument();
+  });
+
+  it('zeigt Meldungen; Isolieren nur über den Freigabe-Dialog, Ignorieren blendet nur aus', async () => {
+    const service = fakeService({ watchPoll: vi.fn(() => Promise.resolve(watchState([event]))) });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/realtime' });
+    const row = await screen.findByTestId('watch-event');
+    expect(row).toHaveTextContent('eicar.com');
+    expect(row).toHaveTextContent('Neue oder geänderte Datei');
+    expect(screen.getByTestId('watch-status')).toHaveTextContent('Wächter läuft.');
+    fireEvent.click(within(row).getByRole('button', { name: 'Mehr Infos' }));
+    expect(within(row).getByTestId('watch-reasons')).toHaveTextContent('EICAR-Prüfzeichenkette');
+
+    fireEvent.click(within(row).getByRole('button', { name: /Isolieren/ }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(service.proposeQuarantine).toHaveBeenCalledWith([finding.path]);
+    expect(service.decide).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Nein' }));
+    await waitFor(() => expect(service.decide).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(service.decide).mock.calls[0]?.[1]).toBe('decline');
+
+    fireEvent.click(
+      within(screen.getByTestId('watch-event')).getByRole('button', { name: 'Ignorieren' }),
+    );
+    expect(await screen.findByTestId('watch-empty')).toBeInTheDocument();
+    expect(service.decide).toHaveBeenCalledTimes(1);
+  });
+
+  it('Gaming-Modus schaltet über den Dienst und zeigt die Restzeit', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/realtime' });
+    const toggle = await screen.findByRole('switch', { name: /Gaming-Modus/ });
+    fireEvent.click(toggle);
+    await waitFor(() => expect(service.setGaming).toHaveBeenCalledWith(true));
+    expect(await screen.findByText(/endet in spätestens 240 Minuten/)).toBeInTheDocument();
+  });
+
+  it('Hinweis auf anderen Seiten mit „Anzeigen“ – ohne Aktion', async () => {
+    const watchPoll = vi
+      .fn<ServiceApi['watchPoll']>()
+      .mockResolvedValueOnce(watchState([event]))
+      .mockResolvedValue(watchState());
+    const service = fakeService({ watchPoll });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/quarantine' });
+    expect(await screen.findByText('Echtzeit-Wächter: 1 neue Meldung(en)')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Anzeigen' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/realtime'));
+    expect(service.proposeQuarantine).not.toHaveBeenCalled();
+    act(() => undefined);
   });
 });

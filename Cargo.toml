@@ -64,6 +64,9 @@ sevenz-rust2 = { version = "0.24.1", default-features = false }
 cab = "0.6.0"
 flate2 = "1.1.10"
 tar = { version = "0.4.46", default-features = false }
+# Echtzeit-Wächter (P3): Dateiänderungen (ReadDirectoryChangesW/inotify) und Prozessstarts (ETW).
+notify = { version = "8.2.0", default-features = false }
+ferrisetw = "1.2.0"
 # Quarantäne (P2): AES-256-GCM, Zufall aus dem Betriebssystem.
 aes-gcm = "0.11.1"
 getrandom = "0.4.3"

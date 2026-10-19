@@ -384,6 +384,37 @@ export const en: Messages<typeof de> = {
     contained: 'Notable contents',
     trusted: 'Trusted since {date}',
   },
+  realtime: {
+    intro:
+      'Watches Downloads, Desktop, Temp and removable drives as well as program starts. Findings are reported – isolating or trusting happens only after your yes.',
+    honest:
+      'Honestly: without a kernel driver AEGIS warns as soon as a file appears or a program starts – it does not block anything before it starts.',
+    status: 'Status',
+    active: 'Guard is running.',
+    inactive: 'Guard is not running.',
+    folders: '{count} locations watched',
+    processesOn: 'Program starts are watched',
+    processesOff: 'Program starts are not watched',
+    dropped: '{count} files not checked due to overload – please run a manual scan.',
+    gaming: 'Gaming mode',
+    gamingHint:
+      'Pauses checks and notices, e.g. while gaming. Ends after 4 hours at the latest; then pending files are checked.',
+    gamingLeft:
+      'On – ends in at most {minutes} minutes. Anything arriving meanwhile is checked afterwards.',
+    events: 'Notices',
+    eventsHint: 'Newest first. Every action asks first.',
+    none: 'No notices. All quiet.',
+    kindFile: 'New or changed file',
+    kindProcess: 'Program start',
+    processNote: 'The program is already running – AEGIS cannot stop it beforehand.',
+    isolate: 'Isolate…',
+    trust: 'Trust…',
+    ignore: 'Ignore',
+    more: 'More info',
+    toastTitle: 'Real-time guard: {count} new notice(s)',
+    toastHint: 'Nothing was changed. Look at the notice and decide yourself.',
+    toastShow: 'Show',
+  },
   trust: {
     title: 'Trust list',
     intro:

@@ -55,7 +55,9 @@ fn main() {
             service::service_decide,
             service::service_confirm_second,
             service::service_list_trust,
-            service::service_revoke_trust
+            service::service_revoke_trust,
+            service::service_watch_poll,
+            service::service_set_gaming
         ])
         .on_window_event(window::on_window_event)
         .setup(move |app| {
@@ -118,7 +120,9 @@ mod test_support {
                 crate::service::service_decide,
                 crate::service::service_confirm_second,
                 crate::service::service_list_trust,
-                crate::service::service_revoke_trust
+                crate::service::service_revoke_trust,
+                crate::service::service_watch_poll,
+                crate::service::service_set_gaming
             ])
             .build(tauri::generate_context!(test = true))
             .unwrap();
@@ -141,7 +145,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 20] = [
+    const EXPECTED_PERMISSIONS: [&str; 22] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -161,6 +165,8 @@ mod tests {
         "allow-service-confirm-second",
         "allow-service-list-trust",
         "allow-service-revoke-trust",
+        "allow-service-watch-poll",
+        "allow-service-set-gaming",
         "dialog:allow-open",
     ];
 
@@ -406,6 +412,8 @@ mod tests {
                     "service_revoke_trust",
                     json!({ "id": "00000000-0000-4000-8000-000000000000" }),
                 ),
+                ("service_watch_poll", json!({ "after": 0 })),
+                ("service_set_gaming", json!({ "on": false })),
                 // Zuletzt: schließt das Testfenster.
                 ("plugin:window|close", json!({})),
             ] {

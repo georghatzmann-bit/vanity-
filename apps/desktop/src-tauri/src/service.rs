@@ -259,7 +259,7 @@ pub async fn service_decide(
     .await
 }
 
-/// Antwort im zweiten Dialog weiterreichen.
+/// Eigene Vertrauensliste (nur lesend).
 #[tauri::command]
 pub async fn service_list_trust() -> Result<Value, String> {
     send(json!({ "type": "list_trust" })).await
@@ -272,6 +272,19 @@ pub async fn service_revoke_trust(id: String) -> Result<Value, String> {
     send(json!({ "type": "revoke_trust", "id": id })).await
 }
 
+/// Meldungen des Echtzeit-Wächters nach Nummer `after` abholen (nur lesend).
+#[tauri::command]
+pub async fn service_watch_poll(after: u64) -> Result<Value, String> {
+    send(json!({ "type": "watch_poll", "after": after })).await
+}
+
+/// Gaming-Modus an/aus: pausiert nur Prüfungen und Hinweise (endet spätestens nach 4 h).
+#[tauri::command]
+pub async fn service_set_gaming(on: bool) -> Result<Value, String> {
+    send(json!({ "type": "set_gaming", "on": on })).await
+}
+
+/// Antwort im zweiten Dialog weiterreichen.
 #[tauri::command]
 pub async fn service_confirm_second(
     challenge_id: String,

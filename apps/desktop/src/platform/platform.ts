@@ -23,6 +23,7 @@ import {
   parseQuarantine,
   parseScan,
   parseTrust,
+  parseWatch,
   type ServiceApi,
 } from './service.ts';
 
@@ -179,6 +180,8 @@ function createTauriService(): ServiceApi {
     revokeTrust: async (id) => {
       expectType(await invoke<unknown>('service_revoke_trust', { id }), 'trust_revoked');
     },
+    watchPoll: async (after) => parseWatch(await invoke<unknown>('service_watch_poll', { after })),
+    setGaming: async (on) => parseWatch(await invoke<unknown>('service_set_gaming', { on })),
   };
 }
 

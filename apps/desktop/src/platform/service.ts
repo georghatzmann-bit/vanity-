@@ -94,6 +94,29 @@ export type DecisionResult =
   | { readonly kind: 'trusted'; readonly note: string }
   | { readonly kind: 'second'; readonly challenge: SecondChallenge };
 
+/** Meldung des Echtzeit-Wächters. */
+export interface WatchEvent {
+  readonly seq: number;
+  readonly at: string;
+  readonly kind: 'file' | 'process';
+  readonly path: string;
+  readonly finding: ScanFinding;
+}
+
+/** Zustand des Echtzeit-Wächters. */
+export interface WatchState {
+  readonly events: readonly WatchEvent[];
+  readonly active: boolean;
+  readonly folders: readonly string[];
+  readonly processes: boolean;
+  readonly gaming: boolean;
+  /** Restdauer des Gaming-Modus in Sekunden. */
+  readonly gamingLeft: number | null;
+  readonly pending: number;
+  readonly dropped: number;
+  readonly note: string | null;
+}
+
 /** Fehler des Dienstes (es wurde nichts ausgeführt, sofern nicht anders gesagt). */
 export class ServiceError extends Error {
   constructor(
@@ -120,6 +143,10 @@ export interface ServiceApi {
   ): Promise<DecisionResult>;
   listTrust(): Promise<readonly TrustEntry[]>;
   revokeTrust(id: string): Promise<void>;
+  /** Meldungen des Wächters nach Nummer `after` (nur lesend). */
+  watchPoll(after: number): Promise<WatchState>;
+  /** Gaming-Modus an/aus (pausiert nur Prüfungen und Hinweise, endet nach spätestens 4 h). */
+  setGaming(on: boolean): Promise<WatchState>;
 }
 
 type Json = Record<string, unknown>;
@@ -224,6 +251,30 @@ export function parseTrust(response: unknown): readonly TrustEntry[] {
       reason: str(e['reason']),
       createdAt: str(e['created_at']),
     }));
+}
+
+export function parseWatch(response: unknown): WatchState {
+  const r = expectType(response, 'watch');
+  const s = isObject(r['status']) ? r['status'] : {};
+  return {
+    events: arr(r['events'])
+      .filter(isObject)
+      .map((e) => ({
+        seq: num(e['seq']),
+        at: str(e['at']),
+        kind: e['kind'] === 'process' ? ('process' as const) : ('file' as const),
+        path: str(e['path']),
+        finding: parseFinding(e['finding']),
+      })),
+    active: s['active'] === true,
+    folders: arr(s['folders']).filter((f): f is string => typeof f === 'string'),
+    processes: s['processes'] === true,
+    gaming: s['gaming'] === true,
+    gamingLeft: typeof r['gaming_left'] === 'number' ? r['gaming_left'] : null,
+    pending: num(s['pending']),
+    dropped: num(s['dropped']),
+    note: typeof s['note'] === 'string' ? s['note'] : null,
+  };
 }
 
 const kindLabels: Readonly<Record<string, string>> = {

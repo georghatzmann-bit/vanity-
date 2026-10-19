@@ -12,6 +12,7 @@ pub mod scm;
 pub mod server;
 pub mod transport;
 pub mod trust;
+pub mod watch;
 pub mod worker;
 
 pub use handler::Service;

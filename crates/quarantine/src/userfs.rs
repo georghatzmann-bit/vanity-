@@ -53,6 +53,12 @@ pub trait UserAccess {
     fn identity(&self) -> Option<String> {
         None
     }
+
+    /// Profilordner des anfragenden Kontos (Windows), z. B. für Meldungen des Wächters.
+    /// `None` = unbekannt bzw. eigener Prozess.
+    fn profile(&self) -> Option<std::path::PathBuf> {
+        None
+    }
 }
 
 /// Ohne Identitätswechsel: der eigene Prozess ist der Nutzer (Tests, Werkzeuge).

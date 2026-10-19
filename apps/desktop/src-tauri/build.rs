@@ -18,6 +18,8 @@ const APP_COMMANDS: &[&str] = &[
     "service_confirm_second",
     "service_list_trust",
     "service_revoke_trust",
+    "service_watch_poll",
+    "service_set_gaming",
 ];
 
 fn main() {

@@ -84,6 +84,18 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Prüfprogramm startet der Dienst nicht. Grenze: Netzwerk sperrt erst die AppContainer-
   Sandbox (P4). Konsolenbetrieb ohne SYSTEM (Entwicklung/CI) nutzt das eigene, eingeschränkte
   Token.
+- **Echtzeit-Wächter (P3.4):** meldet nur, verändert nichts. Beobachtet Downloads, Desktop
+  und Temp jedes Profils sowie Wechseldatenträger (`notify`, ReadDirectoryChangesW) und
+  Programmstarts (ETW `Microsoft-Windows-Kernel-Process`, ohne Treiber – das Programm läuft
+  dann bereits). Geprüft wird im eingeschränkten Prüfprozess (Token des Dienstes ohne
+  Privilegien, niedrige Integrität, Job-Objekt); Dateien über 64 MiB, der eigene Datenordner
+  und bereits geprüfte Stände (Pfad + Zeit + Größe) werden übersprungen, höchstens 10 000
+  wartende Dateien (Überlauf wird gezählt und angezeigt). Meldungen sieht nur das Konto, in
+  dessen Profil die Datei liegt (Profilordner des Pipe-Clients); gemeinsame Orte (USB,
+  Programme-Ordner) sehen alle. Vertraute Dateien (Hash + Pfad) werden nicht gemeldet.
+  Isolieren/Vertrauen nur über Vorschlag + Freigabe-Dialog. **Gaming-Modus** pausiert Prüfen
+  und Hinweise rechnerweit und endet spätestens nach 4 Stunden von selbst; danach wird
+  nachgeprüft. Grenze: Neue Profile werden erst nach einem Dienst-Neustart überwacht.
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.

@@ -276,6 +276,41 @@ pub fn client_sid(pipe: &File) -> io::Result<String> {
     token_user(token.as_raw_handle(), sid_to_string)?
 }
 
+/// Profilordner des Pipe-Clients (`C:\Users\name`) – damit der Dienst Funde aus dessen
+/// Ordnern nur diesem Konto zeigt.
+///
+/// # Errors
+/// Identitätswechsel oder Abfrage nicht möglich.
+pub fn client_profile_dir(pipe: &File) -> io::Result<std::path::PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::UI::Shell::GetUserProfileDirectoryW;
+    let as_client = impersonate_client(pipe)?;
+    let mut token: HANDLE = ptr::null_mut();
+    // SAFETY: Pseudo-Handle des Threads; OpenAsSelf = 1; `token` ist ein Ausgabezeiger.
+    // aegis-unsafe: winffi-open-client-token-profile
+    #[allow(unsafe_code)]
+    let ok = unsafe { OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, 1, &mut token) };
+    drop(as_client);
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let token = own(token)?;
+    let mut buffer = vec![0u16; 1024];
+    let mut len = u32::try_from(buffer.len()).unwrap_or(1024);
+    // SAFETY: `token` hat TOKEN_QUERY; `buffer`/`len` beschreiben einen gültigen Puffer.
+    // aegis-unsafe: winffi-profile-dir
+    #[allow(unsafe_code)]
+    let ok =
+        unsafe { GetUserProfileDirectoryW(token.as_raw_handle(), buffer.as_mut_ptr(), &mut len) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let end = buffer.iter().position(|&c| c == 0).unwrap_or(buffer.len());
+    Ok(std::path::PathBuf::from(std::ffi::OsString::from_wide(
+        &buffer[..end],
+    )))
+}
+
 fn sid_to_string(sid: PSID) -> io::Result<String> {
     let mut text: *mut u16 = ptr::null_mut();
     // SAFETY: `sid` ist eine gültige SID (lebt im Puffer des Aufrufers); `text` erhält einen

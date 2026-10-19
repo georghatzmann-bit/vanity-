@@ -199,6 +199,7 @@ pub mod windows {
     pub struct PipeClient<'a> {
         pipe: &'a File,
         sid: std::sync::OnceLock<Option<String>>,
+        profile: std::sync::OnceLock<Option<std::path::PathBuf>>,
     }
 
     impl<'a> PipeClient<'a> {
@@ -208,6 +209,7 @@ pub mod windows {
             Self {
                 pipe,
                 sid: std::sync::OnceLock::new(),
+                profile: std::sync::OnceLock::new(),
             }
         }
     }
@@ -223,6 +225,12 @@ pub mod windows {
                 .get_or_init(|| {
                     Some(client_sid(self.pipe).unwrap_or_else(|_| "unbekannt".to_owned()))
                 })
+                .clone()
+        }
+
+        fn profile(&self) -> Option<std::path::PathBuf> {
+            self.profile
+                .get_or_init(|| aegis_winffi::client_profile_dir(self.pipe).ok())
                 .clone()
         }
     }

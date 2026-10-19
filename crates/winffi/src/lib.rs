@@ -25,17 +25,22 @@ pub mod fs;
 pub mod process;
 
 #[cfg(windows)]
+pub mod system;
+
+#[cfg(windows)]
 pub use fs::{
     DATA_DIR_SDDL, create_new, create_secure_dir, delete_by_handle, final_path, is_name_surrogate,
     long_path, open_exclusive, owner_is_trusted,
 };
 #[cfg(windows)]
 pub use pipe::{
-    Impersonation, PIPE_NAME, PIPE_SDDL, ServerIdentity, accept, client_sid, create_instance,
-    disconnect, impersonate_client, server_identity, thread_is_impersonating,
+    Impersonation, PIPE_NAME, PIPE_SDDL, ServerIdentity, accept, client_profile_dir, client_sid,
+    create_instance, disconnect, impersonate_client, server_identity, thread_is_impersonating,
 };
 #[cfg(windows)]
 pub use process::{JobLimits, RestrictedChild, RestrictedToken, spawn_restricted};
+#[cfg(windows)]
+pub use system::{process_image_path, removable_drives};
 
 /// Vergleicht den von Windows gelieferten tatsächlichen Pfad (`\\?\C:\…`, UTF-16) mit dem
 /// angefragten (`C:\…`). `equal_ignore_case` vergleicht zwei UTF-16-Folgen ohne
