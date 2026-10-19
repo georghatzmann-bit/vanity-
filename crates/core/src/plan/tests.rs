@@ -209,7 +209,9 @@ fn targets_must_match_kind() {
                 | ActionKind::RenameFile
                 | ActionKind::RunInSandbox
                 | ActionKind::SafeStore
-                | ActionKind::SafeRetrieve => matches!(target, Target::File { .. }),
+                | ActionKind::SafeRetrieve
+                | ActionKind::RestoreBackup
+                | ActionKind::ExportBackup => matches!(target, Target::File { .. }),
                 ActionKind::SuspendProcess
                 | ActionKind::ResumeProcess
                 | ActionKind::TerminateProcess => matches!(target, Target::Process { .. }),
@@ -979,4 +981,28 @@ fn wiederherstellen_mehrerer_eintraege_je_ziel_eine_kennung() {
         del.build(T0),
         Err(PlanError::InvalidParameter { .. }) | Err(PlanError::ExactlyOneTarget { .. })
     ));
+}
+
+#[test]
+fn rueckfall_kopien_zurueckholen_und_ausduennen() {
+    assert!(sample_plan_builder(ActionKind::RestoreBackup).build(T0).is_ok());
+    assert!(matches!(
+        sample_plan_builder(ActionKind::RestoreBackup)
+            .parameter(param::BACKUP_ENTRY, "x")
+            .build(T0),
+        Err(PlanError::InvalidParameter { .. })
+    ));
+    let prune = |before: &str| {
+        ActionPlan::builder(ActionKind::DeletePermanently)
+            .target(Target::file(test_path("Rueckfall")))
+            .parameter(param::BACKUP_BEFORE, before)
+            .what("x")
+            .why("x")
+            .consequence("x")
+            .undo(UndoHint::irreversible("x"))
+            .severity(RiskLevel::Info)
+            .build(T0)
+    };
+    assert!(prune("2026-10-01T00:00:00Z").is_ok());
+    assert!(prune("gestern").is_err());
 }

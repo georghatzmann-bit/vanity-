@@ -94,9 +94,25 @@ pub struct ServiceSettings {
     /// Eigene Schutzordner je Konto.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub protected: Vec<ProtectedSet>,
+    /// Rückfall-Kopien je Konto.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub backup: Vec<BackupSetting>,
     /// Konto, das das Netz getrennt hat (darf es – neben Administratoren – wieder verbinden).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panic_by: Option<String>,
+}
+
+/// Rückfall-Kopien eines Kontos (eingeschaltet per Plan).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BackupSetting {
+    /// Konto (SID).
+    pub owner: Option<String>,
+    /// Profil des Kontos.
+    pub profile: Option<PathBuf>,
+    /// Speichergrenze (MiB).
+    pub quota_mb: u64,
+    /// Eingeschaltet am (RFC 3339).
+    pub since: String,
 }
 
 /// Eigene Schutzordner eines Kontos (Ransomware-Erkennung).
@@ -133,6 +149,7 @@ impl Default for ServiceSettings {
             panic_since: None,
             panic_by: None,
             protected: Vec::new(),
+            backup: Vec::new(),
         }
     }
 }

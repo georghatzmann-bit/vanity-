@@ -80,6 +80,16 @@ pub enum Request {
     ProposeProcessAction { program: PathBuf, action: String },
     /// Ransomware-Schutz: eigene Köderdateien (nur lesend).
     RansomStatus {},
+    /// Rückfall-Kopien: Zustand und neueste Versionen (nur lesend).
+    BackupStatus {},
+    /// Rückfall-Kopien ein- (`on`, Grenze in MiB) bzw. ausschalten vorschlagen.
+    ProposeBackup { on: bool, quota_mb: u64 },
+    /// Eine Version zurückholen vorschlagen.
+    ProposeBackupRestore { id: String },
+    /// Neueste Versionen in einen Ordner (z. B. externes Laufwerk) exportieren vorschlagen.
+    ProposeBackupExport { folder: PathBuf },
+    /// Versionen älter als `days` Tage löschen vorschlagen (zweite Bestätigung).
+    ProposeBackupPrune { days: u32 },
     /// Eigene Schutzordner setzen (nur Beobachtung, verändert nichts; höchstens 20).
     SetProtectedFolders { folders: Vec<PathBuf> },
     /// Köderdateien anlegen (`on`) bzw. entfernen vorschlagen.
@@ -259,6 +269,10 @@ pub enum Response {
         memory: Vec<crate::emergency::MemoryHit>,
         /// Stand des Signatur-Updates.
         update: String,
+    },
+    /// Rückfall-Kopien des Kontos.
+    Backup {
+        state: Box<crate::handler::backup::BackupState>,
     },
     /// Datei-Safe des Kontos.
     Safe {

@@ -70,6 +70,8 @@ impl ServerConfig {
 /// Probe bzw. die Windows Sandbox geschrieben hat – die Besitzerprüfung beim Start steigt
 /// deshalb nicht hinein (der Ordner selbst wird geprüft, sein Inhalt verworfen).
 const LAB_DIR: &str = "labor";
+/// Ordner der Rückfall-Kopien im Datenordner.
+const BACKUP_DIR: &str = "rueckfall";
 
 /// Baut den Dienst-Zustand auf.
 ///
@@ -111,8 +113,13 @@ pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
     let trust = TrustStore::open(&data_dir.join("trust.json"))?;
     let history = crate::history::History::open(&data_dir.join("history.json"))?;
     let settings = crate::schedule::SettingsStore::open(&data_dir.join("settings.json"))?;
+    let backup_dir = data_dir.join(BACKUP_DIR);
+    secure_lab_dir(&backup_dir)?;
+    let backup =
+        aegis_quarantine::backup::BackupStore::open(&backup_dir).map_err(io::Error::other)?;
     let service = Service::new(engine, vault, gate, audit)
         .with_protected(vec![data_dir.to_owned()])
+        .with_backup(Arc::new(backup), backup_dir)
         .with_trust(trust)
         .with_history(history)
         .with_settings(settings)
@@ -201,11 +208,29 @@ fn spawn_scheduler(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
         };
         while !stop.load(Ordering::SeqCst) {
-            let (work, scanner, history) = {
+            let (work, scanner, history, backups, store) = {
                 let mut guard = lock();
-                (guard.take_due_work(), guard.scanner(), guard.history())
+                (
+                    guard.take_due_work(),
+                    guard.scanner(),
+                    guard.history(),
+                    guard.take_due_backups(),
+                    guard.backup_store(),
+                )
             };
             save_history(&history);
+            // Rückfall-Kopien (vom Nutzer per Plan eingeschaltet): lesen mit den Rechten des
+            // angemeldeten Besitzers, schreiben nur in den eigenen Ordner – ohne Dienst-Sperre.
+            if let Some(store) = &store {
+                for job in &backups {
+                    let access = crate::worker::BackgroundAccess {
+                        profile: job.profile.clone(),
+                        require_owner: true,
+                    };
+                    let outcome = crate::handler::backup::run_job(store, job, &access);
+                    lock().record_backup(job, &outcome);
+                }
+            }
             for schedule in &work.schedules {
                 let folders: Vec<PathBuf> = crate::schedule::SCHEDULED_FOLDERS
                     .iter()
@@ -421,7 +446,12 @@ fn secure_dir(dir: &Path) -> io::Result<()> {
                     ),
                 ));
             }
-            let lab = depth == 0 && path.file_name().is_some_and(|n| n == LAB_DIR);
+            // Labor (Reste gehören teils dem Nutzer) und Rückfall-Kopien (sehr viele eigene
+            // Dateien) werden nur selbst geprüft, nicht durchlaufen.
+            let lab = depth == 0
+                && path
+                    .file_name()
+                    .is_some_and(|n| n == LAB_DIR || n == BACKUP_DIR);
             if !lab && depth < 3 && std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_dir()) {
                 stack.push((path, depth + 1));
             }

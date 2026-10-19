@@ -147,6 +147,10 @@ pub fn sample_plan_builder(kind: ActionKind) -> ActionPlanBuilder {
         ActionKind::SafeRetrieve => ActionPlan::builder(kind)
             .target(file)
             .parameter(param::SAFE_ENTRY, "11111111-1111-4111-8111-111111111111"),
+        ActionKind::ExportBackup => ActionPlan::builder(kind).target(file),
+        ActionKind::RestoreBackup => ActionPlan::builder(kind)
+            .target(file)
+            .parameter(param::BACKUP_ENTRY, "22222222-2222-4222-8222-222222222222"),
         ActionKind::RunInSandbox => ActionPlan::builder(kind)
             .target(file)
             .parameter(param::LAB_STAGE, "mini_sandbox")

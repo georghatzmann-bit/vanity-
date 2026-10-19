@@ -1165,3 +1165,152 @@ fn eigene_schutzordner_nur_lesbare_ordner_und_nur_beobachtung() {
     assert!(cleared["folders"].as_array().unwrap().is_empty());
     assert_unchanged(&before, &DirSnapshot::capture(home.path()).unwrap());
 }
+
+#[test]
+fn rueckfall_kopien_nur_nach_opt_in_und_nie_ueberschreibend() {
+    struct Account(std::path::PathBuf);
+    impl aegis_quarantine::UserAccess for Account {
+        fn enter(&self) -> std::io::Result<aegis_quarantine::UserScope> {
+            Ok(aegis_quarantine::UserScope::unchanged())
+        }
+        fn identity(&self) -> Option<String> {
+            Some("S-1-RUECK".into())
+        }
+        fn profile(&self) -> Option<std::path::PathBuf> {
+            Some(self.0.clone())
+        }
+    }
+    let data = tempfile::tempdir().unwrap();
+    let store = std::sync::Arc::new(
+        aegis_quarantine::backup::BackupStore::open(&data.path().join("rueckfall")).unwrap(),
+    );
+    let mut h = harness();
+    h.service = std::mem::replace(&mut h.service, harness().service)
+        .with_backup(std::sync::Arc::clone(&store), data.path().join("rueckfall"));
+    let home = tempfile::tempdir().unwrap();
+    let home_path = {
+        let c = std::fs::canonicalize(home.path()).unwrap();
+        let text = c.to_string_lossy().into_owned();
+        text.strip_prefix(r"\\?\")
+            .map_or(c.clone(), std::path::PathBuf::from)
+    };
+    let doc = write_fixture(&home_path, "Documents/brief.txt", b"Version 1").unwrap();
+    let a = Account(home_path.clone());
+    let send = |h: &mut Harness, v: Value| {
+        let req: Request = serde_json::from_value(v).unwrap();
+        serde_json::to_value(h.service.handle(req, &a)).unwrap()
+    };
+    let decide = |p: &Value, d: &str| {
+        json!({
+            "type": "decide", "plan_id": p["proposal"]["ticket"]["id"],
+            "digest": p["proposal"]["ticket"]["digest"], "nonce": p["proposal"]["nonce"],
+            "decision": d, "dialog_id": "d"
+        })
+    };
+    let status = send(&mut h, json!({"type": "backup_status"}));
+    assert_eq!(status["state"]["enabled"], false, "{status}");
+    // Ohne Einschalten: kein Lauf.
+    assert!(h.service.take_due_backups().is_empty());
+    assert_eq!(
+        send(
+            &mut h,
+            json!({"type": "propose_backup", "on": true, "quota_mb": 7})
+        )["code"],
+        "input"
+    );
+    let p = send(
+        &mut h,
+        json!({"type": "propose_backup", "on": true, "quota_mb": 1024}),
+    );
+    assert_eq!(p["type"], "proposal", "{p}");
+    assert_eq!(send(&mut h, decide(&p, "decline"))["type"], "nothing_done");
+    assert!(h.service.take_due_backups().is_empty());
+    let p = send(
+        &mut h,
+        json!({"type": "propose_backup", "on": true, "quota_mb": 1024}),
+    );
+    assert_eq!(
+        send(&mut h, decide(&p, "execute"))["result"]["status"],
+        "succeeded"
+    );
+
+    // Lauf sichert (liest nur).
+    let jobs = h.service.take_due_backups();
+    assert_eq!(jobs.len(), 1);
+    let before = DirSnapshot::capture(&home_path).unwrap();
+    let outcome = aegis_service::handler::backup::run_job(&store, &jobs[0], &a);
+    assert_eq!(outcome.copied, 1, "{outcome:?}");
+    assert_unchanged(&before, &DirSnapshot::capture(&home_path).unwrap());
+    h.service.record_backup(&jobs[0], &outcome);
+    assert!(
+        h.service.take_due_backups().is_empty(),
+        "erst nach dem Abstand"
+    );
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    write_fixture(&home_path, "Documents/brief.txt", b"Version 2 kaputt").unwrap();
+    h.clock.advance(Duration::minutes(31));
+    let jobs = h.service.take_due_backups();
+    assert_eq!(
+        aegis_service::handler::backup::run_job(&store, &jobs[0], &a).copied,
+        1
+    );
+    let status = send(&mut h, json!({"type": "backup_status"}));
+    assert_eq!(status["state"]["usage"]["versions"], 2, "{status}");
+    let old = status["state"]["versions"][1]["id"].clone();
+
+    // Zurückholen: nie überschreiben – neuer Name.
+    let p = send(&mut h, json!({"type": "propose_backup_restore", "id": old}));
+    let target = p["proposal"]["plan"]["targets"][0]["path"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_ne!(std::path::Path::new(&target), doc.as_path(), "{p}");
+    let done = send(&mut h, decide(&p, "execute"));
+    assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    assert_eq!(std::fs::read(&target).unwrap(), b"Version 1");
+    assert_eq!(std::fs::read(&doc).unwrap(), b"Version 2 kaputt");
+
+    // Export in einen gewählten Ordner – nur mit „Ja“.
+    let usb = tempfile::tempdir().unwrap();
+    let p = send(
+        &mut h,
+        json!({"type": "propose_backup_export", "folder": usb.path()}),
+    );
+    assert_eq!(p["proposal"]["plan"]["kind"], "export_backup", "{p}");
+    assert_eq!(send(&mut h, decide(&p, "decline"))["type"], "nothing_done");
+    assert_eq!(std::fs::read_dir(usb.path()).unwrap().count(), 0);
+    let p = send(
+        &mut h,
+        json!({"type": "propose_backup_export", "folder": usb.path()}),
+    );
+    let done = send(&mut h, decide(&p, "execute"));
+    assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    assert_eq!(std::fs::read_dir(usb.path()).unwrap().count(), 1);
+
+    // Ausdünnen: zweite Bestätigung nötig.
+    let p = send(&mut h, json!({"type": "propose_backup_prune", "days": 30}));
+    assert_eq!(p["proposal"]["plan"]["kind"], "delete_permanently", "{p}");
+    let second = send(&mut h, decide(&p, "execute"));
+    assert_eq!(second["type"], "second_confirmation_required", "{second}");
+    h.clock.advance(Duration::seconds(2));
+    let done = send(
+        &mut h,
+        json!({
+            "type": "confirm_second",
+            "challenge_id": second["challenge"]["challenge_id"],
+            "nonce": second["nonce"],
+            "decision": "execute",
+            "dialog_id": "d2",
+        }),
+    );
+    assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    // Ausschalten: vorhandene Versionen bleiben.
+    let p = send(
+        &mut h,
+        json!({"type": "propose_backup", "on": false, "quota_mb": 0}),
+    );
+    send(&mut h, decide(&p, "execute"));
+    let status = send(&mut h, json!({"type": "backup_status"}));
+    assert_eq!(status["state"]["enabled"], false);
+    assert!(status["state"]["usage"]["versions"].as_u64().unwrap() >= 1);
+}

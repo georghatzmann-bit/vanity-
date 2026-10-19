@@ -149,6 +149,8 @@ pub struct WatchShared {
     entropy_rate: Mutex<HashMap<Option<PathBuf>, VecDeque<Instant>>>,
     /// Zuletzt gestartete Programme: (Zeit, Programm, Konto) – für „Einfrieren“ im Alarm.
     recent_starts: Mutex<VecDeque<(Instant, PathBuf, Option<String>)>>,
+    /// Letzte Ransomware-Warnung je Profil (Rückfall-Kopien pausieren danach).
+    ransom_alerts: Mutex<HashMap<Option<PathBuf>, Instant>>,
     /// Die Dateiüberwachung (zum späteren Hinzufügen geschützter Ordner).
     watcher: Mutex<Option<Arc<Mutex<notify::RecommendedWatcher>>>>,
 }
@@ -346,6 +348,19 @@ impl WatchShared {
             .map(|(_, p)| p.clone())
     }
 
+    /// Gab es für das Profil in der letzten Zeit `within` eine Ransomware-Warnung?
+    #[must_use]
+    pub fn ransom_alert_within(&self, profile: Option<&Path>, within: Duration) -> bool {
+        lock(&self.ransom_alerts).iter().any(|(scope, t)| {
+            t.elapsed() < within
+                && match (scope, profile) {
+                    (Some(s), Some(p)) => same_path(s, p),
+                    (None, None) => true,
+                    _ => false,
+                }
+        })
+    }
+
     /// Ein Programm wurde gestartet (für „Einfrieren“ im Ransomware-Alarm).
     pub fn record_start(&self, program: PathBuf, owner: Option<String>) {
         let now = Instant::now();
@@ -446,6 +461,13 @@ impl WatchShared {
             *next += 1;
             seq
         };
+        if kind == WatchKind::Ransomware {
+            let mut alerts = lock(&self.ransom_alerts);
+            if alerts.len() > 1000 {
+                alerts.clear();
+            }
+            alerts.insert(scope.clone(), Instant::now());
+        }
         let now = OffsetDateTime::now_utc();
         let at = now
             .format(&aegis_core::time::format_description::well_known::Rfc3339)

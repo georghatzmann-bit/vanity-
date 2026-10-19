@@ -125,7 +125,7 @@ fn free_target(entry: &safe::SafeEntry, profile: &Path) -> PathBuf {
 }
 
 impl<C: Clock, W: Durable> Service<C, W> {
-    fn now(&self) -> OffsetDateTime {
+    pub(super) fn now(&self) -> OffsetDateTime {
         self.gate.clock().now()
     }
 

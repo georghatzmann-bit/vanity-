@@ -27,6 +27,7 @@ use aegis_quarantine::{Entry, UserAccess, Vault};
 
 use crate::protocol::{PROTOCOL_VERSION, Proposal, Request, Response};
 
+pub mod backup;
 mod safe;
 
 /// Höchstzahl Pfade pro Anfrage.
@@ -78,6 +79,10 @@ pub struct Service<C: Clock, W: Durable> {
     safe: safe::SafeState,
     /// Signatur-Update außer der Reihe angefordert (Notfall-Scan).
     update_requested: bool,
+    /// Rückfall-Kopien (Betrieb: Speicher im Datenordner).
+    backup: Option<Arc<aegis_quarantine::backup::BackupStore>>,
+    backup_dir: Option<PathBuf>,
+    backup_runs: backup::BackupRuns,
 }
 
 /// Einstellung „Windows-Feature Windows Sandbox“.
@@ -150,6 +155,9 @@ impl<C: Clock, W: Durable> Service<C, W> {
             lab: crate::lab::Lab::new(None),
             safe: safe::SafeState::default(),
             update_requested: false,
+            backup: None,
+            backup_dir: None,
+            backup_runs: backup::BackupRuns::default(),
         }
     }
 
@@ -171,6 +179,18 @@ impl<C: Clock, W: Durable> Service<C, W> {
     #[must_use]
     pub fn with_history(mut self, history: History) -> Self {
         self.history = Arc::new(Mutex::new(history));
+        self
+    }
+
+    /// Speicher der Rückfall-Kopien (Betrieb bzw. Tests).
+    #[must_use]
+    pub fn with_backup(
+        mut self,
+        store: Arc<aegis_quarantine::backup::BackupStore>,
+        dir: PathBuf,
+    ) -> Self {
+        self.backup = Some(store);
+        self.backup_dir = Some(dir);
         self
     }
 
@@ -1550,6 +1570,20 @@ impl<C: Clock, W: Durable> Service<C, W> {
             }
             Request::RansomStatus {} => self.ransom_status(user),
             Request::SetProtectedFolders { folders } => self.set_protected(folders, user),
+            Request::BackupStatus {} => self.backup_status(user),
+            Request::ProposeBackup { on, quota_mb } => self.propose_backup(on, quota_mb, user),
+            Request::ProposeBackupRestore { id } => self.propose_backup_restore(&id, user),
+            Request::ProposeBackupPrune { days } => self.propose_backup_prune(days, user),
+            Request::ProposeBackupExport { folder } => {
+                let paths = [folder];
+                match self.check_paths(&paths) {
+                    Ok(()) => match long_paths(&paths, user) {
+                        Ok(paths) => self.propose_backup_export(&paths[0], user),
+                        Err(e) => e,
+                    },
+                    Err(e) => Response::error("input", e),
+                }
+            }
             Request::ProposeBaits { on } => self.propose_baits(on, user),
             Request::MemoryScan {} => {
                 let mut response = memory_scan(&self.scanner, user);
@@ -2148,6 +2182,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 return self.control_processes(permit, user);
             }
             ActionKind::SafeStore => return self.apply_safe_store(permit, user),
+            ActionKind::RestoreBackup => return self.apply_backup_restore(permit, user),
+            ActionKind::ExportBackup => return self.apply_backup_export(permit, user),
             ActionKind::SafeRetrieve => return self.apply_safe_retrieve(permit, user),
             ActionKind::ChangeSetting => {
                 let bait = plan.targets().iter().any(|t| {
@@ -2159,12 +2195,17 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 let safe = plan.targets().iter().any(|t| {
                     matches!(t, Target::Setting { id } if id == aegis_quarantine::safe::SAFE_SETTING)
                 });
+                let backup = plan.targets().iter().any(|t| {
+                    matches!(t, Target::Setting { id } if id == aegis_quarantine::backup::BACKUP_SETTING)
+                });
                 return if bait {
                     self.apply_baits(permit, user)
                 } else if panic {
                     self.apply_panic(permit, user)
                 } else if safe {
                     self.apply_safe_create(permit, user)
+                } else if backup {
+                    self.apply_backup_setting(permit, user)
                 } else {
                     self.enable_sandbox_feature(permit, user)
                 };
@@ -2255,6 +2296,9 @@ impl<C: Clock, W: Durable> Service<C, W> {
                     if !self.audit_before_execution() {
                         drop(permit);
                         return audit_unavailable();
+                    }
+                    if pending.plan.parameter(param::BACKUP_BEFORE).is_some() {
+                        return self.apply_backup_prune(permit, user);
                     }
                     let result = self.vault.delete_permanently(permit, user);
                     self.report(ActionKind::DeletePermanently, result)

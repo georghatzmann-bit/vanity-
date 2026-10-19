@@ -76,6 +76,12 @@ pub mod param {
     pub const LAB_SHA256: &str = "lab_sha256";
     /// Eintrag im Datei-Safe ([`super::ActionKind::SafeRetrieve`], Pflicht, UUID).
     pub const SAFE_ENTRY: &str = "safe_entry";
+    /// Version einer Rückfall-Kopie ([`super::ActionKind::RestoreBackup`], Pflicht, UUID).
+    pub const BACKUP_ENTRY: &str = "backup_entry";
+    /// Rückfall-Kopien ausdünnen ([`super::ActionKind::DeletePermanently`] statt
+    /// [`QUARANTINE_ID`]): Versionen älter als dieser Zeitpunkt (RFC 3339) werden gelöscht –
+    /// die jeweils neueste Version jeder Datei bleibt immer.
+    pub const BACKUP_BEFORE: &str = "backup_before";
     /// Erlaubte Werte für [`VALUE_TYPE`].
     pub const REGISTRY_VALUE_TYPES: [&str; 6] = [
         "REG_SZ",
@@ -350,11 +356,18 @@ pub enum ActionKind {
     /// Datei aus dem Datei-Safe an ihren ursprünglichen Ort zurückholen (Eintrag in
     /// [`param::SAFE_ENTRY`]; das [`Target::File`] ist der Ort, an den sie zurückkommt).
     SafeRetrieve,
+    /// Version einer Rückfall-Kopie zurückholen (Version in [`param::BACKUP_ENTRY`]; das
+    /// [`Target::File`] ist der Ort, an dem sie neu angelegt wird – nie überschrieben).
+    RestoreBackup,
+    /// Neueste Rückfall-Kopien als normale Dateien in einen Ordner exportieren (z. B. ein
+    /// externes Laufwerk; [`Target::File`] ist der Zielordner, darin entsteht ein neuer
+    /// Unterordner – nichts wird überschrieben).
+    ExportBackup,
 }
 
 impl ActionKind {
     /// Alle bekannten Arten.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 16] = [
         Self::Quarantine,
         Self::Restore,
         Self::DeletePermanently,
@@ -369,6 +382,8 @@ impl ActionKind {
         Self::RunInSandbox,
         Self::SafeStore,
         Self::SafeRetrieve,
+        Self::RestoreBackup,
+        Self::ExportBackup,
     ];
 
     /// Stabile Kennung (identisch mit der serde-Darstellung, Teil der Prüfsumme).
@@ -389,6 +404,8 @@ impl ActionKind {
             Self::RunInSandbox => "run_in_sandbox",
             Self::SafeStore => "safe_store",
             Self::SafeRetrieve => "safe_retrieve",
+            Self::RestoreBackup => "restore_backup",
+            Self::ExportBackup => "export_backup",
         }
     }
 
@@ -410,6 +427,8 @@ impl ActionKind {
             Self::RunInSandbox => "Im Labor ausführen",
             Self::SafeStore => "In den Datei-Safe legen",
             Self::SafeRetrieve => "Aus dem Datei-Safe holen",
+            Self::RestoreBackup => "Rückfall-Kopie zurückholen",
+            Self::ExportBackup => "Rückfall-Kopien exportieren",
         }
     }
 
@@ -431,6 +450,8 @@ impl ActionKind {
             Self::RunInSandbox => "Run in the lab",
             Self::SafeStore => "Move into the file safe",
             Self::SafeRetrieve => "Take out of the file safe",
+            Self::RestoreBackup => "Restore fallback copy",
+            Self::ExportBackup => "Export fallback copies",
         }
     }
 
@@ -459,7 +480,9 @@ impl ActionKind {
             | Self::RenameFile
             | Self::RunInSandbox
             | Self::SafeStore
-            | Self::SafeRetrieve => matches!(target, Target::File { .. }),
+            | Self::SafeRetrieve
+            | Self::RestoreBackup
+            | Self::ExportBackup => matches!(target, Target::File { .. }),
             Self::SuspendProcess | Self::ResumeProcess | Self::TerminateProcess => {
                 matches!(target, Target::Process { .. })
             }
@@ -1036,6 +1059,37 @@ impl ActionPlan {
                 let sha = required_parameter(&plan, param::LAB_SHA256)?;
                 if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
                     return Err(invalid(param::LAB_SHA256, "SHA-256 als 64 Hex-Zeichen"));
+                }
+            }
+            ActionKind::ExportBackup if plan.targets.len() != 1 => {
+                return Err(PlanError::ExactlyOneTarget { kind: plan.kind });
+            }
+            ActionKind::RestoreBackup => {
+                if plan.targets.len() != 1 {
+                    return Err(PlanError::ExactlyOneTarget { kind: plan.kind });
+                }
+                let entry = required_parameter(&plan, param::BACKUP_ENTRY)?;
+                if crate::uuid::Uuid::parse_str(entry).is_err() {
+                    return Err(PlanError::InvalidParameter {
+                        key: param::BACKUP_ENTRY.to_owned(),
+                        reason: "Version muss eine UUID sein",
+                    });
+                }
+            }
+            ActionKind::DeletePermanently if plan.parameter(param::BACKUP_BEFORE).is_some() => {
+                let before = plan.parameter(param::BACKUP_BEFORE).unwrap_or_default();
+                if plan.parameter(param::QUARANTINE_ID).is_some()
+                    || plan.targets.len() != 1
+                    || time::OffsetDateTime::parse(
+                        before,
+                        &time::format_description::well_known::Rfc3339,
+                    )
+                    .is_err()
+                {
+                    return Err(PlanError::InvalidParameter {
+                        key: param::BACKUP_BEFORE.to_owned(),
+                        reason: "Zeitpunkt (RFC 3339), genau ein Ziel, ohne Quarantäne-Eintrag",
+                    });
                 }
             }
             ActionKind::SafeRetrieve => {
