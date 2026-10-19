@@ -3,14 +3,17 @@
  *
  * Tauri liest `app.security.csp` aus `src-tauri/tauri.conf.json` und setzt die Richtlinie im
  * App-Fenster. `vite preview` (Grundlage der Playwright-Tests) sendet über diese Hilfsfunktion
- * exakt dieselbe Richtlinie als HTTP-Header, damit die Tests unter denselben Bedingungen laufen
- * wie die echte App. Die Serialisierung entspricht der von Tauri
- * (`<direktive> <quelle> <quelle>; <direktive> …`).
+ * dieselben Direktiven mit denselben Quellen als HTTP-Header, damit die Tests unter
+ * gleichwertigen Bedingungen laufen wie die echte App.
  *
- * Hinweis zur Parität: Tauri ergänzt beim Ausliefern nur SHA-256-Hashes der gebündelten
- * Skriptdateien in `script-src` sowie Nonces für `<style>`-Elemente bzw. entfernte Skripte im
- * HTML. `index.html` enthält beides nicht (per Test geprüft), die Vorschau verwendet also die
- * gleiche Grundrichtlinie.
+ * Parität ist *semantisch*, nicht byte-genau:
+ * - Tauri hält die Direktiven in einer HashMap; die Reihenfolge im Header ist dort unbestimmt.
+ *   Hier wird in Einfügereihenfolge serialisiert – für den Browser ist das gleichwertig.
+ * - Tauri ergänzt beim Ausliefern SHA-256-Hashes der gebündelten Skriptdateien in `script-src`
+ *   (wirkungsgleich zu `'self'`) sowie Hashes/Nonces für Inline-Skripte und `<style>`-Elemente
+ *   im ausgelieferten HTML. Solcher Inline-Code würde die Richtlinie der App gegenüber der
+ *   Vorschau verändern; `findInlineCode` prüft deshalb das gebaute `dist/index.html`
+ *   (e2e/security.spec.ts) und die Quelle (src/csp.test.ts).
  */
 
 /** Quellen einer Direktive: wie in tauri.conf.json als Text („'self' data:“) oder Liste. */
@@ -65,8 +68,8 @@ function splitSources(directive: string, sources: unknown): string[] {
 }
 
 /**
- * Serialisiert eine CSP wie Tauri: Text wird (bereinigt) übernommen, eine Direktiven-Tabelle
- * wird in Einfügereihenfolge zu „name quelle …; name …“. Wirft bei leeren oder ungültigen
+ * Serialisiert eine CSP im Format von Tauri: Text wird (bereinigt) übernommen, eine
+ * Direktiven-Tabelle wird in Einfügereihenfolge zu „name quelle …; name …“. Wirft bei leeren oder ungültigen
  * Angaben, damit eine kaputte Richtlinie nie unbemerkt (und damit wirkungslos) ausgeliefert wird.
  */
 export function serializeCsp(csp: CspConfig): string {
@@ -109,4 +112,39 @@ export function cspFromTauriConfig(config: unknown): string {
     throw new TypeError('tauri.conf.json: app.security.csp muss Text oder eine Tabelle sein.');
   }
   return serializeCsp(csp as CspConfig);
+}
+
+/**
+ * Findet Inline-Code im HTML, den Tauri beim Ausliefern mit Hashes/Nonces versehen würde
+ * (dann wiche die CSP der App von der Vorschau ab) oder den die CSP ohnehin blockiert:
+ * `<style>`-Elemente, Skripte ohne `src` oder mit Inhalt, Skripte von fremden Ursprüngen,
+ * `style`-Attribute und Inline-Ereignis-Handler. Leere Liste = sauber.
+ */
+export function findInlineCode(html: string): string[] {
+  const findings: string[] = [];
+  if (/<style[\s>]/i.test(html)) {
+    findings.push('<style>-Element');
+  }
+  for (const [, attributes = '', body = ''] of html.matchAll(
+    /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi,
+  )) {
+    const src = /\bsrc\s*=\s*["']?([^"'\s>]*)/i.exec(attributes)?.[1];
+    if (src === undefined || src === '') {
+      findings.push(`Inline-Skript: <script${attributes}>`);
+    } else if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(src)) {
+      findings.push(`Skript von fremdem Ursprung: ${src}`);
+    }
+    if (body.trim() !== '') {
+      findings.push(`Skript mit Inhalt: <script${attributes}>`);
+    }
+  }
+  for (const [tag = ''] of html.matchAll(/<[a-z][^>]*>/gi)) {
+    if (/\sstyle\s*=/i.test(tag)) {
+      findings.push(`style-Attribut: ${tag}`);
+    }
+    if (/\son[a-z]+\s*=/i.test(tag)) {
+      findings.push(`Inline-Ereignis-Handler: ${tag}`);
+    }
+  }
+  return findings;
 }

@@ -2,10 +2,17 @@ import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { cspFromTauriConfig } from '../src/csp.ts';
 
-/** Erwartete CSP – aus derselben Quelle wie Tauri und vite preview (tauri.conf.json). */
-export const expectedCsp = cspFromTauriConfig(
-  JSON.parse(readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8')),
+const tauriConfig: unknown = JSON.parse(
+  readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'),
 );
+
+/** Erwartete CSP – aus derselben Quelle wie Tauri und vite preview (tauri.conf.json). */
+export const expectedCsp = cspFromTauriConfig(tauriConfig);
+
+/** `app.security.freezePrototype` aus tauri.conf.json. */
+export const freezesPrototype =
+  (tauriConfig as { app?: { security?: { freezePrototype?: unknown } } }).app?.security
+    ?.freezePrototype === true;
 
 export interface CspViolation {
   readonly directive: string;
@@ -109,8 +116,24 @@ function installProbe(): void {
   });
 }
 
-/** Registriert die Messsonde für alle folgenden Navigationen der Seite. */
+/**
+ * Wie Tauri bei `freezePrototype: true` (tauri/scripts/freeze_prototype.js): Das erste
+ * Init-Skript friert `Object.prototype` ein – noch vor jedem Skript der Seite. Code, der
+ * z. B. `objekt.toString = …` zuweist, wirft dann im strikten Modus einen TypeError; ohne
+ * diese Nachbildung liefe er in der Vorschau, die echte App bliebe aber leer.
+ */
+function freezePrototype(): void {
+  Object.freeze(Object.prototype);
+}
+
+/**
+ * Stellt die Bedingungen des Tauri-Fensters nach (eingefrorener Prototyp laut tauri.conf.json)
+ * und registriert die Messsonde – für alle folgenden Navigationen der Seite.
+ */
 export async function attachProbe(page: Page): Promise<void> {
+  if (freezesPrototype) {
+    await page.addInitScript(freezePrototype);
+  }
   await page.addInitScript(installProbe);
 }
 

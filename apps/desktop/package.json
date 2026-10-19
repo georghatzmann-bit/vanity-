@@ -6,9 +6,9 @@
   "description": "AEGIS Suite – Desktop-App (Tauri 2 + React).",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.app.json && tsc -p tsconfig.node.json && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.node.json",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "tauri": "tauri"

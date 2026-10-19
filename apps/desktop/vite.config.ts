@@ -10,14 +10,12 @@ import tauriConfig from './src-tauri/tauri.conf.json' with { type: 'json' };
  */
 const contentSecurityPolicy = cspFromTauriConfig(tauriConfig);
 
-const FONT_FILE = /\.(?:woff2?|ttf|otf|eot)(?:$|\?)/i;
-
 /**
- * Schriften nie als data:-URI einbetten: Die CSP erlaubt Schriften nur aus 'self'
- * (font-src). Für alle anderen Dateien gilt Vites Standard-Grenze.
+ * Keine Datei als data:-URI einbetten: Die CSP erlaubt Bilder und Schriften nur aus 'self'
+ * (img-src/font-src ohne data:). Jede Datei wird deshalb als eigene Datei ausgeliefert.
  */
-function inlineAsset(filePath: string): boolean | undefined {
-  return FONT_FILE.test(filePath) ? false : undefined;
+function inlineAsset(): false {
+  return false;
 }
 
 // Tauri erwartet einen festen Port und keine Bildschirm-Löschung (siehe Tauri-Doku).
@@ -42,6 +40,6 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'tests/**/*.test.ts'],
   },
 });

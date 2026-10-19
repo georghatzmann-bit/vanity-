@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Minimale Rechte für das Hauptfenster. Jede Erweiterung wird einzeln begründet (docs/SECURITY.md).",
+  "description": "Hauptfenster ohne IPC-Rechte: P0 ruft keinen Befehl auf. Jede Berechtigung wird einzeln (core:<plugin>:allow-<befehl>, nie ein :default-Bündel) eingetragen und in apps/desktop/README.md begründet.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": []
 }

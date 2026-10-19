@@ -1,0 +1,55 @@
+# cargo-deny-Richtlinie für die Rust-Abhängigkeiten der AEGIS Suite.
+# Wird nur von .github/workflows/supply-chain.yml gelesen (`--config`), daher liegt sie hier.
+# Lokal: cargo deny --manifest-path Cargo.toml --workspace --locked \
+#          --config .github/workflows/supply-chain.deny.toml check
+
+[graph]
+# Ausgeliefert wird nur die Windows-App (x86_64). Die GTK-Kette von Tauri unter Linux
+# (glib, proc-macro-error – RUSTSEC-2024-0429/-0370) dient nur Entwicklung/CI und gelangt
+# nicht in den Windows-Build; sie wird deshalb hier nicht bewertet.
+targets = ["x86_64-pc-windows-msvc"]
+# Auch Code hinter optionalen Features (z. B. aegis-core/testing) zählt.
+all-features = true
+# Nur, was ausgeliefert wird: Dev-Abhängigkeiten (proptest, trybuild …) landen nicht im Installer.
+exclude-dev = true
+
+[advisories]
+version = 2
+# Sicherheitslücken, „unsound“ und „unmaintained“ schlagen fehl (Standard von Version 2);
+# zurückgezogene Versionen ebenfalls. Ausnahmen nur mit Begründung und Ablaufdatum.
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+# Alles, was hier nicht steht, ist verboten – insbesondere GPL/LGPL/AGPL: ClamAV (GPL) wird
+# nur als getrennter Prozess angesprochen, nie eingelinkt (CLAUDE.md, docs/LICENSES.md).
+# MPL-2.0 (cssparser, selectors, dtoa-short, option-ext über Tauri) ist dateibezogenes
+# Copyleft und mit dem Einlinken vereinbar.
+allow = [
+  "Apache-2.0",
+  "BSD-3-Clause",
+  "MIT",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.93
+# Eigene Crates (publish = false) tragen keine Lizenzangabe.
+private = { ignore = true }
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+# Pfad-Abhängigkeiten innerhalb des Workspaces sind erlaubt (nicht veröffentlicht).
+allow-wildcard-paths = true
+deny = [
+  { crate = "clamav-sys", reason = "ClamAV ist GPL: nur als getrennter Prozess ansprechen, nie einlinken" },
+  { crate = "clamav-rs", reason = "ClamAV ist GPL: nur als getrennter Prozess ansprechen, nie einlinken" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
