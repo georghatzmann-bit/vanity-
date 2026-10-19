@@ -13,6 +13,7 @@ import {
   type ScanResult,
   type ServiceApi,
 } from '../platform/service.ts';
+import { EmergencyPanel } from './EmergencyPanel.tsx';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 import { SchedulePanel } from './SchedulePanel.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
@@ -312,6 +313,7 @@ export function ScanPage() {
               </div>
             )}
           </Panel>
+          <EmergencyPanel service={service} />
           <MemoryPanel
             service={service}
             onIsolate={(path) => void flow.start(() => service.proposeQuarantine([path]))}

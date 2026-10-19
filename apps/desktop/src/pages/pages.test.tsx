@@ -70,18 +70,14 @@ describe('Dashboard – ehrlich', () => {
     );
   });
 
-  it('Notfall-Scan ist gesperrt (folgt in P5), bleibt aber per Tastatur erreichbar und erklärt', async () => {
+  it('Notfall-Scan (Panic-Button) öffnet die Scan-Seite', async () => {
     const user = userEvent.setup();
     renderApp();
     const emergency = screen.getByTestId('emergency-scan');
-    expect(emergency).toHaveAttribute('aria-disabled', 'true');
-    expect(emergency).toHaveAccessibleName('Notfall-Scan Folgt in P5');
+    expect(emergency).not.toHaveAttribute('aria-disabled');
+    expect(emergency).toHaveAccessibleName('Notfall-Scan');
     await user.click(emergency);
-    expect(window.location.hash).toBe('#/dashboard');
-    emergency.focus();
-    act(() => emergency.dispatchEvent(new FocusEvent('focusin', { bubbles: true })));
-    // Hinweis als Tooltip (bei Tastaturfokus sofort) – ergänzt, ersetzt nicht den sichtbaren Text.
-    expect(screen.getByText('Folgt in P5', { selector: 'span' })).toBeVisible();
+    expect(window.location.hash).toBe('#/scan');
   });
 
   it('Live-Aktivität: nur echte Ereignisse dieser Sitzung (Start, Einstellungen)', async () => {

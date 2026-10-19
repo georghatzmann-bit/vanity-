@@ -332,8 +332,7 @@ describe('Befehlspalette', () => {
       ).toBe(true);
     }
     const emergency = options.find((option) => option.textContent?.includes('Notfall-Scan'));
-    expect(emergency).toHaveAttribute('aria-disabled', 'true');
-    expect(emergency).toHaveTextContent('Folgt in P5');
+    expect(emergency).not.toHaveAttribute('aria-disabled', 'true');
     const settings = options.find((option) => option.textContent?.startsWith('Einstellungen'));
     expect(settings).toHaveTextContent('Strg');
   });

@@ -33,6 +33,8 @@ const APP_COMMANDS: &[&str] = &[
     "service_ransom_status",
     "service_propose_baits",
     "service_memory_scan",
+    "service_emergency_scan",
+    "service_propose_restore_many",
     "service_panic_status",
     "service_propose_panic",
     "service_safe_status",

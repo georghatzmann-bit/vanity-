@@ -91,7 +91,13 @@ export interface SecondChallenge {
 
 /** Ergebnis einer Antwort. */
 export type DecisionResult =
-  | { readonly kind: 'executed'; readonly ok: boolean; readonly message: string | null }
+  | {
+      readonly kind: 'executed';
+      readonly ok: boolean;
+      readonly message: string | null;
+      /** Kennungen neuer bzw. betroffener Quarantäne-Einträge (für „Alles rückgängig“). */
+      readonly entryIds: readonly string[];
+    }
   | { readonly kind: 'nothing' }
   | { readonly kind: 'trusted'; readonly note: string }
   | { readonly kind: 'second'; readonly challenge: SecondChallenge };
@@ -267,6 +273,36 @@ export interface PanicState {
   readonly available: boolean;
 }
 
+/** Bereich des Notfall-Scans. */
+export type EmergencyAreaId =
+  'autostart' | 'downloads' | 'desktop' | 'temp' | 'appdata' | 'processes' | 'memory';
+
+export interface EmergencyArea {
+  readonly id: EmergencyAreaId;
+  readonly checked: number;
+  readonly findings: readonly ScanFinding[];
+  readonly skipped: number;
+  readonly note: string | null;
+}
+
+/** Ergebnis des Notfall-Scans (Panic-Button). */
+export interface EmergencyResult {
+  readonly areas: readonly EmergencyArea[];
+  /** Funde im Arbeitsspeicher: Prozess + Programm (Reihenfolge wie im Bereich `memory`). */
+  readonly memory: readonly { readonly pid: number; readonly program: string | null }[];
+  readonly update: string;
+}
+
+const EMERGENCY_AREAS: readonly EmergencyAreaId[] = [
+  'autostart',
+  'downloads',
+  'desktop',
+  'temp',
+  'appdata',
+  'processes',
+  'memory',
+];
+
 /** Eintrag im Datei-Safe. */
 export interface SafeEntry {
   readonly id: string;
@@ -346,6 +382,10 @@ export interface ServiceApi {
   panicStatus(): Promise<PanicState>;
   /** Netz trennen (`true`) bzw. wieder verbinden vorschlagen. */
   proposePanic(on: boolean): Promise<Proposal>;
+  /** Notfall-Scan (nur lesend; stößt ein Signatur-Update an). */
+  emergencyScan(): Promise<EmergencyResult>;
+  /** „Alles rückgängig“: mehrere Quarantäne-Einträge in einem Plan wiederherstellen. */
+  proposeRestoreMany(entryIds: readonly string[]): Promise<Proposal>;
   /** Datei-Safe: Zustand (Einträge nur, wenn entsperrt). */
   safeStatus(): Promise<SafeState>;
   /** Datei-Safe anlegen vorschlagen – das Passwort geht nur an den Dienst. */
@@ -714,6 +754,31 @@ export function parsePanic(response: unknown): PanicState {
   };
 }
 
+export function parseEmergency(response: unknown): EmergencyResult {
+  const r = expectType(response, 'emergency_scan');
+  return {
+    areas: arr(r['areas'])
+      .filter(isObject)
+      .filter((a): a is typeof a & { id: EmergencyAreaId } =>
+        (EMERGENCY_AREAS as readonly unknown[]).includes(a['id']),
+      )
+      .map((a) => ({
+        id: a['id'] as EmergencyAreaId,
+        checked: num(a['checked']),
+        findings: arr(a['findings']).map(parseFinding),
+        skipped: num(a['skipped']),
+        note: typeof a['note'] === 'string' ? a['note'] : null,
+      })),
+    memory: arr(r['memory'])
+      .filter(isObject)
+      .map((m) => ({
+        pid: num(m['pid']),
+        program: typeof m['program'] === 'string' ? m['program'] : null,
+      })),
+    update: str(r['update']),
+  };
+}
+
 export function parseSafe(response: unknown): SafeState {
   const r = expectType(response, 'safe');
   return {
@@ -817,6 +882,10 @@ export function parseDecision(response: unknown): DecisionResult {
         kind: 'executed',
         ok: status === 'succeeded',
         message: typeof result['message'] === 'string' ? result['message'] : null,
+        entryIds: arr(response['entries'])
+          .filter(isObject)
+          .map((e) => str(e['id']))
+          .filter((id) => id !== ''),
       };
     }
     case 'nothing_done':

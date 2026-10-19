@@ -336,19 +336,35 @@ impl Vault {
         user: &dyn UserAccess,
     ) -> Result<Outcome, QuarantineError> {
         let plan = permit.ensure_kind(ActionKind::Restore)?;
-        let (entry, target) =
-            self.planned_entry(plan.parameter(param::QUARANTINE_ID), plan.targets())?;
-        let result = if entry.visible_to(user.identity().as_deref()) {
-            self.restore_one(&entry, &target, user)
-        } else {
-            Err(QuarantineError::InvalidPlan(
-                "Eintrag gehört einem anderen Konto".into(),
-            ))
-        };
-        let (entries, failures) = match result {
-            Ok(()) => (vec![entry], vec![]),
-            Err(e) => (vec![], vec![(target, e.to_string())]),
-        };
+        let ids: Vec<&str> = plan
+            .parameter(param::QUARANTINE_ID)
+            .map(|ids| ids.split(',').collect())
+            .unwrap_or_default();
+        if ids.len() != plan.targets().len() || ids.is_empty() {
+            return Err(QuarantineError::InvalidPlan(
+                "je Datei-Ziel genau eine Eintrags-Kennung erwartet".into(),
+            ));
+        }
+        // Alle Einträge vorab prüfen: Passt einer nicht zum Plan, wird nichts angefasst.
+        let mut planned = Vec::with_capacity(ids.len());
+        for (id, target) in ids.iter().zip(plan.targets()) {
+            planned.push(self.planned_entry(Some(id), std::slice::from_ref(target))?);
+        }
+        let mut entries = Vec::new();
+        let mut failures = Vec::new();
+        for (entry, target) in planned {
+            let result = if entry.visible_to(user.identity().as_deref()) {
+                self.restore_one(&entry, &target, user)
+            } else {
+                Err(QuarantineError::InvalidPlan(
+                    "Eintrag gehört einem anderen Konto".into(),
+                ))
+            };
+            match result {
+                Ok(()) => entries.push(entry),
+                Err(e) => failures.push((target, e.to_string())),
+            }
+        }
         Ok(finish(permit, entries, failures, None))
     }
 

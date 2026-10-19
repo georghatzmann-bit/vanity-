@@ -999,3 +999,107 @@ fn service_events_empty<W: aegis_core::audit::Durable>(
 ) -> bool {
     service.take_unwritten_events().is_empty()
 }
+
+#[test]
+fn notfall_scan_nur_lesend_dann_sammel_isolieren_und_alles_rueckgaengig() {
+    struct Account(std::path::PathBuf);
+    impl aegis_quarantine::UserAccess for Account {
+        fn enter(&self) -> std::io::Result<aegis_quarantine::UserScope> {
+            Ok(aegis_quarantine::UserScope::unchanged())
+        }
+        fn identity(&self) -> Option<String> {
+            Some("S-1-NOTFALL".into())
+        }
+        fn profile(&self) -> Option<std::path::PathBuf> {
+            Some(self.0.clone())
+        }
+    }
+    let mut h = harness();
+    let home = tempfile::tempdir().unwrap();
+    let home_path = {
+        let c = std::fs::canonicalize(home.path()).unwrap();
+        let text = c.to_string_lossy().into_owned();
+        text.strip_prefix(r"\\?\")
+            .map_or(c.clone(), std::path::PathBuf::from)
+    };
+    let a = Account(home_path.clone());
+    let dl = write_fixture(&home_path, "Downloads/rechnung.com", &eicar()).unwrap();
+    let app = write_fixture(&home_path, "AppData/Roaming/upd/updater.exe", &eicar()).unwrap();
+    write_fixture(&home_path, "AppData/Roaming/upd/readme.txt", &eicar()).unwrap();
+    write_fixture(&home_path, "Desktop/notiz.txt", b"harmlos").unwrap();
+    let before = DirSnapshot::capture(&home_path).unwrap();
+    let mut send = |v: Value| {
+        let req: Request = serde_json::from_value(v).unwrap();
+        serde_json::to_value(h.service.handle(req, &a)).unwrap()
+    };
+    let r = send(json!({"type": "emergency_scan"}));
+    assert_eq!(r["type"], "emergency_scan", "{r}");
+    let areas = r["areas"].as_array().unwrap();
+    let area = |id: &str| areas.iter().find(|x| x["id"] == id).unwrap().clone();
+    assert_eq!(area("downloads")["findings"][0]["risk"], "dangerous");
+    let appdata = area("appdata");
+    assert_eq!(
+        appdata["checked"], 1,
+        "nur die .exe, nicht die .txt: {appdata}"
+    );
+    assert_eq!(appdata["findings"][0]["risk"], "dangerous");
+    assert!(area("desktop")["findings"].as_array().unwrap().is_empty());
+    assert!(
+        r["update"].as_str().unwrap().contains("ClamAV")
+            || r["update"].as_str().unwrap().contains("Signatur")
+    );
+    // Der Scan selbst ändert nichts.
+    assert_unchanged(&before, &DirSnapshot::capture(&home_path).unwrap());
+
+    // Sammel-Isolieren: ein Plan für alle gewählten Funde.
+    let p = send(json!({"type": "propose_quarantine", "paths": [dl, app]}));
+    assert_eq!(
+        p["proposal"]["plan"]["targets"].as_array().unwrap().len(),
+        2,
+        "{p}"
+    );
+    let decide = |p: &Value, d: &str| {
+        json!({
+            "type": "decide", "plan_id": p["proposal"]["ticket"]["id"],
+            "digest": p["proposal"]["ticket"]["digest"], "nonce": p["proposal"]["nonce"],
+            "decision": d, "dialog_id": "d"
+        })
+    };
+    let done = send(decide(&p, "execute"));
+    assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    assert!(!dl.exists() && !app.exists());
+    let ids: Vec<Value> = done["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["id"].clone())
+        .collect();
+    assert_eq!(ids.len(), 2);
+
+    // „Alles rückgängig machen“: ein Plan, ohne „Ja“ passiert nichts.
+    let undo = send(json!({"type": "propose_restore_many", "entry_ids": ids}));
+    assert_eq!(undo["proposal"]["plan"]["kind"], "restore", "{undo}");
+    assert_eq!(
+        undo["proposal"]["plan"]["targets"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(send(decide(&undo, "decline"))["type"], "nothing_done");
+    assert!(!dl.exists());
+    let undo = send(json!({"type": "propose_restore_many", "entry_ids": ids}));
+    let done = send(decide(&undo, "execute"));
+    assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    assert_eq!(std::fs::read(&dl).unwrap(), eicar());
+    assert_eq!(std::fs::read(&app).unwrap(), eicar());
+    // Fremde/unbekannte Einträge: kein Vorschlag.
+    assert_eq!(
+        send(json!({"type": "propose_restore_many", "entry_ids": ["x"]}))["code"],
+        "quarantine"
+    );
+    assert_eq!(
+        send(json!({"type": "propose_restore_many", "entry_ids": []}))["code"],
+        "input"
+    );
+}

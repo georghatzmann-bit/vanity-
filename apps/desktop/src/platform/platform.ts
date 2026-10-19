@@ -29,6 +29,7 @@ import {
   parsePanic,
   parseRansom,
   parseSafe,
+  parseEmergency,
   parseLabScreenshot,
   decodeBase64,
   parseSchedule,
@@ -227,6 +228,9 @@ function createTauriService(): ServiceApi {
     panicStatus: async () => parsePanic(await invoke<unknown>('service_panic_status')),
     proposePanic: async (on) =>
       parseProposal(await invoke<unknown>('service_propose_panic', { on })),
+    emergencyScan: async () => parseEmergency(await invoke<unknown>('service_emergency_scan')),
+    proposeRestoreMany: async (entryIds) =>
+      parseProposal(await invoke<unknown>('service_propose_restore_many', { entryIds })),
     safeStatus: async () => parseSafe(await invoke<unknown>('service_safe_status')),
     proposeSafeSetup: async (password) =>
       parseProposal(await invoke<unknown>('service_propose_safe_setup', { password })),

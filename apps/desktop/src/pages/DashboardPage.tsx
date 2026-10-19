@@ -20,6 +20,7 @@ import {
   type IconComponent,
   type ModuleState,
 } from '@aegis/ui';
+import { requestEmergencyScan } from './emergencyRequest.ts';
 import { useEffect, useMemo, useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import type { ActivityEntry } from '../activity/activityLog.ts';
 import { useActivity, useServices } from '../app/services.tsx';
@@ -454,13 +455,8 @@ function QuickActions() {
           <ActionRow
             icon={IconPanic}
             label={t('dashboard.quick.emergency')}
-            trailing={
-              <span className="shrink-0 rounded-sm border border-border px-1 font-mono text-2xs text-text-subtle">
-                {t('phase.comingIn', { phase: 'P5' })}
-              </span>
-            }
-            aria-disabled="true"
-            onClick={(event) => event.preventDefault()}
+            trailing={chevron}
+            onClick={requestEmergencyScan}
             className="flex-1"
             data-testid="emergency-scan"
           />

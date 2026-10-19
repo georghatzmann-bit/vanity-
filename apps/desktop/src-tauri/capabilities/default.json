@@ -38,6 +38,8 @@
     "allow-service-ransom-status",
     "allow-service-propose-baits",
     "allow-service-memory-scan",
+    "allow-service-emergency-scan",
+    "allow-service-propose-restore-many",
     "allow-service-panic-status",
     "allow-service-propose-panic",
     "allow-service-safe-status",

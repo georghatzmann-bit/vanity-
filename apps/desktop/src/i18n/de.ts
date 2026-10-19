@@ -254,7 +254,8 @@ export const de = {
       eyebrow: 'Aktionen',
       title: 'Schnellzugriff',
       emergency: 'Notfall-Scan',
-      emergencyHint: 'Der Notfall-Scan (Panic-Button) folgt in P5.',
+      emergencyHint:
+        'Panic-Button: prüft sofort Autostarts, Downloads, Temp, AppData und laufende Programme – nur lesend.',
       replayBoot: 'Start-Animation erneut abspielen',
       palette: 'Befehlspalette',
       settings: 'Einstellungen',
@@ -389,6 +390,37 @@ export const de = {
       'In der Browser-Vorschau gibt es keinen Dienst. Hier wird nichts geprüft und nichts verändert.',
     error: 'Fehler',
   },
+  emergency: {
+    title: 'Panic-Button: Notfall-Scan',
+    honest:
+      'Prüft sofort Autostarts, Downloads, Desktop, Temp, AppData und deine laufenden Programme samt Arbeitsspeicher und stößt ein Signatur-Update an. Nur lesend – isoliert wird erst nach deiner Bestätigung.',
+    run: 'Notfall-Scan starten',
+    running: 'Notfall-Scan läuft – das kann einige Minuten dauern …',
+    update: 'Signaturen: {note}',
+    area: '{checked} geprüft · {found} auffällig',
+    clean:
+      'Keine auffälligen Funde. Bleib trotzdem aufmerksam, wenn sich der Rechner seltsam verhält.',
+    isolate: 'Gewählte Funde isolieren ({count}) …',
+    preselected:
+      'Vorausgewählt sind nur Funde der Stufe „Gefährlich“. Häkchen je Fund setzen oder entfernen.',
+    select: 'Zum Isolieren auswählen: {path}',
+    memoryTitle: 'Im Arbeitsspeicher',
+    memoryHint:
+      'Code im Speicher lässt sich nicht isolieren – das Programm kann nach deinem Ja beendet werden.',
+    terminate: 'Programm beenden …',
+    isolated: '{count} Datei(en) isoliert.',
+    undo: 'Alles rückgängig machen …',
+    undone: 'Rückgängig gemacht.',
+    areas: {
+      autostart: 'Autostarts',
+      downloads: 'Downloads',
+      desktop: 'Desktop',
+      temp: 'Temp',
+      appdata: 'AppData',
+      processes: 'Laufende Programme',
+      memory: 'Arbeitsspeicher',
+    },
+  },
   memory: {
     title: 'Speicher-Scan',
     honest:
@@ -457,11 +489,11 @@ export const de = {
     toastShow: 'Anzeigen',
   },
   panic: {
-    active: 'Netz getrennt (Panic-Button)',
+    active: 'Netz getrennt (Notfall)',
     since: 'seit {time}',
     reconnect: 'Wieder verbinden …',
-    button: 'Panic-Button: Netz trennen …',
-    title: 'Panic-Button',
+    button: 'Notfall: Netz trennen …',
+    title: 'Netz trennen',
     hint: 'Trennt den Rechner sofort vom Netz (Firewall-Sperre für alle Verbindungen) – z. B. bei einem Ransomware-Verdacht. Laufende Programme werden nicht beendet; das geht einzeln über „Beenden …“.',
   },
   ransom: {

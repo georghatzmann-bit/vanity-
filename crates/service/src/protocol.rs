@@ -88,6 +88,11 @@ pub enum Request {
     PanicStatus {},
     /// Netz trennen (`on`) bzw. wieder verbinden vorschlagen.
     ProposePanic { on: bool },
+    /// Notfall-Scan (Autostarts, Downloads, Desktop, Temp, AppData, Programme + Speicher;
+    /// stößt ein Signatur-Update an). Nur lesend.
+    EmergencyScan {},
+    /// Mehrere Quarantäne-Einträge in einem Plan wiederherstellen („Alles rückgängig“).
+    ProposeRestoreMany { entry_ids: Vec<String> },
     /// Datei-Safe: Zustand und – wenn entsperrt – Einträge (nur lesend).
     SafeStatus {},
     /// Datei-Safe anlegen vorschlagen (das Passwort bleibt nur im Speicher des Dienstes).
@@ -232,6 +237,15 @@ pub enum Response {
     Panic {
         since: Option<String>,
         available: bool,
+    },
+    /// Ergebnis des Notfall-Scans je Bereich.
+    EmergencyScan {
+        areas: Vec<crate::emergency::EmergencyArea>,
+        /// Funde im Arbeitsspeicher: Prozess + Programm (in Reihenfolge der Funde im
+        /// Bereich `memory`).
+        memory: Vec<crate::emergency::MemoryHit>,
+        /// Stand des Signatur-Updates.
+        update: String,
     },
     /// Datei-Safe des Kontos.
     Safe {

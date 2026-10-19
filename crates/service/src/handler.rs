@@ -76,6 +76,8 @@ pub struct Service<C: Clock, W: Durable> {
     settings: SettingsStore,
     lab: Arc<crate::lab::Lab>,
     safe: safe::SafeState,
+    /// Signatur-Update außer der Reihe angefordert (Notfall-Scan).
+    update_requested: bool,
 }
 
 /// Einstellung „Windows-Feature Windows Sandbox“.
@@ -147,6 +149,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             settings: SettingsStore::in_memory(),
             lab: crate::lab::Lab::new(None),
             safe: safe::SafeState::default(),
+            update_requested: false,
         }
     }
 
@@ -1061,7 +1064,9 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 }
             });
         }
-        let update = self.settings.get().update_due(now)
+        let requested = std::mem::take(&mut self.update_requested);
+        let update = (self.settings.get().update_due(now)
+            || (requested && self.settings.get().clamav_update))
             && aegis_engine::clamav::ClamAv::locate().is_some_and(|c| c.updater().is_some());
         DueWork { schedules, update }
     }
@@ -1215,9 +1220,48 @@ impl<C: Clock, W: Durable> Service<C, W> {
 
     /// Wie [`Service::mark_trusted`] für eine Scan-Antwort.
     pub fn mark_trusted_response(&self, response: &mut Response, owner: Option<&str>) {
-        if let Response::ScanReport { report } | Response::MemoryScan { report, .. } = response {
-            self.mark_trusted(&mut report.findings, owner);
+        match response {
+            Response::ScanReport { report } | Response::MemoryScan { report, .. } => {
+                self.mark_trusted(&mut report.findings, owner);
+            }
+            Response::EmergencyScan { areas, .. } => {
+                for area in areas {
+                    self.mark_trusted(&mut area.findings, owner);
+                }
+            }
+            _ => {}
         }
+    }
+
+    /// Notfall-Scan: Signatur-Update außer der Reihe anfordern (läuft im Zeitplaner).
+    pub fn request_update(&mut self) -> String {
+        if !self.settings.get().clamav_update {
+            return "Signatur-Update ist ausgeschaltet (Einstellungen)".into();
+        }
+        if !aegis_engine::clamav::ClamAv::locate().is_some_and(|c| c.updater().is_some()) {
+            return "ClamAV ist nicht installiert – geprüft mit den eingebauten Regeln".into();
+        }
+        self.update_requested = true;
+        "Signatur-Update angestoßen (läuft im Hintergrund)".into()
+    }
+
+    /// Verlaufseintrag zum Notfall-Scan.
+    pub fn record_emergency(&self, response: &Response, user: &dyn UserAccess) {
+        let Response::EmergencyScan { areas, .. } = response else {
+            return;
+        };
+        let report = aegis_engine::ScanReport {
+            findings: areas.iter().flat_map(|a| a.findings.clone()).collect(),
+            skipped: Vec::new(),
+            truncated: false,
+        };
+        self.add_history(scan_entry(
+            HistoryKind::Scan,
+            &report,
+            "Notfall-Scan",
+            user.identity(),
+            None,
+        ));
     }
 
     /// Meldungen des Wächters für dieses Konto: eigenes Profil + gemeinsame Orte; Dateien,
@@ -1369,6 +1413,16 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 available: cfg!(windows),
             },
             Request::ProposePanic { on } => self.propose_panic(on, user),
+            Request::EmergencyScan {} => {
+                let note = self.request_update();
+                let mut response = crate::emergency::emergency_scan(&self.scanner, user, note);
+                self.mark_trusted_response(&mut response, user.identity().as_deref());
+                self.record_emergency(&response, user);
+                response
+            }
+            Request::ProposeRestoreMany { entry_ids } => {
+                self.propose_restore_many(&entry_ids, user)
+            }
             Request::SafeStatus {} => self.safe_status(user),
             Request::ProposeSafeSetup { password } => self.propose_safe_create(&password, user),
             Request::SafeUnlock { password } => self.safe_unlock(&password, user),
@@ -1647,6 +1701,65 @@ impl<C: Clock, W: Durable> Service<C, W> {
             .collect();
         match plan {
             Ok(plan) => self.register(plan, owner, hashes),
+            Err(e) => Response::error("plan", e.to_string()),
+        }
+    }
+
+    /// „Alles rückgängig“: mehrere eigene Quarantäne-Einträge in einem Plan wiederherstellen.
+    pub fn propose_restore_many(
+        &mut self,
+        entry_ids: &[String],
+        user: &dyn UserAccess,
+    ) -> Response {
+        if entry_ids.is_empty() || entry_ids.len() > MAX_PATHS {
+            return Response::error("input", format!("1 bis {MAX_PATHS} Einträge erwartet"));
+        }
+        let owner = user.identity();
+        let mut entries: Vec<Entry> = Vec::new();
+        for id in entry_ids {
+            match self.vault.entry(id) {
+                Ok(e) if e.visible_to(owner.as_deref()) => {
+                    if !entries.iter().any(|x| x.id == e.id) {
+                        entries.push(e);
+                    }
+                }
+                Ok(_) => {
+                    return Response::error("quarantine", "Ein Eintrag gehört einem anderen Konto");
+                }
+                Err(e) => return Response::error("quarantine", e.to_string()),
+            }
+        }
+        let names = entries
+            .iter()
+            .take(5)
+            .map(|e| quoted(&e.original_path.display().to_string()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let more = if entries.len() > 5 {
+            format!(" und {} weitere", entries.len() - 5)
+        } else {
+            String::new()
+        };
+        let ids = entries
+            .iter()
+            .map(|e| e.id.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut builder = ActionPlan::builder(ActionKind::Restore)
+            .parameter(param::QUARANTINE_ID, &ids)
+            .what(format!(
+                "{} Datei(en) aus der Quarantäne wiederherstellen: {names}{more}",
+                entries.len()
+            ))
+            .why("Von dir gewählt: „Alles rückgängig machen“.")
+            .consequence("Jede Datei liegt wieder an ihrem ursprünglichen Ort und kann wieder geöffnet und ausgeführt werden. Liegt dort inzwischen etwas, wird nichts überschrieben.")
+            .undo(UndoHint::reversible("Erneut prüfen und isolieren."))
+            .severity(RiskLevel::Info);
+        for e in &entries {
+            builder = builder.target(Target::file(&e.original_path));
+        }
+        match builder.build(self.gate.clock().now()) {
+            Ok(plan) => self.register(plan, owner, HashMap::new()),
             Err(e) => Response::error("plan", e.to_string()),
         }
     }

@@ -5,6 +5,7 @@
 //! - [`worker`] – Prüfprozess: fremde Dateien werden nur dort geparst.
 #![forbid(unsafe_code)]
 
+pub mod emergency;
 pub mod handler;
 pub mod history;
 pub mod lab;

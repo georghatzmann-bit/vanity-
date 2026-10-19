@@ -162,6 +162,24 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                     }
                 }
             }
+            // Notfall-Scan außerhalb der Dienst-Sperre (dauert).
+            Ok(Request::EmergencyScan {}) => {
+                let (scanner, note) = {
+                    let mut guard = lock()?;
+                    (guard.scanner(), guard.request_update())
+                };
+                match Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS) {
+                    None => busy(),
+                    Some(slot) => {
+                        let mut response = crate::emergency::emergency_scan(&scanner, user, note);
+                        drop(slot);
+                        let guard = lock()?;
+                        guard.mark_trusted_response(&mut response, user.identity().as_deref());
+                        guard.record_emergency(&response, user);
+                        response
+                    }
+                }
+            }
             // Bildschirmfoto außerhalb der Dienst-Sperre lesen (die Datei kann warten lassen).
             Ok(Request::LabScreenshot { run_id, name }) => {
                 let lab = lock()?.lab();

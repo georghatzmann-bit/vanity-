@@ -17,6 +17,7 @@ import { routePhases } from '../router/routes.ts';
 import type { EffectivePreferences } from '../settings/preferences.ts';
 import type { Settings } from '../settings/schema.ts';
 import { navGroups, navLabelKey, routeIcons } from './navigation.ts';
+import { requestEmergencyScan } from '../pages/emergencyRequest.ts';
 import { modifierKeys } from './shortcuts.ts';
 
 export interface CommandContext {
@@ -114,9 +115,7 @@ export function buildCommands(context: CommandContext): CommandItem[] {
       group: actionsGroup,
       keywords: ['panic', 'notfall', 'emergency', 'scan'],
       icon: <IconPanic />,
-      hint: t('phase.comingIn', { phase: 'P5' }),
-      disabled: true,
-      onSelect: () => undefined,
+      onSelect: requestEmergencyScan,
     },
   ];
   return [...pages, ...actions];

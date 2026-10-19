@@ -957,3 +957,26 @@ fn datei_safe_holen_braucht_eintrag() {
         Err(PlanError::ExactlyOneTarget { .. })
     ));
 }
+
+#[test]
+fn wiederherstellen_mehrerer_eintraege_je_ziel_eine_kennung() {
+    let two = |ids: &str| {
+        let mut b = sample_plan_builder(ActionKind::Restore).parameter(param::QUARANTINE_ID, ids);
+        b.targets.push(Target::file(test_path("zweite.txt")));
+        b.build(T0)
+    };
+    assert!(two("a-1,b-2").is_ok());
+    for bad in ["a-1", "a-1,b-2,c-3", "a-1,", "a 1,b-2", "a-1,b/2"] {
+        assert!(
+            matches!(two(bad), Err(PlanError::InvalidParameter { .. })),
+            "{bad}"
+        );
+    }
+    let mut del = sample_plan_builder(ActionKind::DeletePermanently)
+        .parameter(param::QUARANTINE_ID, "a-1,b-2");
+    del.targets.push(Target::file(test_path("zweite.txt")));
+    assert!(matches!(
+        del.build(T0),
+        Err(PlanError::InvalidParameter { .. }) | Err(PlanError::ExactlyOneTarget { .. })
+    ));
+}

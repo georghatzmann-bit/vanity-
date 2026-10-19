@@ -55,6 +55,10 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-propose-baits':
     'Dienst: Köderdateien anlegen/entfernen vorschlagen (nur nach „Ja“)',
   'allow-service-memory-scan': 'Dienst: Speicher-Scan eigener Programme (nur lesend)',
+  'allow-service-emergency-scan':
+    'Dienst: Notfall-Scan (Autostarts, Downloads, Temp, AppData, Programme; nur lesend)',
+  'allow-service-propose-restore-many':
+    'Dienst: „Alles rückgängig“ – mehrere Einträge wiederherstellen vorschlagen (nur nach „Ja“)',
   'allow-service-panic-status': 'Dienst: Zustand des Panic-Buttons (nur lesend)',
   'allow-service-propose-panic':
     'Dienst: Netz trennen/wieder verbinden vorschlagen (nur nach „Ja“)',

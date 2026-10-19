@@ -429,6 +429,29 @@ pub async fn service_propose_panic(on: bool) -> Result<Value, String> {
     send(json!({ "type": "propose_panic", "on": on })).await
 }
 
+/// Notfall-Scan (nur lesend; stößt ein Signatur-Update an).
+#[tauri::command]
+pub async fn service_emergency_scan() -> Result<Value, String> {
+    send(json!({ "type": "emergency_scan" })).await
+}
+
+/// Anfrage „Alles rückgängig“: mehrere Quarantäne-Einträge in einem Plan wiederherstellen.
+pub fn propose_restore_many_request(entry_ids: &[String]) -> Result<Value, String> {
+    if entry_ids.is_empty() || entry_ids.len() > MAX_PATHS {
+        return Err(format!("1 bis {MAX_PATHS} Einträge erwartet."));
+    }
+    for id in entry_ids {
+        check_id(id)?;
+    }
+    Ok(json!({ "type": "propose_restore_many", "entry_ids": entry_ids }))
+}
+
+/// „Alles rückgängig machen“ vorschlagen – wiederhergestellt wird nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_restore_many(entry_ids: Vec<String>) -> Result<Value, String> {
+    send(propose_restore_many_request(&entry_ids)?).await
+}
+
 /// Höchstlänge eines Passworts (Zeichen).
 const MAX_PASSWORD_CHARS: usize = 256;
 
@@ -617,6 +640,9 @@ mod tests {
         assert!(propose_process_request("a.exe", "suspend").is_err());
         assert!(check_screenshot_name("../x.png").is_err());
         assert!(check_screenshot_name("bild.exe").is_err());
+        assert!(propose_restore_many_request(&["a-1".into(), "b-2".into()]).is_ok());
+        assert!(propose_restore_many_request(&[]).is_err());
+        assert!(propose_restore_many_request(&["a,b".into()]).is_err());
         assert!(safe_password_request("safe_unlock", "ein-passwort").is_ok());
         assert!(safe_password_request("safe_unlock", "").is_err());
         assert!(safe_password_request("safe_unlock", &"x".repeat(257)).is_err());

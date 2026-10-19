@@ -10,6 +10,7 @@ import type {
   LabRun,
   LabState,
   SafeState,
+  EmergencyResult,
   Proposal,
   ScheduleState,
   ServiceApi,
@@ -126,6 +127,10 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     ),
     proposePanic: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBaits: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    emergencyScan: vi.fn(() => Promise.resolve(emergencyResult())),
+    proposeRestoreMany: vi.fn(() =>
+      Promise.resolve(proposal('Aus der Quarantäne wiederherstellen')),
+    ),
     safeStatus: vi.fn(() => Promise.resolve(safeState())),
     proposeSafeSetup: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     safeUnlock: vi.fn(() => Promise.resolve(safeState({ exists: true, unlocked: true }))),
@@ -133,6 +138,35 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     proposeSafeStore: vi.fn(() => Promise.resolve(proposal('In den Datei-Safe legen'))),
     proposeSafeRetrieve: vi.fn(() => Promise.resolve(proposal('Aus dem Datei-Safe holen'))),
     ...overrides,
+  };
+}
+
+function emergencyResult(): EmergencyResult {
+  const danger = {
+    ...finding,
+    path: 'C:\\Users\\a\\Downloads\\rechnung.com',
+    risk: 'dangerous' as const,
+  };
+  const susp = {
+    ...finding,
+    path: 'C:\\Users\\a\\AppData\\Roaming\\x\\tool.exe',
+    risk: 'suspicious' as const,
+  };
+  const mem = {
+    ...finding,
+    path: 'Speicher von C:\\x\\t.exe (PID 7) @ 0x1000',
+    sha256: null,
+    risk: 'dangerous' as const,
+  };
+  return {
+    areas: [
+      { id: 'autostart', checked: 12, findings: [], skipped: 0, note: null },
+      { id: 'downloads', checked: 40, findings: [danger], skipped: 0, note: null },
+      { id: 'appdata', checked: 300, findings: [susp], skipped: 0, note: null },
+      { id: 'memory', checked: 5, findings: [mem], skipped: 0, note: null },
+    ],
+    memory: [{ pid: 7, program: 'C:\\x\\t.exe' }],
+    update: 'Signatur-Update angestoßen',
   };
 }
 
@@ -697,7 +731,7 @@ describe('Panic-Button', () => {
     renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/realtime' });
     const panel = await screen.findByTestId('ransom-panel');
     expect(screen.queryByTestId('panic-bar')).toBeNull();
-    fireEvent.click(within(panel).getByRole('button', { name: /Panic-Button/ }));
+    fireEvent.click(within(panel).getByRole('button', { name: /Netz trennen/ }));
     const dialog = await screen.findByRole('alertdialog');
     expect(service.proposePanic).toHaveBeenCalledWith(true);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Nein' }));
@@ -804,5 +838,39 @@ describe('Datei-Safe', () => {
     expect(service.proposeSafeStore).toHaveBeenCalledWith(['C:\\Users\\a\\x.txt']);
     fireEvent.click(screen.getByRole('button', { name: 'Sperren' }));
     await waitFor(() => expect(service.safeLock).toHaveBeenCalled());
+  });
+});
+
+describe('Notfall-Scan (Panic-Button)', () => {
+  it('vorausgewählt nur „Gefährlich“, Isolieren und „Alles rückgängig“ nur über Freigabe', async () => {
+    const service = fakeService({
+      decide: vi.fn(() =>
+        Promise.resolve({
+          kind: 'executed' as const,
+          ok: true,
+          message: null,
+          entryIds: ['q-1'],
+        }),
+      ),
+    });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/scan' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Notfall-Scan starten' }));
+    const result = await screen.findByTestId('emergency-result');
+    expect(service.decide).not.toHaveBeenCalled();
+    const boxes = within(result).getAllByRole('checkbox') as HTMLInputElement[];
+    expect(boxes.map((b) => b.checked)).toEqual([true, false]);
+    expect(within(result).getByTestId('emergency-memory')).toHaveTextContent('PID 7');
+    fireEvent.click(within(result).getByRole('button', { name: /Gewählte Funde isolieren \(1\)/ }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(service.proposeQuarantine).toHaveBeenCalledWith([
+      'C:\\Users\\a\\Downloads\\rechnung.com',
+    ]);
+    // Sperrzeit des Dialogs abwarten (600 ms), dann bewusst „Ja“.
+    await act(() => new Promise((r) => setTimeout(r, 700)));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Ja, ausführen' }));
+    const summary = await screen.findByTestId('emergency-summary');
+    expect(summary).toHaveTextContent('1 Datei(en) isoliert');
+    fireEvent.click(within(summary).getByRole('button', { name: /Alles rückgängig/ }));
+    await waitFor(() => expect(service.proposeRestoreMany).toHaveBeenCalledWith(['q-1']));
   });
 });

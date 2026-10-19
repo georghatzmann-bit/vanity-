@@ -299,6 +299,7 @@ fn manipulierter_tresor_und_belegtes_ziel() {
             .restore(approve(&mut gate, &wrong), &OwnProcess)
             .is_err()
     );
+    // Pfadteile als Kennung lehnt schon der Plan ab.
     let traversal = ActionPlan::builder(ActionKind::Restore)
         .target(Target::file(&entry.original_path))
         .parameter(param::QUARANTINE_ID, "../vault")
@@ -307,13 +308,8 @@ fn manipulierter_tresor_und_belegtes_ziel() {
         .consequence("x")
         .undo(UndoHint::reversible("x"))
         .severity(RiskLevel::Info)
-        .build(clock.now())
-        .unwrap();
-    assert!(
-        vault
-            .restore(approve(&mut gate, &traversal), &OwnProcess)
-            .is_err()
-    );
+        .build(clock.now());
+    assert!(traversal.is_err());
 }
 
 #[cfg(unix)]

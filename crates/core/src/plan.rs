@@ -51,7 +51,9 @@ pub mod param {
     pub const NEW_NAME: &str = "new_name";
     /// Kennung des Quarantäne-Eintrags für [`super::ActionKind::Restore`] und
     /// [`super::ActionKind::DeletePermanently`] aus der Quarantäne (das Datei-Ziel ist der
-    /// ursprüngliche Ort, der dem Nutzer angezeigt wird).
+    /// ursprüngliche Ort, der dem Nutzer angezeigt wird). Bei „Wiederherstellen“ mehrerer
+    /// Einträge in einem Plan („Alles rückgängig“): Kennungen mit Komma getrennt, in der
+    /// Reihenfolge der Datei-Ziele.
     pub const QUARANTINE_ID: &str = "quarantine_id";
     /// Neuer Wert für [`super::ActionKind::ChangeSetting`] (Pflicht; darf leer sein). So ist
     /// das „Ja“ des Nutzers an den Wert gebunden, auf den geändert wird – ein Ausführer
@@ -1047,6 +1049,23 @@ impl ActionPlan {
                         reason: "Eintrag muss eine UUID sein",
                     });
                 }
+            }
+            ActionKind::Restore | ActionKind::DeletePermanently
+                if plan.parameter(param::QUARANTINE_ID).is_some_and(|ids| {
+                    let ids: Vec<&str> = ids.split(',').collect();
+                    ids.len() != plan.targets.len()
+                        || (plan.kind == ActionKind::DeletePermanently && ids.len() != 1)
+                        || ids.iter().any(|id| {
+                            id.is_empty()
+                                || id.len() > 64
+                                || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+                        })
+                }) =>
+            {
+                return Err(PlanError::InvalidParameter {
+                    key: param::QUARANTINE_ID.to_owned(),
+                    reason: "je Datei-Ziel genau eine Eintrags-Kennung (Endgültig löschen: genau eine)",
+                });
             }
             ActionKind::Restore if plan.parameter(param::DESTINATION).is_some() => {
                 return Err(PlanError::InvalidParameter {

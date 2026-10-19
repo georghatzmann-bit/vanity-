@@ -241,7 +241,7 @@ test.describe('Befehlspalette', () => {
     await page.getByTestId('palette-trigger').click();
     const dialog = page.getByRole('dialog', { name: 'Befehlspalette' });
     await expect(dialog.getByRole('option', { name: /Einstellungen/ })).toContainText('Strg');
-    await expect(dialog.getByRole('option', { name: /Notfall-Scan/ })).toHaveAttribute(
+    await expect(dialog.getByRole('option', { name: /Notfall-Scan/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );

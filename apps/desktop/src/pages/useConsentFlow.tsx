@@ -25,8 +25,11 @@ export interface ConsentFlow {
   readonly dialogs: ReactNode;
 }
 
-/** Ein Durchlauf; `onDone` nach jeder Ausführung (z. B. Liste neu laden). */
-export function useConsentFlow(service: ServiceApi | null, onDone: () => void): ConsentFlow {
+/** Ein Durchlauf; `onDone` nach jeder Ausführung (z. B. Liste neu laden) mit dem Ergebnis. */
+export function useConsentFlow(
+  service: ServiceApi | null,
+  onDone: (result: Extract<DecisionResult, { kind: 'executed' }>) => void,
+): ConsentFlow {
   const { t, locale } = useT();
   const toast = useToast();
   const dialogBase = useId().replace(/[^A-Za-z0-9]/g, '');
@@ -41,7 +44,7 @@ export function useConsentFlow(service: ServiceApi | null, onDone: () => void): 
             title: result.ok ? t('consentFlow.executed') : t('consentFlow.partial'),
             description: result.message ?? undefined,
           });
-          onDone();
+          onDone(result);
           break;
         case 'trusted':
           toast.show({ tone: 'info', title: t('consentFlow.trusted'), description: result.note });

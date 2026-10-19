@@ -72,6 +72,8 @@ fn main() {
             service::service_ransom_status,
             service::service_propose_baits,
             service::service_memory_scan,
+            service::service_emergency_scan,
+            service::service_propose_restore_many,
             service::service_panic_status,
             service::service_propose_panic,
             service::service_safe_status,
@@ -160,6 +162,8 @@ mod test_support {
                 crate::service::service_ransom_status,
                 crate::service::service_propose_baits,
                 crate::service::service_memory_scan,
+                crate::service::service_emergency_scan,
+                crate::service::service_propose_restore_many,
                 crate::service::service_panic_status,
                 crate::service::service_propose_panic,
                 crate::service::service_safe_status,
@@ -192,7 +196,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 45] = [
+    const EXPECTED_PERMISSIONS: [&str; 47] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -227,6 +231,8 @@ mod tests {
         "allow-service-ransom-status",
         "allow-service-propose-baits",
         "allow-service-memory-scan",
+        "allow-service-emergency-scan",
+        "allow-service-propose-restore-many",
         "allow-service-panic-status",
         "allow-service-propose-panic",
         "allow-service-safe-status",
@@ -505,6 +511,8 @@ mod tests {
                 ("service_ransom_status", json!({})),
                 ("service_propose_baits", json!({ "on": false })),
                 ("service_memory_scan", json!({})),
+                ("service_emergency_scan", json!({})),
+                ("service_propose_restore_many", json!({ "entryIds": ["x"] })),
                 ("service_panic_status", json!({})),
                 ("service_propose_panic", json!({ "on": false })),
                 ("service_safe_status", json!({})),
