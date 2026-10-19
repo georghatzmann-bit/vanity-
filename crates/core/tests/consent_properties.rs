@@ -25,7 +25,7 @@ use aegis_core::consent::{
     ExecutionPermit, Outcome, PermanentDeleteApproval, SecondConfirmationChallenge,
 };
 use aegis_core::plan::{ActionKind, ActionPlan, PlanDigest, PlanId};
-use aegis_core::testing::{ManualClock, sample_plan};
+use aegis_core::testing::{ManualClock, sample_plan, user_answers, user_confirms_second};
 use aegis_core::time::{Duration, OffsetDateTime};
 use proptest::prelude::*;
 use proptest::strategy::ValueTree;
@@ -362,10 +362,7 @@ impl Harness {
                     );
                 }
                 let legitimate = first && !expired && !tamper_digest && valid_origin;
-                match self
-                    .gate
-                    .decide(id, &digest, decision, origin(valid_origin))
-                {
+                match user_answers(&mut self.gate, id, &digest, decision, origin(valid_origin)) {
                     Ok(outcome) => {
                         assert!(legitimate, "Antwort angenommen, obwohl ungültig: {op:?}");
                         match (decision, outcome) {
@@ -405,7 +402,7 @@ impl Harness {
                 let Some(approval) = self.approvals[a].take() else {
                     return;
                 };
-                if let Ok(permit) = approval.redeem(&plan, &self.clock) {
+                if let Ok(permit) = approval.redeem(&plan, &mut self.gate) {
                     assert_ne!(plan.kind(), ActionKind::DeletePermanently);
                     self.check_permit(&permit, &plan);
                     let _event = permit.complete(ExecutionResult::Succeeded);
@@ -474,7 +471,8 @@ impl Harness {
                         },
                     );
                 }
-                match self.gate.confirm_second(
+                match user_confirms_second(
+                    &mut self.gate,
                     approval,
                     challenge.challenge_id,
                     decision,
@@ -507,7 +505,7 @@ impl Harness {
                 let Some((pda, _)) = self.pdas[d].take() else {
                     return;
                 };
-                if let Ok(permit) = pda.redeem(&plan, &self.clock) {
+                if let Ok(permit) = pda.redeem(&plan, &mut self.gate) {
                     assert_eq!(plan.kind(), ActionKind::DeletePermanently);
                     self.check_permit(&permit, &plan);
                     let _event = permit.complete(ExecutionResult::Succeeded);
@@ -523,9 +521,10 @@ impl Harness {
 
     /// Alle Ereignisse des Tors bilden eine gültige Hash-Kette.
     fn finish(mut self) -> Stats {
-        let events = self.gate.take_audit_events();
+        let mut events = self.gate.take_audit_events();
         let mut log = AuditLog::new(Vec::new());
-        log.append_all(events).unwrap();
+        log.append_all(&mut events).unwrap();
+        assert!(events.is_empty());
         let report = verify(std::io::Cursor::new(log.into_inner())).unwrap();
         assert!(report.entries() >= u64::try_from(self.plans.len()).unwrap());
         self.stats

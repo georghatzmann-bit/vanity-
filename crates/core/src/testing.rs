@@ -17,9 +17,23 @@
 //!
 //! Testdateien werden ausschließlich über die hier freigegebenen Helfer
 //! ([`write_fixture`], [`create_fixture_dir`], [`remove_fixture`], [`rename_fixture`],
-//! [`set_fixture_readonly`], unter Unix `create_fixture_symlink`) angelegt oder verändert –
-//! sie stehen in `crates/core/mutation-allowlist.txt`, weigern sich, außerhalb des
-//! übergebenen Test-Ordners zu schreiben, und folgen keinen Links.
+//! [`set_fixture_readonly`], [`set_fixture_modified`], unter Unix `create_fixture_symlink` und
+//! `create_fixture_socket`) angelegt oder verändert – sie stehen in
+//! `crates/core/mutation-allowlist.txt`, arbeiten nur in einem Ordner **unterhalb des
+//! temporären Ordners** ([`std::env::temp_dir`], z. B. von `tempfile::tempdir()`), weigern
+//! sich, außerhalb des übergebenen Test-Ordners zu schreiben, und folgen keinen Links.
+//! Selbst wenn das Feature `testing` versehentlich in Produktivcode gelangte, können sie
+//! so keine Nutzerdateien verändern.
+//!
+//! Nutzerantworten simulieren Tests mit [`user_answers`] und [`user_confirms_second`]
+//! (nur für Tore mit [`ManualClock`]); `ConsentGate::decide` selbst ist per `clippy.toml`
+//! gesperrt.
+//!
+//! Was [`DirSnapshot`] sieht: Typ, Größe, SHA-256 des Inhalts, Schreibschutz, Modus bzw.
+//! Dateiattribute, Änderungszeit, unter Unix die Datei-Identität (Gerät + Inode), unter
+//! Windows die Erstellungszeit. Was er **nicht** sieht: Zugriffsrechte (ACLs), alternative
+//! Datenströme (NTFS), erweiterte Attribute und Änderungen, die alle diese Werte
+//! wiederherstellen.
 //!
 //! Schadcode-Ersatz: nur [`eicar`] (zur Laufzeit zusammengesetzt) und selbst erzeugte,
 //! harmlose Dummy-Dateien.
@@ -35,8 +49,14 @@ use sha2::{Digest, Sha256};
 use time::{Duration, OffsetDateTime};
 
 use crate::canonical::hex_lower;
-use crate::consent::Clock;
-use crate::plan::{ActionKind, ActionPlan, ActionPlanBuilder, PlanError, Target, UndoHint, param};
+use crate::consent::{
+    Approval, ChallengeId, Clock, ConsentError, ConsentGate, Decision, DecisionOrigin, Outcome,
+    PermanentDeleteApproval,
+};
+use crate::plan::{
+    ActionKind, ActionPlan, ActionPlanBuilder, PlanDigest, PlanError, PlanId, Target, UndoHint,
+    param,
+};
 use crate::risk::RiskLevel;
 
 // ---------------------------------------------------------------------------------------
@@ -133,9 +153,9 @@ pub fn sample_plan_builder(kind: ActionKind) -> ActionPlanBuilder {
         ActionKind::SuspendProcess | ActionKind::ResumeProcess | ActionKind::TerminateProcess => {
             ActionPlan::builder(kind).target(process)
         }
-        ActionKind::ChangeSetting => {
-            ActionPlan::builder(kind).target(Target::setting("realtime.enabled"))
-        }
+        ActionKind::ChangeSetting => ActionPlan::builder(kind)
+            .target(Target::setting("realtime.enabled"))
+            .parameter(param::VALUE, "true"),
     };
     let undo = if kind.must_be_irreversible() {
         UndoHint::irreversible("Kann nicht rückgängig gemacht werden.")
@@ -159,25 +179,156 @@ pub fn sample_plan(kind: ActionKind, created_at: OffsetDateTime) -> Result<Actio
 }
 
 // ---------------------------------------------------------------------------------------
+// Simulierte Nutzerantworten
+// ---------------------------------------------------------------------------------------
+
+/// Simuliert im Test die Antwort des Nutzers im Bestätigungsdialog
+/// ([`ConsentGate::decide`]).
+///
+/// `decide` ist per `clippy.toml` gesperrt – im Betrieb reicht nur der Pipe-Handler des
+/// Dienstes die Antwort aus dem UI-Dialog ein. Tests nutzen stattdessen diesen Helfer. Er
+/// nimmt nur ein Tor mit gestellter Uhr ([`ManualClock`]) an und kann daher das Tor des
+/// Dienstes (Systemuhr) nie bedienen.
+///
+/// # Errors
+/// Wie [`ConsentGate::decide`].
+pub fn user_answers(
+    gate: &mut ConsentGate<ManualClock>,
+    id: PlanId,
+    digest: &PlanDigest,
+    decision: Decision,
+    origin: DecisionOrigin,
+) -> Result<Outcome, ConsentError> {
+    // aegis-consent: testing-simulated-user-answer
+    #[allow(clippy::disallowed_methods)]
+    gate.decide(id, digest, decision, origin)
+}
+
+/// Simuliert im Test die Antwort des Nutzers im zweiten Dialog vor endgültigem Löschen
+/// ([`ConsentGate::confirm_second`]). Wie [`user_answers`] nur mit gestellter Uhr.
+///
+/// # Errors
+/// Wie [`ConsentGate::confirm_second`].
+pub fn user_confirms_second(
+    gate: &mut ConsentGate<ManualClock>,
+    approval: Approval,
+    challenge_id: ChallengeId,
+    decision: Decision,
+    origin: DecisionOrigin,
+) -> Result<PermanentDeleteApproval, ConsentError> {
+    // aegis-consent: testing-simulated-second-confirmation
+    #[allow(clippy::disallowed_methods)]
+    gate.confirm_second(approval, challenge_id, decision, origin)
+}
+
+// ---------------------------------------------------------------------------------------
 // Zustands-Schnappschuss
 // ---------------------------------------------------------------------------------------
 
 /// Zustand eines Eintrags im Schnappschuss.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FileState {
     /// Ordner?
     pub is_dir: bool,
     /// Symbolischer Link (wird nicht verfolgt)?
     pub is_symlink: bool,
-    /// Größe in Byte (Ordner und Links: 0).
+    /// Sonderdatei (FIFO, Socket, Gerät …)? Ihr Inhalt wird nie gelesen.
+    pub is_special: bool,
+    /// Größe in Byte (Ordner, Links und Sonderdateien: 0).
     pub len: u64,
-    /// SHA-256 des Inhalts (Links: des Link-Ziels; Ordner: `None`).
+    /// SHA-256 des Inhalts (Links: des Link-Ziels; Ordner und Sonderdateien: `None`).
     pub sha256: Option<[u8; 32]>,
     /// Schreibgeschützt?
     pub readonly: bool,
+    /// Weitere Metadaten (Rechte, Zeitstempel, Identität).
+    pub meta: FileMeta,
+}
+
+/// Weitere Metadaten eines Eintrags – plattformabhängig, `None`, wo nicht verfügbar.
+///
+/// Damit fallen auch Veränderungen auf, die Inhalt und Größe gleich lassen: Rechte ändern
+/// (`chmod`), Zeitstempel stellen, mit gleichem Inhalt neu schreiben, löschen und neu
+/// anlegen, versteckt/System setzen.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct FileMeta {
+    /// Unix: vollständiger Modus (Typ und alle Rechte-Bits); Windows: Dateiattribute.
+    pub mode: Option<u32>,
+    /// Letzte Änderung des Inhalts (Ordner: `None`, deren Liste erfasst der Schnappschuss
+    /// selbst).
+    pub modified: Option<std::time::SystemTime>,
+    /// Windows: Erstellungszeit (100-ns-Schritte seit 1601).
+    pub created: Option<u64>,
+    /// Unix: Datei-Identität (Gerät, Inode).
+    pub file_id: Option<(u64, u64)>,
+}
+
+impl FileMeta {
+    fn of(meta: &fs::Metadata) -> Self {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            Self {
+                mode: Some(meta.mode()),
+                modified: meta.modified().ok(),
+                created: None,
+                file_id: Some((meta.dev(), meta.ino())),
+            }
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            Self {
+                mode: Some(meta.file_attributes()),
+                modified: meta.modified().ok(),
+                created: Some(meta.creation_time()),
+                file_id: None,
+            }
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Self {
+                modified: meta.modified().ok(),
+                ..Self::default()
+            }
+        }
+    }
+
+    fn describe(&self) -> String {
+        let mut parts = Vec::new();
+        if let Some(mode) = self.mode {
+            parts.push(format!("Modus {mode:o}"));
+        }
+        if let Some(modified) = self.modified {
+            parts.push(match modified.duration_since(std::time::UNIX_EPOCH) {
+                Ok(since) => format!("geändert {}.{:09}", since.as_secs(), since.subsec_nanos()),
+                Err(_) => "geändert vor 1970".to_owned(),
+            });
+        }
+        if let Some(created) = self.created {
+            parts.push(format!("erstellt {created}"));
+        }
+        if let Some((dev, ino)) = self.file_id {
+            parts.push(format!("Kennung {dev}:{ino}"));
+        }
+        parts.join(", ")
+    }
 }
 
 impl FileState {
+    /// `true`, wenn Typ, Größe, Inhalt und Schreibschutz übereinstimmen – unabhängig von
+    /// Zeitstempeln und Datei-Identität (z. B. zwei gleich aufgebaute, getrennte Bäume).
+    #[must_use]
+    pub fn same_content(&self, other: &Self) -> bool {
+        self.is_dir == other.is_dir
+            && self.is_symlink == other.is_symlink
+            && self.is_special == other.is_special
+            && self.len == other.len
+            && self.sha256 == other.sha256
+            && self.readonly == other.readonly
+    }
+
     /// SHA-256 als Hex-Text (`-` für Ordner).
     #[must_use]
     pub fn sha256_hex(&self) -> String {
@@ -187,10 +338,12 @@ impl FileState {
     }
 
     fn describe(&self) -> String {
-        if self.is_dir {
+        let base: String = if self.is_dir {
             "Ordner".to_owned()
         } else if self.is_symlink {
             format!("Link, Ziel-Hash {}", self.sha256_hex())
+        } else if self.is_special {
+            "Sonderdatei".to_owned()
         } else {
             format!(
                 "{} Byte, sha256 {}{}",
@@ -202,6 +355,17 @@ impl FileState {
                     ""
                 }
             )
+        };
+        base
+    }
+
+    /// Metadaten als „ [Modus …, geändert …]“ (leer, wenn keine vorliegen).
+    fn meta_suffix(&self) -> String {
+        let meta = self.meta.describe();
+        if meta.is_empty() {
+            meta
+        } else {
+            format!(" [{meta}]")
         }
     }
 }
@@ -277,17 +441,25 @@ fn capture_dir(
         let rel_path = rel.join(entry.file_name());
         let meta = fs::symlink_metadata(&abs_path)?;
         let file_type = meta.file_type();
+        let state = FileState {
+            is_dir: false,
+            is_symlink: false,
+            is_special: false,
+            len: 0,
+            sha256: None,
+            readonly: meta.permissions().readonly(),
+            meta: FileMeta::of(&meta),
+        };
         if file_type.is_symlink() {
             let target = fs::read_link(&abs_path)?;
             let hash: [u8; 32] = Sha256::digest(target.as_os_str().as_encoded_bytes()).into();
             entries.insert(
                 rel_path,
                 FileState {
-                    is_dir: false,
                     is_symlink: true,
-                    len: 0,
                     sha256: Some(hash),
                     readonly: false,
+                    ..state
                 },
             );
         } else if file_type.is_dir() {
@@ -295,22 +467,32 @@ fn capture_dir(
                 rel_path.clone(),
                 FileState {
                     is_dir: true,
-                    is_symlink: false,
-                    len: 0,
-                    sha256: None,
-                    readonly: meta.permissions().readonly(),
+                    // Die Änderungszeit eines Ordners folgt nur seiner Liste – die erfasst der
+                    // Schnappschuss ohnehin Eintrag für Eintrag.
+                    meta: FileMeta {
+                        modified: None,
+                        ..state.meta
+                    },
+                    ..state
                 },
             );
             capture_dir(&abs_path, &rel_path, entries)?;
-        } else {
+        } else if file_type.is_file() {
             entries.insert(
                 rel_path,
                 FileState {
-                    is_dir: false,
-                    is_symlink: false,
                     len: meta.len(),
                     sha256: Some(hash_file(&abs_path)?),
-                    readonly: meta.permissions().readonly(),
+                    ..state
+                },
+            );
+        } else {
+            // FIFO, Socket, Gerät: nie öffnen (ein FIFO würde blockieren), nur vermerken.
+            entries.insert(
+                rel_path,
+                FileState {
+                    is_special: true,
+                    ..state
                 },
             );
         }
@@ -360,26 +542,30 @@ impl fmt::Display for SnapshotDiff {
         for (path, state) in &self.removed {
             writeln!(
                 f,
-                "  - entfernt:     {} ({})",
+                "  - entfernt:     {} ({}){}",
                 path.display(),
-                state.describe()
+                state.describe(),
+                state.meta_suffix()
             )?;
         }
         for (path, state) in &self.added {
             writeln!(
                 f,
-                "  + hinzugefügt: {} ({})",
+                "  + hinzugefügt: {} ({}){}",
                 path.display(),
-                state.describe()
+                state.describe(),
+                state.meta_suffix()
             )?;
         }
         for (path, before, after) in &self.changed {
             writeln!(
                 f,
-                "  ~ verändert:   {}: vorher {}, nachher {}",
+                "  ~ verändert:   {}: vorher {}{}, nachher {}{}",
                 path.display(),
                 before.describe(),
-                after.describe()
+                before.meta_suffix(),
+                after.describe(),
+                after.meta_suffix()
             )?;
         }
         for (old, old_state) in &self.removed {
@@ -414,12 +600,23 @@ fn refuse(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::PermissionDenied, message.to_owned())
 }
 
-/// Prüft `name` (relativ, nur normale Bestandteile) und liefert die Einzelteile.
+/// Prüft `name` (relativ, nur normale Bestandteile, jeder auch unter Windows ein normaler
+/// Name – kein Gerätename wie `NUL`, kein `:` für alternative Datenströme) und liefert die
+/// Einzelteile.
 fn fixture_components(name: &str) -> io::Result<Vec<&std::ffi::OsStr>> {
     let mut parts = Vec::new();
     for component in Path::new(name).components() {
         match component {
-            Component::Normal(part) => parts.push(part),
+            Component::Normal(part) => {
+                let text = part.to_str().unwrap_or_default();
+                if let Err(reason) = crate::plan::check_portable_name(text) {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Fixture-Name „{name}“ ist ungültig: {reason}"),
+                    ));
+                }
+                parts.push(part);
+            }
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
@@ -437,10 +634,25 @@ fn fixture_components(name: &str) -> io::Result<Vec<&std::ffi::OsStr>> {
     Ok(parts)
 }
 
-/// Löst `name` innerhalb von `dir` auf. Zwischenordner dürfen keine Links sein; fehlende
-/// Zwischenordner werden nur bei `create_parents` angelegt.
+/// `dir` muss (nach Auflösen aller Links) echt unterhalb des temporären Ordners liegen.
+fn check_test_dir(dir: &Path) -> io::Result<()> {
+    let temp = fs::canonicalize(std::env::temp_dir())?;
+    let real = fs::canonicalize(dir)?;
+    if real != temp && real.starts_with(&temp) {
+        Ok(())
+    } else {
+        Err(refuse(
+            "Fixture-Helfer arbeiten nur in einem Ordner unterhalb des temporären Ordners – verweigert",
+        ))
+    }
+}
+
+/// Löst `name` innerhalb von `dir` auf. `dir` muss unterhalb des temporären Ordners liegen;
+/// Zwischenordner dürfen keine Links sein; fehlende Zwischenordner werden nur bei
+/// `create_parents` angelegt.
 fn resolve_fixture(dir: &Path, name: &str, create_parents: bool) -> io::Result<PathBuf> {
     let parts = fixture_components(name)?;
+    check_test_dir(dir)?;
     let mut path = dir.to_path_buf();
     let last = parts.len().saturating_sub(1);
     for (index, part) in parts.into_iter().enumerate() {
@@ -550,6 +762,25 @@ pub fn set_fixture_readonly(dir: &Path, name: &str, readonly: bool) -> io::Resul
     Ok(())
 }
 
+/// Stellt die Änderungszeit der Testdatei `dir/name` (Links werden verweigert), um die
+/// Erkennung von Zeitstempel-Änderungen zu prüfen.
+///
+/// # Errors
+/// Wie [`write_fixture`].
+pub fn set_fixture_modified(dir: &Path, name: &str, time: std::time::SystemTime) -> io::Result<()> {
+    let path = resolve_fixture(dir, name, false)?;
+    if is_symlink(&path) {
+        return Err(refuse("Ziel ist ein Link – verweigert"));
+    }
+    // aegis-mutation: testing-fixture-set-modified
+    #[allow(clippy::disallowed_methods)]
+    {
+        let file = fs::OpenOptions::new().write(true).open(&path)?;
+        file.set_modified(time)?;
+    }
+    Ok(())
+}
+
 /// Legt einen symbolischen Link `dir/name` → `target` an, um die Link-Behandlung zu testen
 /// (nur Unix; unter Windows braucht das Anlegen von Links besondere Rechte). Das Ziel wird
 /// dabei weder gelesen noch verändert.
@@ -562,6 +793,21 @@ pub fn create_fixture_symlink(dir: &Path, name: &str, target: &Path) -> io::Resu
     // aegis-mutation: testing-fixture-symlink
     #[allow(clippy::disallowed_methods)]
     std::os::unix::fs::symlink(target, &path)?;
+    Ok(path)
+}
+
+/// Legt eine Unix-Socket-Datei `dir/name` an (Sonderdatei für Schnappschuss-Tests; der
+/// Socket selbst wird sofort wieder geschlossen, die Datei bleibt). Nur Unix.
+///
+/// # Errors
+/// Wie [`write_fixture`].
+#[cfg(unix)]
+pub fn create_fixture_socket(dir: &Path, name: &str) -> io::Result<PathBuf> {
+    let path = resolve_fixture(dir, name, true)?;
+    // aegis-mutation: testing-fixture-socket
+    #[allow(clippy::disallowed_methods)]
+    let listener = std::os::unix::net::UnixListener::bind(&path)?;
+    drop(listener);
     Ok(path)
 }
 

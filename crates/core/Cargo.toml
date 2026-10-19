@@ -31,6 +31,8 @@ tempfile = { workspace = true }
 # Für die Compile-Fail-Tests (tests/ui) direkt nutzbar:
 serde_json = { workspace = true }
 time = { workspace = true }
+# mutation_guard liest Cargo.toml, clippy.toml und .cargo/config mit einem echten TOML-Parser.
+toml = { workspace = true }
 
 [lints]
 workspace = true

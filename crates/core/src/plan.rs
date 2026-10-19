@@ -46,8 +46,25 @@ pub const MAX_PARAMETER_KEY_BYTES: usize = 64;
 pub mod param {
     /// Zielordner für [`super::ActionKind::MoveFile`] (absoluter Pfad, Pflicht).
     pub const DESTINATION: &str = "destination";
-    /// Neuer Dateiname für [`super::ActionKind::RenameFile`] (ohne Pfadtrenner, Pflicht).
+    /// Neuer Dateiname für [`super::ActionKind::RenameFile`] (ein einzelner, unter Windows
+    /// gültiger Dateiname, Pflicht).
     pub const NEW_NAME: &str = "new_name";
+    /// Neuer Wert für [`super::ActionKind::ChangeSetting`] (Pflicht; darf leer sein). So ist
+    /// das „Ja“ des Nutzers an den Wert gebunden, auf den geändert wird – ein Ausführer
+    /// nimmt ihn ausschließlich von hier.
+    pub const VALUE: &str = "value";
+    /// Typ des neuen Werts bei Registrierungswerten (Pflicht, sobald ein
+    /// [`super::Target::RegistryValue`] im Plan steht): einer von [`REGISTRY_VALUE_TYPES`].
+    pub const VALUE_TYPE: &str = "value_type";
+    /// Erlaubte Werte für [`VALUE_TYPE`].
+    pub const REGISTRY_VALUE_TYPES: [&str; 6] = [
+        "REG_SZ",
+        "REG_EXPAND_SZ",
+        "REG_MULTI_SZ",
+        "REG_DWORD",
+        "REG_QWORD",
+        "REG_BINARY",
+    ];
 }
 
 const FIELD_WHAT: &str = "Was genau";
@@ -282,7 +299,9 @@ impl TryFrom<String> for PlanDigest {
 pub enum ActionKind {
     /// Datei in die (verschlüsselte) Quarantäne verschieben.
     Quarantine,
-    /// Datei aus der Quarantäne an ihren Ort zurücklegen.
+    /// Datei aus der Quarantäne an ihren Ort zurücklegen. Das [`Target::File`] ist genau der
+    /// Ort, an den zurückgelegt wird (der ursprüngliche Pfad); ein abweichender Zielordner
+    /// ([`param::DESTINATION`]) ist nicht erlaubt.
     Restore,
     /// Datei endgültig löschen – braucht eine zweite, getrennte Bestätigung.
     DeletePermanently,
@@ -292,7 +311,8 @@ pub enum ActionKind {
     ResumeProcess,
     /// Prozess beenden – nicht rückgängig zu machen.
     TerminateProcess,
-    /// Einstellung oder Registrierungswert ändern.
+    /// Einstellung oder Registrierungswert ändern – auf den Wert [`param::VALUE`]
+    /// (bei Registrierungswerten mit Typ [`param::VALUE_TYPE`]).
     ChangeSetting,
     /// Datei verschieben (Zielordner in [`param::DESTINATION`]).
     MoveFile,
@@ -918,6 +938,31 @@ impl ActionPlan {
                     reason,
                 })?;
             }
+            ActionKind::ChangeSetting => {
+                required_parameter(&plan, param::VALUE)?;
+                let registry = plan
+                    .targets
+                    .iter()
+                    .any(|target| matches!(target, Target::RegistryValue { .. }));
+                match plan.parameter(param::VALUE_TYPE) {
+                    Some(value_type) if !param::REGISTRY_VALUE_TYPES.contains(&value_type) => {
+                        return Err(PlanError::InvalidParameter {
+                            key: param::VALUE_TYPE.to_owned(),
+                            reason: "unbekannter Typ (erlaubt: REG_SZ, REG_EXPAND_SZ, REG_MULTI_SZ, REG_DWORD, REG_QWORD, REG_BINARY)",
+                        });
+                    }
+                    None if registry => {
+                        required_parameter(&plan, param::VALUE_TYPE)?;
+                    }
+                    _ => {}
+                }
+            }
+            ActionKind::Restore if plan.parameter(param::DESTINATION).is_some() => {
+                return Err(PlanError::InvalidParameter {
+                    key: param::DESTINATION.to_owned(),
+                    reason: "Wiederherstellen legt die Datei an das Ziel zurück – ein abweichender Zielordner ist nicht erlaubt",
+                });
+            }
             _ => {}
         }
 
@@ -985,6 +1030,76 @@ fn check_file_name(name: &str) -> Result<(), &'static str> {
     if name == "." || name == ".." {
         return Err("Name darf nicht „.“ oder „..“ sein");
     }
+    check_portable_name(name)?;
+    // Genau ein normaler Bestandteil: Unter Windows ersetzt z. B. „D:x“ beim Anhängen den
+    // ganzen Basis-Pfad – aus „umbenennen“ würde „auf ein anderes Laufwerk verschieben“.
+    let mut components = Path::new(name).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(part)), None) if part == name => Ok(()),
+        _ => Err("Name muss ein einzelner Dateiname sein"),
+    }
+}
+
+/// Unicode-Steuerzeichen für die Schreibrichtung – sie können z. B. eine Endung vortäuschen
+/// („rechnung\u{202e}fdp.exe“ wird als „rechnungexe.pdf“ angezeigt).
+const fn is_bidi_control(c: char) -> bool {
+    matches!(
+        c,
+        '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+    )
+}
+
+/// Unter Windows reservierte Gerätenamen – auch mit Endung („nul.txt“) oder angehängten
+/// Leerzeichen („CON .txt“) sprechen sie das Gerät an statt einer Datei.
+fn is_reserved_device_name(name: &str) -> bool {
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ');
+    let upper = stem.to_uppercase();
+    if matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
+        return true;
+    }
+    let Some(rest) = upper
+        .strip_prefix("COM")
+        .or_else(|| upper.strip_prefix("LPT"))
+    else {
+        return false;
+    };
+    let mut chars = rest.chars();
+    matches!(
+        (chars.next(), chars.next()),
+        (Some('0'..='9' | '\u{b9}' | '\u{b2}' | '\u{b3}'), None)
+    )
+}
+
+/// Prüft einen einzelnen Namensbestandteil (Datei- oder Ordnername) auf allen Plattformen
+/// nach den Windows-Regeln: keine Steuer- oder Schreibrichtungszeichen, keine unter
+/// Windows unzulässigen Zeichen (`: < > " | ? *` – `:` adressiert alternative
+/// Datenströme), kein Punkt oder Leerzeichen am Ende (Win32 entfernt sie still), kein
+/// reservierter Gerätename.
+pub(crate) fn check_portable_name(name: &str) -> Result<(), &'static str> {
+    if name.chars().any(char::is_control) {
+        return Err("Name enthält Steuerzeichen");
+    }
+    if name.chars().any(is_bidi_control) {
+        return Err(
+            "Name enthält Unicode-Schreibrichtungszeichen (können die Endung verschleiern)",
+        );
+    }
+    if name.contains([':', '<', '>', '"', '|', '?', '*']) {
+        return Err("Name enthält ein unter Windows unzulässiges Zeichen (: < > \" | ? *)");
+    }
+    if name.ends_with(['.', ' ']) {
+        return Err("Name darf nicht auf Punkt oder Leerzeichen enden");
+    }
+    if is_reserved_device_name(name) {
+        return Err("Name ist unter Windows ein reservierter Gerätename (CON, NUL, COM1 …)");
+    }
     Ok(())
 }
 
@@ -998,7 +1113,9 @@ fn check_file_name(name: &str) -> Result<(), &'static str> {
 /// Pflicht und nicht leer; mindestens ein gültiges, zur Aktion passendes Ziel ohne
 /// Duplikate; Risikostufe ist Pflicht; „Endgültig löschen“ und „Prozess beenden“ müssen
 /// als nicht umkehrbar gekennzeichnet sein; „Datei verschieben“ braucht
-/// [`param::DESTINATION`], „Datei umbenennen“ genau ein Ziel und [`param::NEW_NAME`].
+/// [`param::DESTINATION`], „Datei umbenennen“ genau ein Ziel und [`param::NEW_NAME`],
+/// „Einstellung ändern“ den neuen Wert [`param::VALUE`] (bei Registrierungswerten auch
+/// [`param::VALUE_TYPE`]); „Wiederherstellen“ nimmt keinen [`param::DESTINATION`].
 #[derive(Debug, Clone)]
 #[must_use = "Ein Builder tut nichts, bis `build` aufgerufen wird"]
 pub struct ActionPlanBuilder {

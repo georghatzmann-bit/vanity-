@@ -19,7 +19,7 @@ use aegis_core::consent::{
 use aegis_core::plan::{ActionKind, ActionPlan, PlanDigest, PlanId, Target, UndoHint};
 use aegis_core::risk::RiskLevel;
 use aegis_core::testing::{
-    DirSnapshot, ManualClock, assert_unchanged, rename_fixture, write_fixture,
+    DirSnapshot, ManualClock, assert_unchanged, rename_fixture, user_answers, write_fixture,
 };
 use aegis_core::time::Duration;
 
@@ -87,9 +87,14 @@ fn nothing_happens_without_yes_and_everything_is_audited() {
     let ticket = gate.propose(plan.clone()).unwrap();
     let answer: UiAnswer =
         serde_json::from_str(&ui_round_trip(&plan, &ticket, Decision::Decline)).unwrap();
-    let outcome = gate
-        .decide(answer.id, &answer.digest, answer.decision, answer.origin)
-        .unwrap();
+    let outcome = user_answers(
+        &mut gate,
+        answer.id,
+        &answer.digest,
+        answer.decision,
+        answer.origin,
+    )
+    .unwrap();
     assert!(matches!(outcome, Outcome::Declined));
     assert_unchanged(&untouched, &DirSnapshot::capture(sandbox.path()).unwrap());
 
@@ -106,16 +111,25 @@ fn nothing_happens_without_yes_and_everything_is_audited() {
     clock.advance(Duration::seconds(5));
     let answer: UiAnswer =
         serde_json::from_str(&ui_round_trip(&plan, &ticket, Decision::Execute)).unwrap();
-    let Outcome::Approved(approval) = gate
-        .decide(answer.id, &answer.digest, answer.decision, answer.origin)
-        .unwrap()
-    else {
+    let Outcome::Approved(approval) = user_answers(
+        &mut gate,
+        answer.id,
+        &answer.digest,
+        answer.decision,
+        answer.origin,
+    )
+    .unwrap() else {
         panic!("Freigabe erwartet");
     };
     assert_unchanged(&untouched, &DirSnapshot::capture(sandbox.path()).unwrap());
-    log.append_all(gate.take_audit_events()).unwrap();
-    let permit = approval.redeem(&plan, gate.clock()).unwrap();
+    let mut events = gate.take_audit_events();
+    log.append_all(&mut events).unwrap();
+    assert!(events.is_empty());
+    let permit = approval.redeem(&plan, &mut gate).unwrap();
     let executed = simulated_quarantine(permit, sandbox.path());
+    // Wie der Dienst: erst das Einlösen (aus dem Tor), dann die Ausführung protokollieren.
+    let mut events = gate.take_audit_events();
+    log.append_all(&mut events).unwrap();
     log.append(clock.now(), executed).unwrap();
     let after = DirSnapshot::capture(sandbox.path()).unwrap();
     let diff = untouched.diff(&after);
@@ -125,10 +139,11 @@ fn nothing_happens_without_yes_and_everything_is_audited() {
     // 4. Protokoll: vollständig und unverändert prüfbar.
     let bytes = log.into_inner();
     let report = verify(Cursor::new(&bytes)).unwrap();
-    assert_eq!(report.entries(), 7);
+    assert_eq!(report.entries(), 8);
     let text = String::from_utf8(bytes).unwrap();
     assert_eq!(text.matches("\"type\":\"decision_recorded\"").count(), 2);
     assert_eq!(text.matches("\"type\":\"plan_expired\"").count(), 1);
+    assert_eq!(text.matches("\"type\":\"permit_issued\"").count(), 1);
     assert_eq!(text.matches("\"type\":\"action_executed\"").count(), 1);
     assert!(text.contains("\"dialog_id\":\"ui-dialog-42\""));
 }
@@ -146,7 +161,8 @@ fn a_plan_changed_after_display_cannot_be_executed() {
     shown["targets"][0]["path"] = serde_json::json!(sandbox.path().join("andere.exe"));
     let shown: ActionPlan = serde_json::from_value(shown).unwrap();
     assert_eq!(shown.id(), ticket.id);
-    let outcome = gate.decide(
+    let outcome = user_answers(
+        &mut gate,
         ticket.id,
         &shown.digest(),
         Decision::Execute,
@@ -155,7 +171,8 @@ fn a_plan_changed_after_display_cannot_be_executed() {
     assert!(outcome.is_err());
     // Auch ein späteres korrektes „Ja“ ist wirkungslos: Der Plan ist verbraucht.
     assert!(
-        gate.decide(
+        user_answers(
+            &mut gate,
             ticket.id,
             &ticket.digest,
             Decision::Execute,
@@ -176,7 +193,8 @@ fn deserialized_plan_grants_nothing() {
     let from_pipe: ActionPlan =
         serde_json::from_str(&serde_json::to_string(&plan).unwrap()).unwrap();
     assert!(
-        gate.decide(
+        user_answers(
+            &mut gate,
             from_pipe.id(),
             &from_pipe.digest(),
             Decision::Execute,
@@ -184,5 +202,11 @@ fn deserialized_plan_grants_nothing() {
         )
         .is_err()
     );
-    assert!(gate.take_audit_events().is_empty());
+    // Der Versuch wird protokolliert – als Ablehnung, nie als Entscheidung.
+    let events = gate.take_audit_events();
+    assert_eq!(events.len(), 1);
+    assert!(matches!(
+        &events[0].event,
+        AuditEvent::DecisionRejected { plan_id, .. } if *plan_id == from_pipe.id()
+    ));
 }

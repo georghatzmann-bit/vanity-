@@ -7,5 +7,5 @@ error: cannot construct `PermanentDeleteApproval` with struct literal syntax due
 help: you might have meant to use the `new` associated function
   |
 5 -     let _forged = PermanentDeleteApproval {};
-5 +     let _forged = PermanentDeleteApproval::new(_, _, _, _, _, _);
+5 +     let _forged = PermanentDeleteApproval::new(_, _, _, _, _, _, _, _);
   |

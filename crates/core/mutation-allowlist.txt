@@ -25,16 +25,26 @@
 #   * Markierungen ohne zugehörige Ausnahme schlagen fehl.
 #   * Es darf keine weitere clippy.toml geben, die die Sperrliste aushebelt; jedes Crate muss
 #     die Workspace-Lints erben (`[lints] workspace = true`).
-#   * Das Feature "testing" von aegis-core darf nur in [dev-dependencies] stehen.
+#   * Das Feature "testing" von aegis-core darf nur in [dev-dependencies] stehen (geprüft mit
+#     `cargo metadata`), und der Produktivcode baut ohne Dev-Abhängigkeiten.
+#   * Keine Ausnahme für ganze Module, aus Makros, per cfg(clippy), #[path] oder include!;
+#     keine clippy.toml zwischen Mitglied und Wurzel, kein CLIPPY_CONF_DIR/--cap-lints.
 # Jede neue oder geänderte Zeile hier ist Pflichtprüfpunkt im Security-Review.
 #
 # Regel für Tests: Testcode legt Dateien und Ordner ausschließlich über die freigegebenen
 # Helfer in `aegis_core::testing` an bzw. verändert sie dort (write_fixture,
 # create_fixture_dir, remove_fixture, rename_fixture, set_fixture_readonly,
-# create_fixture_symlink [nur Unix]; Feature "testing"). Diese verweigern Namen außerhalb
-# des übergebenen Test-Ordners und folgen keinen Links.
-# Temporäre Ordner kommen von `tempfile`. Eigene Ausnahmen in Testcode sind nicht vorgesehen –
-# fehlt ein Helfer, wird er in aegis_core::testing ergänzt und hier eingetragen.
+# set_fixture_modified, create_fixture_symlink und create_fixture_socket [nur Unix];
+# Feature "testing"). Diese arbeiten nur unterhalb des temporären Ordners, verweigern Namen
+# außerhalb des übergebenen Test-Ordners und folgen keinen Links.
+# Temporäre Ordner kommen von `tempfile::tempdir()`. Eigene Ausnahmen in Testcode sind nicht
+# vorgesehen – fehlt ein Helfer, wird er in aegis_core::testing ergänzt und hier eingetragen.
+# Einzige Ausnahme: der Wächter selbst (crates/core/tests/mutation_guard.rs) ruft `cargo metadata`
+# und `cargo check` auf, um den Workspace so zu sehen wie Cargo.
+#
+# Markierungen: `aegis-mutation:` (verändernde API), `aegis-consent:` (Nutzerentscheidung
+# annehmen – ConsentGate::decide/confirm_second, im Betrieb nur der Pipe-Handler des Dienstes),
+# `aegis-unsafe:` (unsafe, nur Windows-FFI mit `// SAFETY:`). Alle stehen in dieser Liste.
 #
 # Format: eine Ausnahme pro Zeile, Trenner „ :: “ (mit Leerzeichen), Kommentare mit „#“.
 
@@ -46,3 +56,8 @@ crates/core/src/testing.rs :: testing-fixture-remove-file :: Test-Hilfe (Feature
 crates/core/src/testing.rs :: testing-fixture-rename :: Test-Hilfe (Feature "testing"): benennt eine Fixture innerhalb des Test-Ordners um, um Umbenennungs-Erkennung zu prüfen.
 crates/core/src/testing.rs :: testing-fixture-set-readonly :: Test-Hilfe (Feature "testing"): setzt den Schreibschutz einer Fixture innerhalb des Test-Ordners.
 crates/core/src/testing.rs :: testing-fixture-symlink :: Test-Hilfe (Feature "testing", nur Unix): legt einen Link innerhalb des Test-Ordners an, um die Link-Abwehr der Helfer und des Schnappschusses zu prüfen; das Ziel bleibt unberührt.
+crates/core/src/testing.rs :: testing-simulated-user-answer :: Test-Hilfe (Feature "testing"): simuliert die Antwort des Nutzers im Test und nimmt nur ein Freigabe-Tor mit gestellter Uhr (ManualClock) an – das Tor des Dienstes (Systemuhr) ist so nie erreichbar.
+crates/core/src/testing.rs :: testing-simulated-second-confirmation :: Test-Hilfe (Feature "testing"): simuliert die zweite Bestätigung beim endgültigen Löschen im Test, nur für Tore mit gestellter Uhr (ManualClock).
+crates/core/src/testing.rs :: testing-fixture-socket :: Test-Hilfe (Feature "testing", nur Unix): legt eine Socket-Datei innerhalb des Test-Ordners an, damit der Schnappschuss Sonderdateien erfasst, ohne sie zu öffnen.
+crates/core/src/testing.rs :: testing-fixture-set-modified :: Test-Hilfe (Feature "testing"): stellt die Änderungszeit einer Fixture-Datei innerhalb des Test-Ordners, um die Zeitstempel-Erkennung des Schnappschusses zu prüfen.
+crates/core/tests/mutation_guard.rs :: guard-runs-cargo :: Der Wächter selbst: startet nur `cargo metadata` (liest Manifeste) und `cargo check` (baut in einen eigenen Ordner unter target/), um den Workspace so zu prüfen, wie Cargo ihn sieht.

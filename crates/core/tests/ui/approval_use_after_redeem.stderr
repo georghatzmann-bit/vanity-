@@ -1,11 +1,11 @@
 error[E0382]: use of moved value: `approval`
  --> tests/ui/approval_use_after_redeem.rs:7:18
   |
-5 | fn redeem_twice(approval: Approval, plan: &ActionPlan) -> Vec<ExecutionPermit> {
+5 | fn redeem_twice(approval: Approval, plan: &ActionPlan, gate: &mut ConsentGate) -> Vec<ExecutionPermit> {
   |                 -------- move occurs because `approval` has type `Approval`, which does not implement the `Copy` trait
-6 |     let first = approval.redeem(plan, &SystemClock);
-  |                          -------------------------- `approval` moved due to this method call
-7 |     let second = approval.redeem(plan, &SystemClock);
+6 |     let first = approval.redeem(plan, gate);
+  |                          ------------------ `approval` moved due to this method call
+7 |     let second = approval.redeem(plan, gate);
   |                  ^^^^^^^^ value used here after move
   |
 note: `Approval::redeem` takes ownership of the receiver `self`, which moves `approval`

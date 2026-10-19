@@ -16,16 +16,20 @@
 use serde::Serialize;
 use time::OffsetDateTime;
 
-use super::{ApprovalNonce, ChallengeId, Clock, ConsentError, DecisionOrigin, GateId};
+use super::{
+    ApprovalNonce, ChallengeId, Clock, ConsentError, ConsentGate, DecisionOrigin, GateId,
+    RedeemRequest,
+};
 use crate::audit::{AuditEvent, ExecutionResult};
 use crate::plan::{ActionKind, ActionPlan, PlanDigest, PlanId, Target};
 use crate::risk::RiskLevel;
 
 /// Freigabe aus einer Nutzerentscheidung „Ja, ausführen“ für genau einen Plan.
 ///
-/// Entsteht ausschließlich in [`super::ConsentGate::decide`]. Gebunden an Plan-ID und
-/// Prüfsumme, einmalig (wird beim Einlösen verbraucht) und kurzlebig
-/// ([`super::ConsentConfig::execution_window`]).
+/// Entsteht ausschließlich in [`super::ConsentGate::decide`]. Gebunden an Plan-ID,
+/// Prüfsumme und das ausstellende Tor, einmalig (wird beim Einlösen verbraucht) und
+/// kurzlebig ([`super::ConsentConfig::execution_window`]). Wird sie nicht rechtzeitig
+/// eingelöst, protokolliert das Tor ihren Verfall ([`AuditEvent::ApprovalExpired`]).
 ///
 /// Für [`ActionKind::DeletePermanently`] kann sie nicht direkt eingelöst werden, sondern
 /// nur über [`super::ConsentGate::request_second_confirmation`] und
@@ -117,29 +121,37 @@ impl Approval {
         self.issuer
     }
 
-    /// Löst die Freigabe für `plan` ein und verbraucht sie – in jedem Fall, auch bei Fehlern.
+    /// Löst die Freigabe für `plan` beim ausstellenden Tor `gate` ein und verbraucht sie – in
+    /// jedem Fall, auch bei Fehlern.
     ///
-    /// `clock` ist die Uhr des Freigabe-Tors (`gate.clock()`). Weil [`Clock`] versiegelt
-    /// ist, kann außerhalb von Tests nur die Systemuhr übergeben werden – das
-    /// Ausführungsfenster lässt sich nicht mit einer erfundenen Zeit umgehen.
+    /// Das Tor prüft Fristen mit seiner eigenen (versiegelten) Uhr und protokolliert das
+    /// Ergebnis: [`AuditEvent::PermitIssued`] bei Erfolg, [`AuditEvent::RedeemRejected`] bei
+    /// jedem verweigerten Versuch – etwa dem Versuch, einen veränderten Plan auszuführen.
     ///
     /// # Errors
+    /// * [`ConsentError::ForeignApproval`] – Freigabe stammt von einem anderen Tor,
     /// * [`ConsentError::PlanMismatch`] – Freigabe gilt für einen anderen Plan,
     /// * [`ConsentError::DigestMismatch`] – Planinhalt weicht vom freigegebenen ab,
     /// * [`ConsentError::RequiresSecondConfirmation`] – endgültiges Löschen,
     /// * [`ConsentError::ApprovalExpired`] / [`ConsentError::ApprovalNotYetValid`] –
-    ///   außerhalb des Ausführungsfensters.
-    pub fn redeem<C: Clock + ?Sized>(
+    ///   außerhalb des Ausführungsfensters oder bereits als verfallen protokolliert.
+    pub fn redeem<C: Clock>(
         self,
         plan: &ActionPlan,
-        clock: &C,
+        gate: &mut ConsentGate<C>,
     ) -> Result<ExecutionPermit, ConsentError> {
-        check_binding(self.plan_id, self.digest, plan)?;
-        if self.kind.requires_second_confirmation() {
-            return Err(ConsentError::RequiresSecondConfirmation(self.plan_id));
-        }
-        let now = clock.now();
-        check_window(self.plan_id, now, self.approved_at, self.expires_at)?;
+        let now = gate.settle_redeem(
+            RedeemRequest {
+                plan_id: self.plan_id,
+                digest: self.digest,
+                nonce: self.nonce,
+                issuer: self.issuer,
+                valid_from: self.approved_at,
+                expires_at: self.expires_at,
+                needs_second_confirmation: self.kind.requires_second_confirmation(),
+            },
+            plan,
+        )?;
         Ok(ExecutionPermit {
             plan: plan.clone(),
             digest: self.digest,
@@ -194,7 +206,8 @@ impl SecondConfirmation {
 }
 
 /// Freigabe für endgültiges Löschen: erste Freigabe **plus** zweite, zeitlich getrennte
-/// Bestätigung. Entsteht ausschließlich in [`super::ConsentGate::confirm_second`].
+/// Bestätigung. Entsteht ausschließlich in [`super::ConsentGate::confirm_second`] und gilt
+/// nur bei ihrem Tor.
 #[derive(Debug)]
 #[must_use = "Eine Freigabe muss eingelöst werden – sonst verfällt sie (es passiert nichts)"]
 pub struct PermanentDeleteApproval {
@@ -204,9 +217,12 @@ pub struct PermanentDeleteApproval {
     first_origin: DecisionOrigin,
     confirmation: SecondConfirmation,
     expires_at: OffsetDateTime,
+    nonce: ApprovalNonce,
+    issuer: GateId,
 }
 
 impl PermanentDeleteApproval {
+    #[allow(clippy::too_many_arguments)]
     pub(super) const fn new(
         plan_id: PlanId,
         digest: PlanDigest,
@@ -214,6 +230,8 @@ impl PermanentDeleteApproval {
         first_origin: DecisionOrigin,
         confirmation: SecondConfirmation,
         expires_at: OffsetDateTime,
+        nonce: ApprovalNonce,
+        issuer: GateId,
     ) -> Self {
         Self {
             plan_id,
@@ -222,6 +240,8 @@ impl PermanentDeleteApproval {
             first_origin,
             confirmation,
             expires_at,
+            nonce,
+            issuer,
         }
     }
 
@@ -249,22 +269,27 @@ impl PermanentDeleteApproval {
         &self.confirmation
     }
 
-    /// Löst die Freigabe für `plan` ein und verbraucht sie – in jedem Fall, auch bei Fehlern.
+    /// Löst die Freigabe für `plan` beim ausstellenden Tor ein und verbraucht sie – in jedem
+    /// Fall, auch bei Fehlern (protokolliert wie bei [`Approval::redeem`]).
     ///
     /// # Errors
     /// Wie [`Approval::redeem`] (ohne `RequiresSecondConfirmation`).
-    pub fn redeem<C: Clock + ?Sized>(
+    pub fn redeem<C: Clock>(
         self,
         plan: &ActionPlan,
-        clock: &C,
+        gate: &mut ConsentGate<C>,
     ) -> Result<ExecutionPermit, ConsentError> {
-        check_binding(self.plan_id, self.digest, plan)?;
-        let now = clock.now();
-        check_window(
-            self.plan_id,
-            now,
-            self.confirmation.confirmed_at,
-            self.expires_at,
+        let now = gate.settle_redeem(
+            RedeemRequest {
+                plan_id: self.plan_id,
+                digest: self.digest,
+                nonce: self.nonce,
+                issuer: self.issuer,
+                valid_from: self.confirmation.confirmed_at,
+                expires_at: self.expires_at,
+                needs_second_confirmation: false,
+            },
+            plan,
         )?;
         Ok(ExecutionPermit {
             plan: plan.clone(),
@@ -362,7 +387,10 @@ impl ExecutionPermit {
     }
 
     /// Schließt die Ausführung ab: verbraucht die Erlaubnis und liefert den
-    /// Protokolleintrag [`AuditEvent::ActionExecuted`].
+    /// Protokolleintrag [`AuditEvent::ActionExecuted`] – der muss ins Prüfprotokoll
+    /// (`#[must_use]`; das Workspace-Lint `unused_must_use = deny` verhindert, dass er
+    /// stillschweigend verworfen wird).
+    #[must_use = "Der Eintrag über die Ausführung muss ins Prüfprotokoll geschrieben werden"]
     pub fn complete(self, result: ExecutionResult) -> AuditEvent {
         AuditEvent::ActionExecuted {
             plan_id: self.plan.id(),
@@ -466,7 +494,7 @@ impl TrustGrant {
     }
 }
 
-fn check_binding(
+pub(super) fn check_binding(
     plan_id: PlanId,
     digest: PlanDigest,
     plan: &ActionPlan,
@@ -483,7 +511,7 @@ fn check_binding(
     Ok(())
 }
 
-fn check_window(
+pub(super) fn check_window(
     plan_id: PlanId,
     now: OffsetDateTime,
     valid_from: OffsetDateTime,

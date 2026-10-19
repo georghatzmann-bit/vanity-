@@ -181,7 +181,8 @@ fn targets_must_match_kind() {
         PlanError::TargetNotAllowed { index: 0, .. }
     ));
 
-    let mut b = sample_plan_builder(ActionKind::ChangeSetting);
+    let mut b =
+        sample_plan_builder(ActionKind::ChangeSetting).parameter(param::VALUE_TYPE, "REG_SZ");
     b.targets = vec![setting.clone(), registry.clone(), other.clone()];
     assert!(b.build(T0).is_ok());
 
@@ -277,7 +278,8 @@ fn invalid_targets_are_rejected() {
         );
     }
     // Leerer Wertname = Standardwert, erlaubt.
-    let mut b = sample_plan_builder(ActionKind::ChangeSetting);
+    let mut b =
+        sample_plan_builder(ActionKind::ChangeSetting).parameter(param::VALUE_TYPE, "REG_SZ");
     b.targets = vec![Target::registry_value(r"HKCU\Software\Test", "")];
     assert!(b.build(T0).is_ok());
 }
@@ -516,7 +518,9 @@ fn digest_of_process_and_other_targets_covers_every_field() {
     assert_eq!(digests.len(), 3);
 
     let reg = |key: &str, name: &str| {
-        let mut b = sample_plan_builder(ActionKind::ChangeSetting).id(fixed_id());
+        let mut b = sample_plan_builder(ActionKind::ChangeSetting)
+            .id(fixed_id())
+            .parameter(param::VALUE_TYPE, "REG_SZ");
         b.targets = vec![Target::registry_value(key, name)];
         b.build(T0).unwrap().digest()
     };
@@ -758,4 +762,141 @@ fn canonical_bytes_start_with_domain() {
             .windows(b"AEGIS-ACTIONPLAN-V1".len())
             .any(|w| w == b"AEGIS-ACTIONPLAN-V1")
     );
+}
+
+// ---------------------------------------------------------------------------------------
+// Regressionen aus dem Security-Review
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn change_setting_binds_the_new_value() {
+    // Ohne neuen Wert gibt es keinen Plan – sonst müsste ein Ausführer ihn von außen nehmen.
+    for target in [
+        Target::setting("realtime.enabled"),
+        Target::registry_value(
+            r"HKLM\SOFTWARE\Policies\Microsoft\Windows Defender",
+            "DisableAntiSpyware",
+        ),
+    ] {
+        let mut b = sample_plan_builder(ActionKind::ChangeSetting);
+        b.targets = vec![target];
+        b.parameters.clear();
+        assert_eq!(
+            err(b),
+            PlanError::MissingParameter {
+                kind: ActionKind::ChangeSetting,
+                key: param::VALUE
+            }
+        );
+    }
+    // Registrierungswerte brauchen zusätzlich einen bekannten Typ.
+    let registry = Target::registry_value(r"HKCU\Software\Test", "Wert");
+    let mut b = sample_plan_builder(ActionKind::ChangeSetting);
+    b.targets = vec![registry.clone()];
+    assert_eq!(
+        err(b),
+        PlanError::MissingParameter {
+            kind: ActionKind::ChangeSetting,
+            key: param::VALUE_TYPE
+        }
+    );
+    let mut b =
+        sample_plan_builder(ActionKind::ChangeSetting).parameter(param::VALUE_TYPE, "REG_WHATEVER");
+    b.targets = vec![registry.clone()];
+    assert!(matches!(
+        err(b),
+        PlanError::InvalidParameter { key, .. } if key == param::VALUE_TYPE
+    ));
+    for value_type in param::REGISTRY_VALUE_TYPES {
+        let mut b =
+            sample_plan_builder(ActionKind::ChangeSetting).parameter(param::VALUE_TYPE, value_type);
+        b.targets = vec![registry.clone()];
+        assert!(b.build(T0).is_ok(), "{value_type}");
+    }
+    // Ein leerer Wert ist erlaubt (z. B. leere Zeichenkette).
+    assert!(
+        sample_plan_builder(ActionKind::ChangeSetting)
+            .parameter(param::VALUE, "")
+            .build(T0)
+            .is_ok()
+    );
+    // Der Wert ist Teil der Prüfsumme: „aus“ statt „an“ ist ein anderer Plan.
+    let with = |value: &str| {
+        sample_plan_builder(ActionKind::ChangeSetting)
+            .id(fixed_id())
+            .parameter(param::VALUE, value)
+            .build(T0)
+            .unwrap()
+            .digest()
+    };
+    assert_ne!(with("true"), with("false"));
+    let typed = |value_type: &str| {
+        let mut b = sample_plan_builder(ActionKind::ChangeSetting)
+            .id(fixed_id())
+            .parameter(param::VALUE, "1")
+            .parameter(param::VALUE_TYPE, value_type);
+        b.targets = vec![Target::registry_value(r"HKCU\Software\Test", "Wert")];
+        b.build(T0).unwrap().digest()
+    };
+    assert_ne!(typed("REG_DWORD"), typed("REG_SZ"));
+}
+
+#[test]
+fn restore_goes_back_to_the_target_path() {
+    let b = sample_plan_builder(ActionKind::Restore).parameter(
+        param::DESTINATION,
+        test_path("Anderswo").display().to_string(),
+    );
+    assert!(matches!(
+        err(b),
+        PlanError::InvalidParameter { key, .. } if key == param::DESTINATION
+    ));
+    assert!(sample_plan(ActionKind::Restore, T0).is_ok());
+}
+
+#[test]
+fn rename_rejects_names_with_windows_side_effects() {
+    for bad in [
+        "D:evil.exe",   // Laufwerk: „umbenennen“ würde auf ein anderes Laufwerk verschieben
+        "x.txt:stream", // alternativer Datenstrom
+        "CON",          // Gerätenamen …
+        "nul.txt",      // … auch mit Endung
+        "Com1",         // … ohne Rücksicht auf Groß-/Kleinschreibung
+        "LPT9.log",
+        "COM\u{b9}",
+        "CONOUT$",
+        "aux .txt", // … und mit Leerzeichen vor der Endung
+        "...",      // Punkte am Ende entfernt Win32 still
+        "trail. ",
+        "trail ",
+        "a\u{202e}gpj.exe", // Schreibrichtung umgekehrt: täuscht „.jpg“ vor
+        "a\u{2066}b",
+        "a\nb", // Steuerzeichen
+        "a\tb",
+        "a<b",
+        "a>b",
+        "a|b",
+        "a?b",
+        "a*b",
+        "a\"b",
+    ] {
+        let b = sample_plan_builder(ActionKind::RenameFile).parameter(param::NEW_NAME, bad);
+        assert!(
+            matches!(err(b), PlanError::InvalidParameter { key, .. } if key == "new_name"),
+            "{bad:?}"
+        );
+    }
+    for good in [
+        "umbenannt.exe",
+        ".versteckt",
+        "CONFIG.sys",
+        "console.log",
+        "COM10",
+        "LPT",
+        "nulled.txt",
+        "Bericht März 2026.pdf",
+    ] {
+        let b = sample_plan_builder(ActionKind::RenameFile).parameter(param::NEW_NAME, good);
+        assert!(b.build(T0).is_ok(), "{good:?}");
+    }
 }

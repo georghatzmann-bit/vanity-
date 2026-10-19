@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::consent::{Clock, ConsentConfig, ConsentGate, Outcome};
-use crate::testing::{ManualClock, sample_plan, test_path};
+use crate::testing::{ManualClock, sample_plan, test_path, user_answers};
 
 const T0: OffsetDateTime = datetime!(2026-10-19 08:00:00.5 UTC);
 
@@ -87,6 +87,16 @@ fn all_events() -> Vec<AuditEvent> {
                 message: "Zugriff verweigert".into(),
             },
         },
+        AuditEvent::PermitIssued {
+            plan_id: pid(7),
+            digest: digest(7),
+            kind: ActionKind::Quarantine,
+        },
+        AuditEvent::RedeemRejected {
+            plan_id: pid(8),
+            reason: "Prüfsumme passt nicht".into(),
+        },
+        AuditEvent::ApprovalExpired { plan_id: pid(9) },
     ]
 }
 
@@ -357,7 +367,7 @@ fn broken_lines_are_reported() {
     let (bytes, _) = sample_log();
     let mut incomplete = bytes.clone();
     incomplete.pop();
-    assert_eq!(problem_at(&incomplete), (11, VerifyProblem::IncompleteLine));
+    assert_eq!(problem_at(&incomplete), (14, VerifyProblem::IncompleteLine));
 
     let mut with_empty = lines(&bytes);
     with_empty.insert(1, String::new());
@@ -539,7 +549,7 @@ fn unrepresentable_event_is_a_serialize_error() {
 
 #[test]
 fn every_event_roundtrips_and_names_its_plan() {
-    let expected_ids = [1, 1, 2, 3, 4, 4, 4, 4, 1, 1, 6];
+    let expected_ids = [1, 1, 2, 3, 4, 4, 4, 4, 1, 1, 6, 7, 8, 9];
     for (event, id) in all_events().into_iter().zip(expected_ids) {
         assert_eq!(event.plan_id(), pid(id));
         let json = serde_json::to_string(&event).unwrap();
@@ -590,6 +600,7 @@ fn entry_hash_text_form() {
 fn messages_are_german() {
     let problems = [
         VerifyProblem::IncompleteLine,
+        VerifyProblem::LineTooLong,
         VerifyProblem::InvalidUtf8,
         VerifyProblem::EmptyLine,
         VerifyProblem::Malformed("x".into()),
@@ -626,6 +637,11 @@ fn messages_are_german() {
             .to_string()
             .contains("verändert")
     );
+    assert!(
+        AuditError::EntryTooLarge { limit: 5 }
+            .to_string()
+            .contains("zu groß")
+    );
 }
 
 #[test]
@@ -637,19 +653,21 @@ fn gate_events_form_a_verifiable_log() {
     let plan = sample_plan(ActionKind::Quarantine, clock.now()).unwrap();
     let ticket = gate.propose(plan.clone()).unwrap();
     clock.advance(Duration::seconds(20));
-    let Outcome::Approved(approval) = gate
-        .decide(
-            ticket.id,
-            &ticket.digest,
-            Decision::Execute,
-            DecisionOrigin::ui_dialog("dlg"),
-        )
-        .unwrap()
-    else {
+    let Outcome::Approved(approval) = user_answers(
+        &mut gate,
+        ticket.id,
+        &ticket.digest,
+        Decision::Execute,
+        DecisionOrigin::ui_dialog("dlg"),
+    )
+    .unwrap() else {
         panic!("Freigabe erwartet");
     };
-    log.append_all(gate.take_audit_events()).unwrap();
-    let permit = approval.redeem(&plan, gate.clock()).unwrap();
+    let mut events = gate.take_audit_events();
+    log.append_all(&mut events).unwrap();
+    let permit = approval.redeem(&plan, &mut gate).unwrap();
+    let mut events = gate.take_audit_events();
+    log.append_all(&mut events).unwrap();
     log.append(clock.now(), permit.complete(ExecutionResult::Succeeded))
         .unwrap();
 
@@ -658,11 +676,12 @@ fn gate_events_form_a_verifiable_log() {
         .unwrap();
     clock.advance(Duration::minutes(11));
     assert_eq!(gate.expire_stale(), vec![ignored.id]);
-    log.append_all(gate.take_audit_events()).unwrap();
+    let mut events = gate.take_audit_events();
+    log.append_all(&mut events).unwrap();
 
     let bytes = log.into_inner();
     let report = verify_bytes(&bytes).unwrap();
-    assert_eq!(report.entries(), 5);
+    assert_eq!(report.entries(), 6);
     let types: Vec<String> = lines(&bytes)
         .iter()
         .map(|line| {
@@ -678,9 +697,162 @@ fn gate_events_form_a_verifiable_log() {
         [
             "plan_proposed",
             "decision_recorded",
+            "permit_issued",
             "action_executed",
             "plan_proposed",
             "plan_expired"
         ]
     );
+}
+
+// ---------------------------------------------------------------------------------------
+// Regressionen aus dem Security-Review
+// ---------------------------------------------------------------------------------------
+
+/// Schreibt die ersten `ok` Einträge, danach schlägt jeder Schreibvorgang fehl.
+struct FailAfter {
+    ok: usize,
+    written: Vec<u8>,
+}
+
+impl Write for FailAfter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if self.ok == 0 {
+            return Err(io::Error::other("Datenträger voll"));
+        }
+        self.written.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if self.ok == 0 {
+            return Err(io::Error::other("Datenträger voll"));
+        }
+        self.ok -= 1;
+        Ok(())
+    }
+}
+
+#[test]
+fn append_all_keeps_unwritten_events() {
+    let mut events: Vec<TimedEvent> = (0..3)
+        .map(|i| TimedEvent {
+            at: T0,
+            event: AuditEvent::PlanExpired { plan_id: pid(i) },
+        })
+        .collect();
+    let mut log = AuditLog::new(FailAfter {
+        ok: 1,
+        written: Vec::new(),
+    });
+    assert!(matches!(
+        log.append_all(&mut events),
+        Err(AuditError::Io(_))
+    ));
+    // Das geschriebene Ereignis ist weg, das fehlgeschlagene und das folgende bleiben.
+    assert_eq!(
+        events.iter().map(|t| t.event.plan_id()).collect::<Vec<_>>(),
+        [pid(1), pid(2)]
+    );
+    assert_eq!(verify_bytes(&log.get_ref().written).unwrap().entries(), 1);
+    // Der Dienst kann sie in ein neues Protokoll schreiben – nichts ist verloren.
+    let mut fresh = AuditLog::new(Vec::new());
+    fresh.append_all(&mut events).unwrap();
+    assert!(events.is_empty());
+    assert_eq!(verify_bytes(fresh.get_ref()).unwrap().entries(), 2);
+}
+
+#[test]
+fn torn_tail_can_be_recovered() {
+    let (bytes, log) = sample_log();
+    let full = verify_bytes(&bytes).unwrap();
+    // Sauberes Ende: identisch mit verify.
+    let clean = verify_prefix(Cursor::new(&bytes), None).unwrap();
+    assert_eq!(*clean.report(), full);
+    assert_eq!(clean.valid_len(), u64::try_from(bytes.len()).unwrap());
+    assert_eq!(clean.torn_tail_len(), 0);
+
+    // Absturz mitten im Schreiben der letzten Zeile.
+    let mut torn = bytes.clone();
+    torn.truncate(bytes.len() - 20);
+    assert_eq!(problem_at(&torn).1, VerifyProblem::IncompleteLine);
+    let prefix = verify_prefix(Cursor::new(&torn), None).unwrap();
+    let entries = full.entries() - 1;
+    assert_eq!(prefix.report().entries(), entries);
+    let cut = usize::try_from(prefix.valid_len()).unwrap();
+    assert_eq!(
+        prefix.torn_tail_len(),
+        u64::try_from(torn.len() - cut).unwrap()
+    );
+    assert_eq!(torn[cut - 1], b'\n');
+    // Abschneiden am gemeldeten Byte und fortsetzen ergibt wieder eine gültige Kette.
+    torn.truncate(cut);
+    assert_eq!(verify_bytes(&torn).unwrap(), *prefix.report());
+    let mut resumed = AuditLog::resume(torn, prefix.report());
+    resumed
+        .append(T0, AuditEvent::PlanExpired { plan_id: pid(42) })
+        .unwrap();
+    assert_eq!(
+        verify_bytes(resumed.get_ref()).unwrap().entries(),
+        entries + 1
+    );
+
+    // Andere Befunde bleiben Fehler, ein Anker muss im intakten Teil liegen.
+    let mut tampered = lines(&bytes);
+    tampered[1] = tampered[1].replace("\"execute\"", "\"decline\"");
+    assert!(matches!(
+        verify_prefix(Cursor::new(join(&tampered)), None),
+        Err(AuditError::Verify {
+            line: 2,
+            problem: VerifyProblem::HashMismatch
+        })
+    ));
+    let anchor = log.anchor().unwrap();
+    let mut torn = bytes.clone();
+    torn.truncate(bytes.len() - 20);
+    assert!(matches!(
+        verify_prefix(Cursor::new(&torn), Some(&anchor)),
+        Err(AuditError::AnchorNotFound { .. })
+    ));
+}
+
+#[test]
+fn overlong_line_is_rejected_without_reading_it_all() {
+    // Endloser Strom ohne Zeilenende: verify bricht nach MAX_ENTRY_BYTES ab, statt den
+    // ganzen Speicher zu belegen.
+    let endless = BufReader::new(io::repeat(b'x'));
+    assert!(matches!(
+        verify(endless),
+        Err(AuditError::Verify {
+            line: 1,
+            problem: VerifyProblem::LineTooLong
+        })
+    ));
+}
+
+#[test]
+fn oversized_entry_is_not_written() {
+    let mut log = AuditLog::new(Vec::new());
+    let huge = AuditEvent::ActionExecuted {
+        plan_id: pid(1),
+        digest: digest(1),
+        kind: ActionKind::Quarantine,
+        result: ExecutionResult::Failed {
+            message: "x".repeat(MAX_ENTRY_BYTES),
+        },
+    };
+    // (`fits_in_log` für zu große Ereignisse prüft schon der Gate-Test
+    // `plan_too_large_for_the_audit_log_is_not_proposed`.)
+    assert!(matches!(
+        log.append(T0, huge),
+        Err(AuditError::EntryTooLarge {
+            limit: MAX_ENTRY_BYTES
+        })
+    ));
+    // Nichts geschrieben, das Protokoll bleibt nutzbar.
+    assert!(log.get_ref().is_empty());
+    assert!(!log.is_poisoned());
+    log.append(T0, AuditEvent::PlanExpired { plan_id: pid(2) })
+        .unwrap();
+    assert!(fits_in_log(&AuditEvent::PlanExpired { plan_id: pid(3) }));
 }

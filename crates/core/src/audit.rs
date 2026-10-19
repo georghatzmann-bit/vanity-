@@ -1,8 +1,9 @@
 //! Prüfprotokoll: nur anhängbar, JSON Lines, mit Hash-Kette.
 //!
-//! Bezug zur Goldenen Regel: Jede Vorlage, Entscheidung, Ablehnung, jeder Verfall und jede
-//! Ausführung wird festgehalten. Nachträgliches Ändern, Löschen, Einfügen oder Vertauschen
-//! von Zeilen wird von [`verify`] erkannt.
+//! Bezug zur Goldenen Regel: Jede Vorlage, Entscheidung, Ablehnung, jeder Verfall, jedes
+//! Einlösen (auch jeder verweigerte Versuch) und jede Ausführung wird festgehalten.
+//! Nachträgliches Ändern, Löschen, Einfügen oder Vertauschen von Zeilen wird von [`verify`]
+//! erkannt.
 //!
 //! # Format
 //!
@@ -14,6 +15,16 @@
 //! ```
 //!
 //! Der erste Eintrag hat `seq = 0` und `prev_hash = 000…0` ([`EntryHash::GENESIS`]).
+//! Eine Zeile ist höchstens [`MAX_ENTRY_BYTES`] lang (inklusive `\n`): [`AuditLog`] schreibt
+//! keine längeren, [`verify`] liest keine längeren (Schutz vor Speichererschöpfung), und
+//! das Freigabe-Tor nimmt keinen Plan an, dessen Vorlage nicht hineinpasst.
+//!
+//! # Wiederaufnahme nach einem Absturz
+//!
+//! Bricht ein Schreibvorgang ab, endet die Datei mit einer unvollständigen Zeile.
+//! [`verify_prefix`] prüft dann den intakten Anfang und nennt dessen Länge in Byte; der
+//! Dienst schneidet den Rest ab (eine eigene, freigegebene Ausnahme) oder beginnt eine neue
+//! Datei und setzt mit [`AuditLog::resume`] fort.
 //!
 //! # Grenzen (ehrlich)
 //!
@@ -29,7 +40,7 @@
 //! [`Write`], [`verify`] liest aus einem beliebigen [`BufRead`].
 
 use std::fmt;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -39,6 +50,13 @@ use crate::canonical;
 use crate::consent::{ChallengeId, Decision, DecisionOrigin};
 use crate::plan::{ActionKind, PlanDigest, PlanId, Target};
 use crate::risk::RiskLevel;
+
+/// Höchstlänge einer Protokollzeile in Byte (inklusive Zeilenende): 64 MiB.
+pub const MAX_ENTRY_BYTES: usize = 64 * 1024 * 1024;
+
+/// Höchstlänge eines Ereignisses als JSON, damit die ganze Zeile (Nummer, Zeit, Hashes)
+/// sicher in [`MAX_ENTRY_BYTES`] passt.
+pub(crate) const MAX_EVENT_BYTES: usize = MAX_ENTRY_BYTES - 1024;
 
 // ---------------------------------------------------------------------------------------
 // Hash
@@ -136,9 +154,13 @@ impl ExecutionResult {
 }
 
 /// Ein protokolliertes Ereignis.
+///
+/// `#[must_use]`: Ein erzeugtes Ereignis (etwa aus [`crate::consent::ExecutionPermit::complete`])
+/// muss ins Protokoll – stillschweigendes Verwerfen meldet der Compiler.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 #[non_exhaustive]
+#[must_use = "Ein Protokoll-Ereignis muss ins Prüfprotokoll geschrieben werden"]
 pub enum AuditEvent {
     /// Plan wurde zur Entscheidung vorgelegt.
     PlanProposed {
@@ -169,14 +191,16 @@ pub enum AuditEvent {
         /// Herkunft.
         origin: DecisionOrigin,
     },
-    /// Antwort verworfen (z. B. falsche Prüfsumme) – der Plan ist verbraucht, nichts geschieht.
+    /// Antwort verworfen (falsche Prüfsumme, ungültige Herkunft, unbekannter, abgelaufener
+    /// oder schon beantworteter Plan …) – nichts geschieht; ein vorgelegter Plan ist verbraucht.
     DecisionRejected {
         /// Plan.
         plan_id: PlanId,
         /// Grund (deutsch).
         reason: String,
     },
-    /// Plan ohne (rechtzeitige) Antwort verfallen – nichts geschieht.
+    /// Plan ohne (rechtzeitige) Antwort verfallen – auch verdrängt oder beim Beenden des
+    /// Tors – nichts geschieht.
     PlanExpired {
         /// Plan.
         plan_id: PlanId,
@@ -221,6 +245,30 @@ pub enum AuditEvent {
         /// Rückfrage.
         challenge_id: ChallengeId,
     },
+    /// Freigabe eingelöst: Die Ausführungserlaubnis wurde ausgestellt. Danach muss ein
+    /// [`AuditEvent::ActionExecuted`] folgen – fehlt es, ist die Ausführung nicht
+    /// abgeschlossen protokolliert worden.
+    PermitIssued {
+        /// Plan.
+        plan_id: PlanId,
+        /// Prüfsumme.
+        digest: PlanDigest,
+        /// Aktion.
+        kind: ActionKind,
+    },
+    /// Einlösen einer Freigabe verweigert (anderer oder veränderter Plan, abgelaufen,
+    /// fremdes Tor …) – nichts geschieht, die Freigabe ist verbraucht.
+    RedeemRejected {
+        /// Plan der Freigabe.
+        plan_id: PlanId,
+        /// Grund (deutsch).
+        reason: String,
+    },
+    /// Freigabe nicht (rechtzeitig) eingelöst und verfallen – nichts geschieht.
+    ApprovalExpired {
+        /// Plan.
+        plan_id: PlanId,
+    },
     /// Freigegebene Aktion ausgeführt.
     ActionExecuted {
         /// Plan.
@@ -256,9 +304,43 @@ impl AuditEvent {
             | Self::SecondConfirmationRecorded { plan_id, .. }
             | Self::SecondConfirmationRejected { plan_id, .. }
             | Self::SecondConfirmationExpired { plan_id, .. }
+            | Self::PermitIssued { plan_id, .. }
+            | Self::RedeemRejected { plan_id, .. }
+            | Self::ApprovalExpired { plan_id }
             | Self::ActionExecuted { plan_id, .. }
             | Self::ActionUndone { plan_id, .. } => *plan_id,
         }
+    }
+}
+
+/// Passt das Ereignis (als JSON) sicher in eine Protokollzeile? `false` auch, wenn es sich
+/// gar nicht darstellen lässt.
+pub(crate) fn fits_in_log(event: &AuditEvent) -> bool {
+    matches!(check_event_size(event), Ok(true))
+}
+
+/// `Ok(false)`: zu groß; `Err`: nicht als JSON darstellbar. Bricht beim Überschreiten der
+/// Grenze ab, ohne das ganze Ereignis aufzubereiten.
+fn check_event_size(event: &AuditEvent) -> Result<bool, serde_json::Error> {
+    /// Zählt Bytes und bricht ab, sobald die Grenze überschritten ist.
+    struct Budget(usize);
+    impl Write for Budget {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0 = self
+                .0
+                .checked_sub(buf.len())
+                .ok_or_else(|| std::io::Error::other("zu groß"))?;
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    match serde_json::to_writer(Budget(MAX_EVENT_BYTES), event) {
+        Ok(()) => Ok(true),
+        // Der einzige E/A-Fehler hier ist das erschöpfte Budget.
+        Err(err) if err.is_io() => Ok(false),
+        Err(err) => Err(err),
     }
 }
 
@@ -341,6 +423,8 @@ pub struct AuditAnchor {
 pub enum VerifyProblem {
     /// Letzte Zeile ohne Zeilenende (Schreibvorgang abgebrochen?).
     IncompleteLine,
+    /// Zeile länger als [`MAX_ENTRY_BYTES`] (beschädigt oder manipuliert).
+    LineTooLong,
     /// Kein gültiges UTF-8.
     InvalidUtf8,
     /// Leere Zeile.
@@ -366,6 +450,7 @@ impl fmt::Display for VerifyProblem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IncompleteLine => f.write_str("Zeile ist unvollständig (kein Zeilenende)"),
+            Self::LineTooLong => f.write_str("Zeile ist länger als erlaubt"),
             Self::InvalidUtf8 => f.write_str("Zeile ist kein gültiges UTF-8"),
             Self::EmptyLine => f.write_str("leere Zeile"),
             Self::Malformed(detail) => write!(f, "Eintrag nicht lesbar ({detail})"),
@@ -399,6 +484,14 @@ pub enum AuditError {
     /// Laufende Nummer erschöpft.
     #[error("Laufende Nummer des Prüfprotokolls erschöpft")]
     SequenceOverflow,
+    /// Eintrag länger als [`MAX_ENTRY_BYTES`] – nicht geschrieben (das Protokoll bleibt nutzbar).
+    #[error(
+        "Eintrag für das Prüfprotokoll ist zu groß (höchstens {limit} Byte) – nicht geschrieben"
+    )]
+    EntryTooLarge {
+        /// Höchstlänge einer Zeile in Byte.
+        limit: usize,
+    },
     /// Protokoll beschädigt oder manipuliert.
     #[error("Prüfprotokoll beschädigt oder manipuliert (Zeile {line}): {problem}")]
     Verify {
@@ -469,7 +562,8 @@ impl<W: Write> AuditLog<W> {
     ///
     /// # Errors
     /// [`AuditError::Poisoned`], [`AuditError::InvalidTimestamp`],
-    /// [`AuditError::SequenceOverflow`], [`AuditError::Serialize`], [`AuditError::Io`].
+    /// [`AuditError::SequenceOverflow`], [`AuditError::Serialize`],
+    /// [`AuditError::EntryTooLarge`], [`AuditError::Io`].
     pub fn append(
         &mut self,
         at: OffsetDateTime,
@@ -477,6 +571,13 @@ impl<W: Write> AuditLog<W> {
     ) -> Result<AuditEntry, AuditError> {
         if self.poisoned {
             return Err(AuditError::Poisoned);
+        }
+        // Vor jeder weiteren Arbeit (Hash, Puffer): Ein zu großes Ereignis wird gar nicht erst
+        // aufbereitet. Mit dem Rest der Zeile (unter 1 KiB) bleibt sie unter MAX_ENTRY_BYTES.
+        if !check_event_size(&event)? {
+            return Err(AuditError::EntryTooLarge {
+                limit: MAX_ENTRY_BYTES,
+            });
         }
         let at = at
             .checked_to_offset(UtcOffset::UTC)
@@ -512,18 +613,36 @@ impl<W: Write> AuditLog<W> {
         Ok(entry)
     }
 
-    /// Hängt alle Ereignisse an (z. B. aus [`crate::consent::ConsentGate::take_audit_events`]).
+    /// Hängt die Ereignisse der Reihe nach an (z. B. aus
+    /// [`crate::consent::ConsentGate::take_audit_events`]) und entfernt jedes erst, nachdem es
+    /// geschrieben wurde. Schlägt ein Eintrag fehl, bleiben er und alle folgenden in `events`
+    /// – nichts geht verloren; der Dienst kann sie z. B. in eine neue Protokolldatei schreiben.
+    ///
+    /// ```
+    /// # use aegis_core::audit::{AuditEvent, AuditLog, TimedEvent};
+    /// # use aegis_core::plan::PlanId;
+    /// # let at = aegis_core::time::OffsetDateTime::UNIX_EPOCH;
+    /// let mut events = vec![TimedEvent { at, event: AuditEvent::PlanExpired { plan_id: PlanId::new_random() } }];
+    /// let mut log = AuditLog::new(Vec::new());
+    /// log.append_all(&mut events)?;
+    /// assert!(events.is_empty());
+    /// # Ok::<(), aegis_core::audit::AuditError>(())
+    /// ```
     ///
     /// # Errors
     /// Wie [`AuditLog::append`]; bricht beim ersten Fehler ab.
-    pub fn append_all(
-        &mut self,
-        events: impl IntoIterator<Item = TimedEvent>,
-    ) -> Result<(), AuditError> {
-        for timed in events {
-            self.append(timed.at, timed.event)?;
+    pub fn append_all(&mut self, events: &mut Vec<TimedEvent>) -> Result<(), AuditError> {
+        let mut written = 0;
+        let mut result = Ok(());
+        for timed in events.iter() {
+            if let Err(err) = self.append(timed.at, timed.event.clone()) {
+                result = Err(err);
+                break;
+            }
+            written += 1;
         }
-        Ok(())
+        events.drain(..written);
+        result
     }
 
     /// Hash des letzten Eintrags ([`EntryHash::GENESIS`], wenn leer) – als externer Anker
@@ -569,6 +688,34 @@ pub struct VerifyReport {
     last: Option<AuditAnchor>,
 }
 
+/// Ergebnis von [`verify_prefix`]: der geprüfte, intakte Anfang des Protokolls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PrefixReport {
+    report: VerifyReport,
+    valid_len: u64,
+    torn_tail_len: u64,
+}
+
+impl PrefixReport {
+    /// Prüfergebnis für den intakten Anfang (für [`AuditLog::resume`]).
+    #[must_use]
+    pub const fn report(&self) -> &VerifyReport {
+        &self.report
+    }
+
+    /// Länge des intakten Anfangs in Byte – hier wird abgeschnitten bzw. fortgesetzt.
+    #[must_use]
+    pub const fn valid_len(&self) -> u64 {
+        self.valid_len
+    }
+
+    /// Länge der abgebrochenen letzten Zeile in Byte (0 = Datei endet sauber).
+    #[must_use]
+    pub const fn torn_tail_len(&self) -> u64 {
+        self.torn_tail_len
+    }
+}
+
 impl VerifyReport {
     /// Anzahl geprüfter Einträge.
     #[must_use]
@@ -601,7 +748,7 @@ impl VerifyReport {
 /// # Errors
 /// [`AuditError::Verify`] mit Zeilennummer und Befund, [`AuditError::Io`].
 pub fn verify<R: BufRead>(reader: R) -> Result<VerifyReport, AuditError> {
-    verify_impl(reader, None)
+    verify_impl(reader, None, false).map(|prefix| prefix.report)
 }
 
 /// Wie [`verify`], verlangt zusätzlich, dass der extern gespeicherte `anchor` (Nummer und
@@ -613,22 +760,46 @@ pub fn verify_with_anchor<R: BufRead>(
     reader: R,
     anchor: &AuditAnchor,
 ) -> Result<VerifyReport, AuditError> {
-    verify_impl(reader, Some(anchor))
+    verify_impl(reader, Some(anchor), false).map(|prefix| prefix.report)
+}
+
+/// Wie [`verify`] (bzw. mit `anchor` wie [`verify_with_anchor`]), aber eine unvollständige
+/// **letzte** Zeile – typisch nach einem Absturz mitten im Schreiben – ist kein Fehler:
+/// Geliefert werden der Prüfbericht des intakten Anfangs und dessen Länge in Byte, damit der
+/// Dienst den Rest abschneiden oder eine neue Datei beginnen und fortsetzen kann. Jeder
+/// andere Befund bleibt ein Fehler. Ein Anker muss im intakten Anfang liegen.
+///
+/// # Errors
+/// Wie [`verify_with_anchor`].
+pub fn verify_prefix<R: BufRead>(
+    reader: R,
+    anchor: Option<&AuditAnchor>,
+) -> Result<PrefixReport, AuditError> {
+    verify_impl(reader, anchor, true)
 }
 
 fn verify_impl<R: BufRead>(
     mut reader: R,
     anchor: Option<&AuditAnchor>,
-) -> Result<VerifyReport, AuditError> {
+    allow_torn_tail: bool,
+) -> Result<PrefixReport, AuditError> {
+    // Eine Zeile darf (mit Zeilenende) höchstens MAX_ENTRY_BYTES lang sein; gelesen wird
+    // ein Byte mehr, um Überlänge zu erkennen, ohne beliebig viel Speicher zu belegen.
+    let read_limit = u64::try_from(MAX_ENTRY_BYTES)
+        .unwrap_or(u64::MAX)
+        .saturating_add(1);
     let mut expected_seq: u64 = 0;
     let mut prev = EntryHash::GENESIS;
     let mut last = None;
     let mut anchor_seen = false;
     let mut line_no: u64 = 0;
+    let mut valid_len: u64 = 0;
+    let mut torn_tail_len: u64 = 0;
     let mut buf = Vec::new();
     loop {
         buf.clear();
-        if reader.read_until(b'\n', &mut buf)? == 0 {
+        let read = (&mut reader).take(read_limit).read_until(b'\n', &mut buf)?;
+        if read == 0 {
             break;
         }
         line_no = line_no.saturating_add(1);
@@ -636,9 +807,18 @@ fn verify_impl<R: BufRead>(
             line: line_no,
             problem,
         };
-        if buf.pop() != Some(b'\n') {
+        if buf.last() != Some(&b'\n') {
+            if buf.len() > MAX_ENTRY_BYTES {
+                return Err(fail(VerifyProblem::LineTooLong));
+            }
+            if allow_torn_tail {
+                torn_tail_len = u64::try_from(buf.len()).unwrap_or(u64::MAX);
+                break;
+            }
             return Err(fail(VerifyProblem::IncompleteLine));
         }
+        let line_len = u64::try_from(buf.len()).unwrap_or(u64::MAX);
+        buf.pop();
         let text = std::str::from_utf8(&buf).map_err(|_| fail(VerifyProblem::InvalidUtf8))?;
         if text.is_empty() {
             return Err(fail(VerifyProblem::EmptyLine));
@@ -676,15 +856,20 @@ fn verify_impl<R: BufRead>(
         expected_seq = expected_seq
             .checked_add(1)
             .ok_or(AuditError::SequenceOverflow)?;
+        valid_len = valid_len.saturating_add(line_len);
     }
     if let Some(anchor) = anchor
         && !anchor_seen
     {
         return Err(AuditError::AnchorNotFound { seq: anchor.seq });
     }
-    Ok(VerifyReport {
-        entries: expected_seq,
-        last,
+    Ok(PrefixReport {
+        report: VerifyReport {
+            entries: expected_seq,
+            last,
+        },
+        valid_len,
+        torn_tail_len,
     })
 }
 
