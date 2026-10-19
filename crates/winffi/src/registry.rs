@@ -178,11 +178,27 @@ pub fn write_raw(hive: &Hive, key: &str, name: &str, value: &RawValue) -> io::Re
 /// # Errors
 /// Kein Zugriff.
 pub fn delete_value(hive: &Hive, key: &str, name: &str) -> io::Result<()> {
-    let handle = match open_for_write(hive, key) {
-        Ok(h) => h,
-        Err(e) if e.raw_os_error() == Some(2) => return Ok(()),
-        Err(e) => return Err(e),
+    // Nur öffnen, nie anlegen: Fehlt der Schlüssel, gibt es auch den Wert nicht.
+    let (root, path, _) = hive.root_and_prefix(key);
+    let path = wide(&path);
+    let mut raw: HKEY = ptr::null_mut();
+    // SAFETY: nullterminierter Pfad; nur Recht zum Setzen/Entfernen von Werten.
+    // aegis-unsafe: winffi-registry-open-delete
+    #[allow(unsafe_code)]
+    let code = unsafe {
+        RegOpenKeyExW(
+            root,
+            path.as_ptr(),
+            0,
+            KEY_SET_VALUE | KEY_WOW64_64KEY,
+            &mut raw,
+        )
     };
+    if code == NOT_FOUND {
+        return Ok(());
+    }
+    status(code)?;
+    let handle = Key(raw);
     let name = wide(name);
     // SAFETY: Schlüssel offen; nullterminierter Name.
     // aegis-unsafe: winffi-registry-delete

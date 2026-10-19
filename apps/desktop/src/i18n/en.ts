@@ -588,12 +588,14 @@ export const en: Messages<typeof de> = {
     fixHint:
       '“Fix…” first shows a plan with every single step. Nothing changes without your yes; the previous state is kept.',
     fixButton: 'Fix…',
-    adminOnly: 'Applies to the whole PC – only an administrator can change it.',
+    adminOnly:
+      'Applies to the whole PC – AEGIS needs administrator rights for this (start the app with right-click “Run as administrator”).',
     openSettings: 'Open in Windows',
     undoTitle: 'Undo',
     undoHint:
       'AEGIS kept the state before these changes. Restoring it is a separate plan with your yes.',
     undo: 'Undo…',
+    autorunDone: 'Autostart disabled: {name}',
     fixDone: {
       enable_uac: 'User Account Control set to “default”',
       disable_smb1: 'SMBv1 turned off',
@@ -614,6 +616,37 @@ export const en: Messages<typeof de> = {
     open: 'Reachable from outside (all interfaces)',
     openNone: 'No TCP ports on all interfaces.',
     unknownProgram: 'unknown program',
+  },
+  persistence: {
+    title: 'Autostart & persistence',
+    intro:
+      'Where programs settle in for the next start: autostart keys and folders, scheduled tasks, services, Winlogon, IFEO, AppInit, WMI subscriptions, your own COM entries and browser extensions. AEGIS checks the program files in its scanning process.',
+    check: 'Check autostarts',
+    recheck: 'Check again',
+    notYet: 'Not checked yet – this takes a few seconds.',
+    windowsOnly: 'Autostarts exist only on Windows.',
+    filter: 'Show',
+    notable: 'Important',
+    all: 'All ({count})',
+    filesChecked: '{count} program files checked',
+    empty: 'Nothing noticeable found.',
+    disabled: 'disabled in Windows',
+    disable: 'Disable…',
+    quarantine: 'Quarantine…',
+    kinds: {
+      run: 'Autostart (Run)',
+      run_once: 'Run once (RunOnce)',
+      policy_run: 'Autostart by policy',
+      startup_folder: 'Startup folder',
+      scheduled_task: 'Scheduled task',
+      service: 'Service',
+      winlogon: 'Windows logon (Winlogon)',
+      ifeo: 'Program redirect (IFEO)',
+      app_init: 'AppInit_DLLs',
+      wmi_consumer: 'WMI subscription',
+      com_object: 'COM entry',
+      browser_extension: 'Browser extension',
+    },
   },
   lab: {
     intro:

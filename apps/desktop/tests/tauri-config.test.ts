@@ -62,6 +62,9 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
     'Dienst: Härtungs-Schritt vorschlagen (feste Liste; ausgeführt erst nach „Ja“, mit Rückgängig)',
   'allow-service-propose-hardening-undo':
     'Dienst: gemerkten Stand vor dem Beheben wiederherstellen vorschlagen (erst nach „Ja“)',
+  'allow-service-persistence-status': 'Dienst: Autostart-Einträge lesen und bewerten (nur lesend)',
+  'allow-service-propose-autorun-disable':
+    'Dienst: Autostart-Eintrag deaktivieren vorschlagen (erst nach „Ja“, mit Rückgängig)',
   'allow-service-propose-backup':
     'Dienst: Rückfall-Kopien ein-/ausschalten vorschlagen (nur nach „Ja“)',
   'allow-service-propose-backup-restore':

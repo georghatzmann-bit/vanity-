@@ -538,6 +538,19 @@ pub async fn service_propose_hardening_undo(id: String) -> Result<Value, String>
     send(json!({ "type": "propose_hardening_undo", "id": id })).await
 }
 
+/// Persistenz-Check: Autostart-Einträge lesen und bewerten (nur lesend).
+#[tauri::command]
+pub async fn service_persistence_status() -> Result<Value, String> {
+    send(json!({ "type": "persistence_status" })).await
+}
+
+/// Autostart-Eintrag aus dem letzten Check deaktivieren vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_autorun_disable(id: String) -> Result<Value, String> {
+    check_id(&id)?;
+    send(json!({ "type": "propose_autorun_disable", "id": id })).await
+}
+
 /// Härtung: Systemzustand lesen und bewerten (nur lesend). `fresh`: neu prüfen statt ein
 /// bis zu 10 Minuten altes Ergebnis.
 #[tauri::command]

@@ -27,6 +27,7 @@ import {
   type HardeningState,
 } from '../platform/service.ts';
 import { PageBody, PageHeader } from './PageHeader.tsx';
+import { PersistencePanel } from './PersistencePanel.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
 import { useConsentFlow } from './useConsentFlow.tsx';
 
@@ -130,7 +131,11 @@ export function HardeningPage() {
   }, [service, load]);
 
   const toast = useToast();
-  const flow = useConsentFlow(service, () => void load(true));
+  const [version, setVersion] = useState(0);
+  const flow = useConsentFlow(service, () => {
+    void load(true);
+    setVersion((v) => v + 1);
+  });
   const fail = (error: unknown) =>
     toast.show({
       tone: 'danger',
@@ -296,6 +301,13 @@ export function HardeningPage() {
               )}
             </Panel>
           </div>
+          {service !== null && (
+            <PersistencePanel
+              service={service}
+              start={(load) => void flow.start(load)}
+              version={version}
+            />
+          )}
           {state !== null && state.undo.length > 0 && (
             <Panel title={t('hardening.undoTitle')} description={t('hardening.undoHint')}>
               <ul className="space-y-2" data-testid="hardening-undo">
@@ -305,9 +317,17 @@ export function HardeningPage() {
                     className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-2 p-2"
                   >
                     <span className="min-w-0 flex-1 text-sm text-text">
-                      {(fixKinds as readonly string[]).includes(u.fix)
-                        ? t(`hardening.fixDone.${u.fix as FixKind}`)
-                        : u.fix}
+                      {u.fix.startsWith('autorun:') ? (
+                        <SafeText
+                          value={t('hardening.autorunDone', {
+                            name: u.fix.slice('autorun:'.length),
+                          })}
+                        />
+                      ) : (fixKinds as readonly string[]).includes(u.fix) ? (
+                        t(`hardening.fixDone.${u.fix as FixKind}`)
+                      ) : (
+                        u.fix
+                      )}
                       <span className="block text-xs text-text-subtle">{date(u.at)}</span>
                     </span>
                     <Button

@@ -65,8 +65,17 @@ pub fn restore_commands() -> Vec<Vec<String>> {
 /// `netsh.exe` am festen Systemort.
 #[cfg_attr(not(windows), allow(dead_code))]
 fn netsh() -> Option<PathBuf> {
-    let root = std::env::var_os("SystemRoot").map(PathBuf::from)?;
-    Some(root.join(r"System32\netsh.exe"))
+    #[cfg(windows)]
+    {
+        aegis_winffi::accounts::system_dir()
+            .ok()
+            .map(|dir| dir.join("netsh.exe"))
+    }
+    #[cfg(not(windows))]
+    {
+        let root = std::env::var_os("SystemRoot").map(PathBuf::from)?;
+        Some(root.join(r"System32\netsh.exe"))
+    }
 }
 
 /// Führt die Befehle aus (je höchstens 30 s). Nur mit der Erlaubnis des Panic-Plans aufrufen.

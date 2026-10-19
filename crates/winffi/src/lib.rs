@@ -18,6 +18,9 @@
 mod util;
 
 #[cfg(windows)]
+pub mod accounts;
+
+#[cfg(windows)]
 pub mod pipe;
 
 #[cfg(windows)]

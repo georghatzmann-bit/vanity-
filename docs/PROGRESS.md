@@ -113,14 +113,16 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
        jeder Schritt steht im Plan, alter Stand gemerkt, „Rückgängig“ als eigener Plan;
        Gruppenrichtlinien werden nie geändert; Update/Verschlüsselung/Virenschutz öffnen nur die
        Windows-Einstellungen.
-3. [ ] P6.3 Persistenz-Check (Run-Schlüssel, Autostart-Ordner, Aufgaben, Dienste, WMI, IFEO,
-       AppInit, COM, Browser-Erweiterungen).
+3. [x] P6.3 Persistenz-Check: Run-Schlüssel, Autostart-Ordner, Aufgaben, Dienste, Winlogon,
+       IFEO, AppInit, WMI-Abos, COM, Browser-Erweiterungen – bewertet (Merkmale + Prüfprozess),
+       Deaktivieren per Plan mit Rückgängig, Autostart-Dateien über die Quarantäne (D-045).
+       Außerdem P6-Review (P6.1/P6.2) umgesetzt: 0 kritisch/hoch, 3 mittel, Rest niedrig.
 4. [ ] P6.4 Treiber-Check gegen eine Liste verwundbarer Treiber (Lizenz vorher prüfen).
 5. [ ] P6.5 Software-Updates über winget (Installieren nur nach „Ja“).
 6. [ ] P6.6 Kamera/Mikrofon-Wächter, Zwischenablage (Krypto-Adressen, opt-in), USB-Geräte.
 7. [ ] P6.7 Sicherheits-Review (separater Agent), Doku, DoD.
 
-**Nächster Schritt:** P6.3 Persistenz-Check.
+**Nächster Schritt:** P6.4 Treiber-Check.
 
 ## P5 – Schutz-Werkzeuge
 

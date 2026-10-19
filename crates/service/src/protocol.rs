@@ -92,6 +92,10 @@ pub enum Request {
     ProposeHardeningFix { fix: String },
     /// Ein Beheben rückgängig machen vorschlagen – nur nach „Ja“.
     ProposeHardeningUndo { id: String },
+    /// Persistenz-Check: Autostart-Einträge lesen und bewerten (nur lesend, dauert).
+    PersistenceStatus {},
+    /// Einen Autostart-Eintrag aus dem letzten Check deaktivieren vorschlagen – nur nach „Ja“.
+    ProposeAutorunDisable { id: String },
     /// Rückfall-Kopien ein- (`on`, Grenze in MiB) bzw. ausschalten vorschlagen.
     ProposeBackup { on: bool, quota_mb: u64 },
     /// Eine Version zurückholen vorschlagen.
@@ -287,6 +291,12 @@ pub enum Response {
     /// Härtung & Sicherheits-Score.
     Hardening {
         state: Box<crate::handler::hardening::HardeningState>,
+    },
+    /// Persistenz-Check.
+    Persistence {
+        state: Box<crate::handler::persistence::PersistenceState>,
+        /// Rückgängig machbare Schritte des Kontos.
+        undo: Vec<crate::handler::harden::UndoInfo>,
     },
     /// Datei-Safe des Kontos.
     Safe {

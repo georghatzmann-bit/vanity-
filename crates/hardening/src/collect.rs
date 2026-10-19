@@ -141,10 +141,43 @@ pub struct FixState {
     pub nla_policy: bool,
     /// Proxy-Skript (`AutoConfigURL`) des Kontos gesetzt?
     pub auto_config: bool,
+    /// Manueller Proxy des Kontos an?
+    pub proxy_enabled: bool,
+    /// `DefaultConnectionSettings` des Kontos ohne Proxy-Merker (falls dort einer gesetzt ist).
+    pub connections_without_proxy: Option<Vec<u8>>,
+    /// Stufe der Benutzerkontensteuerung.
+    pub uac: Option<UacLevel>,
+    /// SMBv1-Server an?
+    pub smb1: Option<bool>,
+    /// Remotedesktop.
+    pub rdp: Option<crate::facts::RdpState>,
+    /// Ist der Firewall-Dienst (MpsSvc) deaktiviert? Dann hilft Einschalten per `netsh` nicht.
+    pub firewall_service_disabled: bool,
+}
+
+/// `DefaultConnectionSettings` (WinINet): Version, Zähler, Merker (0x02 Proxy, 0x04 Skript) …
+/// Liefert den Wert ohne Proxy-Merker (Zähler +1) oder `None`, wenn keiner gesetzt ist.
+#[must_use]
+pub fn connections_without_proxy(blob: &[u8]) -> Option<Vec<u8>> {
+    if blob.len() < 12 || blob.len() > 4096 {
+        return None;
+    }
+    let flags = u32::from_le_bytes([blob[8], blob[9], blob[10], blob[11]]);
+    let cleared = flags & !(0x02 | 0x04);
+    if cleared == flags {
+        return None;
+    }
+    let mut out = blob.to_vec();
+    let counter = u32::from_le_bytes([blob[4], blob[5], blob[6], blob[7]]).wrapping_add(1);
+    out[4..8].copy_from_slice(&counter.to_le_bytes());
+    out[8..12].copy_from_slice(&cleared.to_le_bytes());
+    Some(out)
 }
 
 #[cfg(windows)]
-pub use self::windows::{collect, fix_state};
+pub use self::windows::{
+    collect, fix_state, machine_autoruns, machine_autoruns_of, proxy_of, user_registry_autoruns,
+};
 
 #[cfg(windows)]
 mod windows {
@@ -163,6 +196,7 @@ mod windows {
         AntivirusState, BitLockerState, FirewallState, ListeningPort, ProxyState, RdpState,
         SystemFacts, TpmState, parse_hosts,
     };
+    use crate::persistence::{Autorun, AutorunKind};
 
     /// `WBEM_E_INVALID_NAMESPACE`: Diese Windows-Edition hat den Namensraum nicht.
     const INVALID_NAMESPACE: i32 = 0x8004_100E_u32 as i32;
@@ -293,6 +327,7 @@ mod windows {
                     "UserAuthentication",
                 )
             })
+            // Fehlt der Wert, gilt der Windows-Standard seit Vista/Server 2008: NLA verlangt.
             .unwrap_or(1);
         Some(RdpState {
             enabled: deny == 0,
@@ -319,11 +354,52 @@ mod windows {
             })
             .map(|v| v == 1)
         };
+        if firewall_service_disabled() {
+            // Ohne Dienst filtert die Windows-Firewall nichts – egal, was eingestellt ist.
+            return FirewallState {
+                domain: Some(false),
+                private: Some(false),
+                public: Some(false),
+            };
+        }
         FirewallState {
             domain: read("DomainProfile", "DomainProfile"),
             private: read("StandardProfile", "PrivateProfile"),
             public: read("PublicProfile", "PublicProfile"),
         }
+    }
+
+    fn firewall_service_disabled() -> bool {
+        dword(
+            &Hive::LocalMachine,
+            r"SYSTEM\CurrentControlSet\Services\MpsSvc",
+            "Start",
+        ) == Some(4)
+    }
+
+    /// Aktive Firewalls anderer Hersteller (Windows-Sicherheitscenter).
+    fn firewall_products() -> Vec<String> {
+        query(
+            r"ROOT\SecurityCenter2",
+            "SELECT displayName, productState FROM FirewallProduct",
+            false,
+        )
+        .map(|rows| {
+            rows.iter()
+                .filter(|r| v_u32(r, "productState").is_some_and(av_product_active))
+                .filter_map(|r| v_string(r, "displayName"))
+                .filter(|n| !n.to_ascii_lowercase().contains("windows"))
+                .map(|n| n.chars().take(80).collect())
+                .take(5)
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    /// Proxy eines Kontos (nur lesend; `HKU\<SID>`).
+    #[must_use]
+    pub fn proxy_of(sid: &str) -> Option<ProxyState> {
+        proxy(sid)
     }
 
     fn proxy(sid: &str) -> Option<ProxyState> {
@@ -519,64 +595,434 @@ mod windows {
     }
 
     fn guest_enabled() -> Option<bool> {
-        let rows = query(
-            r"ROOT\CIMV2",
-            "SELECT SID, Disabled FROM Win32_UserAccount WHERE LocalAccount = TRUE",
-            false,
-        )
-        .ok()?;
-        rows.iter()
-            .find(|r| v_string(r, "SID").is_some_and(|s| s.ends_with("-501")))
-            .and_then(|r| v_bool(r, "Disabled"))
-            .map(|disabled| !disabled)
+        guest_account().map(|(_, enabled)| enabled)
     }
 
     fn guest_account() -> Option<(String, bool)> {
-        let rows = query(
-            r"ROOT\CIMV2",
-            "SELECT Name, SID, Disabled FROM Win32_UserAccount WHERE LocalAccount = TRUE",
-            false,
-        )
-        .ok()?;
-        rows.iter()
-            .find(|r| v_string(r, "SID").is_some_and(|s| s.ends_with("-501")))
-            .and_then(|r| Some((v_string(r, "Name")?, !v_bool(r, "Disabled")?)))
+        aegis_winffi::accounts::guest_account().ok().flatten()
     }
 
-    /// Liest, was ein Plan zum Beheben wissen muss (nur lesend). `user_sid`: Konto für den Proxy.
+    /// Liest, was ein Plan zum Beheben von `fix` wissen muss – nur das (nur lesend, ohne WMI).
+    /// `user_sid`: Konto für den Proxy.
     #[must_use]
-    pub fn fix_state(user_sid: Option<&str>) -> FixState {
+    pub fn fix_state(fix: crate::FixKind, user_sid: Option<&str>) -> FixState {
+        use crate::FixKind;
         let hklm = Hive::LocalMachine;
-        let fw = firewall();
-        let firewall_off = [
-            (fw.domain, "domainprofile"),
-            (fw.private, "privateprofile"),
-            (fw.public, "publicprofile"),
-        ]
-        .into_iter()
-        .filter(|(on, _)| *on == Some(false))
-        .map(|(_, name)| name.to_owned())
-        .collect();
-        let firewall_policy = ["DomainProfile", "PrivateProfile", "PublicProfile"]
-            .iter()
-            .any(|p| {
-                dword(
-                    &hklm,
-                    &format!(r"SOFTWARE\Policies\Microsoft\WindowsFirewall\{p}"),
-                    "EnableFirewall",
-                ) == Some(0)
-            });
-        let policy = r"SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services";
-        FixState {
-            firewall_off,
-            firewall_policy,
-            guest: guest_account(),
-            rdp_policy: dword(&hklm, policy, "fDenyTSConnections").is_some(),
-            nla_policy: dword(&hklm, policy, "UserAuthentication").is_some(),
-            auto_config: user_sid
-                .and_then(proxy)
-                .is_some_and(|p| p.auto_config.is_some()),
+        let mut state = FixState::default();
+        match fix {
+            FixKind::EnableUac => state.uac = uac(),
+            FixKind::DisableSmb1 => state.smb1 = smb1(),
+            FixKind::DisableRdp | FixKind::EnableRdpNla => {
+                let policy = r"SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services";
+                state.rdp = rdp();
+                state.rdp_policy = dword(&hklm, policy, "fDenyTSConnections").is_some();
+                state.nla_policy = dword(&hklm, policy, "UserAuthentication").is_some();
+            }
+            FixKind::DisableGuest => state.guest = guest_account(),
+            FixKind::EnableFirewall => {
+                let fw = firewall();
+                state.firewall_off = [
+                    (fw.domain, "domainprofile"),
+                    (fw.private, "privateprofile"),
+                    (fw.public, "publicprofile"),
+                ]
+                .into_iter()
+                .filter(|(on, _)| *on == Some(false))
+                .map(|(_, name)| name.to_owned())
+                .collect();
+                state.firewall_policy = ["DomainProfile", "PrivateProfile", "PublicProfile"]
+                    .iter()
+                    .any(|p| {
+                        dword(
+                            &hklm,
+                            &format!(r"SOFTWARE\Policies\Microsoft\WindowsFirewall\{p}"),
+                            "EnableFirewall",
+                        ) == Some(0)
+                    });
+                state.firewall_service_disabled = firewall_service_disabled();
+            }
+            FixKind::DisableProxy => {
+                if let Some(sid) = user_sid {
+                    let p = proxy(sid);
+                    state.proxy_enabled = p.as_ref().is_some_and(|p| p.enabled);
+                    state.auto_config = p.as_ref().is_some_and(|p| p.auto_config.is_some());
+                    state.connections_without_proxy = aegis_winffi::registry::read_raw(
+                        &Hive::User(sid.to_owned()),
+                        r"Software\Microsoft\Windows\CurrentVersion\Internet Settings\Connections",
+                        "DefaultConnectionSettings",
+                    )
+                    .ok()
+                    .flatten()
+                    .filter(|v| v.kind == 3)
+                    .and_then(|v| super::connections_without_proxy(&v.bytes));
+                }
+            }
+            FixKind::OpenSettings => {}
         }
+        state
+    }
+
+    // -----------------------------------------------------------------------------------
+    // Persistenz (P6.3, nur lesend)
+    // -----------------------------------------------------------------------------------
+
+    const MAX_AUTORUNS: usize = 3000;
+
+    fn approved(hive: &Hive, folder: &str, name: &str) -> bool {
+        let key =
+            format!(r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\{folder}");
+        aegis_winffi::registry::read_raw(hive, &key, name)
+            .ok()
+            .flatten()
+            .is_none_or(|v| crate::persistence::startup_approved_enabled(&v.bytes))
+    }
+
+    fn run_keys(hive: &Hive, machine: bool, label: &str, out: &mut Vec<Autorun>) {
+        let mut keys = vec![
+            (
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                AutorunKind::Run,
+                "Run",
+            ),
+            (
+                r"Software\Microsoft\Windows\CurrentVersion\RunOnce",
+                AutorunKind::RunOnce,
+                "",
+            ),
+            (
+                r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run",
+                AutorunKind::PolicyRun,
+                "",
+            ),
+        ];
+        if machine {
+            keys.push((
+                r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run",
+                AutorunKind::Run,
+                "Run32",
+            ));
+            keys.push((
+                r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce",
+                AutorunKind::RunOnce,
+                "",
+            ));
+        }
+        for (key, kind, approved_folder) in keys {
+            for v in read_values(hive, key).into_iter().take(500) {
+                let enabled =
+                    approved_folder.is_empty() || approved(hive, approved_folder, &v.name);
+                out.push(Autorun::new(
+                    kind,
+                    machine,
+                    format!(r"{label}\{key}"),
+                    v.name,
+                    v.data,
+                    enabled,
+                ));
+            }
+        }
+    }
+
+    fn startup_folder(dir: &std::path::Path, machine: bool, out: &mut Vec<Autorun>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in entries.flatten().take(500) {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.eq_ignore_ascii_case("desktop.ini") {
+                continue;
+            }
+            if e.file_type().is_ok_and(|t| t.is_file()) {
+                out.push(Autorun::new(
+                    AutorunKind::StartupFolder,
+                    machine,
+                    dir.display().to_string(),
+                    name,
+                    e.path().display().to_string(),
+                    true,
+                ));
+            }
+        }
+    }
+
+    fn tasks(root: &std::path::Path, out: &mut Vec<Autorun>) {
+        let mut stack = vec![(root.to_path_buf(), 0usize)];
+        let mut seen = 0usize;
+        while let Some((dir, depth)) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for e in entries.flatten() {
+                let Ok(kind) = e.file_type() else { continue };
+                if kind.is_symlink() {
+                    continue;
+                }
+                if kind.is_dir() {
+                    if depth < 8 {
+                        stack.push((e.path(), depth + 1));
+                    }
+                    continue;
+                }
+                seen += 1;
+                if seen > 4000 || out.len() >= MAX_AUTORUNS {
+                    return;
+                }
+                let Ok(file) = std::fs::File::open(e.path()) else {
+                    continue;
+                };
+                let mut bytes = Vec::new();
+                if file.take(512 * 1024).read_to_end(&mut bytes).is_err() {
+                    continue;
+                }
+                let text = decode_xml(&bytes);
+                let Some((commands, enabled)) = crate::persistence::parse_task_xml(&text) else {
+                    continue;
+                };
+                let path = e.path();
+                let task = path.strip_prefix(root).map_or_else(
+                    |_| path.display().to_string(),
+                    |p| format!("\\{}", p.display()),
+                );
+                for command in commands.into_iter().take(4) {
+                    out.push(Autorun::new(
+                        AutorunKind::ScheduledTask,
+                        true,
+                        "Aufgabenplanung",
+                        task.clone(),
+                        command,
+                        enabled,
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Aufgaben-XML ist meist UTF-16 (mit BOM), manchmal UTF-8.
+    fn decode_xml(bytes: &[u8]) -> String {
+        if let Some(rest) = bytes.strip_prefix(&[0xff, 0xfe]) {
+            let units: Vec<u16> = rest
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            String::from_utf16_lossy(&units)
+        } else {
+            String::from_utf8_lossy(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes))
+                .into_owned()
+        }
+    }
+
+    fn services(out: &mut Vec<Autorun>) {
+        let hklm = Hive::LocalMachine;
+        let base = r"SYSTEM\CurrentControlSet\Services";
+        for name in read_subkeys(&hklm, base).into_iter().take(2000) {
+            let key = format!(r"{base}\{name}");
+            let values = read_values(&hklm, &key);
+            let get = |n: &str| {
+                values
+                    .iter()
+                    .find(|v| v.name.eq_ignore_ascii_case(n))
+                    .map(|v| v.data.clone())
+            };
+            let start = get("Start").and_then(|s| s.trim().parse::<u32>().ok());
+            let kind = get("Type")
+                .and_then(|s| s.trim().parse::<u32>().ok())
+                .unwrap_or(0);
+            // Nur Programme (Typ 0x10/0x20/0x50/0x60), die automatisch starten (0–2).
+            if kind & 0x30 == 0 || !matches!(start, Some(0..=2)) {
+                continue;
+            }
+            let Some(image) = get("ImagePath") else {
+                continue;
+            };
+            let dll = read_values(&hklm, &format!(r"{key}\Parameters"))
+                .into_iter()
+                .find(|v| v.name.eq_ignore_ascii_case("ServiceDll"))
+                .map(|v| v.data);
+            let command = match dll {
+                Some(dll) => format!("{image} | {dll}"),
+                None => image,
+            };
+            out.push(Autorun::new(
+                AutorunKind::Service,
+                true,
+                format!(r"HKLM\{base}"),
+                name,
+                command,
+                true,
+            ));
+        }
+    }
+
+    fn winlogon(hive: &Hive, machine: bool, label: &str, out: &mut Vec<Autorun>) {
+        let key = r"Software\Microsoft\Windows NT\CurrentVersion\Winlogon";
+        for v in read_values(hive, key) {
+            let shell = v.name.eq_ignore_ascii_case("Shell");
+            if shell || (machine && v.name.eq_ignore_ascii_case("Userinit")) {
+                out.push(Autorun::new(
+                    AutorunKind::Winlogon,
+                    machine,
+                    format!(r"{label}\{key}"),
+                    v.name,
+                    v.data,
+                    true,
+                ));
+            }
+        }
+    }
+
+    fn ifeo_and_appinit(out: &mut Vec<Autorun>) {
+        let hklm = Hive::LocalMachine;
+        let ifeo = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options";
+        for name in read_subkeys(&hklm, ifeo).into_iter().take(1000) {
+            if let Some(debugger) = value(&hklm, &format!(r"{ifeo}\{name}"), "Debugger")
+                .filter(|d| !d.trim().is_empty())
+            {
+                out.push(Autorun::new(
+                    AutorunKind::Ifeo,
+                    true,
+                    format!(r"HKLM\{ifeo}"),
+                    name,
+                    debugger,
+                    true,
+                ));
+            }
+        }
+        for key in [
+            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows",
+            r"SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\Windows",
+        ] {
+            let dlls = value(&hklm, key, "AppInit_DLLs").filter(|d| !d.trim().is_empty());
+            if let Some(dlls) = dlls {
+                let load = dword(&hklm, key, "LoadAppInit_DLLs") == Some(1);
+                out.push(Autorun::new(
+                    AutorunKind::AppInit,
+                    true,
+                    format!(r"HKLM\{key}"),
+                    "AppInit_DLLs",
+                    dlls,
+                    load,
+                ));
+            }
+        }
+    }
+
+    fn wmi_consumers(out: &mut Vec<Autorun>) {
+        if let Ok(rows) = query(
+            r"ROOT\subscription",
+            "SELECT Name, CommandLineTemplate FROM CommandLineEventConsumer",
+            false,
+        ) {
+            for r in rows.iter().take(200) {
+                out.push(Autorun::new(
+                    AutorunKind::WmiConsumer,
+                    true,
+                    r"WMI ROOT\subscription",
+                    v_string(r, "Name").unwrap_or_default(),
+                    v_string(r, "CommandLineTemplate").unwrap_or_default(),
+                    true,
+                ));
+            }
+        }
+        if let Ok(rows) = query(
+            r"ROOT\subscription",
+            "SELECT Name, ScriptFileName, ScriptText FROM ActiveScriptEventConsumer",
+            false,
+        ) {
+            for r in rows.iter().take(200) {
+                let script = v_string(r, "ScriptFileName")
+                    .filter(|f| !f.is_empty())
+                    .or_else(|| v_string(r, "ScriptText"))
+                    .unwrap_or_default();
+                out.push(Autorun::new(
+                    AutorunKind::WmiConsumer,
+                    true,
+                    r"WMI ROOT\subscription",
+                    v_string(r, "Name").unwrap_or_default(),
+                    script,
+                    true,
+                ));
+            }
+        }
+    }
+
+    /// Autostarts für alle Konten (nur lesend; Systemorte, keine Nutzerdateien).
+    #[must_use]
+    pub fn machine_autoruns() -> Vec<Autorun> {
+        let mut out = Vec::new();
+        for kind in [
+            AutorunKind::Run,
+            AutorunKind::Winlogon,
+            AutorunKind::Ifeo,
+            AutorunKind::StartupFolder,
+            AutorunKind::ScheduledTask,
+            AutorunKind::Service,
+            AutorunKind::WmiConsumer,
+        ] {
+            out.extend(machine_autoruns_of(kind));
+        }
+        out.truncate(MAX_AUTORUNS);
+        out
+    }
+
+    /// Nur eine Art (zum erneuten Prüfen vor dem Ausführen eines Plans). `Run` liefert auch
+    /// `RunOnce`/`PolicyRun`, `Ifeo` auch `AppInit`.
+    #[must_use]
+    pub fn machine_autoruns_of(kind: AutorunKind) -> Vec<Autorun> {
+        let mut out = Vec::new();
+        let hklm = Hive::LocalMachine;
+        match kind {
+            AutorunKind::Run | AutorunKind::RunOnce | AutorunKind::PolicyRun => {
+                run_keys(&hklm, true, "HKLM", &mut out);
+            }
+            AutorunKind::Winlogon => winlogon(&hklm, true, "HKLM", &mut out),
+            AutorunKind::Ifeo | AutorunKind::AppInit => ifeo_and_appinit(&mut out),
+            AutorunKind::StartupFolder => {
+                if let Some(data) = std::env::var_os("ProgramData") {
+                    startup_folder(
+                        &PathBuf::from(data).join(r"Microsoft\Windows\Start Menu\Programs\StartUp"),
+                        true,
+                        &mut out,
+                    );
+                }
+            }
+            AutorunKind::ScheduledTask => {
+                let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+                tasks(&PathBuf::from(root).join(r"System32\Tasks"), &mut out);
+            }
+            AutorunKind::Service => services(&mut out),
+            AutorunKind::WmiConsumer => wmi_consumers(&mut out),
+            AutorunKind::ComObject | AutorunKind::BrowserExtension => {}
+        }
+        out.truncate(MAX_AUTORUNS);
+        out
+    }
+
+    /// Autostarts in der Registrierung eines Kontos (`HKU\<SID>`; nur lesend). Den
+    /// Autostart-Ordner im Profil liest der Dienst selbst mit den Rechten des Kontos.
+    #[must_use]
+    pub fn user_registry_autoruns(sid: &str) -> Vec<Autorun> {
+        let mut out = Vec::new();
+        let hive = Hive::User(sid.to_owned());
+        let label = format!(r"HKU\{sid}");
+        run_keys(&hive, false, &label, &mut out);
+        winlogon(&hive, false, &label, &mut out);
+        let clsid = r"Software\Classes\CLSID";
+        for id in read_subkeys(&hive, clsid).into_iter().take(500) {
+            if let Some(server) = value(&hive, &format!(r"{clsid}\{id}\InprocServer32"), "")
+                .filter(|s| !s.trim().is_empty())
+            {
+                out.push(Autorun::new(
+                    AutorunKind::ComObject,
+                    false,
+                    format!(r"{label}\{clsid}"),
+                    id,
+                    server,
+                    true,
+                ));
+            }
+        }
+        out.truncate(MAX_AUTORUNS);
+        out
     }
 
     /// Liest alle Fakten (nur lesend; dauert je nach System einige Sekunden – nicht unter
@@ -594,6 +1040,7 @@ mod windows {
             rdp: rdp(),
             guest_enabled: guest_enabled(),
             firewall: firewall(),
+            firewall_others: firewall_products(),
             antivirus: antivirus(),
             proxy: user_sid.and_then(proxy),
             dns_servers: dns_servers(),
@@ -664,5 +1111,16 @@ mod tests {
             r"C:\Windows\System32\drivers\etc"
         );
         assert_eq!(expand_system_root(r"D:\x", r"C:\Windows"), r"D:\x");
+    }
+
+    #[test]
+    fn verbindungseinstellungen_ohne_proxy() {
+        let mut blob = vec![0x46, 0, 0, 0, 7, 0, 0, 0, 0x03, 0, 0, 0, 0, 0];
+        let cleared = connections_without_proxy(&blob).unwrap();
+        assert_eq!(&cleared[4..8], &8u32.to_le_bytes());
+        assert_eq!(&cleared[8..12], &1u32.to_le_bytes());
+        blob[8] = 0x09;
+        assert!(connections_without_proxy(&blob).is_none());
+        assert!(connections_without_proxy(&[1, 2]).is_none());
     }
 }

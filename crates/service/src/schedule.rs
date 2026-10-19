@@ -100,9 +100,9 @@ pub struct ServiceSettings {
     /// Konto, das das Netz getrennt hat (darf es – neben Administratoren – wieder verbinden).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panic_by: Option<String>,
-    /// Score-Verlauf der Härtung (je Tag, höchstens 90).
+    /// Score-Verlauf der Härtung je Konto (je Tag, höchstens 90).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub hardening: Vec<ScorePoint>,
+    pub hardening: Vec<OwnerScores>,
     /// Gemerkte Stände vor dem Beheben (für „Rückgängig“, höchstens 50).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hardening_undo: Vec<crate::handler::harden::FixRecord>,
@@ -116,6 +116,16 @@ pub struct ScorePoint {
     pub date: String,
     /// Score 0–100.
     pub value: u8,
+}
+
+/// Score-Verlauf eines Kontos.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OwnerScores {
+    /// Konto.
+    pub owner: Option<String>,
+    /// Werte je Tag (älteste zuerst).
+    pub points: Vec<ScorePoint>,
 }
 
 /// Rückfall-Kopien eines Kontos (eingeschaltet per Plan).

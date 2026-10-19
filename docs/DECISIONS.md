@@ -250,3 +250,12 @@ Konto. Gruppenrichtlinien ändert AEGIS nie (sie gehören der IT bzw. dem Besitz
 BitLocker, Updates und Virenschutz schaltet AEGIS nicht selbst – die App öffnet dafür nur die
 passende Windows-Seite aus einer festen Liste.
 
+## D-045 – Persistenz-Check: erklären statt raten, deaktivieren statt löschen
+
+Status: angenommen (P6.3). Autostarts werden gelesen, mit nachvollziehbaren Merkmalen bewertet
+und die Programmdateien im Prüfprozess geprüft – „unauffällig“ heißt nicht „sicher“. Deaktivieren
+entfernt nur den Autostart (Run-Wert, Aufgabe, Dienst-Start), nie die Programmdatei, und ist mit
+Rückgängig gemerkt. Dateien im Autostart-Ordner gehen den bekannten Weg über die Quarantäne.
+Winlogon, WMI-Abos, COM-Einträge und Browser-Erweiterungen zeigt AEGIS mit Erklärung an,
+ändert sie aber nicht selbst (zu leicht zu beschädigen bzw. Sache des Browsers).
+

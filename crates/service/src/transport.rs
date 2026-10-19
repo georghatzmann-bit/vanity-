@@ -226,21 +226,73 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
             }
             // Härtung: Systemfakten außerhalb der Dienst-Sperre lesen (WMI dauert).
             Ok(Request::HardeningStatus { fresh }) => {
-                let cached = if fresh {
-                    None
-                } else {
-                    lock()?.hardening_cached(user)
+                let (cached, recent) = {
+                    let guard = lock()?;
+                    (
+                        if fresh {
+                            None
+                        } else {
+                            guard.hardening_cached(user)
+                        },
+                        guard.recent_machine_facts(),
+                    )
                 };
                 match cached {
                     Some(response) => response,
-                    None => match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {
-                        None => busy(),
-                        Some(slot) => {
-                            let facts = crate::handler::hardening::collect_facts(user);
-                            drop(slot);
-                            lock()?.hardening_finish(facts, user)
+                    None => {
+                        // Rechnerweite Fakten höchstens alle 30 s neu lesen (für alle Konten).
+                        let machine = match recent {
+                            Some(facts) => Some(facts),
+                            None => {
+                                Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS).map(|slot| {
+                                    let facts = crate::handler::hardening::collect_machine_facts();
+                                    drop(slot);
+                                    facts
+                                })
+                            }
+                        };
+                        match machine {
+                            None => busy(),
+                            Some(machine) => {
+                                let proxy = crate::handler::hardening::user_proxy(user);
+                                lock()?.hardening_finish(machine, proxy, user)
+                            }
                         }
-                    },
+                    }
+                }
+            }
+            // Härtung beheben: Vorprüfung unter der Sperre, Stand lesen außerhalb.
+            Ok(Request::ProposeHardeningFix { fix }) => {
+                let pre = {
+                    let mut guard = lock()?;
+                    guard
+                        .fix_precheck(&fix, user)
+                        .map(|kind| (kind, guard.harden_system()))
+                };
+                match pre {
+                    Err(response) => response,
+                    Ok((kind, system)) => {
+                        match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {
+                            None => busy(),
+                            Some(slot) => {
+                                let state = system.fix_state(kind, user.identity().as_deref());
+                                drop(slot);
+                                lock()?.propose_fix_with(kind, state, user)
+                            }
+                        }
+                    }
+                }
+            }
+            // Persistenz-Check außerhalb der Dienst-Sperre (Aufgaben, Dienste, Dateiprüfung).
+            Ok(Request::PersistenceStatus {}) => {
+                let scanner = lock()?.scanner();
+                match Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS) {
+                    None => busy(),
+                    Some(slot) => {
+                        let state = crate::handler::persistence::collect(&scanner, user);
+                        drop(slot);
+                        lock()?.persistence_finish(state, user)
+                    }
                 }
             }
             // Bildschirmfoto außerhalb der Dienst-Sperre lesen (die Datei kann warten lassen).

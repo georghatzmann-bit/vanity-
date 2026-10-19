@@ -226,6 +226,7 @@ fn network(f: &SystemFacts) -> CheckResult {
             .filter(|e| is_local_address(&e.address))
             .filter(|e| SECURITY_HOSTS.iter().any(|s| e.host.contains(s)))
             .map(|e| e.host.as_str())
+            .take(10)
             .collect();
         if !blocked.is_empty() {
             fail_de.push(format!(
@@ -548,31 +549,46 @@ pub fn evaluate(f: &SystemFacts) -> Vec<CheckResult> {
     });
 
     let fw = [f.firewall.domain, f.firewall.private, f.firewall.public];
-    out.push(if fw.iter().all(Option::is_none) {
-        unknown(CheckId::Firewall)
-    } else if fw.contains(&Some(false)) {
-        let off: Vec<&str> = [("Domäne", fw[0]), ("Privat", fw[1]), ("Öffentlich", fw[2])]
-            .iter()
-            .filter(|(_, on)| *on == Some(false))
-            .map(|(n, _)| *n)
-            .collect();
-        with_fix(
+    out.push(
+        if fw.iter().all(Option::is_none) && f.firewall_others.is_empty() {
+            unknown(CheckId::Firewall)
+        } else if !f.firewall_others.is_empty() && fw.contains(&Some(false)) {
             result(
                 CheckId::Firewall,
-                Fail,
-                format!("Die Windows-Firewall ist aus für: {}.", off.join(", ")),
-                format!("The Windows Firewall is off for: {}.", off.join(", ")),
-            ),
-            FixKind::EnableFirewall,
-        )
-    } else {
-        result(
-            CheckId::Firewall,
-            Pass,
-            "Die Windows-Firewall ist für alle Profile an.",
-            "The Windows Firewall is on for all profiles.",
-        )
-    });
+                Pass,
+                format!(
+                    "Aktive Firewall: {} (die Windows-Firewall ist dafür teilweise aus).",
+                    f.firewall_others.join(", ")
+                ),
+                format!(
+                    "Active firewall: {} (the Windows Firewall is partly off for it).",
+                    f.firewall_others.join(", ")
+                ),
+            )
+        } else if fw.contains(&Some(false)) {
+            let off: Vec<&str> = [("Domäne", fw[0]), ("Privat", fw[1]), ("Öffentlich", fw[2])]
+                .iter()
+                .filter(|(_, on)| *on == Some(false))
+                .map(|(n, _)| *n)
+                .collect();
+            with_fix(
+                result(
+                    CheckId::Firewall,
+                    Fail,
+                    format!("Die Windows-Firewall ist aus für: {}.", off.join(", ")),
+                    format!("The Windows Firewall is off for: {}.", off.join(", ")),
+                ),
+                FixKind::EnableFirewall,
+            )
+        } else {
+            result(
+                CheckId::Firewall,
+                Pass,
+                "Die Windows-Firewall ist für alle Profile an.",
+                "The Windows Firewall is on for all profiles.",
+            )
+        },
+    );
 
     let av = &f.antivirus;
     out.push(if av.defender_realtime.is_none() && av.other_active.is_empty() {
@@ -680,6 +696,7 @@ mod tests {
                 private: Some(true),
                 public: Some(true),
             },
+            firewall_others: Vec::new(),
             antivirus: AntivirusState {
                 defender_realtime: Some(true),
                 defender_signature_age_days: Some(1),

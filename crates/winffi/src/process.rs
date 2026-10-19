@@ -40,7 +40,7 @@ use windows_sys::Win32::System::JobObjects::{
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::SystemServices::{JOB_OBJECT_UILIMIT_ALL, SE_GROUP_INTEGRITY};
 use windows_sys::Win32::System::Threading::{
-    CREATE_NO_WINDOW, CREATE_SUSPENDED, CreateProcessAsUserW, DeleteProcThreadAttributeList,
+    CREATE_SUSPENDED, CreateProcessAsUserW, DETACHED_PROCESS, DeleteProcThreadAttributeList,
     EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess, GetCurrentThread, GetExitCodeProcess,
     InitializeProcThreadAttributeList, OpenProcessToken, OpenThreadToken,
     PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROCESS_INFORMATION, ResumeThread, STARTF_USESTDHANDLES,
@@ -445,6 +445,9 @@ pub fn spawn_restricted(
     info.lpAttributeList = list.as_ptr();
     let application = wide(exe);
     let mut line = command_line(exe, args);
+    // Fester, für jedes Token lesbarer Arbeitsordner (der des Aufrufers kann für das
+    // eingeschränkte Token unlesbar sein – dann scheitert der Start mit 0xC0000142).
+    let directory = crate::accounts::system_dir().map(|d| wide(&d))?;
     let mut process = PROCESS_INFORMATION::default();
     // SAFETY: Alle Zeiger zeigen auf lebende, nullterminierte Puffer bzw. Strukturen; die
     // Handle-Liste begrenzt die Vererbung auf die beiden Kind-Enden; der Prozess startet
@@ -462,9 +465,11 @@ pub fn spawn_restricted(
             ptr::null(),
             ptr::null(),
             1,
-            CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT,
+            // Ohne Konsole (DETACHED_PROCESS): Ein- und Ausgabe laufen nur über die Pipes; so
+            // muss kein Konsolen-Host für das eingeschränkte Token entstehen.
+            CREATE_SUSPENDED | DETACHED_PROCESS | EXTENDED_STARTUPINFO_PRESENT,
             ptr::null(),
-            ptr::null(),
+            directory.as_ptr(),
             &raw const info.StartupInfo,
             &mut process,
         )

@@ -130,6 +130,9 @@ pub struct SystemFacts {
     pub guest_enabled: Option<bool>,
     /// Firewall.
     pub firewall: FirewallState,
+    /// Aktive Firewalls anderer Hersteller (Windows-Sicherheitscenter).
+    #[serde(default)]
+    pub firewall_others: Vec<String>,
     /// Virenschutz.
     pub antivirus: AntivirusState,
     /// Proxy der Sitzung des anfragenden Kontos.
@@ -149,8 +152,8 @@ pub fn parse_hosts(text: &str) -> Vec<HostsEntry> {
         .filter_map(|line| {
             let line = line.split('#').next().unwrap_or("").trim();
             let mut parts = line.split_whitespace();
-            let address = parts.next()?;
-            let hosts: Vec<&str> = parts.collect();
+            let address = parts.next().filter(|a| a.len() <= 255)?;
+            let hosts: Vec<&str> = parts.filter(|h| h.len() <= 255).take(64).collect();
             (!hosts.is_empty()).then(|| {
                 hosts
                     .into_iter()

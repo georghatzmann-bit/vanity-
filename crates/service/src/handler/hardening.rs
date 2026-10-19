@@ -1,6 +1,8 @@
 //! Härtung & Sicherheits-Score (P6, nur lesend): Der Dienst liest die Systemfakten (außerhalb
 //! der Dienst-Sperre, dauert einige Sekunden), bewertet sie mit `aegis-hardening` und merkt sich
-//! je Tag einen Score für den Verlauf. Behoben wird hier nichts.
+//! je Tag und Konto einen Score für den Verlauf (der Proxy ist je Konto). Behoben wird hier
+//! nichts. Die rechnerweiten Fakten werden höchstens alle 30 Sekunden neu gelesen – „neu
+//! prüfen“ in schneller Folge (auch von mehreren Konten) blockiert so niemanden.
 
 use aegis_core::audit::Durable;
 use aegis_core::consent::Clock;
@@ -11,7 +13,7 @@ use serde::Serialize;
 
 use super::Service;
 use crate::protocol::Response;
-use crate::schedule::ScorePoint;
+use crate::schedule::{OwnerScores, ScorePoint};
 
 /// Tage im Score-Verlauf.
 pub const HISTORY_DAYS: usize = 90;
@@ -19,6 +21,10 @@ pub const HISTORY_DAYS: usize = 90;
 const MAX_SHOWN: usize = 300;
 /// So lange gilt ein Ergebnis ohne „neu prüfen“ (Minuten).
 pub const CACHE_MINUTES: i64 = 10;
+/// Rechnerweite Fakten werden höchstens so oft neu gelesen (Sekunden).
+pub const FACTS_MIN_SECONDS: i64 = 30;
+/// Konten mit Score-Verlauf.
+const MAX_OWNERS: usize = 50;
 
 /// Zustand für die Oberfläche.
 #[derive(Debug, Clone, Serialize)]
@@ -41,29 +47,46 @@ pub struct HardeningState {
     pub undo: Vec<super::harden::UndoInfo>,
 }
 
-/// Liest die Fakten (nur lesend, ohne Dienst-Sperre aufrufen). Der Proxy wird für das
-/// anfragende Konto gelesen.
+/// Liest die rechnerweiten Fakten (nur lesend, ohne Dienst-Sperre aufrufen; ohne Proxy).
 #[must_use]
-pub fn collect_facts(user: &dyn UserAccess) -> SystemFacts {
+pub fn collect_machine_facts() -> SystemFacts {
     #[cfg(windows)]
     {
-        let sid = user.identity().filter(|s| s.starts_with("S-"));
-        aegis_hardening::collect::collect(sid.as_deref())
+        aegis_hardening::collect::collect(None)
     }
     #[cfg(not(windows))]
     {
-        let _ = user;
         SystemFacts::default()
     }
 }
 
-/// Fügt den Score des Tages ein (ersetzt einen früheren Wert desselben Tages).
-pub fn record_point(history: &mut Vec<ScorePoint>, date: String, value: u8) {
+/// Proxy des anfragenden Kontos (nur lesend).
+#[must_use]
+pub fn user_proxy(user: &dyn UserAccess) -> Option<aegis_hardening::facts::ProxyState> {
+    #[cfg(windows)]
+    {
+        let sid = user.identity().filter(|s| s.starts_with("S-1-"))?;
+        aegis_hardening::collect::proxy_of(&sid)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = user;
+        None
+    }
+}
+
+/// Fügt den Score des Tages ein (ersetzt einen früheren Wert desselben Tages). Liefert, ob
+/// sich etwas geändert hat.
+pub fn record_point(history: &mut Vec<ScorePoint>, date: String, value: u8) -> bool {
+    if history.iter().any(|p| p.date == date && p.value == value) {
+        return false;
+    }
     history.retain(|p| p.date != date);
     history.push(ScorePoint { date, value });
     history.sort_by(|a, b| a.date.cmp(&b.date));
     let excess = history.len().saturating_sub(HISTORY_DAYS);
     history.drain(..excess);
+    true
 }
 
 impl<C: Clock, W: Durable> Service<C, W> {
@@ -83,22 +106,66 @@ impl<C: Clock, W: Durable> Service<C, W> {
             })
     }
 
-    /// Bewertet gelesene Fakten, merkt den Score des Tages und antwortet.
-    pub fn hardening_finish(&mut self, mut facts: SystemFacts, user: &dyn UserAccess) -> Response {
+    /// Rechnerweite Fakten, wenn sie jünger als [`FACTS_MIN_SECONDS`] sind.
+    #[must_use]
+    pub fn recent_machine_facts(&self) -> Option<SystemFacts> {
+        let now = self.now();
+        self.machine_facts
+            .as_ref()
+            .filter(|(at, _)| now - *at < aegis_core::time::Duration::seconds(FACTS_MIN_SECONDS))
+            .map(|(_, f)| f.clone())
+    }
+
+    fn history_of(&self, owner: &Option<String>) -> Vec<ScorePoint> {
+        self.settings
+            .get()
+            .hardening
+            .iter()
+            .find(|o| o.owner == *owner)
+            .map_or_else(Vec::new, |o| o.points.clone())
+    }
+
+    /// Bewertet rechnerweite Fakten plus den Proxy des Kontos, merkt den Score des Tages (je
+    /// Konto) und antwortet.
+    pub fn hardening_finish(
+        &mut self,
+        machine: SystemFacts,
+        proxy: Option<aegis_hardening::facts::ProxyState>,
+        user: &dyn UserAccess,
+    ) -> Response {
+        let now: OffsetDateTime = self.now();
+        let fresh = self
+            .machine_facts
+            .as_ref()
+            .is_none_or(|(_, f)| *f != machine);
+        if fresh {
+            self.machine_facts = Some((now, machine.clone()));
+        }
+        let mut facts = machine;
+        facts.proxy = proxy;
         let checks = evaluate(&facts);
         let score = score(&checks);
-        let now: OffsetDateTime = self.now();
         let date = format!(
             "{:04}-{:02}-{:02}",
             now.year(),
             u8::from(now.month()),
             now.day()
         );
+        let owner = user.identity();
         if let Some(value) = score.value {
-            // Verlauf ist ein Komfort: Ein Speicherfehler verhindert die Antwort nicht.
-            let _ = self
-                .settings
-                .update(|s| record_point(&mut s.hardening, date.clone(), value));
+            let mut history = self.history_of(&owner);
+            if record_point(&mut history, date, value) {
+                // Verlauf ist ein Komfort: Ein Speicherfehler verhindert die Antwort nicht.
+                let _ = self.settings.update(|s| {
+                    s.hardening.retain(|o| o.owner != owner);
+                    s.hardening.push(OwnerScores {
+                        owner: owner.clone(),
+                        points: history,
+                    });
+                    let excess = s.hardening.len().saturating_sub(MAX_OWNERS);
+                    s.hardening.drain(..excess);
+                });
+            }
         }
         if let Some(hosts) = facts.hosts.as_mut() {
             hosts.truncate(MAX_SHOWN);
@@ -111,7 +178,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             score,
             checks,
             facts,
-            history: self.settings.get().hardening.clone(),
+            history: self.history_of(&owner),
             checked_at: now
                 .format(&aegis_core::time::format_description::well_known::Rfc3339)
                 .unwrap_or_default(),
@@ -121,8 +188,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
         if self.hardening_cache.len() >= 32 {
             self.hardening_cache.clear();
         }
-        self.hardening_cache
-            .insert(user.identity(), (now, state.clone()));
+        self.hardening_cache.insert(owner, (now, state.clone()));
         Response::Hardening {
             state: Box::new(state),
         }
@@ -136,8 +202,12 @@ mod tests {
     #[test]
     fn verlauf_je_tag_und_begrenzt() {
         let mut h = Vec::new();
-        record_point(&mut h, "2026-10-01".into(), 50);
-        record_point(&mut h, "2026-10-01".into(), 60);
+        assert!(record_point(&mut h, "2026-10-01".into(), 50));
+        assert!(record_point(&mut h, "2026-10-01".into(), 60));
+        assert!(
+            !record_point(&mut h, "2026-10-01".into(), 60),
+            "unverändert"
+        );
         record_point(&mut h, "2026-09-30".into(), 40);
         assert_eq!(h.len(), 2);
         assert_eq!(h[0].date, "2026-09-30");

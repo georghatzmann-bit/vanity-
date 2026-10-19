@@ -13,6 +13,7 @@ import type {
   RansomState,
   BackupState,
   HardeningState,
+  PersistenceState,
   EmergencyResult,
   Proposal,
   ScheduleState,
@@ -113,6 +114,8 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     hardeningStatus: vi.fn(() => Promise.resolve(hardeningState())),
     proposeHardeningFix: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeHardeningUndo: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    persistenceStatus: vi.fn(() => Promise.resolve(persistenceState())),
+    proposeAutorunDisable: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBackup: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBackupRestore: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopie zurückholen'))),
     proposeBackupExport: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopien exportieren'))),
@@ -241,6 +244,58 @@ function hardeningState(over: Partial<HardeningState> = {}): HardeningState {
     admin: true,
     undo: [],
     ...over,
+  };
+}
+
+function persistenceState(): PersistenceState {
+  const base = {
+    machine: false,
+    enabled: true,
+    reasons: [],
+    file: null,
+    missing: false,
+    action: null,
+  } as const;
+  return {
+    available: true,
+    filesChecked: 3,
+    admin: false,
+    undo: [],
+    entries: [
+      {
+        ...base,
+        id: 'a1',
+        kind: 'run',
+        location: 'HKU\\S-1-5-21-1\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+        name: 'Updater',
+        command: 'powershell -enc SQBFAFgA',
+        risk: 'dangerous',
+        reasons: [{ de: 'PowerShell mit verschlüsseltem Befehl.', en: 'Encoded PowerShell.' }],
+        action: 'disable',
+      },
+      {
+        ...base,
+        id: 'a2',
+        kind: 'startup_folder',
+        location: 'C:\\Users\\a\\Startup',
+        name: 'tool.lnk',
+        command: 'C:\\Users\\a\\Startup\\tool.lnk',
+        risk: 'clean',
+        file: 'C:\\Users\\a\\Startup\\tool.lnk',
+        action: 'quarantine',
+      },
+      {
+        ...base,
+        id: 'a3',
+        kind: 'service',
+        machine: true,
+        location: 'HKLM\\SYSTEM\\CurrentControlSet\\Services',
+        name: 'Spooler',
+        command: 'C:\\Windows\\System32\\spoolsv.exe',
+        risk: 'clean',
+        action: 'disable',
+      },
+    ],
   };
 }
 
@@ -1145,7 +1200,7 @@ describe('Härtung', () => {
     const checks = await screen.findByTestId('hardening-checks');
     const smb = within(checks).getByTestId('hardening-check-smb1');
     expect(within(smb).getByRole('button', { name: 'Beheben …' })).toBeDisabled();
-    expect(smb).toHaveTextContent('nur ein Administrator');
+    expect(smb).toHaveTextContent('Administratorrechte');
     const proxy = within(checks).getByTestId('hardening-check-network');
     fireEvent.click(within(proxy).getByRole('button', { name: 'Beheben …' }));
     await screen.findByRole('alertdialog');
@@ -1159,5 +1214,41 @@ describe('Härtung', () => {
     expect(undo).toHaveTextContent('SMBv1 abgeschaltet');
     fireEvent.click(within(undo).getByRole('button', { name: /Rückgängig/ }));
     await waitFor(() => expect(service.proposeHardeningUndo).toHaveBeenCalledWith('u-1'));
+  });
+
+  it('Autostarts: erst auf Knopfdruck, Deaktivieren und Quarantäne nur als Vorschlag', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/hardening' });
+    const panel = await screen.findByTestId('persistence-panel');
+    expect(service.persistenceStatus).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Autostarts prüfen' }));
+    const entries = await within(panel).findByTestId('persistence-entries');
+    expect(within(entries).getAllByTestId('persistence-entry')).toHaveLength(2);
+    expect(entries).toHaveTextContent('PowerShell mit verschlüsseltem Befehl.');
+    fireEvent.click(within(entries).getByRole('button', { name: 'Deaktivieren …' }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeAutorunDisable).toHaveBeenCalledWith('a1');
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Nein' }));
+    fireEvent.click(within(entries).getByRole('button', { name: 'In die Quarantäne …' }));
+    await waitFor(() =>
+      expect(service.proposeQuarantine).toHaveBeenCalledWith(['C:\\Users\\a\\Startup\\tool.lnk']),
+    );
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Nein' }),
+    );
+    // Alle zeigen: auch Dienste; rechnerweite nur mit Administratorrechten.
+    fireEvent.click(within(panel).getByRole('radio', { name: 'Alle (3)' }));
+    const spooler = within(panel)
+      .getAllByTestId('persistence-entry')
+      .find((e) => e.getAttribute('data-kind') === 'service');
+    expect(spooler).toBeDefined();
+    expect(
+      within(spooler as HTMLElement).getByRole('button', { name: 'Deaktivieren …' }),
+    ).toBeDisabled();
+    expect(service.decide).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'execute',
+      expect.anything(),
+    );
   });
 });

@@ -12,6 +12,7 @@
 pub mod checks;
 pub mod collect;
 pub mod facts;
+pub mod persistence;
 
 pub use checks::{CheckId, CheckResult, CheckStatus, FixKind, Score, evaluate, score};
 pub use facts::SystemFacts;

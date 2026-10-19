@@ -247,26 +247,48 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Prüfprotokoll (die Freigabe ist an sie gebunden); der Verlauf nennt nur Anzahlen. Wer das
   Konto oder den Dienst kontrolliert, während der Safe entsperrt ist, kann mitlesen; ein
   vergessenes Passwort kann niemand ersetzen.
-- **Härtung / Sicherheits-Score (P6.1):** nur lesend – Registrierung (HKLM, für den Proxy nur
-  der Zweig des anfragenden Kontos), WMI (BitLocker/TPM mit verschlüsselten Aufrufen, Defender,
-  Sicherheitscenter, Updates, Gastkonto), Hosts-Datei (am tatsächlichen Ort aus `DataBasePath`,
-  höchstens 1 MiB) und Port-Tabellen. Läuft außerhalb der Dienst-Sperre (höchstens eine Prüfung
-  gleichzeitig); ein Ergebnis gilt je Konto 10 Minuten, „Neu prüfen“ liest frisch. Die
-  WMI-Bibliothek richtet COM im Dienst beim ersten Aufruf prozessweit ein (Standard-Sicherheit,
-  Identitätswechsel-Stufe „Impersonate“) – sonst nutzt der Dienst kein COM. Was nicht lesbar
-  ist, bleibt „unbekannt“ und zählt nicht; liegt weniger als die Hälfte der Gewichte vor, gibt
-  es keinen Score (D-043). Behoben wird hier nichts – das kommt als eigener Plan (P6.2).
+- **Härtung / Sicherheits-Score (P6.1):** nur lesend – Registrierung (HKLM; den Proxy nur im
+  Zweig des anfragenden Kontos), WMI (BitLocker/TPM mit verschlüsselten Aufrufen, Defender,
+  Sicherheitscenter inkl. Firewalls anderer Hersteller, Updates), Gastkonto über `NetUserEnum`,
+  Hosts-Datei (am tatsächlichen Ort aus `DataBasePath`, höchstens 1 MiB, Einträge über 255
+  Zeichen verworfen) und Port-Tabellen. Läuft außerhalb der Dienst-Sperre; die rechnerweiten
+  Fakten werden höchstens alle 30 Sekunden neu gelesen (für alle Konten), der Proxy je Konto.
+  Ein Ergebnis gilt je Konto 10 Minuten; der Score-Verlauf ist je Konto (90 Tage, nur bei
+  Änderung geschrieben). **COM:** Der Dienst legt beim Start selbst eine restriktive
+  COM-Sicherheit fest (Zugriff nur SYSTEM/Administratoren, `PKT_PRIVACY`, Identitätswechsel
+  „Impersonate“) – sonst täte es die WMI-Bibliothek prozessweit ohne Zugriffsprüfung. Was nicht
+  lesbar ist, bleibt „unbekannt“; liegt weniger als die Hälfte der Gewichte vor, gibt es keinen
+  Score (D-043). Ein gestoppter Firewall-Dienst zählt als „Firewall aus“.
 - **Härtung beheben (P6.2):** jeder Vorschlag ist ein Plan, dessen Ziele genau die Schritte
-  nennen (Registrierungswert mit neuem Wert, Firewall-Profil, Gastkonto); beim Ausführen
-  bestimmt der Dienst die Schritte neu – weichen sie vom Plan ab, passiert nichts. Rechnerweite
-  Schritte nur für Administratoren (Prüfung beim Vorschlag und beim Ausführen), der Proxy nur im
-  Zweig `HKU\<SID>` des anfragenden Kontos. Vor dem Ändern liest der Dienst den alten Wert roh
-  (Typ + Bytes) und merkt ihn (höchstens 50 Stände je Rechner); „Rückgängig“ ist ein eigener
-  Plan des Kontos, das behoben hat. Schlägt ein Schritt fehl, werden die schon ausgeführten
-  zurückgenommen. Gruppenrichtlinien werden nie geändert (AEGIS sagt das und verweist auf die
-  IT). `netsh`/`net` laufen vom festen Systemort, mit festen Argumenten (Kontoname geprüft),
-  höchstens 30 s. Updates, BitLocker und Virenschutz öffnet die App nur als Windows-Seite
-  (feste Liste) – den Manipulationsschutz von Defender fasst AEGIS nie an.
+  nennen; der Plan-Wert trägt zusätzlich eine SHA-256-Prüfsumme der Schritte. Beim Ausführen
+  bestimmt der Dienst die Schritte neu – weichen Text oder Prüfsumme ab, passiert nichts. Was
+  schon in Ordnung (oder strenger) ist, wird abgelehnt – ein Beheben kann nie lockern. Rechnerweite
+  Schritte nur für Administratoren: geprüft **vor** jedem Lesen, beim Vorschlag und beim
+  Ausführen; der Stand wird außerhalb der Dienst-Sperre gelesen (gezielt je Schritt, ohne WMI).
+  Werte im Profil des Kontos (`HKU\<SID>`, Proxy) liest und schreibt der Dienst nur im
+  Identitätswechsel des Kontos. Vor dem Ändern merkt er den alten Wert roh (nur `DWORD`/Text
+  bis 2 KiB, Binär bis 4 KiB; sonst wird nichts geändert), höchstens 10 Stände je Konto – andere
+  Konten verdrängen nie fremde Stände. „Rückgängig“ ist ein eigener Plan des Kontos, das behoben
+  hat; er wird als schwächend gekennzeichnet („Verdächtig“, Warnung im Text). Schlägt ein Schritt
+  fehl, werden die schon ausgeführten zurückgenommen; gelingt das nicht ganz, meldet AEGIS
+  „teilweise“, nennt, was noch gilt, und merkt dafür einen Rückgängig-Stand. Entfernen öffnet
+  Schlüssel nur (legt nichts an). Gruppenrichtlinien werden nie geändert. `netsh`/`net`/`schtasks`
+  laufen vom Systemordner (`GetSystemDirectoryW`), mit festen Argumenten (Kontoname geprüft),
+  höchstens 30 s – unter der Dienst-Sperre (selten, nach „Ja“). Updates, BitLocker und Virenschutz
+  öffnet die App nur als Windows-Seite (feste Liste) – den Manipulationsschutz von Defender fasst
+  AEGIS nie an. Ehrlich: Rechnerweite Punkte brauchen eine als Administrator gestartete App.
+- **Persistenz-Check (P6.3):** liest Run/RunOnce/Richtlinien-Run (HKLM, eigenes HKU),
+  Autostart-Ordner (gemeinsamer als Dienst, eigener mit Nutzerrechten), geplante Aufgaben (XML
+  in `System32\Tasks`, höchstens 4000), automatisch startende Dienste, Winlogon, IFEO-Debugger,
+  AppInit_DLLs, WMI-Abos (`ROOT\subscription`), eigene COM-Einträge und Browser-Erweiterungen
+  (Chrome/Edge/Brave, mit Nutzerrechten). Bewertung: Merkmale im Befehl (kodiertes PowerShell,
+  Nachladen aus dem Netz, Skript-Hosts, rundll32/regsvr32-Missbrauch, Temp/Downloads/Öffentlich,
+  Verschleierung) plus Prüfung der Programmdateien im Prüfprozess mit den Rechten des Kontos
+  (höchstens 400). Deaktivieren ist ein Plan wie beim Beheben (Run-Wert entfernen, Aufgabe
+  abschalten, Dienst auf „Deaktiviert“, IFEO-Debugger entfernen, AppInit nicht laden); vor dem
+  Ausführen wird der Eintrag neu gelesen und muss unverändert sein. Dateien im Autostart-Ordner
+  werden über die Quarantäne isoliert. Winlogon, WMI-Abos, COM und Erweiterungen werden nur
+  erklärt.
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.
@@ -315,6 +337,7 @@ Prüfung „kein Code-Pfad ändert etwas ohne Freigabe“ ist fester Bestandteil
 
 | Datum | Umfang | Ergebnis |
 | --- | --- | --- |
+| 2026-10-19 | P6.1/P6.2: Härtungs-Fakten, Score, Beheben mit Rückgängig (winffi-Registrierung, Port-Tabellen, Dienst, App). 1 Prüfer | 0 kritisch/hoch. 3 mittel: P6-R1 WMI/Registrierung unter der Dienst-Sperre vor Admin-Prüfung → Admin und Grenzen zuerst, Stand außerhalb der Sperre und gezielt (Gastkonto ohne WMI); P6-R2 Rückgängig-Stände rechnerweit verdrängbar, Proxy-Fix immer möglich, große Rohwerte → 10 je Konto, Proxy nur wenn gesetzt, Rohwerte begrenzt, Base64; P6-R16 Ausführungsweg ungetestet → Systemzugriff als Schnittstelle mit Ersatz, Tests für Ausführen, Abbruch, Admin, Konten, Grenze, Rücknahme. Niedrig: HKU als SYSTEM → Identitätswechsel; Rücknahmefehler verschwiegen → „teilweise“ mit Rest; UAC/SMB1/RDP/NLA konnten lockern → abgelehnt wenn schon in Ordnung; Rückgängig harmlos dargestellt → „Verdächtig“ + Warnung; Bindung nur über Texte → Prüfsumme; Entfernen legte Schlüssel an → nur öffnen; Slot-Aushungern → Fakten höchstens alle 30 s, Verlauf nur bei Änderung; Verlauf rechnerweit → je Konto; Hosts-Speicher → Längengrenzen; COM-Sicherheit der WMI-Bibliothek → eigene restriktive beim Start; Text für Nicht-Administratoren; Fakten (Firewall anderer Hersteller, gestoppter Dienst, Proxy-Verbindungseinstellungen, NLA-Standard). Kleinigkeiten: SID-Prüfung einheitlich, Meldung zum Gastnamen, Systemordner über `GetSystemDirectoryW`; Ausrichtung der Tabellenpuffer bleibt (Heap liefert 16-Byte-Ausrichtung); Registrierungs-Test unter Windows folgt mit P6.7 – alle übrigen behoben |
 | 2026-10-19 | P5-Nachprüfung: Korrekturen P5.7, Notfall-Scan P5.8, Ransomware-Ergänzungen P5.9, Rückfall-Kopien P5.10. 1 Prüfer | 0 kritisch, 1 hoch: P5-S1 Rückfall-Kopien konnten die Systemplatte füllen (Größe nur beim Sammeln geprüft, keine Platz-/Gesamtgrenze) → geprüfte Größe am Handle, Lesen begrenzt, Gesamtgrenze, Mindest-Freiplatz, D-042. 4 mittel: P5-S2 Dateinamen aus nicht lesbaren Unterordnern geschützter Ordner in Meldungen → außerhalb der Profile nur der Schutzordner; P5-S3 Schutzordner nur nach Pfad (erster gewinnt, Entfernen beendete Standardbeobachtung) → je Konto, Standardordner bleiben, Grenze vor dem Beobachten; P5-S4 Index skalierte nicht/sperrte aus → Zeilenprotokoll, einmal je Lauf gelesen, Grenzen vor dem Verschlüsseln, Aufräumen verwaister Kopien; P5-S5 Export/Ausdünnen/Läufe blockierten den Dienst → außerhalb der Sperre, eigener Faden, Abbruch beim Beenden. 5 niedrig: Cloud-Platzhalter → übersprungen; Schutzordner über dem Datenordner → abgelehnt, Datenordner-Ereignisse ignoriert; Identitätswechsel nur nach Profilpfad → SID-Prüfung; teilweises Einfrieren als „fehlgeschlagen“ → „teilweise“; Speicherfehler verhinderte Dienststart → optional. Kleinigkeiten (Doku im Prüfprozess, Export-Zeitstempel, Update erst bei laufendem Notfall-Scan, Reihenfolge ohne Textvergleich, kein Verlauf bei abgemeldetem Konto, Reihenfolge D-039–D-041) – alle behoben, Tests ergänzt |
 | 2026-10-19 | P5.1–P5.6: DPAPI-Schlüssel, Prozess-Aktionen, Ransomware-Schutz, Netz trennen, Speicher-Scan, Datei-Safe. 1 Prüfer | 0 kritisch/hoch. 3 mittel: P5-R1 Argon2-Parameter aus dem Safe-Kopf (bis 1 GiB) unter der Dienst-Sperre → nur AEGIS-Parameter, Ableitung außerhalb der Sperre, je Konto eine, Grenzen vor der Ableitung; P5-R2 Netz trennen/verbinden ohne Rechteregel → Wieder verbinden nur trennendes Konto/Admins, Entscheidung D-036; P5-R3 halbe Sperre ohne Zustand → Zurücknehmen bei Fehler, Wieder verbinden immer möglich. 6 niedrig: Thread-ID-Wiederverwendung/neue Threads beim Anhalten → Thread-Prüfung, mehrere Runden; Speicher-Scan Spitzenbedarf → paketweise, 128 MiB; Safe-Ordner-Prüfung Groß/Klein → gefalteter Vergleich + Test; Klartext-Pfade in Protokoll/Verlauf → Verlauf nur Anzahlen, Protokoll ehrlich dokumentiert; Ransomware-Pausen/Scharfschalten/Profilname → getrennte Pausen, Köder einzeln scharf, laute Ordner relativ zum Profil + Tests; Admin-Prozessliste → nur eigene, AEGIS-Programme ausgenommen. 3 Kleinigkeiten (DPAPI-Doku + Start bei fehlgeschlagener Umstellung, Rahmen überschreiben/Fehlversuche nur bei falschem Passwort, Köder bei Speicherfehler bewacht) – alle behoben |
 | 2026-10-19 | P4: Labor (Dienst, winffi-Sandbox, Sonde, App-Befehle, Labor-Seite). 1 Prüfer | 1 hoch: P4-1 Absturz des Dienstes über einen Bildnamen mit Mehrbyte-Zeichen (Byte-Slicing, `panic = abort`) → reine ASCII-/Byteprüfung vor allem anderen, Test. 6 mittel: P4-2 Ausgabe der Stufe 1 als SYSTEM unter der Dienst-Sperre gelesen → Identitätswechsel, Hardlink-Prüfung, außerhalb der Sperre; P4-3 VM nicht kontrolliert, erster Bericht vertraut → Prozess gehalten, Frist/Größengrenze, Lesen erst nach Ende, Hinweise vom Dienst; P4-4 gemeinsames, bleibendes AppContainer-Profil → Profil je Lauf, danach gelöscht, kein SYSTEM-Rückfall; P4-5 Erlaubnis vor der Arbeit als „erfolgreich“ protokolliert → Erlaubnis im Lauf, echtes Ergebnis; P4-6 „Vertrauen“ auf Labor-Vorschläge → abgelehnt (Dienst + UI); P4-7 Berichtsgrößen → 1 MiB, Textgrenzen, Bericht nur je Lauf. 8 niedrig/Kleinigkeiten (stiller Token-Rückfall, Ordnerrechte Stufe 2, Zählung aktiver Läufe, Dateiname der Kopie, Sonde per Umgebungsvariable, Fensterfotos ohne AppContainer-/Hänger-Prüfung, PNG ungeprüft, Prüfsumme nicht verglichen, DISM ohne Frist, Netz-Text) – alle behoben, Tests ergänzt |

@@ -411,6 +411,49 @@ export interface HardeningState {
   readonly undo: readonly { readonly id: string; readonly fix: string; readonly at: string }[];
 }
 
+/** Arten von Autostart-Einträgen (wie im Dienst). */
+export const autorunKinds = [
+  'run',
+  'run_once',
+  'policy_run',
+  'startup_folder',
+  'scheduled_task',
+  'service',
+  'winlogon',
+  'ifeo',
+  'app_init',
+  'wmi_consumer',
+  'com_object',
+  'browser_extension',
+] as const;
+export type AutorunKind = (typeof autorunKinds)[number];
+
+/** Ein bewerteter Autostart-Eintrag. */
+export interface AutorunEntry {
+  readonly id: string;
+  readonly kind: AutorunKind;
+  readonly machine: boolean;
+  readonly location: string;
+  readonly name: string;
+  readonly command: string;
+  readonly enabled: boolean;
+  readonly risk: RiskLevel;
+  readonly reasons: readonly { readonly de: string; readonly en: string }[];
+  readonly file: string | null;
+  readonly missing: boolean;
+  /** `disable` (Plan) oder `quarantine` (Datei im Autostart-Ordner). */
+  readonly action: 'disable' | 'quarantine' | null;
+}
+
+/** Persistenz-Check. */
+export interface PersistenceState {
+  readonly available: boolean;
+  readonly entries: readonly AutorunEntry[];
+  readonly filesChecked: number;
+  readonly admin: boolean;
+  readonly undo: readonly { readonly id: string; readonly fix: string; readonly at: string }[];
+}
+
 /** Ransomware-Schutz des Kontos. */
 export interface RansomState {
   /** Angelegte Köderdateien. */
@@ -507,6 +550,10 @@ export interface ServiceApi {
   proposeHardeningFix(fix: FixKind): Promise<Proposal>;
   /** Ein Beheben rückgängig machen vorschlagen. */
   proposeHardeningUndo(id: string): Promise<Proposal>;
+  /** Persistenz-Check: Autostart-Einträge lesen und bewerten (nur lesend, dauert). */
+  persistenceStatus(): Promise<PersistenceState>;
+  /** Autostart-Eintrag aus dem letzten Check deaktivieren vorschlagen. */
+  proposeAutorunDisable(id: string): Promise<Proposal>;
   /** Rückfall-Kopien ein- (`true`, Grenze in MiB) bzw. ausschalten vorschlagen. */
   proposeBackup(on: boolean, quotaMb: number): Promise<Proposal>;
   /** Version zurückholen vorschlagen. */
@@ -991,6 +1038,46 @@ export function parseHardening(response: unknown): HardeningState {
       : null,
     admin: st['admin'] === true,
     undo: arr(st['undo'])
+      .filter(isObject)
+      .map((u) => ({ id: str(u['id']), fix: str(u['fix']), at: str(u['at']) })),
+  };
+}
+
+export function parsePersistence(response: unknown): PersistenceState {
+  const r = expectType(response, 'persistence');
+  const st = isObject(r['state']) ? r['state'] : {};
+  const isKind = (v: unknown): v is AutorunKind => (autorunKinds as readonly unknown[]).includes(v);
+  return {
+    available: st['available'] === true,
+    entries: arr(st['entries'])
+      .filter(isObject)
+      .flatMap((e) => {
+        const kind = e['kind'];
+        const action = e['action'];
+        return isKind(kind)
+          ? [
+              {
+                id: str(e['id']),
+                kind,
+                machine: e['machine'] === true,
+                location: str(e['location']),
+                name: str(e['name']),
+                command: str(e['command']),
+                enabled: e['enabled'] !== false,
+                risk: riskLevelFromCoreId(str(e['risk'])) ?? 'info',
+                reasons: arr(e['reasons'])
+                  .filter(isObject)
+                  .map((x) => ({ de: str(x['de']), en: str(x['en']) })),
+                file: typeof e['file'] === 'string' ? e['file'] : null,
+                missing: e['missing'] === true,
+                action: action === 'disable' || action === 'quarantine' ? action : null,
+              },
+            ]
+          : [];
+      }),
+    filesChecked: num(st['files_checked']),
+    admin: st['admin'] === true,
+    undo: arr(r['undo'])
       .filter(isObject)
       .map((u) => ({ id: str(u['id']), fix: str(u['fix']), at: str(u['at']) })),
   };

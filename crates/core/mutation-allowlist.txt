@@ -243,6 +243,16 @@ crates/winffi/src/registry.rs :: winffi-registry-set :: Windows-FFI (Härtung): 
 crates/winffi/src/registry.rs :: winffi-registry-set-value :: Härtung: setzt genau den Wert aus dem freigegebenen Plan bzw. stellt beim „Rückgängig“-Plan den gemerkten Wert wieder her – nur nach „Ja“.
 crates/winffi/src/registry.rs :: winffi-registry-delete :: Windows-FFI (Härtung): unsafe-Aufruf RegDeleteValueW – nur aus einem freigegebenen „Rückgängig“-Plan.
 crates/winffi/src/registry.rs :: winffi-registry-delete-value :: Härtung: entfernt beim „Rückgängig“-Plan nur einen Wert, den der Härtungs-Plan selbst neu angelegt hatte – nur nach „Ja“.
+crates/winffi/src/accounts.rs :: winffi-accounts-text :: Windows-FFI (Härtung): liest den Namen eines Kontos aus dem Puffer von NetUserEnum (nur lesend).
+crates/winffi/src/accounts.rs :: winffi-accounts-enum :: Windows-FFI (Härtung): listet lokale Konten (NetUserEnum, nur lesend) – für das Gastkonto.
+crates/winffi/src/accounts.rs :: winffi-accounts-slice :: Windows-FFI (Härtung): Einträge des NetUserEnum-Puffers lesen.
+crates/winffi/src/accounts.rs :: winffi-accounts-free :: Windows-FFI (Härtung): gibt den Puffer von NetUserEnum frei.
+crates/winffi/src/accounts.rs :: winffi-system-dir :: Windows-FFI: liest den Systemordner (GetSystemDirectoryW, nur lesend).
+crates/winffi/src/accounts.rs :: winffi-com-mta :: Windows-FFI (Dienststart): hält das COM-MTA des Dienstes offen (verändert nichts am System).
+crates/winffi/src/accounts.rs :: winffi-com-sd-size :: Windows-FFI (Dienststart): Größenabfrage für die absolute Sicherheitsbeschreibung.
+crates/winffi/src/accounts.rs :: winffi-com-sd-absolute :: Windows-FFI (Dienststart): wandelt die feste SDDL in eigenen Speicher um.
+crates/winffi/src/accounts.rs :: winffi-com-security :: Windows-FFI (Dienststart): legt die COM-Sicherheit des eigenen Prozesses restriktiv fest (SYSTEM/Administratoren, PKT_PRIVACY) – nur dieser Prozess.
+crates/winffi/src/registry.rs :: winffi-registry-open-delete :: Windows-FFI (Härtung): öffnet einen vorhandenen Schlüssel zum Entfernen eines Werts (legt nichts an).
 crates/winffi/src/inspect.rs :: winffi-toolhelp-first :: Windows-FFI (Labor-Bericht, nur lesend): Registrierung lesen, Prozesse/TCP-Verbindungen auflisten oder Bildschirmfotos der Labor-Fenster in eigenen Speicher kopieren – verändert nichts am System.
 crates/winffi/src/inspect.rs :: winffi-toolhelp-next :: Windows-FFI (Labor-Bericht, nur lesend): Registrierung lesen, Prozesse/TCP-Verbindungen auflisten oder Bildschirmfotos der Labor-Fenster in eigenen Speicher kopieren – verändert nichts am System.
 crates/winffi/src/inspect.rs :: winffi-toolhelp-snapshot :: Windows-FFI (Labor-Bericht, nur lesend): Registrierung lesen, Prozesse/TCP-Verbindungen auflisten oder Bildschirmfotos der Labor-Fenster in eigenen Speicher kopieren – verändert nichts am System.
@@ -306,7 +316,7 @@ crates/winffi/src/control.rs :: winffi-control-thread-first :: Windows-FFI: erst
 crates/winffi/src/control.rs :: winffi-control-thread-next :: Windows-FFI: nächster Thread des Schnappschusses.
 crates/service/src/panic.rs :: service-panic-netsh :: Panic-Button: setzt bzw. löscht nach Freigabe genau zwei AEGIS-Sperrregeln der Windows-Firewall (fester netsh-Pfad, feste Argumente).
 crates/service/src/panic.rs :: service-panic-netsh-timeout :: Panic-Button: beendet nur das selbst gestartete netsh nach 30 Sekunden.
-crates/service/src/handler/harden.rs :: service-harden-tool :: Härtung: startet netsh bzw. net vom festen Systemort mit den Argumenten eines freigegebenen Plans (Firewall-Profil einschalten, Gastkonto deaktivieren bzw. Rückgängig) – nur nach „Ja“.
+crates/service/src/handler/harden.rs :: service-harden-tool :: Härtung: startet netsh, net bzw. schtasks aus dem Systemordner mit den Argumenten eines freigegebenen Plans (Firewall-Profil einschalten, Gastkonto deaktivieren, geplante Aufgabe abschalten bzw. Rückgängig) – nur nach „Ja“.
 crates/service/src/handler/harden.rs :: service-harden-tool-timeout :: Härtung: beendet nur das selbst gestartete Werkzeug nach Ablauf der Frist.
 crates/winffi/src/memory.rs :: winffi-memory-module-snapshot :: Windows-FFI: Schnappschuss der Module eines Prozesses (nur lesen, Speicher-Scan).
 crates/winffi/src/memory.rs :: winffi-memory-module-first :: Windows-FFI: erstes Modul des Schnappschusses.

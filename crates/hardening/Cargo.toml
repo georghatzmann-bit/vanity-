@@ -8,7 +8,9 @@ publish.workspace = true
 authors.workspace = true
 
 [dependencies]
+aegis-core = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 aegis-winffi = { workspace = true }

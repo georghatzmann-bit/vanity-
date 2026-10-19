@@ -30,6 +30,7 @@ use crate::protocol::{PROTOCOL_VERSION, Proposal, Request, Response};
 pub mod backup;
 pub mod harden;
 pub mod hardening;
+pub mod persistence;
 mod safe;
 
 /// Höchstzahl Pfade pro Anfrage.
@@ -87,6 +88,12 @@ pub struct Service<C: Clock, W: Durable> {
     backup_runs: backup::BackupRuns,
     /// Aufgeschobene lange Arbeit nach einem „Ja“ (nur innerhalb einer Anfrage gesetzt).
     deferred: Option<backup::Deferred>,
+    /// Zuletzt gelesene rechnerweite Fakten der Härtung (ohne Proxy).
+    machine_facts: Option<(OffsetDateTime, aegis_hardening::SystemFacts)>,
+    /// Systemzugriff der Härtung (Tests: Ersatz).
+    harden_system: Arc<dyn harden::HardenSystem>,
+    /// Letzter Persistenz-Check je Konto (Grundlage für Vorschläge).
+    persistence_cache: HashMap<Option<String>, Vec<persistence::AutorunView>>,
     /// Letztes Härtungs-Ergebnis je Konto (Proxy ist je Konto).
     hardening_cache: HashMap<Option<String>, (OffsetDateTime, hardening::HardeningState)>,
 }
@@ -166,6 +173,9 @@ impl<C: Clock, W: Durable> Service<C, W> {
             backup_runs: backup::BackupRuns::default(),
             deferred: None,
             hardening_cache: HashMap::new(),
+            persistence_cache: HashMap::new(),
+            harden_system: Arc::new(harden::RealSystem),
+            machine_facts: None,
         }
     }
 
@@ -1634,11 +1644,20 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Request::ProposeHardeningFix { fix } => self.propose_fix(&fix, user),
             Request::ProposeHardeningUndo { id } => self.propose_fix_undo(&id, user),
             // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
+            Request::PersistenceStatus {} => {
+                let state = persistence::collect(&self.scanner(), user);
+                self.persistence_finish(state, user)
+            }
+            Request::ProposeAutorunDisable { id } => self.propose_autorun_disable(&id, user),
+            // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
             Request::HardeningStatus { fresh } => match self.hardening_cached(user) {
                 Some(cached) if !fresh => cached,
                 _ => {
-                    let facts = hardening::collect_facts(user);
-                    self.hardening_finish(facts, user)
+                    let machine = self
+                        .recent_machine_facts()
+                        .unwrap_or_else(hardening::collect_machine_facts);
+                    let proxy = hardening::user_proxy(user);
+                    self.hardening_finish(machine, proxy, user)
                 }
             },
             Request::ProposeBackup { on, quota_mb } => self.propose_backup(on, quota_mb, user),
@@ -2269,7 +2288,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                     matches!(t, Target::Setting { id } if id == aegis_quarantine::backup::BACKUP_SETTING)
                 });
                 let harden = plan.targets().iter().any(|t| {
-                    matches!(t, Target::Setting { id } if id == harden::FIX_SETTING || id == harden::UNDO_SETTING)
+                    matches!(t, Target::Setting { id } if id == harden::FIX_SETTING || id == harden::UNDO_SETTING || id == persistence::AUTORUN_SETTING)
                 });
                 return if bait {
                     self.apply_baits(permit, user)

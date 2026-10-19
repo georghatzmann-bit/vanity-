@@ -92,8 +92,10 @@ dependencies = [
 name = "aegis-hardening"
 version = "0.1.0"
 dependencies = [
+ "aegis-core",
  "aegis-winffi",
  "serde",
+ "serde_json",
  "wmi",
 ]
 

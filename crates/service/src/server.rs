@@ -170,6 +170,12 @@ fn open_audit(path: &Path) -> io::Result<AuditLog<File>> {
 /// # Errors
 /// Start fehlgeschlagen (Endpunkt belegt, Daten nicht lesbar …).
 pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
+    // COM-Sicherheit restriktiv festlegen, bevor eine Bibliothek (WMI der Härtung) es mit
+    // offenen Standardwerten tut.
+    #[cfg(windows)]
+    if let Err(e) = aegis_winffi::accounts::init_com_security() {
+        eprintln!("AEGIS-Dienst: COM-Sicherheit nicht festgelegt: {e}");
+    }
     let service = build_service(&config.data_dir)?;
     // Echtzeit-Wächter: meldet nur (Prüfung im eingeschränkten Prüfprozess); der eigene
     // Datenordner wird nie geprüft. Startet er nicht, läuft der Dienst trotzdem – der Status

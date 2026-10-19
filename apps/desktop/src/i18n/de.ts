@@ -596,12 +596,14 @@ export const de = {
     fixHint:
       '„Beheben …“ zeigt erst einen Plan mit jedem einzelnen Schritt. Geändert wird nur nach deinem Ja; der alte Stand wird gemerkt.',
     fixButton: 'Beheben …',
-    adminOnly: 'Gilt für den ganzen PC – nur ein Administrator kann das ändern.',
+    adminOnly:
+      'Gilt für den ganzen PC – dafür braucht AEGIS Administratorrechte (App mit Rechtsklick „Als Administrator ausführen“ starten).',
     openSettings: 'In Windows öffnen',
     undoTitle: 'Rückgängig machen',
     undoHint:
       'AEGIS hat sich den Stand vor diesen Änderungen gemerkt. Zurückholen ist ein eigener Plan mit deinem Ja.',
     undo: 'Rückgängig …',
+    autorunDone: 'Autostart deaktiviert: {name}',
     fixDone: {
       enable_uac: 'Benutzerkontensteuerung auf „Standard“ gestellt',
       disable_smb1: 'SMBv1 abgeschaltet',
@@ -622,6 +624,37 @@ export const de = {
     open: 'Von außen erreichbar (alle Schnittstellen)',
     openNone: 'Keine TCP-Ports auf allen Schnittstellen.',
     unknownProgram: 'unbekanntes Programm',
+  },
+  persistence: {
+    title: 'Autostart & Persistenz',
+    intro:
+      'Wo sich Programme für den nächsten Start festsetzen: Autostart-Schlüssel und -Ordner, geplante Aufgaben, Dienste, Winlogon, IFEO, AppInit, WMI-Abos, eigene COM-Einträge und Browser-Erweiterungen. Die Programmdateien prüft AEGIS im Prüfprozess.',
+    check: 'Autostarts prüfen',
+    recheck: 'Neu prüfen',
+    notYet: 'Noch nicht geprüft – das dauert einige Sekunden.',
+    windowsOnly: 'Autostarts gibt es nur unter Windows.',
+    filter: 'Anzeige',
+    notable: 'Wichtige',
+    all: 'Alle ({count})',
+    filesChecked: '{count} Programmdateien geprüft',
+    empty: 'Nichts Auffälliges gefunden.',
+    disabled: 'in Windows deaktiviert',
+    disable: 'Deaktivieren …',
+    quarantine: 'In die Quarantäne …',
+    kinds: {
+      run: 'Autostart (Run)',
+      run_once: 'Einmal-Start (RunOnce)',
+      policy_run: 'Autostart per Richtlinie',
+      startup_folder: 'Autostart-Ordner',
+      scheduled_task: 'Geplante Aufgabe',
+      service: 'Dienst',
+      winlogon: 'Windows-Anmeldung (Winlogon)',
+      ifeo: 'Programm-Umleitung (IFEO)',
+      app_init: 'AppInit_DLLs',
+      wmi_consumer: 'WMI-Abo',
+      com_object: 'COM-Eintrag',
+      browser_extension: 'Browser-Erweiterung',
+    },
   },
   lab: {
     intro:

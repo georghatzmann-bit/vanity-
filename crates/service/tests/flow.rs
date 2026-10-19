@@ -9,6 +9,7 @@ use aegis_core::testing::{DirSnapshot, ManualClock, assert_unchanged, eicar, wri
 use aegis_core::time::Duration;
 use aegis_engine::Engine;
 use aegis_quarantine::{OwnProcess, Vault};
+use aegis_service::handler::harden::{HardenSystem, Raw, Step};
 use aegis_service::{Request, Service};
 use serde_json::{Value, json};
 
@@ -886,6 +887,19 @@ fn haertung_nur_lesend_mit_ehrlichem_score() {
 }
 
 #[test]
+fn persistenz_nur_lesend_und_deaktivieren_nur_aus_dem_check() {
+    let mut h = harness();
+    let r = h.send(json!({"type": "persistence_status"}));
+    assert_eq!(r["type"], "persistence", "{r}");
+    if !cfg!(windows) {
+        assert_eq!(r["state"]["available"], false);
+        assert!(r["state"]["entries"].as_array().unwrap().is_empty());
+    }
+    let r = h.send(json!({"type": "propose_autorun_disable", "id": "0123456789abcdef"}));
+    assert_eq!(r["code"], "unknown", "{r}");
+}
+
+#[test]
 fn speicher_scan_nur_lesend() {
     let mut h = harness();
     let r = h.send(json!({"type": "memory_scan"}));
@@ -1355,4 +1369,185 @@ fn rueckfall_kopien_nur_nach_opt_in_und_nie_ueberschreibend() {
     let status = send(&mut h, json!({"type": "backup_status"}));
     assert_eq!(status["state"]["enabled"], false);
     assert!(status["state"]["usage"]["versions"].as_u64().unwrap() >= 1);
+}
+
+/// Ersatz für den Systemzugriff der Härtung: merkt sich, was ausgeführt würde.
+#[derive(Debug, Default)]
+struct FakeSystem {
+    state: std::sync::Mutex<aegis_hardening::collect::FixState>,
+    applied: std::sync::Mutex<Vec<Step>>,
+    reads: std::sync::atomic::AtomicUsize,
+}
+
+impl HardenSystem for FakeSystem {
+    fn fix_state(
+        &self,
+        _fix: aegis_hardening::FixKind,
+        _sid: Option<&str>,
+    ) -> Result<aegis_hardening::collect::FixState, String> {
+        self.reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(self.state.lock().unwrap().clone())
+    }
+
+    fn before(
+        &self,
+        step: &Step,
+        _user: &dyn aegis_quarantine::UserAccess,
+    ) -> Result<Step, String> {
+        Ok(match step.clone() {
+            Step::Registry {
+                place, key, name, ..
+            } => Step::Registry {
+                place,
+                key,
+                name,
+                value: Some(Raw {
+                    kind: 4,
+                    bytes: 1u32.to_le_bytes().to_vec(),
+                }),
+            },
+            Step::Firewall { profile, on } => Step::Firewall { profile, on: !on },
+            Step::Guest { name, active } => Step::Guest {
+                name,
+                active: !active,
+            },
+            Step::Task { path, enabled } => Step::Task {
+                path,
+                enabled: !enabled,
+            },
+        })
+    }
+
+    fn apply(
+        &self,
+        _permit: &aegis_core::consent::ExecutionPermit,
+        step: &Step,
+        _user: &dyn aegis_quarantine::UserAccess,
+    ) -> Result<(), String> {
+        self.applied.lock().unwrap().push(step.clone());
+        Ok(())
+    }
+}
+
+/// Konto ohne Administratorrechte (Windows-SID).
+struct Standard;
+
+impl aegis_quarantine::UserAccess for Standard {
+    fn enter(&self) -> std::io::Result<aegis_quarantine::UserScope> {
+        Ok(aegis_quarantine::UserScope::unchanged())
+    }
+
+    fn identity(&self) -> Option<String> {
+        Some("S-1-5-21-1-2-3-1001".into())
+    }
+}
+
+impl Harness {
+    fn send_as(&mut self, request: Value, user: &dyn aegis_quarantine::UserAccess) -> Value {
+        let req: Request = serde_json::from_value(request).unwrap();
+        serde_json::to_value(self.service.handle(req, user)).unwrap()
+    }
+
+    fn answer_as(
+        &mut self,
+        proposal: &Value,
+        decision: &str,
+        user: &dyn aegis_quarantine::UserAccess,
+    ) -> Value {
+        let p = &proposal["proposal"];
+        self.send_as(
+            json!({
+                "type": "decide",
+                "plan_id": p["ticket"]["id"],
+                "digest": p["ticket"]["digest"],
+                "nonce": p["nonce"],
+                "decision": decision,
+                "dialog_id": "dialog-1",
+            }),
+            user,
+        )
+    }
+}
+
+fn harden_harness() -> (Harness, std::sync::Arc<FakeSystem>) {
+    let mut h = harness();
+    let fake = std::sync::Arc::new(FakeSystem::default());
+    {
+        let mut st = fake.state.lock().unwrap();
+        st.smb1 = Some(true);
+        st.firewall_off = vec!["privateprofile".into()];
+        st.proxy_enabled = true;
+    }
+    h.service.set_harden_system(fake.clone());
+    (h, fake)
+}
+
+#[test]
+fn haertung_beheben_und_rueckgaengig_nur_nach_ja() {
+    let (mut h, fake) = harden_harness();
+    let p = h.send(json!({"type": "propose_hardening_fix", "fix": "disable_smb1"}));
+    assert_eq!(p["type"], "proposal", "{p}");
+    assert!(
+        fake.applied.lock().unwrap().is_empty(),
+        "ohne Ja passiert nichts"
+    );
+    let done = h.answer(&p, "execute");
+    assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    assert_eq!(fake.applied.lock().unwrap().len(), 1);
+    let status = h.send(json!({"type": "hardening_status", "fresh": true}));
+    let undo = status["state"]["undo"].as_array().unwrap().clone();
+    assert_eq!(undo.len(), 1);
+    assert_eq!(undo[0]["fix"], "disable_smb1");
+    // Rückgängig: eigener Plan, als schwächend gekennzeichnet.
+    let back = h.send(json!({"type": "propose_hardening_undo", "id": undo[0]["id"]}));
+    assert_eq!(back["proposal"]["plan"]["severity"], "suspicious", "{back}");
+    assert!(
+        back["proposal"]["plan"]["consequence"]
+            .as_str()
+            .unwrap()
+            .contains("schwächer")
+    );
+    assert_eq!(h.answer(&back, "execute")["result"]["status"], "succeeded");
+    assert_eq!(fake.applied.lock().unwrap().len(), 2);
+    let status = h.send(json!({"type": "hardening_status", "fresh": true}));
+    assert!(status["state"]["undo"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn haertung_geaenderter_zustand_bricht_ab() {
+    let (mut h, fake) = harden_harness();
+    let p = h.send(json!({"type": "propose_hardening_fix", "fix": "enable_firewall"}));
+    assert_eq!(p["type"], "proposal", "{p}");
+    fake.state.lock().unwrap().firewall_off = vec!["privateprofile".into(), "publicprofile".into()];
+    let done = h.answer(&p, "execute");
+    assert_eq!(done["result"]["status"], "failed", "{done}");
+    assert!(fake.applied.lock().unwrap().is_empty());
+}
+
+#[test]
+fn haertung_admin_regel_konten_und_grenze() {
+    let (mut h, fake) = harden_harness();
+    // Rechnerweit: Standardkonto wird abgewiesen, bevor etwas gelesen wird.
+    let r = h.send_as(
+        json!({"type": "propose_hardening_fix", "fix": "disable_smb1"}),
+        &Standard,
+    );
+    assert_eq!(r["code"], "admin", "{r}");
+    assert_eq!(fake.reads.load(std::sync::atomic::Ordering::SeqCst), 0);
+    // Eigener Proxy: erlaubt; höchstens 10 gemerkte Stände je Konto.
+    for _ in 0..12 {
+        let p = h.send_as(
+            json!({"type": "propose_hardening_fix", "fix": "disable_proxy"}),
+            &Standard,
+        );
+        assert_eq!(p["type"], "proposal", "{p}");
+        let done = h.answer_as(&p, "execute", &Standard);
+        assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    }
+    let mine = h.send_as(json!({"type": "hardening_status"}), &Standard);
+    let undo = mine["state"]["undo"].as_array().unwrap().clone();
+    assert_eq!(undo.len(), 10);
+    // Ein anderes Konto sieht diese Stände nicht und kann sie nicht zurücknehmen.
+    let other = h.send(json!({"type": "propose_hardening_undo", "id": undo[0]["id"]}));
+    assert_eq!(other["code"], "unknown", "{other}");
 }
