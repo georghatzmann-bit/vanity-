@@ -1,0 +1,15 @@
+error[E0382]: borrow of moved value: `permit`
+ --> tests/ui/permit_use_after_complete.rs:7:18
+  |
+5 | fn execute_twice(permit: ExecutionPermit) {
+  |                  ------ move occurs because `permit` has type `ExecutionPermit`, which does not implement the `Copy` trait
+6 |     let _first = permit.complete(ExecutionResult::Succeeded);
+  |                         ------------------------------------ `permit` moved due to this method call
+7 |     let _again = permit.plan();
+  |                  ^^^^^^ value borrowed here after move
+  |
+note: `ExecutionPermit::complete` takes ownership of the receiver `self`, which moves `permit`
+ --> src/consent/tokens.rs
+  |
+  |     pub fn complete(self, result: ExecutionResult) -> AuditEvent {
+  |                     ^^^^

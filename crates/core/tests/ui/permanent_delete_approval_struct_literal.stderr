@@ -1,0 +1,11 @@
+error: cannot construct `PermanentDeleteApproval` with struct literal syntax due to private fields
+ --> tests/ui/permanent_delete_approval_struct_literal.rs:5:19
+  |
+5 |     let _forged = PermanentDeleteApproval {};
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+help: you might have meant to use the `new` associated function
+  |
+5 -     let _forged = PermanentDeleteApproval {};
+5 +     let _forged = PermanentDeleteApproval::new(_, _, _, _, _, _);
+  |

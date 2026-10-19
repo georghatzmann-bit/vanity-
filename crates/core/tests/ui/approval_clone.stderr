@@ -1,0 +1,5 @@
+error[E0599]: no method named `clone` found for struct `Approval` in the current scope
+ --> tests/ui/approval_clone.rs:5:25
+  |
+5 |     let copy = approval.clone();
+  |                         ^^^^^ method not found in `Approval`

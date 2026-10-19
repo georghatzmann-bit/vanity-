@@ -1,0 +1,48 @@
+# AEGIS Suite – Freigabeliste für verändernde Aufrufe (Mutations-Allowlist)
+#
+# Goldene Regel: AEGIS verändert, verschiebt, beendet oder löscht nichts ohne ausdrückliche
+# Bestätigung des Nutzers. Verändernde std-APIs (Dateien löschen, schreiben, anlegen,
+# umbenennen, kopieren, Rechte ändern, zum Schreiben öffnen, Prozesse starten oder beenden …)
+# sind deshalb in /clippy.toml per `disallowed-methods` gesperrt.
+#
+# Eine Ausnahme ist nur so erlaubt:
+#   1. `#[allow(clippy::disallowed_methods)]` so eng wie möglich setzen (am Statement oder
+#      an einer kleinen Hilfsfunktion, nie für ein ganzes Modul).
+#   2. In der Zeile direkt darüber (oder am Ende derselben Zeile) die Markierung
+#          // aegis-mutation: <kennung>
+#      Kennung: Kleinbuchstaben, Ziffern, Bindestriche (z. B. quarantine-move), je Datei eindeutig.
+#   3. Hier einen Eintrag ergänzen:
+#          <pfad ab Repo-Wurzel> :: <kennung> :: <Begründung>
+#      Die Begründung sagt, warum die Stelle die Goldene Regel nicht verletzt – z. B. „nur
+#      mit ExecutionPermit erreichbar“ oder „schreibt ausschließlich AEGIS-eigene Daten
+#      (Prüfprotokoll)“.
+#
+# Erzwungen von crates/core/tests/mutation_guard.rs (läuft bei jedem `cargo test`):
+#   * Jede Unterdrückung von clippy::disallowed_methods – auch indirekt über clippy::all,
+#     clippy::style oder warnings, per allow oder expect, auch in cfg_attr – braucht
+#     Markierung und Eintrag hier.
+#   * Jeder Eintrag muss zu einer vorhandenen Stelle passen; veraltete Einträge schlagen fehl.
+#   * Markierungen ohne zugehörige Ausnahme schlagen fehl.
+#   * Es darf keine weitere clippy.toml geben, die die Sperrliste aushebelt; jedes Crate muss
+#     die Workspace-Lints erben (`[lints] workspace = true`).
+#   * Das Feature "testing" von aegis-core darf nur in [dev-dependencies] stehen.
+# Jede neue oder geänderte Zeile hier ist Pflichtprüfpunkt im Security-Review.
+#
+# Regel für Tests: Testcode legt Dateien und Ordner ausschließlich über die freigegebenen
+# Helfer in `aegis_core::testing` an bzw. verändert sie dort (write_fixture,
+# create_fixture_dir, remove_fixture, rename_fixture, set_fixture_readonly,
+# create_fixture_symlink [nur Unix]; Feature "testing"). Diese verweigern Namen außerhalb
+# des übergebenen Test-Ordners und folgen keinen Links.
+# Temporäre Ordner kommen von `tempfile`. Eigene Ausnahmen in Testcode sind nicht vorgesehen –
+# fehlt ein Helfer, wird er in aegis_core::testing ergänzt und hier eingetragen.
+#
+# Format: eine Ausnahme pro Zeile, Trenner „ :: “ (mit Leerzeichen), Kommentare mit „#“.
+
+crates/core/src/testing.rs :: testing-fixture-create-dir :: Test-Hilfe (Feature "testing"): legt fehlende Zwischenordner einer Fixture an – nur unterhalb des übergebenen Test-Ordners, vorhandene Links werden verweigert.
+crates/core/src/testing.rs :: testing-fixture-write :: Test-Hilfe (Feature "testing"): schreibt harmlose Fixture-Dateien ausschließlich innerhalb des übergebenen Test-Ordners; Links und „..“ werden verweigert.
+crates/core/src/testing.rs :: testing-fixture-create-leaf-dir :: Test-Hilfe (Feature "testing"): legt einen leeren Fixture-Ordner innerhalb des übergebenen Test-Ordners an.
+crates/core/src/testing.rs :: testing-fixture-remove-dir :: Test-Hilfe (Feature "testing"): entfernt einen Fixture-Ordner innerhalb des Test-Ordners (Links werden selbst entfernt, nie ihr Ziel).
+crates/core/src/testing.rs :: testing-fixture-remove-file :: Test-Hilfe (Feature "testing"): entfernt eine Fixture-Datei innerhalb des Test-Ordners, um Lösch-Erkennung zu prüfen.
+crates/core/src/testing.rs :: testing-fixture-rename :: Test-Hilfe (Feature "testing"): benennt eine Fixture innerhalb des Test-Ordners um, um Umbenennungs-Erkennung zu prüfen.
+crates/core/src/testing.rs :: testing-fixture-set-readonly :: Test-Hilfe (Feature "testing"): setzt den Schreibschutz einer Fixture innerhalb des Test-Ordners.
+crates/core/src/testing.rs :: testing-fixture-symlink :: Test-Hilfe (Feature "testing", nur Unix): legt einen Link innerhalb des Test-Ordners an, um die Link-Abwehr der Helfer und des Schnappschusses zu prüfen; das Ziel bleibt unberührt.

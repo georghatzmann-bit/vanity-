@@ -1,0 +1,5 @@
+error[E0599]: no associated function or constant named `default` found for struct `Approval` in the current scope
+ --> tests/ui/approval_default.rs:5:29
+  |
+5 |     let _forged = Approval::default();
+  |                             ^^^^^^^ associated function or constant not found in `Approval`

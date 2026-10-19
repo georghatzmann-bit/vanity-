@@ -1,0 +1,5 @@
+error[E0599]: no method named `clone` found for struct `ExecutionPermit` in the current scope
+ --> tests/ui/permit_clone.rs:5:23
+  |
+5 |     let copy = permit.clone();
+  |                       ^^^^^ method not found in `ExecutionPermit`

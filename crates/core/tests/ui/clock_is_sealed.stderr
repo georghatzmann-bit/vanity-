@@ -1,0 +1,30 @@
+error[E0277]: the trait bound `FrozenClock: consent::sealed::Sealed` is not satisfied
+ --> tests/ui/clock_is_sealed.rs:8:16
+  |
+8 | impl Clock for FrozenClock {
+  |                ^^^^^^^^^^^ unsatisfied trait bound
+  |
+help: the trait `consent::sealed::Sealed` is not implemented for `FrozenClock`
+ --> tests/ui/clock_is_sealed.rs:6:1
+  |
+6 | struct FrozenClock;
+  | ^^^^^^^^^^^^^^^^^^
+help: the following other types implement trait `consent::sealed::Sealed`
+ --> src/consent.rs
+  |
+  | impl sealed::Sealed for SystemClock {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `SystemClock`
+  |
+ ::: src/testing.rs
+  |
+  | impl crate::consent::sealed::Sealed for ManualClock {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ManualClock`
+note: required by a bound in `Clock`
+ --> src/consent.rs
+  |
+  | pub trait Clock: sealed::Sealed {
+  |                  ^^^^^^^^^^^^^^ required by this bound in `Clock`
+  = note: `Clock` is a "sealed trait", because to implement it you also need to implement `aegis_core::consent::sealed::Sealed`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+  = help: the following types implement the trait:
+            aegis_core::consent::SystemClock
+            aegis_core::testing::ManualClock

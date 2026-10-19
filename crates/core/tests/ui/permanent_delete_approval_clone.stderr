@@ -1,0 +1,5 @@
+error[E0599]: no method named `clone` found for struct `PermanentDeleteApproval` in the current scope
+ --> tests/ui/permanent_delete_approval_clone.rs:5:25
+  |
+5 |     let copy = approval.clone();
+  |                         ^^^^^ method not found in `PermanentDeleteApproval`

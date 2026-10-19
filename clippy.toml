@@ -1,3 +1,58 @@
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
+
+# Goldene Regel: Verändernde std-APIs sind gesperrt. Eine Ausnahme braucht
+#   1. `#[allow(clippy::disallowed_methods)]` so eng wie möglich (am Ausdruck/Statement),
+#   2. direkt darüber die Markierung `// aegis-mutation: <kennung>`,
+#   3. den Eintrag `<datei> :: <kennung> :: <begründung>` in crates/core/mutation-allowlist.txt.
+# Der Test crates/core/tests/mutation_guard.rs erzwingt das; das Security-Review prüft jede Ausnahme.
+#
+# Dateien öffnen: Gesperrt sind nicht `OpenOptions::open` (das braucht auch reines Lesen,
+# etwa mit Freigabe-Modi unter Windows), sondern alle Schalter, die Schreibzugriff,
+# Anlegen oder Kürzen bewirken. Ohne einen gesperrten Schalter öffnet `open` nur lesend.
+# Plattform-Pfade tragen `allow-invalid = true`, weil es sie auf der jeweils anderen
+# Plattform nicht gibt (sonst warnt Clippy dort über einen ungültigen Pfad).
+disallowed-methods = [
+  # Dateien und Ordner löschen, verschieben, schreiben, anlegen
+  { path = "std::fs::remove_file", reason = "Goldene Regel: Löschen nur mit Freigabe (ExecutionPermit) – Ausnahme nur über crates/core/mutation-allowlist.txt" },
+  { path = "std::fs::remove_dir", reason = "Goldene Regel: Löschen nur mit Freigabe (ExecutionPermit) – Ausnahme nur über crates/core/mutation-allowlist.txt" },
+  { path = "std::fs::remove_dir_all", reason = "Goldene Regel: Löschen nur mit Freigabe (ExecutionPermit) – Ausnahme nur über crates/core/mutation-allowlist.txt" },
+  { path = "std::fs::rename", reason = "Goldene Regel: Verschieben/Umbenennen nur mit Freigabe – Ausnahme nur über crates/core/mutation-allowlist.txt" },
+  { path = "std::fs::write", reason = "Goldene Regel: Schreiben nur mit Freigabe oder als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::copy", reason = "Goldene Regel: Kopieren überschreibt Ziele – nur mit Freigabe oder als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::hard_link", reason = "Goldene Regel: Links anlegen verändert das Dateisystem – nur über mutation-allowlist.txt" },
+  { path = "std::fs::soft_link", reason = "Goldene Regel: Links anlegen verändert das Dateisystem – nur über mutation-allowlist.txt" },
+  { path = "std::fs::set_permissions", reason = "Goldene Regel: Rechte ändern nur mit Freigabe – Ausnahme nur über crates/core/mutation-allowlist.txt" },
+  { path = "std::fs::create_dir", reason = "Goldene Regel: Ordner anlegen nur als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::create_dir_all", reason = "Goldene Regel: Ordner anlegen nur als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::DirBuilder::create", reason = "Goldene Regel: Ordner anlegen nur als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::File::create", reason = "Goldene Regel: Datei anlegen/kürzen nur als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::File::create_new", reason = "Goldene Regel: Datei anlegen nur als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::File::set_len", reason = "Goldene Regel: Datei kürzen/verlängern nur mit Freigabe (mutation-allowlist.txt)" },
+  { path = "std::fs::File::set_permissions", reason = "Goldene Regel: Rechte ändern nur mit Freigabe (mutation-allowlist.txt)" },
+  { path = "std::fs::File::set_times", reason = "Goldene Regel: Zeitstempel ändern nur mit Freigabe (mutation-allowlist.txt)" },
+  { path = "std::fs::File::set_modified", reason = "Goldene Regel: Zeitstempel ändern nur mit Freigabe (mutation-allowlist.txt)" },
+  # Dateien zum Schreiben öffnen (siehe Begründung oben)
+  { path = "std::fs::OpenOptions::write", reason = "Goldene Regel: Öffnen zum Schreiben nur als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::OpenOptions::append", reason = "Goldene Regel: Öffnen zum Anhängen nur als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::OpenOptions::truncate", reason = "Goldene Regel: Kürzen nur als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::OpenOptions::create", reason = "Goldene Regel: Anlegen nur als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::fs::OpenOptions::create_new", reason = "Goldene Regel: Anlegen nur als freigegebene Ausnahme (mutation-allowlist.txt)" },
+  { path = "std::os::windows::fs::OpenOptionsExt::access_mode", reason = "Goldene Regel: freie Zugriffsrechte (z. B. GENERIC_WRITE/DELETE) nur als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },
+  { path = "std::os::windows::fs::OpenOptionsExt::custom_flags", reason = "Goldene Regel: Flags wie FILE_FLAG_DELETE_ON_CLOSE nur als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },
+  { path = "std::os::unix::fs::OpenOptionsExt::custom_flags", reason = "Goldene Regel: Flags wie O_TRUNC nur als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },
+  # Plattform-spezifische Dateisystem-Änderungen
+  { path = "std::os::windows::fs::symlink_file", reason = "Goldene Regel: Links anlegen nur über mutation-allowlist.txt", allow-invalid = true },
+  { path = "std::os::windows::fs::symlink_dir", reason = "Goldene Regel: Links anlegen nur über mutation-allowlist.txt", allow-invalid = true },
+  { path = "std::os::unix::fs::symlink", reason = "Goldene Regel: Links anlegen nur über mutation-allowlist.txt", allow-invalid = true },
+  { path = "std::os::unix::fs::chown", reason = "Goldene Regel: Besitzer ändern nur über mutation-allowlist.txt", allow-invalid = true },
+  { path = "std::os::unix::fs::fchown", reason = "Goldene Regel: Besitzer ändern nur über mutation-allowlist.txt", allow-invalid = true },
+  { path = "std::os::unix::fs::lchown", reason = "Goldene Regel: Besitzer ändern nur über mutation-allowlist.txt", allow-invalid = true },
+  # Prozesse starten und beenden
+  { path = "std::process::Command::spawn", reason = "Goldene Regel: Prozesse starten nur als freigegebene Ausnahme (z. B. isolierter Parser) – mutation-allowlist.txt" },
+  { path = "std::process::Command::output", reason = "Goldene Regel: Prozesse starten nur als freigegebene Ausnahme (z. B. isolierter Parser) – mutation-allowlist.txt" },
+  { path = "std::process::Command::status", reason = "Goldene Regel: Prozesse starten nur als freigegebene Ausnahme (z. B. isolierter Parser) – mutation-allowlist.txt" },
+  { path = "std::os::unix::process::CommandExt::exec", reason = "Goldene Regel: Prozess ersetzen nur über mutation-allowlist.txt", allow-invalid = true },
+  { path = "std::process::Child::kill", reason = "Goldene Regel: Prozesse beenden nur mit Freigabe (ExecutionPermit) – Ausnahme nur über mutation-allowlist.txt" },
+]

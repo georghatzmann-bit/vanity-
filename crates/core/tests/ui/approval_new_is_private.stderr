@@ -1,0 +1,16 @@
+error[E0624]: associated function `new` is private
+ --> tests/ui/approval_new_is_private.rs:5:34
+  |
+5 |       let _constructor = Approval::new;
+  |                                    ^^^ private associated function
+  |
+ ::: src/consent/tokens.rs
+  |
+  | /     pub(crate) const fn new(
+  | |         plan_id: PlanId,
+  | |         digest: PlanDigest,
+  | |         kind: ActionKind,
+... |
+  | |         origin: DecisionOrigin,
+  | |     ) -> Self {
+  | |_____________- private associated function defined here

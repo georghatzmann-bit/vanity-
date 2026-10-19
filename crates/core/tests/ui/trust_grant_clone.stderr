@@ -1,0 +1,5 @@
+error[E0599]: no method named `clone` found for struct `TrustGrant` in the current scope
+ --> tests/ui/trust_grant_clone.rs:5:22
+  |
+5 |     let copy = grant.clone();
+  |                      ^^^^^ method not found in `TrustGrant`
