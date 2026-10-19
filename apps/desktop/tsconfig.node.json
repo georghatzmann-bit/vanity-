@@ -6,6 +6,7 @@
   "include": [
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
+    "src/test",
     "tests",
     "e2e",
     "vite.config.ts",

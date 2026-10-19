@@ -35,6 +35,15 @@ export default defineConfig({
     target: 'chrome120',
     sourcemap: false,
     assetsInlineLimit: inlineAsset,
+    rolldownOptions: {
+      output: {
+        // Fremdbibliotheken (React, Motion, Tauri-API) getrennt von App und Design-System –
+        // kleinere Pakete, besseres Caching, keine Warnung zur Paketgröße.
+        codeSplitting: {
+          groups: [{ name: 'vendor', test: /[\\/]node_modules[\\/]/ }],
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

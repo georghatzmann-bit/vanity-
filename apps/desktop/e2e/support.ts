@@ -39,7 +39,7 @@ export interface Probe {
   bootSeenAt: number | null;
   /** data-reduced-motion der Start-Ebene beim Erscheinen. */
   bootReducedMotion: string | null;
-  /** Zeitpunkt, zu dem die Startseite freigegeben wurde (data-state="ready"). */
+  /** Zeitpunkt, zu dem die Shell freigegeben wurde (data-state="ready"). */
   homeReadyAt: number | null;
 }
 
@@ -103,7 +103,7 @@ function installProbe(): void {
         probe.phases.push(phase);
       }
     }
-    const home = document.querySelector('[data-testid="home"]');
+    const home = document.querySelector('[data-testid="shell"]');
     if (probe.homeReadyAt === null && home?.getAttribute('data-state') === 'ready') {
       probe.homeReadyAt = now;
     }
@@ -153,8 +153,9 @@ export function bootLayer(page: Page) {
   return page.getByTestId('aegis-boot');
 }
 
+/** Die App-Shell (Titelleiste, Navigation, Inhalt) – liegt während des Starts inert darunter. */
 export function home(page: Page) {
-  return page.getByTestId('home');
+  return page.getByTestId('shell');
 }
 
 /**
@@ -175,11 +176,11 @@ export async function waitForBootPhase(page: Page, phase: RegExp): Promise<void>
   );
 }
 
-/** Wartet, bis die Startseite freigegeben ist (Start-Ebene entfernt, nicht mehr inert). */
+/** Wartet, bis die Shell freigegeben ist (Start-Ebene entfernt, nicht mehr inert). */
 export async function waitForHome(page: Page, timeout?: number): Promise<void> {
   await page.waitForFunction(
     () => {
-      const element = document.querySelector('[data-testid="home"]');
+      const element = document.querySelector('[data-testid="shell"]');
       return (
         element?.getAttribute('data-state') === 'ready' &&
         !element.hasAttribute('inert') &&
@@ -215,4 +216,43 @@ export function isLocalUrl(url: string): boolean {
     (parsed.protocol === 'http:' || parsed.protocol === 'ws:') &&
     ['127.0.0.1', 'localhost', '[::1]'].includes(parsed.hostname)
   );
+}
+
+/** Gespeicherte Einstellungen (Format wie src/settings/schema.ts). */
+export const SETTINGS_KEY = 'aegis.settings';
+
+/**
+ * Legt Einstellungen vor dem ersten Laden ab – nur, wenn noch keine gespeichert sind, damit
+ * ein Neuladen die vom Test geänderten Werte nicht überschreibt.
+ */
+export async function seedSettings(page: Page, settings: Record<string, unknown>): Promise<void> {
+  await page.addInitScript(
+    ({ key, value }) => {
+      if (window.localStorage.getItem(key) === null) {
+        window.localStorage.setItem(key, JSON.stringify({ version: 1, settings: value }));
+      }
+    },
+    { key: SETTINGS_KEY, value: settings },
+  );
+}
+
+/** Liest die gespeicherten Einstellungen der Seite. */
+export async function readSettings(page: Page): Promise<Record<string, unknown> | null> {
+  return page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key);
+    return raw === null
+      ? null
+      : (JSON.parse(raw) as { settings: Record<string, unknown> }).settings;
+  }, SETTINGS_KEY);
+}
+
+/** Wartet, bis der Seitenübergang fertig ist (sonst misst axe halb eingeblendete Farben). */
+export async function waitForPageSettled(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const view = document.querySelector('[data-transition-key]');
+    return view !== null && getComputedStyle(view).opacity === '1';
+  });
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
 }

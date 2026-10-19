@@ -8,6 +8,7 @@ import {
   required,
   waitForBootPhase,
   waitForHome,
+  waitForPageSettled,
 } from './support.ts';
 
 /** Messwert im Bericht festhalten (Annotation), damit Reserven sichtbar bleiben. */
@@ -32,12 +33,13 @@ test.describe('Start-Animation', () => {
   test('läuft vollständig und gibt die Startseite innerhalb von 3 s frei', async ({ page }) => {
     await page.goto('/');
 
-    // Zuerst die Start-Ebene; die Startseite liegt darunter, ist aber gesperrt.
+    // Zuerst die Start-Ebene; die Shell liegt darunter, ist aber gesperrt.
     await expect(bootLayer(page)).toBeVisible();
     await expect(home(page)).toHaveAttribute('data-state', 'booting');
     await expect(home(page)).toHaveAttribute('inert', '');
     await expect(home(page)).toHaveAttribute('aria-hidden', 'true');
-    await expect(page.getByRole('heading', { name: 'AEGIS Suite' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toHaveCount(0);
+    await expect(page.getByRole('navigation')).toHaveCount(0);
 
     await waitForHome(page, 3_000);
     await expect(bootLayer(page)).toHaveCount(0);
@@ -53,13 +55,13 @@ test.describe('Start-Animation', () => {
     expect(probe.phases).toEqual(expect.arrayContaining(['draw', 'sweep', 'word', 'exit']));
     expect(probe.phases.indexOf('draw')).toBeLessThan(probe.phases.indexOf('exit'));
 
-    // Startseite ist bedienbar: zugänglich, fokussiert, Statuszeile eingeblendet.
+    // Shell ist bedienbar: zugänglich, Fokus auf der Überschrift der Seite.
     await expect(home(page)).not.toHaveAttribute('inert');
     await expect(home(page)).not.toHaveAttribute('aria-hidden');
     await expect(page.getByRole('main')).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: 'AEGIS Suite' })).toBeFocused();
-    await expect(page.getByTestId('home-status')).toHaveText('Fundament bereit · Phase P0');
-    await expect(page.getByTestId('home-status')).toHaveCSS('opacity', '1');
+    await expect(page.getByRole('navigation', { name: 'Hauptnavigation' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeFocused();
+    await expect(page.getByTestId('honesty-kernel')).toBeVisible();
   });
 
   test('Escape überspringt schnell (< 600 ms bis zur Startseite)', async ({ page }) => {
@@ -80,7 +82,7 @@ test.describe('Start-Animation', () => {
     expect(readyAfter).toBeLessThan(600);
     // Abgebrochen statt zu Ende gelaufen: Die Ausblend-Phase des Zeitplans kam nie.
     expect(probe.phases).not.toContain('exit');
-    await expect(page.getByRole('heading', { level: 1, name: 'AEGIS Suite' })).toBeFocused();
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeFocused();
   });
 
   test('Überspringen-Button per Tastatur (Tab, dann Enter)', async ({ page }) => {
@@ -104,8 +106,8 @@ test.describe('Start-Animation', () => {
     expect(readyAfter).toBeGreaterThanOrEqual(0);
     expect(readyAfter).toBeLessThan(600);
     expect(probe.phases).not.toContain('exit');
-    // Fokus landet danach in der Startseite, nicht im Nichts.
-    await expect(page.getByRole('heading', { level: 1, name: 'AEGIS Suite' })).toBeFocused();
+    // Fokus landet danach in der Shell (Überschrift der Seite), nicht im Nichts.
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeFocused();
   });
 });
 
@@ -126,12 +128,12 @@ test.describe('Bewegung reduzieren', () => {
       required(probe.homeReadyAt, 'homeReadyAt') - required(probe.bootSeenAt, 'bootSeenAt');
     note(`Start-Ebene (reduziert) sichtbar: ${shownFor.toFixed(0)} ms`);
     expect(shownFor).toBeLessThan(800);
-    await expect(page.getByRole('heading', { level: 1, name: 'AEGIS Suite' })).toBeFocused();
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeFocused();
   });
 });
 
 test.describe('Startseite', () => {
-  test('Bildschirmfoto (Start-Animation und Startseite)', async ({ page }, testInfo) => {
+  test('Bildschirmfoto (Start-Animation und Dashboard)', async ({ page }, testInfo) => {
     await page.goto('/');
 
     // Momentaufnahme mitten in der Animation (zur Sichtprüfung, ohne Bildvergleich).
@@ -141,7 +143,7 @@ test.describe('Startseite', () => {
     await testInfo.attach('start-animation', { path: bootShot, contentType: 'image/png' });
 
     await waitForHome(page);
-    await expect(page.getByTestId('home-status')).toHaveCSS('opacity', '1');
+    await waitForPageSettled(page);
     const fonts = await loadAllFontFaces(page);
     expect(fonts.filter((face) => !face.loaded)).toEqual([]);
 

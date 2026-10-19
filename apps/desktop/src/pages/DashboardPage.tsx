@@ -1,0 +1,461 @@
+import {
+  Button,
+  IconArrowRight,
+  IconChevronRight,
+  IconInfo,
+  IconPanic,
+  IconPlay,
+  IconPower,
+  IconSearch,
+  IconSettings,
+  IconShield,
+  IconSliders,
+  IconWarning,
+  Kbd,
+  Panel,
+  ScoreGauge,
+  StatusRing,
+  Tooltip,
+  cx,
+  type IconComponent,
+} from '@aegis/ui';
+import { useMemo, useState, type ComponentPropsWithRef, type ReactNode } from 'react';
+import type { ActivityEntry } from '../activity/activityLog.ts';
+import { useActivity, useServices } from '../app/services.tsx';
+import { useT } from '../i18n/I18nProvider.tsx';
+import type { Translator } from '../i18n/translator.ts';
+import { describeSettingValue, settingLabelKeys } from '../settings/describe.ts';
+import { useShell } from '../shell/ShellContext.tsx';
+import { modifierKeys } from '../shell/shortcuts.ts';
+import { PageBody, PageHeader } from './PageHeader.tsx';
+
+/** Bauplan laut docs/PROGRESS.md: P0 erledigt, P1 in Arbeit. */
+export const buildPhases = [
+  'P0',
+  'P1',
+  'P2',
+  'P3',
+  'P4',
+  'P5',
+  'P6',
+  'P7',
+  'P8',
+  'P9',
+  'P10',
+  'P11',
+  'P12',
+  'P13',
+] as const;
+type BuildPhase = (typeof buildPhases)[number];
+export const CURRENT_PHASE: BuildPhase = 'P1';
+const currentIndex = buildPhases.indexOf(CURRENT_PHASE);
+const LAST_PHASE: BuildPhase = 'P13';
+
+/** Schutz-Module des Dashboards – es gibt sie noch nicht, daher „Nicht verfügbar“. */
+const modules = [
+  { id: 'signatures', phase: 'P2' },
+  { id: 'realtime', phase: 'P3' },
+  { id: 'ransomware', phase: 'P5' },
+  { id: 'network', phase: 'P7' },
+] as const;
+
+/** Zwei Spalten mit gemeinsamen Fugen: schmal (Score, Schnellzugriff) | breit. */
+const columns = 'grid grid-cols-[minmax(0,1fr)_minmax(0,1.65fr)] gap-5';
+
+/** Anzahl der Einträge, bevor „Alle anzeigen“ nötig ist. */
+const ACTIVITY_PREVIEW = 6;
+
+/**
+ * Dashboard – ehrlich: Score und Module zeigen „nicht verfügbar / folgt in Pn“, bis es echte
+ * Messwerte gibt. Die Live-Aktivität enthält nur echte Ereignisse dieser Sitzung.
+ */
+export function DashboardPage() {
+  const { t } = useT();
+  return (
+    <PageBody>
+      <PageHeader
+        eyebrow={t('pages.dashboard.eyebrow')}
+        title={t('pages.dashboard.title')}
+        description={t('pages.dashboard.description')}
+      />
+      <HonestyNotes />
+      <div className={columns}>
+        <ScorePanel />
+        <ModulesPanel />
+      </div>
+      <div className={columns}>
+        <QuickActions />
+        <BuildPanel />
+      </div>
+      <ActivityPanel />
+    </PageBody>
+  );
+}
+
+/** Die beiden Grundsätze, die jeder kennen soll – gut sichtbar ganz oben. */
+function HonestyNotes() {
+  const { t } = useT();
+  const items = [
+    {
+      id: 'golden',
+      icon: IconShield,
+      title: t('dashboard.honesty.goldenTitle'),
+      text: t('dashboard.honesty.golden'),
+    },
+    {
+      id: 'kernel',
+      icon: IconInfo,
+      title: t('dashboard.honesty.kernelTitle'),
+      text: t('dashboard.honesty.kernel'),
+    },
+  ] as const;
+  return (
+    <section
+      aria-label={t('dashboard.honesty.label')}
+      className="relative grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] overflow-hidden rounded-xl border border-border bg-surface-1 shadow-bevel"
+      data-testid="honesty-notes"
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-accent/60 to-transparent"
+      />
+      {items.map((item, index) => (
+        <div
+          key={item.id}
+          className={cx(
+            'flex items-start gap-3.5 px-5 py-4',
+            index > 0 && 'border-l border-border',
+          )}
+          data-testid={`honesty-${item.id}`}
+        >
+          <span
+            aria-hidden="true"
+            className={cx(
+              'mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border',
+              index === 0
+                ? 'border-accent/40 bg-accent-glow/30 text-accent'
+                : 'border-border bg-surface-2 text-text-muted',
+            )}
+          >
+            <item.icon size={16} strokeWidth={2} />
+          </span>
+          <p className="text-sm text-text-muted">
+            <strong className="block font-semibold text-text">{item.title}</strong> {item.text}
+          </p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function ScorePanel() {
+  const { t } = useT();
+  return (
+    <Panel
+      eyebrow={t('dashboard.score.eyebrow')}
+      title={t('dashboard.score.title')}
+      data-testid="score-panel"
+    >
+      <div className="flex justify-center pt-1">
+        <ScoreGauge
+          value={null}
+          size={184}
+          label={t('dashboard.score.label')}
+          unavailableText={t('dashboard.score.unavailable')}
+          unavailableHint={t('dashboard.score.hint')}
+          outOfLabel={t('dashboard.score.outOf')}
+          bandLabels={{
+            low: t('dashboard.score.bands.low'),
+            medium: t('dashboard.score.bands.medium'),
+            high: t('dashboard.score.bands.high'),
+          }}
+        />
+      </div>
+    </Panel>
+  );
+}
+
+function ModulesPanel() {
+  const { t } = useT();
+  return (
+    <Panel
+      eyebrow={t('dashboard.modules.eyebrow')}
+      title={t('dashboard.modules.title')}
+      data-testid="modules-panel"
+      footer={
+        <p className="flex items-start gap-2 text-xs text-text-muted">
+          <IconInfo size={14} aria-hidden="true" className="mt-px shrink-0" />
+          {t('dashboard.modules.footer')}
+        </p>
+      }
+    >
+      <ul className="grid grid-cols-2 gap-x-6 gap-y-5 pt-1">
+        {modules.map((module) => (
+          <li key={module.id} data-testid={`module-${module.id}`}>
+            <StatusRing
+              state="unavailable"
+              layout="inline"
+              label={t(`dashboard.modules.${module.id}`)}
+              stateLabel={t('dashboard.modules.unavailable')}
+              sublabel={t('phase.comingIn', { phase: module.phase })}
+              size={60}
+            />
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+/** „AEGIS entsteht“: Bauplan P0–P13 mit dem aktuellen Stand und den nächsten Schritten. */
+function BuildPanel() {
+  const { t } = useT();
+  const upcoming = buildPhases.slice(currentIndex + 1, currentIndex + 4);
+  return (
+    <Panel
+      eyebrow={t('dashboard.build.eyebrow')}
+      title={t('dashboard.build.title')}
+      data-testid="build-panel"
+    >
+      <p className="max-w-xl text-sm text-text-muted">{t('dashboard.build.lead')}</p>
+      <div className="mt-5" role="group" aria-label={t('dashboard.build.progressLabel')}>
+        <div aria-hidden="true" className="flex gap-1.5">
+          {buildPhases.map((phase, index) => (
+            <span
+              key={phase}
+              className={cx(
+                'h-1.5 flex-1 rounded-full',
+                index < currentIndex && 'bg-accent shadow-glow',
+                index === currentIndex && 'bg-accent/35 ring-1 ring-accent ring-inset',
+                index > currentIndex && 'bg-surface-3',
+              )}
+            />
+          ))}
+        </div>
+        <p className="mt-2.5 flex items-center justify-between gap-4 font-mono text-2xs tracking-wide text-text-muted">
+          <span>
+            {t('dashboard.build.summary', {
+              current: CURRENT_PHASE,
+              last: LAST_PHASE,
+              name: t(`dashboard.build.phases.${CURRENT_PHASE}`),
+            })}
+          </span>
+          <span className="text-accent">{t('dashboard.build.current')}</span>
+        </p>
+      </div>
+      <p className="mt-5 font-mono text-2xs tracking-caps text-text-subtle uppercase">
+        {t('dashboard.build.next')}
+      </p>
+      <ol className="mt-2 grid grid-cols-3 gap-2">
+        {upcoming.map((phase) => (
+          <li
+            key={phase}
+            className="flex flex-col gap-1 rounded-lg border border-border bg-surface-2/60 px-3 py-2.5"
+          >
+            <span className="font-mono text-2xs text-text-subtle">{phase}</span>
+            <span className="text-sm text-text">{t(`dashboard.build.phases.${phase}`)}</span>
+          </li>
+        ))}
+      </ol>
+    </Panel>
+  );
+}
+
+interface ActionRowProps extends Omit<ComponentPropsWithRef<'button'>, 'children'> {
+  readonly icon: IconComponent;
+  readonly label: string;
+  /** Rechts: Tastenkürzel, Phase oder Pfeil. */
+  readonly trailing: ReactNode;
+}
+
+/** Zeile im Schnellzugriff: Symbol, Beschriftung, rechts Kürzel/Hinweis. */
+function ActionRow({ icon: Icon, label, trailing, className, ...rest }: ActionRowProps) {
+  const unavailable = rest['aria-disabled'] === true || rest['aria-disabled'] === 'true';
+  return (
+    <button
+      type="button"
+      className={cx(
+        'group flex min-h-11 w-full items-center gap-3 rounded-lg border border-transparent px-2 py-1.5 text-left text-sm transition-colors duration-150',
+        unavailable
+          ? 'cursor-not-allowed text-text-subtle'
+          : 'text-text hover:border-border hover:bg-surface-2',
+        className,
+      )}
+      {...rest}
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          'grid size-7 shrink-0 place-items-center rounded-md border border-border bg-surface-2',
+          unavailable ? 'text-text-subtle' : 'text-text-muted group-hover:text-accent',
+        )}
+      >
+        <Icon size={15} />
+      </span>
+      <span className="min-w-0 flex-1 text-pretty">{label}</span> {trailing}
+    </button>
+  );
+}
+
+function QuickActions() {
+  const { t } = useT();
+  const { router } = useServices();
+  const { openPalette, replayBoot } = useShell();
+  const chevron = (
+    <IconChevronRight size={14} aria-hidden="true" className="shrink-0 text-text-subtle" />
+  );
+  return (
+    <Panel
+      eyebrow={t('dashboard.quick.eyebrow')}
+      title={t('dashboard.quick.title')}
+      data-testid="quick-actions"
+    >
+      <div className="-mx-2 flex flex-col gap-0.5">
+        <ActionRow
+          icon={IconPlay}
+          label={t('dashboard.quick.replayBoot')}
+          trailing={chevron}
+          onClick={replayBoot}
+          data-testid="replay-boot"
+        />
+        <ActionRow
+          icon={IconSearch}
+          label={t('dashboard.quick.palette')}
+          trailing={<Kbd keys={modifierKeys(t, 'K')} size="sm" aria-hidden="true" />}
+          onClick={openPalette}
+          aria-keyshortcuts="Control+K Meta+K"
+        />
+        <ActionRow
+          icon={IconSettings}
+          label={t('dashboard.quick.settings')}
+          trailing={chevron}
+          onClick={() => router.navigate('settings')}
+        />
+        <Tooltip content={t('dashboard.quick.emergencyHint')} placement="top">
+          <ActionRow
+            icon={IconPanic}
+            label={t('dashboard.quick.emergency')}
+            trailing={
+              <span className="shrink-0 rounded-sm border border-border px-1 font-mono text-2xs text-text-subtle">
+                {t('phase.comingIn', { phase: 'P5' })}
+              </span>
+            }
+            aria-disabled="true"
+            onClick={(event) => event.preventDefault()}
+            className="flex-1"
+            data-testid="emergency-scan"
+          />
+        </Tooltip>
+      </div>
+    </Panel>
+  );
+}
+
+const activityIcons: Readonly<Record<ActivityEntry['kind'], IconComponent>> = {
+  'app-started': IconPower,
+  'setting-changed': IconSliders,
+  'boot-replayed': IconPlay,
+  'tray-navigate': IconArrowRight,
+  'save-failed': IconWarning,
+};
+
+function describeActivity(t: Translator['t'], entry: ActivityEntry): string {
+  switch (entry.kind) {
+    case 'app-started':
+      return t('dashboard.activity.events.appStarted');
+    case 'setting-changed':
+      return t('dashboard.activity.events.settingChanged', {
+        setting: t(settingLabelKeys[entry.setting]),
+        value: describeSettingValue(t, entry.setting, entry.value),
+      });
+    case 'boot-replayed':
+      return t('dashboard.activity.events.bootReplayed');
+    case 'tray-navigate':
+      return t('dashboard.activity.events.trayNavigate', {
+        page: t(`pages.${entry.target}.title`),
+      });
+    case 'save-failed':
+      return t('dashboard.activity.events.saveFailed');
+  }
+}
+
+function ActivityPanel() {
+  const { t, tp, locale } = useT();
+  const entries = useActivity();
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? entries : entries.slice(0, ACTIVITY_PREVIEW);
+  const time = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    [locale],
+  );
+
+  return (
+    <Panel
+      eyebrow={t('dashboard.activity.eyebrow')}
+      title={t('dashboard.activity.title')}
+      padding="none"
+      data-testid="activity-panel"
+      actions={
+        <span className="font-mono text-2xs text-text-subtle" data-testid="activity-count">
+          {tp('dashboard.activity.count', entries.length)}
+        </span>
+      }
+      footer={
+        <div className="flex items-center justify-between gap-4">
+          <p className="flex items-start gap-2 text-xs text-text-muted">
+            <IconInfo size={14} aria-hidden="true" className="mt-px shrink-0" />
+            {t('dashboard.activity.footer')}
+          </p>
+          {entries.length > ACTIVITY_PREVIEW && (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {expanded ? t('dashboard.activity.showLess') : t('dashboard.activity.showAll')}
+            </Button>
+          )}
+        </div>
+      }
+    >
+      <ol className="divide-y divide-border border-t border-border" data-testid="activity-list">
+        {visible.map((entry) => {
+          const Icon = activityIcons[entry.kind];
+          return (
+            <li
+              key={entry.id}
+              className="grid grid-cols-[4.5rem_1.75rem_minmax(0,1fr)] items-center gap-3 px-5 py-2.5"
+              data-kind={entry.kind}
+            >
+              <time
+                dateTime={new Date(entry.at).toISOString()}
+                className="font-mono text-xs text-text-subtle tabular-nums"
+              >
+                {time.format(entry.at)}
+              </time>
+              <span
+                aria-hidden="true"
+                className={cx(
+                  'grid size-7 place-items-center rounded-md border border-border bg-surface-2',
+                  entry.kind === 'save-failed' ? 'text-warn' : 'text-text-muted',
+                )}
+              >
+                <Icon size={14} />
+              </span>
+              <p className="min-w-0 truncate text-sm text-text">
+                {describeActivity(t, entry)}
+                {entry.kind === 'app-started' && (
+                  <span className="ml-2 text-xs text-text-subtle">
+                    {entry.platform === 'tauri' ? t('statusbar.desktop') : t('statusbar.preview')}
+                  </span>
+                )}
+              </p>
+            </li>
+          );
+        })}
+      </ol>
+    </Panel>
+  );
+}

@@ -1,0 +1,46 @@
+/*
+ * App-eigene Stile der Desktop-Shell (nach '@aegis/ui/styles.css' eingebunden).
+ * Nur Design-Tokens (--aegis-*), keine Rohfarben.
+ */
+
+/*
+ * App-Vorgabe „Bewegung: Reduziert“ (Einstellungen): dieselbe Abschaltung wie die globale
+ * Regel von @aegis/ui für `prefers-reduced-motion`, aber ausgelöst über `data-motion` auf
+ * <html> – CSS-Media-Queries kann die App nicht umstellen.
+ */
+:root[data-motion='reduced'] *,
+:root[data-motion='reduced'] *::before,
+:root[data-motion='reduced'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  animation-delay: 0ms !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Die Shell scrollt im Inhaltsbereich, nicht im Dokument. */
+html,
+body {
+  overflow: hidden;
+}
+
+/* Ruhiges Licht oben im Inhaltsbereich – statisch, keine Bewegung. */
+.aegis-content-glow {
+  background-image: radial-gradient(
+    60% 100% at 50% 0%,
+    var(--aegis-accent-glow) 0%,
+    transparent 70%
+  );
+  opacity: 0.18;
+}
+
+:root[data-theme='light'] .aegis-content-glow {
+  opacity: 0.32;
+}
+
+/* Scrollende Liste (Seitenleiste bei kleinen Fenstern): unten sanft ausblenden statt hart
+   abschneiden. Statische Maske – keine Bewegung. */
+.aegis-scroll-fade {
+  mask-image: linear-gradient(to bottom, black calc(100% - 1rem), transparent);
+}
