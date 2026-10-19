@@ -472,6 +472,26 @@ export interface PersistenceState {
   };
 }
 
+/** Paket mit neuerer Version (winget). */
+export interface SoftwareUpdate {
+  readonly name: string;
+  readonly id: string;
+  readonly version: string;
+  readonly available: string;
+  readonly source: string;
+  /** Name oder Kennung von winget gekürzt – dann kein Aktualisieren aus AEGIS. */
+  readonly truncated: boolean;
+}
+
+/** Software-Updates. */
+export interface UpdatesState {
+  readonly available: boolean;
+  readonly packages: readonly SoftwareUpdate[];
+  readonly checkedAt: string;
+  readonly admin: boolean;
+  readonly error: string | null;
+}
+
 /** Ransomware-Schutz des Kontos. */
 export interface RansomState {
   /** Angelegte Köderdateien. */
@@ -572,6 +592,10 @@ export interface ServiceApi {
   persistenceStatus(): Promise<PersistenceState>;
   /** Autostart-Eintrag aus dem letzten Check deaktivieren vorschlagen. */
   proposeAutorunDisable(id: string): Promise<Proposal>;
+  /** Software-Updates: winget nach neueren Versionen fragen (nur lesend, braucht Netz). */
+  softwareUpdates(): Promise<UpdatesState>;
+  /** Ein Paket aus der letzten Abfrage aktualisieren vorschlagen. */
+  proposeSoftwareUpdate(id: string): Promise<Proposal>;
   /** Rückfall-Kopien ein- (`true`, Grenze in MiB) bzw. ausschalten vorschlagen. */
   proposeBackup(on: boolean, quotaMb: number): Promise<Proposal>;
   /** Version zurückholen vorschlagen. */
@@ -1120,6 +1144,27 @@ export function parsePersistence(response: unknown): PersistenceState {
   };
 }
 
+export function parseUpdates(response: unknown): UpdatesState {
+  const r = expectType(response, 'updates');
+  const st = isObject(r['state']) ? r['state'] : {};
+  return {
+    available: st['available'] === true,
+    packages: arr(st['packages'])
+      .filter(isObject)
+      .map((p) => ({
+        name: str(p['name']),
+        id: str(p['id']),
+        version: str(p['version']),
+        available: str(p['available']),
+        source: str(p['source']),
+        truncated: p['truncated'] === true,
+      })),
+    checkedAt: str(st['checked_at']),
+    admin: st['admin'] === true,
+    error: typeof st['error'] === 'string' ? st['error'] : null,
+  };
+}
+
 export function parseRansom(response: unknown): RansomState {
   const r = expectType(response, 'ransom');
   const strings = (v: unknown) => arr(v).filter((b): b is string => typeof b === 'string');
@@ -1154,6 +1199,7 @@ const kindLabels: Readonly<Record<string, string>> = {
   safe_retrieve: 'Aus dem Datei-Safe holen',
   restore_backup: 'Rückfall-Kopie zurückholen',
   export_backup: 'Rückfall-Kopien exportieren',
+  update_software: 'Software aktualisieren',
 };
 
 /** Wandelt den Vorschlag des Dienstes in die Form des Freigabe-Dialogs. */

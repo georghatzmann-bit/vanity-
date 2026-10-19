@@ -297,6 +297,13 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Rückgängig); Boot/System nie. Sperrliste einschalten ist ein Härtungs-Plan (Admin, Neustart);
   Device-Guard-Richtlinien werden nicht geändert. Grenze: Ein Angreifer mit Kernel-Rechten kann
   die Anzeige fälschen – der Check findet bekannte Fälle, er beweist keine Sauberkeit.
+- **Software-Updates (P6.5):** Netz nur auf Knopfdruck (winget-Paketquelle). winget wird nur
+  aus `%ProgramFiles%\WindowsApps\Microsoft.DesktopAppInstaller_*` gestartet (geschützt,
+  kein Link), ohne Fenster, mit festen Argumenten; Kennung und Version stammen aus dem Plan und
+  werden in Core, Dienst und App-Befehl geprüft (kein `-`/Leerzeichen → keine eingeschleusten
+  Schalter). Installieren nur nach „Ja“ und nur für Administratoren, nie automatisch. Vertrauen:
+  Pakete kommen aus dem Microsoft-Community-Repository mit Prüfsumme im Manifest – AEGIS prüft
+  die Installer nicht zusätzlich (Grenze, offen für P7/P13).
 - **YARA-X/wasmtime-Hinweise:** `cargo deny` ignoriert begründet einzelne wasmtime-Hinweise
   (betreffen WASI/Komponenten, die YARA-X nicht nutzt), `rsa` (Marvin, nur Signaturprüfung
   in Authenticode) und `bincode` (unmaintained) – erneute Prüfung bis 2027-01-31.

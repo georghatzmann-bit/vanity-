@@ -32,6 +32,7 @@ pub mod harden;
 pub mod hardening;
 pub mod persistence;
 mod safe;
+pub mod updates;
 
 /// Höchstzahl Pfade pro Anfrage.
 pub const MAX_PATHS: usize = 1000;
@@ -94,6 +95,10 @@ pub struct Service<C: Clock, W: Durable> {
     harden_system: Arc<dyn harden::HardenSystem>,
     /// Letzter Persistenz-Check je Konto (Grundlage für Vorschläge).
     persistence_cache: HashMap<Option<String>, Vec<persistence::AutorunView>>,
+    /// Paketverwaltung für Software-Updates (Tests: Ersatz).
+    packages: Arc<dyn updates::PackageManager>,
+    /// Letzte Liste verfügbarer Updates (rechnerweit; Grundlage für Vorschläge).
+    updates: Option<(OffsetDateTime, Vec<aegis_hardening::updates::Upgrade>)>,
     /// Letztes Härtungs-Ergebnis je Konto (Proxy ist je Konto).
     hardening_cache: HashMap<Option<String>, (OffsetDateTime, hardening::HardeningState)>,
 }
@@ -174,6 +179,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
             deferred: None,
             hardening_cache: HashMap::new(),
             persistence_cache: HashMap::new(),
+            packages: Arc::new(updates::Winget),
+            updates: None,
             harden_system: Arc::new(harden::RealSystem),
             machine_facts: None,
         }
@@ -1650,6 +1657,12 @@ impl<C: Clock, W: Durable> Service<C, W> {
             }
             Request::ProposeAutorunDisable { id } => self.propose_autorun_disable(&id, user),
             // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
+            Request::SoftwareUpdates {} => {
+                let list = self.packages.list();
+                self.updates_finish(list, user)
+            }
+            Request::ProposeSoftwareUpdate { id } => self.propose_software_update(&id, user),
+            // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
             Request::HardeningStatus { fresh } => match self.hardening_cached(user) {
                 Some(cached) if !fresh => cached,
                 _ => {
@@ -2273,6 +2286,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             ActionKind::SafeStore => return self.apply_safe_store(permit, user),
             ActionKind::RestoreBackup => return self.apply_backup_restore(permit, user),
             ActionKind::ExportBackup => return self.apply_backup_export(permit, user),
+            ActionKind::UpdateSoftware => return self.apply_software_update(permit),
             ActionKind::SafeRetrieve => return self.apply_safe_retrieve(permit, user),
             ActionKind::ChangeSetting => {
                 let bait = plan.targets().iter().any(|t| {

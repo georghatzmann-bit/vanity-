@@ -320,6 +320,8 @@ crates/service/src/panic.rs :: service-panic-netsh :: Panic-Button: setzt bzw. l
 crates/service/src/panic.rs :: service-panic-netsh-timeout :: Panic-Button: beendet nur das selbst gestartete netsh nach 30 Sekunden.
 crates/service/src/handler/harden.rs :: service-harden-tool :: Härtung: startet netsh, net bzw. schtasks aus dem Systemordner mit den Argumenten eines freigegebenen Plans (Firewall-Profil einschalten, Gastkonto deaktivieren, geplante Aufgabe abschalten bzw. Rückgängig) – nur nach „Ja“.
 crates/service/src/handler/harden.rs :: service-harden-tool-timeout :: Härtung: beendet nur das selbst gestartete Werkzeug nach Ablauf der Frist.
+crates/service/src/handler/updates.rs :: service-winget-run :: Dienst: winget am festen Ort (WindowsApps) starten – Liste lesen bzw. ein freigegebenes Update (Kennung und Version aus dem Plan mit „Ja“).
+crates/service/src/handler/updates.rs :: service-winget-timeout :: Dienst: nur das selbst gestartete winget nach Ablauf der Frist beenden.
 crates/winffi/src/memory.rs :: winffi-memory-module-snapshot :: Windows-FFI: Schnappschuss der Module eines Prozesses (nur lesen, Speicher-Scan).
 crates/winffi/src/memory.rs :: winffi-memory-module-first :: Windows-FFI: erstes Modul des Schnappschusses.
 crates/winffi/src/memory.rs :: winffi-memory-module-next :: Windows-FFI: nächstes Modul des Schnappschusses.

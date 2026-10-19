@@ -666,6 +666,20 @@ export const de = {
       driver: 'Treiber',
     },
   },
+  updates: {
+    title: 'Software-Updates',
+    intro:
+      'Veraltete Programme sind ein häufiges Einfallstor. AEGIS fragt auf Knopfdruck winget (Paketquelle „winget“ von Microsoft) nach neueren Versionen – dafür wird eine Verbindung ins Internet aufgebaut. Aktualisiert wird je Programm erst nach deinem Ja.',
+    check: 'Nach Updates suchen',
+    recheck: 'Erneut suchen',
+    notYet: 'Noch nicht gesucht.',
+    windowsOnly: 'Software-Updates über winget gibt es nur unter Windows.',
+    none: 'Alles aktuell – winget kennt keine neueren Versionen.',
+    update: 'Aktualisieren …',
+    truncated: 'Kennung gekürzt – bitte in winget selbst aktualisieren',
+    honest:
+      'Ehrlich: Der Dienst aktualisiert für den ganzen PC installierte Programme. Nur für dein Konto installierte Programme zeigt winget hier ggf. nicht – die lassen sich mit „winget upgrade“ im eigenen Konto aktualisieren. Ein Update lässt sich nicht automatisch rückgängig machen.',
+  },
   lab: {
     intro:
       'Startet ein unbekanntes Programm abgeschottet und zeigt, was es versucht – Dateien, Autostart, Prozesse, Verbindungen. Gestartet wird nur nach deinem Ja; das Original bleibt unverändert.',

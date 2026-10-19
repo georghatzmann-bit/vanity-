@@ -31,6 +31,7 @@ import {
   parseBackup,
   parseHardening,
   parsePersistence,
+  parseUpdates,
   parseSafe,
   parseEmergency,
   parseLabScreenshot,
@@ -266,6 +267,9 @@ function createTauriService(): ServiceApi {
       parsePersistence(await invoke<unknown>('service_persistence_status')),
     proposeAutorunDisable: async (id) =>
       parseProposal(await invoke<unknown>('service_propose_autorun_disable', { id })),
+    softwareUpdates: async () => parseUpdates(await invoke<unknown>('service_software_updates')),
+    proposeSoftwareUpdate: async (id) =>
+      parseProposal(await invoke<unknown>('service_propose_software_update', { id })),
     proposeBackup: async (on, quotaMb) =>
       parseProposal(await invoke<unknown>('service_propose_backup', { on, quotaMb })),
     proposeBackupRestore: async (id) =>

@@ -79,6 +79,8 @@ fn main() {
             service::service_propose_hardening_undo,
             service::service_persistence_status,
             service::service_propose_autorun_disable,
+            service::service_software_updates,
+            service::service_propose_software_update,
             service::service_propose_backup,
             service::service_propose_backup_restore,
             service::service_propose_backup_export,
@@ -182,6 +184,8 @@ mod test_support {
                 crate::service::service_propose_hardening_undo,
                 crate::service::service_persistence_status,
                 crate::service::service_propose_autorun_disable,
+                crate::service::service_software_updates,
+                crate::service::service_propose_software_update,
                 crate::service::service_propose_backup,
                 crate::service::service_propose_backup_restore,
                 crate::service::service_propose_backup_export,
@@ -223,7 +227,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 60] = [
+    const EXPECTED_PERMISSIONS: [&str; 62] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -264,6 +268,8 @@ mod tests {
         "allow-service-propose-hardening-undo",
         "allow-service-persistence-status",
         "allow-service-propose-autorun-disable",
+        "allow-service-software-updates",
+        "allow-service-propose-software-update",
         "allow-service-propose-backup",
         "allow-service-propose-backup-restore",
         "allow-service-propose-backup-export",
@@ -560,6 +566,8 @@ mod tests {
                 ("service_propose_hardening_undo", json!({ "id": "x" })),
                 ("service_persistence_status", json!({})),
                 ("service_propose_autorun_disable", json!({ "id": "x" })),
+                ("service_software_updates", json!({})),
+                ("service_propose_software_update", json!({ "id": "x" })),
                 (
                     "service_propose_backup",
                     json!({ "on": false, "quotaMb": 0 }),

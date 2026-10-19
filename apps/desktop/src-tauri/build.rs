@@ -39,6 +39,8 @@ const APP_COMMANDS: &[&str] = &[
     "service_propose_hardening_undo",
     "service_persistence_status",
     "service_propose_autorun_disable",
+    "service_software_updates",
+    "service_propose_software_update",
     "service_propose_backup",
     "service_propose_backup_restore",
     "service_propose_backup_export",

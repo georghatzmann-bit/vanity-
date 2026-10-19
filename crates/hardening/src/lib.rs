@@ -14,6 +14,7 @@ pub mod collect;
 pub mod drivers;
 pub mod facts;
 pub mod persistence;
+pub mod updates;
 
 pub use checks::{CheckId, CheckResult, CheckStatus, FixKind, Score, evaluate, score};
 pub use facts::SystemFacts;

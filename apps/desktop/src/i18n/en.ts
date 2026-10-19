@@ -658,6 +658,20 @@ export const en: Messages<typeof de> = {
       driver: 'Driver',
     },
   },
+  updates: {
+    title: 'Software updates',
+    intro:
+      'Outdated programs are a common way in. On request AEGIS asks winget (Microsoft’s “winget” package source) for newer versions – this connects to the internet. Each program is only updated after your yes.',
+    check: 'Check for updates',
+    recheck: 'Check again',
+    notYet: 'Not checked yet.',
+    windowsOnly: 'Software updates via winget are only available on Windows.',
+    none: 'Everything is up to date – winget knows no newer versions.',
+    update: 'Update…',
+    truncated: 'ID shortened – please update in winget yourself',
+    honest:
+      'Honest note: the service updates programs installed for the whole PC. Programs installed only for your account may not appear here – update those with “winget upgrade” in your own account. An update cannot be undone automatically.',
+  },
   lab: {
     intro:
       'Runs an unknown program in isolation and shows what it tries to do – files, autostart, processes, connections. It only starts after your yes; the original stays unchanged.',

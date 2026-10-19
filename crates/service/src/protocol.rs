@@ -96,6 +96,10 @@ pub enum Request {
     PersistenceStatus {},
     /// Einen Autostart-Eintrag aus dem letzten Check deaktivieren vorschlagen – nur nach „Ja“.
     ProposeAutorunDisable { id: String },
+    /// Software-Updates: winget nach neueren Versionen fragen (nur lesend, braucht Netz).
+    SoftwareUpdates {},
+    /// Ein Paket aus der letzten Abfrage aktualisieren vorschlagen – nur nach „Ja“.
+    ProposeSoftwareUpdate { id: String },
     /// Rückfall-Kopien ein- (`on`, Grenze in MiB) bzw. ausschalten vorschlagen.
     ProposeBackup { on: bool, quota_mb: u64 },
     /// Eine Version zurückholen vorschlagen.
@@ -291,6 +295,10 @@ pub enum Response {
     /// Härtung & Sicherheits-Score.
     Hardening {
         state: Box<crate::handler::hardening::HardeningState>,
+    },
+    /// Software-Updates.
+    Updates {
+        state: Box<crate::handler::updates::UpdatesState>,
     },
     /// Persistenz-Check.
     Persistence {

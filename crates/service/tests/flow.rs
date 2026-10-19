@@ -1589,3 +1589,74 @@ fn haertung_admin_regel_konten_und_grenze() {
     let other = h.send(json!({"type": "propose_hardening_undo", "id": undo[0]["id"]}));
     assert_eq!(other["code"], "unknown", "{other}");
 }
+
+#[derive(Debug, Default)]
+struct FakePackages {
+    upgraded: std::sync::Mutex<Vec<(String, String)>>,
+}
+
+impl aegis_service::handler::updates::PackageManager for FakePackages {
+    fn list(&self) -> Result<Vec<aegis_hardening::updates::Upgrade>, String> {
+        let pkg = |name: &str, id: &str, truncated| aegis_hardening::updates::Upgrade {
+            name: name.into(),
+            id: id.into(),
+            version: "1.0".into(),
+            available: "2.0.1".into(),
+            source: "winget".into(),
+            truncated,
+        };
+        Ok(vec![
+            pkg("Beispiel", "Beispiel.App", false),
+            pkg("Langer Name…", "Lang.Kennung…", true),
+        ])
+    }
+
+    fn upgrade(&self, permit: &aegis_core::consent::ExecutionPermit) -> Result<String, String> {
+        let (id, version) = aegis_service::handler::updates::plan_package(permit)?;
+        self.upgraded.lock().unwrap().push((id, version));
+        Ok("aktualisiert".into())
+    }
+}
+
+#[test]
+fn software_updates_nur_nach_ja_und_nur_als_admin() {
+    let mut h = harness();
+    let fake = std::sync::Arc::new(FakePackages::default());
+    h.service.set_package_manager(fake.clone());
+    // Ohne Liste kein Vorschlag.
+    let r = h.send(json!({"type": "propose_software_update", "id": "Beispiel.App"}));
+    assert_eq!(r["code"], "unknown", "{r}");
+    let list = h.send(json!({"type": "software_updates"}));
+    assert_eq!(list["type"], "updates", "{list}");
+    assert_eq!(list["state"]["packages"].as_array().unwrap().len(), 2);
+    assert!(
+        fake.upgraded.lock().unwrap().is_empty(),
+        "Liste ändert nichts"
+    );
+    let r = h.send_as(
+        json!({"type": "propose_software_update", "id": "Beispiel.App"}),
+        &Standard,
+    );
+    assert_eq!(r["code"], "admin", "{r}");
+    let r = h.send(json!({"type": "propose_software_update", "id": "Lang.Kennung…"}));
+    assert_eq!(r["code"], "updates", "{r}");
+    let p = h.send(json!({"type": "propose_software_update", "id": "Beispiel.App"}));
+    assert_eq!(p["type"], "proposal", "{p}");
+    assert_eq!(p["proposal"]["plan"]["kind"], "update_software");
+    assert_eq!(p["proposal"]["plan"]["undo"]["type"], "irreversible", "{p}");
+    assert_eq!(h.answer(&p, "decline")["type"], "nothing_done");
+    assert!(
+        fake.upgraded.lock().unwrap().is_empty(),
+        "Nein ändert nichts"
+    );
+    let p = h.send(json!({"type": "propose_software_update", "id": "Beispiel.App"}));
+    let done = h.answer(&p, "execute");
+    assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    assert_eq!(
+        *fake.upgraded.lock().unwrap(),
+        vec![("Beispiel.App".to_owned(), "2.0.1".to_owned())]
+    );
+    // Danach ist die Liste veraltet: erst neu suchen.
+    let r = h.send(json!({"type": "propose_software_update", "id": "Beispiel.App"}));
+    assert_eq!(r["code"], "unknown", "{r}");
+}

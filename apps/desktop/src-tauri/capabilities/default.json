@@ -44,6 +44,8 @@
     "allow-service-propose-hardening-undo",
     "allow-service-persistence-status",
     "allow-service-propose-autorun-disable",
+    "allow-service-software-updates",
+    "allow-service-propose-software-update",
     "allow-service-propose-backup",
     "allow-service-propose-backup-restore",
     "allow-service-propose-backup-export",

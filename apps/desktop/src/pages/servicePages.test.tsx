@@ -116,6 +116,33 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     proposeHardeningUndo: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     persistenceStatus: vi.fn(() => Promise.resolve(persistenceState())),
     proposeAutorunDisable: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    softwareUpdates: vi.fn(() =>
+      Promise.resolve({
+        available: true,
+        checkedAt: '2026-10-19T10:00:00Z',
+        admin: true,
+        error: null,
+        packages: [
+          {
+            name: 'Mozilla Firefox',
+            id: 'Mozilla.Firefox',
+            version: '130.0',
+            available: '131.0.2',
+            source: 'winget',
+            truncated: false,
+          },
+          {
+            name: 'Microsoft Visual C++ 2015…',
+            id: 'Microsoft.VCRedist.20…',
+            version: '14.38',
+            available: '14.40',
+            source: 'winget',
+            truncated: true,
+          },
+        ],
+      }),
+    ),
+    proposeSoftwareUpdate: vi.fn(() => Promise.resolve(proposal('Software aktualisieren'))),
     proposeBackup: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBackupRestore: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopie zurückholen'))),
     proposeBackupExport: vi.fn(() => Promise.resolve(proposal('Rückfall-Kopien exportieren'))),
@@ -1276,6 +1303,32 @@ describe('Härtung', () => {
     expect(
       within(spooler as HTMLElement).getByRole('button', { name: 'Deaktivieren …' }),
     ).toBeDisabled();
+    expect(service.decide).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'execute',
+      expect.anything(),
+    );
+  });
+
+  it('Software-Updates: erst auf Knopfdruck, Aktualisieren nur als Vorschlag', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/hardening' });
+    const panel = await screen.findByTestId('updates-panel');
+    expect(service.softwareUpdates).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Nach Updates suchen' }));
+    const list = await within(panel).findByTestId('updates-list');
+    const entries = within(list).getAllByTestId('update-entry');
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toHaveTextContent('Mozilla.Firefox · 130.0 → 131.0.2');
+    // Gekürzte Kennung: kein Knopf, nur Hinweis.
+    expect(within(entries[1] as HTMLElement).queryByRole('button')).toBeNull();
+    expect(entries[1]).toHaveTextContent('Kennung gekürzt');
+    fireEvent.click(
+      within(entries[0] as HTMLElement).getByRole('button', { name: 'Aktualisieren …' }),
+    );
+    await screen.findByRole('alertdialog');
+    expect(service.proposeSoftwareUpdate).toHaveBeenCalledWith('Mozilla.Firefox');
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Nein' }));
     expect(service.decide).not.toHaveBeenCalledWith(
       expect.anything(),
       'execute',

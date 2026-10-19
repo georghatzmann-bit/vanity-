@@ -121,11 +121,13 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
        gebündelt, SHA-256 + Authenticode), Deaktivieren nur automatisch/manuell startender
        Treiber per Plan; neue Score-Prüfung „Schutz vor verwundbaren Treibern“ (Speicher-
        Integrität, Microsoft-Sperrliste – einschalten per Plan) (D-046).
-5. [ ] P6.5 Software-Updates über winget (Installieren nur nach „Ja“).
+5. [x] P6.5 Software-Updates über winget: Liste auf Knopfdruck, je Paket ein Plan (neue
+       Aktionsart `update_software`, genau Kennung + Version), Installieren nur nach „Ja“ als
+       Administrator, außerhalb der Dienst-Sperre, kein automatisches Rückgängig (D-047).
 6. [ ] P6.6 Kamera/Mikrofon-Wächter, Zwischenablage (Krypto-Adressen, opt-in), USB-Geräte.
 7. [ ] P6.7 Sicherheits-Review (separater Agent), Doku, DoD.
 
-**Nächster Schritt:** P6.5 Software-Updates über winget.
+**Nächster Schritt:** P6.6 Kamera/Mikrofon, Zwischenablage, USB.
 
 ## P5 – Schutz-Werkzeuge
 

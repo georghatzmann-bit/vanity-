@@ -28,6 +28,9 @@ static RUNNING_KDF: AtomicUsize = AtomicUsize::new(0);
 /// Höchstzahl gleichzeitiger Härtungs-Prüfungen (WMI/Registrierung, einige Sekunden).
 pub const MAX_PARALLEL_FACTS: usize = 1;
 static RUNNING_FACTS: AtomicUsize = AtomicUsize::new(0);
+/// Höchstzahl gleichzeitiger Abfragen bei winget (Netz, bis zu drei Minuten).
+pub const MAX_PARALLEL_UPDATE_LISTS: usize = 1;
+static RUNNING_UPDATE_LISTS: AtomicUsize = AtomicUsize::new(0);
 
 /// Zählt eine belegte Stelle, gibt sie beim Verwerfen frei.
 #[derive(Debug)]
@@ -280,6 +283,18 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                                 lock()?.propose_fix_with(kind, state, user)
                             }
                         }
+                    }
+                }
+            }
+            // winget-Abfrage (Netz) außerhalb der Dienst-Sperre.
+            Ok(Request::SoftwareUpdates {}) => {
+                let packages = lock()?.package_manager();
+                match Slot::try_take(&RUNNING_UPDATE_LISTS, MAX_PARALLEL_UPDATE_LISTS) {
+                    None => busy(),
+                    Some(slot) => {
+                        let list = packages.list();
+                        drop(slot);
+                        lock()?.updates_finish(list, user)
                     }
                 }
             }

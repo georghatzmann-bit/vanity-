@@ -221,6 +221,7 @@ fn targets_must_match_kind() {
                 ActionKind::AddTrust | ActionKind::RemoveTrust => {
                     !matches!(target, Target::Setting { .. })
                 }
+                ActionKind::UpdateSoftware => matches!(target, Target::Other { .. }),
             };
             assert_eq!(
                 kind.accepts_target(target),
@@ -1009,4 +1010,38 @@ fn rueckfall_kopien_zurueckholen_und_ausduennen() {
     };
     assert!(prune("2026-10-01T00:00:00Z").is_ok());
     assert!(prune("gestern").is_err());
+}
+
+#[test]
+fn software_update_nur_mit_gueltiger_kennung_und_version() {
+    use crate::testing::sample_plan_builder;
+    assert!(
+        sample_plan_builder(ActionKind::UpdateSoftware)
+            .build(T0)
+            .is_ok()
+    );
+    for (id, version) in [
+        ("--source", "1.0"),
+        ("Mozilla.Firefox", "1.0 --override"),
+        ("a b", "1.0"),
+        ("", "1.0"),
+        ("Git.Git", ""),
+        ("Git.Git", "< 2.0"),
+    ] {
+        let b = sample_plan_builder(ActionKind::UpdateSoftware)
+            .parameter(param::PACKAGE_ID, id)
+            .parameter(param::PACKAGE_VERSION, version);
+        assert!(
+            matches!(b.build(T0), Err(PlanError::InvalidParameter { .. })),
+            "{id} {version}"
+        );
+    }
+    assert!(valid_package_id("Microsoft.VCRedist.2015+.x64"));
+    assert!(valid_package_version("131.0.2"));
+    let mut b = sample_plan_builder(ActionKind::UpdateSoftware);
+    b.targets.push(Target::other("zweites"));
+    assert!(matches!(
+        b.build(T0),
+        Err(PlanError::ExactlyOneTarget { .. })
+    ));
 }

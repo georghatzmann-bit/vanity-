@@ -65,6 +65,10 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-persistence-status': 'Dienst: Autostart-Einträge lesen und bewerten (nur lesend)',
   'allow-service-propose-autorun-disable':
     'Dienst: Autostart-Eintrag deaktivieren vorschlagen (erst nach „Ja“, mit Rückgängig)',
+  'allow-service-software-updates':
+    'Dienst: winget nach neueren Programmversionen fragen (nur lesend, auf Knopfdruck)',
+  'allow-service-propose-software-update':
+    'Dienst: ein Programm-Update vorschlagen (erst nach „Ja“, genau Kennung und Version)',
   'allow-service-propose-backup':
     'Dienst: Rückfall-Kopien ein-/ausschalten vorschlagen (nur nach „Ja“)',
   'allow-service-propose-backup-restore':

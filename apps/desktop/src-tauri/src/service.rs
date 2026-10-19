@@ -552,6 +552,36 @@ pub async fn service_propose_autorun_disable(id: String) -> Result<Value, String
     send(json!({ "type": "propose_autorun_disable", "id": id })).await
 }
 
+/// winget-Kennung: Buchstaben, Ziffern, `.`, `-`, `_`, `+`; beginnt nicht mit einem Schalter.
+fn check_package_id(value: &str) -> Result<(), String> {
+    let ok = value.len() <= 128
+        && value
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphanumeric())
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '+'));
+    if ok {
+        Ok(())
+    } else {
+        Err("Ungültige Paket-Kennung.".to_owned())
+    }
+}
+
+/// Software-Updates: winget nach neueren Versionen fragen (nur lesend, braucht Netz).
+#[tauri::command]
+pub async fn service_software_updates() -> Result<Value, String> {
+    send(json!({ "type": "software_updates" })).await
+}
+
+/// Ein Paket aus der letzten Abfrage aktualisieren vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_software_update(id: String) -> Result<Value, String> {
+    check_package_id(&id)?;
+    send(json!({ "type": "propose_software_update", "id": id })).await
+}
+
 /// Härtung: Systemzustand lesen und bewerten (nur lesend). `fresh`: neu prüfen statt ein
 /// bis zu 10 Minuten altes Ergebnis.
 #[tauri::command]

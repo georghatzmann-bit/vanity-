@@ -82,6 +82,11 @@ pub mod param {
     /// [`QUARANTINE_ID`]): Versionen älter als dieser Zeitpunkt (RFC 3339) werden gelöscht –
     /// die jeweils neueste Version jeder Datei bleibt immer.
     pub const BACKUP_BEFORE: &str = "backup_before";
+    /// Paket-Kennung ([`super::ActionKind::UpdateSoftware`], Pflicht, winget-Kennung).
+    pub const PACKAGE_ID: &str = "package_id";
+    /// Zielversion ([`super::ActionKind::UpdateSoftware`], Pflicht) – genau diese wird
+    /// installiert.
+    pub const PACKAGE_VERSION: &str = "package_version";
     /// Erlaubte Werte für [`VALUE_TYPE`].
     pub const REGISTRY_VALUE_TYPES: [&str; 6] = [
         "REG_SZ",
@@ -363,11 +368,14 @@ pub enum ActionKind {
     /// externes Laufwerk; [`Target::File`] ist der Zielordner, darin entsteht ein neuer
     /// Unterordner – nichts wird überschrieben).
     ExportBackup,
+    /// Installiertes Programm auf eine neuere Version aktualisieren (Paket-Kennung und
+    /// Zielversion in [`param::PACKAGE_ID`] bzw. [`param::PACKAGE_VERSION`]).
+    UpdateSoftware,
 }
 
 impl ActionKind {
     /// Alle bekannten Arten.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::Quarantine,
         Self::Restore,
         Self::DeletePermanently,
@@ -384,6 +392,7 @@ impl ActionKind {
         Self::SafeRetrieve,
         Self::RestoreBackup,
         Self::ExportBackup,
+        Self::UpdateSoftware,
     ];
 
     /// Stabile Kennung (identisch mit der serde-Darstellung, Teil der Prüfsumme).
@@ -406,6 +415,7 @@ impl ActionKind {
             Self::SafeRetrieve => "safe_retrieve",
             Self::RestoreBackup => "restore_backup",
             Self::ExportBackup => "export_backup",
+            Self::UpdateSoftware => "update_software",
         }
     }
 
@@ -429,6 +439,7 @@ impl ActionKind {
             Self::SafeRetrieve => "Aus dem Datei-Safe holen",
             Self::RestoreBackup => "Rückfall-Kopie zurückholen",
             Self::ExportBackup => "Rückfall-Kopien exportieren",
+            Self::UpdateSoftware => "Software aktualisieren",
         }
     }
 
@@ -452,6 +463,7 @@ impl ActionKind {
             Self::SafeRetrieve => "Take out of the file safe",
             Self::RestoreBackup => "Restore fallback copy",
             Self::ExportBackup => "Export fallback copies",
+            Self::UpdateSoftware => "Update software",
         }
     }
 
@@ -490,6 +502,7 @@ impl ActionKind {
                 target,
                 Target::Setting { .. } | Target::RegistryValue { .. } | Target::Other { .. }
             ),
+            Self::UpdateSoftware => matches!(target, Target::Other { .. }),
             Self::AddTrust | Self::RemoveTrust => matches!(
                 target,
                 Target::File { .. } | Target::Process { .. } | Target::Other { .. }
@@ -1064,6 +1077,23 @@ impl ActionPlan {
             ActionKind::ExportBackup if plan.targets.len() != 1 => {
                 return Err(PlanError::ExactlyOneTarget { kind: plan.kind });
             }
+            ActionKind::UpdateSoftware => {
+                if plan.targets.len() != 1 {
+                    return Err(PlanError::ExactlyOneTarget { kind: plan.kind });
+                }
+                if !valid_package_id(required_parameter(&plan, param::PACKAGE_ID)?) {
+                    return Err(PlanError::InvalidParameter {
+                        key: param::PACKAGE_ID.to_owned(),
+                        reason: "ungültige Paket-Kennung",
+                    });
+                }
+                if !valid_package_version(required_parameter(&plan, param::PACKAGE_VERSION)?) {
+                    return Err(PlanError::InvalidParameter {
+                        key: param::PACKAGE_VERSION.to_owned(),
+                        reason: "ungültige Version",
+                    });
+                }
+            }
             ActionKind::RestoreBackup => {
                 if plan.targets.len() != 1 {
                     return Err(PlanError::ExactlyOneTarget { kind: plan.kind });
@@ -1177,6 +1207,29 @@ fn check_parameter(key: &str, value: &str) -> Result<(), PlanError> {
         ));
     }
     check_value(value, true).map_err(invalid)
+}
+
+/// winget-Paketkennung: Buchstaben, Ziffern, `.`, `-`, `_`, `+`; höchstens 128 Zeichen, beginnt
+/// mit Buchstabe oder Ziffer (kein Schalter).
+#[must_use]
+pub fn valid_package_id(id: &str) -> bool {
+    let b = id.as_bytes();
+    !b.is_empty()
+        && b.len() <= 128
+        && b[0].is_ascii_alphanumeric()
+        && b.iter()
+            .all(|c| c.is_ascii_alphanumeric() || b".-_+".contains(c))
+}
+
+/// Paketversion: Buchstaben, Ziffern, `.`, `-`, `_`, `+`; höchstens 64 Zeichen.
+#[must_use]
+pub fn valid_package_version(version: &str) -> bool {
+    let b = version.as_bytes();
+    !b.is_empty()
+        && b.len() <= 64
+        && b[0].is_ascii_alphanumeric()
+        && b.iter()
+            .all(|c| c.is_ascii_alphanumeric() || b".-_+".contains(c))
 }
 
 fn required_parameter<'a>(plan: &'a ActionPlan, key: &'static str) -> Result<&'a str, PlanError> {

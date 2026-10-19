@@ -170,6 +170,10 @@ pub fn sample_plan_builder(kind: ActionKind) -> ActionPlanBuilder {
         ActionKind::ChangeSetting => ActionPlan::builder(kind)
             .target(Target::setting("realtime.enabled"))
             .parameter(param::VALUE, "true"),
+        ActionKind::UpdateSoftware => ActionPlan::builder(kind)
+            .target(Target::other("winget-Paket „Beispiel“ (Beispiel.App)"))
+            .parameter(param::PACKAGE_ID, "Beispiel.App")
+            .parameter(param::PACKAGE_VERSION, "2.0.1"),
     };
     let undo = if kind.must_be_irreversible() {
         UndoHint::irreversible("Kann nicht rückgängig gemacht werden.")

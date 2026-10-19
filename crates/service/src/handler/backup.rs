@@ -94,13 +94,24 @@ enum DeferredKind {
     Prune,
 }
 
-/// Lange Arbeit nach einem „Ja“ (Export, Ausdünnen) – mit der Erlaubnis als Wert, ausgeführt
-/// ohne Dienst-Sperre, damit andere Anfragen nicht warten.
+/// Was aufgeschoben ausgeführt wird.
+#[derive(Debug)]
+enum Work {
+    Backup {
+        store: std::sync::Arc<BackupStore>,
+        kind: DeferredKind,
+    },
+    Update {
+        packages: std::sync::Arc<dyn super::updates::PackageManager>,
+    },
+}
+
+/// Lange Arbeit nach einem „Ja“ (Export, Ausdünnen, Software-Update) – mit der Erlaubnis als
+/// Wert, ausgeführt ohne Dienst-Sperre, damit andere Anfragen nicht warten.
 #[derive(Debug)]
 pub struct Deferred {
     permit: ExecutionPermit,
-    store: std::sync::Arc<BackupStore>,
-    kind: DeferredKind,
+    work: Work,
 }
 
 /// Ergebnis aufgeschobener Arbeit.
@@ -110,19 +121,35 @@ pub enum DeferredOutcome {
     Exported(Result<(PathBuf, usize, usize), String>),
     /// Ausdünnen: gelöschte Kopien.
     Pruned(Result<usize, String>),
+    /// Software-Update: Meldung von winget.
+    Updated(Result<String, String>),
 }
 
 impl Deferred {
     /// Führt die Arbeit aus (ohne Dienst-Sperre); `cancel` bricht zwischen Dateien ab.
     #[must_use]
     pub fn run(&self, user: &dyn UserAccess, cancel: &dyn Fn() -> bool) -> DeferredOutcome {
-        match self.kind {
-            DeferredKind::Export => {
-                DeferredOutcome::Exported(self.store.export(&self.permit, user, cancel))
-            }
-            DeferredKind::Prune => {
-                DeferredOutcome::Pruned(self.store.prune(&self.permit, user.identity().as_deref()))
-            }
+        match &self.work {
+            Work::Backup {
+                store,
+                kind: DeferredKind::Export,
+            } => DeferredOutcome::Exported(store.export(&self.permit, user, cancel)),
+            Work::Backup {
+                store,
+                kind: DeferredKind::Prune,
+            } => DeferredOutcome::Pruned(store.prune(&self.permit, user.identity().as_deref())),
+            Work::Update { packages } => DeferredOutcome::Updated(packages.upgrade(&self.permit)),
+        }
+    }
+
+    /// Software-Update nach dem „Ja“ (Kennung und Version stehen im Plan der Erlaubnis).
+    pub(super) fn update(
+        permit: ExecutionPermit,
+        packages: std::sync::Arc<dyn super::updates::PackageManager>,
+    ) -> Self {
+        Self {
+            permit,
+            work: Work::Update { packages },
         }
     }
 }
@@ -609,8 +636,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
         let action = permit.plan().kind();
         self.deferred = Some(Deferred {
             permit,
-            store,
-            kind,
+            work: Work::Backup { store, kind },
         });
         // Wird durch das Ergebnis der aufgeschobenen Arbeit ersetzt.
         Response::Executed {
@@ -650,10 +676,17 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 ExecutionResult::Succeeded,
                 format!("{n} Versionen gelöscht"),
             ),
-            DeferredOutcome::Exported(Err(m)) | DeferredOutcome::Pruned(Err(m)) => {
+            DeferredOutcome::Updated(Ok(message)) => (ExecutionResult::Succeeded, message),
+            DeferredOutcome::Exported(Err(m))
+            | DeferredOutcome::Pruned(Err(m))
+            | DeferredOutcome::Updated(Err(m)) => {
                 (ExecutionResult::Failed { message: m.clone() }, m)
             }
         };
+        if kind == ActionKind::UpdateSoftware {
+            // Die Liste ist danach veraltet.
+            self.updates = None;
+        }
         self.finish_plan(work.permit, &result, user, Some(detail));
         Response::Executed {
             kind,

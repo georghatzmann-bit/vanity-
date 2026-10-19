@@ -275,3 +275,19 @@ weniger): Speicher-Integrität an = in Ordnung; nur Microsoft-Sperrliste = verbe
 Kernisolierung); Sperrliste aus = Risiko mit Plan `VulnerableDriverBlocklistEnable = 1`
 (nicht, wenn eine Device-Guard-Richtlinie die Treiber-Regeln festlegt).
 
+## D-047 – Software-Updates über winget im Dienst, je Paket ein Plan
+
+Status: angenommen (P6.5). Neue Aktionsart `update_software` (Ziel: Beschreibung, Pflicht-Parameter
+`package_id` und `package_version`, im Core geprüft: nur Buchstaben, Ziffern, `.-_+`, kein
+Schalter). Die Liste holt der Dienst nur auf Knopfdruck mit `winget upgrade --source winget`
+(Netz, abschaltbar durch Nicht-Benutzen; nichts läuft im Hintergrund). Gelesen wird die Tabelle
+über die Spaltenanfänge der Kopfzeile; unplausible Zeilen werden verworfen, gekürzte Kennungen
+nicht angeboten. Ein Vorschlag geht nur aus der höchstens 60 Minuten alten Liste und nur für
+Administratoren (der Dienst installiert als SYSTEM für alle Konten). Nach „Ja“ läuft
+`winget upgrade --id <id> --exact --version <ver> --source winget --silent …` außerhalb der
+Dienst-Sperre (aufgeschobene Arbeit wie beim Export), höchstens ein Update gleichzeitig, Frist
+30 Minuten. winget liegt im geschützten `WindowsApps` (App-Installer, höchste Version); AEGIS
+bündelt nichts. Rückgängig gibt es nicht automatisch – der Plan sagt das und nennt den
+winget-Befehl für die alte Version. Nur für ein Konto installierte Programme meldet winget als
+SYSTEM oft nicht; die UI sagt das.
+
