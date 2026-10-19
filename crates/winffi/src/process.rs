@@ -116,34 +116,50 @@ impl RestrictedToken {
                 )
             };
             if ok == 0 {
-                return Err(io::Error::last_os_error());
+                return Err(step("DuplicateTokenEx", io::Error::last_os_error()));
             }
             own(primary)?
         };
+        // Ist die Quelle schon ein eingeschränktes LUA-Token (Hintergrundprüfung „nur Nutzer“),
+        // lehnt Windows ein zweites LUA_TOKEN mit Fehler 87 ab – dann ohne diesen Schalter
+        // (die Quelle ist bereits ohne Administratorrechte und Privilegien).
         let mut restricted: HANDLE = ptr::null_mut();
-        // SAFETY: `primary` ist gültig; keine SID-/Privilegien-Listen (Zähler 0, Zeiger null).
-        // aegis-unsafe: winffi-restrict-token
-        #[allow(unsafe_code)]
-        let ok = unsafe {
-            CreateRestrictedToken(
-                primary.as_raw_handle(),
-                DISABLE_MAX_PRIVILEGE | LUA_TOKEN,
-                0,
-                ptr::null(),
-                0,
-                ptr::null(),
-                0,
-                ptr::null(),
-                &mut restricted,
-            )
-        };
+        let mut ok = 0;
+        for flags in [DISABLE_MAX_PRIVILEGE | LUA_TOKEN, DISABLE_MAX_PRIVILEGE] {
+            // SAFETY: `primary` ist gültig; keine SID-/Privilegien-Listen (Zähler 0, Zeiger
+            // null); `restricted` ist ein Ausgabezeiger.
+            // aegis-unsafe: winffi-restrict-token
+            #[allow(unsafe_code)]
+            let created = unsafe {
+                CreateRestrictedToken(
+                    primary.as_raw_handle(),
+                    flags,
+                    0,
+                    ptr::null(),
+                    0,
+                    ptr::null(),
+                    0,
+                    ptr::null(),
+                    &mut restricted,
+                )
+            };
+            ok = created;
+            if ok != 0 || io::Error::last_os_error().raw_os_error() != Some(87) {
+                break;
+            }
+        }
         if ok == 0 {
-            return Err(io::Error::last_os_error());
+            return Err(step("CreateRestrictedToken", io::Error::last_os_error()));
         }
         let restricted = own(restricted)?;
-        set_low_integrity(restricted.as_raw_handle())?;
+        set_low_integrity(restricted.as_raw_handle()).map_err(|e| step("Integritätsstufe", e))?;
         Ok(Self(restricted))
     }
+}
+
+/// Fehler mit dem fehlgeschlagenen Schritt (Fehlersuche ohne Debugger, z. B. in CI).
+fn step(name: &str, e: io::Error) -> io::Error {
+    io::Error::new(e.kind(), format!("{name}: {e}"))
 }
 
 fn set_low_integrity(token: HANDLE) -> io::Result<()> {
@@ -448,9 +464,8 @@ pub fn spawn_restricted(
     let mut process = PROCESS_INFORMATION::default();
     // Ohne Konsole (DETACHED_PROCESS): Ein- und Ausgabe laufen nur über die Pipes; so muss kein
     // Konsolen-Host für das eingeschränkte Token entstehen (bei Tokens aus dem
-    // Identitätswechsel über die Pipe scheiterte das mit 0xC0000142). Manche Tokens (das
-    // „nur Nutzer“-Token der Hintergrundprüfung) lehnt Windows damit ab (Fehler 87) – dann
-    // einmal mit unsichtbarer Konsole (CREATE_NO_WINDOW).
+    // Identitätswechsel über die Pipe scheiterte das mit 0xC0000142). Lehnt Windows das mit
+    // Fehler 87 ab, einmal mit unsichtbarer Konsole (CREATE_NO_WINDOW).
     let mut ok = 0;
     for console in [DETACHED_PROCESS, CREATE_NO_WINDOW] {
         // SAFETY: Alle Zeiger zeigen auf lebende, nullterminierte Puffer bzw. Strukturen; die
@@ -482,7 +497,7 @@ pub fn spawn_restricted(
         }
     }
     if ok == 0 {
-        return Err(io::Error::last_os_error());
+        return Err(step("CreateProcessAsUserW", io::Error::last_os_error()));
     }
     // SAFETY: CreateProcessAsUserW hat beide Handles neu geliefert; jedes wird genau einmal
     // übernommen.
