@@ -291,6 +291,18 @@ bündelt nichts. Rückgängig gibt es nicht automatisch – der Plan sagt das un
 winget-Befehl für die alte Version. Nur für ein Konto installierte Programme meldet winget als
 SYSTEM oft nicht; die UI sagt das.
 
+## D-049 – Netzwerk-Monitor ohne Netz, Firewall nur mit eigenen Regeln
+
+Status: angenommen (P7.1/P7.2). Verbindungen liest der Dienst (TCP-Tabelle mit Prozess, Programm,
+Konto) – ein Konto sieht nur seine eigenen Programme, Administratoren alle. Länder kommen aus
+einer gebündelten, gemeinfreien Tabelle (iptoasn.com, 1,6 MB) – keine GeoIP- oder
+Reverse-DNS-Abfrage im Netz. „Neu“ heißt: dieses Programm kontaktiert dieses Internet-Ziel zum
+ersten Mal seit Dienststart (Verlauf je Konto nur im Speicher, 30 Tage, 2000 Ziele; die erste
+Abfrage ist Grundlinie). Firewall: Regeln werden aus der Registrierung gelesen; AEGIS schlägt nur
+eigene Regeln `AEGIS-Block-<Prüfsumme des Pfads>` vor (ausgehend blockieren, Programmpfad geprüft,
+per `netsh` nach „Ja“, Administrator, Rückgängig über den bekannten Härtungs-Weg) und entfernt nur
+solche Regeln. Fremde Regeln und Profile fasst AEGIS hier nie an.
+
 ## D-048 – Geräte & Privatsphäre: melden statt blockieren, Zwischenablage nur in der App
 
 Status: angenommen (P6.6). Ohne Treiber kann AEGIS Kamera, Mikrofon oder USB nicht sperren – es

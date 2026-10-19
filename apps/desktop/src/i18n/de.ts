@@ -668,6 +668,63 @@ export const de = {
       driver: 'Treiber',
     },
   },
+  network: {
+    intro:
+      'Welche Programme gerade mit wem sprechen – mit Land und Dienst. Neue Ziele eines Programms werden hervorgehoben. AEGIS liest nur; „Netz sperren …“ legt erst nach deinem Ja eine eigene Regel in der Windows-Firewall an.',
+    refresh: 'Aktualisieren',
+    windowsOnly: 'Verbindungen und Firewall gibt es nur unter Windows.',
+    filter: 'Anzeige',
+    filterInternet: 'Internet',
+    filterNew: 'Neu ({count})',
+    filterAll: 'Alle ({count})',
+    allAccounts: 'Alle Konten (Administrator)',
+    ownOnly: 'Nur Programme deines Kontos',
+    none: 'Keine Verbindungen in dieser Ansicht.',
+    newTarget: 'Neues Ziel',
+    firstSeen: 'Erstmals gesehen: {date}',
+    block: 'Netz sperren …',
+    scope: {
+      loopback: 'dieser PC',
+      private: 'Heimnetz',
+      link_local: 'lokal',
+      multicast: 'Rundruf',
+      public: 'Internet',
+    },
+    connections: {
+      title: 'Verbindungen',
+      intro:
+        'Aktuelle TCP-Verbindungen je Programm. Länder stammen aus einer mitgelieferten Liste (iptoasn.com) – ohne Abfrage im Netz.',
+    },
+    history: {
+      title: 'Verlauf',
+      intro:
+        'Ziele deiner Programme seit dem Start des Dienstes (höchstens 30 Tage). Nur im Speicher, nicht auf der Platte.',
+      empty: 'Noch keine Ziele aufgezeichnet.',
+      seen: 'zuerst {first}, zuletzt {last}, {count}×',
+    },
+    firewall: {
+      title: 'Firewall',
+      intro:
+        'Regeln der Windows-Firewall (nur lesend). AEGIS fasst fremde Regeln nie an – nur eigene „Netz sperren“-Regeln lassen sich hier wieder entfernen.',
+      check: 'Regeln lesen',
+      notYet: 'Noch nicht gelesen.',
+      summary:
+        '{total} Regeln, davon {active} aktiv · {inbound} erlauben eingehende Verbindungen · {block} blockieren · {policy} per Richtlinie',
+      notable: 'Auffällige Regeln',
+      notableNone: 'Keine auffälligen Regeln gefunden.',
+      aegis: 'Regeln von AEGIS',
+      aegisNone: 'AEGIS hat keine Regeln angelegt.',
+      remove: 'Regel entfernen …',
+      allow: 'erlauben',
+      block: 'blockieren',
+      in: 'eingehend',
+      out: 'ausgehend',
+      inactive: 'inaktiv',
+      policy: 'Richtlinie',
+      honest:
+        'Ehrlich: Die Windows-Firewall bleibt die Firewall – AEGIS ergänzt nur eigene Regeln nach deinem Ja.',
+    },
+  },
   devices: {
     title: 'Geräte & Privatsphäre',
     intro:

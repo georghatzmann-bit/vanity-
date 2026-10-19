@@ -1419,6 +1419,15 @@ impl HardenSystem for FakeSystem {
                 path,
                 enabled: !enabled,
             },
+            Step::BlockProgram {
+                name,
+                program,
+                present,
+            } => Step::BlockProgram {
+                name,
+                program,
+                present: !present,
+            },
         })
     }
 
@@ -1659,4 +1668,48 @@ fn software_updates_nur_nach_ja_und_nur_als_admin() {
     // Danach ist die Liste veraltet: erst neu suchen.
     let r = h.send(json!({"type": "propose_software_update", "id": "Beispiel.App"}));
     assert_eq!(r["code"], "unknown", "{r}");
+}
+
+#[test]
+fn firewall_regel_nur_nach_ja_admin_und_rueckgaengig() {
+    let (mut h, fake) = harden_harness();
+    let dir = tempfile::tempdir().unwrap();
+    let exe = write_fixture(dir.path(), "tool.exe", b"MZ harmlos").unwrap();
+    let program = exe.display().to_string();
+    // Unter Linux gibt es keinen Laufwerksbuchstaben – dort lehnt AEGIS jeden Pfad ab.
+    let r = h.send(json!({"type": "propose_firewall_block", "program": program, "block": true}));
+    if !cfg!(windows) {
+        assert_eq!(r["code"], "input", "{r}");
+        let r = h.send(
+            json!({"type": "propose_firewall_block", "program": r"C:\Temp\x.exe", "block": true}),
+        );
+        assert_eq!(r["code"], "input", "Programm fehlt: {r}");
+        return;
+    }
+    assert_eq!(r["type"], "proposal", "{r}");
+    let r2 = h.send_as(
+        json!({"type": "propose_firewall_block", "program": program, "block": true}),
+        &Standard,
+    );
+    assert_eq!(r2["code"], "admin", "{r2}");
+    assert_eq!(h.answer(&r, "decline")["type"], "nothing_done");
+    assert!(fake.applied.lock().unwrap().is_empty());
+    let p = h.send(json!({"type": "propose_firewall_block", "program": program, "block": true}));
+    assert_eq!(h.answer(&p, "execute")["result"]["status"], "succeeded");
+    assert_eq!(fake.applied.lock().unwrap().len(), 1);
+    let status = h.send(json!({"type": "hardening_status", "fresh": true}));
+    let undo = status["state"]["undo"].as_array().unwrap().clone();
+    assert!(undo[0]["fix"].as_str().unwrap().starts_with("firewall:"));
+}
+
+#[test]
+fn netzwerk_und_firewall_nur_lesend() {
+    let mut h = harness();
+    let r = h.send(json!({"type": "network_status"}));
+    assert_eq!(r["type"], "network", "{r}");
+    let r = h.send(json!({"type": "firewall_status"}));
+    assert_eq!(r["type"], "firewall", "{r}");
+    if !cfg!(windows) {
+        assert_eq!(r["state"]["available"], false);
+    }
 }

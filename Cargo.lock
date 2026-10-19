@@ -103,6 +103,9 @@ dependencies = [
 [[package]]
 name = "aegis-netwatch"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "aegis-quarantine"
@@ -142,6 +145,7 @@ dependencies = [
  "aegis-core",
  "aegis-engine",
  "aegis-hardening",
+ "aegis-netwatch",
  "aegis-quarantine",
  "aegis-sandbox",
  "aegis-winffi",

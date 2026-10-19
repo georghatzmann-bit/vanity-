@@ -39,6 +39,7 @@ Lizenz-Report) und hier zusammengefasst.
 | abuse.ch MalwareBazaar / URLhaus / ThreatFox (P2/P7) | CC0 / Nutzungsbedingungen, API-Key nötig | Bedingungen + Rate-Limits prüfen |
 | YARA-Regelsätze (P2) | je Satz verschieden (z. B. DRL, GPL, MIT) | nur Sätze mit passender Lizenz |
 | YARA-X (P2) | BSD-3-Clause | Rust-Crate |
+| iptoasn.com ip2country (P7.1) | Public Domain (PDDL v1.0, geprüft 2026-10-19) | Länderzuordnung von IP-Bereichen → `rules/geo/ip-country.bin` (Skript `scripts/update-geoip.mjs`, zusammengefasst, IPv6 auf 64 Bit) |
 | LOLDrivers (P6.4) | Apache-2.0 (geprüft 2026-10-19, keine NOTICE-Datei) | Nur Prüfsummen + Kurzangaben aus `loldrivers.io/api/drivers.json` → `rules/drivers/loldrivers.tsv` (Skript `scripts/update-loldrivers.mjs`), Lizenztext in `rules/drivers/LICENSE-LOLDrivers.txt`; keine Treiberdateien |
 | EasyList / EasyPrivacy (P12) | GPL-3.0 / CC BY-SA 3.0 | Listen getrennt laden |
 | Phishing-/Malware-Domainlisten (P7) | je Liste | z. B. URLhaus, Phishing.Database |

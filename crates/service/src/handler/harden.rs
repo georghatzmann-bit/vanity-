@@ -150,6 +150,15 @@ pub enum Step {
         /// Aktiv?
         active: bool,
     },
+    /// AEGIS-Firewall-Regel „ausgehend blockieren“ für ein Programm anlegen bzw. entfernen.
+    BlockProgram {
+        /// Regelname (`AEGIS-Block-…`).
+        name: String,
+        /// Programmpfad.
+        program: String,
+        /// Anlegen (sonst entfernen)?
+        present: bool,
+    },
 }
 
 const FIREWALL_PROFILES: [&str; 3] = ["domainprofile", "privateprofile", "publicprofile"];
@@ -201,6 +210,18 @@ impl Step {
                     "deaktivieren"
                 }
             ),
+            Self::BlockProgram {
+                name,
+                program,
+                present: true,
+            } => format!(
+                "Windows-Firewall: Regel „{name}“ anlegen – ausgehende Verbindungen von {program} blockieren"
+            ),
+            Self::BlockProgram {
+                name,
+                program,
+                present: false,
+            } => format!("Windows-Firewall: Regel „{name}“ ({program}) entfernen"),
         }
     }
 
@@ -461,10 +482,10 @@ pub fn split_value(value: &str) -> (&str, &str) {
     value.rsplit_once('#').unwrap_or((value, ""))
 }
 
-struct Texts {
-    what: &'static str,
-    why: &'static str,
-    consequence: &'static str,
+pub(super) struct Texts {
+    pub(super) what: &'static str,
+    pub(super) why: &'static str,
+    pub(super) consequence: &'static str,
 }
 
 fn texts(fix: FixKind) -> Texts {
@@ -725,6 +746,15 @@ mod sys {
                 path: path.clone(),
                 enabled: !enabled,
             },
+            Step::BlockProgram {
+                name,
+                program,
+                present,
+            } => Step::BlockProgram {
+                name: name.clone(),
+                program: program.clone(),
+                present: !present,
+            },
         })
     }
 
@@ -827,6 +857,38 @@ mod sys {
                     if *enabled { "/ENABLE" } else { "/DISABLE" },
                 ],
             ),
+            Step::BlockProgram {
+                name,
+                program,
+                present: true,
+            } => run(
+                "netsh.exe",
+                &[
+                    "advfirewall",
+                    "firewall",
+                    "add",
+                    "rule",
+                    &format!("name={name}"),
+                    "dir=out",
+                    "action=block",
+                    &format!("program={program}"),
+                    "enable=yes",
+                ],
+            ),
+            Step::BlockProgram {
+                name,
+                present: false,
+                ..
+            } => run(
+                "netsh.exe",
+                &[
+                    "advfirewall",
+                    "firewall",
+                    "delete",
+                    "rule",
+                    &format!("name={name}"),
+                ],
+            ),
         }
     }
 }
@@ -891,6 +953,19 @@ impl<C: Clock, W: Durable> Service<C, W> {
     #[must_use]
     pub fn harden_system(&self) -> Arc<dyn HardenSystem> {
         Arc::clone(&self.harden_system)
+    }
+
+    /// Plan aus Schritten (auch für die Firewall-Regeln der Seite „Netzwerk“).
+    pub(super) fn fix_plan_public(
+        &self,
+        setting: &str,
+        value: &str,
+        steps: &[Step],
+        texts: &Texts,
+        undo: UndoHint,
+        severity: RiskLevel,
+    ) -> Result<ActionPlan, String> {
+        self.fix_plan(setting, value, steps, texts, undo, severity)
     }
 
     fn fix_plan(
@@ -1090,10 +1165,25 @@ impl<C: Clock, W: Durable> Service<C, W> {
         let autorun = plan.targets().iter().any(
             |t| matches!(t, Target::Setting { id } if id == super::persistence::AUTORUN_SETTING),
         );
+        let block = plan
+            .targets()
+            .iter()
+            .any(|t| matches!(t, Target::Setting { id } if id == super::network::BLOCK_SETTING));
         let owner = user.identity();
         let system = Arc::clone(&self.harden_system);
         // Schritte neu bestimmen – sie müssen genau denen im Plan entsprechen.
-        let steps: Result<(Vec<Step>, Option<String>), String> = if autorun {
+        let steps: Result<(Vec<Step>, Option<String>), String> = if block {
+            super::network::block_steps(value).map(|s| {
+                let program = value
+                    .rsplit('\\')
+                    .next()
+                    .unwrap_or_default()
+                    .chars()
+                    .take(120)
+                    .collect::<String>();
+                (s, Some(format!("firewall:{program}")))
+            })
+        } else if autorun {
             super::persistence::parse_value(value)
                 .ok_or_else(|| "Ungültiger Eintrag".to_owned())
                 .and_then(|(kind, id)| {

@@ -100,6 +100,12 @@ pub enum Request {
     SoftwareUpdates {},
     /// Geräte & Privatsphäre: Kamera-/Mikrofon-Nutzung des Kontos, Tastaturen, USB-Laufwerke.
     DevicesStatus {},
+    /// Netzwerk: Verbindungen je Programm (eigene; Administratoren: alle) und Verlauf.
+    NetworkStatus {},
+    /// Firewall-Übersicht (nur lesend).
+    FirewallStatus {},
+    /// AEGIS-Firewall-Regel für ein Programm anlegen (`block`) bzw. entfernen – nur nach „Ja“.
+    ProposeFirewallBlock { program: String, block: bool },
     /// Ein Paket aus der letzten Abfrage aktualisieren vorschlagen – nur nach „Ja“.
     ProposeSoftwareUpdate { id: String },
     /// Rückfall-Kopien ein- (`on`, Grenze in MiB) bzw. ausschalten vorschlagen.
@@ -297,6 +303,14 @@ pub enum Response {
     /// Härtung & Sicherheits-Score.
     Hardening {
         state: Box<crate::handler::hardening::HardeningState>,
+    },
+    /// Netzwerk.
+    Network {
+        state: Box<crate::handler::network::NetworkState>,
+    },
+    /// Firewall-Übersicht.
+    Firewall {
+        state: Box<crate::handler::network::FirewallState>,
     },
     /// Geräte & Privatsphäre.
     Devices {

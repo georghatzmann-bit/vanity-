@@ -29,7 +29,7 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 | P4 | Sandbox Stufe 1+2 + Verhaltensbericht | **erledigt** (Windows-CI wird bestätigt) |
 | P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | **erledigt** |
 | P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | erledigt |
-| P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | offen |
+| P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | in Arbeit |
 | P8 | Defender-Schalter | offen |
 | P9 | Tresor + Erweiterung | offen |
 | P10 | Tools 1–11 | offen |
@@ -144,8 +144,21 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 | Review dokumentiert, Funde behoben | ✅ `docs/SECURITY.md` → Review-Protokoll |
 | `pnpm check` + E2E grün; CI Linux + Windows | ✅ lokal; Windows-CI siehe GitHub Actions |
 
-**P6 erledigt.** **Nächster Schritt:** P7 – Netzwerk (Verbindungen je Programm,
-Firewall-Übersicht), Web-Schutz (MV3-Erweiterung, Phishing-/Malware-Listen), Heimnetz, Leck-Check.
+**P6 erledigt.**
+
+## P7 – Netzwerk & Web-Schutz
+
+1. [x] P7.1 Netzwerk-Monitor: Verbindungen je Programm (eigenes Konto, Administratoren alle),
+       Land aus gebündelter Tabelle (iptoasn, gemeinfrei), Dienst, neue Ziele hervorgehoben,
+       Verlauf je Konto (im Speicher, 30 Tage) – Seite „Netzwerk“ (D-049).
+2. [x] P7.2 Firewall-Übersicht (Regeln lesen, auffällige Regeln, eigene Regeln) und
+       „Netz sperren …“ als Plan mit „Ja“ (AEGIS-Regel, Rückgängig).
+3. [ ] P7.3 Web-Schutz-Erweiterung (MV3, Listen mit Lizenz, Warnseite, Downloads), DoH-Hinweis.
+4. [ ] P7.4 Heimnetz-Scanner (nur eigenes Subnetz) + Router-Hinweise.
+5. [ ] P7.5 Leck-Check (HIBP Range, k-Anonymität; E-Mail nur mit eigenem Schlüssel).
+6. [ ] P7.6 Sicherheits-Review, Doku, DoD.
+
+**Nächster Schritt:** P7.3 Web-Schutz-Erweiterung.
 
 ## P5 – Schutz-Werkzeuge
 

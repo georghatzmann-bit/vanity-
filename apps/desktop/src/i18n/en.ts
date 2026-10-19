@@ -660,6 +660,63 @@ export const en: Messages<typeof de> = {
       driver: 'Driver',
     },
   },
+  network: {
+    intro:
+      'Which programs are talking to whom right now – with country and service. New destinations of a program are highlighted. AEGIS only reads; “Block network…” adds its own Windows Firewall rule only after your yes.',
+    refresh: 'Refresh',
+    windowsOnly: 'Connections and firewall are only available on Windows.',
+    filter: 'View',
+    filterInternet: 'Internet',
+    filterNew: 'New ({count})',
+    filterAll: 'All ({count})',
+    allAccounts: 'All accounts (administrator)',
+    ownOnly: 'Only programs of your account',
+    none: 'No connections in this view.',
+    newTarget: 'New destination',
+    firstSeen: 'First seen: {date}',
+    block: 'Block network…',
+    scope: {
+      loopback: 'this PC',
+      private: 'home network',
+      link_local: 'local',
+      multicast: 'broadcast',
+      public: 'internet',
+    },
+    connections: {
+      title: 'Connections',
+      intro:
+        'Current TCP connections per program. Countries come from a bundled list (iptoasn.com) – no online lookup.',
+    },
+    history: {
+      title: 'History',
+      intro:
+        'Destinations of your programs since the service started (at most 30 days). In memory only, not on disk.',
+      empty: 'No destinations recorded yet.',
+      seen: 'first {first}, last {last}, {count}×',
+    },
+    firewall: {
+      title: 'Firewall',
+      intro:
+        'Windows Firewall rules (read-only). AEGIS never touches other rules – only its own “block network” rules can be removed here.',
+      check: 'Read rules',
+      notYet: 'Not read yet.',
+      summary:
+        '{total} rules, {active} active · {inbound} allow incoming connections · {block} block · {policy} by policy',
+      notable: 'Notable rules',
+      notableNone: 'No notable rules found.',
+      aegis: 'Rules by AEGIS',
+      aegisNone: 'AEGIS has not added any rules.',
+      remove: 'Remove rule…',
+      allow: 'allow',
+      block: 'block',
+      in: 'inbound',
+      out: 'outbound',
+      inactive: 'inactive',
+      policy: 'policy',
+      honest:
+        'Honest note: the Windows Firewall stays the firewall – AEGIS only adds its own rules after your yes.',
+    },
+  },
   devices: {
     title: 'Devices & privacy',
     intro:

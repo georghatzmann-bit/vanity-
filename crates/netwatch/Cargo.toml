@@ -1,6 +1,6 @@
 [package]
 name = "aegis-netwatch"
-description = "Netzwerk & Web-Schutz (P7): Verbindungen pro Prozess, Firewall-Übersicht, Heimnetz, Leck-Check."
+description = "Netzwerk & Web-Schutz (P7): Verbindungen pro Programm, Firewall-Übersicht, Heimnetz, Leck-Check."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,7 @@ publish.workspace = true
 authors.workspace = true
 
 [dependencies]
+serde = { workspace = true }
 
 [lints]
 workspace = true

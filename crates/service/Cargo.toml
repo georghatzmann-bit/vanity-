@@ -11,6 +11,7 @@ authors.workspace = true
 aegis-core = { workspace = true }
 aegis-engine = { workspace = true }
 aegis-hardening = { workspace = true }
+aegis-netwatch = { workspace = true }
 aegis-quarantine = { workspace = true }
 aegis-sandbox = { workspace = true }
 base64 = { workspace = true }

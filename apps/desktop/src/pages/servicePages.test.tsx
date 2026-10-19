@@ -143,6 +143,63 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
       }),
     ),
     proposeSoftwareUpdate: vi.fn(() => Promise.resolve(proposal('Software aktualisieren'))),
+    networkStatus: vi.fn(() =>
+      Promise.resolve({
+        available: true,
+        admin: true,
+        connections: [
+          {
+            pid: 42,
+            program: 'C:\\Users\\a\\AppData\\Local\\Temp\\x.exe',
+            remote: '203.0.113.9',
+            port: 9001,
+            service: 'Tor',
+            state: 'established',
+            scope: 'public' as const,
+            country: 'NL',
+            firstSeen: 1_760_000_000,
+            isNew: true,
+          },
+          {
+            pid: 7,
+            program: 'C:\\Program Files\\Browser\\browser.exe',
+            remote: '192.168.1.1',
+            port: 80,
+            service: 'HTTP',
+            state: 'established',
+            scope: 'private' as const,
+            country: null,
+            firstSeen: 1_760_000_000,
+            isNew: false,
+          },
+        ],
+        history: [
+          { program: 'x.exe', remote: '203.0.113.9', country: 'NL', first: 1, last: 2, count: 3 },
+        ],
+      }),
+    ),
+    firewallStatus: vi.fn(() =>
+      Promise.resolve({
+        available: true,
+        admin: true,
+        summary: { total: 400, active: 300, inboundAllow: 120, block: 20, policy: 0 },
+        notable: [],
+        aegis: [
+          {
+            name: 'AEGIS-Block-0123456789abcdef',
+            action: 'block',
+            active: true,
+            direction: 'out',
+            program: 'C:\\Temp\\y.exe',
+            localPorts: null,
+            profiles: [],
+            policy: false,
+            note: null,
+          },
+        ],
+      }),
+    ),
+    proposeFirewallBlock: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     devicesStatus: vi.fn(() =>
       Promise.resolve({
         available: true,
@@ -1375,5 +1432,37 @@ describe('Härtung', () => {
     expect(within(panel).getByTestId('devices-list')).toHaveTextContent('USB-Tastatur');
     fireEvent.click(within(panel).getByTestId('setting-clipboard-guard'));
     await waitFor(() => expect(platform.clipboardGuard).toHaveBeenCalledWith(true));
+  });
+
+  it('Netzwerk: Verbindungen nur lesend, Sperren und Entfernen nur als Vorschlag', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/network' });
+    const panel = await screen.findByTestId('network-connections');
+    const rows = await within(panel).findAllByTestId('network-connection');
+    // Ansicht „Internet“: das Heimnetz-Ziel fehlt, das neue Ziel ist markiert.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('x.exe');
+    expect(rows[0]).toHaveTextContent('Neues Ziel');
+    expect(rows[0]).toHaveTextContent('203.0.113.9:9001 · Tor · Internet');
+    fireEvent.click(within(rows[0] as HTMLElement).getByRole('button', { name: 'Netz sperren …' }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposeFirewallBlock).toHaveBeenCalledWith(
+      'C:\\Users\\a\\AppData\\Local\\Temp\\x.exe',
+      true,
+    );
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Nein' }));
+    expect(await screen.findByTestId('network-history')).toHaveTextContent('x.exe');
+    fireEvent.click(screen.getByRole('button', { name: 'Regeln lesen' }));
+    const aegis = await screen.findByTestId('firewall-aegis');
+    expect(screen.getByTestId('firewall-summary')).toHaveTextContent('400 Regeln');
+    fireEvent.click(within(aegis).getByRole('button', { name: 'Regel entfernen …' }));
+    await waitFor(() =>
+      expect(service.proposeFirewallBlock).toHaveBeenCalledWith('C:\\Temp\\y.exe', false),
+    );
+    expect(service.decide).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'execute',
+      expect.anything(),
+    );
   });
 });

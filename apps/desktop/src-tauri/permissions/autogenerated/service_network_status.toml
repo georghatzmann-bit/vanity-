@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-network-status"
+description = "Enables the service_network_status command without any pre-configured scope."
+commands.allow = ["service_network_status"]
+
+[[permission]]
+identifier = "deny-service-network-status"
+description = "Denies the service_network_status command without any pre-configured scope."
+commands.deny = ["service_network_status"]

@@ -4,6 +4,7 @@ import { DashboardPage } from './DashboardPage.tsx';
 import { HardeningPage } from './HardeningPage.tsx';
 import { LabPage } from './LabPage.tsx';
 import { ModulePage } from './ModulePage.tsx';
+import { NetworkPage } from './NetworkPage.tsx';
 import { QuarantinePage } from './QuarantinePage.tsx';
 import { RealtimePage } from './RealtimePage.tsx';
 import { ReportsPage } from './ReportsPage.tsx';
@@ -34,6 +35,8 @@ export function Page({ route }: { readonly route: RouteId }) {
       return <SafePage />;
     case 'hardening':
       return <HardeningPage />;
+    case 'network':
+      return <NetworkPage />;
     default:
       return <ModulePage route={route} />;
   }

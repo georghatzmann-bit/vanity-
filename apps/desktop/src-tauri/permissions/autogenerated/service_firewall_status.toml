@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-firewall-status"
+description = "Enables the service_firewall_status command without any pre-configured scope."
+commands.allow = ["service_firewall_status"]
+
+[[permission]]
+identifier = "deny-service-firewall-status"
+description = "Denies the service_firewall_status command without any pre-configured scope."
+commands.deny = ["service_firewall_status"]

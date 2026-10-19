@@ -33,6 +33,8 @@ import {
   parsePersistence,
   parseUpdates,
   parseDevices,
+  parseFirewall,
+  parseNetwork,
   parseSafe,
   parseEmergency,
   parseLabScreenshot,
@@ -312,6 +314,10 @@ function createTauriService(): ServiceApi {
     proposeSoftwareUpdate: async (id) =>
       parseProposal(await invoke<unknown>('service_propose_software_update', { id })),
     devicesStatus: async () => parseDevices(await invoke<unknown>('service_devices_status')),
+    networkStatus: async () => parseNetwork(await invoke<unknown>('service_network_status')),
+    firewallStatus: async () => parseFirewall(await invoke<unknown>('service_firewall_status')),
+    proposeFirewallBlock: async (program, block) =>
+      parseProposal(await invoke<unknown>('service_propose_firewall_block', { program, block })),
     proposeBackup: async (on, quotaMb) =>
       parseProposal(await invoke<unknown>('service_propose_backup', { on, quotaMb })),
     proposeBackupRestore: async (id) =>

@@ -31,6 +31,7 @@ pub mod backup;
 pub mod devices;
 pub mod harden;
 pub mod hardening;
+pub mod network;
 pub mod persistence;
 mod safe;
 pub mod updates;
@@ -96,6 +97,8 @@ pub struct Service<C: Clock, W: Durable> {
     harden_system: Arc<dyn harden::HardenSystem>,
     /// Letzter Persistenz-Check je Konto (Grundlage für Vorschläge).
     persistence_cache: HashMap<Option<String>, Vec<persistence::AutorunView>>,
+    /// Verlauf der Netzwerkziele je Konto (nur im Speicher, seit Dienststart).
+    net_history: HashMap<Option<String>, aegis_netwatch::conn::History>,
     /// Paketverwaltung für Software-Updates (Tests: Ersatz).
     packages: Arc<dyn updates::PackageManager>,
     /// Letzte Liste verfügbarer Updates (rechnerweit; Grundlage für Vorschläge).
@@ -181,6 +184,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             hardening_cache: HashMap::new(),
             persistence_cache: HashMap::new(),
             packages: Arc::new(updates::Winget),
+            net_history: HashMap::new(),
             updates: None,
             harden_system: Arc::new(harden::RealSystem),
             machine_facts: None,
@@ -1666,6 +1670,17 @@ impl<C: Clock, W: Durable> Service<C, W> {
             // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
             Request::DevicesStatus {} => devices::devices_response(devices::collect(user)),
             // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
+            Request::NetworkStatus {} => self.network_finish(network::read_connections(), user),
+            Request::FirewallStatus {} => Response::Firewall {
+                state: Box::new(network::firewall_state(
+                    &network::read_rules(),
+                    user.is_admin(),
+                )),
+            },
+            Request::ProposeFirewallBlock { program, block } => {
+                self.propose_firewall_block(&program, block, user)
+            }
+            // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
             Request::HardeningStatus { fresh } => match self.hardening_cached(user) {
                 Some(cached) if !fresh => cached,
                 _ => {
@@ -2305,7 +2320,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                     matches!(t, Target::Setting { id } if id == aegis_quarantine::backup::BACKUP_SETTING)
                 });
                 let harden = plan.targets().iter().any(|t| {
-                    matches!(t, Target::Setting { id } if id == harden::FIX_SETTING || id == harden::UNDO_SETTING || id == persistence::AUTORUN_SETTING)
+                    matches!(t, Target::Setting { id } if id == harden::FIX_SETTING || id == harden::UNDO_SETTING || id == persistence::AUTORUN_SETTING || id == network::BLOCK_SETTING)
                 });
                 return if bait {
                     self.apply_baits(permit, user)

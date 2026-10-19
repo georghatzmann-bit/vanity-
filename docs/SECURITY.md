@@ -297,6 +297,12 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Rückgängig); Boot/System nie. Sperrliste einschalten ist ein Härtungs-Plan (Admin, Neustart);
   Device-Guard-Richtlinien werden nicht geändert. Grenze: Ein Angreifer mit Kernel-Rechten kann
   die Anzeige fälschen – der Check findet bekannte Fälle, er beweist keine Sauberkeit.
+- **Netzwerk & Firewall (P7.1/P7.2):** nur lesend (TCP-Tabelle, Prozesspfad/-konto,
+  Firewall-Regeln aus der Registrierung). Kontotrennung: fremde Verbindungen nur für
+  Administratoren. Keine Netzabfragen (Länder aus gebündelter Tabelle). Regel anlegen/entfernen
+  nur als Plan mit „Ja“ (Administrator): fester Name `AEGIS-Block-…`, Programmpfad geprüft
+  (Laufwerk, `.exe`, ohne `"`, `..`, `/`, `|`), Argumente einzeln an `netsh` aus dem
+  Systemordner; die Prüfsumme bindet die Schritte. Entfernt werden nur AEGIS-Regeln.
 - **Geräte & Privatsphäre (P6.6):** nur lesend (Registrierung `ConsentStore` je Profil, WMI
   `Win32_PnPEntity`/`Win32_DiskDrive`). Meldungen über den Wächter-Feed: Kamera/Mikrofon nur an
   das betroffene Konto, neue Tastaturen an alle. Zwischenablage-Wächter in der App (opt-in):

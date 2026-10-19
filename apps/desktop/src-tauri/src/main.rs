@@ -85,6 +85,9 @@ fn main() {
             service::service_persistence_status,
             service::service_propose_autorun_disable,
             service::service_devices_status,
+            service::service_network_status,
+            service::service_firewall_status,
+            service::service_propose_firewall_block,
             service::service_software_updates,
             service::service_propose_software_update,
             service::service_propose_backup,
@@ -192,6 +195,9 @@ mod test_support {
                 crate::service::service_persistence_status,
                 crate::service::service_propose_autorun_disable,
                 crate::service::service_devices_status,
+                crate::service::service_network_status,
+                crate::service::service_firewall_status,
+                crate::service::service_propose_firewall_block,
                 crate::service::service_software_updates,
                 crate::service::service_propose_software_update,
                 crate::service::service_propose_backup,
@@ -235,7 +241,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 64] = [
+    const EXPECTED_PERMISSIONS: [&str; 67] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -278,6 +284,9 @@ mod tests {
         "allow-service-persistence-status",
         "allow-service-propose-autorun-disable",
         "allow-service-devices-status",
+        "allow-service-network-status",
+        "allow-service-firewall-status",
+        "allow-service-propose-firewall-block",
         "allow-service-software-updates",
         "allow-service-propose-software-update",
         "allow-service-propose-backup",
@@ -578,6 +587,12 @@ mod tests {
                 ("service_persistence_status", json!({})),
                 ("service_propose_autorun_disable", json!({ "id": "x" })),
                 ("service_devices_status", json!({})),
+                ("service_network_status", json!({})),
+                ("service_firewall_status", json!({})),
+                (
+                    "service_propose_firewall_block",
+                    json!({ "program": "x", "block": true }),
+                ),
                 ("service_software_updates", json!({})),
                 ("service_propose_software_update", json!({ "id": "x" })),
                 (

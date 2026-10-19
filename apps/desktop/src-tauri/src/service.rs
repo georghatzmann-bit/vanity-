@@ -576,6 +576,28 @@ pub async fn service_devices_status() -> Result<Value, String> {
     send(json!({ "type": "devices_status" })).await
 }
 
+/// Netzwerk: Verbindungen je Programm (eigene; Administratoren: alle) und Verlauf (nur lesend).
+#[tauri::command]
+pub async fn service_network_status() -> Result<Value, String> {
+    send(json!({ "type": "network_status" })).await
+}
+
+/// Firewall-Übersicht (nur lesend).
+#[tauri::command]
+pub async fn service_firewall_status() -> Result<Value, String> {
+    send(json!({ "type": "firewall_status" })).await
+}
+
+/// AEGIS-Firewall-Regel für ein Programm anlegen (`block`) bzw. entfernen vorschlagen – nur
+/// nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_firewall_block(program: String, block: bool) -> Result<Value, String> {
+    if program.is_empty() || program.len() > 260 || program.chars().any(char::is_control) {
+        return Err("Ungültiger Programmpfad.".to_owned());
+    }
+    send(json!({ "type": "propose_firewall_block", "program": program, "block": block })).await
+}
+
 /// Software-Updates: winget nach neueren Versionen fragen (nur lesend, braucht Netz).
 #[tauri::command]
 pub async fn service_software_updates() -> Result<Value, String> {

@@ -121,12 +121,24 @@ fn utf16_text(data: &[u8]) -> String {
 /// Alle Werte eines Schlüssels (nur lesen). Fehlt der Schlüssel: leer.
 #[must_use]
 pub fn read_values(hive: &Hive, subkey: &str) -> Vec<RegValue> {
+    read_values_limited(hive, subkey, 1024, MAX_DATA)
+}
+
+/// Wie [`read_values`], mit eigenen Grenzen (Anzahl Werte, Zeichen je Wert) – z. B. für die
+/// vielen, langen Firewall-Regeln.
+#[must_use]
+pub fn read_values_limited(
+    hive: &Hive,
+    subkey: &str,
+    max_values: u32,
+    max_chars: usize,
+) -> Vec<RegValue> {
     let (root, path, label) = hive.root_and_prefix(subkey);
     let Some(key) = open_key(root, &path) else {
         return Vec::new();
     };
     let mut out = Vec::new();
-    for index in 0..1024u32 {
+    for index in 0..max_values {
         let mut name = vec![0u16; 16_384];
         let mut name_len = u32::try_from(name.len()).unwrap_or(0);
         let mut data = vec![0u8; 16_384];
@@ -167,7 +179,7 @@ pub fn read_values(hive: &Hive, subkey: &str) -> Vec<RegValue> {
         out.push(RegValue {
             key: label.clone(),
             name: String::from_utf16_lossy(&name),
-            data: text.chars().take(MAX_DATA).collect(),
+            data: text.chars().take(max_chars).collect(),
         });
     }
     out

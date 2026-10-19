@@ -197,6 +197,7 @@ pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
     let service = Arc::new(Mutex::new(service));
     spawn_scheduler(Arc::clone(&service), Arc::clone(stop));
     spawn_backups(Arc::clone(&service), Arc::clone(stop));
+    spawn_netwatch(Arc::clone(&service), Arc::clone(stop));
     #[cfg(windows)]
     spawn_devices(Arc::clone(&service), Arc::clone(stop));
     let result = serve(&config.endpoint, &service, stop);
@@ -298,6 +299,28 @@ fn spawn_backups(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
             }
             for _ in 0..60 {
                 if cancel() {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+    });
+}
+
+/// Netzwerk-Verlauf (nur lesend): alle 15 Sekunden die Verbindungen aller Programme in die
+/// Verläufe der Konten aufnehmen (gelesen außerhalb der Sperre).
+fn spawn_netwatch(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
+    std::thread::spawn(move || {
+        while !stop.load(Ordering::SeqCst) {
+            let list = crate::handler::network::read_connections();
+            if !list.is_empty() {
+                service
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .observe_connections(list);
+            }
+            for _ in 0..15 {
+                if stop.load(Ordering::SeqCst) {
                     return;
                 }
                 std::thread::sleep(std::time::Duration::from_secs(1));

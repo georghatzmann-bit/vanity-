@@ -286,6 +286,32 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                     }
                 }
             }
+            // Verbindungen und Firewall-Regeln außerhalb der Dienst-Sperre lesen.
+            Ok(Request::NetworkStatus {}) => {
+                match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {
+                    None => busy(),
+                    Some(slot) => {
+                        let list = crate::handler::network::read_connections();
+                        drop(slot);
+                        lock()?.network_finish(list, user)
+                    }
+                }
+            }
+            Ok(Request::FirewallStatus {}) => {
+                match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {
+                    None => busy(),
+                    Some(slot) => {
+                        let rules = crate::handler::network::read_rules();
+                        drop(slot);
+                        crate::protocol::Response::Firewall {
+                            state: Box::new(crate::handler::network::firewall_state(
+                                &rules,
+                                user.is_admin(),
+                            )),
+                        }
+                    }
+                }
+            }
             // Geräte (WMI) außerhalb der Dienst-Sperre.
             Ok(Request::DevicesStatus {}) => {
                 match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {

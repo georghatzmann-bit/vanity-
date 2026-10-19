@@ -472,6 +472,71 @@ export interface PersistenceState {
   };
 }
 
+/** Bereich einer Netzwerkadresse. */
+export type NetScope = 'loopback' | 'private' | 'link_local' | 'multicast' | 'public';
+
+/** Eine Verbindung. */
+export interface NetConnection {
+  readonly pid: number;
+  readonly program: string | null;
+  readonly remote: string;
+  readonly port: number;
+  readonly service: string | null;
+  readonly state: string;
+  readonly scope: NetScope;
+  readonly country: string | null;
+  /** Unix-Sekunden. */
+  readonly firstSeen: number;
+  /** Neues Ziel dieses Programms. */
+  readonly isNew: boolean;
+}
+
+/** Ein Ziel im Verlauf. */
+export interface SeenDestination {
+  readonly program: string;
+  readonly remote: string;
+  readonly country: string | null;
+  readonly first: number;
+  readonly last: number;
+  readonly count: number;
+}
+
+/** Netzwerk. */
+export interface NetworkState {
+  readonly available: boolean;
+  readonly connections: readonly NetConnection[];
+  readonly history: readonly SeenDestination[];
+  readonly admin: boolean;
+}
+
+/** Firewall-Regel. */
+export interface FirewallRuleView {
+  readonly name: string;
+  readonly action: string;
+  readonly active: boolean;
+  readonly direction: string;
+  readonly program: string | null;
+  readonly localPorts: string | null;
+  readonly profiles: readonly string[];
+  readonly policy: boolean;
+  readonly note: { readonly de: string; readonly en: string } | null;
+}
+
+/** Firewall-Übersicht. */
+export interface FirewallState {
+  readonly available: boolean;
+  readonly summary: {
+    readonly total: number;
+    readonly active: number;
+    readonly inboundAllow: number;
+    readonly block: number;
+    readonly policy: number;
+  };
+  readonly notable: readonly FirewallRuleView[];
+  readonly aegis: readonly FirewallRuleView[];
+  readonly admin: boolean;
+}
+
 /** Kamera-/Mikrofon-Nutzung laut Windows. */
 export interface CapabilityUse {
   readonly capability: 'webcam' | 'microphone';
@@ -626,6 +691,12 @@ export interface ServiceApi {
   proposeSoftwareUpdate(id: string): Promise<Proposal>;
   /** Geräte & Privatsphäre: Kamera-/Mikrofon-Nutzung, Tastaturen, USB-Laufwerke (nur lesend). */
   devicesStatus(): Promise<DevicesState>;
+  /** Netzwerk: Verbindungen je Programm und Verlauf (nur lesend). */
+  networkStatus(): Promise<NetworkState>;
+  /** Firewall-Übersicht (nur lesend). */
+  firewallStatus(): Promise<FirewallState>;
+  /** AEGIS-Regel „Netz für Programm sperren“ anlegen (`block`) bzw. entfernen vorschlagen. */
+  proposeFirewallBlock(program: string, block: boolean): Promise<Proposal>;
   /** Rückfall-Kopien ein- (`true`, Grenze in MiB) bzw. ausschalten vorschlagen. */
   proposeBackup(on: boolean, quotaMb: number): Promise<Proposal>;
   /** Version zurückholen vorschlagen. */
@@ -1173,6 +1244,82 @@ function watchKind(kind: unknown): WatchEvent['kind'] {
   return kind === 'process' || kind === 'ransomware' || kind === 'device' || kind === 'privacy'
     ? kind
     : 'file';
+}
+
+const netScopes: readonly NetScope[] = ['loopback', 'private', 'link_local', 'multicast', 'public'];
+
+export function parseNetwork(response: unknown): NetworkState {
+  const r = expectType(response, 'network');
+  const st = isObject(r['state']) ? r['state'] : {};
+  const opt = (v: unknown) => (typeof v === 'string' ? v : null);
+  return {
+    available: st['available'] === true,
+    connections: arr(st['connections'])
+      .filter(isObject)
+      .map((c) => {
+        const scope = c['scope'];
+        return {
+          pid: num(c['pid']),
+          program: opt(c['program']),
+          remote: str(c['remote']),
+          port: num(c['port']),
+          service: opt(c['service']),
+          state: str(c['state']),
+          scope: netScopes.includes(scope as NetScope) ? (scope as NetScope) : 'public',
+          country: opt(c['country']),
+          firstSeen: num(c['first_seen']),
+          isNew: c['new'] === true,
+        };
+      }),
+    history: arr(st['history'])
+      .filter(isObject)
+      .map((h) => ({
+        program: str(h['program']),
+        remote: str(h['remote']),
+        country: opt(h['country']),
+        first: num(h['first']),
+        last: num(h['last']),
+        count: num(h['count']),
+      })),
+    admin: st['admin'] === true,
+  };
+}
+
+function parseRule(v: Record<string, unknown>): FirewallRuleView {
+  const note = v['note'];
+  return {
+    name: str(v['name']),
+    action: str(v['action']),
+    active: v['active'] === true,
+    direction: str(v['direction']),
+    program: typeof v['program'] === 'string' ? v['program'] : null,
+    localPorts: typeof v['local_ports'] === 'string' ? v['local_ports'] : null,
+    profiles: arr(v['profiles']).filter((p): p is string => typeof p === 'string'),
+    policy: v['policy'] === true,
+    note:
+      Array.isArray(note) && typeof note[0] === 'string' && typeof note[1] === 'string'
+        ? { de: note[0], en: note[1] }
+        : null,
+  };
+}
+
+export function parseFirewall(response: unknown): FirewallState {
+  const r = expectType(response, 'firewall');
+  const st = isObject(r['state']) ? r['state'] : {};
+  const sum = isObject(st['summary']) ? st['summary'] : {};
+  return {
+    available: st['available'] === true,
+    summary: {
+      total: num(sum['total']),
+      active: num(sum['active']),
+      inboundAllow: num(sum['inbound_allow']),
+      block: num(sum['block']),
+      policy: num(sum['policy']),
+    },
+    notable: arr(st['notable']).filter(isObject).map(parseRule),
+    aegis: arr(st['aegis']).filter(isObject).map(parseRule),
+    admin: st['admin'] === true,
+  };
 }
 
 export function parseDevices(response: unknown): DevicesState {
