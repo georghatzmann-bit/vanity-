@@ -318,3 +318,23 @@ nur die letzte Krypto-Adresse 3 Sekunden im Speicher und meldet einen Austausch 
 Adresse desselben Typs (BTC, ETH, LTC, DOGE, TRX, XMR) samt Programm, dem die Zwischenablage danach
 gehört. Er verändert die Zwischenablage nie.
 
+## D-050 – Web-Schutz als MV3-Erweiterung mit declarativeNetRequest
+
+Status: angenommen (P7.3). Ohne Treiber oder Proxy sieht AEGIS den Browser-Verkehr nicht; der
+Schutz liegt deshalb in einer Erweiterung für Edge/Chrome (`extensions/webshield`). Sperren
+geschieht über `declarativeNetRequest`: Der Browser vergleicht die Adressen selbst, die
+Erweiterung bekommt keinen Verlauf. Eine gelistete Seite wird (nur Hauptseiten-Aufrufe) auf die
+eigene Warnseite umgeleitet; „Trotzdem öffnen“ verlangt ein ausdrückliches Häkchen und gilt nur
+für diesen Host in dieser Browser-Sitzung (Sitzungsregel). Dafür merkt sich der Hintergrund je
+Tab nur die zuletzt aufgerufene Adresse im Sitzungsspeicher (`storage.session`, gelöscht beim
+Schließen von Tab/Browser). Listen: klein und gebündelt (Block List Project ransomware + scam,
+≈10 000 Domains, statische Regeln); groß und täglich nachgeladen (Phishing.Database, Block List
+Project phishing + fraud, zusammen höchstens 900 000 Domains als dynamische Regeln in Stücken zu
+50 000). Das Nachladen ist abschaltbar (dann gilt nur die gebündelte Liste); scheitert eine
+Quelle, bleibt die alte Liste ihrer Kategorie aktiv. URLhaus wurde wegen Anmeldepflicht und
+unklarer Weitergabe-Bedingungen nicht genommen. Seitenhinweise (Markenname in fremder Domain,
+Punycode, Passwortfeld ohne HTTPS) zeigt ein Inhaltsskript in einem geschlossenen Schatten-Baum,
+ohne Eingaben zu lesen. Downloads werden nur per Benachrichtigung markiert, nie abgebrochen oder
+gelöscht (Goldene Regel). DoH stellt AEGIS nicht um – die App zeigt nur, wo man es einschaltet.
+Bis zur Veröffentlichung in den Erweiterungs-Stores wird die Erweiterung „entpackt“ geladen (P13
+legt den Ordner mit aus); die App sagt das offen.

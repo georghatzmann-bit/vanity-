@@ -27,6 +27,10 @@ wird hier **vor** der Nutzung eingetragen (Name, Herkunft, Lizenz, Nutzungsart, 
 | argon2 0.6 (+ blake2, password-hash) | RustCrypto | MIT/Apache-2.0 | Datei-Safe: Schlüssel aus dem Passwort (Argon2id, P5) | 2026-10-19 |
 | wmi 0.18 (+ futures 0.3) | ohadravid / rust-lang | MIT/Apache-2.0 | Härtung: WMI-Abfragen nur lesend (BitLocker, TPM, Defender, Sicherheitscenter, Updates; P6) | 2026-10-19 |
 | axe-core / @axe-core/playwright 4.14 | Deque | MPL-2.0 | nur Tests, nicht ausgeliefert | 2026-10-19 |
+| Block List Project – ransomware, scam (P7.3) | github.com/blocklistproject/Lists | Unlicense (Repository-Lizenz; die Kopfzeilen der Listen nennen MIT – beides frei, Herkunft wird genannt) | gebündelt als `extensions/webshield/public/rules/bundled.json` (Skript `update-webshield-lists.mjs`) | 2026-10-19 |
+| Block List Project – phishing, fraud (P7.3) | github.com/blocklistproject/Lists | Unlicense / MIT (wie oben) | von der Erweiterung zur Laufzeit geladen (abschaltbar) | 2026-10-19 |
+| Phishing.Database (P7.3) | github.com/Phishing-Database/Phishing.Database | MIT | `phishing-domains-ACTIVE.txt`, von der Erweiterung zur Laufzeit geladen (abschaltbar) | 2026-10-19 |
+| @types/chrome 0.3 | DefinitelyTyped | MIT | nur Typen beim Bau der Erweiterung | 2026-10-19 |
 
 Rust- und npm-Abhängigkeiten werden ab P13 automatisch inventarisiert (`cargo about` /
 Lizenz-Report) und hier zusammengefasst.
@@ -42,7 +46,7 @@ Lizenz-Report) und hier zusammengefasst.
 | iptoasn.com ip2country (P7.1) | Public Domain (PDDL v1.0, geprüft 2026-10-19) | Länderzuordnung von IP-Bereichen → `rules/geo/ip-country.bin` (Skript `scripts/update-geoip.mjs`, zusammengefasst, IPv6 auf 64 Bit) |
 | LOLDrivers (P6.4) | Apache-2.0 (geprüft 2026-10-19, keine NOTICE-Datei) | Nur Prüfsummen + Kurzangaben aus `loldrivers.io/api/drivers.json` → `rules/drivers/loldrivers.tsv` (Skript `scripts/update-loldrivers.mjs`), Lizenztext in `rules/drivers/LICENSE-LOLDrivers.txt`; keine Treiberdateien |
 | EasyList / EasyPrivacy (P12) | GPL-3.0 / CC BY-SA 3.0 | Listen getrennt laden |
-| Phishing-/Malware-Domainlisten (P7) | je Liste | z. B. URLhaus, Phishing.Database |
+| URLhaus (abuse.ch) für P7.3 | Konto + kommerzielle Bedingungen | **abgelehnt** (2026-10-19): Download nur mit Anmeldung, Bedingungen für Weitergabe unklar |
 | Have I Been Pwned Range-API (P7/P9) | API-Bedingungen | k-Anonymität, nur Hash-Präfix |
 | VirusTotal API (P2) | VT-Nutzungsbedingungen | eigener API-Key, 4/Min & 500/Tag |
 | ONNX-Modell (P14) | je Modell | nur öffentliche, lizenzierte Modelle |

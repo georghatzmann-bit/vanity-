@@ -1465,4 +1465,13 @@ describe('Härtung', () => {
       expect.anything(),
     );
   });
+
+  it('Web-Schutz: Anleitung und DoH nur als Vorschlag, auch ohne Dienst', async () => {
+    renderApp({ platform: fakePlatform('tauri', undefined, null), hash: '#/network' });
+    const web = await screen.findByTestId('web-shield');
+    expect(web).toHaveTextContent('Entpackt laden');
+    expect(web).toHaveTextContent('DNS über HTTPS');
+    expect(web).toHaveTextContent('nur ein Vorschlag');
+    expect(within(web).queryByRole('button')).toBeNull();
+  });
 });

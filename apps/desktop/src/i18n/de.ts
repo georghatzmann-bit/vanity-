@@ -702,6 +702,25 @@ export const de = {
       empty: 'Noch keine Ziele aufgezeichnet.',
       seen: 'zuerst {first}, zuletzt {last}, {count}×',
     },
+    web: {
+      title: 'Web-Schutz (Browser-Erweiterung)',
+      intro:
+        'Die Erweiterung „AEGIS Web-Schutz“ für Edge und Chrome hält bekannte Phishing-, Betrugs- und Ransomware-Seiten an, bevor sie laden, weist auf Tricks wie nachgemachte Markennamen hin und warnt bei riskanten Downloads. Sie speichert keinen Verlauf und sendet nichts.',
+      feature1:
+        'Warnseite statt gefährlicher Seite – „Trotzdem öffnen“ nur nach deiner Bestätigung, nur für diese Sitzung.',
+      feature2:
+        'Listen: mitgelieferte Ransomware-/Betrugsliste, dazu täglich öffentliche Phishing- und Betrugslisten (abschaltbar).',
+      feature3:
+        'Hinweise bei verdächtigen Adressen (Markenname in fremder Domain, Punycode, Passwort ohne HTTPS).',
+      feature4: 'Hinweise bei riskanten Downloads – abgebrochen oder gelöscht wird nichts.',
+      installTitle: 'Installieren',
+      install:
+        'Edge: edge://extensions öffnen → „Entwicklermodus“ an → „Entpackt laden“ → Ordner „webshield“ im AEGIS-Installationsordner wählen. Chrome: chrome://extensions, gleiche Schritte.',
+      dohTitle: 'Tipp: DNS verschlüsseln (DoH)',
+      doh: 'Verschlüsseltes DNS verhindert, dass Dritte im Netz deine Seitenaufrufe mitlesen oder umbiegen. Windows 11: Einstellungen → Netzwerk und Internet → (WLAN/Ethernet) → Eigenschaften → DNS-Serverzuweisung → Bearbeiten → „Verschlüsselt (nur DNS über HTTPS)“. Im Browser: Einstellungen → Datenschutz → „Sicheres DNS verwenden“. AEGIS ändert das nicht selbst – es ist nur ein Vorschlag.',
+      honest:
+        'Ehrlich: Listen kennen nur gemeldete Seiten. Die Erweiterung ersetzt keine Vorsicht – und sie wirkt nur in Browsern, in denen du sie installierst.',
+    },
     firewall: {
       title: 'Firewall',
       intro:

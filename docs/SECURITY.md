@@ -303,6 +303,17 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   nur als Plan mit „Ja“ (Administrator): fester Name `AEGIS-Block-…`, Programmpfad geprüft
   (Laufwerk, `.exe`, ohne `"`, `..`, `/`, `|`), Argumente einzeln an `netsh` aus dem
   Systemordner; die Prüfsumme bindet die Schritte. Entfernt werden nur AEGIS-Regeln.
+- **Web-Schutz-Erweiterung (P7.3):** Manifest V3, Rechte nur `declarativeNetRequest`,
+  `storage`, `webNavigation`, `downloads`, `notifications`, `alarms` (+ Host-Zugriff für die
+  Umleitung und das Laden der Listen) – kein `history`, `cookies`, `tabs`, `scripting`,
+  `webRequest`, kein `externally_connectable` (Test erzwingt das). CSP der Seiten `script-src
+  'self'`, kein nachgeladener Code, Seiten bauen DOM nur über `textContent`. Nachrichten nimmt der
+  Hintergrund nur von den eigenen Seiten an (Absender-Adresse geprüft; Inhaltsskripte können keine
+  Freigabe auslösen). Listen nur über HTTPS, Antwort höchstens 24 MiB, Domains geprüft
+  (Syntax, keine IPs/lokalen Namen), Zahl begrenzt. Grenzen: Die Warnseite ist für Webseiten
+  erreichbar (nötig für die Umleitung) – Seiten können so erkennen, dass die Erweiterung
+  installiert ist; Listen erkennen nur gemeldete Seiten; Schutz nur in Browsern mit installierter
+  Erweiterung.
 - **Geräte & Privatsphäre (P6.6):** nur lesend (Registrierung `ConsentStore` je Profil, WMI
   `Win32_PnPEntity`/`Win32_DiskDrive`). Meldungen über den Wächter-Feed: Kamera/Mikrofon nur an
   das betroffene Konto, neue Tastaturen an alle. Zwischenablage-Wächter in der App (opt-in):

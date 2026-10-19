@@ -432,6 +432,37 @@ function FirewallPanel({
   );
 }
 
+/** Web-Schutz: Hinweise zur Browser-Erweiterung und zu verschlüsseltem DNS (nur Text). */
+function WebShieldPanel() {
+  const { t } = useT();
+  const features = [
+    t('network.web.feature1'),
+    t('network.web.feature2'),
+    t('network.web.feature3'),
+    t('network.web.feature4'),
+  ];
+  return (
+    <Panel title={t('network.web.title')} description={t('network.web.intro')}>
+      <div className="space-y-4 text-sm" data-testid="web-shield">
+        <ul className="list-disc space-y-1 pl-5 text-text">
+          {features.map((f) => (
+            <li key={f}>{f}</li>
+          ))}
+        </ul>
+        <div>
+          <h3 className="font-medium text-text">{t('network.web.installTitle')}</h3>
+          <p className="text-text-muted">{t('network.web.install')}</p>
+        </div>
+        <div>
+          <h3 className="font-medium text-text">{t('network.web.dohTitle')}</h3>
+          <p className="text-text-muted">{t('network.web.doh')}</p>
+        </div>
+        <p className="text-xs text-text-subtle">{t('network.web.honest')}</p>
+      </div>
+    </Panel>
+  );
+}
+
 export function NetworkPage() {
   const { t } = useT();
   const platform = usePlatform();
@@ -482,6 +513,7 @@ export function NetworkPage() {
           />
         </>
       )}
+      <WebShieldPanel />
       {flow.dialogs}
     </PageBody>
   );

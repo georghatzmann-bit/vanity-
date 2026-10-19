@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "AEGIS Web-Schutz",
+  "short_name": "AEGIS",
+  "version": "0.1.0",
+  "description": "Hält bekannte Phishing-, Betrugs- und Schadsoftware-Seiten an und warnt vor riskanten Downloads. Kein Verlauf, keine Telemetrie.",
+  "minimum_chrome_version": "121",
+  "icons": { "32": "icons/32.png", "128": "icons/128.png" },
+  "action": { "default_title": "AEGIS Web-Schutz", "default_icon": { "32": "icons/32.png" } },
+  "background": { "service_worker": "background.js" },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "permissions": [
+    "declarativeNetRequest",
+    "storage",
+    "webNavigation",
+    "downloads",
+    "notifications",
+    "alarms"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "declarative_net_request": {
+    "rule_resources": [{ "id": "bundled", "enabled": true, "path": "rules/bundled.json" }]
+  },
+  "web_accessible_resources": [
+    { "resources": ["warn.html", "warn.js", "page.css"], "matches": ["<all_urls>"] }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+  }
+}

@@ -694,6 +694,25 @@ export const en: Messages<typeof de> = {
       empty: 'No destinations recorded yet.',
       seen: 'first {first}, last {last}, {count}×',
     },
+    web: {
+      title: 'Web Shield (browser extension)',
+      intro:
+        'The “AEGIS Web Shield” extension for Edge and Chrome stops known phishing, scam and ransomware sites before they load, points out tricks such as imitated brand names and warns about risky downloads. It keeps no history and sends nothing.',
+      feature1:
+        'A warning page instead of the dangerous site – “Open anyway” only after your confirmation, only for this session.',
+      feature2:
+        'Lists: bundled ransomware/scam list, plus public phishing and scam lists updated daily (can be turned off).',
+      feature3:
+        'Hints on suspicious addresses (brand name in a foreign domain, punycode, password without HTTPS).',
+      feature4: 'Hints on risky downloads – nothing is cancelled or deleted.',
+      installTitle: 'Install',
+      install:
+        'Edge: open edge://extensions → turn on “Developer mode” → “Load unpacked” → choose the “webshield” folder in the AEGIS installation folder. Chrome: chrome://extensions, same steps.',
+      dohTitle: 'Tip: encrypt DNS (DoH)',
+      doh: 'Encrypted DNS prevents others on the network from reading or redirecting the sites you visit. Windows 11: Settings → Network & internet → (Wi-Fi/Ethernet) → Properties → DNS server assignment → Edit → “Encrypted only (DNS over HTTPS)”. In the browser: Settings → Privacy → “Use secure DNS”. AEGIS does not change this itself – it is only a suggestion.',
+      honest:
+        'To be honest: lists only know reported sites. The extension does not replace caution – and it only works in browsers where you install it.',
+    },
     firewall: {
       title: 'Firewall',
       intro:

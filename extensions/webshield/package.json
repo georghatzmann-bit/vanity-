@@ -1,0 +1,26 @@
+{
+  "name": "@aegis/webshield",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AEGIS Web-Schutz: Browser-Erweiterung (Manifest V3, declarativeNetRequest).",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "update-lists": "node scripts/update-webshield-lists.mjs",
+    "test:e2e": "node scripts/build.mjs && playwright test"
+  },
+  "dependencies": {
+    "@aegis/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.56.1",
+    "@types/chrome": "0.3.4",
+    "@types/node": "22.20.5",
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

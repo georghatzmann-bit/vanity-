@@ -153,12 +153,17 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
        Verlauf je Konto (im Speicher, 30 Tage) – Seite „Netzwerk“ (D-049).
 2. [x] P7.2 Firewall-Übersicht (Regeln lesen, auffällige Regeln, eigene Regeln) und
        „Netz sperren …“ als Plan mit „Ja“ (AEGIS-Regel, Rückgängig).
-3. [ ] P7.3 Web-Schutz-Erweiterung (MV3, Listen mit Lizenz, Warnseite, Downloads), DoH-Hinweis.
+3. [x] P7.3 Web-Schutz-Erweiterung `extensions/webshield` (MV3, declarativeNetRequest): gebündelte
+       Ransomware-/Betrugsliste + täglich nachgeladene Phishing-/Betrugslisten (abschaltbar),
+       Warnseite mit „Trotzdem öffnen“ nur nach Häkchen (Sitzung), Seitenhinweise (Marke,
+       Punycode, Passwort ohne HTTPS), Download-Hinweise; Optionen-Seite; Unit- und
+       Chromium-E2E-Tests (inkl. axe). App: Abschnitt „Web-Schutz“ mit Anleitung und DoH-Hinweis
+       (D-050).
 4. [ ] P7.4 Heimnetz-Scanner (nur eigenes Subnetz) + Router-Hinweise.
 5. [ ] P7.5 Leck-Check (HIBP Range, k-Anonymität; E-Mail nur mit eigenem Schlüssel).
 6. [ ] P7.6 Sicherheits-Review, Doku, DoD.
 
-**Nächster Schritt:** P7.3 Web-Schutz-Erweiterung.
+**Nächster Schritt:** P7.4 Heimnetz-Scanner.
 
 ## P5 – Schutz-Werkzeuge
 
