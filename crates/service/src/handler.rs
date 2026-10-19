@@ -2289,7 +2289,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             ActionKind::SafeStore => return self.apply_safe_store(permit, user),
             ActionKind::RestoreBackup => return self.apply_backup_restore(permit, user),
             ActionKind::ExportBackup => return self.apply_backup_export(permit, user),
-            ActionKind::UpdateSoftware => return self.apply_software_update(permit),
+            ActionKind::UpdateSoftware => return self.apply_software_update(permit, user),
             ActionKind::SafeRetrieve => return self.apply_safe_retrieve(permit, user),
             ActionKind::ChangeSetting => {
                 let bait = plan.targets().iter().any(|t| {

@@ -319,7 +319,7 @@ fn spawn_devices(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
         let watch = lock().watch();
         let mut state = crate::handler::devices::DeviceWatch::default();
         while !stop.load(Ordering::SeqCst) {
-            let devices = aegis_hardening::collect::devices();
+            let devices = aegis_hardening::collect::devices().ok();
             let uses: Vec<_> = aegis_hardening::collect::profile_sids()
                 .into_iter()
                 .map(|sid| {
@@ -328,7 +328,7 @@ fn spawn_devices(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
                 })
                 .collect();
             let known = lock().known_keyboards();
-            let (alerts, known) = state.poll(&devices, &uses, known);
+            let (alerts, known) = state.poll(devices.as_deref(), &uses, known);
             lock().remember_keyboards(known);
             for alert in alerts {
                 watch.report(alert.kind, alert.path, None, alert.owner, alert.finding);

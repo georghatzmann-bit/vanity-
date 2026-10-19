@@ -178,6 +178,11 @@ mod watcher {
                 continue;
             }
             seen = now;
+            // Als „nicht überwachen“ markierte Inhalte (Passwort-Manager) liest AEGIS nicht.
+            if aegis_winffi::clipboard::excluded_from_monitoring() {
+                detector = Detector::default();
+                continue;
+            }
             // Ein anderes Programm kann die Zwischenablage kurz geöffnet halten.
             let text = aegis_winffi::clipboard::read_text(200).or_else(|_| {
                 std::thread::sleep(Duration::from_millis(50));

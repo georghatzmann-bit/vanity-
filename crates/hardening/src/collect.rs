@@ -180,8 +180,8 @@ pub fn connections_without_proxy(blob: &[u8]) -> Option<Vec<u8>> {
 
 #[cfg(windows)]
 pub use self::windows::{
-    capability_uses, collect, devices, fix_state, machine_autoruns, machine_autoruns_of,
-    profile_sids, proxy_of, user_registry_autoruns,
+    capability_uses, collect, devices, fix_state, machine_autorun_named, machine_autoruns,
+    machine_autoruns_of, profile_sids, proxy_of, user_registry_autoruns,
 };
 
 #[cfg(windows)]
@@ -840,33 +840,64 @@ mod windows {
                 if seen > 4000 || out.len() >= MAX_AUTORUNS {
                     return;
                 }
-                let Ok(file) = std::fs::File::open(e.path()) else {
-                    continue;
-                };
-                let mut bytes = Vec::new();
-                if file.take(512 * 1024).read_to_end(&mut bytes).is_err() {
-                    continue;
-                }
-                let text = decode_xml(&bytes);
-                let Some((commands, enabled)) = crate::persistence::parse_task_xml(&text) else {
-                    continue;
-                };
-                let path = e.path();
-                let task = path.strip_prefix(root).map_or_else(
-                    |_| path.display().to_string(),
-                    |p| format!("\\{}", p.display()),
-                );
-                for command in commands.into_iter().take(4) {
-                    out.push(Autorun::new(
-                        AutorunKind::ScheduledTask,
-                        true,
-                        "Aufgabenplanung",
-                        task.clone(),
-                        command,
-                        enabled,
-                    ));
-                }
+                task_entries(root, &e.path(), out);
             }
+        }
+    }
+
+    /// Befehle einer Aufgabendatei (`path` liegt unter `root`).
+    fn task_entries(root: &std::path::Path, path: &std::path::Path, out: &mut Vec<Autorun>) {
+        let Ok(file) = std::fs::File::open(path) else {
+            return;
+        };
+        let mut bytes = Vec::new();
+        if file.take(512 * 1024).read_to_end(&mut bytes).is_err() {
+            return;
+        }
+        let text = decode_xml(&bytes);
+        let Some((commands, enabled)) = crate::persistence::parse_task_xml(&text) else {
+            return;
+        };
+        let task = path.strip_prefix(root).map_or_else(
+            |_| path.display().to_string(),
+            |p| format!("\\{}", p.display()),
+        );
+        for command in commands.into_iter().take(4) {
+            out.push(Autorun::new(
+                AutorunKind::ScheduledTask,
+                true,
+                "Aufgabenplanung",
+                task.clone(),
+                command,
+                enabled,
+            ));
+        }
+    }
+
+    fn tasks_root() -> PathBuf {
+        let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        PathBuf::from(root).join(r"System32\Tasks")
+    }
+
+    /// Nur den einen Eintrag erneut lesen (vor dem Ausführen eines Plans – schnell, damit die
+    /// Dienst-Sperre kurz bleibt). Dienste, Treiber und Aufgaben gezielt, sonst die ganze Art.
+    #[must_use]
+    pub fn machine_autorun_named(kind: AutorunKind, name: &str) -> Vec<Autorun> {
+        match kind {
+            AutorunKind::Service => service_entry(name).into_iter().collect(),
+            AutorunKind::Driver => {
+                let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+                driver_entry(name, &root).into_iter().collect()
+            }
+            AutorunKind::ScheduledTask => {
+                let root = tasks_root();
+                let mut out = Vec::new();
+                if let Some(file) = crate::persistence::task_file(&root, name) {
+                    task_entries(&root, &file, &mut out);
+                }
+                out
+            }
+            _ => machine_autoruns_of(kind),
         }
     }
 
@@ -884,87 +915,105 @@ mod windows {
         }
     }
 
-    fn services(out: &mut Vec<Autorun>) {
+    const SERVICES: &str = r"SYSTEM\CurrentControlSet\Services";
+
+    /// Ein automatisch startender Win32-Dienst (sonst `None`).
+    fn service_entry(name: &str) -> Option<Autorun> {
         let hklm = Hive::LocalMachine;
-        let base = r"SYSTEM\CurrentControlSet\Services";
-        for name in read_subkeys(&hklm, base).into_iter().take(2000) {
-            let key = format!(r"{base}\{name}");
-            let values = read_values(&hklm, &key);
-            let get = |n: &str| {
-                values
-                    .iter()
-                    .find(|v| v.name.eq_ignore_ascii_case(n))
-                    .map(|v| v.data.clone())
-            };
-            let start = get("Start").and_then(|s| s.trim().parse::<u32>().ok());
-            let kind = get("Type")
-                .and_then(|s| s.trim().parse::<u32>().ok())
-                .unwrap_or(0);
-            // Nur Programme (Typ 0x10/0x20/0x50/0x60), die automatisch starten (0–2).
-            if kind & 0x30 == 0 || !matches!(start, Some(0..=2)) {
-                continue;
-            }
-            let Some(image) = get("ImagePath") else {
-                continue;
-            };
-            let dll = read_values(&hklm, &format!(r"{key}\Parameters"))
-                .into_iter()
-                .find(|v| v.name.eq_ignore_ascii_case("ServiceDll"))
-                .map(|v| v.data);
-            let command = match dll {
-                Some(dll) => format!("{image} | {dll}"),
-                None => image,
-            };
-            out.push(Autorun::new(
+        let key = format!(r"{SERVICES}\{name}");
+        let values = read_values(&hklm, &key);
+        let get = |n: &str| {
+            values
+                .iter()
+                .find(|v| v.name.eq_ignore_ascii_case(n))
+                .map(|v| v.data.clone())
+        };
+        let start = get("Start").and_then(|s| s.trim().parse::<u32>().ok());
+        let kind = get("Type")
+            .and_then(|s| s.trim().parse::<u32>().ok())
+            .unwrap_or(0);
+        // Nur Programme (Typ 0x10/0x20/0x50/0x60), die automatisch starten (0–2).
+        if kind & 0x30 == 0 || !matches!(start, Some(0..=2)) {
+            return None;
+        }
+        let image = get("ImagePath")?;
+        let dll = read_values(&hklm, &format!(r"{key}\Parameters"))
+            .into_iter()
+            .find(|v| v.name.eq_ignore_ascii_case("ServiceDll"))
+            .map(|v| v.data);
+        let command = match dll {
+            Some(dll) => format!("{image} | {dll}"),
+            None => image,
+        };
+        Some(
+            Autorun::new(
                 AutorunKind::Service,
                 true,
-                format!(r"HKLM\{base}"),
+                format!(r"HKLM\{SERVICES}"),
                 name,
                 command,
                 true,
-            ));
+            )
+            .with_start(start),
+        )
+    }
+
+    fn services(out: &mut Vec<Autorun>) {
+        for name in read_subkeys(&Hive::LocalMachine, SERVICES)
+            .into_iter()
+            .take(2000)
+        {
+            out.extend(service_entry(&name));
         }
+    }
+
+    /// Ein Kernel- bzw. Dateisystem-Treiber aus seinem Dienst-Eintrag (sonst `None`).
+    fn driver_entry(name: &str, root: &str) -> Option<Autorun> {
+        let values = read_values(&Hive::LocalMachine, &format!(r"{SERVICES}\{name}"));
+        let get = |n: &str| {
+            values
+                .iter()
+                .find(|v| v.name.eq_ignore_ascii_case(n))
+                .map(|v| v.data.clone())
+        };
+        let kind = get("Type")
+            .and_then(|s| s.trim().parse::<u32>().ok())
+            .unwrap_or(0);
+        // 0x1 Kernel-Treiber, 0x2 Dateisystem-Treiber.
+        if kind & 0x3 == 0 || kind & 0x30 != 0 {
+            return None;
+        }
+        let start = get("Start").and_then(|s| s.trim().parse::<u32>().ok());
+        let image = get("ImagePath");
+        let command = crate::drivers::driver_path(image.as_deref(), name, root)
+            .or(image)
+            .unwrap_or_default();
+        Some(
+            Autorun::new(
+                AutorunKind::Driver,
+                true,
+                format!(r"HKLM\{SERVICES}"),
+                name,
+                command,
+                start != Some(4),
+            )
+            .with_start(start),
+        )
     }
 
     /// Kernel- und Dateisystem-Treiber aus den Dienst-Einträgen plus geladene Treiber ohne
     /// Eintrag (nur lesend).
     fn drivers(out: &mut Vec<Autorun>) {
         let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
-        let hklm = Hive::LocalMachine;
-        let base = r"SYSTEM\CurrentControlSet\Services";
         let mut known: Vec<String> = Vec::new();
-        for name in read_subkeys(&hklm, base).into_iter().take(3000) {
-            let values = read_values(&hklm, &format!(r"{base}\{name}"));
-            let get = |n: &str| {
-                values
-                    .iter()
-                    .find(|v| v.name.eq_ignore_ascii_case(n))
-                    .map(|v| v.data.clone())
-            };
-            let kind = get("Type")
-                .and_then(|s| s.trim().parse::<u32>().ok())
-                .unwrap_or(0);
-            // 0x1 Kernel-Treiber, 0x2 Dateisystem-Treiber.
-            if kind & 0x3 == 0 || kind & 0x30 != 0 {
-                continue;
+        for name in read_subkeys(&Hive::LocalMachine, SERVICES)
+            .into_iter()
+            .take(3000)
+        {
+            if let Some(entry) = driver_entry(&name, &root) {
+                known.push(entry.command.to_ascii_lowercase());
+                out.push(entry);
             }
-            let start = get("Start").and_then(|s| s.trim().parse::<u32>().ok());
-            let image = get("ImagePath");
-            let command = crate::drivers::driver_path(image.as_deref(), &name, &root)
-                .or(image)
-                .unwrap_or_default();
-            known.push(command.to_ascii_lowercase());
-            out.push(
-                Autorun::new(
-                    AutorunKind::Driver,
-                    true,
-                    format!(r"HKLM\{base}"),
-                    name,
-                    command,
-                    start != Some(4),
-                )
-                .with_start(start),
-            );
         }
         if let Ok(loaded) = aegis_winffi::inspect::loaded_drivers() {
             for kernel in loaded.into_iter().take(2000) {
@@ -1120,10 +1169,7 @@ mod windows {
                     );
                 }
             }
-            AutorunKind::ScheduledTask => {
-                let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
-                tasks(&PathBuf::from(root).join(r"System32\Tasks"), &mut out);
-            }
+            AutorunKind::ScheduledTask => tasks(&tasks_root(), &mut out),
             AutorunKind::Service => services(&mut out),
             AutorunKind::WmiConsumer => wmi_consumers(&mut out),
             AutorunKind::Driver => drivers(&mut out),
@@ -1225,15 +1271,20 @@ mod windows {
     }
 
     /// Angeschlossene Tastaturen und USB-Laufwerke (WMI, nur lesend).
-    #[must_use]
-    pub fn devices() -> Vec<crate::devices::Device> {
+    ///
+    /// # Errors
+    /// Tastaturen nicht abfragbar (z. B. WMI beim Hochfahren noch nicht bereit) – dann darf
+    /// der Wächter weder eine Grundlinie setzen noch „neue“ Tastaturen melden.
+    pub fn devices() -> Result<Vec<crate::devices::Device>, String> {
         use crate::devices::{Device, DeviceKind};
         let mut out = Vec::new();
-        if let Ok(rows) = query(
+        let rows = query(
             r"ROOT\CIMV2",
             "SELECT Name, PNPDeviceID FROM Win32_PnPEntity WHERE PNPClass = 'Keyboard' AND Present = TRUE",
             false,
-        ) {
+        )
+        .map_err(|e| format!("Tastaturen nicht abfragbar: {e}"))?;
+        {
             for row in rows.iter().take(100) {
                 if let Some(id) = v_string(row, "PNPDeviceID") {
                     let name = v_string(row, "Name").unwrap_or_default();
@@ -1253,7 +1304,7 @@ mod windows {
                 }
             }
         }
-        out
+        Ok(out)
     }
 
     /// Liest alle Fakten (nur lesend; dauert je nach System einige Sekunden – nicht unter

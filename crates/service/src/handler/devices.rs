@@ -93,7 +93,7 @@ pub fn collect(user: &dyn UserAccess) -> DevicesState {
         DevicesState {
             available: true,
             uses: views(uses),
-            devices: aegis_hardening::collect::devices(),
+            devices: aegis_hardening::collect::devices().unwrap_or_default(),
         }
     }
     #[cfg(not(windows))]
@@ -130,25 +130,33 @@ pub struct DeviceWatch {
 }
 
 impl DeviceWatch {
-    /// Wertet eine Abfrage aus. `known`: bekannte Tastaturen (`None` = noch keine Grundlinie –
-    /// dann wird nur gemerkt). Liefert Meldungen und die neue Liste bekannter Tastaturen.
+    /// Wertet eine Abfrage aus. `devices`: `None`, wenn die Geräte nicht abfragbar waren –
+    /// dann bleiben Grundlinie und bekannte Tastaturen unverändert. `known`: bekannte Tastaturen
+    /// (`None` = noch keine Grundlinie – dann wird nur gemerkt). Liefert Meldungen und die
+    /// (ggf. unveränderte) Liste bekannter Tastaturen (`None` = weiterhin keine Grundlinie).
     pub fn poll(
         &mut self,
-        devices: &[Device],
+        devices: Option<&[Device]>,
         uses: &[(String, Vec<CapabilityUse>)],
         known: Option<Vec<String>>,
-    ) -> (Vec<DeviceAlert>, Vec<String>) {
+    ) -> (Vec<DeviceAlert>, Option<Vec<String>>) {
         let mut alerts = Vec::new();
-        let baseline = known.is_none();
-        let mut known = known.unwrap_or_default();
-        for device in new_keyboards(&known, devices) {
-            if !baseline {
-                alerts.push(keyboard_alert(device));
+        let known = match devices {
+            None => known,
+            Some(devices) => {
+                let baseline = known.is_none();
+                let mut known = known.unwrap_or_default();
+                for device in new_keyboards(&known, devices) {
+                    if !baseline {
+                        alerts.push(keyboard_alert(device));
+                    }
+                    known.push(device.id.clone());
+                }
+                let excess = known.len().saturating_sub(MAX_KNOWN);
+                known.drain(..excess);
+                Some(known)
             }
-            known.push(device.id.clone());
-        }
-        let excess = known.len().saturating_sub(MAX_KNOWN);
-        known.drain(..excess);
+        };
 
         let mut now = HashSet::new();
         for (sid, list) in uses {
@@ -221,9 +229,11 @@ impl<C: Clock, W: Durable> Service<C, W> {
         self.settings.get().known_keyboards.clone()
     }
 
-    /// Bekannte Tastaturen merken (nur bei Änderung).
-    pub fn remember_keyboards(&mut self, known: Vec<String>) {
-        if self.settings.get().known_keyboards.as_ref() != Some(&known) {
+    /// Bekannte Tastaturen merken (nur bei Änderung; `None` ändert nichts).
+    pub fn remember_keyboards(&mut self, known: Option<Vec<String>>) {
+        if let Some(known) = known
+            && self.settings.get().known_keyboards.as_ref() != Some(&known)
+        {
             let _ = self.settings.update(|s| s.known_keyboards = Some(known));
         }
     }
@@ -251,20 +261,28 @@ mod tests {
     #[test]
     fn tastaturen_erst_grundlinie_dann_neue_melden() {
         let mut w = DeviceWatch::default();
-        let (alerts, known) = w.poll(&[keyboard(r"HID\VID_1\1")], &[], None);
+        // WMI noch nicht bereit: keine Grundlinie, nichts gemerkt.
+        let (alerts, known) = w.poll(None, &[], None);
+        assert!(alerts.is_empty());
+        assert_eq!(known, None);
+        let (alerts, known) = w.poll(Some(&[keyboard(r"HID\VID_1\1")]), &[], None);
         assert!(alerts.is_empty(), "Grundlinie meldet nichts");
-        assert_eq!(known.len(), 1);
+        assert_eq!(known.as_ref().map(Vec::len), Some(1));
+        // Fehler später: Liste bleibt, keine Meldung.
+        let (alerts, kept) = w.poll(None, &[], known.clone());
+        assert!(alerts.is_empty());
+        assert_eq!(kept, known);
         let (alerts, known) = w.poll(
-            &[keyboard(r"HID\VID_1\1"), keyboard(r"HID\VID_2\1")],
+            Some(&[keyboard(r"HID\VID_1\1"), keyboard(r"HID\VID_2\1")]),
             &[],
-            Some(known),
+            known,
         );
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].kind, WatchKind::Device);
         assert!(alerts[0].owner.is_none(), "an alle Konten");
         assert!(alerts[0].finding.summary_de.contains("BadUSB"));
-        assert_eq!(known.len(), 2);
-        let (alerts, _) = w.poll(&[keyboard(r"HID\VID_2\1")], &[], Some(known));
+        assert_eq!(known.as_ref().map(Vec::len), Some(2));
+        let (alerts, _) = w.poll(Some(&[keyboard(r"HID\VID_2\1")]), &[], known);
         assert!(alerts.is_empty(), "bekannt bleibt bekannt");
     }
 
@@ -274,13 +292,13 @@ mod tests {
         let sid = "S-1-5-21-1-2-3-1001".to_owned();
         // Beim Start schon laufend: nicht melden.
         let (alerts, _) = w.poll(
-            &[],
+            Some(&[]),
             &[(sid.clone(), vec![cam("Teams", 10, 0)])],
             Some(vec![]),
         );
         assert!(alerts.is_empty());
         let (alerts, _) = w.poll(
-            &[],
+            Some(&[]),
             &[(
                 sid.clone(),
                 vec![
@@ -295,12 +313,12 @@ mod tests {
         assert_eq!(alerts[0].finding.risk, RiskLevel::Suspicious);
         // Beendet und neu begonnen: wieder melden.
         let (alerts, _) = w.poll(
-            &[],
+            Some(&[]),
             &[(sid.clone(), vec![cam("Teams", 10, 15)])],
             Some(vec![]),
         );
         assert!(alerts.is_empty());
-        let (alerts, _) = w.poll(&[], &[(sid, vec![cam("Teams", 30, 0)])], Some(vec![]));
+        let (alerts, _) = w.poll(Some(&[]), &[(sid, vec![cam("Teams", 30, 0)])], Some(vec![]));
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].finding.risk, RiskLevel::Info);
     }

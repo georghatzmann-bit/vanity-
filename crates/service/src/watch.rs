@@ -531,7 +531,9 @@ impl WatchShared {
             let label = match kind {
                 WatchKind::Process => "Programmstart",
                 WatchKind::Ransomware => "Ransomware-Verdacht",
-                _ => "Neue Datei",
+                WatchKind::Device => "Neues Gerät",
+                WatchKind::Privacy => "Kamera/Mikrofon",
+                WatchKind::File | WatchKind::Schedule => "Neue Datei",
             };
             lock(history).add(
                 now,

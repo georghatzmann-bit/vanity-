@@ -28,7 +28,7 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 | P3 | Echtzeit-Wächter, Heuristik, Cheat-Logik, Whitelist, Dokument/Skript/Archiv, Berichte | **erledigt** |
 | P4 | Sandbox Stufe 1+2 + Verhaltensbericht | **erledigt** (Windows-CI wird bestätigt) |
 | P5 | Panic-Button, Speicher-Scan, Ransomware-Schutz, Datei-Safe | **erledigt** |
-| P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | in Arbeit |
+| P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | erledigt |
 | P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | offen |
 | P8 | Defender-Schalter | offen |
 | P9 | Tresor + Erweiterung | offen |
@@ -103,7 +103,7 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 
 ## P6 – Härtung & Systemzustand
 
-1. [x] P6.1 Sicherheits-Score: zwölf gewichtete Prüfungen (Updates, Secure Boot, TPM, BitLocker,
+1. [x] P6.1 Sicherheits-Score: zwölf (seit P6.4 dreizehn) gewichtete Prüfungen (Updates, Secure Boot, TPM, BitLocker,
        UAC, SMBv1, Remotedesktop, Gastkonto, Firewall, Virenschutz, Proxy/DNS/Hosts, Ports),
        Fakten nur lesend (Registrierung, WMI, Hosts-Datei, Port-Tabellen) außerhalb der
        Dienst-Sperre; „unbekannt“ zählt nicht, ohne genug Bewertbares kein Score. Seite „Härtung“
@@ -128,9 +128,24 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
        Wächter-Meldung bei Beginn, Tastaturen/USB-Laufwerke mit BadUSB-Hinweis bei neuer
        Tastatur, Zwischenablage-Wächter für Krypto-Adressen in der App (opt-in, nur lesend)
        (D-048).
-7. [ ] P6.7 Sicherheits-Review (separater Agent), Doku, DoD.
+7. [x] P6.7 Sicherheits-Review P6.3–P6.6 (separater Agent): 0 kritisch/hoch, 2 mittel, 4 niedrig,
+       3 Kleinigkeiten – alle behoben (siehe `docs/SECURITY.md`).
 
-**Nächster Schritt:** P6.7 Sicherheits-Review P6 (separater Agent), Doku, DoD.
+### Definition of Done – Stand P6
+
+| Kriterium | Status |
+| --- | --- |
+| Score nur aus gelesenen Fakten, „unbekannt“ zählt nicht | ✅ `crates/hardening/src/checks.rs` (Tests), `flow.rs` (`haertung_nur_lesend_…`) |
+| Beheben/Deaktivieren/Update nur nach „Ja“, Prüfsumme bindet die Schritte, geänderter Stand bricht ab | ✅ `flow.rs` (`haertung_…`, `persistenz_…`, `treiber_sperrliste_…`, `software_updates_…`) |
+| Rechnerweites nur für Administratoren, Fremdkonten nie | ✅ `flow.rs`, `handler/persistence.rs`-Tests |
+| Boot-/System-Treiber und wichtige Dienste nie deaktivierbar | ✅ `handler/persistence.rs`-Tests |
+| Treiberliste lizenziert und gebündelt, Authenticode-Hash geprüft | ✅ `docs/LICENSES.md`, `crates/hardening/src/drivers.rs`-Tests |
+| Geräte/Kamera/Zwischenablage nur lesend; Meldungen kontogetrennt; Zwischenablage opt-in | ✅ `handler/devices.rs`-, `clipboard_guard.rs`-Tests, Vitest |
+| Review dokumentiert, Funde behoben | ✅ `docs/SECURITY.md` → Review-Protokoll |
+| `pnpm check` + E2E grün; CI Linux + Windows | ✅ lokal; Windows-CI siehe GitHub Actions |
+
+**P6 erledigt.** **Nächster Schritt:** P7 – Netzwerk (Verbindungen je Programm,
+Firewall-Übersicht), Web-Schutz (MV3-Erweiterung, Phishing-/Malware-Listen), Heimnetz, Leck-Check.
 
 ## P5 – Schutz-Werkzeuge
 

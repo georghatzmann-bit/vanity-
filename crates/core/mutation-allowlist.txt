@@ -246,6 +246,8 @@ crates/winffi/src/clipboard.rs :: winffi-clipboard-data :: Windows-FFI (Zwischen
 crates/winffi/src/clipboard.rs :: winffi-clipboard-lock :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Text zum Lesen sperren.
 crates/winffi/src/clipboard.rs :: winffi-clipboard-read :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Text in eigenen Speicher kopieren (gekürzt).
 crates/winffi/src/clipboard.rs :: winffi-clipboard-unlock :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Sperre wieder lösen.
+crates/winffi/src/clipboard.rs :: winffi-clipboard-exclude-format :: Windows-FFI (Zwischenablage-Wächter, nur lesend): Kennung des Formats „nicht überwachen“ abfragen.
+crates/winffi/src/clipboard.rs :: winffi-clipboard-exclude-check :: Windows-FFI (Zwischenablage-Wächter, nur lesend): prüfen, ob der Inhalt als „nicht überwachen“ markiert ist.
 crates/winffi/src/registry.rs :: winffi-registry-close :: Windows-FFI (Härtung): schließt einen selbst geöffneten Registrierungsschlüssel.
 crates/winffi/src/registry.rs :: winffi-registry-open-read :: Windows-FFI (Härtung): öffnet einen Schlüssel nur zum Lesen (Stand für „Rückgängig“ merken).
 crates/winffi/src/registry.rs :: winffi-registry-query :: Windows-FFI (Härtung): liest einen Wert roh in eigenen Speicher (nur lesend).

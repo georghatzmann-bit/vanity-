@@ -223,7 +223,7 @@ pub fn authentihash(bytes: &[u8]) -> Option<[u8; 32]> {
     Some(hasher.finalize().into())
 }
 
-/// Plausibler Windows-Pfad ohne `..` und Steuerzeichen.
+/// Plausibler Windows-Pfad ohne `..`, `/` und Steuerzeichen.
 fn plausible(path: &str) -> bool {
     let b = path.as_bytes();
     b.len() >= 4
@@ -232,7 +232,7 @@ fn plausible(path: &str) -> bool {
         && b[1] == b':'
         && b[2] == b'\\'
         && !path.split('\\').any(|part| part == "..")
-        && !path.chars().any(char::is_control)
+        && !path.chars().any(|c| c.is_control() || c == '/')
 }
 
 fn strip_prefix_ci<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
@@ -440,6 +440,10 @@ mod tests {
             None
         );
         assert_eq!(driver_path(Some(r"C:\a\..\b.sys"), "b", root), None);
+        assert_eq!(
+            driver_path(Some(r"C:\Windows\System32\drivers/../../x.sys"), "x", root),
+            None
+        );
         assert_eq!(
             kernel_path(r"\WINDOWS\system32\ntoskrnl.exe", root).as_deref(),
             Some(r"C:\WINDOWS\system32\ntoskrnl.exe")

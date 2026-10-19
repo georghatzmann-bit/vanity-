@@ -39,6 +39,56 @@ const MAX_FILES: usize = 400;
 const MAX_EXTENSIONS: usize = 300;
 /// Höchstzahl geprüfter Treiberdateien je Durchlauf.
 const MAX_DRIVERS: usize = 2000;
+/// Dienste und Treiber, die AEGIS nie deaktiviert: Sicherheit (Firewall, Defender,
+/// Sicherheitscenter, Ereignisprotokoll), Systemkern (RPC, DCOM, WMI, Anmeldung, Plug and Play,
+/// Netz-Grundlagen, Updates) und AEGIS selbst.
+const PROTECTED_SERVICES: &[&str] = &[
+    "aegis-service",
+    "AppIDSvc",
+    "BFE",
+    "BrokerInfrastructure",
+    "CoreMessagingRegistrar",
+    "CryptSvc",
+    "DcomLaunch",
+    "Dhcp",
+    "Dnscache",
+    "EventLog",
+    "gpsvc",
+    "KeyIso",
+    "LanmanWorkstation",
+    "LSM",
+    "MpsSvc",
+    "mpsdrv",
+    "nsi",
+    "PlugPlay",
+    "Power",
+    "ProfSvc",
+    "RpcEptMapper",
+    "RpcSs",
+    "SamSs",
+    "Schedule",
+    "SecurityHealthService",
+    "Sense",
+    "SystemEventsBroker",
+    "TrustedInstaller",
+    "UserManager",
+    "WdBoot",
+    "WdFilter",
+    "WdNisDrv",
+    "WdNisSvc",
+    "WinDefend",
+    "Winmgmt",
+    "wscsvc",
+    "wuauserv",
+];
+
+/// Geschützter Dienst bzw. Treiber (Groß-/Kleinschreibung egal)?
+fn protected_service(name: &str) -> bool {
+    PROTECTED_SERVICES
+        .iter()
+        .any(|p| p.eq_ignore_ascii_case(name))
+}
+
 /// Schlüssel der Dienst- und Treiber-Einträge.
 const SERVICES: &str = r"HKLM\SYSTEM\CurrentControlSet\Services";
 
@@ -206,7 +256,16 @@ fn view(
     if entry.kind == AutorunKind::Driver {
         driver_reasons(&entry, known_driver.as_ref(), &mut risk, &mut reasons);
     }
+    let protected = matches!(entry.kind, AutorunKind::Service | AutorunKind::Driver)
+        && protected_service(&entry.name);
+    if protected {
+        reasons.push(Reason {
+            de: "Wichtiger Windows- bzw. Sicherheitsdienst – AEGIS deaktiviert ihn nicht.".into(),
+            en: "Important Windows or security service – AEGIS does not disable it.".into(),
+        });
+    }
     let action = match entry.kind {
+        _ if protected => None,
         AutorunKind::Run
         | AutorunKind::RunOnce
         | AutorunKind::PolicyRun
@@ -367,6 +426,19 @@ pub fn collect(scanner: &Scanner, user: &dyn UserAccess) -> PersistenceState {
     let mut files: BTreeMap<String, Option<PathBuf>> = BTreeMap::new();
     let mut driver_hashes: HashMap<PathBuf, Option<DriverHashes>> = HashMap::new();
     if let Ok(_scope) = user.enter() {
+        // Aufgaben liest der Dienst als SYSTEM – gezeigt werden nur die, deren Datei das Konto
+        // selbst lesen darf (fremde, private Aufgaben bleiben verborgen).
+        #[cfg(windows)]
+        {
+            let root =
+                PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()))
+                    .join(r"System32\Tasks");
+            entries.retain(|e| {
+                e.kind != AutorunKind::ScheduledTask
+                    || aegis_hardening::persistence::task_file(&root, &e.name)
+                        .is_some_and(|f| std::fs::File::open(f).is_ok())
+            });
+        }
         if let Some(p) = &profile {
             let startup = p.join(r"AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup");
             if let Ok(list) = std::fs::read_dir(&startup) {
@@ -404,6 +476,9 @@ pub fn collect(scanner: &Scanner, user: &dyn UserAccess) -> PersistenceState {
             }
             files.insert(entry.id.clone(), file);
         }
+    } else {
+        // Ohne die Rechte des Kontos keine Aufgaben (sie wären mit SYSTEM-Rechten gelesen).
+        entries.retain(|e| e.kind != AutorunKind::ScheduledTask);
     }
     let drivers_checked = driver_hashes.values().filter(|h| h.is_some()).count();
     let known: HashMap<PathBuf, KnownDriver> = driver_hashes
@@ -550,6 +625,12 @@ pub fn disable_steps(entry: &Autorun, sid: Option<&str>) -> Result<Vec<Step>, St
             path: entry.name.clone(),
             enabled: false,
         }]),
+        AutorunKind::Service | AutorunKind::Driver if protected_service(&entry.name) => Err(
+            "Wichtiger Windows- bzw. Sicherheitsdienst – AEGIS deaktiviert ihn nicht.".into(),
+        ),
+        AutorunKind::Service if !plausible_service(&entry.name) => {
+            Err("Ungewöhnlicher Dienstname – AEGIS ändert ihn nicht.".into())
+        }
         AutorunKind::Service => Ok(vec![Step::Registry {
             place: Place::Machine,
             key: format!(r"SYSTEM\CurrentControlSet\Services\{}", entry.name),
@@ -603,11 +684,20 @@ pub fn disable_steps(entry: &Autorun, sid: Option<&str>) -> Result<Vec<Step>, St
     }
 }
 
-/// Liest den Eintrag erneut (vor dem Ausführen eines Plans).
-pub(super) fn reload(kind: AutorunKind, id: &str, sid: Option<&str>) -> Option<Autorun> {
+/// Liest den Eintrag erneut (vor dem Ausführen eines Plans). `name` aus dem letzten Check:
+/// Dann wird nur dieser Eintrag gelesen (kurz unter der Dienst-Sperre).
+pub(super) fn reload(
+    kind: AutorunKind,
+    id: &str,
+    name: Option<&str>,
+    sid: Option<&str>,
+) -> Option<Autorun> {
     #[cfg(windows)]
     {
-        let mut list = aegis_hardening::collect::machine_autoruns_of(kind);
+        let mut list = match name {
+            Some(name) => aegis_hardening::collect::machine_autorun_named(kind, name),
+            None => aegis_hardening::collect::machine_autoruns_of(kind),
+        };
         if let Some(sid) = sid.filter(|s| s.starts_with("S-1-")) {
             list.extend(aegis_hardening::collect::user_registry_autoruns(sid));
         }
@@ -615,7 +705,7 @@ pub(super) fn reload(kind: AutorunKind, id: &str, sid: Option<&str>) -> Option<A
     }
     #[cfg(not(windows))]
     {
-        let _ = (kind, id, sid);
+        let _ = (kind, id, name, sid);
         None
     }
 }
@@ -682,6 +772,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             builder = builder.target(Target::other(step.describe()));
         }
         let driver = view.entry.kind == AutorunKind::Driver;
+        let system_part = matches!(view.entry.kind, AutorunKind::Service | AutorunKind::Driver);
         let effect = if driver {
             format!(
                 "Der Treiber {} wird ab dem nächsten Neustart nicht mehr geladen (bis dahin bleibt er aktiv). Geräte oder Programme, die ihn brauchen, funktionieren dann evtl. nicht mehr. Die Treiberdatei bleibt unverändert.",
@@ -692,6 +783,15 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 "Das Programm startet nicht mehr automatisch ({}). Die Programmdatei selbst bleibt unverändert.",
                 super::quoted(&view.entry.command)
             )
+        };
+        let effect = if system_part {
+            format!(
+                "{effect} Achtung: Dienste und Treiber gehören oft zu Geräten, Windows-Funktionen oder anderen Programmen – deaktiviere nur, was du kennst."
+            )
+        } else if view.entry.kind == AutorunKind::ScheduledTask {
+            format!("{effect} Deaktiviert wird die ganze Aufgabe (mit allen ihren Befehlen).")
+        } else {
+            effect
         };
         let plan = builder
             .what(format!(
@@ -719,7 +819,11 @@ impl<C: Clock, W: Durable> Service<C, W> {
             .undo(UndoHint::reversible(
                 "AEGIS merkt sich den alten Stand – „Rückgängig“ auf der Seite „Härtung“ stellt ihn wieder her.",
             ))
-            .severity(view.risk.max(RiskLevel::Info))
+            .severity(if system_part {
+                view.risk.max(RiskLevel::Suspicious)
+            } else {
+                view.risk.max(RiskLevel::Info)
+            })
             .build(self.now());
         match plan {
             Ok(plan) => self.register(plan, owner, HashMap::new()),
@@ -922,6 +1026,39 @@ mod tests {
         let mut raw = driver(Some(3), SERVICES);
         raw.command = r"\Device\HarddiskVolume2\x.sys".into();
         assert!(files_of(&raw, &env).is_empty());
+    }
+
+    #[test]
+    fn wichtige_dienste_werden_nie_deaktiviert() {
+        let svc = |name: &str| {
+            Autorun::new(
+                AutorunKind::Service,
+                true,
+                SERVICES,
+                name,
+                "svchost.exe",
+                true,
+            )
+            .with_start(Some(2))
+        };
+        for name in ["MpsSvc", "mpssvc", "RpcSs", "WinDefend", "aegis-service"] {
+            assert!(disable_steps(&svc(name), None).is_err(), "{name}");
+            let v = view(svc(name), None, &HashMap::new(), None);
+            assert_eq!(v.action, None, "{name}");
+            assert!(v.reasons.iter().any(|r| r.de.contains("Sicherheitsdienst")));
+        }
+        assert!(disable_steps(&svc("Evil/x"), None).is_err());
+        assert!(disable_steps(&svc("SomeUpdater"), None).is_ok());
+        let wd = Autorun::new(
+            AutorunKind::Driver,
+            true,
+            SERVICES,
+            "WdFilter",
+            "x.sys",
+            true,
+        )
+        .with_start(Some(3));
+        assert!(disable_steps(&wd, None).is_err());
     }
 
     #[test]

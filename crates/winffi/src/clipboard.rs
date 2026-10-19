@@ -8,7 +8,7 @@ use std::ptr;
 use windows_sys::Win32::Foundation::HWND;
 use windows_sys::Win32::System::DataExchange::{
     CloseClipboard, GetClipboardData, GetClipboardOwner, GetClipboardSequenceNumber,
-    IsClipboardFormatAvailable, OpenClipboard,
+    IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW,
 };
 use windows_sys::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
 use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
@@ -25,6 +25,25 @@ pub fn sequence_number() -> u32 {
     unsafe {
         GetClipboardSequenceNumber()
     }
+}
+
+/// Hat das kopierende Programm den Inhalt als „nicht überwachen“ markiert (z. B.
+/// Passwort-Manager: `ExcludeClipboardContentFromMonitorProcessing`)? Dann liest AEGIS ihn nicht.
+#[must_use]
+pub fn excluded_from_monitoring() -> bool {
+    let name = crate::util::wide("ExcludeClipboardContentFromMonitorProcessing");
+    // SAFETY: nullterminierter Name; liefert die Kennung des (systemweit bekannten) Formats.
+    // aegis-unsafe: winffi-clipboard-exclude-format
+    #[allow(unsafe_code)]
+    let format = unsafe { RegisterClipboardFormatW(name.as_ptr()) };
+    if format == 0 {
+        return false;
+    }
+    // SAFETY: Formatkennung von oben.
+    // aegis-unsafe: winffi-clipboard-exclude-check
+    #[allow(unsafe_code)]
+    let present = unsafe { IsClipboardFormatAvailable(format) };
+    present != 0
 }
 
 /// Prozess-ID des Programms, dem die Zwischenablage gerade gehört (hat zuletzt kopiert).

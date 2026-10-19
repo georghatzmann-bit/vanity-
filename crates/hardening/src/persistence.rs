@@ -344,6 +344,25 @@ pub fn parse_task_xml(xml: &str) -> Option<(Vec<String>, bool)> {
     Some((commands, enabled))
 }
 
+/// Datei einer geplanten Aufgabe (`\\Ordner\\Name`) unter `root` (`System32\\Tasks`).
+/// Abgelehnt: kein führendes `\\`, leere Teile, `..`, `/`, `:`, Steuerzeichen, über 260 Zeichen.
+#[must_use]
+pub fn task_file(root: &std::path::Path, task: &str) -> Option<std::path::PathBuf> {
+    let rest = task.strip_prefix('\\')?;
+    let ok = task.chars().count() <= 260
+        && !rest.is_empty()
+        && rest
+            .split('\\')
+            .all(|part| !part.is_empty() && part != "." && part != "..")
+        && !task
+            .chars()
+            .any(|c| c.is_control() || matches!(c, '/' | ':' | '"'));
+    ok.then(|| {
+        rest.split('\\')
+            .fold(root.to_path_buf(), |path, part| path.join(part))
+    })
+}
+
 /// Bewertung eines Eintrags allein aus Art und Text (der Dienst ergänzt Datei-Prüfungen).
 #[must_use]
 pub fn assess(entry: &Autorun) -> (RiskLevel, Vec<Flag>) {
@@ -464,5 +483,19 @@ mod tests {
         );
         assert!(!enabled);
         assert!(parse_task_xml("<Task><Actions><ComHandler/></Actions></Task>").is_none());
+    }
+
+    #[test]
+    fn aufgabendatei_nur_unter_dem_ordner() {
+        let root = std::path::Path::new("tasks");
+        assert_eq!(
+            task_file(root, r"\Microsoft\Upd"),
+            Some(root.join("Microsoft").join("Upd"))
+        );
+        for bad in [
+            r"Upd", r"\", r"\a\..\b", r"\a\\b", r"\a/b", r"\C:x", "\\a\u{0}",
+        ] {
+            assert_eq!(task_file(root, bad), None, "{bad}");
+        }
     }
 }

@@ -1097,7 +1097,12 @@ impl<C: Clock, W: Durable> Service<C, W> {
             super::persistence::parse_value(value)
                 .ok_or_else(|| "Ungültiger Eintrag".to_owned())
                 .and_then(|(kind, id)| {
-                    let entry = super::persistence::reload(kind, id, owner.as_deref()).ok_or_else(
+                    let name = self
+                        .persistence_cache
+                        .get(&owner)
+                        .and_then(|list| list.iter().find(|v| v.entry.id == id))
+                        .map(|v| v.entry.name.clone());
+                    let entry = super::persistence::reload(kind, id, name.as_deref(), owner.as_deref()).ok_or_else(
                         || "Der Eintrag hat sich seit dem Vorschlag geändert oder ist weg – nichts geändert.".to_owned(),
                     )?;
                     let name: String = entry.name.chars().take(120).collect();

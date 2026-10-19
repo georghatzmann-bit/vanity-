@@ -190,7 +190,7 @@ mod sys {
                 #[allow(clippy::disallowed_methods)]
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err("winget hat zu lange gebraucht".into());
+                return Err("winget hat zu lange gebraucht und wurde beendet. Ein bereits gestartetes Installationsprogramm kann noch weiterlaufen – bitte später „Erneut suchen“.".into());
             }
             std::thread::sleep(Duration::from_millis(250));
         };
@@ -378,9 +378,26 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
-    /// Update nach dem „Ja“: läuft außerhalb der Dienst-Sperre.
-    pub(super) fn apply_software_update(&mut self, permit: ExecutionPermit) -> Response {
+    /// Update nach dem „Ja“: läuft außerhalb der Dienst-Sperre. Die Administratorrechte werden
+    /// beim Ausführen erneut geprüft.
+    pub(super) fn apply_software_update(
+        &mut self,
+        permit: ExecutionPermit,
+        user: &dyn UserAccess,
+    ) -> Response {
         let action = permit.plan().kind();
+        if !user.is_admin() {
+            let result = aegis_core::audit::ExecutionResult::Failed {
+                message: "Software-Updates gelten für den ganzen PC – dafür braucht AEGIS Administratorrechte.".into(),
+            };
+            self.finish_plan(permit, &result, user, None);
+            return Response::Executed {
+                kind: action,
+                result,
+                entries: Vec::new(),
+                failures: Vec::new(),
+            };
+        }
         self.deferred = Some(super::backup::Deferred::update(
             permit,
             Arc::clone(&self.packages),
