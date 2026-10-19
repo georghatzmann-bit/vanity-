@@ -1,0 +1,319 @@
+//! Verbindung zum Dienst `aegis-service` (Scans, Quarantäne, Freigaben).
+//!
+//! Die App führt selbst **nichts** aus: Sie reicht Anfragen an den Dienst weiter, der jeden
+//! Plan selbst formuliert und nur nach „Ja“ (mit Einmal-Nonce) handelt. Jede Anfrage wird
+//! hier auf erlaubte Werte geprüft, bevor sie die App verlässt.
+//!
+//! Transport: Named Pipe `\\.\pipe\aegis-service` (Windows) bzw. Unix-Socket des
+//! Entwicklungsdienstes. Nachrichten: 4-Byte-Länge (LE) + JSON, wie `aegis_service::protocol`.
+
+use std::io::{self, Read, Write};
+
+use serde_json::{Value, json};
+
+/// Größte Nachricht (wie im Dienst).
+const MAX_FRAME: u32 = 16 * 1024 * 1024;
+/// Höchstzahl Pfade pro Anfrage (wie im Dienst).
+const MAX_PATHS: usize = 1000;
+/// Längste erlaubte Pfadangabe (Windows-Langpfade).
+const MAX_PATH_CHARS: usize = 32_767;
+/// Längste Kennung (Plan, Prüfsumme, Nonce, Dialog).
+const MAX_ID_CHARS: usize = 128;
+
+/// Endpunkt des Dienstes.
+fn endpoint() -> Option<String> {
+    #[cfg(windows)]
+    {
+        Some(r"\\.\pipe\aegis-service".to_owned())
+    }
+    #[cfg(not(windows))]
+    {
+        let state = std::env::var_os("XDG_STATE_HOME")
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .or_else(|| {
+                std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state"))
+            })?;
+        Some(
+            state
+                .join("aegis-service/aegis.sock")
+                .to_string_lossy()
+                .into_owned(),
+        )
+    }
+}
+
+#[cfg(unix)]
+fn connect(endpoint: &str) -> io::Result<std::os::unix::net::UnixStream> {
+    std::os::unix::net::UnixStream::connect(endpoint)
+}
+
+#[cfg(windows)]
+fn connect(endpoint: &str) -> io::Result<std::fs::File> {
+    // Öffnet die Pipe des Dienstes zum Senden der Anfrage – keine Datei, keine Nutzerdaten.
+    // aegis-mutation: desktop-service-pipe-open
+    #[allow(clippy::disallowed_methods)]
+    let pipe = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(endpoint);
+    pipe
+}
+
+/// Sendet eine Nachricht und liest die Antwort.
+fn roundtrip<S: Read + Write>(stream: &mut S, request: &Value) -> io::Result<Value> {
+    let payload = serde_json::to_vec(request).map_err(io::Error::other)?;
+    let len = u32::try_from(payload.len())
+        .ok()
+        .filter(|l| *l <= MAX_FRAME)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Anfrage zu groß"))?;
+    stream.write_all(&len.to_le_bytes())?;
+    stream.write_all(&payload)?;
+    stream.flush()?;
+    let mut header = [0u8; 4];
+    stream.read_exact(&mut header)?;
+    let len = u32::from_le_bytes(header);
+    if len > MAX_FRAME {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Antwort zu groß",
+        ));
+    }
+    let mut body = vec![0u8; usize::try_from(len).map_err(io::Error::other)?];
+    stream.read_exact(&mut body)?;
+    serde_json::from_slice(&body).map_err(io::Error::other)
+}
+
+/// Fehlertext für die Oberfläche (Deutsch; die UI zeigt ihn als „Dienst nicht erreichbar“).
+fn unreachable(error: &io::Error) -> String {
+    format!("Der AEGIS-Dienst ist nicht erreichbar ({error}).")
+}
+
+async fn send(request: Value) -> Result<Value, String> {
+    let endpoint = endpoint().ok_or("Kein Endpunkt des Dienstes bestimmbar.")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut stream = connect(&endpoint).map_err(|e| unreachable(&e))?;
+        roundtrip(&mut stream, &request).map_err(|e| unreachable(&e))
+    })
+    .await
+    .map_err(|e| format!("Interner Fehler: {e}"))?
+}
+
+fn check_paths(paths: &[String]) -> Result<(), String> {
+    if paths.is_empty() || paths.len() > MAX_PATHS {
+        return Err(format!("1 bis {MAX_PATHS} Pfade erwartet."));
+    }
+    for p in paths {
+        if p.is_empty()
+            || p.chars().count() > MAX_PATH_CHARS
+            || p.contains('\0')
+            || !std::path::Path::new(p).is_absolute()
+        {
+            return Err("Ungültiger Pfad (nur absolute Pfade).".to_owned());
+        }
+    }
+    Ok(())
+}
+
+fn check_id(value: &str) -> Result<(), String> {
+    let ok = !value.is_empty()
+        && value.len() <= MAX_ID_CHARS
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':'));
+    if ok {
+        Ok(())
+    } else {
+        Err("Ungültige Kennung.".to_owned())
+    }
+}
+
+fn check_decision(value: &str) -> Result<(), String> {
+    if matches!(value, "execute" | "decline" | "ignore" | "trust") {
+        Ok(())
+    } else {
+        Err("Ungültige Entscheidung.".to_owned())
+    }
+}
+
+/// Anfrage „Prüfen“ (nur lesend).
+pub fn scan_request(paths: &[String]) -> Result<Value, String> {
+    check_paths(paths)?;
+    Ok(json!({ "type": "scan", "paths": paths }))
+}
+
+/// Anfrage „Isolieren vorschlagen“.
+pub fn propose_quarantine_request(paths: &[String]) -> Result<Value, String> {
+    check_paths(paths)?;
+    Ok(json!({ "type": "propose_quarantine", "paths": paths }))
+}
+
+/// Anfrage „Wiederherstellen/Löschen vorschlagen“.
+pub fn propose_entry_request(kind: &str, entry_id: &str) -> Result<Value, String> {
+    check_id(entry_id)?;
+    Ok(json!({ "type": kind, "entry_id": entry_id }))
+}
+
+/// Antwort im Freigabe-Dialog.
+pub fn decide_request(
+    plan_id: &str,
+    digest: &str,
+    nonce: &str,
+    decision: &str,
+    dialog_id: &str,
+) -> Result<Value, String> {
+    for id in [plan_id, digest, nonce, dialog_id] {
+        check_id(id)?;
+    }
+    check_decision(decision)?;
+    Ok(json!({
+        "type": "decide", "plan_id": plan_id, "digest": digest, "nonce": nonce,
+        "decision": decision, "dialog_id": dialog_id,
+    }))
+}
+
+/// Antwort im zweiten Dialog vor endgültigem Löschen.
+pub fn confirm_second_request(
+    challenge_id: &str,
+    nonce: &str,
+    decision: &str,
+    dialog_id: &str,
+) -> Result<Value, String> {
+    for id in [challenge_id, nonce, dialog_id] {
+        check_id(id)?;
+    }
+    check_decision(decision)?;
+    Ok(json!({
+        "type": "confirm_second", "challenge_id": challenge_id, "nonce": nonce,
+        "decision": decision, "dialog_id": dialog_id,
+    }))
+}
+
+/// Dateien/Ordner prüfen (nur lesend).
+#[tauri::command]
+pub async fn service_scan(paths: Vec<String>) -> Result<Value, String> {
+    send(scan_request(&paths)?).await
+}
+
+/// Quarantäne auflisten.
+#[tauri::command]
+pub async fn service_list_quarantine() -> Result<Value, String> {
+    send(json!({ "type": "list_quarantine" })).await
+}
+
+/// Isolieren vorschlagen (der Dienst prüft und formuliert den Plan).
+#[tauri::command]
+pub async fn service_propose_quarantine(paths: Vec<String>) -> Result<Value, String> {
+    send(propose_quarantine_request(&paths)?).await
+}
+
+/// Wiederherstellen vorschlagen.
+#[tauri::command]
+pub async fn service_propose_restore(entry_id: String) -> Result<Value, String> {
+    send(propose_entry_request("propose_restore", &entry_id)?).await
+}
+
+/// Endgültiges Löschen vorschlagen.
+#[tauri::command]
+pub async fn service_propose_delete(entry_id: String) -> Result<Value, String> {
+    send(propose_entry_request("propose_delete", &entry_id)?).await
+}
+
+/// Antwort des Nutzers im Freigabe-Dialog weiterreichen.
+#[tauri::command]
+pub async fn service_decide(
+    plan_id: String,
+    digest: String,
+    nonce: String,
+    decision: String,
+    dialog_id: String,
+) -> Result<Value, String> {
+    send(decide_request(
+        &plan_id, &digest, &nonce, &decision, &dialog_id,
+    )?)
+    .await
+}
+
+/// Antwort im zweiten Dialog weiterreichen.
+#[tauri::command]
+pub async fn service_confirm_second(
+    challenge_id: String,
+    nonce: String,
+    decision: String,
+    dialog_id: String,
+) -> Result<Value, String> {
+    send(confirm_second_request(
+        &challenge_id,
+        &nonce,
+        &decision,
+        &dialog_id,
+    )?)
+    .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn eingaben_werden_geprueft() {
+        let abs = if cfg!(windows) { r"C:\x" } else { "/x" }.to_owned();
+        assert!(scan_request(std::slice::from_ref(&abs)).is_ok());
+        assert!(scan_request(&[]).is_err());
+        assert!(scan_request(&["relativ".to_owned()]).is_err());
+        assert!(scan_request(&[format!("{abs}\0")]).is_err());
+        assert!(scan_request(&vec![abs.clone(); MAX_PATHS + 1]).is_err());
+        assert!(propose_entry_request("propose_restore", "../x").is_err());
+        assert!(decide_request("a", "b", "c", "execute", "d").is_ok());
+        assert!(decide_request("a", "b", "c", "execute_now", "d").is_err());
+        assert!(decide_request("a b", "b", "c", "decline", "d").is_err());
+        assert!(confirm_second_request("a", "b", "trust", &"x".repeat(200)).is_err());
+    }
+
+    #[test]
+    fn rahmen_rundweg() {
+        // Gegenstelle simulieren: Antwort vorab in den Puffer legen.
+        struct Duplex {
+            inbound: io::Cursor<Vec<u8>>,
+            outbound: Vec<u8>,
+        }
+        impl Read for Duplex {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                self.inbound.read(buf)
+            }
+        }
+        impl Write for Duplex {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                self.outbound.write(buf)
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let answer = br#"{"type":"hello"}"#;
+        let mut inbound = u32::try_from(answer.len()).unwrap().to_le_bytes().to_vec();
+        inbound.extend_from_slice(answer);
+        let mut d = Duplex {
+            inbound: io::Cursor::new(inbound),
+            outbound: Vec::new(),
+        };
+        let v = roundtrip(&mut d, &json!({"type": "list_quarantine"})).unwrap();
+        assert_eq!(v["type"], "hello");
+        assert_eq!(&d.outbound[4..], br#"{"type":"list_quarantine"}"#);
+        let mut too_big = Duplex {
+            inbound: io::Cursor::new((MAX_FRAME + 1).to_le_bytes().to_vec()),
+            outbound: Vec::new(),
+        };
+        assert!(roundtrip(&mut too_big, &json!({})).is_err());
+    }
+
+    #[test]
+    fn endpunkt_ist_bestimmbar() {
+        let ep = endpoint();
+        if cfg!(windows) {
+            assert_eq!(ep.as_deref(), Some(r"\\.\pipe\aegis-service"));
+        } else if std::env::var_os("HOME").is_some() {
+            assert!(ep.unwrap().ends_with("aegis-service/aegis.sock"));
+        }
+    }
+}

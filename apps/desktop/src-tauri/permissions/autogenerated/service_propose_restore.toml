@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-propose-restore"
+description = "Enables the service_propose_restore command without any pre-configured scope."
+commands.allow = ["service_propose_restore"]
+
+[[permission]]
+identifier = "deny-service-propose-restore"
+description = "Denies the service_propose_restore command without any pre-configured scope."
+commands.deny = ["service_propose_restore"]

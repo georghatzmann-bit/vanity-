@@ -28,6 +28,14 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-app-info': 'App-Befehl app_info (Version, Build-Profil, Plattform, Infobereich; lesend)',
   'allow-hide-to-tray':
     'App-Befehl hide_to_tray: Schließen-Knopf mit „Beim Schließen in den Infobereich“ – versteckt nur mit Tray-Symbol',
+  'allow-service-scan': 'Dienst: Dateien/Ordner prüfen (nur lesend)',
+  'allow-service-list-quarantine': 'Dienst: Quarantäne anzeigen (nur lesend)',
+  'allow-service-propose-quarantine': 'Dienst: Isolieren vorschlagen (ausgeführt erst nach Ja)',
+  'allow-service-propose-restore': 'Dienst: Wiederherstellen vorschlagen',
+  'allow-service-propose-delete': 'Dienst: endgültiges Löschen vorschlagen (zwei Bestätigungen)',
+  'allow-service-decide': 'Dienst: Antwort aus dem Freigabe-Dialog (mit Einmal-Nonce)',
+  'allow-service-confirm-second': 'Dienst: zweite Bestätigung vor endgültigem Löschen',
+  'dialog:allow-open': 'Datei-/Ordnerauswahl für Scans (nur Auswahl)',
 };
 
 /**

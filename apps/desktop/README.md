@@ -41,6 +41,14 @@ ersetzen, Pfade des Nutzers auslesen, Events an das Backend senden) und auch kei
 | `core:event:allow-unlisten`                  | Empfänger wieder abmelden (z. B. beim Verlassen einer Seite), sonst bleiben sie bis zum Ende aktiv.                                                                                       |
 | `allow-app-info`                             | App-Befehl `app_info` (Version, Build-Profil, Plattform für „Über AEGIS“, ob es ein Symbol im Infobereich gibt). Nur lesend; der Befehl selbst macht kein I/O.                            |
 | `allow-hide-to-tray`                         | App-Befehl `hide_to_tray`: Schließen-Knopf bei „Beim Schließen in den Infobereich“ (Standard: an). Versteckt das Fenster nur, wenn es ein Symbol im Infobereich gibt (siehe „Schließen“). |
+| `allow-service-scan`                         | App-Befehl `service_scan`: Dateien/Ordner vom Dienst prüfen lassen. Nur lesend; Pfade werden geprüft (absolut, ≤ 1000).                                                                   |
+| `allow-service-list-quarantine`              | App-Befehl `service_list_quarantine`: Quarantäne-Einträge anzeigen. Nur lesend.                                                                                                           |
+| `allow-service-propose-quarantine`           | App-Befehl `service_propose_quarantine`: Isolieren **vorschlagen** – der Dienst prüft selbst und formuliert den Plan; ausgeführt wird erst nach „Ja“.                                     |
+| `allow-service-propose-restore`              | App-Befehl `service_propose_restore`: Wiederherstellen vorschlagen (nur Vorschlag).                                                                                                       |
+| `allow-service-propose-delete`               | App-Befehl `service_propose_delete`: Endgültiges Löschen vorschlagen (nur Vorschlag; braucht danach zwei Bestätigungen).                                                                  |
+| `allow-service-decide`                       | App-Befehl `service_decide`: Antwort aus dem Freigabe-Dialog an den Dienst – gilt nur mit der Einmal-Nonce des Vorschlags.                                                                |
+| `allow-service-confirm-second`               | App-Befehl `service_confirm_second`: Antwort im zweiten Dialog vor endgültigem Löschen (eigene Einmal-Nonce).                                                                             |
+| `dialog:allow-open`                          | Datei- bzw. Ordnerauswahl für Scans („Datei wählen…“). Nur Auswahl; die App liest/schreibt dabei nichts. `save`, `message`, `ask` usw. bleiben gesperrt.                                  |
 
 Dieselbe Liste steht als `JUSTIFIED_PERMISSIONS` in `tests/tauri-config.test.ts` und als
 `EXPECTED_PERMISSIONS` in `src-tauri/src/main.rs` (Rust-Test, prüft auch diese Tabelle).
@@ -73,10 +81,18 @@ echten ACL: jeder Aufruf der Oberfläche läuft, alles andere wird abgelehnt).
 | Abmelden (Rückgabe von `onResized`/`listen`)                    | `plugin:event\|unlisten`                  | `core:event:allow-unlisten`                  |
 | `invoke('app_info')`                                            | `app_info`                                | `allow-app-info`                             |
 | `invoke('hide_to_tray')`                                        | `hide_to_tray`                            | `allow-hide-to-tray`                         |
+| `invoke('service_scan')`                                        | `service_scan`                            | `allow-service-scan`                         |
+| `invoke('service_list_quarantine')`                             | `service_list_quarantine`                 | `allow-service-list-quarantine`              |
+| `invoke('service_propose_quarantine')`                          | `service_propose_quarantine`              | `allow-service-propose-quarantine`           |
+| `invoke('service_propose_restore')`                             | `service_propose_restore`                 | `allow-service-propose-restore`              |
+| `invoke('service_propose_delete')`                              | `service_propose_delete`                  | `allow-service-propose-delete`               |
+| `invoke('service_decide')`                                      | `service_decide`                          | `allow-service-decide`                       |
+| `invoke('service_confirm_second')`                              | `service_confirm_second`                  | `allow-service-confirm-second`               |
+| `open()` aus `@tauri-apps/plugin-dialog`                        | `plugin:dialog\|open`                     | `dialog:allow-open`                          |
 
 **App-Befehle nur mit Recht.** `src-tauri/build.rs` meldet die App-Befehle über
 `tauri_build::AppManifest::commands` an. Damit gibt es ein ACL-Manifest der App, und Tauri lässt
-App-Befehle nur noch mit ausdrücklicher Berechtigung zu (`allow-app-info`, `allow-hide-to-tray`)
+App-Befehle nur noch mit ausdrücklicher Berechtigung zu (`allow-app-info`, `allow-hide-to-tray`, `allow-service-*`)
 – ohne dieses Manifest stünde jeder App-Befehl jedem lokalen Fenster offen. Die
 Berechtigungsdateien `src-tauri/permissions/autogenerated/*.toml` erzeugt das Build-Skript.
 

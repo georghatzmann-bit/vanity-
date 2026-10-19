@@ -355,6 +355,46 @@ export const de = {
     replayBoot: 'Start-Animation abspielen',
     emergency: 'Notfall-Scan',
   },
+  consentFlow: {
+    nothingDone: 'Es wurde nichts verändert.',
+    executed: 'Ausgeführt',
+    partial: 'Teilweise ausgeführt',
+    failed: 'Nicht ausgeführt',
+    trusted: 'Vermerkt – nichts ausgeführt',
+    serviceDown: 'Dienst nicht erreichbar',
+    serviceDownHint:
+      'Der Hintergrunddienst „aegis-service“ antwortet nicht. Ohne ihn kann AEGIS nicht prüfen oder isolieren – es wird nichts verändert.',
+    previewOnly: 'Nur in der Desktop-App verfügbar',
+    previewOnlyHint:
+      'In der Browser-Vorschau gibt es keinen Dienst. Hier wird nichts geprüft und nichts verändert.',
+    error: 'Fehler',
+  },
+  scanner: {
+    intro:
+      'Wähle Dateien oder einen Ordner. AEGIS prüft nur und erklärt die Funde – verändert wird nichts ohne dein Ja.',
+    pickFiles: 'Dateien wählen …',
+    pickFolder: 'Ordner wählen …',
+    scanning: 'Prüfe …',
+    result: 'Ergebnis',
+    checked: '{count} Dateien geprüft · {notable} auffällig',
+    clean: 'Nichts Auffälliges gefunden.',
+    isolate: 'Isolieren …',
+    why: 'Warum?',
+    skipped: '{count} Einträge übersprungen (Links, Sonderdateien, nicht lesbar)',
+    partial: 'Nur teilweise geprüft',
+    confidence: 'Sicherheit {value} %',
+    truncated: 'Abgebrochen: zu viele Dateien in einem Lauf.',
+  },
+  vault: {
+    intro:
+      'Isolierte Dateien liegen verschlüsselt im Tresor des Dienstes. Wiederherstellen oder endgültig löschen – jeweils nur nach deiner Bestätigung.',
+    empty: 'Die Quarantäne ist leer.',
+    restore: 'Wiederherstellen …',
+    delete: 'Endgültig löschen …',
+    refresh: 'Aktualisieren',
+    isolatedAt: 'Isoliert am {date}',
+    never: 'AEGIS löscht nie automatisch – auch nicht nach Fristen.',
+  },
   toast: {
     region: 'Benachrichtigungen',
     dismiss: 'Meldung schließen',

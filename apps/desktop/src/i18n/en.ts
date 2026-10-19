@@ -352,6 +352,46 @@ export const en: Messages<typeof de> = {
     replayBoot: 'Play start animation',
     emergency: 'Emergency scan',
   },
+  consentFlow: {
+    nothingDone: 'Nothing was changed.',
+    executed: 'Done',
+    partial: 'Partly done',
+    failed: 'Not done',
+    trusted: 'Noted – nothing was done',
+    serviceDown: 'Service not reachable',
+    serviceDownHint:
+      'The background service "aegis-service" is not responding. Without it AEGIS cannot scan or isolate – nothing is changed.',
+    previewOnly: 'Only available in the desktop app',
+    previewOnlyHint:
+      'The browser preview has no service. Nothing is scanned and nothing is changed here.',
+    error: 'Error',
+  },
+  scanner: {
+    intro:
+      'Choose files or a folder. AEGIS only scans and explains its findings – nothing is changed without your yes.',
+    pickFiles: 'Choose files…',
+    pickFolder: 'Choose folder…',
+    scanning: 'Scanning…',
+    result: 'Result',
+    checked: '{count} files checked · {notable} notable',
+    clean: 'Nothing suspicious found.',
+    isolate: 'Isolate…',
+    why: 'Why?',
+    skipped: '{count} entries skipped (links, special files, unreadable)',
+    partial: 'Only partly checked',
+    confidence: 'Confidence {value} %',
+    truncated: 'Stopped: too many files in one run.',
+  },
+  vault: {
+    intro:
+      'Isolated files are stored encrypted in the service vault. Restore or delete permanently – each only after you confirm.',
+    empty: 'The quarantine is empty.',
+    restore: 'Restore…',
+    delete: 'Delete permanently…',
+    refresh: 'Refresh',
+    isolatedAt: 'Isolated on {date}',
+    never: 'AEGIS never deletes automatically – not even after a deadline.',
+  },
   toast: {
     region: 'Notifications',
     dismiss: 'Dismiss notification',

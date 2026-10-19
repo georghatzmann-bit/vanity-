@@ -25,8 +25,6 @@ export const DEFAULT_ROUTE: RouteId = 'dashboard';
 
 /** Module, die es noch nicht gibt, mit der Phase, in der sie kommen. */
 export const routePhases: Readonly<Partial<Record<RouteId, string>>> = {
-  scan: 'P2',
-  quarantine: 'P2',
   realtime: 'P3',
   reports: 'P3',
   lab: 'P4',

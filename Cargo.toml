@@ -38,6 +38,8 @@ tauri = { version = "2.12.4", features = [] }
 tauri-build = { version = "2.7.3", features = [] }
 # Desktop-App: nur eine Instanz (zweiter Start holt das vorhandene Fenster nach vorn).
 tauri-plugin-single-instance = "2.5.4"
+# Desktop-App: Datei-/Ordnerauswahl für Scans (nur „open“ freigegeben).
+tauri-plugin-dialog = "2.8.3"
 # Desktop-App, nur Windows: native Fehlermeldung, falls die App nicht starten kann
 # (MessageBoxW ohne eigenes `unsafe`; dieselbe Bibliothek nutzt Tauris Dialog-Plugin).
 # Ohne Standard-Features: die sind nur für Linux (xdg-portal/Wayland).

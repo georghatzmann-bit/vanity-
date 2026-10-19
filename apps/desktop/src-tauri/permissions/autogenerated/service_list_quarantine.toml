@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-list-quarantine"
+description = "Enables the service_list_quarantine command without any pre-configured scope."
+commands.allow = ["service_list_quarantine"]
+
+[[permission]]
+identifier = "deny-service-list-quarantine"
+description = "Denies the service_list_quarantine command without any pre-configured scope."
+commands.deny = ["service_list_quarantine"]

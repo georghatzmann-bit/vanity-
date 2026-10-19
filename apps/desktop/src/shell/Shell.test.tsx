@@ -56,10 +56,10 @@ describe('Seitenleiste', () => {
     const links = within(nav()).getAllByRole('link');
     expect(links).toHaveLength(routeIds.length);
     expect(within(nav()).getByRole('link', { current: 'page' })).toHaveAccessibleName('Dashboard');
-    expect(within(nav()).getByRole('link', { name: 'Scan, folgt in P2' })).toHaveAttribute(
-      'href',
-      '#/scan',
-    );
+    expect(
+      within(nav()).getByRole('link', { name: 'Echtzeit-Wächter, folgt in P3' }),
+    ).toHaveAttribute('href', '#/realtime');
+    expect(within(nav()).getByRole('link', { name: 'Scan' })).toHaveAttribute('href', '#/scan');
     expect(within(nav()).getByRole('link', { name: 'Tools, folgt in P10' })).toBeInTheDocument();
     expect(within(nav()).getByRole('link', { name: 'Einstellungen' })).toBeInTheDocument();
   });
@@ -116,7 +116,9 @@ describe('Seitenleiste', () => {
       'aria-expanded',
       'false',
     );
-    expect(within(nav()).getByRole('link', { name: 'Scan, folgt in P2' })).toBeInTheDocument();
+    expect(
+      within(nav()).getByRole('link', { name: 'Echtzeit-Wächter, folgt in P3' }),
+    ).toBeInTheDocument();
     expect(memory.settings()?.sidebarCollapsed).toBe(true);
     // Bedien-Komfort, kein Ereignis für die Live-Aktivität.
     expect(screen.queryByText(/Navigation einklappen:/)).toBeNull();

@@ -7,6 +7,7 @@ export {
   listenWhileMounted,
   parseHideOutcome,
   parseNavigatePayload,
+  toPathList,
   reportPlatformError,
   type HideOutcome,
   type NavigateTarget,
@@ -21,3 +22,17 @@ export {
   useWindowMaximized,
   type AppInfoState,
 } from './PlatformContext.tsx';
+export {
+  ServiceError,
+  parseDecision,
+  parseProposal,
+  parseQuarantine,
+  parseScan,
+  type DecisionResult,
+  type Proposal,
+  type QuarantineEntry,
+  type ScanFinding,
+  type ScanResult,
+  type SecondChallenge,
+  type ServiceApi,
+} from './service.ts';

@@ -4,6 +4,7 @@
 
 mod app_info;
 mod navigation;
+mod service;
 mod startup_error;
 mod tray;
 mod window;
@@ -42,9 +43,17 @@ fn main() {
             window::reveal_main(app);
         }))
         .plugin(navigation::guard(policy))
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             app_info::app_info,
-            window::hide_to_tray
+            window::hide_to_tray,
+            service::service_scan,
+            service::service_list_quarantine,
+            service::service_propose_quarantine,
+            service::service_propose_restore,
+            service::service_propose_delete,
+            service::service_decide,
+            service::service_confirm_second
         ])
         .on_window_event(window::on_window_event)
         .setup(move |app| {
@@ -98,7 +107,14 @@ mod test_support {
         let app = mock_builder()
             .invoke_handler(tauri::generate_handler![
                 crate::app_info::app_info,
-                crate::window::hide_to_tray
+                crate::window::hide_to_tray,
+                crate::service::service_scan,
+                crate::service::service_list_quarantine,
+                crate::service::service_propose_quarantine,
+                crate::service::service_propose_restore,
+                crate::service::service_propose_delete,
+                crate::service::service_decide,
+                crate::service::service_confirm_second
             ])
             .build(tauri::generate_context!(test = true))
             .unwrap();
@@ -121,7 +137,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 10] = [
+    const EXPECTED_PERMISSIONS: [&str; 18] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -132,6 +148,14 @@ mod tests {
         "core:event:allow-unlisten",
         "allow-app-info",
         "allow-hide-to-tray",
+        "allow-service-scan",
+        "allow-service-list-quarantine",
+        "allow-service-propose-quarantine",
+        "allow-service-propose-restore",
+        "allow-service-propose-delete",
+        "allow-service-decide",
+        "allow-service-confirm-second",
+        "dialog:allow-open",
     ];
 
     fn capability() -> serde_json::Value {
@@ -344,6 +368,33 @@ mod tests {
                     json!({ "event": "aegis://navigate", "eventId": 0 }),
                 ),
                 ("app_info", json!({})),
+                // Dienst-Befehle: Ohne laufenden Dienst endet jeder Aufruf mit „nicht
+                // erreichbar“ – hier zählt nur, dass die ACL sie durchlässt.
+                (
+                    "service_scan",
+                    json!({ "paths": ["/aegis-test/gibt-es-nicht"] }),
+                ),
+                ("service_list_quarantine", json!({})),
+                (
+                    "service_propose_quarantine",
+                    json!({ "paths": ["/aegis-test/gibt-es-nicht"] }),
+                ),
+                (
+                    "service_propose_restore",
+                    json!({ "entryId": "00000000-0000-4000-8000-000000000000" }),
+                ),
+                (
+                    "service_propose_delete",
+                    json!({ "entryId": "00000000-0000-4000-8000-000000000000" }),
+                ),
+                (
+                    "service_decide",
+                    json!({ "planId": "p", "digest": "d", "nonce": "n", "decision": "decline", "dialogId": "x" }),
+                ),
+                (
+                    "service_confirm_second",
+                    json!({ "challengeId": "c", "nonce": "n", "decision": "decline", "dialogId": "x" }),
+                ),
                 // Zuletzt: schließt das Testfenster.
                 ("plugin:window|close", json!({})),
             ] {

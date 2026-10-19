@@ -13,9 +13,9 @@ import {
 const pages = [
   { nav: 'Dashboard', route: 'dashboard', heading: 'Dashboard', phase: null },
   { nav: 'Berichte', route: 'reports', heading: 'Berichte', phase: 'P3' },
-  { nav: 'Scan', route: 'scan', heading: 'Scan', phase: 'P2' },
+  { nav: 'Scan', route: 'scan', heading: 'Scan', phase: null },
   { nav: 'Echtzeit-Wächter', route: 'realtime', heading: 'Echtzeit-Wächter', phase: 'P3' },
-  { nav: 'Quarantäne', route: 'quarantine', heading: 'Quarantäne', phase: 'P2' },
+  { nav: 'Quarantäne', route: 'quarantine', heading: 'Quarantäne', phase: null },
   { nav: 'Labor', route: 'lab', heading: 'Labor', phase: 'P4' },
   { nav: 'Härtung', route: 'hardening', heading: 'Härtung', phase: 'P6' },
   { nav: 'Netzwerk', route: 'network', heading: 'Netzwerk', phase: 'P7' },
@@ -194,9 +194,9 @@ test.describe('Navigation', () => {
     await waitForHome(page);
     await page.getByRole('button', { name: 'Navigation einklappen' }).click();
     await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');
-    const scan = navigation(page).getByRole('link', { name: 'Scan, folgt in P2' });
-    await scan.hover();
-    await expect(page.getByRole('tooltip')).toHaveText('Scan · Folgt in P2');
+    const realtime = navigation(page).getByRole('link', { name: 'Echtzeit-Wächter, folgt in P3' });
+    await realtime.hover();
+    await expect(page.getByRole('tooltip')).toHaveText('Echtzeit-Wächter · Folgt in P3');
     await page.reload();
     await waitForHome(page);
     await expect(page.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');

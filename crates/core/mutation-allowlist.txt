@@ -88,3 +88,4 @@ crates/service/src/server.rs :: service-audit-append :: Dienst: öffnet das eige
 crates/service/src/server.rs :: service-audit-truncate-torn-tail :: Dienst: schneidet nur eine unvollständige letzte Zeile des eigenen Prüfprotokolls ab (nach Absturz); geprüfte Einträge bleiben.
 crates/service/src/server.rs :: service-audit-truncate-set-len :: Dienst: kürzt das eigene Prüfprotokoll auf die geprüfte Länge (nur nach unvollständiger letzter Zeile).
 crates/winffi/src/lib.rs :: service-dacl-apply-acl :: Windows: setzt nur die Zugriffsliste des AEGIS-eigenen Datenordners (SYSTEM/Administratoren), nie die von Nutzerdateien.
+apps/desktop/src-tauri/src/service.rs :: desktop-service-pipe-open :: Desktop-App: öffnet die Named Pipe des Dienstes zum Senden einer Anfrage – keine Datei, keine Nutzerdaten.

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-decide"
+description = "Enables the service_decide command without any pre-configured scope."
+commands.allow = ["service_decide"]
+
+[[permission]]
+identifier = "deny-service-decide"
+description = "Denies the service_decide command without any pre-configured scope."
+commands.deny = ["service_decide"]

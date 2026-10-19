@@ -16,6 +16,7 @@ import type {
   Unlisten,
   WindowApi,
 } from '../platform/platform.ts';
+import type { ServiceApi } from '../platform/service.ts';
 import { SETTINGS_STORAGE_KEY, SETTINGS_VERSION, type Settings } from '../settings/schema.ts';
 import type { StorageLike } from '../settings/store.ts';
 
@@ -49,7 +50,12 @@ export const desktopInfo: AppInfo = {
 };
 
 /** Nachgebildete Plattform: Desktop (mit Fensterknöpfen) oder Browser-Vorschau. */
-export function fakePlatform(kind: 'tauri' | 'browser', info?: AppInfo): FakePlatform {
+export function fakePlatform(
+  kind: 'tauri' | 'browser',
+  info?: AppInfo,
+  service: ServiceApi | null = null,
+  picked: readonly string[] = [],
+): FakePlatform {
   const navigateHandlers = new Set<(target: NavigateTarget) => void>();
   const resizeHandlers = new Set<() => void>();
   let maximized = false;
@@ -95,6 +101,8 @@ export function fakePlatform(kind: 'tauri' | 'browser', info?: AppInfo): FakePla
       }
     },
     listenerCount: () => navigateHandlers.size + resizeHandlers.size,
+    service: kind === 'tauri' ? service : null,
+    pickPaths: kind === 'tauri' ? vi.fn(() => Promise.resolve(picked)) : null,
   };
 }
 

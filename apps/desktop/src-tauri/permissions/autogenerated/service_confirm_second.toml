@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-confirm-second"
+description = "Enables the service_confirm_second command without any pre-configured scope."
+commands.allow = ["service_confirm_second"]
+
+[[permission]]
+identifier = "deny-service-confirm-second"
+description = "Denies the service_confirm_second command without any pre-configured scope."
+commands.deny = ["service_confirm_second"]

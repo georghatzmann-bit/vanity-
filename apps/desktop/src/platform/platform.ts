@@ -12,9 +12,17 @@
  * `onCloseRequested` (bräuchte `allow-destroy`, siehe README „Bewusst nicht gewährt“).
  */
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { version as configuredVersion } from '../../src-tauri/tauri.conf.json';
 import { parseAppInfo, previewAppInfo, type AppInfo } from './appInfo.ts';
+import {
+  parseDecision,
+  parseProposal,
+  parseQuarantine,
+  parseScan,
+  type ServiceApi,
+} from './service.ts';
 
 /** Meldet einen Empfänger wieder ab. */
 export type Unlisten = () => void;
@@ -64,6 +72,20 @@ export interface Platform {
   appInfo(): Promise<AppInfo>;
   /** Tray-Menü „Dashboard“ / „Einstellungen“. In der Vorschau kommt nie ein Ereignis. */
   onNavigate(handler: (target: NavigateTarget) => void): Promise<Unlisten>;
+  /** Dienst `aegis-service` – `null` in der Browser-Vorschau (dort gibt es keinen Dienst). */
+  readonly service: ServiceApi | null;
+  /** Datei-/Ordnerauswahl; leere Liste bei Abbruch. `null` in der Vorschau. */
+  readonly pickPaths: ((kind: 'files' | 'folder') => Promise<readonly string[]>) | null;
+}
+
+/** Wandelt das Ergebnis des Auswahldialogs in eine Pfadliste. */
+export function toPathList(selection: unknown): readonly string[] {
+  if (typeof selection === 'string') {
+    return [selection];
+  }
+  return Array.isArray(selection)
+    ? selection.filter((p): p is string => typeof p === 'string')
+    : [];
 }
 
 /** Prüft die Nutzdaten von `aegis://navigate`; Unbekanntes wird ignoriert (`null`). */
@@ -108,6 +130,49 @@ export function createTauriPlatform(): Platform {
           handler(target);
         }
       }),
+    service: createTauriService(),
+    pickPaths: async (kind) =>
+      toPathList(
+        await openDialog(
+          kind === 'folder' ? { directory: true } : { multiple: true, directory: false },
+        ),
+      ),
+  };
+}
+
+/**
+ * Dienst-Befehle (`service_*`): jeder Aufruf steht hier wörtlich, damit
+ * `tests/ipc-contract.test.ts` Aufrufe, Anmeldung (build.rs) und Rechte abgleichen kann.
+ */
+function createTauriService(): ServiceApi {
+  return {
+    scan: async (paths) => parseScan(await invoke<unknown>('service_scan', { paths })),
+    listQuarantine: async () => parseQuarantine(await invoke<unknown>('service_list_quarantine')),
+    proposeQuarantine: async (paths) =>
+      parseProposal(await invoke<unknown>('service_propose_quarantine', { paths })),
+    proposeRestore: async (entryId) =>
+      parseProposal(await invoke<unknown>('service_propose_restore', { entryId })),
+    proposeDelete: async (entryId) =>
+      parseProposal(await invoke<unknown>('service_propose_delete', { entryId })),
+    decide: async (proposal, decision, dialogId) =>
+      parseDecision(
+        await invoke<unknown>('service_decide', {
+          planId: proposal.plan.id,
+          digest: proposal.digest,
+          nonce: proposal.nonce,
+          decision,
+          dialogId,
+        }),
+      ),
+    confirmSecond: async (challenge, decision, dialogId) =>
+      parseDecision(
+        await invoke<unknown>('service_confirm_second', {
+          challengeId: challenge.challengeId,
+          nonce: challenge.nonce,
+          decision,
+          dialogId,
+        }),
+      ),
   };
 }
 
@@ -118,6 +183,8 @@ export function createBrowserPlatform(info: AppInfo): Platform {
     window: null,
     appInfo: () => Promise.resolve(info),
     onNavigate: () => Promise.resolve(() => undefined),
+    service: null,
+    pickPaths: null,
   };
 }
 

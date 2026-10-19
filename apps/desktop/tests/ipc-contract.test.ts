@@ -112,19 +112,25 @@ describe('Tauri-Aufrufe der Oberfläche', () => {
         expect(text, `${file} importiert @tauri-apps`).not.toMatch(/['"]@tauri-apps\//);
       }
       expect(text, `${file}: Tauri-Interna`).not.toMatch(/__TAURI(?:_INTERNALS)?__/);
-      expect(text, `${file}: Tauri-Plugins`).not.toMatch(/@tauri-apps\/plugin-/);
+      // Einziges Plugin: die Datei-/Ordnerauswahl, nur im Adapter (siehe nächster Test).
+      if (file !== ADAPTER) {
+        expect(text, `${file}: Tauri-Plugins`).not.toMatch(/@tauri-apps\/plugin-/);
+      }
       expect(text, `${file}: dynamischer Import`).not.toMatch(/import\(\s*['"]@tauri-apps/);
     }
   });
 
-  it('der Adapter nutzt genau invoke, isTauri und getCurrentWindow', () => {
+  it('der Adapter nutzt genau invoke, isTauri, getCurrentWindow und die Dateiauswahl', () => {
     const imports = [...adapter.matchAll(/^import\s+([^;]+?)\s+from\s+'(@tauri-apps\/[^']+)';$/gm)]
       .map(([, names, from]) => `${names ?? ''} from ${from ?? ''}`)
       .sort();
     expect(imports).toEqual([
       '{ getCurrentWindow } from @tauri-apps/api/window',
       '{ invoke, isTauri } from @tauri-apps/api/core',
+      '{ open as openDialog } from @tauri-apps/plugin-dialog',
     ]);
+    // Aus dem Dialog-Plugin nur `open` (Auswahl) – kein save/message/ask.
+    expect(adapter.match(/\bopenDialog\(/g)).toHaveLength(1);
     // Genau ein Fenster-Objekt – das eigene Hauptfenster, keine Aufrufe am Adapter vorbei.
     expect(adapter.match(/getCurrentWindow\(\)/g)).toHaveLength(1);
     expect(adapter).toMatch(/const current = getCurrentWindow\(\);/);
@@ -166,6 +172,7 @@ describe('Tauri-Aufrufe der Oberfläche', () => {
       ...methods.flatMap((method) => WINDOW_METHOD_PERMISSIONS[method] ?? []),
       ...appCommands().map((command) => `allow-${command.replaceAll('_', '-')}`),
       ...(read(TITLE_BAR).includes('data-tauri-drag-region') ? DRAG_REGION_PERMISSIONS : []),
+      ...(adapter.includes('openDialog(') ? ['dialog:allow-open'] : []),
     ]);
     const granted = capabilityPermissions();
     expect(new Set(granted).size, 'keine doppelten Einträge').toBe(granted.length);
