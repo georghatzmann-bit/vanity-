@@ -113,13 +113,24 @@ pub fn build_service(data_dir: &Path) -> io::Result<LiveService> {
     let trust = TrustStore::open(&data_dir.join("trust.json"))?;
     let history = crate::history::History::open(&data_dir.join("history.json"))?;
     let settings = crate::schedule::SettingsStore::open(&data_dir.join("settings.json"))?;
+    // Rückfall-Kopien sind optional: Lässt sich ihr Speicher nicht einrichten, startet der
+    // Dienst trotzdem (die Funktion meldet sich dann als „nicht verfügbar“).
     let backup_dir = data_dir.join(BACKUP_DIR);
-    secure_lab_dir(&backup_dir)?;
-    let backup =
-        aegis_quarantine::backup::BackupStore::open(&backup_dir).map_err(io::Error::other)?;
-    let service = Service::new(engine, vault, gate, audit)
-        .with_protected(vec![data_dir.to_owned()])
-        .with_backup(Arc::new(backup), backup_dir)
+    let backup = secure_lab_dir(&backup_dir)
+        .map_err(|e| e.to_string())
+        .and_then(|()| {
+            aegis_quarantine::backup::BackupStore::open(&backup_dir).map_err(|e| e.to_string())
+        });
+    let service =
+        Service::new(engine, vault, gate, audit).with_protected(vec![data_dir.to_owned()]);
+    let service = match backup {
+        Ok(store) => service.with_backup(Arc::new(store), backup_dir),
+        Err(e) => {
+            eprintln!("AEGIS-Dienst: Rückfall-Kopien nicht verfügbar: {e}");
+            service
+        }
+    };
+    let service = service
         .with_trust(trust)
         .with_history(history)
         .with_settings(settings)
@@ -165,7 +176,7 @@ pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
     // zeigt das an.
     let mut watch_config =
         crate::watch::WatchConfig::default_for_platform(vec![config.data_dir.clone()]);
-    watch_config.protected.extend(service.protected_folders());
+    watch_config.custom_protected = service.protected_folders();
     if let Err(e) = crate::watch::start(
         watch_config,
         service.scanner(),
@@ -179,6 +190,7 @@ pub fn run(config: &ServerConfig, stop: &Arc<AtomicBool>) -> io::Result<()> {
     let history = service.history();
     let service = Arc::new(Mutex::new(service));
     spawn_scheduler(Arc::clone(&service), Arc::clone(stop));
+    spawn_backups(Arc::clone(&service), Arc::clone(stop));
     let result = serve(&config.endpoint, &service, stop);
     save_history(&history);
     result
@@ -208,29 +220,11 @@ fn spawn_scheduler(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
         };
         while !stop.load(Ordering::SeqCst) {
-            let (work, scanner, history, backups, store) = {
+            let (work, scanner, history) = {
                 let mut guard = lock();
-                (
-                    guard.take_due_work(),
-                    guard.scanner(),
-                    guard.history(),
-                    guard.take_due_backups(),
-                    guard.backup_store(),
-                )
+                (guard.take_due_work(), guard.scanner(), guard.history())
             };
             save_history(&history);
-            // Rückfall-Kopien (vom Nutzer per Plan eingeschaltet): lesen mit den Rechten des
-            // angemeldeten Besitzers, schreiben nur in den eigenen Ordner – ohne Dienst-Sperre.
-            if let Some(store) = &store {
-                for job in &backups {
-                    let access = crate::worker::BackgroundAccess {
-                        profile: job.profile.clone(),
-                        require_owner: true,
-                    };
-                    let outcome = crate::handler::backup::run_job(store, job, &access);
-                    lock().record_backup(job, &outcome);
-                }
-            }
             for schedule in &work.schedules {
                 let folders: Vec<PathBuf> = crate::schedule::SCHEDULED_FOLDERS
                     .iter()
@@ -242,6 +236,7 @@ fn spawn_scheduler(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
                 let access = crate::worker::BackgroundAccess {
                     profile: Some(schedule.profile.clone()),
                     require_owner: true,
+                    owner: None,
                 };
                 let result = scanner.scan(&folders, &access);
                 lock().record_scheduled(schedule, result);
@@ -254,6 +249,47 @@ fn spawn_scheduler(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
             }
             for _ in 0..60 {
                 if stop.load(Ordering::SeqCst) {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+    });
+}
+
+/// Rückfall-Kopien (vom Nutzer per Plan eingeschaltet) in einem eigenen Faden: lesen mit den
+/// Rechten des angemeldeten Besitzers, schreiben nur in den eigenen Ordner – ohne Dienst-Sperre
+/// und ohne geplante Scans oder Updates aufzuhalten; beim Beenden wird zwischen Dateien
+/// abgebrochen.
+fn spawn_backups(service: Arc<Mutex<LiveService>>, stop: Arc<AtomicBool>) {
+    std::thread::spawn(move || {
+        let lock = || {
+            service
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+        let cancel = || stop.load(Ordering::SeqCst);
+        while !cancel() {
+            let (jobs, store) = {
+                let mut guard = lock();
+                (guard.take_due_backups(), guard.backup_store())
+            };
+            if let Some(store) = &store {
+                for job in &jobs {
+                    if cancel() {
+                        return;
+                    }
+                    let access = crate::worker::BackgroundAccess {
+                        profile: job.profile.clone(),
+                        require_owner: true,
+                        owner: job.owner.clone(),
+                    };
+                    let outcome = crate::handler::backup::run_job(store, job, &access, &cancel);
+                    lock().record_backup(job, &outcome);
+                }
+            }
+            for _ in 0..60 {
+                if cancel() {
                     return;
                 }
                 std::thread::sleep(std::time::Duration::from_secs(1));

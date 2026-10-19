@@ -142,8 +142,8 @@ pub struct WatchShared {
     /// Ransomware-Erkennung (nur Warnungen).
     ransom: crate::ransom::RansomGuard,
     /// Geschützte Ordner – nur für die Ransomware-Erkennung beobachtet (ohne jede Datei zu
-    /// prüfen): (Ordner, Profil des Besitzers).
-    protected: Mutex<Vec<(PathBuf, Option<PathBuf>)>>,
+    /// prüfen). Ein Ordner kann mehreren Konten gehören (je ein Eintrag).
+    protected: Mutex<Vec<Protected>>,
     /// Wartende Entropie-Stichproben (Pfad, Profil) und ihre Rate je Profil.
     entropy_queue: Mutex<VecDeque<(PathBuf, Option<PathBuf>)>>,
     entropy_rate: Mutex<HashMap<Option<PathBuf>, VecDeque<Instant>>>,
@@ -266,11 +266,16 @@ impl WatchShared {
     }
 
     /// Dateiänderung für die Ransomware-Erkennung; meldet ein erkanntes Muster (nur Warnung).
+    ///
+    /// `shown`: Liegt die Datei außerhalb der Profile in einem geschützten Ordner, nennt die
+    /// Meldung nur diesen Ordner – Dateinamen aus Unterordnern, die das Konto nicht lesen darf,
+    /// verlassen den Dienst so nie.
     pub fn observe_change(
         &self,
         change: crate::ransom::FileChange,
         path: &Path,
         scope: Option<PathBuf>,
+        shown: Option<&Path>,
     ) {
         let now = Instant::now();
         if crate::ransom::wants_entropy(change, path, scope.as_deref()) {
@@ -292,60 +297,104 @@ impl WatchShared {
             }
         }
         if let Some(signal) = self.ransom.observe(change, path, scope.as_deref(), now) {
+            let (signal, path) = match shown {
+                Some(root) => (signal.shown_as(root), root.to_path_buf()),
+                None => (signal, path.to_path_buf()),
+            };
             let finding = signal.finding();
-            self.push(
-                WatchKind::Ransomware,
-                path.to_path_buf(),
-                scope,
-                None,
-                finding,
-            );
+            self.push(WatchKind::Ransomware, path, scope, None, finding);
         }
     }
 
     /// Beobachtet `dir` zusätzlich für die Ransomware-Erkennung (Köder, Massenänderungen,
     /// Entropie) – geprüft wird dort nicht jede Datei. `profile`: Besitzer (für Meldungen).
+    /// Vom Nutzer gewählt: [`Self::unprotect`] nimmt ihn wieder heraus.
     pub fn protect(&self, dir: PathBuf, profile: Option<PathBuf>) -> bool {
-        use notify::Watcher as _;
-        let dir = long_name(dir);
-        {
-            let list = lock(&self.protected);
-            if list.iter().any(|(d, _)| same_path(d, &dir)) {
-                return true;
-            }
-        }
-        let watched = lock(&self.watcher).as_ref().is_some_and(|w| {
-            lock(w)
-                .watch(&dir, notify::RecursiveMode::Recursive)
-                .is_ok()
-        });
-        let mut list = lock(&self.protected);
-        if list.len() < 2000 {
-            list.push((dir, profile.map(long_name)));
-        }
-        watched
+        self.add_protected(dir, profile, false)
     }
 
-    /// Beendet die zusätzliche Beobachtung von `dir`.
-    pub fn unprotect(&self, dir: &Path) {
+    /// Wie [`Self::protect`] für die Standardordner (Dokumente, Bilder): bleibt immer.
+    pub fn protect_default(&self, dir: PathBuf, profile: Option<PathBuf>) -> bool {
+        self.add_protected(dir, profile, true)
+    }
+
+    fn add_protected(&self, dir: PathBuf, profile: Option<PathBuf>, pinned: bool) -> bool {
+        use notify::Watcher as _;
+        let dir = long_name(dir);
+        let profile = profile.map(long_name);
+        let already_watched = {
+            let mut list = lock(&self.protected);
+            if let Some(entry) = list
+                .iter_mut()
+                .find(|e| same_path(&e.dir, &dir) && same_profile(&e.profile, &profile))
+            {
+                entry.pinned |= pinned;
+                return true;
+            }
+            if list.len() >= MAX_PROTECTED {
+                return false;
+            }
+            let watched = list.iter().any(|e| same_path(&e.dir, &dir));
+            list.push(Protected {
+                dir: dir.clone(),
+                profile,
+                pinned,
+            });
+            watched
+        };
+        already_watched
+            || lock(&self.watcher).as_ref().is_some_and(|w| {
+                lock(w)
+                    .watch(&dir, notify::RecursiveMode::Recursive)
+                    .is_ok()
+            })
+    }
+
+    /// Beendet die zusätzliche Beobachtung von `dir` für das Konto mit `profile` (Standard-
+    /// ordner bleiben; beobachtet wird weiter, solange noch jemand den Ordner schützt oder er
+    /// ohnehin geprüft wird).
+    pub fn unprotect(&self, dir: &Path, profile: Option<&Path>) {
         use notify::Watcher as _;
         let dir = long_name(dir.to_path_buf());
+        let profile = profile.map(|p| long_name(p.to_path_buf()));
         let mut list = lock(&self.protected);
         let before = list.len();
-        list.retain(|(d, _)| !same_path(d, &dir));
-        if list.len() != before
+        list.retain(|e| {
+            e.pinned || !(same_path(&e.dir, &dir) && same_profile(&e.profile, &profile))
+        });
+        let still = list.iter().any(|e| same_path(&e.dir, &dir));
+        drop(list);
+        let scanned = lock(&self.status)
+            .folders
+            .iter()
+            .any(|f| same_path(f, &dir));
+        if before != lock(&self.protected).len()
+            && !still
+            && !scanned
             && let Some(w) = lock(&self.watcher).as_ref()
         {
             let _ = lock(w).unwatch(&dir);
         }
     }
 
-    /// Liegt `path` in einem geschützten Ordner? Liefert dessen Profil.
-    fn protected_scope(&self, path: &Path) -> Option<Option<PathBuf>> {
+    /// Wem gehört `path` als geschützter Ordner? Je Konto: (Profil, Schutzordner).
+    fn protected_scopes(&self, path: &Path) -> Vec<(Option<PathBuf>, PathBuf)> {
+        let mut out: Vec<(Option<PathBuf>, PathBuf)> = Vec::new();
+        for e in lock(&self.protected)
+            .iter()
+            .filter(|e| is_within(path, &e.dir))
+        {
+            if !out.iter().any(|(p, _)| same_profile(p, &e.profile)) {
+                out.push((e.profile.clone(), e.dir.clone()));
+            }
+        }
+        out
+    }
+
+    fn is_protected(&self, path: &Path) -> bool {
         lock(&self.protected)
             .iter()
-            .find(|(d, _)| is_within(path, d))
-            .map(|(_, p)| p.clone())
+            .any(|e| is_within(path, &e.dir))
     }
 
     /// Gab es für das Profil in der letzten Zeit `within` eine Ransomware-Warnung?
@@ -525,8 +574,10 @@ pub struct WatchConfig {
     pub profile_roots: Vec<PathBuf>,
     /// Ordner, die nie geprüft werden (AEGIS-Datenordner).
     pub exclude: Vec<PathBuf>,
-    /// Geschützte Ordner (nur Ransomware-Erkennung): (Ordner, Profil).
+    /// Standard-Schutzordner (nur Ransomware-Erkennung): (Ordner, Profil).
     pub protected: Vec<(PathBuf, Option<PathBuf>)>,
+    /// Vom Nutzer gewählte Schutzordner: (Ordner, Profil des Besitzers).
+    pub custom_protected: Vec<(PathBuf, Option<PathBuf>)>,
     /// Wechseldatenträger und neue Profile mit überwachen (Windows).
     pub removable: bool,
     /// Prozessstarts beobachten (Windows, ETW).
@@ -552,6 +603,27 @@ const PROFILE_FOLDERS: [&str; 3] = ["Downloads", "Desktop", r"AppData\Local\Temp
 
 /// Standard-Schutzordner je Profil (Ransomware-Erkennung; Desktop wird ohnehin beobachtet).
 pub const PROTECTED_FOLDERS: [&str; 2] = ["Documents", "Pictures"];
+
+/// Höchstzahl geschützter Ordner (alle Konten).
+const MAX_PROTECTED: usize = 2000;
+
+/// Ein geschützter Ordner eines Kontos.
+#[derive(Debug, Clone)]
+struct Protected {
+    dir: PathBuf,
+    profile: Option<PathBuf>,
+    /// Standardordner (bleibt, auch wenn das Konto ihn zusätzlich selbst wählt und wieder
+    /// entfernt).
+    pinned: bool,
+}
+
+fn same_profile(a: &Option<PathBuf>, b: &Option<PathBuf>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => same_path(a, b),
+        (None, None) => true,
+        _ => false,
+    }
+}
 
 /// Wurzel der Nutzerprofile.
 #[cfg(windows)]
@@ -621,6 +693,7 @@ impl WatchConfig {
             profile_roots,
             exclude,
             protected,
+            custom_protected: Vec::new(),
             removable: cfg!(windows),
             processes: cfg!(windows),
             settle: Duration::from_secs(2),
@@ -718,6 +791,7 @@ pub fn start(
         folders: config.folders.clone(),
         profile_roots: config.profile_roots.clone(),
     };
+    let exclude = config.exclude.clone();
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
         let Ok(event) = result else { return };
         if event.need_rescan() {
@@ -735,10 +809,23 @@ pub fn start(
                     change
                 };
                 let path = long_name(path.clone());
-                let scope = scopes
-                    .scope_of(&path)
-                    .or_else(|| file_shared.protected_scope(&path).flatten());
-                file_shared.observe_change(change, &path, scope);
+                // Der AEGIS-Datenordner zählt nie mit (eigene Schreibvorgänge des Dienstes).
+                if exclude.iter().any(|e| is_within(&path, e)) {
+                    continue;
+                }
+                if let Some(scope) = scopes.scope_of(&path) {
+                    file_shared.observe_change(change, &path, Some(scope), None);
+                    continue;
+                }
+                // Außerhalb der Profile: jedem Konto, das den Ordner schützt, nur mit dem
+                // Schutzordner als Ort (keine fremden Dateinamen).
+                let owners = file_shared.protected_scopes(&path);
+                if owners.is_empty() {
+                    file_shared.observe_change(change, &path, None, None);
+                }
+                for (scope, root) in owners {
+                    file_shared.observe_change(change, &path, scope, Some(&root));
+                }
             }
         }
         if !matches!(
@@ -751,7 +838,7 @@ pub fn start(
             // Geschützte Ordner dienen nur der Ransomware-Erkennung – dort wird nicht jede
             // Datei geprüft (außer sie liegt zugleich in einem geprüften Ordner).
             let long = long_name(path.clone());
-            if file_shared.protected_scope(&long).is_some() && !scopes.in_scan_folder(&long) {
+            if file_shared.is_protected(&long) && !scopes.in_scan_folder(&long) {
                 continue;
             }
             offer(&file_tx, &file_shared, (path, WatchKind::File, None));
@@ -781,6 +868,9 @@ pub fn start(
     let watcher = Arc::new(Mutex::new(watcher));
     *lock(&shared.watcher) = Some(Arc::clone(&watcher));
     for (dir, profile) in std::mem::take(&mut config.protected) {
+        shared.protect_default(dir, profile);
+    }
+    for (dir, profile) in std::mem::take(&mut config.custom_protected) {
         shared.protect(dir, profile);
     }
     spawn_entropy(
@@ -826,6 +916,7 @@ fn spawn_entropy(
                 let background = crate::worker::BackgroundAccess {
                     profile: scope.clone(),
                     require_owner: true,
+                    owner: None,
                 };
                 let access: &dyn aegis_quarantine::UserAccess = match identity {
                     ScanIdentity::Background => &background,
@@ -891,7 +982,7 @@ fn spawn_poller(
                     for sub in PROTECTED_FOLDERS {
                         let dir = profile.join(sub);
                         if dir.is_dir() {
-                            shared.protect(dir, Some(profile.clone()));
+                            shared.protect_default(dir, Some(profile.clone()));
                         }
                     }
                     shared.add_profiles([profile]);
@@ -1109,6 +1200,7 @@ fn scan_group(
     let background = crate::worker::BackgroundAccess {
         profile: scope.clone(),
         require_owner: false,
+        owner: None,
     };
     let access: &dyn aegis_quarantine::UserAccess = match config.identity {
         ScanIdentity::Background => &background,
@@ -1162,6 +1254,7 @@ mod tests {
                 crate::ransom::FileChange::Renamed,
                 &PathBuf::from(format!("/u/a/Dokumente/{i}.docx.locked")),
                 Some(profile.clone()),
+                None,
             );
         }
         let own = shared.events_after(
@@ -1182,6 +1275,55 @@ mod tests {
             },
         );
         assert!(other.is_empty());
+    }
+
+    #[test]
+    fn geteilter_schutzordner_meldet_nur_den_ordner_und_jedem_konto() {
+        let shared = WatchShared::new();
+        let root = PathBuf::from("/daten/geteilt");
+        let (a, b) = (PathBuf::from("/u/a"), PathBuf::from("/u/b"));
+        shared.protect(root.clone(), Some(a.clone()));
+        shared.protect(root.clone(), Some(b.clone()));
+        assert_eq!(shared.protected_scopes(&root.join("x")).len(), 2);
+        for i in 0..crate::ransom::RENAMED_LIMIT {
+            let path = root.join(format!("B-privat/{i}.docx.locked"));
+            for (scope, shown) in shared.protected_scopes(&path) {
+                shared.observe_change(
+                    crate::ransom::FileChange::Renamed,
+                    &path,
+                    scope,
+                    Some(&shown),
+                );
+            }
+        }
+        for (sid, profile) in [("S-A", &a), ("S-B", &b)] {
+            let seen = shared.events_after(
+                0,
+                Viewer::Account {
+                    sid,
+                    profile: Some(profile),
+                },
+            );
+            assert_eq!(seen.len(), 1, "{sid}");
+            assert_eq!(seen[0].path, root, "nur der Schutzordner, kein Dateiname");
+            assert!(!format!("{:?}", seen[0].finding).contains("B-privat"));
+        }
+        // A nimmt den Ordner heraus: B schützt ihn weiter.
+        shared.unprotect(&root, Some(&a));
+        let left = shared.protected_scopes(&root.join("x"));
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].0.as_deref(), Some(b.as_path()));
+    }
+
+    #[test]
+    fn standardordner_bleibt_beim_entfernen_eigener_auswahl() {
+        let shared = WatchShared::new();
+        let docs = PathBuf::from("/u/a/Documents");
+        let a = Some(PathBuf::from("/u/a"));
+        shared.protect_default(docs.clone(), a.clone());
+        shared.protect(docs.clone(), a.clone());
+        shared.unprotect(&docs, a.as_deref());
+        assert!(shared.is_protected(&docs.join("brief.docx")));
     }
 
     #[test]
@@ -1298,6 +1440,7 @@ mod tests {
             profile_roots: Vec::new(),
             exclude: Vec::new(),
             protected: Vec::new(),
+            custom_protected: Vec::new(),
             removable: false,
             processes: false,
             settle: Duration::from_millis(100),
@@ -1350,6 +1493,7 @@ mod tests {
             profile_roots: Vec::new(),
             exclude: Vec::new(),
             protected: vec![(docs.clone(), Some(dir.path().to_path_buf()))],
+            custom_protected: Vec::new(),
             removable: false,
             processes: false,
             settle: Duration::from_millis(100),

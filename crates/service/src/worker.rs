@@ -148,10 +148,6 @@ impl Scanner {
 }
 
 impl Scanner {
-    /// Prüft gelesene Speicherbereiche (nur YARA/EICAR) – im Prüfprozess, nie im Dienst.
-    ///
-    /// # Errors
-    /// Wie [`Scanner::scan`].
     /// Entropie der Dateianfänge (nur lesen) – mit den Rechten von `user`, im Prüfprozess.
     ///
     /// # Errors
@@ -193,6 +189,10 @@ impl Scanner {
         }
     }
 
+    /// Prüft gelesene Speicherbereiche (nur YARA/EICAR) – im Prüfprozess, nie im Dienst.
+    ///
+    /// # Errors
+    /// Wie [`Scanner::scan`].
     pub fn scan_memory(
         &self,
         blocks: Vec<MemoryBlock>,
@@ -237,6 +237,8 @@ pub struct BackgroundAccess {
     /// Nur mit den Rechten des Profil-Besitzers prüfen (geplante Scans): Ist er nicht
     /// angemeldet, wird nicht geprüft statt mit einem schwächeren Konto „nichts“ zu finden.
     pub require_owner: bool,
+    /// Erwartetes Konto (SID) des Profil-Besitzers, falls bekannt (Rückfall-Kopien).
+    pub owner: Option<String>,
 }
 
 impl UserAccess for BackgroundAccess {
@@ -244,7 +246,10 @@ impl UserAccess for BackgroundAccess {
         #[cfg(windows)]
         {
             let guard = match (&self.profile, self.require_owner) {
-                (Some(profile), true) => aegis_winffi::impersonate_profile_owner(profile)?,
+                (Some(profile), true) => aegis_winffi::impersonate_profile_owner(
+                    profile,
+                    self.owner.as_deref().filter(|s| s.starts_with("S-")),
+                )?,
                 (profile, _) => aegis_winffi::impersonate_for_background(profile.as_deref())?,
             };
             Ok(aegis_quarantine::UserScope::holding(guard))

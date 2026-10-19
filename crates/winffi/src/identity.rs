@@ -83,11 +83,12 @@ fn same_dir(a: &[u16], b: &[u16]) -> bool {
 }
 
 /// Wechselt auf den Nutzer, dem der Profilordner `profile` gehört – nur, wenn er angemeldet
-/// ist (Token seiner Sitzung). Braucht SYSTEM-Rechte (Dienst).
+/// ist (Token seiner Sitzung) und, falls `sid` angegeben ist, genau dieses Konto ist (ein
+/// neu angelegtes Konto mit demselben Profilpfad zählt nicht). Braucht SYSTEM-Rechte (Dienst).
 ///
 /// # Errors
 /// Nutzer nicht angemeldet, keine Berechtigung oder Wechsel nicht möglich.
-pub fn impersonate_profile_owner(profile: &Path) -> io::Result<Impersonation> {
+pub fn impersonate_profile_owner(profile: &Path, sid: Option<&str>) -> io::Result<Impersonation> {
     use std::os::windows::ffi::OsStrExt;
     let wanted: Vec<u16> = profile.as_os_str().encode_wide().collect();
     let mut sessions: *mut WTS_SESSION_INFOW = ptr::null_mut();
@@ -128,9 +129,17 @@ pub fn impersonate_profile_owner(profile: &Path) -> io::Result<Impersonation> {
             continue;
         }
         let token = own(token)?;
-        if profile_dir_of(token.as_raw_handle()).is_some_and(|dir| same_dir(&dir, &wanted)) {
-            return impersonate(token.as_raw_handle());
+        if !profile_dir_of(token.as_raw_handle()).is_some_and(|dir| same_dir(&dir, &wanted)) {
+            continue;
         }
+        if let Some(sid) = sid {
+            let actual =
+                crate::util::token_user(token.as_raw_handle(), crate::pipe::sid_to_string)?;
+            if !actual.is_ok_and(|a| a.eq_ignore_ascii_case(sid)) {
+                continue;
+            }
+        }
+        return impersonate(token.as_raw_handle());
     }
     Err(io::Error::new(
         io::ErrorKind::NotFound,
@@ -260,7 +269,7 @@ pub fn impersonate_restricted_self() -> io::Result<Impersonation> {
 /// Kein Wechsel möglich – dann wird **nicht** geprüft.
 pub fn impersonate_for_background(profile: Option<&Path>) -> io::Result<Impersonation> {
     if let Some(profile) = profile
-        && let Ok(guard) = impersonate_profile_owner(profile)
+        && let Ok(guard) = impersonate_profile_owner(profile, None)
     {
         return Ok(guard);
     }

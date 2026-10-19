@@ -429,6 +429,7 @@ fn waechter_meldungen_ueber_das_protokoll() {
             profile_roots: Vec::new(),
             exclude: Vec::new(),
             protected: Vec::new(),
+            custom_protected: Vec::new(),
             removable: false,
             processes: false,
             settle: std::time::Duration::from_millis(100),
@@ -1238,7 +1239,7 @@ fn rueckfall_kopien_nur_nach_opt_in_und_nie_ueberschreibend() {
     let jobs = h.service.take_due_backups();
     assert_eq!(jobs.len(), 1);
     let before = DirSnapshot::capture(&home_path).unwrap();
-    let outcome = aegis_service::handler::backup::run_job(&store, &jobs[0], &a);
+    let outcome = aegis_service::handler::backup::run_job(&store, &jobs[0], &a, &|| false);
     assert_eq!(outcome.copied, 1, "{outcome:?}");
     assert_unchanged(&before, &DirSnapshot::capture(&home_path).unwrap());
     h.service.record_backup(&jobs[0], &outcome);
@@ -1251,7 +1252,7 @@ fn rueckfall_kopien_nur_nach_opt_in_und_nie_ueberschreibend() {
     h.clock.advance(Duration::minutes(31));
     let jobs = h.service.take_due_backups();
     assert_eq!(
-        aegis_service::handler::backup::run_job(&store, &jobs[0], &a).copied,
+        aegis_service::handler::backup::run_job(&store, &jobs[0], &a, &|| false).copied,
         1
     );
     let status = send(&mut h, json!({"type": "backup_status"}));

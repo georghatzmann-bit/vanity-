@@ -37,9 +37,10 @@ use windows_sys::Win32::Storage::FileSystem::{
     FILE_DISPOSITION_INFO, FILE_DISPOSITION_INFO_EX, FILE_FLAG_BACKUP_SEMANTICS,
     FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_SEQUENTIAL_SCAN, FILE_NAME_NORMALIZED,
     FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
-    FileAttributeTagInfo, FileDispositionInfo, FileDispositionInfoEx, GetFileInformationByHandle,
-    GetFileInformationByHandleEx, GetFinalPathNameByHandleW, GetLongPathNameW, OPEN_EXISTING,
-    READ_CONTROL, ReOpenFile, SetFileInformationByHandle, VOLUME_NAME_DOS, WRITE_DAC,
+    FileAttributeTagInfo, FileDispositionInfo, FileDispositionInfoEx, GetDiskFreeSpaceExW,
+    GetFileInformationByHandle, GetFileInformationByHandleEx, GetFinalPathNameByHandleW,
+    GetLongPathNameW, OPEN_EXISTING, READ_CONTROL, ReOpenFile, SetFileInformationByHandle,
+    VOLUME_NAME_DOS, WRITE_DAC,
 };
 
 use crate::util::{SecurityDescriptor, own, sid_is, wide};
@@ -163,6 +164,23 @@ pub fn long_path(path: &Path) -> io::Result<PathBuf> {
         }
         buffer.resize(len + 1, 0);
     }
+}
+
+/// Freier Platz (für den Aufrufer verfügbar) und Gesamtgröße des Laufwerks von `path` in Byte.
+///
+/// # Errors
+/// Laufwerk nicht lesbar.
+pub fn disk_space(path: &Path) -> io::Result<(u64, u64)> {
+    let name = wide(path);
+    let (mut free, mut total) = (0u64, 0u64);
+    // SAFETY: `name` ist nullterminiert; Ausgabezeiger gültig; dritter Wert nicht abgefragt.
+    // aegis-unsafe: winffi-disk-space
+    #[allow(unsafe_code)]
+    let ok = unsafe { GetDiskFreeSpaceExW(name.as_ptr(), &mut free, &mut total, ptr::null_mut()) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok((free, total))
 }
 
 /// Vergleicht zwei Texte ohne Groß-/Kleinschreibung wie NTFS (`CompareStringOrdinal`).

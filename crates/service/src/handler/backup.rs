@@ -12,7 +12,9 @@ use aegis_core::plan::{ActionKind, ActionPlan, Target, UndoHint, param};
 use aegis_core::risk::RiskLevel;
 use aegis_core::time::{Duration, OffsetDateTime};
 use aegis_quarantine::UserAccess;
-use aegis_quarantine::backup::{BACKUP_SETTING, BackupStore, BackupVersion, MAX_FILE, Usage};
+use aegis_quarantine::backup::{
+    BACKUP_SETTING, BackupStore, BackupVersion, MAX_FILE, StoreError, Usage,
+};
 use serde::Serialize;
 
 use super::Service;
@@ -29,6 +31,8 @@ pub const PAUSE_AFTER_ALERT_MINUTES: u64 = 60;
 /// Höchstzahl Dateien, die ein Lauf ansieht bzw. sichert.
 const MAX_SEEN: usize = 50_000;
 const MAX_COPIES: usize = 2_000;
+/// Hinweis, wenn der Besitzer nicht angemeldet ist (kein Eintrag im Verlauf).
+pub const NOT_SIGNED_IN: &str = "Konto nicht angemeldet – nächster Versuch später";
 /// Erlaubte Fristen fürs Ausdünnen (Tage).
 pub const PRUNE_DAYS: [u32; 4] = [7, 30, 90, 365];
 
@@ -84,9 +88,66 @@ pub struct BackupState {
     pub versions: Vec<BackupVersion>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeferredKind {
+    Export,
+    Prune,
+}
+
+/// Lange Arbeit nach einem „Ja“ (Export, Ausdünnen) – mit der Erlaubnis als Wert, ausgeführt
+/// ohne Dienst-Sperre, damit andere Anfragen nicht warten.
+#[derive(Debug)]
+pub struct Deferred {
+    permit: ExecutionPermit,
+    store: std::sync::Arc<BackupStore>,
+    kind: DeferredKind,
+}
+
+/// Ergebnis aufgeschobener Arbeit.
+#[derive(Debug)]
+pub enum DeferredOutcome {
+    /// Export: (Ordner, geschrieben, fehlgeschlagen).
+    Exported(Result<(PathBuf, usize, usize), String>),
+    /// Ausdünnen: gelöschte Kopien.
+    Pruned(Result<usize, String>),
+}
+
+impl Deferred {
+    /// Führt die Arbeit aus (ohne Dienst-Sperre); `cancel` bricht zwischen Dateien ab.
+    #[must_use]
+    pub fn run(&self, user: &dyn UserAccess, cancel: &dyn Fn() -> bool) -> DeferredOutcome {
+        match self.kind {
+            DeferredKind::Export => {
+                DeferredOutcome::Exported(self.store.export(&self.permit, user, cancel))
+            }
+            DeferredKind::Prune => {
+                DeferredOutcome::Pruned(self.store.prune(&self.permit, user.identity().as_deref()))
+            }
+        }
+    }
+}
+
 fn rfc3339(t: OffsetDateTime) -> String {
     t.format(&aegis_core::time::format_description::well_known::Rfc3339)
         .unwrap_or_default()
+}
+
+/// Cloud-Platzhalter (z. B. OneDrive „nur online“): Lesen würde sie herunterladen und die
+/// Platte füllen – solche Dateien werden nicht gesichert.
+fn is_placeholder(meta: &std::fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const OFFLINE: u32 = 0x1000;
+        const RECALL_ON_OPEN: u32 = 0x0004_0000;
+        const RECALL_ON_DATA_ACCESS: u32 = 0x0040_0000;
+        meta.file_attributes() & (OFFLINE | RECALL_ON_OPEN | RECALL_ON_DATA_ACCESS) != 0
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = meta;
+        false
+    }
 }
 
 /// Sammelt die Dateien eines Ordners (ohne Links, ohne laute Ordner und Köder), höchstens
@@ -119,7 +180,7 @@ fn collect(root: &Path, profile: Option<&Path>, max: usize, out: &mut Vec<(PathB
                 continue;
             }
             let Ok(meta) = entry.metadata() else { continue };
-            if meta.len() > MAX_FILE {
+            if meta.len() > MAX_FILE || is_placeholder(&meta) {
                 continue;
             }
             let modified = meta
@@ -132,44 +193,42 @@ fn collect(root: &Path, profile: Option<&Path>, max: usize, out: &mut Vec<(PathB
     }
 }
 
-/// Führt einen Lauf aus (ohne Dienst-Sperre). `access` liefert die Rechte des Besitzers.
-pub fn run_job(store: &BackupStore, job: &BackupJob, access: &dyn UserAccess) -> BackupOutcome {
+/// Führt einen Lauf aus (ohne Dienst-Sperre). `access` liefert die Rechte des Besitzers,
+/// `cancel` bricht zwischen zwei Dateien ab (Dienst wird beendet).
+pub fn run_job(
+    store: &BackupStore,
+    job: &BackupJob,
+    access: &dyn UserAccess,
+    cancel: &dyn Fn() -> bool,
+) -> BackupOutcome {
     let mut outcome = BackupOutcome::default();
-    let owner = job.owner.as_deref();
     let mut files = Vec::new();
     {
         let Ok(_scope) = access.enter() else {
-            outcome.note = "Konto nicht angemeldet – nächster Versuch später".into();
+            outcome.note = NOT_SIGNED_IN.into();
             return outcome;
         };
         for folder in &job.folders {
             collect(folder, job.profile.as_deref(), MAX_SEEN, &mut files);
         }
     }
-    let mut used = match store.usage(owner) {
-        Ok(u) => u.bytes,
+    let mut run = match store.begin(job.owner.as_deref()) {
+        Ok(run) => run,
         Err(e) => {
             outcome.note = format!("Speicher nicht lesbar: {e}");
             return outcome;
         }
     };
     for (path, modified, size) in files {
+        if cancel() {
+            break;
+        }
         if outcome.copied >= MAX_COPIES {
             outcome.note = "Viele Änderungen – der Rest folgt im nächsten Lauf".into();
             break;
         }
-        match store.needs(owner, &path, modified, size) {
-            Ok(true) => {}
-            Ok(false) => continue,
-            Err(_) => {
-                outcome.skipped += 1;
-                continue;
-            }
-        }
-        if used.saturating_add(size) > job.quota {
-            outcome.note =
-                "Speichergrenze erreicht – neue Versionen werden nicht gesichert (bitte alte ausdünnen oder Grenze erhöhen)".into();
-            break;
+        if !run.needs(&path, modified, size) {
+            continue;
         }
         // Öffnen mit den Rechten des Besitzers (geteilt, ohne Links), schreiben als Dienst in
         // den eigenen Ordner.
@@ -180,16 +239,17 @@ pub fn run_job(store: &BackupStore, job: &BackupJob, access: &dyn UserAccess) ->
             };
             aegis_engine::scan::open_regular(&path)
         };
-        match opened.map_err(|e| e.to_string()).and_then(|(file, _)| {
-            store
-                .store(owner, &path, file, modified)
-                .map_err(|e| e.to_string())
-        }) {
-            Ok(v) => {
-                used = used.saturating_add(v.size);
-                outcome.copied += 1;
+        let Ok((file, _)) = opened else {
+            outcome.skipped += 1;
+            continue;
+        };
+        match run.store(&path, file, modified, size, job.quota) {
+            Ok(_) => outcome.copied += 1,
+            Err(StoreError::Skip(_)) => outcome.skipped += 1,
+            Err(StoreError::Stop(note)) => {
+                outcome.note = note;
+                break;
             }
-            Err(_) => outcome.skipped += 1,
         }
     }
     outcome
@@ -518,23 +578,64 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
-    /// Führt den Export aus.
+    /// Export nach dem „Ja“: läuft außerhalb der Dienst-Sperre (siehe [`Deferred`]).
     pub(super) fn apply_backup_export(
         &mut self,
         permit: ExecutionPermit,
         user: &dyn UserAccess,
     ) -> Response {
-        let outcome = match &self.backup {
-            Some(store) => store.export(&permit, user),
-            None => Err("Rückfall-Kopien sind hier nicht verfügbar".into()),
+        self.defer(permit, DeferredKind::Export, user)
+    }
+
+    fn defer(
+        &mut self,
+        permit: ExecutionPermit,
+        kind: DeferredKind,
+        user: &dyn UserAccess,
+    ) -> Response {
+        let Some(store) = self.backup.clone() else {
+            let result = ExecutionResult::Failed {
+                message: "Rückfall-Kopien sind hier nicht verfügbar".into(),
+            };
+            let action = permit.plan().kind();
+            self.finish_plan(permit, &result, user, None);
+            return Response::Executed {
+                kind: action,
+                result,
+                entries: Vec::new(),
+                failures: Vec::new(),
+            };
         };
-        let (result, detail) = match &outcome {
-            Ok((folder, written, 0)) => (
-                ExecutionResult::Succeeded,
-                format!("{written} Datei(en) nach {}", folder.display()),
-            ),
-            Ok((folder, written, failed)) => (
-                if *written > 0 {
+        let action = permit.plan().kind();
+        self.deferred = Some(Deferred {
+            permit,
+            store,
+            kind,
+        });
+        // Wird durch das Ergebnis der aufgeschobenen Arbeit ersetzt.
+        Response::Executed {
+            kind: action,
+            result: ExecutionResult::Failed {
+                message: "läuft".into(),
+            },
+            entries: Vec::new(),
+            failures: Vec::new(),
+        }
+    }
+
+    /// Schließt aufgeschobene Arbeit ab: Prüfprotokoll, Verlauf, Antwort.
+    pub fn finish_deferred(
+        &mut self,
+        work: Deferred,
+        outcome: DeferredOutcome,
+        user: &dyn UserAccess,
+    ) -> Response {
+        let kind = work.permit.plan().kind();
+        let (result, detail) = match outcome {
+            DeferredOutcome::Exported(Ok((folder, written, failed))) => (
+                if failed == 0 {
+                    ExecutionResult::Succeeded
+                } else if written > 0 {
                     ExecutionResult::PartiallySucceeded {
                         message: format!("{failed} Datei(en) nicht möglich"),
                     }
@@ -545,11 +646,17 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 },
                 format!("{written} Datei(en) nach {}", folder.display()),
             ),
-            Err(m) => (ExecutionResult::Failed { message: m.clone() }, m.clone()),
+            DeferredOutcome::Pruned(Ok(n)) => (
+                ExecutionResult::Succeeded,
+                format!("{n} Versionen gelöscht"),
+            ),
+            DeferredOutcome::Exported(Err(m)) | DeferredOutcome::Pruned(Err(m)) => {
+                (ExecutionResult::Failed { message: m.clone() }, m)
+            }
         };
-        self.finish_plan(permit, &result, user, Some(detail));
+        self.finish_plan(work.permit, &result, user, Some(detail));
         Response::Executed {
-            kind: ActionKind::ExportBackup,
+            kind,
             result,
             entries: Vec::new(),
             failures: Vec::new(),
@@ -581,31 +688,13 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
-    /// Führt das Ausdünnen nach der zweiten Bestätigung aus.
+    /// Ausdünnen nach der zweiten Bestätigung: läuft außerhalb der Dienst-Sperre.
     pub(super) fn apply_backup_prune(
         &mut self,
         permit: ExecutionPermit,
         user: &dyn UserAccess,
     ) -> Response {
-        let owner = user.identity();
-        let outcome = match &self.backup {
-            Some(store) => store.prune(&permit, owner.as_deref()),
-            None => Err("Rückfall-Kopien sind hier nicht verfügbar".into()),
-        };
-        let result = match &outcome {
-            Ok(_) => ExecutionResult::Succeeded,
-            Err(m) => ExecutionResult::Failed { message: m.clone() },
-        };
-        let detail = outcome
-            .as_ref()
-            .map_or_else(Clone::clone, |n| format!("{n} Versionen gelöscht"));
-        self.finish_plan(permit, &result, user, Some(detail));
-        Response::Executed {
-            kind: ActionKind::DeletePermanently,
-            result,
-            entries: Vec::new(),
-            failures: Vec::new(),
-        }
+        self.defer(permit, DeferredKind::Prune, user)
     }
 
     /// Fällige Läufe (Zeitplaner); markiert sie als gestartet.
@@ -656,7 +745,8 @@ impl<C: Clock, W: Durable> Service<C, W> {
         self.backup_runs
             .last
             .insert(job.owner.clone(), (now, outcome.note.clone()));
-        if outcome.copied > 0 || !outcome.note.is_empty() {
+        // Nicht angemeldet: kein Verlaufseintrag alle 30 Minuten.
+        if outcome.copied > 0 || (!outcome.note.is_empty() && outcome.note != NOT_SIGNED_IN) {
             self.add_history(NewEntry {
                 kind: HistoryKind::Action,
                 risk: None,

@@ -666,6 +666,21 @@ fn create_new_file(path: &Path) -> io::Result<File> {
     options.open(path)
 }
 
+fn append_own_file(path: &Path) -> io::Result<File> {
+    // Nur AEGIS-eigene Protokoll-Dateien im Tresor (Index der Rückfall-Kopien) – anhängen,
+    // nie kürzen oder überschreiben.
+    // aegis-mutation: quarantine-append-own-file
+    #[allow(clippy::disallowed_methods)]
+    let options = {
+        let mut options = OpenOptions::new();
+        options.append(true).create(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        options
+    };
+    options.open(path)
+}
+
 fn write_new_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let mut f = create_new_file(path)?;
     f.write_all(bytes)?;

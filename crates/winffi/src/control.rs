@@ -64,11 +64,17 @@ fn open_checked(pid: u32, expected_image: &Path, access: u32) -> io::Result<Owne
     Ok(process)
 }
 
-/// Führt die Aktion aus. Im Identitätswechsel des Nutzers aufrufen.
+/// Führt die Aktion aus. Im Identitätswechsel des Nutzers aufrufen. `Ok(Some(hinweis))`:
+/// nur teilweise gelungen (z. B. startet das Programm laufend neue Threads) – die erreichten
+/// Threads sind angehalten, „Fortsetzen“ hebt das auf.
 ///
 /// # Errors
 /// Kein Zugriff, Prozess beendet/ausgetauscht, kritisch oder Aktion fehlgeschlagen.
-pub fn control_process(pid: u32, expected_image: &Path, action: ProcessAction) -> io::Result<()> {
+pub fn control_process(
+    pid: u32,
+    expected_image: &Path,
+    action: ProcessAction,
+) -> io::Result<Option<String>> {
     match action {
         ProcessAction::Terminate => {
             let process = open_checked(pid, expected_image, PROCESS_TERMINATE)?;
@@ -84,7 +90,7 @@ pub fn control_process(pid: u32, expected_image: &Path, action: ProcessAction) -
             if ok == 0 {
                 return Err(io::Error::last_os_error());
             }
-            Ok(())
+            Ok(None)
         }
         ProcessAction::Suspend | ProcessAction::Resume => {
             // Rechte am Prozess prüfen; das offene Handle hält die Prozess-ID fest.
@@ -116,11 +122,11 @@ pub fn control_process(pid: u32, expected_image: &Path, action: ProcessAction) -
                 return Err(io::Error::other("Kein Thread erreichbar"));
             }
             if suspend && !settled && threads_of(pid)?.iter().any(|t| !handled.contains(t)) {
-                return Err(io::Error::other(
-                    "Das Programm startet laufend neue Threads – nur teilweise angehalten",
+                return Ok(Some(
+                    "Das Programm startet laufend neue Threads – nur teilweise angehalten (Fortsetzen hebt das auf)".into(),
                 ));
             }
-            Ok(())
+            Ok(None)
         }
     }
 }

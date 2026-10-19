@@ -83,6 +83,8 @@ pub struct Service<C: Clock, W: Durable> {
     backup: Option<Arc<aegis_quarantine::backup::BackupStore>>,
     backup_dir: Option<PathBuf>,
     backup_runs: backup::BackupRuns,
+    /// Aufgeschobene lange Arbeit nach einem „Ja“ (nur innerhalb einer Anfrage gesetzt).
+    deferred: Option<backup::Deferred>,
 }
 
 /// Einstellung „Windows-Feature Windows Sandbox“.
@@ -158,6 +160,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             backup: None,
             backup_dir: None,
             backup_runs: backup::BackupRuns::default(),
+            deferred: None,
         }
     }
 
@@ -602,6 +605,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
     ) -> Response {
         let plan = permit.plan().clone();
         let mut failures = Vec::new();
+        let mut partial: Vec<String> = Vec::new();
         let mut done = 0usize;
         for target in plan.targets() {
             let Target::Process { pid, image_path } = target else {
@@ -613,14 +617,22 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 Err(e) => Err(format!("Rechte des Nutzers nicht übernehmbar: {e}")),
             };
             match result {
-                Ok(()) => done += 1,
+                Ok(None) => done += 1,
+                Ok(Some(note)) => {
+                    done += 1;
+                    partial.push(format!("PID {pid}: {note}"));
+                }
                 Err(message) => {
                     failures.push((image_path.clone(), format!("PID {pid}: {message}")))
                 }
             }
         }
-        let result = if failures.is_empty() {
+        let result = if failures.is_empty() && partial.is_empty() {
             aegis_core::audit::ExecutionResult::Succeeded
+        } else if failures.is_empty() {
+            aegis_core::audit::ExecutionResult::PartiallySucceeded {
+                message: partial.join("; "),
+            }
         } else if done > 0 {
             aegis_core::audit::ExecutionResult::PartiallySucceeded {
                 message: format!(
@@ -645,7 +657,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             title: format!(
                 "{} – {}",
                 plan.what(),
-                if failures.is_empty() {
+                if failures.is_empty() && partial.is_empty() {
                     "erledigt"
                 } else {
                     "teilweise/nicht möglich"
@@ -654,6 +666,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
             detail: failures
                 .iter()
                 .map(|f| f.1.clone())
+                .chain(partial.iter().cloned())
                 .collect::<Vec<_>>()
                 .join("; "),
             paths: plan
@@ -753,6 +766,20 @@ impl<C: Clock, W: Durable> Service<C, W> {
             Ok(f) => f,
             Err(e) => return e,
         };
+        // Auch kein Ordner, der den AEGIS-Datenordner enthält (sonst zählten die eigenen
+        // Schreibvorgänge des Dienstes als Massenänderung).
+        if let Some(f) = folders
+            .iter()
+            .find(|f| self.protected.iter().any(|d| starts_with_folded(d, f)))
+        {
+            return Response::error(
+                "input",
+                format!(
+                    "{} enthält den AEGIS-Datenordner – bitte einen Unterordner wählen",
+                    escape_text(&f.display().to_string())
+                ),
+            );
+        }
         {
             let _scope = match user.enter() {
                 Ok(s) => s,
@@ -805,10 +832,9 @@ impl<C: Clock, W: Durable> Service<C, W> {
         if let Err(e) = saved {
             return Response::error("settings", e.to_string());
         }
-        let still: Vec<(PathBuf, Option<PathBuf>)> = self.protected_folders();
         for f in old {
-            if !still.iter().any(|(s, _)| crate::paths::same_path(s, &f)) {
-                self.watch.unprotect(&f);
+            if !unique.iter().any(|u| crate::paths::same_path(u, &f)) {
+                self.watch.unprotect(&f, profile.as_deref());
             }
         }
         for f in unique {
@@ -1495,8 +1521,37 @@ impl<C: Clock, W: Durable> Service<C, W> {
 
     /// Verarbeitet eine Anfrage. Abgelaufene Vorschläge werden vorher verworfen
     /// (Standard bei Nicht-Reaktion: nichts tun). Nutzerdateien fasst der Dienst nur mit den
-    /// Rechten von `user` an (Windows: Identität des Pipe-Clients).
+    /// Rechten von `user` an (Windows: Identität des Pipe-Clients). Lange Arbeit nach einem
+    /// „Ja“ (Export, Ausdünnen) läuft hier gleich mit – die Pipe nutzt [`Self::handle_split`].
     pub fn handle(&mut self, request: Request, user: &dyn UserAccess) -> Response {
+        match self.handle_split(request, user) {
+            Ok(response) => response,
+            Err(work) => {
+                let outcome = work.run(user, &|| false);
+                self.finish_deferred(*work, outcome, user)
+            }
+        }
+    }
+
+    /// Wie [`Self::handle`], liefert lange Arbeit nach einem „Ja“ aber als
+    /// [`backup::Deferred`] zurück: Der Aufrufer führt sie **ohne** Dienst-Sperre aus und gibt
+    /// das Ergebnis mit [`Self::finish_deferred`] zurück (Prüfprotokoll unter der Sperre).
+    ///
+    /// # Errors
+    /// `Err` ist keine Störung, sondern die aufgeschobene Arbeit.
+    pub fn handle_split(
+        &mut self,
+        request: Request,
+        user: &dyn UserAccess,
+    ) -> Result<Response, Box<backup::Deferred>> {
+        let response = self.handle_inner(request, user);
+        match self.deferred.take() {
+            Some(work) => Err(Box::new(work)),
+            None => Ok(response),
+        }
+    }
+
+    fn handle_inner(&mut self, request: Request, user: &dyn UserAccess) -> Response {
         self.drain_lab_audit();
         for id in self.gate.expire_stale() {
             self.proposals.remove(&id);
@@ -2762,7 +2817,7 @@ fn running_processes_of(
 
 /// Eine Prozess-Aktion (im Identitätswechsel aufrufen).
 #[cfg(windows)]
-fn control_one(pid: u32, image: &Path, kind: ActionKind) -> Result<(), String> {
+fn control_one(pid: u32, image: &Path, kind: ActionKind) -> Result<Option<String>, String> {
     use aegis_winffi::control::{ProcessAction, control_process};
     let action = match kind {
         ActionKind::TerminateProcess => ProcessAction::Terminate,
@@ -2774,7 +2829,7 @@ fn control_one(pid: u32, image: &Path, kind: ActionKind) -> Result<(), String> {
 }
 
 #[cfg(not(windows))]
-fn control_one(_pid: u32, _image: &Path, _kind: ActionKind) -> Result<(), String> {
+fn control_one(_pid: u32, _image: &Path, _kind: ActionKind) -> Result<Option<String>, String> {
     Err("Prozess-Aktionen gibt es nur unter Windows".into())
 }
 

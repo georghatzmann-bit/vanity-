@@ -62,6 +62,32 @@ pub enum Signal {
     },
 }
 
+impl Signal {
+    /// Dasselbe Muster, als Ort aber nur `root` (z. B. der geschützte Ordner).
+    #[must_use]
+    pub fn shown_as(self, root: &Path) -> Self {
+        let root = root.to_path_buf();
+        match self {
+            Self::Canary { .. } => Self::Canary { path: root },
+            Self::Encrypting { count, .. } => Self::Encrypting {
+                example: root,
+                count,
+            },
+            Self::Burst {
+                changed,
+                renamed,
+                removed,
+                ..
+            } => Self::Burst {
+                example: root,
+                changed,
+                renamed,
+                removed,
+            },
+        }
+    }
+}
+
 /// Zeitfenster für Massenänderungen.
 pub const WINDOW: Duration = Duration::from_secs(20);
 /// Schwellen im Zeitfenster.

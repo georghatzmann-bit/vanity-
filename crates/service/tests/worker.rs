@@ -79,6 +79,7 @@ fn hintergrund_liest_nur_was_alle_nutzer_lesen_duerfen() {
     let shared = BackgroundAccess {
         profile: None,
         require_owner: false,
+        owner: None,
     };
     let findings = worker()
         .examine(std::slice::from_ref(&private), &shared)

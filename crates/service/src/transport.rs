@@ -204,13 +204,14 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
             }
             // Notfall-Scan außerhalb der Dienst-Sperre (dauert).
             Ok(Request::EmergencyScan {}) => {
-                let (scanner, note) = {
-                    let mut guard = lock()?;
-                    (guard.scanner(), guard.request_update())
-                };
                 match Slot::try_take(&RUNNING_SCANS, MAX_PARALLEL_SCANS) {
                     None => busy(),
                     Some(slot) => {
+                        // Update erst anfordern, wenn der Scan auch wirklich läuft.
+                        let (scanner, note) = {
+                            let mut guard = lock()?;
+                            (guard.scanner(), guard.request_update())
+                        };
                         let mut response = crate::emergency::emergency_scan(&scanner, user, note);
                         drop(slot);
                         let guard = lock()?;
@@ -225,7 +226,17 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                 let lab = lock()?.lab();
                 crate::handler::lab_screenshot_response(&lab, user, &run_id, &name)
             }
-            Ok(request) => lock()?.handle(request, user),
+            // Lange Arbeit nach einem „Ja“ (Export, Ausdünnen) außerhalb der Dienst-Sperre.
+            Ok(request) => {
+                let split = lock()?.handle_split(request, user);
+                match split {
+                    Ok(response) => response,
+                    Err(work) => {
+                        let outcome = work.run(user, &|| false);
+                        lock()?.finish_deferred(*work, outcome, user)
+                    }
+                }
+            }
             Err(e) => Response::error("invalid", format!("Ungültige Anfrage: {e}")),
         };
         let bytes = serde_json::to_vec(&response).map_err(io::Error::other)?;

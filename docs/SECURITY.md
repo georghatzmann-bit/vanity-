@@ -171,9 +171,12 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   laute Ordner wie Temp/AppData unterhalb des Profils ausgenommen). Pausen getrennt:
   Massenänderungen je Profil 10 min, Köder je Datei – ein anderer Köder warnt sofort; neue
   Köder machen bekannte nicht unscharf. **Geschützte Ordner (P5.9):** Desktop, Dokumente,
-  Bilder und eigene Ordner (höchstens 20; nur Ordner, die das Konto selbst lesen kann – sonst
-  bekäme es Dateinamen aus fremden Ordnern gemeldet) werden nur für diese Erkennung
-  beobachtet, nicht jede Datei geprüft. **Entropie:** Bei geänderten, sonst „lesbaren“ Dateien
+  Bilder und eigene Ordner (höchstens 20; nur Ordner, die das Konto selbst lesen kann, nicht
+  ganze Laufwerke und keine, die den AEGIS-Datenordner enthalten) werden nur für diese
+  Erkennung beobachtet, nicht jede Datei geprüft. Außerhalb der Profile nennt eine Meldung nur
+  den Schutzordner, nie die Datei – sonst erführe ein Konto Dateinamen aus Unterordnern, die es
+  nicht lesen darf. Schützen mehrere Konten denselben Ordner, wird jedes gewarnt; entfernt eines
+  ihn, bleiben die anderen (und die Standardordner) beobachtet. **Entropie:** Bei geänderten, sonst „lesbaren“ Dateien
   (Text, CSV, alte Office-Formate …) und Umbenennungen auf ungewöhnliche Endungen misst der
   eingeschränkte Prüfprozess die Entropie der ersten 64 KiB – mit den Rechten des angemeldeten
   Profil-Besitzers, sonst gar nicht; höchstens 40 Stichproben je Profil und 20 s. Wirken 8
@@ -213,7 +216,17 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   überschrieben, SHA-256 geprüft. Export auf ein Laufwerk: Plan, normale Kopien der neuesten
   Versionen in einen neuen Unterordner des gewählten Ordners (mit Nutzerrechten, nie
   überschrieben). Ausdünnen: Plan „Endgültig löschen“ mit zweiter Bestätigung; die neueste
-  Version jeder Datei bleibt immer. Der Startcheck des Datenordners durchläuft diesen Ordner
+  Version jeder Datei bleibt immer. **Grenzen (P5.11):** je Konto die gewählte Grenze und
+  höchstens 100 000 Versionen, über alle Konten 200 GiB, und auf dem Laufwerk bleiben immer
+  mindestens 10 GiB bzw. 10 % frei – eine volle Platte würde sonst das Prüfprotokoll und damit
+  jede Aktion lahmlegen. Gelesen wird höchstens die beim Sammeln geprüfte Größe (wächst die Datei,
+  wird die Kopie verworfen); Cloud-Platzhalter werden nicht gelesen (kein Herunterladen). Der
+  Index ist ein Zeilenprotokoll (beschädigte Zeilen kosten nur diese Version; Ausdünnen räumt
+  verwaiste Kopien mit auf). Export und Ausdünnen laufen nach dem „Ja“ außerhalb der
+  Dienst-Sperre, Sicherungsläufe in einem eigenen Faden (bricht beim Beenden zwischen Dateien
+  ab). Der Hintergrund-Identitätswechsel prüft neben dem Profil auch die SID des Kontos. Ist der
+  Speicher nicht einrichtbar, startet der Dienst trotzdem (Funktion „nicht verfügbar“).
+  Der Startcheck des Datenordners durchläuft diesen Ordner
   nicht (sehr viele eigene Dateien) – er prüft nur den Ordner selbst. Ehrlich: Administratoren
   dieses Rechners können die Kopien lesen; die Pfade stehen im Klartext-Index im Datenordner.
 - **Datei-Safe (P5.6):** Ordner im Profil des Nutzers; alle Zugriffe im Identitätswechsel und
@@ -282,6 +295,7 @@ Prüfung „kein Code-Pfad ändert etwas ohne Freigabe“ ist fester Bestandteil
 
 | Datum | Umfang | Ergebnis |
 | --- | --- | --- |
+| 2026-10-19 | P5-Nachprüfung: Korrekturen P5.7, Notfall-Scan P5.8, Ransomware-Ergänzungen P5.9, Rückfall-Kopien P5.10. 1 Prüfer | 0 kritisch, 1 hoch: P5-S1 Rückfall-Kopien konnten die Systemplatte füllen (Größe nur beim Sammeln geprüft, keine Platz-/Gesamtgrenze) → geprüfte Größe am Handle, Lesen begrenzt, Gesamtgrenze, Mindest-Freiplatz, D-042. 4 mittel: P5-S2 Dateinamen aus nicht lesbaren Unterordnern geschützter Ordner in Meldungen → außerhalb der Profile nur der Schutzordner; P5-S3 Schutzordner nur nach Pfad (erster gewinnt, Entfernen beendete Standardbeobachtung) → je Konto, Standardordner bleiben, Grenze vor dem Beobachten; P5-S4 Index skalierte nicht/sperrte aus → Zeilenprotokoll, einmal je Lauf gelesen, Grenzen vor dem Verschlüsseln, Aufräumen verwaister Kopien; P5-S5 Export/Ausdünnen/Läufe blockierten den Dienst → außerhalb der Sperre, eigener Faden, Abbruch beim Beenden. 5 niedrig: Cloud-Platzhalter → übersprungen; Schutzordner über dem Datenordner → abgelehnt, Datenordner-Ereignisse ignoriert; Identitätswechsel nur nach Profilpfad → SID-Prüfung; teilweises Einfrieren als „fehlgeschlagen“ → „teilweise“; Speicherfehler verhinderte Dienststart → optional. Kleinigkeiten (Doku im Prüfprozess, Export-Zeitstempel, Update erst bei laufendem Notfall-Scan, Reihenfolge ohne Textvergleich, kein Verlauf bei abgemeldetem Konto, Reihenfolge D-039–D-041) – alle behoben, Tests ergänzt |
 | 2026-10-19 | P5.1–P5.6: DPAPI-Schlüssel, Prozess-Aktionen, Ransomware-Schutz, Netz trennen, Speicher-Scan, Datei-Safe. 1 Prüfer | 0 kritisch/hoch. 3 mittel: P5-R1 Argon2-Parameter aus dem Safe-Kopf (bis 1 GiB) unter der Dienst-Sperre → nur AEGIS-Parameter, Ableitung außerhalb der Sperre, je Konto eine, Grenzen vor der Ableitung; P5-R2 Netz trennen/verbinden ohne Rechteregel → Wieder verbinden nur trennendes Konto/Admins, Entscheidung D-036; P5-R3 halbe Sperre ohne Zustand → Zurücknehmen bei Fehler, Wieder verbinden immer möglich. 6 niedrig: Thread-ID-Wiederverwendung/neue Threads beim Anhalten → Thread-Prüfung, mehrere Runden; Speicher-Scan Spitzenbedarf → paketweise, 128 MiB; Safe-Ordner-Prüfung Groß/Klein → gefalteter Vergleich + Test; Klartext-Pfade in Protokoll/Verlauf → Verlauf nur Anzahlen, Protokoll ehrlich dokumentiert; Ransomware-Pausen/Scharfschalten/Profilname → getrennte Pausen, Köder einzeln scharf, laute Ordner relativ zum Profil + Tests; Admin-Prozessliste → nur eigene, AEGIS-Programme ausgenommen. 3 Kleinigkeiten (DPAPI-Doku + Start bei fehlgeschlagener Umstellung, Rahmen überschreiben/Fehlversuche nur bei falschem Passwort, Köder bei Speicherfehler bewacht) – alle behoben |
 | 2026-10-19 | P4: Labor (Dienst, winffi-Sandbox, Sonde, App-Befehle, Labor-Seite). 1 Prüfer | 1 hoch: P4-1 Absturz des Dienstes über einen Bildnamen mit Mehrbyte-Zeichen (Byte-Slicing, `panic = abort`) → reine ASCII-/Byteprüfung vor allem anderen, Test. 6 mittel: P4-2 Ausgabe der Stufe 1 als SYSTEM unter der Dienst-Sperre gelesen → Identitätswechsel, Hardlink-Prüfung, außerhalb der Sperre; P4-3 VM nicht kontrolliert, erster Bericht vertraut → Prozess gehalten, Frist/Größengrenze, Lesen erst nach Ende, Hinweise vom Dienst; P4-4 gemeinsames, bleibendes AppContainer-Profil → Profil je Lauf, danach gelöscht, kein SYSTEM-Rückfall; P4-5 Erlaubnis vor der Arbeit als „erfolgreich“ protokolliert → Erlaubnis im Lauf, echtes Ergebnis; P4-6 „Vertrauen“ auf Labor-Vorschläge → abgelehnt (Dienst + UI); P4-7 Berichtsgrößen → 1 MiB, Textgrenzen, Bericht nur je Lauf. 8 niedrig/Kleinigkeiten (stiller Token-Rückfall, Ordnerrechte Stufe 2, Zählung aktiver Läufe, Dateiname der Kopie, Sonde per Umgebungsvariable, Fensterfotos ohne AppContainer-/Hänger-Prüfung, PNG ungeprüft, Prüfsumme nicht verglichen, DISM ohne Frist, Netz-Text) – alle behoben, Tests ergänzt |
 | 2026-10-19 | P3: Prüfprozess/Token, Vertrauensliste, Wächter, Verlauf/Zeitpläne/Updates, HTML-Export. 2 Durchgänge (der erste brach nach dem ersten Fund ab) | 2 hoch: P3-1 Hintergrundprüfungen mit SYSTEM-abgeleitetem Token (→ Profil-Besitzer bzw. LocalService, Öffnen mit Prüfung am Handle), P3-2 Verlauf/Vertrauensliste konnten den Dienststart blockieren (→ Größen- und Längengrenzen, Quoten, Beiseitelegen). 8 mittel (Aushungern/Warteschlange, Abstürze verstecken Dateien, rechnerweite Schalter für jeden Nutzer → Gaming je Konto + Admin-Pflicht, gemeinsame Grenzen → Quoten, Dateizugriffe unter der Sperre, freshclam als SYSTEM ohne Job, Zuordnung „gemeinsam“ nach Pfad → SID/Profil-Wurzel, LocalService statt eingeschränktem SYSTEM). 6 niedrig (Rückfall auf Dienst-Token, gemeinsame „unbekannt“-Kennung, Pfadvergleich, Termine, USB/ETW, Export überschreibt). Alle behoben bzw. Grenzen dokumentiert, Tests ergänzt (Windows-Test „nur Nutzer“-Token) |

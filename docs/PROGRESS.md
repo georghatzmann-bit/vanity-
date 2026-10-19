@@ -123,10 +123,11 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 10. [x] P5.10 Rückfall-Kopien (Opt-in-Plan, versioniert, verschlüsselt im Datenordner des
         Dienstes, alle 30 min), Zurückholen, Export aufs Laufwerk, Ausdünnen mit zweiter
         Bestätigung; Panel auf der Echtzeit-Seite.
-11. [ ] P5.11 Nachprüfung der neuen Teile (separater Agent), DoD.
+11. [x] P5.11 Nachprüfung der neuen Teile (separater Agent): 0 kritisch, 1 hoch (Rückfall-Kopien
+        konnten die Platte füllen), 4 mittel, 5 niedrig, Kleinigkeiten – alle behoben (D-042).
 
-**Nächster Schritt:** Review-Funde beheben, dann P6 (Härtung, Persistenz, Treiber-Check,
-Kamera/Mikro/Zwischenablage/USB-Wächter).
+**P5 erledigt.** **Nächster Schritt:** P6 (Härtung & Score, Persistenz, Treiber-Check,
+Software-Updates, Kamera/Mikro/Zwischenablage/USB-Wächter).
 
 ## P1 – erledigt
 

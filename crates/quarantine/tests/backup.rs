@@ -11,7 +11,7 @@ use aegis_core::plan::{ActionKind, ActionPlan, Target, UndoHint, param};
 use aegis_core::risk::RiskLevel;
 use aegis_core::testing::{ManualClock, user_answers, user_confirms_second, write_fixture};
 use aegis_quarantine::OwnProcess;
-use aegis_quarantine::backup::BackupStore;
+use aegis_quarantine::backup::{BackupStore, StoreError};
 
 fn real_tempdir() -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().unwrap();
@@ -38,9 +38,16 @@ fn approve(gate: &mut ConsentGate<ManualClock>, plan: &ActionPlan) -> ExecutionP
     approval.redeem(plan, gate).unwrap()
 }
 
+const QUOTA: u64 = 1024 * 1024;
+
 fn store_file(store: &BackupStore, path: &Path, modified: i64) {
     let file = std::fs::File::open(path).unwrap();
-    store.store(None, path, file, modified).unwrap();
+    let size = file.metadata().unwrap().len();
+    store
+        .begin(None)
+        .unwrap()
+        .store(path, file, modified, size, QUOTA)
+        .unwrap();
 }
 
 #[test]
@@ -51,12 +58,12 @@ fn sichern_zurueckholen_ausduennen() {
     let clock = ManualClock::default();
     let mut gate = ConsentGate::with_clock(clock.clone(), ConsentConfig::default()).unwrap();
     let doc = write_fixture(&home, "Dokumente/plan.txt", b"Version 1").unwrap();
-    assert!(store.needs(None, &doc, 1, 9).unwrap());
+    assert!(store.begin(None).unwrap().needs(&doc, 1, 9));
     store_file(&store, &doc, 1);
-    assert!(!store.needs(None, &doc, 1, 9).unwrap(), "unverändert");
+    assert!(!store.begin(None).unwrap().needs(&doc, 1, 9), "unverändert");
     std::thread::sleep(std::time::Duration::from_millis(1100));
     write_fixture(&home, "Dokumente/plan.txt", b"Version 2 (verschluesselt?)").unwrap();
-    assert!(store.needs(None, &doc, 2, 27).unwrap());
+    assert!(store.begin(None).unwrap().needs(&doc, 2, 27));
     store_file(&store, &doc, 2);
     let usage = store.usage(None).unwrap();
     assert_eq!((usage.files, usage.versions), (1, 2));
@@ -104,7 +111,7 @@ fn sichern_zurueckholen_ausduennen() {
         .build(clock.now())
         .unwrap();
     let (folder, written, failed) = store
-        .export(&approve(&mut gate, &plan), &OwnProcess)
+        .export(&approve(&mut gate, &plan), &OwnProcess, &|| false)
         .unwrap();
     assert_eq!((written, failed), (1, 0));
     assert!(folder.starts_with(&usb));
@@ -158,6 +165,37 @@ fn sichern_zurueckholen_ausduennen() {
     assert_eq!(store.prune(&permit, None).unwrap(), 1);
     let usage = store.usage(None).unwrap();
     assert_eq!((usage.files, usage.versions), (1, 1), "neueste bleibt");
+}
+
+#[test]
+fn grenzen_beim_sichern() {
+    let (_home, home) = real_tempdir();
+    let (_data, data) = real_tempdir();
+    let store = BackupStore::open(&data.join("backup")).unwrap();
+    let a = write_fixture(&home, "a.txt", &[b'a'; 600]).unwrap();
+    let b = write_fixture(&home, "b.txt", &[b'b'; 600]).unwrap();
+    let mut run = store.begin(None).unwrap();
+    run.store(&a, std::fs::File::open(&a).unwrap(), 1, 600, 1000)
+        .unwrap();
+    // Speichergrenze erreicht: Lauf endet, nichts angelegt.
+    let err = run
+        .store(&b, std::fs::File::open(&b).unwrap(), 1, 600, 1000)
+        .unwrap_err();
+    assert!(matches!(err, StoreError::Stop(_)), "{err}");
+    assert_eq!(store.usage(None).unwrap().versions, 1);
+    assert_eq!(
+        walk(&data)
+            .iter()
+            .filter(|p| p.extension().is_some_and(|x| x == "abk"))
+            .count(),
+        1
+    );
+    // Datei wuchs nach dem Sammeln (geprüfte Größe 600): nichts gesichert.
+    let file = std::fs::File::open(&b).unwrap();
+    write_fixture(&home, "b.txt", &[b'c'; 900]).unwrap();
+    let err = run.store(&b, file, 2, 600, QUOTA).unwrap_err();
+    assert!(matches!(err, StoreError::Skip(_)), "{err}");
+    assert_eq!(store.usage(None).unwrap().versions, 1);
 }
 
 fn walk(dir: &Path) -> Vec<PathBuf> {

@@ -165,6 +165,12 @@ braucht einen eigenen Plan („Im Labor ausführen“, Stufe/Sekunden/Netz im Pl
 Original wird nur gelesen (Kopie mit SHA-256 im Labor-Ordner). Einschalten der Windows Sandbox
 ist ein eigener Plan (nur Administratoren, DISM ohne Neustart).
 
+## D-034 – Bildschirmfotos ohne Lockerung der CSP
+Bilder kommen als PNG-Bytes über IPC und werden per `createImageBitmap` auf ein Canvas
+gezeichnet – `img-src` bleibt `'self'` (kein `data:`/`blob:`). Fotos der Mini-Sandbox macht
+die App (der Dienst läuft in Sitzung 0 und sieht den Desktop nicht), aber nur für die
+Prozess-IDs, die der Dienst für einen laufenden eigenen Lauf nennt.
+
 ## D-035 – Prozess-Aktionen nur für eigene Prozesse
 Der Dienst schlägt Beenden/Anhalten/Fortsetzen nur für Prozesse des anfragenden Kontos vor und
 führt sie im Identitätswechsel aus. So kann ein Nutzer über den SYSTEM-Dienst nichts beenden,
@@ -181,6 +187,22 @@ trennende Konto und Administratoren, damit Schadsoftware in einem anderen Konto 
 nicht aufheben kann. Der eigentliche **Panic-Button** der Spezifikation ist der Notfall-Scan
 (D-039).
 
+## D-037 – Datei-Safe im Profil, Schlüssel nur aus dem Passwort
+Der Safe liegt im Profil des Nutzers (nicht im Datenordner des Dienstes), damit Rechte und
+Sicherungen des Kontos gelten. Der Schlüssel entsteht nur aus dem Passwort (Argon2id) – kein
+Wiederherstellungsweg, auch nicht für AEGIS; das steht im Plan und auf der Seite. Der Dienst
+hält den entsperrten Schlüssel höchstens 10 min ohne Nutzung im Speicher.
+
+## D-038 – Eigene Seite „Datei-Safe“ unter „Schutz“
+Der Safe ist kein Passwort-Tresor (P9) und keine Quarantäne – er bekommt eine eigene Seite in
+der Gruppe „Schutz“ mit eigenem Symbol.
+
+## D-039 – Panic-Button = Notfall-Scan
+Laut Spezifikation (Modul G) ist der Panic-Button ein sofortiger, nur lesender Notfall-Scan mit
+anschließendem Sammel-Isolieren (vorausgewählt nur „Gefährlich“) und „Alles rückgängig“. Er
+liegt auf der Scan-Seite und ist über Dashboard und Befehlspalette erreichbar. „Netz trennen“
+bleibt als zusätzliche Notfall-Maßnahme beim Ransomware-Schutz.
+
 ## D-040 – Geschützte Ordner nur beobachten, nicht prüfen
 Dokumente, Bilder und eigene Schutzordner werden nur für die Ransomware-Erkennung beobachtet
 (Köder, Massenänderungen, Entropie-Stichproben) – nicht jede geänderte Datei wird geprüft;
@@ -196,24 +218,14 @@ Für das externe Laufwerk gibt es den Export (eigener Plan): normale Kopien der 
 in einen gewählten Ordner – nach dem Abziehen offline geschützt. Ausdünnen ist „Endgültig
 löschen“ mit zweiter Bestätigung; die neueste Version bleibt.
 
-## D-039 – Panic-Button = Notfall-Scan
-Laut Spezifikation (Modul G) ist der Panic-Button ein sofortiger, nur lesender Notfall-Scan mit
-anschließendem Sammel-Isolieren (vorausgewählt nur „Gefährlich“) und „Alles rückgängig“. Er
-liegt auf der Scan-Seite und ist über Dashboard und Befehlspalette erreichbar. „Netz trennen“
-bleibt als zusätzliche Notfall-Maßnahme beim Ransomware-Schutz.
+## D-042 – Rückfall-Kopien: feste Grenzen und Index als Zeilenprotokoll
 
-## D-037 – Datei-Safe im Profil, Schlüssel nur aus dem Passwort
-Der Safe liegt im Profil des Nutzers (nicht im Datenordner des Dienstes), damit Rechte und
-Sicherungen des Kontos gelten. Der Schlüssel entsteht nur aus dem Passwort (Argon2id) – kein
-Wiederherstellungsweg, auch nicht für AEGIS; das steht im Plan und auf der Seite. Der Dienst
-hält den entsperrten Schlüssel höchstens 10 min ohne Nutzung im Speicher.
-
-## D-038 – Eigene Seite „Datei-Safe“ unter „Schutz“
-Der Safe ist kein Passwort-Tresor (P9) und keine Quarantäne – er bekommt eine eigene Seite in
-der Gruppe „Schutz“ mit eigenem Symbol.
-
-## D-034 – Bildschirmfotos ohne Lockerung der CSP
-Bilder kommen als PNG-Bytes über IPC und werden per `createImageBitmap` auf ein Canvas
-gezeichnet – `img-src` bleibt `'self'` (kein `data:`/`blob:`). Fotos der Mini-Sandbox macht
-die App (der Dienst läuft in Sitzung 0 und sieht den Desktop nicht), aber nur für die
-Prozess-IDs, die der Dienst für einen laufenden eigenen Lauf nennt.
+Status: angenommen (P5.11). Eine volle Systemplatte würde das Prüfprotokoll und damit jede
+Aktion von AEGIS lahmlegen. Darum: je Konto die gewählte Grenze, über alle Konten 200 GiB, und auf
+dem Laufwerk bleiben immer mindestens 10 GiB bzw. 10 % frei – sonst pausieren die Kopien. Gelesen
+wird nur die beim Sammeln geprüfte Größe (wächst die Datei, wird die Kopie verworfen);
+Cloud-Platzhalter (OneDrive „nur online“) werden nicht gesichert, weil Lesen sie herunterladen
+würde. Der Index ist ein Zeilenprotokoll (eine Zeile je Version, angehängt): ein Lauf liest ihn
+einmal, beschädigte Zeilen kosten nur diese Version, und Ausdünnen schreibt ihn neu und räumt
+verwaiste Kopien mit auf. Export und Ausdünnen laufen nach dem „Ja“ außerhalb der Dienst-Sperre,
+Sicherungsläufe in einem eigenen Faden, der beim Beenden des Dienstes zwischen Dateien abbricht.
