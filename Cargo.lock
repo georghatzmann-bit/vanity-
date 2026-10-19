@@ -145,6 +145,7 @@ dependencies = [
  "base64 0.22.1",
  "ferrisetw",
  "getrandom 0.4.3",
+ "goblin",
  "notify",
  "serde",
  "serde_json",

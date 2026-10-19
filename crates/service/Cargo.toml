@@ -24,6 +24,7 @@ zeroize = { workspace = true }
 
 [dev-dependencies]
 aegis-core = { workspace = true, features = ["testing"] }
+goblin = { workspace = true }
 tempfile = { workspace = true }
 
 
