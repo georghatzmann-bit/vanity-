@@ -88,6 +88,9 @@ pub struct ServiceSettings {
     /// Angelegte Köderdateien des Ransomware-Schutzes (je Konto).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub baits: Vec<BaitSet>,
+    /// Panic-Button aktiv seit (RFC 3339); `None` = Netz normal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panic_since: Option<String>,
 }
 
 /// Köderdateien eines Kontos.
@@ -110,6 +113,7 @@ impl Default for ServiceSettings {
             clamav_update: true,
             last_update: None,
             baits: Vec::new(),
+            panic_since: None,
         }
     }
 }

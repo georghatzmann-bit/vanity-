@@ -16,6 +16,7 @@ import { buildCommands } from './commands.tsx';
 import { titleKey } from './navigation.ts';
 import { ShellContext, type ShellActions } from './ShellContext.tsx';
 import { isDialogOpen, isTextInput } from './shortcuts.ts';
+import { PanicBar } from './PanicBar.tsx';
 import { Sidebar } from './Sidebar.tsx';
 import { StatusBar } from './StatusBar.tsx';
 import { TitleBar } from './TitleBar.tsx';
@@ -165,6 +166,7 @@ export function Shell({ ready, bootCount, preferences, onReplayBoot }: ShellProp
           {t('app.skipToContent')}
         </button>
         <TitleBar onOpenPalette={() => setPaletteOpen(true)} />
+        <PanicBar />
         <div className="flex min-h-0 flex-1">
           <Sidebar
             ref={navRef}

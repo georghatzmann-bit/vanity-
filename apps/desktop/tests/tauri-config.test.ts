@@ -54,6 +54,9 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-ransom-status': 'Dienst: eigene Köderdateien des Ransomware-Schutzes (nur lesend)',
   'allow-service-propose-baits':
     'Dienst: Köderdateien anlegen/entfernen vorschlagen (nur nach „Ja“)',
+  'allow-service-panic-status': 'Dienst: Zustand des Panic-Buttons (nur lesend)',
+  'allow-service-propose-panic':
+    'Dienst: Netz trennen/wieder verbinden vorschlagen (nur nach „Ja“)',
   'allow-lab-capture-windows': 'Fensterfotos eines eigenen Mini-Sandbox-Laufs (nur lesend)',
   'allow-export-report':
     'Bericht als HTML speichern – Inhalt aus Rust, Ort nur über den Speichern-Dialog',

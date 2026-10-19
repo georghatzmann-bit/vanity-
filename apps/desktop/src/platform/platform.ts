@@ -25,6 +25,7 @@ import {
   parseHistory,
   parseLab,
   parseLabReportResponse,
+  parsePanic,
   parseRansom,
   parseLabScreenshot,
   decodeBase64,
@@ -220,6 +221,9 @@ function createTauriService(): ServiceApi {
       parseProposal(
         await invoke<unknown>('service_propose_lab_run', { path, stage, seconds, network }),
       ),
+    panicStatus: async () => parsePanic(await invoke<unknown>('service_panic_status')),
+    proposePanic: async (on) =>
+      parseProposal(await invoke<unknown>('service_propose_panic', { on })),
     ransomStatus: async () => parseRansom(await invoke<unknown>('service_ransom_status')),
     proposeBaits: async (on) =>
       parseProposal(await invoke<unknown>('service_propose_baits', { on })),

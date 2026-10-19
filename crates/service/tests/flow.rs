@@ -808,3 +808,24 @@ fn koederdateien_nur_per_plan_und_nur_unveraendert_entfernt() {
         "eigene Datei bleibt"
     );
 }
+
+#[test]
+fn panic_button_nur_als_vorschlag() {
+    let mut h = harness();
+    let status = h.send(json!({"type": "panic_status"}));
+    assert_eq!(status["type"], "panic");
+    assert!(status["since"].is_null());
+    assert_eq!(status["available"], cfg!(windows));
+    let off = h.send(json!({"type": "propose_panic", "on": false}));
+    assert_eq!(off["code"], "panic", "nicht getrennt – nichts aufzuheben");
+    let on = h.send(json!({"type": "propose_panic", "on": true}));
+    if cfg!(windows) {
+        assert_eq!(on["type"], "proposal", "{on}");
+        assert_eq!(on["proposal"]["plan"]["kind"], "change_setting");
+        // Ohne „Ja“ passiert nichts.
+        assert_eq!(h.answer(&on, "decline")["type"], "nothing_done");
+        assert!(h.send(json!({"type": "panic_status"}))["since"].is_null());
+    } else {
+        assert_eq!(on["code"], "panic");
+    }
+}

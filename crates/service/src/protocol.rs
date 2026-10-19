@@ -82,6 +82,10 @@ pub enum Request {
     RansomStatus {},
     /// Köderdateien anlegen (`on`) bzw. entfernen vorschlagen.
     ProposeBaits { on: bool },
+    /// Panic-Button: Zustand (nur lesend).
+    PanicStatus {},
+    /// Netz trennen (`on`) bzw. wieder verbinden vorschlagen.
+    ProposePanic { on: bool },
     /// Antwort des Nutzers im Freigabe-Dialog.
     Decide {
         plan_id: PlanId,
@@ -162,6 +166,11 @@ pub enum Response {
     LabScreenshot { png_base64: String },
     /// Ransomware-Schutz des Kontos.
     Ransom { baits: Vec<PathBuf> },
+    /// Panic-Button: aktiv seit (RFC 3339) bzw. `None`.
+    Panic {
+        since: Option<String>,
+        available: bool,
+    },
     /// Verhaltensbericht eines Labor-Laufs.
     LabReport {
         report: Box<aegis_sandbox::report::BehaviorReport>,

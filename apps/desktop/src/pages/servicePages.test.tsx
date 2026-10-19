@@ -104,6 +104,8 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     labCaptureWindows: vi.fn(() => Promise.resolve([])),
     proposeProcessAction: vi.fn(() => Promise.resolve(proposal('Prozess beenden'))),
     ransomStatus: vi.fn(() => Promise.resolve({ baits: [] })),
+    panicStatus: vi.fn(() => Promise.resolve({ since: null, available: true })),
+    proposePanic: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     proposeBaits: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     ...overrides,
   };
@@ -650,5 +652,32 @@ describe('Ransomware-Schutz', () => {
     expect(service.proposeBaits).toHaveBeenCalledWith(true);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Nein' }));
     await waitFor(() => expect(vi.mocked(service.decide).mock.calls[0]?.[1]).toBe('decline'));
+  });
+});
+
+describe('Panic-Button', () => {
+  it('Netz trennen nur über den Freigabe-Dialog', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/realtime' });
+    const panel = await screen.findByTestId('ransom-panel');
+    expect(screen.queryByTestId('panic-bar')).toBeNull();
+    fireEvent.click(within(panel).getByRole('button', { name: /Panic-Button/ }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(service.proposePanic).toHaveBeenCalledWith(true);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Nein' }));
+    await waitFor(() => expect(vi.mocked(service.decide).mock.calls[0]?.[1]).toBe('decline'));
+  });
+
+  it('Leiste, solange getrennt – „Wieder verbinden“ nur als Vorschlag', async () => {
+    const service = fakeService({
+      panicStatus: vi.fn(() => Promise.resolve({ since: '2026-10-19T12:00:00Z', available: true })),
+    });
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/dashboard' });
+    const bar = await screen.findByTestId('panic-bar');
+    expect(bar).toHaveTextContent('Netz getrennt');
+    fireEvent.click(within(bar).getByRole('button', { name: /Wieder verbinden/ }));
+    await screen.findByRole('alertdialog');
+    expect(service.proposePanic).toHaveBeenCalledWith(false);
+    expect(service.decide).not.toHaveBeenCalled();
   });
 });

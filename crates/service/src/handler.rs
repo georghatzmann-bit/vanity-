@@ -730,6 +730,110 @@ impl<C: Clock, W: Durable> Service<C, W> {
         }
     }
 
+    /// Panic-Button: Netz trennen (`on`) bzw. wieder verbinden vorschlagen.
+    pub fn propose_panic(&mut self, on: bool, user: &dyn UserAccess) -> Response {
+        let active = self.settings.get().panic_since.is_some();
+        if !cfg!(windows) {
+            return Response::error("panic", "Den Panic-Button gibt es nur unter Windows");
+        }
+        if on == active {
+            return Response::error(
+                "panic",
+                if on {
+                    "Das Netz ist bereits getrennt"
+                } else {
+                    "Das Netz ist nicht getrennt"
+                },
+            );
+        }
+        let builder = ActionPlan::builder(ActionKind::ChangeSetting)
+            .target(Target::setting(crate::panic::PANIC_SETTING))
+            .parameter(param::VALUE, if on { "on" } else { "off" });
+        let builder = if on {
+            builder
+                .what("Panic-Button: Rechner vom Netz trennen")
+                .why("Zum Beispiel bei einem Ransomware-Verdacht: Ohne Netz kann Schadsoftware keine Daten hinaus schicken, keine Befehle holen und andere Geräte nicht erreichen.")
+                .consequence("Die Windows-Firewall sperrt jede ein- und ausgehende Verbindung (zwei AEGIS-Regeln; ist die Firewall aus, wird sie eingeschaltet und bleibt an). Internet, Heimnetz und Updates sind getrennt – für alle Konten dieses Rechners. Laufende Programme werden NICHT beendet.")
+                .undo(UndoHint::reversible("„Wieder verbinden“ entfernt genau diese beiden Regeln."))
+                .severity(RiskLevel::Suspicious)
+        } else {
+            builder
+                .what("Panic-Button aufheben: Rechner wieder verbinden")
+                .why("Von dir gewählt – z. B. nachdem das verdächtige Programm beendet bzw. isoliert ist.")
+                .consequence("Die beiden AEGIS-Sperrregeln werden gelöscht; Verbindungen sind wieder wie vorher erlaubt. Die Firewall bleibt eingeschaltet.")
+                .undo(UndoHint::reversible("Panic-Button erneut auslösen."))
+                .severity(RiskLevel::Info)
+        };
+        match builder.build(self.gate.clock().now()) {
+            Ok(plan) => self.register(plan, user.identity(), HashMap::new()),
+            Err(e) => Response::error("plan", e.to_string()),
+        }
+    }
+
+    /// Führt den freigegebenen Panic-Plan aus.
+    fn apply_panic(
+        &mut self,
+        permit: aegis_core::consent::ExecutionPermit,
+        user: &dyn UserAccess,
+    ) -> Response {
+        let plan = permit.plan().clone();
+        let on = plan.parameter(param::VALUE) == Some("on");
+        let commands = if on {
+            crate::panic::block_commands()
+        } else {
+            crate::panic::restore_commands()
+        };
+        let outcome = crate::panic::run(&permit, &commands);
+        let result = match &outcome {
+            Ok(()) => {
+                let since = on.then(|| {
+                    self.gate
+                        .clock()
+                        .now()
+                        .format(&aegis_core::time::format_description::well_known::Rfc3339)
+                        .unwrap_or_default()
+                });
+                match self.settings.update(|s| s.panic_since = since) {
+                    Ok(()) => aegis_core::audit::ExecutionResult::Succeeded,
+                    Err(e) => aegis_core::audit::ExecutionResult::PartiallySucceeded {
+                        message: format!("Zustand nicht gespeichert: {e}"),
+                    },
+                }
+            }
+            Err(message) => aegis_core::audit::ExecutionResult::Failed {
+                message: message.clone(),
+            },
+        };
+        let event = permit.complete(result.clone());
+        self.record(event);
+        if self.audit.sync().is_err() {
+            self.audit_failed = true;
+        }
+        self.add_history(NewEntry {
+            kind: HistoryKind::Action,
+            risk: on.then_some(RiskLevel::Suspicious),
+            title: format!(
+                "{} – {}",
+                plan.what(),
+                if outcome.is_ok() {
+                    "erledigt"
+                } else {
+                    "nicht möglich"
+                }
+            ),
+            detail: outcome.err().unwrap_or_default(),
+            paths: Vec::new(),
+            owner: user.identity(),
+            scope: None,
+        });
+        Response::Executed {
+            kind: ActionKind::ChangeSetting,
+            result,
+            entries: Vec::new(),
+            failures: Vec::new(),
+        }
+    }
+
     /// Führt den freigegebenen Köder-Plan aus (Dateien aus dem Plan, Nutzerrechte).
     fn apply_baits(
         &mut self,
@@ -1249,6 +1353,11 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 baits: self.baits_of(user.identity().as_deref()),
             },
             Request::ProposeBaits { on } => self.propose_baits(on, user),
+            Request::PanicStatus {} => Response::Panic {
+                since: self.settings.get().panic_since.clone(),
+                available: cfg!(windows),
+            },
+            Request::ProposePanic { on } => self.propose_panic(on, user),
             Request::ProposeLabRun {
                 path,
                 stage,
@@ -1744,8 +1853,13 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 let bait = plan.targets().iter().any(|t| {
                     matches!(t, Target::Setting { id } if id == aegis_quarantine::bait::BAIT_SETTING)
                 });
+                let panic = plan.targets().iter().any(
+                    |t| matches!(t, Target::Setting { id } if id == crate::panic::PANIC_SETTING),
+                );
                 return if bait {
                     self.apply_baits(permit, user)
+                } else if panic {
+                    self.apply_panic(permit, user)
                 } else {
                     self.enable_sandbox_feature(permit, user)
                 };

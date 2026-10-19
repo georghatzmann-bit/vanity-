@@ -435,6 +435,14 @@ export const de = {
     toastHint: 'Nichts wurde verändert. Sieh dir die Meldung an und entscheide selbst.',
     toastShow: 'Anzeigen',
   },
+  panic: {
+    active: 'Netz getrennt (Panic-Button)',
+    since: 'seit {time}',
+    reconnect: 'Wieder verbinden …',
+    button: 'Panic-Button: Netz trennen …',
+    title: 'Panic-Button',
+    hint: 'Trennt den Rechner sofort vom Netz (Firewall-Sperre für alle Verbindungen) – z. B. bei einem Ransomware-Verdacht. Laufende Programme werden nicht beendet; das geht einzeln über „Beenden …“.',
+  },
   ransom: {
     title: 'Ransomware-Schutz',
     honest:

@@ -251,6 +251,14 @@ export interface LabState {
   readonly runs: readonly LabRun[];
 }
 
+/** Panic-Button. */
+export interface PanicState {
+  /** Netz getrennt seit (ISO-Zeit) bzw. `null`. */
+  readonly since: string | null;
+  /** Gibt es den Panic-Button (Windows)? */
+  readonly available: boolean;
+}
+
 /** Ransomware-Schutz des Kontos. */
 export interface RansomState {
   /** Angelegte Köderdateien. */
@@ -304,6 +312,10 @@ export interface ServiceApi {
     seconds: number,
     network: boolean,
   ): Promise<Proposal>;
+  /** Panic-Button: Zustand (nur lesend). */
+  panicStatus(): Promise<PanicState>;
+  /** Netz trennen (`true`) bzw. wieder verbinden vorschlagen. */
+  proposePanic(on: boolean): Promise<Proposal>;
   /** Ransomware-Schutz: eigene Köderdateien (nur lesend). */
   ransomStatus(): Promise<RansomState>;
   /** Köderdateien anlegen (`true`) bzw. entfernen vorschlagen. */
@@ -632,6 +644,14 @@ export function parseLab(response: unknown): LabState {
         state: parseLabRunState(run['state']),
         container: typeof run['container'] === 'string' ? run['container'] : null,
       })),
+  };
+}
+
+export function parsePanic(response: unknown): PanicState {
+  const r = expectType(response, 'panic');
+  return {
+    since: typeof r['since'] === 'string' ? r['since'] : null,
+    available: r['available'] === true,
   };
 }
 

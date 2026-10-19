@@ -431,6 +431,14 @@ export const en: Messages<typeof de> = {
     toastHint: 'Nothing was changed. Look at the notice and decide yourself.',
     toastShow: 'Show',
   },
+  panic: {
+    active: 'Network disconnected (panic button)',
+    since: 'since {time}',
+    reconnect: 'Reconnect…',
+    button: 'Panic button: disconnect network…',
+    title: 'Panic button',
+    hint: 'Immediately disconnects this PC from the network (firewall block for all connections) – e.g. on a ransomware suspicion. Running programs are not terminated; use “Terminate…” for that.',
+  },
   ransom: {
     title: 'Ransomware protection',
     honest:

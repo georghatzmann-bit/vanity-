@@ -286,3 +286,5 @@ crates/winffi/src/control.rs :: winffi-control-resume :: Windows-FFI: ResumeThre
 crates/winffi/src/control.rs :: winffi-control-thread-snapshot :: Windows-FFI: Schnappschuss der Threads (nur lesen).
 crates/winffi/src/control.rs :: winffi-control-thread-first :: Windows-FFI: erster Thread des Schnappschusses.
 crates/winffi/src/control.rs :: winffi-control-thread-next :: Windows-FFI: nächster Thread des Schnappschusses.
+crates/service/src/panic.rs :: service-panic-netsh :: Panic-Button: setzt bzw. löscht nach Freigabe genau zwei AEGIS-Sperrregeln der Windows-Firewall (fester netsh-Pfad, feste Argumente).
+crates/service/src/panic.rs :: service-panic-netsh-timeout :: Panic-Button: beendet nur das selbst gestartete netsh nach 30 Sekunden.

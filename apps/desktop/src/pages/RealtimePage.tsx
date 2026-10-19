@@ -155,6 +155,7 @@ function RansomPanel({
           {count > 0 ? t('ransom.baitsOn', { count: String(count) }) : t('ransom.baitsOff')}
         </p>
         <p className="text-sm text-text-muted">{t('ransom.burst')}</p>
+        <p className="text-xs text-text-subtle">{t('panic.hint')}</p>
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
@@ -162,6 +163,13 @@ function RansomPanel({
             onClick={() => start(() => service.proposeBaits(true))}
           >
             {t('ransom.addBaits')}
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={() => start(() => service.proposePanic(true))}
+          >
+            {t('panic.button')}
           </Button>
           {count > 0 && (
             <Button

@@ -411,6 +411,18 @@ pub async fn service_propose_process_action(
     send(propose_process_request(&program, &action)?).await
 }
 
+/// Panic-Button: Zustand (nur lesend).
+#[tauri::command]
+pub async fn service_panic_status() -> Result<Value, String> {
+    send(json!({ "type": "panic_status" })).await
+}
+
+/// Netz trennen bzw. wieder verbinden vorschlagen – nur nach „Ja“.
+#[tauri::command]
+pub async fn service_propose_panic(on: bool) -> Result<Value, String> {
+    send(json!({ "type": "propose_panic", "on": on })).await
+}
+
 /// Ransomware-Schutz: eigene Köderdateien (nur lesend).
 #[tauri::command]
 pub async fn service_ransom_status() -> Result<Value, String> {
