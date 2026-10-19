@@ -13,6 +13,10 @@ wird hier **vor** der Nutzung eingetragen (Name, Herkunft, Lizenz, Nutzungsart, 
 | React 19, Motion, Vite, Tailwind CSS | npm | MIT | UI | 2026-10-19 |
 | tauri-plugin-single-instance 2.5.4 | tauri-apps | MIT / Apache-2.0 | nur eine laufende Instanz | 2026-10-19 |
 | rfd 0.17 | PolyMeilex/rfd | MIT | Fehlerdialog bei Startfehlern (Windows) | 2026-10-19 |
+| YARA-X 1.21 (nur ausgewählte Module) | VirusTotal/yara-x | BSD-3-Clause | Regel-Engine (P2) | 2026-10-19 |
+| goblin 0.10 (nur PE) | m4b/goblin | MIT | PE-Analyse (P2) | 2026-10-19 |
+| wasmtime 45 / cranelift (über yara-x) | Bytecode Alliance | Apache-2.0 WITH LLVM-exception | Regel-Ausführung in YARA-X | 2026-10-19 |
+| AEGIS-eigene YARA-Regeln `rules/yara/aegis-builtin.yar` | AEGIS | wie das Projekt | eingebaute Regeln | 2026-10-19 |
 | axe-core / @axe-core/playwright 4.14 | Deque | MPL-2.0 | nur Tests, nicht ausgeliefert | 2026-10-19 |
 
 Rust- und npm-Abhängigkeiten werden ab P13 automatisch inventarisiert (`cargo about` /

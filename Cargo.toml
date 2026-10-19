@@ -43,6 +43,17 @@ rfd = { version = "0.17.2", default-features = false }
 # Desktop-App, nur Windows: Windows-Version für `app_info` (nur lesend, RtlGetVersion);
 # ohnehin über tao/wry im Abhängigkeitsbaum.
 windows-version = "0.1.7"
+# Engine (P2): PE-Parser ohne Standard-Features (nur PE), YARA-X für Regeln.
+goblin = { version = "0.10.7", default-features = false, features = ["std", "pe32", "pe64"] }
+# Nur benötigte Module (ohne zip/crx/vt/Test-Module): weniger Angriffsfläche, kein `zip`-Crate.
+yara-x = { version = "1.21.0", default-features = false, features = [
+  "constant-folding", "exact-atoms", "fast-regexp", "generate-proto-code",
+  "pe-module", "dotnet-module", "elf-module", "lnk-module", "macho-module",
+  "math-module", "hash-module", "string-module", "time-module", "console-module",
+] }
+# Quarantäne (P2): AES-256-GCM, Zufall aus dem Betriebssystem.
+aes-gcm = "0.11.1"
+getrandom = "0.4.3"
 tempfile = "3.27.0"
 proptest = "1.12.0"
 trybuild = "1.0.122"

@@ -18,7 +18,25 @@ version = 2
 # Sicherheitslücken, „unsound“ und „unmaintained“ schlagen fehl (Standard von Version 2);
 # zurückgezogene Versionen ebenfalls. Ausnahmen nur mit Begründung und Ablaufdatum.
 yanked = "deny"
-ignore = []
+ignore = [
+  # yara-x 1.21 (neueste Version) verlangt wasmtime ^45; für die 45er-Reihe gibt es keine
+  # Korrektur. Betroffen sind Komponentenmodell, async-Einstiege, WASI-Dateisystem und
+  # mehrere Engines – YARA-X nutzt nichts davon: Es übersetzt nur unsere eigenen, vertrauten
+  # Regeln in Wasm, ohne WASI. Gescannte Dateien sind Daten, kein Wasm-Code.
+  # Erneut prüfen bei jedem yara-x-Update, spätestens 2027-01-31.
+  { id = "RUSTSEC-2026-0222", reason = "wasmtime 45 via yara-x: mehrere Engines – nicht genutzt" },
+  { id = "RUSTSEC-2026-0269", reason = "wasmtime 45 via yara-x: WASI-Dateisystem – nicht genutzt" },
+  { id = "RUSTSEC-2026-0316", reason = "wasmtime 45 via yara-x: Komponentenmodell – nicht genutzt" },
+  { id = "RUSTSEC-2026-0327", reason = "wasmtime 45 via yara-x: async-Komponenten – nicht genutzt" },
+  { id = "RUSTSEC-2026-0359", reason = "wasmtime 45 via yara-x: Komponentenmodell-Typen – nicht genutzt" },
+  { id = "RUSTSEC-2026-0362", reason = "wasmtime 45 via yara-x: async-Einstiege – nicht genutzt" },
+  { id = "RUSTSEC-2026-0363", reason = "wasmtime 45 via yara-x: Komponentenmodell-Handles – nicht genutzt" },
+  # rsa (Marvin): Zeitseitenkanal beim ENTschlüsseln mit privatem Schlüssel. YARA-X prüft mit
+  # rsa nur Authenticode-Signaturen (öffentlicher Schlüssel) – kein Geheimnis im Spiel.
+  { id = "RUSTSEC-2023-0071", reason = "rsa via yara-x pe-module: nur Signaturprüfung mit öffentlichem Schlüssel" },
+  # bincode: nicht mehr gepflegt, aber ohne bekannte Lücke; von yara-x für Regel-Serialisierung.
+  { id = "RUSTSEC-2025-0141", reason = "bincode via yara-x: ungepflegt, keine bekannte Lücke" },
+]
 
 [licenses]
 version = 2
@@ -28,6 +46,8 @@ version = 2
 # Copyleft und mit dem Einlinken vereinbar.
 allow = [
   "Apache-2.0",
+  # Apache-2.0 mit LLVM-Ausnahme (wasmtime/cranelift via yara-x): nur zusätzliche Erlaubnis.
+  "Apache-2.0 WITH LLVM-exception",
   "BSD-3-Clause",
   "MIT",
   "MPL-2.0",

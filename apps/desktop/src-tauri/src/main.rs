@@ -223,10 +223,10 @@ mod tests {
     /// aufgelösten ACL (Capability + App-Manifest aus `build.rs`).
     mod ipc {
         use serde_json::{Value, json};
+        use tauri::WebviewWindow;
         use tauri::ipc::{CallbackFn, InvokeBody};
         use tauri::test::{INVOKE_KEY, MockRuntime, get_ipc_response};
         use tauri::webview::InvokeRequest;
-        use tauri::WebviewWindow;
 
         use crate::test_support::{app, window};
         use crate::window::MAIN_WINDOW_LABEL;
