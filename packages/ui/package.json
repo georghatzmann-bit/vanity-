@@ -7,14 +7,19 @@
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/styles/index.css",
-    "./tokens.css": "./src/tokens/tokens.css"
+    "./tokens.css": "./src/tokens/tokens.css",
+    "./tokens": "./src/tokens/index.ts",
+    "./assets/*": "./assets/*"
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview --port 5199 --strictPort",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "export-logo": "node scripts/export-logo.mjs",
+    "check-logo": "node scripts/export-logo.mjs --check"
   },
   "peerDependencies": {
     "react": "^19.0.0",

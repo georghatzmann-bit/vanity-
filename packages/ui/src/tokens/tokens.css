@@ -1,0 +1,245 @@
+/*
+ * AEGIS Design-Tokens (Tailwind v4, CSS-first).
+ *
+ * 1. Rohwerte als --aegis-* Variablen je Theme. Dunkel ist Standard (:root), Hell über
+ *    [data-theme='light'] – auf <html> oder auf einem beliebigen Teilbaum.
+ * 2. Abbildung nach Tailwind per `@theme inline`: Utilities verweisen direkt auf die
+ *    --aegis-* Variablen und lösen sie am jeweiligen Element auf. Dadurch wechseln
+ *    bg-surface-1, text-text-muted, border-border, text-risk-dangerous … mit data-theme,
+ *    auch in verschachtelten Teilbäumen.
+ * 3. Die Standard-Farbpalette von Tailwind wird entfernt (--color-*: initial): Komponenten
+ *    verwenden ausschließlich semantische Tokens, keine hart codierten Farben.
+ *
+ * Spiegel in TypeScript: tokens.ts (per Test synchron gehalten).
+ */
+
+@layer theme {
+  :root {
+    --aegis-radius-xs: 2px;
+    --aegis-radius-sm: 4px;
+    --aegis-radius-md: 6px;
+    --aegis-radius-lg: 8px;
+    --aegis-radius-xl: 12px;
+    --aegis-radius-2xl: 16px;
+
+    --aegis-font-sans:
+      'Inter Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+    --aegis-font-mono:
+      'JetBrains Mono Variable', 'Cascadia Mono', Consolas, ui-monospace, monospace;
+
+    --aegis-font-size-2xs: 0.6875rem;
+    --aegis-line-height-2xs: 1rem;
+    --aegis-font-size-xs: 0.75rem;
+    --aegis-line-height-xs: 1.125rem;
+    --aegis-font-size-sm: 0.8125rem;
+    --aegis-line-height-sm: 1.25rem;
+    --aegis-font-size-base: 0.875rem;
+    --aegis-line-height-base: 1.375rem;
+    --aegis-font-size-md: 1rem;
+    --aegis-line-height-md: 1.5rem;
+    --aegis-font-size-lg: 1.125rem;
+    --aegis-line-height-lg: 1.625rem;
+    --aegis-font-size-xl: 1.375rem;
+    --aegis-line-height-xl: 1.875rem;
+    --aegis-font-size-2xl: 1.75rem;
+    --aegis-line-height-2xl: 2.25rem;
+    --aegis-font-size-3xl: 2.25rem;
+    --aegis-line-height-3xl: 2.625rem;
+    --aegis-font-size-display: 3rem;
+    --aegis-line-height-display: 3.25rem;
+
+    --aegis-tracking-tight: -0.015em;
+    --aegis-tracking-normal: 0em;
+    --aegis-tracking-wide: 0.04em;
+    --aegis-tracking-caps: 0.08em;
+    --aegis-tracking-wordmark: 0.32em;
+
+    --aegis-duration-instant: 80ms;
+    --aegis-duration-fast: 150ms;
+    --aegis-duration-base: 220ms;
+    --aegis-duration-slow: 360ms;
+    --aegis-duration-slower: 560ms;
+
+    --aegis-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --aegis-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+    --aegis-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+    --aegis-ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+
+  /* Dunkles Theme (Standard) */
+  :root,
+  [data-theme='dark'] {
+    color-scheme: dark;
+
+    --aegis-bg: #07090c;
+    --aegis-surface-1: #0d1116;
+    --aegis-surface-2: #131820;
+    --aegis-surface-3: #1a212b;
+    --aegis-surface-glass: rgb(19 24 32 / 0.72);
+    --aegis-border: #232c38;
+    --aegis-border-strong: #56637a;
+    --aegis-text: #e7edf4;
+    --aegis-text-muted: #9ba8b7;
+    --aegis-text-subtle: #6e7a89;
+    --aegis-accent: #22d3ee;
+    --aegis-accent-strong: #67e8f9;
+    --aegis-accent-glow: rgb(34 211 238 / 0.35);
+    --aegis-on-accent: #031418;
+    --aegis-success: #34d399;
+    --aegis-warn: #fbbf24;
+    --aegis-danger: #f87171;
+    --aegis-focus: #22d3ee;
+    --aegis-focus-glow: rgb(34 211 238 / 0.28);
+
+    --aegis-risk-clean: #34d399;
+    --aegis-risk-clean-subtle: #122c28;
+    --aegis-risk-info: #60a5fa;
+    --aegis-risk-info-subtle: #192636;
+    --aegis-risk-game: #a78bfa;
+    --aegis-risk-game-subtle: #232236;
+    --aegis-risk-risky: #facc15;
+    --aegis-risk-risky-subtle: #2e2b16;
+    --aegis-risk-suspicious: #fb923c;
+    --aegis-risk-suspicious-subtle: #2e231b;
+    --aegis-risk-dangerous: #f87171;
+    --aegis-risk-dangerous-subtle: #2e1e23;
+
+    --aegis-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.45);
+    --aegis-shadow-md: 0 6px 16px -4px rgb(0 0 0 / 0.6), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+    --aegis-shadow-lg: 0 18px 40px -12px rgb(0 0 0 / 0.7), 0 6px 12px -6px rgb(0 0 0 / 0.5);
+    --aegis-shadow-bevel: inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+    --aegis-shadow-glow: 0 0 0 1px rgb(34 211 238 / 0.35), 0 0 24px -4px rgb(34 211 238 / 0.45);
+  }
+
+  /* Helles Theme */
+  [data-theme='light'] {
+    color-scheme: light;
+
+    --aegis-bg: #f5f7fa;
+    --aegis-surface-1: #ffffff;
+    --aegis-surface-2: #f0f3f7;
+    --aegis-surface-3: #e6ebf1;
+    --aegis-surface-glass: rgb(255 255 255 / 0.72);
+    --aegis-border: #d5dce5;
+    --aegis-border-strong: #7c899b;
+    --aegis-text: #0b1220;
+    --aegis-text-muted: #475467;
+    --aegis-text-subtle: #6b7789;
+    --aegis-accent: #0b6a84;
+    --aegis-accent-strong: #0a5368;
+    --aegis-accent-glow: rgb(11 106 132 / 0.25);
+    --aegis-on-accent: #ffffff;
+    --aegis-success: #05704f;
+    --aegis-warn: #a04a06;
+    --aegis-danger: #b91c1c;
+    --aegis-focus: #0b6a84;
+    --aegis-focus-glow: rgb(11 106 132 / 0.22);
+
+    --aegis-risk-clean: #05704f;
+    --aegis-risk-clean-subtle: #e6f1ed;
+    --aegis-risk-info: #1d4ed8;
+    --aegis-risk-info-subtle: #e8edfb;
+    --aegis-risk-game: #6d28d9;
+    --aegis-risk-game-subtle: #f0eafb;
+    --aegis-risk-risky: #875c00;
+    --aegis-risk-risky-subtle: #f3efe6;
+    --aegis-risk-suspicious: #b13a0a;
+    --aegis-risk-suspicious-subtle: #f7ebe7;
+    --aegis-risk-dangerous: #b91c1c;
+    --aegis-risk-dangerous-subtle: #f8e8e8;
+
+    --aegis-shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.08);
+    --aegis-shadow-md: 0 6px 16px -4px rgb(15 23 42 / 0.12), 0 2px 4px -2px rgb(15 23 42 / 0.08);
+    --aegis-shadow-lg: 0 18px 40px -12px rgb(15 23 42 / 0.18), 0 6px 12px -6px rgb(15 23 42 / 0.1);
+    --aegis-shadow-bevel: inset 0 1px 0 0 rgb(255 255 255 / 0.7);
+    --aegis-shadow-glow: 0 0 0 1px rgb(11 106 132 / 0.3), 0 0 20px -4px rgb(11 106 132 / 0.3);
+  }
+}
+
+/* Abbildung in Tailwind. `inline`, damit Utilities am Element auflösen (Teilbaum-Theming). */
+@theme inline {
+  --color-*: initial;
+
+  --color-bg: var(--aegis-bg);
+  --color-surface-1: var(--aegis-surface-1);
+  --color-surface-2: var(--aegis-surface-2);
+  --color-surface-3: var(--aegis-surface-3);
+  --color-surface-glass: var(--aegis-surface-glass);
+  --color-border: var(--aegis-border);
+  --color-border-strong: var(--aegis-border-strong);
+  --color-text: var(--aegis-text);
+  --color-text-muted: var(--aegis-text-muted);
+  --color-text-subtle: var(--aegis-text-subtle);
+  --color-accent: var(--aegis-accent);
+  --color-accent-strong: var(--aegis-accent-strong);
+  --color-accent-glow: var(--aegis-accent-glow);
+  --color-on-accent: var(--aegis-on-accent);
+  --color-success: var(--aegis-success);
+  --color-warn: var(--aegis-warn);
+  --color-danger: var(--aegis-danger);
+  --color-focus: var(--aegis-focus);
+  --color-focus-glow: var(--aegis-focus-glow);
+  --color-risk-clean: var(--aegis-risk-clean);
+  --color-risk-clean-subtle: var(--aegis-risk-clean-subtle);
+  --color-risk-info: var(--aegis-risk-info);
+  --color-risk-info-subtle: var(--aegis-risk-info-subtle);
+  --color-risk-game: var(--aegis-risk-game);
+  --color-risk-game-subtle: var(--aegis-risk-game-subtle);
+  --color-risk-risky: var(--aegis-risk-risky);
+  --color-risk-risky-subtle: var(--aegis-risk-risky-subtle);
+  --color-risk-suspicious: var(--aegis-risk-suspicious);
+  --color-risk-suspicious-subtle: var(--aegis-risk-suspicious-subtle);
+  --color-risk-dangerous: var(--aegis-risk-dangerous);
+  --color-risk-dangerous-subtle: var(--aegis-risk-dangerous-subtle);
+
+  --shadow-sm: var(--aegis-shadow-sm);
+  --shadow-md: var(--aegis-shadow-md);
+  --shadow-lg: var(--aegis-shadow-lg);
+  --shadow-bevel: var(--aegis-shadow-bevel);
+  --shadow-glow: var(--aegis-shadow-glow);
+
+  --radius-xs: var(--aegis-radius-xs);
+  --radius-sm: var(--aegis-radius-sm);
+  --radius-md: var(--aegis-radius-md);
+  --radius-lg: var(--aegis-radius-lg);
+  --radius-xl: var(--aegis-radius-xl);
+  --radius-2xl: var(--aegis-radius-2xl);
+
+  --font-sans: var(--aegis-font-sans);
+  --font-mono: var(--aegis-font-mono);
+
+  --text-2xs: var(--aegis-font-size-2xs);
+  --text-2xs--line-height: var(--aegis-line-height-2xs);
+  --text-xs: var(--aegis-font-size-xs);
+  --text-xs--line-height: var(--aegis-line-height-xs);
+  --text-sm: var(--aegis-font-size-sm);
+  --text-sm--line-height: var(--aegis-line-height-sm);
+  --text-base: var(--aegis-font-size-base);
+  --text-base--line-height: var(--aegis-line-height-base);
+  --text-md: var(--aegis-font-size-md);
+  --text-md--line-height: var(--aegis-line-height-md);
+  --text-lg: var(--aegis-font-size-lg);
+  --text-lg--line-height: var(--aegis-line-height-lg);
+  --text-xl: var(--aegis-font-size-xl);
+  --text-xl--line-height: var(--aegis-line-height-xl);
+  --text-2xl: var(--aegis-font-size-2xl);
+  --text-2xl--line-height: var(--aegis-line-height-2xl);
+  --text-3xl: var(--aegis-font-size-3xl);
+  --text-3xl--line-height: var(--aegis-line-height-3xl);
+  --text-display: var(--aegis-font-size-display);
+  --text-display--line-height: var(--aegis-line-height-display);
+
+  --tracking-tight: var(--aegis-tracking-tight);
+  --tracking-normal: var(--aegis-tracking-normal);
+  --tracking-wide: var(--aegis-tracking-wide);
+  --tracking-caps: var(--aegis-tracking-caps);
+  --tracking-wordmark: var(--aegis-tracking-wordmark);
+
+  --ease-standard: var(--aegis-ease-standard);
+  --ease-enter: var(--aegis-ease-enter);
+  --ease-exit: var(--aegis-ease-exit);
+  --ease-draw: var(--aegis-ease-draw);
+
+  --default-transition-duration: var(--aegis-duration-fast);
+  --default-transition-timing-function: var(--aegis-ease-standard);
+}

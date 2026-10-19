@@ -1,1 +1,95 @@
+/*
+ * Globale Stile des AEGIS Design-Systems.
+ * Einbinden in Apps: `import '@aegis/ui/styles.css';` (über @tailwindcss/vite verarbeitet).
+ *
+ * Schriften werden lokal aus @fontsource-variable gebündelt (SIL OFL 1.1, keine CDNs).
+ */
 @import 'tailwindcss';
+@import '@fontsource-variable/inter/opsz.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+@import '../tokens/tokens.css';
+
+/* Komponenten des Pakets liegen außerhalb des App-Quellbaums – explizit scannen. */
+@source '../';
+
+@layer base {
+  html {
+    background-color: var(--aegis-bg);
+    color: var(--aegis-text);
+    font-family: var(--aegis-font-sans);
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent;
+    scrollbar-width: thin;
+    scrollbar-color: var(--aegis-border-strong) transparent;
+  }
+
+  body {
+    min-height: 100dvh;
+    background-color: var(--aegis-bg);
+    color: var(--aegis-text);
+    font-size: var(--aegis-font-size-base);
+    line-height: var(--aegis-line-height-base);
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--aegis-font-mono);
+  }
+
+  /* Zahlen in Zeit- und Datenangaben springen nicht (Zähler, Fortschritt, Hashes). */
+  time,
+  data,
+  kbd,
+  samp {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Fokus nur bei Tastaturbedienung: klarer Ring in Akzentfarbe mit dezentem Leuchten. */
+  :focus-visible {
+    outline: 2px solid var(--aegis-focus);
+    outline-offset: 2px;
+    box-shadow: 0 0 14px 2px var(--aegis-focus-glow);
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::selection {
+    background-color: var(--aegis-accent-glow);
+    color: var(--aegis-text);
+  }
+
+  /* Reduzierte Bewegung: Übergänge und Animationen global praktisch abschalten. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0.01ms !important;
+      transition-delay: 0ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Tabellarische Ziffern mit durchgestrichener Null – für Zahlenkolonnen, Hashes, IDs. */
+@utility tabular {
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+/* Glas nur sparsam einsetzen (Overlays, Befehlspalette); ohne backdrop-filter deckend. */
+@utility glass {
+  background-color: var(--aegis-surface-2);
+  @supports (backdrop-filter: blur(1px)) {
+    background-color: var(--aegis-surface-glass);
+    backdrop-filter: blur(18px) saturate(1.2);
+  }
+}
