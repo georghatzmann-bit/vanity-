@@ -8,6 +8,9 @@ publish.workspace = true
 authors.workspace = true
 
 [dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
 
 [lints]
 workspace = true
