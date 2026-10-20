@@ -206,8 +206,13 @@ fn ordinal_equal_ignore_case(a: &[u16], b: &[u16]) -> bool {
 
 fn ensure_same_path(handle: HANDLE, requested: &Path) -> io::Result<()> {
     let actual = final_path_wide(handle)?;
-    let requested: Vec<u16> = requested.as_os_str().encode_wide().collect();
-    if crate::final_path_matches_with(&actual, &requested, ordinal_equal_ignore_case) {
+    let matches = |path: &Path| {
+        let wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+        crate::final_path_matches_with(&actual, &wide, ordinal_equal_ignore_case)
+    };
+    // Kurznamen (8.3, z. B. `RUNNER~1`) zählen als derselbe Pfad: Die Langform ändert nur die
+    // Schreibweise, folgt aber keinem Link – Abzweigungen fallen weiter auf.
+    if matches(requested) || long_path(requested).is_ok_and(|long| matches(&long)) {
         Ok(())
     } else {
         Err(io::Error::new(
