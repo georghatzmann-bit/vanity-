@@ -1,6 +1,6 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-20 · **P0–P11 abgeschlossen** · nächste Phase: **P12 – Privacy-Browser**
+Stand: 2026-10-20 · **P0–P12 abgeschlossen**, P13 im Abschluss (Review) · danach optional **P14**
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
@@ -34,8 +34,8 @@ Stand: 2026-10-20 · **P0–P11 abgeschlossen** · nächste Phase: **P12 – Pri
 | P9 | Tresor + Erweiterung | erledigt |
 | P10 | Tools 1–11 | erledigt |
 | P11 | Tools 12–22 + Animations-Feinschliff | erledigt |
-| P12 | Privacy-Browser | in Arbeit |
-| P13 | Setup-Bootstrapper, Uninstaller, Updater, Abschlusstests, deutsches README | offen |
+| P12 | Privacy-Browser | erledigt |
+| P13 | Setup-Bootstrapper, Uninstaller, Updater, Abschlusstests, deutsches README | in Arbeit (Review) |
 | P14 | optional: ML-Modell, AMSI-Beobachter, Browser-Sandbox | offen |
 
 ## P0 – erledigt

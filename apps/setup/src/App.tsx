@@ -169,7 +169,7 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
         {step === 'welcome' && (
           <section className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
             <InstallShield progress={null} label={t('progress')} />
-            <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
+            <h1 ref={heading} tabIndex={-1} className="outline-none text-2xl font-semibold">
               {t('welcome')}
             </h1>
             <p className="max-w-md text-sm text-text-muted">{t('welcomeText')}</p>
@@ -192,7 +192,7 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
 
         {step === 'privacy' && (
           <section className="flex flex-1 flex-col gap-4">
-            <h1 ref={heading} tabIndex={-1} className="text-xl font-semibold">
+            <h1 ref={heading} tabIndex={-1} className="outline-none text-xl font-semibold">
               {t('privacyTitle')}
             </h1>
             <ul className="list-disc space-y-2 pl-5 text-sm text-text-muted">
@@ -215,7 +215,7 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
 
         {step === 'options' && (
           <section className="flex flex-1 flex-col gap-4">
-            <h1 ref={heading} tabIndex={-1} className="text-xl font-semibold">
+            <h1 ref={heading} tabIndex={-1} className="outline-none text-xl font-semibold">
               {t('optionsTitle')}
             </h1>
             {info !== null && !info.windows && (
@@ -292,7 +292,7 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
         {step === 'install' && (
           <section className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
             <InstallShield progress={shieldValue} label={t('progress')} />
-            <h1 ref={heading} tabIndex={-1} className="text-xl font-semibold">
+            <h1 ref={heading} tabIndex={-1} className="outline-none text-xl font-semibold">
               {t('stepInstall')}
             </h1>
             <p role="status" className="min-h-5 text-sm text-text-muted">
@@ -321,7 +321,7 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
         {step === 'done' && (
           <section className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
             <InstallShield progress={1} done label={t('progress')} />
-            <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
+            <h1 ref={heading} tabIndex={-1} className="outline-none text-2xl font-semibold">
               {t('doneTitle')}
             </h1>
             <p className="max-w-md text-sm text-text-muted">{t('doneText')}</p>
