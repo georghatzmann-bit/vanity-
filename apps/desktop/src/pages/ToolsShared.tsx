@@ -3,7 +3,7 @@
  * Vorschau → Auswahl → Ausführen (bei endgültigem Löschen mit zweitem Dialog) → Ergebnis →
  * Rückgängig.
  */
-import { Button, Dialog, SafeText } from '@aegis/ui';
+import { Button, CountUp, Dialog, SafeText } from '@aegis/ui';
 import { useId, useState, type ReactNode } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
@@ -343,6 +343,9 @@ export function PreviewFlow({
           data-testid="tool-result"
           role="status"
         >
+          <p className="text-2xl font-semibold text-text tabular-nums" aria-hidden="true">
+            <CountUp value={run.done} duration={600} locale={locale} />
+          </p>
           <p className="font-medium text-text">
             {t('toolbox.result', {
               done: String(run.done),

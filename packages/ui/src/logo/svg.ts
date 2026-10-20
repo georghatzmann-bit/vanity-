@@ -95,6 +95,37 @@ export function renderAppIconSvg(): string {
   );
 }
 
+/** Kantenlänge der Kleinst-Variante (Raster 16 px, gezeichnet auf 64 Einheiten). */
+export const smallIconSize = 64;
+
+/**
+ * Kleinst-Variante für 16/24 px (Taskleiste, Tray, Explorer-Liste): Schild fast
+ * formatfüllend, ohne das feine Λ (verschwimmt bei 16 px), dafür ein kräftiger Scan-Balken
+ * (doppelte Strichstärke) als einzige Aussparung.
+ */
+export function renderSmallIconSvg(): string {
+  const scale = 0.9;
+  const offset = formatNumber((smallIconSize - markSize * scale) / 2);
+  const barHeight = markStrokeWidth * 2;
+  return svgDocument(
+    `width="${smallIconSize}" height="${smallIconSize}" viewBox="0 0 ${smallIconSize} ${smallIconSize}"`,
+    [
+      '<title>AEGIS</title>',
+      '<defs>',
+      ...accentGradient('mark').map((line) => `  ${line}`),
+      `  <mask id="bar" maskUnits="userSpaceOnUse" x="0" y="0" width="${markSize}" height="${markSize}">`,
+      `    <path d="${fillShape}" fill="white" stroke="white" stroke-width="${markStrokeWidth}" stroke-linejoin="miter"/>`,
+      `    <rect x="14" y="${34 - barHeight / 2}" width="${markSize - 28}" height="${barHeight}" fill="black"/>`,
+      '  </mask>',
+      '</defs>',
+      `<rect width="${smallIconSize}" height="${smallIconSize}" rx="12" fill="${palette.bg}"/>`,
+      `<g transform="translate(${offset} ${offset}) scale(${scale})">`,
+      `  <path d="${fillShape}" fill="url(#mark)" stroke="url(#mark)" stroke-width="${markStrokeWidth}" stroke-linejoin="miter" mask="url(#bar)"/>`,
+      '</g>',
+    ],
+  );
+}
+
 /** Einfarbiges Bildzeichen (currentColor, ausgesparte Formen) – z. B. für Tray/Druck. */
 export function renderMonoMarkSvg(): string {
   return svgDocument(`width="${markSize}" height="${markSize}" viewBox="${markViewBox}"`, [
@@ -132,6 +163,7 @@ export function renderFullLogoSvg(): string {
 export function renderLogoAssets(): Readonly<Record<string, string>> {
   return {
     'logo-mark.svg': renderAppIconSvg(),
+    'logo-mark-16.svg': renderSmallIconSvg(),
     'logo-mark-mono.svg': renderMonoMarkSvg(),
     'logo-full.svg': renderFullLogoSvg(),
   };

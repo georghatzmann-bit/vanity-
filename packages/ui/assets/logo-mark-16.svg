@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>AEGIS</title>
+  <defs>
+    <linearGradient id="mark" gradientUnits="userSpaceOnUse" x1="32" y1="2" x2="32" y2="62">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <mask id="bar" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <path d="M32 4 L54 10 V34 L32 60 L10 34 V10 Z" fill="white" stroke="white" stroke-width="4" stroke-linejoin="miter"/>
+      <rect x="14" y="30" width="36" height="8" fill="black"/>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="12" fill="#07090c"/>
+  <g transform="translate(3.2 3.2) scale(0.9)">
+    <path d="M32 4 L54 10 V34 L32 60 L10 34 V10 Z" fill="url(#mark)" stroke="url(#mark)" stroke-width="4" stroke-linejoin="miter" mask="url(#bar)"/>
+  </g>
+</svg>

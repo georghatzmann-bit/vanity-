@@ -2,7 +2,16 @@
  * Scan: Dateien/Ordner vom Dienst prüfen lassen und Funde erklären. Isolieren wird nur
  * vorgeschlagen – ausgeführt wird erst nach „Ja, ausführen“ im Freigabe-Dialog.
  */
-import { Button, IconFile, IconTree, Panel, RiskBadge, SafeText, useToast } from '@aegis/ui';
+import {
+  Button,
+  IconFile,
+  IconTree,
+  Panel,
+  RiskBadge,
+  SafeText,
+  StatusRing,
+  useToast,
+} from '@aegis/ui';
 import { useCallback, useState } from 'react';
 import { useT } from '../i18n/I18nProvider.tsx';
 import { usePlatform } from '../platform/PlatformContext.tsx';
@@ -152,9 +161,11 @@ function MemoryPanel({
       }
     >
       {result === null ? (
-        <p className="text-sm text-text-muted">
-          {busy ? t('scanner.scanning') : t('memory.intro')}
-        </p>
+        busy ? (
+          <Scanning label={t('scanner.scanning')} />
+        ) : (
+          <p className="text-sm text-text-muted">{t('memory.intro')}</p>
+        )
       ) : (
         <div aria-live="polite" data-testid="memory-result">
           <p className="text-sm text-text-muted tabular-nums">
@@ -199,6 +210,16 @@ function MemoryPanel({
         </div>
       )}
     </Panel>
+  );
+}
+
+/** Laufende Prüfung: kreisender Scan-Ring (nur transform; bei reduzierter Bewegung still). */
+function Scanning({ label }: { readonly label: string }) {
+  return (
+    <div className="flex items-center gap-3" role="status">
+      <StatusRing state="scanning" label={label} hideText size={40} />
+      <p className="text-sm text-text-muted">{label}</p>
+    </div>
   );
 }
 
@@ -276,11 +297,13 @@ export function ScanPage() {
             }
           >
             {down !== null && <ServiceNotice kind="down" detail={down} />}
-            {result === null && down === null && (
-              <p className="text-sm text-text-muted">
-                {busy ? t('scanner.scanning') : t('scanner.intro')}
-              </p>
-            )}
+            {result === null &&
+              down === null &&
+              (busy ? (
+                <Scanning label={t('scanner.scanning')} />
+              ) : (
+                <p className="text-sm text-text-muted">{t('scanner.intro')}</p>
+              ))}
             {result !== null && (
               <div aria-live="polite">
                 <p className="text-sm text-text-muted tabular-nums" data-testid="scan-summary">

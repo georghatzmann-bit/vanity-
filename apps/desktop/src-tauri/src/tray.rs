@@ -132,15 +132,14 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build()
 }
 
-/// Legt das Tray-Symbol an (Symbol = App-Symbol, Tooltip, Menü, Klick-Verhalten).
+/// Legt das Tray-Symbol an (eigene Kleinst-Variante des Logos, Tooltip, Menü, Klick-Verhalten).
 ///
 /// # Errors
-/// Wenn das App-Symbol fehlt oder das System das Symbol nicht anlegen kann.
+/// Wenn das System das Symbol nicht anlegen kann.
 pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<R>> {
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .ok_or_else(|| tauri::Error::AssetNotFound("App-Symbol für den Infobereich".into()))?;
+    // Für 16–32 px gezeichnet (`packages/ui/assets/logo-mark-16.svg`): kräftiger Scan-Balken
+    // statt des feinen Λ, das in der Taskleiste verschwimmt.
+    let icon = tauri::include_image!("icons/tray.png");
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .tooltip(TOOLTIP)

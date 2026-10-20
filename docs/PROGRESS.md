@@ -89,7 +89,7 @@ Stand: 2026-10-20 · **P0–P10 abgeschlossen** · nächste Phase: **P11 – Too
   Bis dahin begrenzt der Identitätswechsel alles auf die Rechte des anfragenden Nutzers.
 - Sicherheits-Score bleibt „noch nicht bewertet“, bis die Systemprüfungen (P6) da sind.
 - Wächter: externe USB-Festplatten und Netzlaufwerke werden nicht überwacht (Dienst sieht sie nicht je Sitzung).
-- 16-px-Icon: Schild gut erkennbar, die A-Aussparung verschwimmt → eigene 16-px-Variante (P11).
+- 16-px-Icon: eigene Kleinst-Variante seit P11.3 (`logo-mark-16.svg`, Tray + 16/24 px im ICO).
 - Optional: Dependabot für Action-Pins (öffnet automatisch PRs – nur auf deinen Wunsch).
 
 ## Offene Fragen an dich (Richtungsentscheidungen)
@@ -201,7 +201,11 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        der Dienst-Sperre), neuer Punkt nur als Plan nach „Ja“, nur Administratoren, bereinigte
        Beschreibung, `Checkpoint-Computer` vom festen Systemort, danach nachgeprüft; AEGIS löscht
        und spielt keine Punkte zurück. Bereich auf der Seite „Härtung“ (vor dem Beheben).
-3. [ ] P11.3 Animations-Feinschliff, Review, DoD.
+3. [x] P11.3 Animations-Feinschliff: kreisender Scan-Ring während Prüfungen, hochzählende
+       Ergebnisse der Werkzeuge, eigene 16-px-Variante des Logos (`logo-mark-16.svg`: Schild
+       ohne feines Λ, kräftiger Scan-Balken) für die 16/24-px-Bilder in `icon.ico` und das
+       Tray-Symbol.
+4. [ ] P11.4 Sicherheits-Review P11 (separater Agent), Befunde beheben, DoD.
 
 ## P10 – Windows-Tools 1–11
 
