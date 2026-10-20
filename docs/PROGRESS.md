@@ -188,6 +188,18 @@ eigenen LAN/WLAN; Leck-Check mit k-Anonymität; alle Prüfungen grün.
 nachgeprüft; „Wieder AN“ mit einem Klick; Manipulationsschutz nie umgangen (Anleitung +
 Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur Virenschutz.
 
+## P13 – Setup, Updater, Deinstallation, README
+
+1. [x] P13.1 Installer für den Rechner mit Hooks: Dienst registrieren/entfernen
+       (`aegis-service install|uninstall`), Prüfprozess, Tresor-Host + Manifeste (HKLM, Chrome/
+       Edge/Brave), Erweiterungen; Deinstallation löscht Daten nur nach zwei Bestätigungen.
+       Signierte Updates (`crates/update`, Release-Werkzeug `aegis-release`), Bereich „Updates“
+       auf „Über AEGIS“ (Suche nur auf Klick, Installation nach Bestätigung), WinHTTP mit
+       selbst geprüften Weiterleitungen. D-059.
+2. [ ] P13.2 `AEGIS-Setup.exe` (eigener kleiner Installer-Assistent mit Animation und Ton,
+       lädt das signierte Paket, prüft SHA-256, WebView2-Hinweis).
+3. [ ] P13.3 README (Deutsch), Endtests, Sicherheits-Review P13, DoD.
+
 ## P12 – Privacy-Browser
 
 1. [x] P12.1 `crates/browser-core` (Adresszeile → Adresse/Suche, HTTPS-only, gesperrte Schemata,
@@ -392,5 +404,4 @@ unbekannte Downloads – nie automatisch).
 
 ## Nächster Schritt
 
-P12 (Privacy-Browser), P13 (Setup, Updater, Deinstallation, README; dabei Host und Erweiterungen
-ausliefern und registrieren).
+P12.2 (Review-Befunde Browser), P13.2 Setup-Assistent, P13.3 README + Review.

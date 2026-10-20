@@ -18,6 +18,7 @@ wird hier **vor** der Nutzung eingetragen (Name, Herkunft, Lizenz, Nutzungsart, 
 | adblock 0.13 (adblock-rust) | Brave Software | MPL-2.0 | Filterregeln (Adblock-Plus-Format) im Privacy-Browser (P12) | 2026-10-20 |
 | url 2.5 | The rust-url developers | MIT / Apache-2.0 | Adressen im Privacy-Browser | 2026-10-20 |
 | webview2-com 0.39 | Bill Avery / Microsoft | MIT | WebView2-Schnittstellen für den Tracker-Blocker (gleiche Version wie Tauri/wry) | 2026-10-20 |
+| ed25519-dalek 3.0 / curve25519-dalek | dalek-cryptography | BSD-3-Clause | Signaturprüfung der Update-Angaben (P13) | 2026-10-20 |
 | EasyList, EasyPrivacy (Filterlisten) | The EasyList authors | GPL-3.0 / CC BY-SA 3.0 | **Nicht mitgeliefert** – der Browser lädt sie nur auf Klick des Nutzers von easylist.to | 2026-10-20 |
 | YARA-X 1.21 (nur ausgewählte Module) | VirusTotal/yara-x | BSD-3-Clause | Regel-Engine (P2) | 2026-10-19 |
 | goblin 0.10 (nur PE) | m4b/goblin | MIT | PE-Analyse (P2) | 2026-10-19 |

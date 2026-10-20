@@ -65,3 +65,100 @@ fn service_main(_args: Vec<OsString>) {
     }
     set(ServiceState::Stopped, ServiceControlAccept::empty());
 }
+
+/// Anzeigename des Dienstes.
+pub const DISPLAY_NAME: &str = "AEGIS Suite – Schutzdienst";
+
+/// Legt den Dienst an (automatischer Start, Konto LocalSystem, Argument `service`) und startet
+/// ihn. Nur vom Installationsprogramm aufgerufen (mit Administratorrechten, nach der
+/// Entscheidung des Nutzers zu installieren). Ist er schon da, wird nur der Pfad aktualisiert.
+///
+/// # Errors
+/// Keine Rechte oder SCM meldet einen Fehler.
+pub fn install(exe: &std::path::Path) -> windows_service::Result<()> {
+    use windows_service::service::{
+        ServiceAccess, ServiceErrorControl, ServiceInfo, ServiceStartType,
+    };
+    use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
+
+    let manager = ServiceManager::local_computer(
+        None::<&str>,
+        ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE,
+    )?;
+    let info = ServiceInfo {
+        name: OsString::from(SERVICE_NAME),
+        display_name: OsString::from(DISPLAY_NAME),
+        service_type: ServiceType::OWN_PROCESS,
+        start_type: ServiceStartType::AutoStart,
+        error_control: ServiceErrorControl::Normal,
+        executable_path: exe.to_path_buf(),
+        launch_arguments: vec![OsString::from("service")],
+        dependencies: Vec::new(),
+        account_name: None,
+        account_password: None,
+    };
+    let access = ServiceAccess::QUERY_STATUS | ServiceAccess::START | ServiceAccess::CHANGE_CONFIG;
+    let service = match manager.open_service(SERVICE_NAME, access) {
+        Ok(existing) => {
+            // Installation (Update): denselben Dienst auf die neue Datei zeigen lassen.
+            // aegis-mutation: scm-install-update-config
+            #[allow(clippy::disallowed_methods)]
+            existing.change_config(&info)?;
+            existing
+        }
+        Err(_) => {
+            // Installation: legt den Schutzdienst an (vom Nutzer gestartetes Setup, UAC).
+            // aegis-mutation: scm-install-create
+            #[allow(clippy::disallowed_methods)]
+            let created = manager.create_service(&info, access)?;
+            created
+        }
+    };
+    // Installation: Beschreibung des eigenen Dienstes.
+    // aegis-mutation: scm-install-description
+    #[allow(clippy::disallowed_methods)]
+    service.set_description(
+        "Prüft Dateien und meldet Funde. Verändert nichts ohne ausdrückliche Bestätigung in der AEGIS-App.",
+    )?;
+    if service.query_status()?.current_state != ServiceState::Running {
+        // Installation: startet den eben angelegten Dienst.
+        // aegis-mutation: scm-install-start
+        #[allow(clippy::disallowed_methods)]
+        service.start::<&str>(&[])?;
+    }
+    Ok(())
+}
+
+/// Hält den Dienst an und entfernt ihn (nur vom Deinstallationsprogramm aufgerufen, nach der
+/// Entscheidung des Nutzers zu deinstallieren). Fehlt er: kein Fehler.
+///
+/// # Errors
+/// Keine Rechte oder SCM meldet einen Fehler.
+pub fn uninstall() -> windows_service::Result<()> {
+    use windows_service::service::ServiceAccess;
+    use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
+
+    let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)?;
+    let Ok(service) = manager.open_service(
+        SERVICE_NAME,
+        ServiceAccess::QUERY_STATUS | ServiceAccess::STOP | ServiceAccess::DELETE,
+    ) else {
+        return Ok(());
+    };
+    if service.query_status()?.current_state != ServiceState::Stopped {
+        // Deinstallation: hält den eigenen Dienst an.
+        // aegis-mutation: scm-uninstall-stop
+        #[allow(clippy::disallowed_methods)]
+        let _ = service.stop();
+        for _ in 0..50 {
+            if service.query_status()?.current_state == ServiceState::Stopped {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    }
+    // Deinstallation: entfernt den eigenen Dienst.
+    // aegis-mutation: scm-uninstall-delete
+    #[allow(clippy::disallowed_methods)]
+    service.delete()
+}

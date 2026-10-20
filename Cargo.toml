@@ -21,6 +21,7 @@ aegis-vault-core = { path = "crates/vault-core" }
 aegis-vault-host = { path = "crates/vault-host" }
 aegis-tools = { path = "crates/tools" }
 aegis-browser-core = { path = "crates/browser-core" }
+aegis-update = { path = "crates/update" }
 aegis-defender-switch = { path = "crates/defender-switch" }
 aegis-quarantine = { path = "crates/quarantine" }
 aegis-winffi = { path = "crates/winffi" }
@@ -39,6 +40,8 @@ adblock = { version = "0.13.3", default-features = false, features = [
   "full-regex-handling",
 ] }
 url = "2.5.8"
+# Signierte Updates (P13): Ed25519-Signatur des Update-Manifests.
+ed25519-dalek = { version = "3.0.0", default-features = false, features = ["zeroize"] }
 time = { version = "0.3.55", features = ["serde", "formatting", "parsing", "macros"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

@@ -17,6 +17,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { version as configuredVersion } from '../../src-tauri/tauri.conf.json';
 import { parseAppInfo, previewAppInfo, type AppInfo } from './appInfo.ts';
 import { parseLanReport, type LanReport } from './lan.ts';
+import { parseUpdate, type UpdatesApi } from './updates.ts';
 import { parseStrength, parseVaultList, parseVaultStatus, type VaultApi } from './vault.ts';
 import {
   parseAutostart,
@@ -144,6 +145,8 @@ export interface Platform {
   readonly vault: VaultApi | null;
   /** Windows-Tools (P10). `null` in der Vorschau. */
   readonly tools: ToolsApi | null;
+  /** Signierte Updates (P13). `null` in der Vorschau. */
+  readonly updates: UpdatesApi | null;
 }
 
 /** Ausgetauschte Krypto-Adresse (gekürzt). */
@@ -301,6 +304,12 @@ export function createTauriPlatform(): Platform {
       },
       saveLayout: (name) => invoke<unknown>('tools_layout_save', { name }).then(parseLayout),
       deleteLayout: (name) => invoke<undefined>('tools_layout_delete', { name }),
+    },
+    updates: {
+      status: async () => parseUpdate(await invoke<unknown>('update_status')),
+      check: async () => parseUpdate(await invoke<unknown>('update_check')),
+      download: async () => parseUpdate(await invoke<unknown>('update_download')),
+      install: () => invoke('update_install'),
     },
     vault: {
       status: () => invoke<unknown>('vault_status').then(parseVaultStatus),
@@ -477,6 +486,7 @@ export function createBrowserPlatform(info: AppInfo): Platform {
     leakEmailCheck: null,
     vault: null,
     tools: null,
+    updates: null,
   };
 }
 

@@ -62,6 +62,10 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-tools-layouts': 'Desktop-Layouts anzeigen',
   'allow-tools-layout-save': 'Desktop-Layout speichern (liest nur)',
   'allow-tools-layout-delete': 'Desktop-Layout löschen',
+  'allow-update-status': 'Update-Stand ohne Netz',
+  'allow-update-check': 'Signiertes Manifest prüfen (nur auf Klick)',
+  'allow-update-download': 'Installationsprogramm laden und prüfen',
+  'allow-update-install': 'Geprüftes Installationsprogramm starten',
   'allow-service-scan': 'Dienst: Dateien/Ordner prüfen (nur lesend)',
   'allow-service-list-quarantine': 'Dienst: Quarantäne anzeigen (nur lesend)',
   'allow-service-propose-quarantine': 'Dienst: Isolieren vorschlagen (ausgeführt erst nach Ja)',
@@ -260,11 +264,23 @@ describe('Build', () => {
 describe('Installer (NSIS)', () => {
   const nsis = tauriConfig.bundle.windows.nsis as {
     installMode?: string;
+    installerHooks?: string;
     languages?: string[];
   };
 
-  it('installiert pro Nutzer (kein Admin für die App)', () => {
-    expect(nsis.installMode).toBe('currentUser');
+  it('installiert für den PC (der Schutzdienst braucht einmal Administratorrechte; die App läuft danach als Nutzer)', () => {
+    expect(nsis.installMode).toBe('perMachine');
+    expect(nsis.installerHooks).toBe('windows/hooks.nsh');
+  });
+
+  it('Deinstallation behält die Daten, außer nach zwei Bestätigungen (still: immer behalten)', () => {
+    const hooks = readFileSync(new URL('../src-tauri/windows/hooks.nsh', import.meta.url), 'utf8');
+    const deleteAt = hooks.indexOf('RMDir /r "$COMMONAPPDATA\\AEGIS"');
+    expect(deleteAt).toBeGreaterThan(0);
+    const before = hooks.slice(0, deleteAt);
+    expect(before.match(/MessageBox MB_YESNO[^\n]*\/SD IDNO/g)).toHaveLength(2);
+    expect(hooks).toContain('aegis-service.exe" install');
+    expect(hooks).toContain('aegis-service.exe" uninstall');
   });
 
   it('spricht Deutsch zuerst, Englisch als zweite Sprache (Rückfall: Deutsch)', () => {

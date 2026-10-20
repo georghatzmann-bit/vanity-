@@ -28,6 +28,8 @@ aegis-netwatch = { workspace = true }
 aegis-vault-core = { workspace = true }
 # Windows-Tools (P10): Vorschau, Protokoll, Rückgängig.
 aegis-tools = { workspace = true }
+# Signierte Updates (P13).
+aegis-update = { workspace = true }
 zeroize = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]

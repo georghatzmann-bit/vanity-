@@ -26,6 +26,8 @@ Thumbs.db
 *.pfx
 *.p12
 *.key
+# Nur der öffentliche Update-Schlüssel wird eingecheckt (der geheime nie).
+!release/update-public.key
 .env
 .env.*
 *.aegisvault

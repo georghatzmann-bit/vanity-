@@ -15,6 +15,7 @@ mod service;
 mod startup_error;
 mod tools;
 mod tray;
+mod update;
 mod vault;
 mod window;
 mod winsec;
@@ -86,6 +87,10 @@ fn main() {
             tools::tools_layouts,
             tools::tools_layout_save,
             tools::tools_layout_delete,
+            update::update_status,
+            update::update_check,
+            update::update_download,
+            update::update_install,
             service::service_scan,
             service::service_list_quarantine,
             service::service_propose_quarantine,
@@ -237,6 +242,10 @@ mod test_support {
                 crate::tools::tools_layouts,
                 crate::tools::tools_layout_save,
                 crate::tools::tools_layout_delete,
+                crate::update::update_status,
+                crate::update::update_check,
+                crate::update::update_download,
+                crate::update::update_install,
                 crate::service::service_scan,
                 crate::service::service_list_quarantine,
                 crate::service::service_propose_quarantine,
@@ -318,7 +327,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 99] = [
+    const EXPECTED_PERMISSIONS: [&str; 103] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -358,6 +367,10 @@ mod tests {
         "allow-tools-layouts",
         "allow-tools-layout-save",
         "allow-tools-layout-delete",
+        "allow-update-status",
+        "allow-update-check",
+        "allow-update-download",
+        "allow-update-install",
         "allow-service-scan",
         "allow-service-list-quarantine",
         "allow-service-propose-quarantine",
@@ -664,6 +677,10 @@ mod tests {
                 ("tools_layouts", json!({})),
                 ("tools_layout_save", json!({ "name": "x" })),
                 ("tools_layout_delete", json!({ "name": "gibt-es-nicht" })),
+                ("update_status", json!({})),
+                ("update_check", json!({})),
+                ("update_download", json!({})),
+                ("update_install", json!({})),
                 (
                     "plugin:event|listen",
                     json!({

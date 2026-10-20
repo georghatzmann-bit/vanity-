@@ -399,7 +399,32 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Netzpfade, Steuerzeichen entfernt, Größe begrenzt; Allowlist-Einträge) + Fehlerdialog.
 - Navigationswächter (`src-tauri/src/navigation.rs`): Das Fenster darf nur die gebündelte UI
   laden; externe Seiten werden blockiert. Keine CDNs, keine Telemetrie.
-- Installation pro Nutzer (NSIS `currentUser`, Deutsch/Englisch), Admin nur für den Dienst.
+- Installation für den Rechner (NSIS `perMachine`, Deutsch/Englisch; UAC einmal beim
+  Installieren), weil Dienst, Native-Messaging-Host (HKLM) und Programmdateien systemweit
+  liegen müssen. Die App selbst läuft danach als Nutzer. Hooks (`windows/hooks.nsh`):
+  Dienst registrieren (`aegis-service install`: Konto LocalSystem, Autostart, Beschreibung),
+  Host-Manifeste für Chrome/Edge/Brave, Erweiterungen als entpackte Ordner zum Laden.
+  Deinstallation: Dienst anhalten und entfernen, Registrierungen löschen. Quarantäne,
+  Prüfprotokoll und Einstellungen (`%ProgramData%\AEGIS`) bleiben, außer der Nutzer bestätigt
+  das Löschen zweimal getrennt (im stillen Modus immer „Nein“).
+
+## Updates (P13)
+
+- Suche nur auf Klick (Über AEGIS → Updates), nie im Hintergrund.
+- `latest.json` ist mit Ed25519 signiert (`crates/update`); der öffentliche Schlüssel ist in die
+  App eingebaut (`release/update-public.key`). Ohne Schlüssel sind Updates abgeschaltet und die
+  Oberfläche sagt das. Der geheime Schlüssel liegt nur beim Herausgeber (`aegis-release
+  keygen`, nie eingecheckt).
+- Akzeptiert werden nur Adressen unter den eigenen GitHub-Releases (ein Ordner, ein
+  Dateiname, keine `..`), Version muss neuer sein. Weiterleitungen folgt AEGIS selbst –
+  höchstens fünf, nur `https` auf `github.com`, `objects.githubusercontent.com`,
+  `release-assets.githubusercontent.com` (WinHTTP folgt nie automatisch).
+- Die Datei wird gegen Größe und SHA-256 aus dem signierten Manifest geprüft, in eine neue
+  Datei geschrieben (nie überschrieben) und unmittelbar vor dem Start erneut geprüft.
+  Installiert wird erst nach „Jetzt installieren“ + Bestätigungsdialog; Windows fragt nach
+  Administratorrechten.
+- Ehrlich: Ohne Code-Signing-Zertifikat warnt SmartScreen; die Manifest-Signatur ersetzt das
+  nicht für Windows, schützt aber AEGIS vor fremden Updates.
 
 ## Lieferkette
 

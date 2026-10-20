@@ -1,0 +1,31 @@
+[package]
+name = "aegis-update"
+description = "Signierte Updates (P13): Manifest mit Ed25519-Signatur, SHA-256 der Dateien, Versionsvergleich – ohne Netz."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+base64 = { workspace = true }
+ed25519-dalek = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[features]
+# Nur für das Release-Werkzeug `aegis-release` (Schlüssel erzeugen, Manifest signieren).
+sign = ["dep:getrandom"]
+
+[dependencies.getrandom]
+workspace = true
+optional = true
+
+[[bin]]
+name = "aegis-release"
+path = "src/bin/aegis-release.rs"
+required-features = ["sign"]
+
+[lints]
+workspace = true

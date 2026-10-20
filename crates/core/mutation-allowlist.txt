@@ -374,6 +374,7 @@ crates/winffi/src/http.rs :: winffi-http-send :: Windows-FFI (HTTPS-Abruf, nur G
 crates/winffi/src/http.rs :: winffi-http-receive :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
 crates/winffi/src/http.rs :: winffi-http-status :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
 crates/winffi/src/http.rs :: winffi-http-read :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-location :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
 crates/winffi/src/lan.rs :: winffi-lan-luid :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
 crates/winffi/src/clipboard.rs :: winffi-clipboard-alloc :: Windows-FFI (Passwort-Tresor): setzt Text in die Zwischenablage nur auf Klick „Kopieren“ (ohne Verlauf/Cloud) und leert genau diesen Inhalt nach 30 s wieder – sonst nichts.
 crates/winffi/src/clipboard.rs :: winffi-clipboard-fill :: Windows-FFI (Passwort-Tresor): setzt Text in die Zwischenablage nur auf Klick „Kopieren“ (ohne Verlauf/Cloud) und leert genau diesen Inhalt nach 30 s wieder – sonst nichts.
@@ -444,3 +445,14 @@ crates/winffi/src/webview.rs :: winffi-webview-filter :: Windows-FFI (Browser): 
 apps/browser/src-tauri/src/store.rs :: browser-store-dir :: Browser: legt den eigenen Datenordner an (Einstellungen, Lesezeichen, Filterlisten).
 apps/browser/src-tauri/src/store.rs :: browser-store-write :: Browser: schreibt eine eigene Hilfsdatei (eindeutiger Name, create_new).
 apps/browser/src-tauri/src/store.rs :: browser-store-replace :: Browser: ersetzt die eigene Datei durch die eben geschriebene Fassung.
+crates/update/src/bin/aegis-release.rs :: release-keygen-secret :: Release-Werkzeug (nur Herausgeber): schreibt den neuen geheimen Signaturschlüssel in eine neue Datei (create_new, nie überschreiben).
+crates/service/src/scm.rs :: scm-install-update-config :: Installation (Setup, UAC, vom Nutzer gestartet): zeigt den vorhandenen Schutzdienst auf die neue Programmdatei.
+crates/service/src/scm.rs :: scm-install-create :: Installation (Setup, UAC, vom Nutzer gestartet): legt den Schutzdienst an.
+crates/service/src/scm.rs :: scm-install-description :: Installation: Beschreibung des eigenen Dienstes.
+crates/service/src/scm.rs :: scm-install-start :: Installation: startet den eben angelegten eigenen Dienst.
+crates/service/src/scm.rs :: scm-uninstall-stop :: Deinstallation (vom Nutzer gestartet): hält den eigenen Dienst an.
+crates/service/src/scm.rs :: scm-uninstall-delete :: Deinstallation (vom Nutzer gestartet): entfernt den eigenen Dienst.
+crates/winffi/src/shell.rs :: winffi-shell-launch :: Windows-FFI: ShellExecuteW („open“) – startet ein Programm über die Shell (UAC bei Bedarf).
+crates/winffi/src/shell.rs :: winffi-shell-launch-call :: Startet nur das geprüfte Installationsprogramm eines Updates nach „Jetzt installieren“.
+apps/desktop/src-tauri/src/update.rs :: update-download-dir :: Updates: eigener Ordner im Temp-Verzeichnis für das geprüfte Installationsprogramm.
+apps/desktop/src-tauri/src/update.rs :: update-download-write :: Updates: schreibt das gegen Signatur und SHA-256 geprüfte Installationsprogramm in eine neue Datei.

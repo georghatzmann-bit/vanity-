@@ -13,7 +13,7 @@ use aegis_service::server::{ServerConfig, run};
 
 fn usage() -> ! {
     eprintln!(
-        "Aufruf: aegis-service run [--data-dir ORDNER] [--endpoint NAME] | aegis-service service"
+        "Aufruf: aegis-service run [--data-dir ORDNER] [--endpoint NAME] | aegis-service service | aegis-service install | aegis-service uninstall"
     );
     std::process::exit(2);
 }
@@ -48,6 +48,24 @@ fn main() {
             );
             if let Err(e) = run(&config, &Arc::new(AtomicBool::new(false))) {
                 eprintln!("aegis-service konnte nicht starten: {e}");
+                std::process::exit(1);
+            }
+        }
+        // Nur vom Installationsprogramm (mit Administratorrechten) aufgerufen.
+        #[cfg(windows)]
+        Some("install") => {
+            let result = std::env::current_exe()
+                .map_err(|e| e.to_string())
+                .and_then(|exe| aegis_service::scm::install(&exe).map_err(|e| e.to_string()));
+            if let Err(e) = result {
+                eprintln!("aegis-service: Installation fehlgeschlagen: {e}");
+                std::process::exit(1);
+            }
+        }
+        #[cfg(windows)]
+        Some("uninstall") => {
+            if let Err(e) = aegis_service::scm::uninstall() {
+                eprintln!("aegis-service: Entfernen fehlgeschlagen: {e}");
                 std::process::exit(1);
             }
         }

@@ -493,3 +493,19 @@ selbst und lädt nichts nach (Arti als Beigabe wäre ein eigenes, großes Paket;
 Ehrlich in der Oberfläche: Der Browser reduziert Tracking, er anonymisiert nicht; der offizielle
 Tor Browser ist stärker.
 
+
+## D-059 – Installation für den Rechner, Dienst über Installer-Hooks, signierte Updates
+
+Status: angenommen (P13). Das NSIS-Paket installiert für den Rechner (`perMachine`), weil der
+Dienst (`aegis-service`, LocalSystem), der Native-Messaging-Host des Tresors (HKLM-Einträge für
+Chrome, Edge, Brave) und die Programmdateien systemweit liegen; die App läuft weiterhin als
+Nutzer. Dienst, Prüfprozess und Host bringt der Installer über `windows/hooks.nsh` mit; der
+Dienst registriert sich selbst (`aegis-service install` / `uninstall`, `crates/service/src/scm.rs`).
+Daten in `%ProgramData%\AEGIS` (Quarantäne!) löscht die Deinstallation nur nach zwei getrennten
+Bestätigungen; still nie. Updates: eigenes, kleines Format statt `tauri-plugin-updater`
+(dessen Minisign-Schlüssel und automatischer Ablauf passen nicht zu „nur auf Klick, Installation
+nach Ja“): `latest.json` mit Ed25519-Signatur (`ed25519-dalek`), SHA-256 und Größe je Datei,
+nur eigene Release-Adressen, Weiterleitungen nur auf GitHub-Hosts. Der Schlüssel des
+Herausgebers wird vom Nutzer selbst erzeugt (`cargo run -p aegis-update --features sign --bin
+aegis-release -- keygen <datei>`); solange `release/update-public.key` leer ist, sind Updates
+abgeschaltet. Code-Signing (Authenticode) bleibt eine offene Entscheidung des Nutzers (Kosten).

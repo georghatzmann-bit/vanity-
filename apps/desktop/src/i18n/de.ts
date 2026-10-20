@@ -1278,6 +1278,25 @@ export const de = {
       unknownOwner: 'unbekanntes Programm',
     },
   },
+  updater: {
+    title: 'Updates',
+    intro:
+      'AEGIS sucht nur nach Updates, wenn du hier klickst. Angenommen werden nur Updates mit gültiger Signatur des Herausgebers; jede Datei wird vor dem Start gegen ihre Prüfsumme geprüft.',
+    check: 'Nach Updates suchen',
+    disabled:
+      'In diesem Build sind Updates abgeschaltet – es ist kein Signaturschlüssel des Herausgebers eingebaut. Neue Versionen gibt es dann über das Setup.',
+    upToDate: 'AEGIS ist aktuell (Version {version}).',
+    available: 'Version {version} ist verfügbar (installiert: {current}).',
+    download: 'Herunterladen und prüfen',
+    install: 'Jetzt installieren …',
+    confirmTitle: 'Update installieren?',
+    confirmText:
+      'AEGIS wird dafür beendet; Windows fragt nach Administratorrechten. Deine Daten und die Quarantäne bleiben erhalten.',
+    installNow: 'Jetzt installieren',
+    cancel: 'Abbrechen',
+    honest:
+      'Ehrlich: Solange das Installationsprogramm nicht mit einem Code-Signing-Zertifikat signiert ist, warnt Windows SmartScreen beim Start. Die Signatur der Update-Angaben prüft AEGIS trotzdem selbst.',
+  },
   restore: {
     title: 'Wiederherstellungspunkte',
     intro:

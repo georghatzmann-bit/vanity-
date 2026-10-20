@@ -305,3 +305,43 @@ pub fn set_wallpaper(path: &Path) -> io::Result<()> {
     }
     Ok(())
 }
+
+/// Startet ein Programm über die Shell (`open`), damit Windows bei Bedarf nach
+/// Administratorrechten fragt (UAC) – für das Installationsprogramm eines geprüften Updates,
+/// nachdem der Nutzer „Jetzt installieren“ gewählt hat.
+///
+/// # Errors
+/// Start nicht möglich (oder in der UAC-Abfrage abgelehnt).
+pub fn launch(program: &Path, arguments: &str) -> io::Result<()> {
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let verb = wide("open");
+    let file = wide(program);
+    let params = wide(arguments);
+    // SAFETY: Alle Zeichenketten sind nullterminiert und leben bis nach dem Aufruf; kein
+    // Fenster als Besitzer.
+    // aegis-unsafe: winffi-shell-launch
+    #[allow(unsafe_code)]
+    // Startet nur das geprüfte Installationsprogramm nach „Jetzt installieren“.
+    // aegis-mutation: winffi-shell-launch-call
+    #[allow(clippy::disallowed_methods)]
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            verb.as_ptr(),
+            file.as_ptr(),
+            params.as_ptr(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    // Werte > 32 bedeuten Erfolg (Dokumentation von ShellExecuteW).
+    if result as usize > 32 {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "Start nicht möglich (Code {})",
+            result as usize
+        )))
+    }
+}

@@ -12,7 +12,8 @@ import {
 import { useT } from '../i18n/I18nProvider.tsx';
 import type { Translator } from '../i18n/translator.ts';
 import type { AppInfo } from '../platform/appInfo.ts';
-import { useAppInfo } from '../platform/PlatformContext.tsx';
+import { useAppInfo, usePlatform } from '../platform/PlatformContext.tsx';
+import { UpdatePanel } from './UpdatePanel.tsx';
 import { Blueprint, ViewfinderCorners } from './decor.tsx';
 import { PageBody, PageHeader } from './PageHeader.tsx';
 
@@ -45,6 +46,7 @@ function platformName(t: Translator['t'], info: AppInfo): string {
 export function AboutPage() {
   const { t } = useT();
   const appInfo = useAppInfo();
+  const { updates } = usePlatform();
 
   return (
     <PageBody width="narrow">
@@ -92,6 +94,8 @@ export function AboutPage() {
           {appInfo.status === 'ready' && <InfoTable info={appInfo.info} />}
         </Panel>
       </div>
+
+      {updates !== null && <UpdatePanel updates={updates} />}
 
       <Panel title={t('about.principlesTitle')} data-testid="about-principles">
         <ul className="grid grid-cols-2 gap-x-8 gap-y-4">

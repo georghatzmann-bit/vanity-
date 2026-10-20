@@ -1,5 +1,6 @@
 //! HTTPS-Abruf über WinHTTP (Windows-Zertifikatsspeicher, System-Proxy). Nur `GET`, nur
-//! HTTPS auf Port 443, keine Weiterleitungen, Antwortgröße begrenzt. Für optionale Dienste
+//! HTTPS auf Port 443, keine automatischen Weiterleitungen (bei 3xx steht das Ziel in
+//! `Response::location`, der Aufrufer prüft es selbst), Antwortgröße begrenzt. Für optionale Dienste
 //! (Leck-Check) und später Updates – nie im Hintergrund ohne Nutzerwunsch.
 
 use std::ffi::c_void;
@@ -10,10 +11,10 @@ use windows_sys::Win32::Networking::WinHttp::{
     INTERNET_DEFAULT_HTTPS_PORT, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_ADDREQ_FLAG_ADD,
     WINHTTP_FLAG_SECURE, WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2, WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3,
     WINHTTP_OPTION_REDIRECT_POLICY, WINHTTP_OPTION_REDIRECT_POLICY_NEVER,
-    WINHTTP_OPTION_SECURE_PROTOCOLS, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE,
-    WinHttpAddRequestHeaders, WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest,
-    WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest,
-    WinHttpSetOption, WinHttpSetTimeouts,
+    WINHTTP_OPTION_SECURE_PROTOCOLS, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_LOCATION,
+    WINHTTP_QUERY_STATUS_CODE, WinHttpAddRequestHeaders, WinHttpCloseHandle, WinHttpConnect,
+    WinHttpOpen, WinHttpOpenRequest, WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse,
+    WinHttpSendRequest, WinHttpSetOption, WinHttpSetTimeouts,
 };
 
 use crate::util::wide;
@@ -25,6 +26,8 @@ pub struct Response {
     pub status: u16,
     /// Inhalt (höchstens die erlaubte Größe).
     pub body: Vec<u8>,
+    /// Ziel einer Weiterleitung (nur bei 3xx; ungeprüft – der Aufrufer entscheidet).
+    pub location: Option<String>,
 }
 
 /// WinHTTP-Handle, wird beim Verlassen geschlossen.
@@ -210,6 +213,32 @@ pub fn https_get(
             ptr::null_mut(),
         )
     })?;
+    let location = if (300..400).contains(&status) {
+        let mut buffer = vec![0u16; 4096];
+        let mut bytes = u32::try_from(buffer.len() * 2).unwrap_or(0);
+        // SAFETY: gültiges Anfrage-Handle; Puffer mit angegebener Länge in Bytes; WinHTTP
+        // schreibt höchstens so viel und gibt die geschriebene Länge zurück.
+        // aegis-unsafe: winffi-http-location
+        #[allow(unsafe_code)]
+        let ok = unsafe {
+            WinHttpQueryHeaders(
+                request.0,
+                WINHTTP_QUERY_LOCATION,
+                ptr::null(),
+                buffer.as_mut_ptr().cast(),
+                &mut bytes,
+                ptr::null_mut(),
+            )
+        };
+        if ok == 0 {
+            None
+        } else {
+            let len = (usize::try_from(bytes).unwrap_or(0) / 2).min(buffer.len());
+            String::from_utf16(&buffer[..len]).ok()
+        }
+    } else {
+        None
+    };
     let mut body = Vec::new();
     let mut chunk = vec![0u8; 16 * 1024];
     loop {
@@ -237,5 +266,6 @@ pub fn https_get(
     Ok(Response {
         status: u16::try_from(status).unwrap_or(0),
         body,
+        location,
     })
 }

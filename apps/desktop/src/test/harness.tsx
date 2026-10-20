@@ -138,6 +138,7 @@ export function fakePlatform(
         : null,
     vault: kind === 'tauri' ? fakeVault() : null,
     tools: kind === 'tauri' ? fakeTools() : null,
+    updates: null,
     leakEmailCheck:
       kind === 'tauri'
         ? vi.fn(() =>

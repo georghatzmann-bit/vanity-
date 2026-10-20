@@ -1262,6 +1262,25 @@ export const en: Messages<typeof de> = {
       unknownOwner: 'unknown program',
     },
   },
+  updater: {
+    title: 'Updates',
+    intro:
+      'AEGIS only looks for updates when you click here. Only updates with a valid publisher signature are accepted; every file is checked against its checksum before it starts.',
+    check: 'Check for updates',
+    disabled:
+      'Updates are switched off in this build – no publisher signing key is built in. New versions are then available via the setup.',
+    upToDate: 'AEGIS is up to date (version {version}).',
+    available: 'Version {version} is available (installed: {current}).',
+    download: 'Download and verify',
+    install: 'Install now…',
+    confirmTitle: 'Install update?',
+    confirmText:
+      'AEGIS will close for this; Windows asks for administrator rights. Your data and the quarantine are kept.',
+    installNow: 'Install now',
+    cancel: 'Cancel',
+    honest:
+      'Honestly: as long as the installer is not signed with a code-signing certificate, Windows SmartScreen warns when it starts. AEGIS still verifies the signature of the update information itself.',
+  },
   restore: {
     title: 'Restore points',
     intro:
