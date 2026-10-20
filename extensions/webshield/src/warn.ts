@@ -19,7 +19,7 @@ interface BlockedInfo {
 
 /** Angehaltener Host; kurz nachfragen, falls der Hintergrund gerade erst aufwacht. */
 async function blockedInfo(): Promise<BlockedInfo> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
     const answer: unknown = await chrome.runtime.sendMessage({ type: 'blocked-url' });
     const o =
       typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
@@ -27,7 +27,7 @@ async function blockedInfo(): Promise<BlockedInfo> {
     if (host !== null) {
       return { host, allowable: o.allowable === true };
     }
-    await new Promise((done) => setTimeout(done, 200));
+    await new Promise((done) => setTimeout(done, 250));
   }
   return { host: null, allowable: false };
 }

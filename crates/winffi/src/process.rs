@@ -83,21 +83,34 @@ impl RestrictedToken {
         let thread = if ok == 0 {
             let err = io::Error::last_os_error();
             if err.raw_os_error() != i32::try_from(ERROR_NO_TOKEN).ok() {
-                return Err(err);
+                return Err(step("OpenThreadToken", err));
             }
             None
         } else {
             Some(own(thread)?)
         };
-        let mut process: HANDLE = ptr::null_mut();
-        // SAFETY: Pseudo-Handle des eigenen Prozesses; `process` ist ein Ausgabezeiger.
-        // aegis-unsafe: winffi-process-token-for-child
-        #[allow(unsafe_code)]
-        let ok = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_ACCESS, &mut process) };
-        if ok == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let process = own(process)?;
+        // Das Prozess-Token öffnet ein kurzer Hilfsthread: Er trägt keinen Identitätswechsel,
+        // die Zugriffsprüfung läuft also gegen den Prozess selbst. Im Identitätswechsel (etwa
+        // mit dem eingeschränkten „nur Nutzer“-Token) lehnte Windows das mit Fehler 5 ab.
+        let process = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let mut process: HANDLE = ptr::null_mut();
+                    // SAFETY: Pseudo-Handle des eigenen Prozesses; `process` ist ein
+                    // Ausgabezeiger.
+                    // aegis-unsafe: winffi-process-token-for-child
+                    #[allow(unsafe_code)]
+                    let ok = unsafe {
+                        OpenProcessToken(GetCurrentProcess(), TOKEN_ACCESS, &mut process)
+                    };
+                    if ok == 0 {
+                        return Err(step("OpenProcessToken", io::Error::last_os_error()));
+                    }
+                    own(process)
+                })
+                .join()
+                .map_err(|_| io::Error::other("Hilfsthread abgebrochen"))?
+        })?;
         // Ohne Sonderrecht (SeAssignPrimaryToken, das nur SYSTEM/Dienste haben) darf nur ein
         // direkt vom eigenen Prozess-Token abgeleitetes Token einem neuen Prozess zugewiesen
         // werden. Ist die übernommene Identität dieselbe wie die des Prozesses (Konsolen- und
