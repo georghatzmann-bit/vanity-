@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/desktop/src-tauri"]
+members = ["crates/*", "apps/desktop/src-tauri", "apps/browser/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -20,6 +20,7 @@ aegis-netwatch = { path = "crates/netwatch" }
 aegis-vault-core = { path = "crates/vault-core" }
 aegis-vault-host = { path = "crates/vault-host" }
 aegis-tools = { path = "crates/tools" }
+aegis-browser-core = { path = "crates/browser-core" }
 aegis-defender-switch = { path = "crates/defender-switch" }
 aegis-quarantine = { path = "crates/quarantine" }
 aegis-winffi = { path = "crates/winffi" }
@@ -32,6 +33,12 @@ sha2 = "0.11.1"
 base64 = "0.22.1"
 blake3 = "1.8.7"
 uuid = { version = "1.28.0", features = ["v4", "serde"] }
+# Privacy-Browser (P12): Filterlisten im Adblock-Plus-Format (Brave, MPL-2.0) und Adressen.
+adblock = { version = "0.13.3", default-features = false, features = [
+  "embedded-domain-resolver",
+  "full-regex-handling",
+] }
+url = "2.5.8"
 time = { version = "0.3.55", features = ["serde", "formatting", "parsing", "macros"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
@@ -87,6 +94,7 @@ windows = { version = "0.62.2", features = [
   "Win32_UI_Shell_Common",
 ] }
 windows-core = "0.62.2"
+webview2-com = "0.39.1"
 windows-service = "0.8.1"
 tempfile = "3.27.0"
 proptest = "1.12.0"

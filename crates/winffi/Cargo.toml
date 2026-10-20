@@ -12,6 +12,8 @@ zeroize = { workspace = true }
 # Nur für die Desktop-Symbole (Werkzeug 4): COM-Schnittstellen der Shell (IFolderView).
 windows = { workspace = true }
 windows-core = { workspace = true }
+# Privacy-Browser (P12): Netzanfragen in WebView2 prüfen (gleiche Version wie Tauri/wry).
+webview2-com = { workspace = true }
 windows-sys = { workspace = true, features = [
   "Win32_Foundation",
   "Win32_Globalization",

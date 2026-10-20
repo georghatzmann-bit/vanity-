@@ -1,0 +1,10 @@
+/*
+ * Stile der Browser-Leiste (nach '@aegis/ui/styles.css' eingebunden). Nur Design-Tokens,
+ * keine Rohfarben. Die Leiste füllt genau ihr WebView.
+ */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}

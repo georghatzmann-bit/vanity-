@@ -1,0 +1,25 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Nur die Leiste des Browsers (WebView „chrome“ in jedem Browser-Fenster): eigene Befehle für Tabs, Einstellungen, Listen und Lesezeichen sowie das Hören auf Zustands-Ereignisse. Die Webseiten-Tabs (fremde Inhalte) bekommen keinerlei Rechte.",
+  "webviews": ["chrome-*"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-browser-state",
+    "allow-tab-open",
+    "allow-tab-close",
+    "allow-tab-select",
+    "allow-tab-go",
+    "allow-tab-back",
+    "allow-tab-forward",
+    "allow-tab-reload",
+    "allow-tab-allow-http",
+    "allow-content-visible",
+    "allow-settings-save",
+    "allow-lists-update",
+    "allow-bookmark-add",
+    "allow-bookmark-remove",
+    "allow-ghost-open"
+  ]
+}

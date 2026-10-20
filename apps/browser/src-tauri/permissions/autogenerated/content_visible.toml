@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-content-visible"
+description = "Enables the content_visible command without any pre-configured scope."
+commands.allow = ["content_visible"]
+
+[[permission]]
+identifier = "deny-content-visible"
+description = "Denies the content_visible command without any pre-configured scope."
+commands.deny = ["content_visible"]

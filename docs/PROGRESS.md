@@ -34,7 +34,7 @@ Stand: 2026-10-20 · **P0–P11 abgeschlossen** · nächste Phase: **P12 – Pri
 | P9 | Tresor + Erweiterung | erledigt |
 | P10 | Tools 1–11 | erledigt |
 | P11 | Tools 12–22 + Animations-Feinschliff | erledigt |
-| P12 | Privacy-Browser | offen |
+| P12 | Privacy-Browser | in Arbeit |
 | P13 | Setup-Bootstrapper, Uninstaller, Updater, Abschlusstests, deutsches README | offen |
 | P14 | optional: ML-Modell, AMSI-Beobachter, Browser-Sandbox | offen |
 
@@ -187,6 +187,16 @@ eigenen LAN/WLAN; Leck-Check mit k-Anonymität; alle Prüfungen grün.
 **DoD P8:** Stand vor/nach dem Umschalten kommt von Windows (WMI) und wird nach jedem Befehl
 nachgeprüft; „Wieder AN“ mit einem Klick; Manipulationsschutz nie umgangen (Anleitung +
 Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur Virenschutz.
+
+## P12 – Privacy-Browser
+
+1. [x] P12.1 `crates/browser-core` (Adresszeile → Adresse/Suche, HTTPS-only, gesperrte Schemata,
+       Blocker auf Filterlisten mit `adblock`, Einstellungen + WebView2-Schalter für DoH/WebRTC,
+       Lesezeichen) und `apps/browser` (eigenes Tauri-Fenster: Leiste in React, je Tab ein WebView,
+       Rechte nur für die Leiste, Pop-ups als Tabs, HTTP nur nach Klick, Listen nur auf Wunsch,
+       Ghost-Fenster InPrivate, optional über laufenden Tor/Arti); Windows: Prüfung jeder Anfrage
+       in WebView2 (`aegis_winffi::webview`). D-058.
+2. [ ] P12.2 Sicherheits-Review (separater Agent), Befunde beheben, DoD.
 
 ## P11 – Windows-Tools 12–22 + Animations-Feinschliff
 

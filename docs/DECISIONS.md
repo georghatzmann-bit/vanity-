@@ -472,3 +472,24 @@ Schritte, die die Vorschau angezeigt hat. „Im Hintergrund“ gilt ab dem Einsc
 könnte Vorschau und „Ausführen“ selbst aufrufen (anders als beim Dienst gibt es keine Einmal-
 Kennung im Dialog); dagegen stehen CSP, SafeText und keine HTML-Einfügungen. Der Shredder
 verlangt zusätzlich die nur im zweiten Dialog gezeigte Kennung.
+
+## D-058 – Privacy-Browser: eigenes Tauri-Fenster, Tabs als WebViews, Blocker in WebView2
+
+Status: angenommen (P12). Der Browser ist eine eigene App (`apps/browser`, `aegis-browser`),
+nicht Teil der Schutz-App: Webseiten sind fremder Code und sollen nie in die Nähe der
+App-Befehle kommen. Jedes Fenster hat oben eine Leiste (React, lokale Seite, WebView
+`chrome-<fenster>`) und je Tab ein eigenes WebView darunter (Tauri „unstable“, mehrere WebViews
+je Fenster). Die einzige Capability gilt nur für `chrome-*`; Tabs haben keine Rechte.
+Navigation nur `http`/`https` (nie `file:`, `javascript:` …), HTTPS-only hebt `http` an, HTTP
+nur nach ausdrücklichem Klick je Host und Sitzung; Pop-ups werden Tabs. Werbe-/Tracker-Blocker:
+`adblock` (Brave, MPL-2.0) auf EasyList/EasyPrivacy – die Listen werden **nicht** mitgeliefert
+(GPL-3.0/CC BY-SA 3.0) und nur auf Klick per HTTPS geladen; geprüft wird jede Anfrage über
+WebView2 `WebResourceRequested` (`aegis_winffi::webview`), blockierte bekommen eine leere
+403-Antwort. Unter Linux (Entwicklung) gibt es keinen Blocker – die Oberfläche sagt das.
+DNS-over-HTTPS (Quad9 Standard, Mullvad, Cloudflare, aus) und WebRTC ohne lokale Adressen über
+Chromium-Schalter; einheitlicher Browser-Kennzeichner. Ghost-Modus: InPrivate-Fenster; „über
+Tor“ nur, wenn bereits ein Tor-/Arti-SOCKS-Proxy läuft (9150/9050) – AEGIS startet kein Tor
+selbst und lädt nichts nach (Arti als Beigabe wäre ein eigenes, großes Paket; später möglich).
+Ehrlich in der Oberfläche: Der Browser reduziert Tracking, er anonymisiert nicht; der offizielle
+Tor Browser ist stärker.
+

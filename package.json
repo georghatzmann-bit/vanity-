@@ -14,7 +14,7 @@
     "test": "pnpm -r --if-present test",
     "test:e2e": "pnpm -r --if-present test:e2e",
     "rust:check": "cargo fmt --all --check && cargo clippy --workspace --all-targets --locked -- -D warnings && cargo clippy --workspace --all-targets --all-features --release --locked -- -D warnings && cargo test --workspace --locked",
-    "rust:check:windows": "cargo clippy --workspace --exclude aegis-desktop --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings && cargo clippy --workspace --exclude aegis-desktop --all-targets --all-features --release --target x86_64-pc-windows-msvc --locked -- -D warnings",
+    "rust:check:windows": "cargo clippy --workspace --exclude aegis-desktop --exclude aegis-browser --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings && cargo clippy --workspace --exclude aegis-desktop --exclude aegis-browser --all-targets --all-features --release --target x86_64-pc-windows-msvc --locked -- -D warnings",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm rust:check"
   },
   "devDependencies": {

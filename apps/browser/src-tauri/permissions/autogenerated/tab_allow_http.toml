@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tab-allow-http"
+description = "Enables the tab_allow_http command without any pre-configured scope."
+commands.allow = ["tab_allow_http"]
+
+[[permission]]
+identifier = "deny-tab-allow-http"
+description = "Denies the tab_allow_http command without any pre-configured scope."
+commands.deny = ["tab_allow_http"]

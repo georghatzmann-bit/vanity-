@@ -27,6 +27,9 @@ pub mod clipboard;
 pub mod pipe;
 
 #[cfg(windows)]
+pub mod webview;
+
+#[cfg(windows)]
 pub mod fs;
 
 #[cfg(windows)]

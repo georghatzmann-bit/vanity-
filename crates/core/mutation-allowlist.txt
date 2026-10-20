@@ -440,3 +440,7 @@ crates/winffi/src/registry.rs :: winffi-registry-open-count :: Windows-FFI: öff
 crates/winffi/src/registry.rs :: winffi-registry-count :: Windows-FFI: RegQueryInfoKeyW – zählt Werte und Unterschlüssel (nur lesend).
 crates/winffi/src/registry.rs :: winffi-registry-delete-key :: Windows-FFI: RegDeleteKeyExW für einen leeren Schlüssel, den ein freigegebener Plan selbst angelegt hatte.
 crates/winffi/src/registry.rs :: winffi-registry-delete-empty-key :: Windows-FFI: „Rückgängig“ eines selbst angelegten, inzwischen leeren Schlüssels (Explorer-Schalter), nur nach Freigabe.
+crates/winffi/src/webview.rs :: winffi-webview-filter :: Windows-FFI (Browser): prüft Netzanfragen eigener WebView2-Tabs und beantwortet blockierte mit 403 – verändert nichts am System.
+apps/browser/src-tauri/src/store.rs :: browser-store-dir :: Browser: legt den eigenen Datenordner an (Einstellungen, Lesezeichen, Filterlisten).
+apps/browser/src-tauri/src/store.rs :: browser-store-write :: Browser: schreibt eine eigene Hilfsdatei (eindeutiger Name, create_new).
+apps/browser/src-tauri/src/store.rs :: browser-store-replace :: Browser: ersetzt die eigene Datei durch die eben geschriebene Fassung.

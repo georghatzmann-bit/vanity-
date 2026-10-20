@@ -74,8 +74,8 @@ jobs:
       # nur im Release-Build oder hinter einem Feature steckt, wird sonst nie gelintet.
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo clippy --workspace --all-targets --all-features --release --locked -- -D warnings
-      - run: cargo clippy --workspace --exclude aegis-desktop --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
-      - run: cargo clippy --workspace --exclude aegis-desktop --all-targets --all-features --release --target x86_64-pc-windows-msvc --locked -- -D warnings
+      - run: cargo clippy --workspace --exclude aegis-desktop --exclude aegis-browser --all-targets --target x86_64-pc-windows-msvc --locked -- -D warnings
+      - run: cargo clippy --workspace --exclude aegis-desktop --exclude aegis-browser --all-targets --all-features --release --target x86_64-pc-windows-msvc --locked -- -D warnings
       - run: cargo test --workspace --locked
       # Swatinem/rust-cache (bis einschließlich v2.9.2) räumt target/tests/target ohne `await`
       # auf und meldet ein fehlendes Verzeichnis als ##[error] (trybuild legt nur
