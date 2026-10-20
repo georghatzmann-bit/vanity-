@@ -18,8 +18,15 @@ import {
   SegmentedControl,
   Toggle,
 } from '@aegis/ui';
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import type { BrowserApi, Doh, Search, Settings, View } from './api.ts';
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
+import type { BrowserApi, Search, Settings, View } from './api.ts';
 import { text, type Lang, type TextKey } from './texts.ts';
 
 export function App({ api, lang }: { readonly api: BrowserApi; readonly lang: Lang }) {
@@ -61,6 +68,33 @@ export function App({ api, lang }: { readonly api: BrowserApi; readonly lang: La
   }, [api]);
 
   const active = view?.tabs.find((tab) => tab.id === view.active) ?? null;
+
+  // Tabs per Pfeiltaste, Pos1/Ende wechseln (Muster „Tabs“ der WAI-ARIA).
+  const tabKeys = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (view === null || active === null) {
+      return;
+    }
+    const ids = view.tabs.map((tab) => tab.id);
+    const index = ids.indexOf(active.id);
+    const next =
+      e.key === 'ArrowRight'
+        ? ids[(index + 1) % ids.length]
+        : e.key === 'ArrowLeft'
+          ? ids[(index - 1 + ids.length) % ids.length]
+          : e.key === 'Home'
+            ? ids[0]
+            : e.key === 'End'
+              ? ids[ids.length - 1]
+              : undefined;
+    if (next === undefined) {
+      return;
+    }
+    e.preventDefault();
+    run(api.selectTab(next));
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`[data-tab-id="${String(next)}"]`)?.focus();
+    });
+  };
   const shown = editing ? input : active && active.url !== 'about:blank' ? active.url : '';
 
   const toggleMenu = (open: boolean) => {
@@ -108,9 +142,21 @@ export function App({ api, lang }: { readonly api: BrowserApi; readonly lang: La
   return (
     <div className="flex h-screen flex-col bg-surface text-text">
       {/* Tabs */}
-      <div role="tablist" aria-label={t('tabs')} className="flex h-9 items-end gap-1 px-2 pt-1">
+      <div
+        role="tablist"
+        aria-label={t('tabs')}
+        className="flex h-9 items-end gap-1 px-2 pt-1"
+        onKeyDown={tabKeys}
+      >
         {view.ghost && (
-          <span className="mr-1 flex items-center gap-1 rounded-md bg-surface-3 px-2 py-0.5 text-2xs text-accent">
+          <span
+            className="mr-1 flex items-center gap-1 rounded-md bg-surface-3 px-2 py-0.5 text-2xs text-accent"
+            title={
+              view.tor && view.proxyPort !== null
+                ? t('ghostTorTitle', { port: String(view.proxyPort) })
+                : undefined
+            }
+          >
             <IconEye aria-hidden="true" />
             {view.tor ? t('ghostTor') : t('ghost')}
           </span>
@@ -128,15 +174,22 @@ export function App({ api, lang }: { readonly api: BrowserApi; readonly lang: La
                 type="button"
                 role="tab"
                 aria-selected={selected}
-                className="min-w-0 flex-1 truncate text-left"
+                tabIndex={selected ? 0 : -1}
+                data-tab-id={tab.id}
+                className="min-w-0 flex-1 truncate rounded text-left focus-visible:outline-2 focus-visible:outline-accent"
                 onClick={() => run(api.selectTab(tab.id))}
               >
-                <SafeText value={tab.title || tab.host || t('newPage')} />
+                <SafeText
+                  value={tab.title || tab.host || t('newPage')}
+                  mono={false}
+                  breakAll={false}
+                  maxLength={80}
+                />
               </button>
               <button
                 type="button"
                 aria-label={t('closeTab')}
-                className="rounded p-0.5 opacity-70 hover:bg-surface-3 hover:opacity-100 [&_svg]:size-3"
+                className="rounded p-0.5 opacity-70 hover:bg-surface-3 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-accent [&_svg]:size-3"
                 onClick={() => run(api.closeTab(tab.id))}
               >
                 <IconClose aria-hidden="true" />
@@ -194,7 +247,7 @@ export function App({ api, lang }: { readonly api: BrowserApi; readonly lang: La
         </form>
         {active?.insecure && (
           <Button size="sm" variant="ghost" onClick={() => run(api.allowHttp(active.id))}>
-            {t('allowHttp')}
+            {t('allowHttp', { host: hostOf(active.insecure) })}
           </Button>
         )}
         <span
@@ -202,7 +255,11 @@ export function App({ api, lang }: { readonly api: BrowserApi; readonly lang: La
           data-testid="shield"
         >
           <IconShield aria-hidden="true" />
-          {view.filtering ? t('blocking', { count: String(view.rules) }) : t('notBlocking')}
+          {view.filtering
+            ? t('blocking', { count: String(view.rules) })
+            : view.settings.blockTrackers
+              ? t('notBlocking')
+              : t('blockingOff')}
         </span>
         <IconButton
           label={t('bookmark')}
@@ -243,17 +300,12 @@ export function App({ api, lang }: { readonly api: BrowserApi; readonly lang: La
                 checked={view.settings.javascript}
                 onCheckedChange={(javascript) => save({ javascript })}
               />
-              <SegmentedControl<Doh>
-                label={t('doh')}
-                value={view.settings.doh}
-                onValueChange={(doh) => save({ doh })}
-                options={[
-                  { value: 'quad9', label: 'Quad9' },
-                  { value: 'mullvad', label: 'Mullvad' },
-                  { value: 'cloudflare', label: 'Cloudflare' },
-                  { value: 'off', label: t('dohOff') },
-                ]}
-              />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{t('dns')}</p>
+                <p className="text-xs text-text-muted" data-testid="dns-hint">
+                  {t('dnsHint')}
+                </p>
+              </div>
               <SegmentedControl<Search>
                 label={t('search')}
                 value={view.settings.search}
@@ -327,6 +379,18 @@ export function App({ api, lang }: { readonly api: BrowserApi; readonly lang: La
       )}
     </div>
   );
+}
+
+/** Host einer Adresse für Texte (ohne Adresse: leer). */
+function hostOf(url: string | null): string {
+  if (url === null) {
+    return '';
+  }
+  try {
+    return new URL(url).host;
+  } catch {
+    return '';
+  }
 }
 
 function IconButton({

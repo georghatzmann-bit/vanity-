@@ -486,12 +486,21 @@ nur nach ausdrücklichem Klick je Host und Sitzung; Pop-ups werden Tabs. Werbe-/
 (GPL-3.0/CC BY-SA 3.0) und nur auf Klick per HTTPS geladen; geprüft wird jede Anfrage über
 WebView2 `WebResourceRequested` (`aegis_winffi::webview`), blockierte bekommen eine leere
 403-Antwort. Unter Linux (Entwicklung) gibt es keinen Blocker – die Oberfläche sagt das.
-DNS-over-HTTPS (Quad9 Standard, Mullvad, Cloudflare, aus) und WebRTC ohne lokale Adressen über
-Chromium-Schalter; einheitlicher Browser-Kennzeichner. Ghost-Modus: InPrivate-Fenster; „über
+WebRTC ohne lokale Adressen über Chromium-Schalter; einheitlicher Browser-Kennzeichner. Ghost-Modus: InPrivate-Fenster; „über
 Tor“ nur, wenn bereits ein Tor-/Arti-SOCKS-Proxy läuft (9150/9050) – AEGIS startet kein Tor
 selbst und lädt nichts nach (Arti als Beigabe wäre ein eigenes, großes Paket; später möglich).
 Ehrlich in der Oberfläche: Der Browser reduziert Tracking, er anonymisiert nicht; der offizielle
 Tor Browser ist stärker.
+
+Nachtrag P12.2 (Review): DoH lässt sich in WebView2 nicht per Schalter setzen – der Browser nutzt
+das DNS von Windows (dort ist DoH ab Windows 11 einstellbar), die Auswahl entfiel. Der Tor-Modus
+setzt `--proxy-server` und `--host-resolver-rules` selbst (wry lässt den Proxy sonst fallen); je
+Profil (normal, Ghost, Tor je Port) ein eigener Datenordner mit festen Schaltern. Tauri spritzt
+`window.__TAURI_INTERNALS__` (mit der WebView-Kennung) in jedes WebView, ohne Ausschalter: Tabs
+haben dadurch keine Rechte, Seiten erkennen aber eine App mit WebView2 – das sagt die Oberfläche;
+Kennungen sind zufällig. Der saubere Weg (Tabs als rohe WebView2-Controller über `winffi`, ganz
+ohne Tauri-IPC) bleibt als spätere Verbesserung offen. SmartScreen bleibt in normalen Fenstern an
+(Schutz geht vor), Ghost-Fenster fragen Microsoft nicht.
 
 
 ## D-059 – Installation für den Rechner, Dienst über Installer-Hooks, signierte Updates

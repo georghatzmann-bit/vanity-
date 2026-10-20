@@ -1,41 +1,19 @@
 //! Einstellungen des Browsers und die daraus folgenden Schalter für WebView2 (Chromium):
-//! DNS-over-HTTPS, WebRTC ohne lokale Adressen, kein Hintergrund-Netz der Engine. Alles mit
-//! sicheren Standards; jede Netz-Funktion ist abschaltbar.
+//! WebRTC ohne lokale Adressen, kein Hintergrund-Netz der Engine, im Tor-Modus alles über den
+//! SOCKS-Proxy (auch DNS). Die Schalter hängen nur von der Fensterart ab – WebView2 verlangt
+//! für einen Datenordner während der ganzen Laufzeit dieselben Schalter.
+//!
+//! DNS-over-HTTPS: WebView2 bietet dafür keinen Schalter (Chromium steuert DoH nur über
+//! Richtlinien bzw. interne Einstellungen). Der Browser nutzt deshalb das DNS von Windows; ab
+//! Windows 11 lässt sich dort DNS-over-HTTPS einschalten – die Oberfläche sagt das ehrlich.
 
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::address::Search;
 
-/// DNS-over-HTTPS-Anbieter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Doh {
-    /// Aus (DNS des Systems).
-    Off,
-    /// Quad9 (Schweiz, filtert bekannte Schadseiten).
-    #[default]
-    Quad9,
-    /// Mullvad (Schweden).
-    Mullvad,
-    /// Cloudflare.
-    Cloudflare,
-}
-
-impl Doh {
-    /// Vorlage der Anfrage-Adresse (`None`: aus).
-    #[must_use]
-    pub fn template(self) -> Option<&'static str> {
-        match self {
-            Self::Off => None,
-            Self::Quad9 => Some("https://dns.quad9.net/dns-query"),
-            Self::Mullvad => Some("https://dns.mullvad.net/dns-query"),
-            Self::Cloudflare => Some("https://cloudflare-dns.com/dns-query"),
-        }
-    }
-}
-
-/// Einstellungen (gespeichert als JSON im Datenordner des Browsers).
+/// Einstellungen (gespeichert als JSON im Datenordner des Browsers). Unbekannte Felder älterer
+/// Fassungen (z. B. `doh`) werden ignoriert.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
@@ -43,10 +21,8 @@ pub struct Settings {
     pub https_only: bool,
     /// Werbe-/Tracker-Blocker (braucht geladene Listen).
     pub block_trackers: bool,
-    /// JavaScript erlaubt (aus: viele Seiten funktionieren nicht mehr).
+    /// JavaScript erlaubt (aus: viele Seiten funktionieren nicht mehr). Gilt für neue Tabs.
     pub javascript: bool,
-    /// DNS-over-HTTPS.
-    pub doh: Doh,
     /// Suchmaschine.
     pub search: Search,
     /// Startseite (`None`: leere Seite).
@@ -59,7 +35,6 @@ impl Default for Settings {
             https_only: true,
             block_trackers: true,
             javascript: true,
-            doh: Doh::default(),
             search: Search::default(),
             home: None,
         }
@@ -83,23 +58,73 @@ impl Settings {
 /// Fester, allgemeiner Browser-Kennzeichner (gleich für alle Nutzer – weniger Fingerabdruck).
 pub const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
-/// Schalter für WebView2 (Chromium-Kommandozeile). Gelten für alle Tabs eines Fensters.
-#[must_use]
-pub fn browser_args(settings: &Settings) -> String {
-    let mut args = vec![
-        // WebRTC nur über den Proxy/die Standardroute: keine lokalen IP-Adressen an Seiten.
-        "--force-webrtc-ip-handling-policy=disable_non_proxied_udp".to_owned(),
-        // Kein „Safe Browsing“-Abgleich an Dritte, keine Hintergrund-Dienste der Engine.
-        "--disable-background-networking".to_owned(),
-        "--disable-features=msSmartScreenProtection,AutofillServerCommunication,OptimizationHints,InterestFeedContentSuggestions".to_owned(),
-    ];
-    if let Some(template) = settings.doh.template() {
-        // DNS-over-HTTPS im sicheren Modus (kein Rückfall auf das System-DNS).
-        args.push("--enable-features=DnsOverHttps".to_owned());
-        args.push("--dns-over-https-mode=secure".to_owned());
-        args.push(format!("--dns-over-https-templates={template}"));
+/// Art eines Profils (je Art ein eigener Datenordner mit festen Schaltern).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Profile {
+    /// Normales Fenster.
+    Normal,
+    /// Ghost (InPrivate).
+    Ghost,
+    /// Ghost über einen SOCKS5-Proxy auf `127.0.0.1:<port>` (Tor/Arti).
+    Tor(u16),
+}
+
+impl Profile {
+    /// Name des Datenordners.
+    #[must_use]
+    pub fn folder(self) -> String {
+        match self {
+            Self::Normal => "profile".to_owned(),
+            Self::Ghost => "ghost".to_owned(),
+            Self::Tor(port) => format!("ghost-tor-{port}"),
+        }
     }
-    args.join(" ")
+}
+
+/// Schalter für WebView2 (Chromium-Kommandozeile). Wry fügt eigene Schalter (auch den Proxy)
+/// nicht mehr hinzu, sobald welche gesetzt sind – deshalb steht hier alles selbst.
+///
+/// # Errors
+/// Tor mit Port 0.
+pub fn browser_args(profile: Profile) -> Result<String, String> {
+    let mut disabled = vec![
+        // Wie wry: keine Edge-eigenen Dialoge außerhalb des Fensters.
+        "msWebOOUI",
+        "msPdfOOUI",
+        // Keine Hintergrund-Dienste der Engine an Dritte.
+        "AutofillServerCommunication",
+        "OptimizationHints",
+        "InterestFeedContentSuggestions",
+    ];
+    let mut args = vec!["--disable-background-networking".to_owned()];
+    match profile {
+        Profile::Normal => {
+            // WebRTC nur über die öffentliche Standardroute: keine lokalen IP-Adressen an
+            // Seiten, Videoanrufe funktionieren weiter. SmartScreen (Phishing-/Schadseiten-
+            // Schutz, fragt bei Microsoft nach) bleibt an.
+            args.push("--force-webrtc-ip-handling-policy=default_public_interface_only".into());
+        }
+        Profile::Ghost => {
+            args.push("--force-webrtc-ip-handling-policy=default_public_interface_only".into());
+            // Ghost: keine Adressen an Microsoft (dafür kein SmartScreen-Schutz – die
+            // Oberfläche sagt das).
+            disabled.push("msSmartScreenProtection");
+        }
+        Profile::Tor(port) => {
+            let proxy = tor_proxy(port)?;
+            // Alles über den Proxy, auch DNS (Namen löst der Proxy auf); WebRTC ohne UDP am
+            // Proxy vorbei.
+            args.push(format!(
+                "--proxy-server={}",
+                proxy.as_str().trim_end_matches('/')
+            ));
+            args.push("--host-resolver-rules=\"MAP * ~NOTFOUND , EXCLUDE 127.0.0.1\"".into());
+            args.push("--force-webrtc-ip-handling-policy=disable_non_proxied_udp".into());
+            disabled.push("msSmartScreenProtection");
+        }
+    }
+    args.push(format!("--disable-features={}", disabled.join(",")));
+    Ok(args.join(" "))
 }
 
 /// Proxy für den Ghost-Modus mit Tor (`socks5://127.0.0.1:<port>`).
@@ -121,15 +146,32 @@ mod tests {
     fn sichere_standards() {
         let s = Settings::default();
         assert!(s.https_only && s.block_trackers && s.javascript);
-        assert_eq!(s.doh, Doh::Quad9);
-        let args = browser_args(&s);
-        assert!(args.contains("--dns-over-https-templates=https://dns.quad9.net/dns-query"));
-        assert!(args.contains("disable_non_proxied_udp"));
-        let off = Settings {
-            doh: Doh::Off,
-            ..Settings::default()
-        };
-        assert!(!browser_args(&off).contains("dns-over-https"));
+        let normal = browser_args(Profile::Normal).unwrap();
+        assert!(normal.contains("default_public_interface_only"));
+        assert!(normal.contains("msWebOOUI,msPdfOOUI"));
+        assert!(!normal.contains("proxy-server"));
+        assert!(!normal.contains("msSmartScreenProtection"));
+        let ghost = browser_args(Profile::Ghost).unwrap();
+        assert!(ghost.contains("msSmartScreenProtection") && !ghost.contains("proxy-server"));
+        // Alte Einstellungen mit DoH-Feld lassen sich weiter lesen.
+        let old: Settings =
+            serde_json::from_str("{\"doh\":\"quad9\",\"httpsOnly\":false}").unwrap();
+        assert!(!old.https_only);
+    }
+
+    /// P12-R1: Der Tor-Modus muss den Proxy selbst setzen (sonst gingen Seiten direkt raus).
+    #[test]
+    fn tor_geht_ueber_den_proxy_auch_dns() {
+        let tor = browser_args(Profile::Tor(9150)).unwrap();
+        assert!(
+            tor.contains("--proxy-server=socks5://127.0.0.1:9150"),
+            "{tor}"
+        );
+        assert!(tor.contains("--host-resolver-rules=\"MAP * ~NOTFOUND , EXCLUDE 127.0.0.1\""));
+        assert!(tor.contains("disable_non_proxied_udp"));
+        assert!(browser_args(Profile::Tor(0)).is_err());
+        assert_eq!(Profile::Tor(9050).folder(), "ghost-tor-9050");
+        assert_ne!(Profile::Normal.folder(), Profile::Ghost.folder());
     }
 
     #[test]

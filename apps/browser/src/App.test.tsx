@@ -34,7 +34,6 @@ function view(over: Partial<View> = {}): View {
       httpsOnly: true,
       blockTrackers: true,
       javascript: true,
-      doh: 'quad9',
       search: 'duck_duck_go',
       home: null,
     },
@@ -94,6 +93,18 @@ describe('Browser-Leiste', () => {
     await waitFor(() => expect(api.calls).toContain('selectTab:2'));
   });
 
+  it('Tabs per Tastatur: nur der aktive ist im Fokus-Weg, Pfeile wechseln', async () => {
+    const api = fakeApi(view());
+    render(<App api={api} lang="de" />);
+    const tabs = await screen.findAllByRole('tab');
+    expect(tabs[0]).toHaveAttribute('tabindex', '0');
+    expect(tabs[1]).toHaveAttribute('tabindex', '-1');
+    fireEvent.keyDown(tabs[0] as HTMLElement, { key: 'ArrowRight' });
+    await waitFor(() => expect(api.calls).toContain('selectTab:2'));
+    fireEvent.keyDown(screen.getAllByRole('tab')[1] as HTMLElement, { key: 'Home' });
+    await waitFor(() => expect(api.calls).toContain('selectTab:1'));
+  });
+
   it('Adresszeile schickt die Eingabe an den aktiven Tab', async () => {
     const api = fakeApi(view());
     render(<App api={api} lang="de" />);
@@ -105,12 +116,32 @@ describe('Browser-Leiste', () => {
     await waitFor(() => expect(api.calls).toContain('go:1:wetter berlin'));
   });
 
-  it('HTTP nur nach ausdrücklichem Klick, Blocker ehrlich ohne Listen', async () => {
+  it('HTTP nur nach ausdrücklichem Klick (mit Host), Blocker ehrlich ohne Listen', async () => {
     const api = fakeApi(view({ active: 2 }));
     render(<App api={api} lang="de" />);
     expect(await screen.findByTestId('shield')).toHaveTextContent('Blocker ohne Listen');
-    fireEvent.click(await screen.findByRole('button', { name: 'Unsicher über HTTP öffnen' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'news.example unverschlüsselt (HTTP) öffnen' }),
+    );
     await waitFor(() => expect(api.calls).toContain('allowHttp:2'));
+  });
+
+  it('Blocker aus heißt „aus“, Tor-Fenster nennt den Proxy ehrlich', async () => {
+    const base = view();
+    const api = fakeApi(
+      view({
+        ghost: true,
+        tor: true,
+        proxyPort: 9150,
+        settings: { ...base.settings, blockTrackers: false },
+      }),
+    );
+    render(<App api={api} lang="de" />);
+    expect(await screen.findByTestId('shield')).toHaveTextContent('Blocker aus');
+    const badge = screen.getByText('Ghost · Tor-Proxy');
+    expect(badge.closest('[title]')?.getAttribute('title')).toContain(
+      'AEGIS kann nicht prüfen, ob dort wirklich Tor läuft',
+    );
   });
 
   it('Menü verdeckt die Seite, Listen laden nur auf Klick, ehrlicher Tor-Hinweis', async () => {
@@ -121,6 +152,9 @@ describe('Browser-Leiste', () => {
     expect(api.calls).toContain('content:false');
     expect(api.updateLists).not.toHaveBeenCalled();
     expect(menu).toHaveTextContent('Tor Browser deutlich stärker');
+    // Kein DoH-Schalter, der nichts bewirkt – ehrlicher Hinweis auf das DNS von Windows.
+    expect(within(menu).queryByText('DNS-over-HTTPS')).toBeNull();
+    expect(within(menu).getByTestId('dns-hint')).toHaveTextContent('DNS von Windows');
     fireEvent.click(within(menu).getByRole('button', { name: 'EasyList + EasyPrivacy laden' }));
     await waitFor(() => expect(within(menu).getByTestId('lists')).toHaveTextContent('120 Regeln'));
     fireEvent.click(within(menu).getByRole('switch', { name: 'JavaScript erlauben' }));
@@ -134,9 +168,14 @@ describe('Browser-Leiste', () => {
   it('Sprache und Parser', () => {
     expect(lang(['de-AT'])).toBe('de');
     expect(lang(['en-US'])).toBe('en');
-    const v = parseView({ tabs: [{ id: 'x', title: 5 }], settings: { doh: 'evil', search: 1 } });
+    const v = parseView({
+      tabs: [{ id: 'x', title: 5 }],
+      settings: { search: 1 },
+      proxyPort: 1.5,
+    });
     expect(v.tabs[0]?.id).toBe(0);
-    expect(v.settings.doh).toBe('quad9');
+    expect(v.settings.search).toBe('duck_duck_go');
+    expect(v.proxyPort).toBeNull();
     expect(v.settings.httpsOnly).toBe(true);
   });
 });

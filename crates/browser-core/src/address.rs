@@ -122,6 +122,16 @@ pub fn navigable(url: &Url) -> bool {
     matches!(url.scheme(), "http" | "https") || url.as_str() == "about:blank"
 }
 
+/// Darf eine eingebettete Seite (iframe) diese Adresse laden? Web-Adressen sowie die
+/// Inhalts-Schemata, die Seiten für eigene Rahmen brauchen (`about:blank`/`about:srcdoc`,
+/// `data:`, `blob:`). Alles andere (`file:`, `javascript:`, Programm-Schemata …) nie.
+/// Ob `http` erlaubt ist, entscheidet zusätzlich HTTPS-only.
+#[must_use]
+pub fn frame_navigable(url: &Url) -> bool {
+    matches!(url.scheme(), "http" | "https" | "data" | "blob")
+        || matches!(url.as_str(), "about:blank" | "about:srcdoc")
+}
+
 /// Kurzform für die Anzeige (Host, ohne `www.`).
 #[must_use]
 pub fn display_host(url: &Url) -> String {
@@ -191,6 +201,23 @@ mod tests {
         assert!(!navigable(&Url::parse("file:///etc/passwd").unwrap()));
         assert!(navigable(&Url::parse("about:blank").unwrap()));
         assert!(!navigable(&Url::parse("about:config").unwrap()));
+        for ok in [
+            "https://a.example/",
+            "about:srcdoc",
+            "data:text/html,x",
+            "blob:https://a.example/1",
+        ] {
+            assert!(frame_navigable(&Url::parse(ok).unwrap()), "{ok}");
+        }
+        for bad in [
+            "file:///c:/x",
+            "javascript:alert(1)",
+            "ms-msdt:/id",
+            "search-ms:query=x",
+            "about:config",
+        ] {
+            assert!(!frame_navigable(&Url::parse(bad).unwrap()), "{bad}");
+        }
     }
 
     #[test]

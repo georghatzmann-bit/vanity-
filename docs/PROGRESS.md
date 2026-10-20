@@ -208,7 +208,18 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        Rechte nur für die Leiste, Pop-ups als Tabs, HTTP nur nach Klick, Listen nur auf Wunsch,
        Ghost-Fenster InPrivate, optional über laufenden Tor/Arti); Windows: Prüfung jeder Anfrage
        in WebView2 (`aegis_winffi::webview`). D-058.
-2. [ ] P12.2 Sicherheits-Review (separater Agent), Befunde beheben, DoD.
+2. [x] P12.2 Sicherheits-Review (separater Agent): 1 kritisch, 2 hoch, 6 mittel, Niedriges –
+       behoben bzw. ehrlich benannt (Tor-Proxy wirklich gesetzt, kein wirkungsloser DoH-Schalter,
+       iframes und Worker im Blocker, Filter vor der ersten Seite, Pop-ups im Hintergrund und
+       begrenzt, iframes/externe Programme geprüft, feste Schalter je Profil) – siehe
+       `docs/SECURITY.md`. Dazu Windows: 8.3-Kurznamen in der Pfadprüfung (P11.5).
+
+**DoD P12:** eigene App mit Rechten nur für die Leiste; nur http/https, HTTPS-only mit Ausnahme
+nur nach Klick (je Host und Fenster-Bereich); Blocker auf EasyList/EasyPrivacy (nur auf Klick
+geladen) für Seiten, iframes und Worker; Ghost-Fenster InPrivate, optional über einen laufenden
+SOCKS5-Proxy (Tor/Arti) samt DNS; ehrliche Texte (reduziert Tracking, anonymisiert nicht; Seiten
+erkennen WebView2; kein Beweis für Tor). Offen: Tabs als rohe WebView2-Controller (ohne
+Tauri-Kennung im Seitenkontext).
 
 ## P11 – Windows-Tools 12–22 + Animations-Feinschliff
 
@@ -404,4 +415,4 @@ unbekannte Downloads – nie automatisch).
 
 ## Nächster Schritt
 
-P12.2 (Review-Befunde Browser), P13.2 Setup-Assistent, P13.3 README + Review.
+P13.2 Setup-Assistent, P13.3 README + Review.

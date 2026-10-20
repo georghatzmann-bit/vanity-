@@ -441,10 +441,13 @@ crates/winffi/src/registry.rs :: winffi-registry-open-count :: Windows-FFI: öff
 crates/winffi/src/registry.rs :: winffi-registry-count :: Windows-FFI: RegQueryInfoKeyW – zählt Werte und Unterschlüssel (nur lesend).
 crates/winffi/src/registry.rs :: winffi-registry-delete-key :: Windows-FFI: RegDeleteKeyExW für einen leeren Schlüssel, den ein freigegebener Plan selbst angelegt hatte.
 crates/winffi/src/registry.rs :: winffi-registry-delete-empty-key :: Windows-FFI: „Rückgängig“ eines selbst angelegten, inzwischen leeren Schlüssels (Explorer-Schalter), nur nach Freigabe.
-crates/winffi/src/webview.rs :: winffi-webview-filter :: Windows-FFI (Browser): prüft Netzanfragen eigener WebView2-Tabs und beantwortet blockierte mit 403 – verändert nichts am System.
+crates/winffi/src/webview.rs :: winffi-webview-filter :: Windows-FFI (Browser): prüft Netzanfragen und Navigationen eigener WebView2-Tabs (blockierte Anfragen: leere 403, eingebettete Seiten/externe Programme: abbrechen) – verändert nichts am System.
+crates/winffi/src/webview.rs :: winffi-webview-core :: Windows-FFI (Browser): liest die WebView2-Schnittstelle des eigenen Tabs – verändert nichts am System.
+crates/winffi/src/webview.rs :: winffi-webview-history :: Windows-FFI (Browser): Zurück/Vor im eigenen Tab – verändert nichts am System.
 apps/browser/src-tauri/src/store.rs :: browser-store-dir :: Browser: legt den eigenen Datenordner an (Einstellungen, Lesezeichen, Filterlisten).
 apps/browser/src-tauri/src/store.rs :: browser-store-write :: Browser: schreibt eine eigene Hilfsdatei (eindeutiger Name, create_new).
 apps/browser/src-tauri/src/store.rs :: browser-store-replace :: Browser: ersetzt die eigene Datei durch die eben geschriebene Fassung.
+apps/browser/src-tauri/src/store.rs :: browser-store-discard :: entfernt nach einem Schreibfehler die eben selbst angelegte Hilfsdatei mit eindeutigem Namen im eigenen Datenordner des Browsers.
 crates/update/src/bin/aegis-release.rs :: release-keygen-secret :: Release-Werkzeug (nur Herausgeber): schreibt den neuen geheimen Signaturschlüssel in eine neue Datei (create_new, nie überschreiben).
 crates/service/src/scm.rs :: scm-install-update-config :: Installation (Setup, UAC, vom Nutzer gestartet): zeigt den vorhandenen Schutzdienst auf die neue Programmdatei.
 crates/service/src/scm.rs :: scm-install-create :: Installation (Setup, UAC, vom Nutzer gestartet): legt den Schutzdienst an.

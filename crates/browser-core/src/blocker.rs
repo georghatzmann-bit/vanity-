@@ -122,6 +122,18 @@ impl Kind {
     }
 }
 
+/// Zählt als Netzwerkregel (keine Kommentare, keine Kosmetik wie `##.werbung`, die der
+/// Browser nicht anwendet).
+fn network_rule(line: &str) -> bool {
+    let line = line.trim();
+    !line.is_empty()
+        && !line.starts_with('!')
+        && !line.starts_with('[')
+        && !["##", "#@#", "#?#", "#$#", "#%#", "#@?#", "#@$#"]
+            .iter()
+            .any(|m| line.contains(m))
+}
+
 /// Der Blocker (ohne Listen: blockiert nichts).
 pub struct Blocker {
     engine: Option<Engine>,
@@ -152,10 +164,7 @@ impl Blocker {
         let mut set = FilterSet::new(false);
         let mut rules = 0;
         for text in lists.iter().filter(|t| plausible_list(t)) {
-            rules += text
-                .lines()
-                .filter(|l| !l.is_empty() && !l.starts_with('!') && !l.starts_with('['))
-                .count();
+            rules += text.lines().filter(|l| network_rule(l)).count();
             set.add_filter_list((*text).to_owned(), ParseOptions::default());
         }
         if rules == 0 {
@@ -167,7 +176,7 @@ impl Blocker {
         }
     }
 
-    /// Zahl der Regeln (ungefähr; Zeilen ohne Kommentare).
+    /// Zahl der Netzwerkregeln (ungefähr; Zeilen ohne Kommentare und Kosmetik).
     #[must_use]
     pub fn rules(&self) -> usize {
         self.rules
@@ -193,12 +202,13 @@ impl Blocker {
 mod tests {
     use super::*;
 
-    const LIST: &str = "[Adblock Plus 2.0]\n! Titel: Test\n||ads.example^\n||tracker.example^$third-party\n@@||ads.example/erlaubt.js\n";
+    const LIST: &str = "[Adblock Plus 2.0]\n! Titel: Test\n||ads.example^\n||tracker.example^$third-party\n@@||ads.example/erlaubt.js\n##.werbung\nnews.example#@#.banner\n||frame.example^$subdocument\n";
 
     #[test]
     fn blockiert_nach_regeln() {
         let b = Blocker::from_lists(&[LIST]);
-        assert_eq!(b.rules(), 3);
+        // Kosmetik zählt nicht mit (wird nicht angewandt).
+        assert_eq!(b.rules(), 4);
         let page = "https://news.example/";
         assert!(b.blocks("https://ads.example/banner.js", page, Kind::Script));
         assert!(!b.blocks("https://ads.example/erlaubt.js", page, Kind::Script));
@@ -210,6 +220,9 @@ mod tests {
             Kind::Image
         ));
         assert!(!b.blocks("https://news.example/bild.png", page, Kind::Image));
+        // Eingebettete Werbe-Seiten (iframes) ja, als Hauptseite nie.
+        assert!(b.blocks("https://frame.example/ad", page, Kind::Subdocument));
+        assert!(!b.blocks("https://frame.example/ad", page, Kind::Document));
         // Die gewählte Seite selbst nie.
         assert!(!b.blocks("https://ads.example/", page, Kind::Document));
     }

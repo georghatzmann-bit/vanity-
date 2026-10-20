@@ -1,14 +1,21 @@
 //! Fenster, Tabs und Regeln der Navigation. Jedes Browser-Fenster hat eine Leiste (WebView
 //! `chrome-<fenster>`, lokale App-Seite) und je Tab ein WebView `tab-<n>` darunter. Nur die
 //! Leiste darf Befehle aufrufen (Capability); Webseiten bekommen keine Rechte.
+//!
+//! Kennungen von Fenstern und Tabs sind zufällig (keine Zähler, kein „ghost“ im Namen): Tauri
+//! zeigt jedem WebView seine Kennung, Seiten sollen daraus weder Ghost-Modus noch Sitzung
+//! ablesen können.
 
 use std::collections::HashSet;
+use std::hash::{BuildHasher, Hasher};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
+use std::time::{Duration, Instant};
 
 use aegis_browser_core::address::{self, display_host, navigable, upgrade};
 use aegis_browser_core::blocker::{Blocker, List, MAX_LIST};
 use aegis_browser_core::bookmarks::{self, Bookmark};
-use aegis_browser_core::settings::{self, Settings, USER_AGENT};
+use aegis_browser_core::settings::{self, Profile, Settings, USER_AGENT};
 use serde::Serialize;
 use tauri::webview::{NewWindowResponse, PageLoadEvent};
 use tauri::{
@@ -24,17 +31,33 @@ pub const CHROME_HEIGHT: f64 = 88.0;
 const MAX_TABS: usize = 40;
 /// Übliche Ports von Tor (Tor Browser 9150, Tor-/Arti-Dienst 9050).
 const TOR_PORTS: [u16; 2] = [9150, 9050];
+/// Pop-ups: höchstens so viele je Fenster im Zeitfenster [`POPUP_WINDOW`].
+const POPUP_LIMIT: usize = 3;
+const POPUP_WINDOW: Duration = Duration::from_secs(10);
+/// Dieselbe HTTP-Adresse innerhalb dieser Zeit erneut → Umleitungsschleife, nicht anheben.
+const UPGRADE_LOOP: Duration = Duration::from_secs(15);
 
 /// Art eines Fensters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowKind {
     /// Normales Fenster (eigenes Profil im Datenordner).
     Normal,
-    /// Ghost: InPrivate (nichts bleibt), optional über Tor.
+    /// Ghost: InPrivate (kein Verlauf, keine Cookies, kein Cache bleiben), optional über einen
+    /// SOCKS-Proxy (Tor/Arti).
     Ghost {
-        /// SOCKS-Port eines laufenden Tor/Arti (`None`: ohne Tor).
+        /// Port des SOCKS-Proxys auf 127.0.0.1 (`None`: ohne Proxy).
         tor: Option<u16>,
     },
+}
+
+impl WindowKind {
+    fn profile(self) -> Profile {
+        match self {
+            Self::Normal => Profile::Normal,
+            Self::Ghost { tor: None } => Profile::Ghost,
+            Self::Ghost { tor: Some(port) } => Profile::Tor(port),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +69,11 @@ struct Tab {
     loading: bool,
     /// Auf HTTPS angehobene Adresse, deren HTTP-Fassung der Nutzer erlauben könnte.
     insecure: Option<String>,
+    /// Zuletzt angehobene HTTP-Adresse und wann (eine Seite, die gleich wieder auf HTTP
+    /// umleitet – auch per Skript –, wird nicht endlos angehoben).
+    upgraded: Option<(String, Instant)>,
+    /// Blocker im WebView eingehängt (nur Windows).
+    filtered: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -55,17 +83,18 @@ struct WindowInfo {
     active: Option<u32>,
     /// Inhalt verdeckt (Leiste zeigt ein Menü über die ganze Fläche).
     content_hidden: bool,
+    /// Zeitpunkte der letzten Pop-ups.
+    popups: Vec<Instant>,
 }
 
 #[derive(Debug, Default)]
 struct Inner {
     windows: Vec<WindowInfo>,
     tabs: Vec<Tab>,
-    next_tab: u32,
-    next_window: u32,
     settings: Settings,
     bookmarks: Vec<Bookmark>,
-    /// Hosts, für die der Nutzer in dieser Sitzung HTTP erlaubt hat.
+    /// `„<bereich>|<host>“`, für die der Nutzer in dieser Sitzung HTTP erlaubt hat. Bereich:
+    /// `normal` für normale Fenster, sonst die Kennung des Ghost-Fensters.
     http_ok: HashSet<String>,
     /// Zeitpunkt der geladenen Listen (Unix-Sekunden).
     lists_updated: Option<i64>,
@@ -75,6 +104,8 @@ struct Inner {
 pub struct Browser {
     inner: Mutex<Inner>,
     blocker: Arc<RwLock<Blocker>>,
+    /// Blocker eingeschaltet (gilt sofort für alle Tabs).
+    blocking: Arc<AtomicBool>,
     store: Store,
 }
 
@@ -94,6 +125,21 @@ fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+}
+
+/// Zufällige, noch freie Kennung (Zufall aus dem Hash-Schlüssel des Prozesses).
+fn fresh_id(taken: impl Fn(u32) -> bool) -> u32 {
+    let state = std::collections::hash_map::RandomState::new();
+    let mut salt = 0u64;
+    loop {
+        let mut hasher = state.build_hasher();
+        hasher.write_u64(salt);
+        let id = u32::try_from(hasher.finish() & 0x7fff_ffff).unwrap_or(1);
+        if id != 0 && !taken(id) {
+            return id;
+        }
+        salt += 1;
+    }
 }
 
 impl Browser {
@@ -117,6 +163,7 @@ impl Browser {
         let meta: ListsMeta = store.read_json("lists.json");
         let blocker = load_blocker(&store);
         Ok(Self {
+            blocking: Arc::new(AtomicBool::new(settings.block_trackers)),
             inner: Mutex::new(Inner {
                 settings,
                 bookmarks,
@@ -146,6 +193,26 @@ fn load_blocker(store: &Store) -> Blocker {
     Blocker::from_lists(&refs)
 }
 
+/// Bereich der HTTP-Ausnahmen eines Fensters (Ghost-Fenster teilen sie mit niemandem).
+fn http_scope(inner: &Inner, window: &str) -> String {
+    match inner
+        .windows
+        .iter()
+        .find(|w| w.label == window)
+        .map(|w| w.kind)
+    {
+        Some(WindowKind::Normal) => "normal".to_owned(),
+        _ => window.to_owned(),
+    }
+}
+
+fn http_allowed(inner: &Inner, window: &str, url: &Url) -> bool {
+    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+    inner
+        .http_ok
+        .contains(&format!("{}|{host}", http_scope(inner, window)))
+}
+
 /* ------------------------------------------------------------------ Ansicht */
 
 /// Ein Tab für die Leiste.
@@ -168,23 +235,32 @@ pub struct View {
     window: String,
     ghost: bool,
     tor: bool,
+    /// Port des SOCKS-Proxys im Tor-Modus.
+    proxy_port: Option<u16>,
     tabs: Vec<TabView>,
     active: Option<u32>,
     settings: Settings,
     bookmarks: Vec<Bookmark>,
     rules: usize,
     lists_updated: Option<i64>,
-    /// Blocker wirkt (nur Windows/WebView2).
+    /// Blocker wirkt im aktiven Tab (nur Windows/WebView2, eingeschaltet, Listen geladen,
+    /// im Tab eingehängt).
     filtering: bool,
 }
 
 fn view(browser: &Browser, inner: &Inner, window: &str) -> View {
     let info = inner.windows.iter().find(|w| w.label == window);
     let kind = info.map_or(WindowKind::Normal, |w| w.kind);
+    let active = info.and_then(|w| w.active);
+    let rules = browser.rules();
     View {
         window: window.to_owned(),
         ghost: matches!(kind, WindowKind::Ghost { .. }),
         tor: matches!(kind, WindowKind::Ghost { tor: Some(_) }),
+        proxy_port: match kind {
+            WindowKind::Ghost { tor } => tor,
+            WindowKind::Normal => None,
+        },
         tabs: inner
             .tabs
             .iter()
@@ -202,12 +278,18 @@ fn view(browser: &Browser, inner: &Inner, window: &str) -> View {
                 }
             })
             .collect(),
-        active: info.and_then(|w| w.active),
+        active,
         settings: inner.settings.clone(),
         bookmarks: inner.bookmarks.clone(),
-        rules: browser.rules(),
+        rules,
         lists_updated: inner.lists_updated,
-        filtering: cfg!(windows) && inner.settings.block_trackers && browser.rules() > 0,
+        filtering: cfg!(windows)
+            && inner.settings.block_trackers
+            && rules > 0
+            && inner
+                .tabs
+                .iter()
+                .any(|t| Some(t.id) == active && t.filtered),
     }
 }
 
@@ -243,23 +325,24 @@ pub fn open_window<R: Runtime>(app: &AppHandle<R>, kind: WindowKind) -> Result<S
     let browser = app.state::<Browser>();
     let label = {
         let mut inner = browser.lock();
-        inner.next_window += 1;
-        let label = match kind {
-            WindowKind::Normal => format!("win-{}", inner.next_window),
-            WindowKind::Ghost { .. } => format!("ghost-{}", inner.next_window),
-        };
+        let id = fresh_id(|id| {
+            let label = format!("win-{id:x}");
+            inner.windows.iter().any(|w| w.label == label)
+        });
+        let label = format!("win-{id:x}");
         inner.windows.push(WindowInfo {
             label: label.clone(),
             kind,
             active: None,
             content_hidden: false,
+            popups: Vec::new(),
         });
         label
     };
     let title = match kind {
         WindowKind::Normal => "AEGIS Browser",
         WindowKind::Ghost { tor: None } => "AEGIS Browser – Ghost",
-        WindowKind::Ghost { tor: Some(_) } => "AEGIS Browser – Ghost über Tor",
+        WindowKind::Ghost { tor: Some(_) } => "AEGIS Browser – Ghost über Tor-Proxy",
     };
     let window = tauri::window::WindowBuilder::new(app, &label)
         .title(title)
@@ -285,11 +368,13 @@ pub fn open_window<R: Runtime>(app: &AppHandle<R>, kind: WindowKind) -> Result<S
             let mut inner = browser.lock();
             inner.tabs.retain(|t| t.window != event_label);
             inner.windows.retain(|w| w.label != event_label);
+            let scope = format!("{event_label}|");
+            inner.http_ok.retain(|k| !k.starts_with(&scope));
         }
         _ => {}
     });
     let home = browser.lock().settings.home.clone();
-    open_tab(app, &label, home.as_deref().unwrap_or("about:blank"))?;
+    open_tab(app, &label, home.as_deref().unwrap_or("about:blank"), true)?;
     Ok(label)
 }
 
@@ -328,22 +413,55 @@ fn layout<R: Runtime>(app: &AppHandle<R>, window: &str) {
 
 /* ------------------------------------------------------------------ Tabs */
 
-fn tor_reachable(port: u16) -> bool {
-    std::net::TcpStream::connect_timeout(
+/// Antwortet auf `127.0.0.1:<port>` ein SOCKS5-Proxy (Begrüßung „ohne Anmeldung“)? Das ist
+/// kein Beweis für Tor – die Oberfläche sagt das.
+fn socks5_ready(port: u16) -> bool {
+    use std::io::{Read, Write};
+    let timeout = Duration::from_millis(400);
+    let Ok(mut stream) = std::net::TcpStream::connect_timeout(
         &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
-        std::time::Duration::from_millis(400),
-    )
-    .is_ok()
+        timeout,
+    ) else {
+        return false;
+    };
+    let mut answer = [0u8; 2];
+    stream.set_read_timeout(Some(timeout)).is_ok()
+        && stream.set_write_timeout(Some(timeout)).is_ok()
+        && stream.write_all(&[5, 1, 0]).is_ok()
+        && stream.read_exact(&mut answer).is_ok()
+        && answer == [5, 0]
 }
 
-/// Öffnet einen Tab im Fenster `window` mit der Adresse `target` (bereits geprüft).
-fn open_tab<R: Runtime>(app: &AppHandle<R>, window: &str, target: &str) -> Result<u32, String> {
+/// Pop-up erlaubt? Höchstens [`POPUP_LIMIT`] je Fenster in [`POPUP_WINDOW`].
+fn popup_allowed(inner: &mut Inner, window: &str) -> bool {
+    let Some(info) = inner.windows.iter_mut().find(|w| w.label == window) else {
+        return false;
+    };
+    let now = Instant::now();
+    info.popups
+        .retain(|t| now.saturating_duration_since(*t) < POPUP_WINDOW);
+    if info.popups.len() >= POPUP_LIMIT {
+        return false;
+    }
+    info.popups.push(now);
+    true
+}
+
+/// Öffnet einen Tab im Fenster `window` mit der Adresse `target` (bereits geprüft). Der Tab
+/// startet leer; erst wenn Blocker und Prüfungen eingehängt sind, lädt er `target`.
+/// `activate`: nach vorn holen (Pop-ups öffnen im Hintergrund).
+fn open_tab<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &str,
+    target: &str,
+    activate: bool,
+) -> Result<u32, String> {
     let url = Url::parse(target).map_err(|e| e.to_string())?;
     if !navigable(&url) {
         return Err("Diese Adresse öffnet der Browser nicht.".into());
     }
     let browser = app.state::<Browser>();
-    let (id, settings, kind) = {
+    let (id, javascript, kind) = {
         let mut inner = browser.lock();
         if inner.tabs.iter().filter(|t| t.window == window).count() >= MAX_TABS {
             return Err("Zu viele Tabs in diesem Fenster.".into());
@@ -354,61 +472,83 @@ fn open_tab<R: Runtime>(app: &AppHandle<R>, window: &str, target: &str) -> Resul
             .find(|w| w.label == window)
             .map(|w| w.kind)
             .ok_or("Fenster unbekannt.")?;
-        inner.next_tab += 1;
-        let id = inner.next_tab;
+        let id = fresh_id(|id| inner.tabs.iter().any(|t| t.id == id));
         inner.tabs.push(Tab {
             id,
             window: window.to_owned(),
-            url: url.to_string(),
+            url: "about:blank".to_owned(),
             title: String::new(),
             loading: true,
             insecure: None,
+            upgraded: None,
+            filtered: false,
         });
-        (id, inner.settings.clone(), kind)
+        (id, inner.settings.javascript, kind)
     };
+    match create_tab(app, window, id, kind, javascript) {
+        Ok(webview) => {
+            prepare(app, &webview, window, id);
+            if url.as_str() != "about:blank" {
+                let _ = webview.navigate(url);
+            }
+        }
+        Err(e) => {
+            browser.lock().tabs.retain(|t| t.id != id);
+            return Err(e);
+        }
+    }
+    {
+        let mut inner = browser.lock();
+        if let Some(info) = inner.windows.iter_mut().find(|w| w.label == window)
+            && (activate || info.active.is_none())
+        {
+            info.active = Some(id);
+        }
+    }
+    layout(app, window);
+    Ok(id)
+}
+
+/// Legt das WebView eines Tabs an (leere Seite, alle Regeln als Rückrufe).
+fn create_tab<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &str,
+    id: u32,
+    kind: WindowKind,
+    javascript: bool,
+) -> Result<Webview<R>, String> {
     let label = tab_label(id);
     let data = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(url))
-        .user_agent(USER_AGENT)
-        .additional_browser_args(&settings::browser_args(&settings));
-    builder = match kind {
-        WindowKind::Normal => builder.data_directory(data.join("profile")),
-        WindowKind::Ghost { tor: None } => {
-            builder.data_directory(data.join("profile")).incognito(true)
-        }
-        // Tor braucht eine eigene Umgebung (Proxy gilt für den ganzen Engine-Prozess).
-        WindowKind::Ghost { tor: Some(port) } => builder
-            .data_directory(data.join("ghost-tor"))
-            .incognito(true)
-            .proxy_url(settings::tor_proxy(port)?),
-    };
-    if !settings.javascript {
+    let profile = kind.profile();
+    // Je Profil ein eigener Datenordner mit festen Schaltern (auch der Proxy steht in den
+    // Schaltern – wry setzt ihn nicht, sobald eigene Schalter da sind).
+    let mut builder = WebviewBuilder::new(
+        &label,
+        WebviewUrl::External(Url::parse("about:blank").map_err(|e| e.to_string())?),
+    )
+    .user_agent(USER_AGENT)
+    .additional_browser_args(&settings::browser_args(profile)?)
+    .data_directory(data.join(profile.folder()));
+    if matches!(kind, WindowKind::Ghost { .. }) {
+        builder = builder.incognito(true);
+    }
+    if !javascript {
         builder = builder.disable_javascript();
     }
     let nav_app = app.clone();
-    let nav_label = label.clone();
-    builder = builder.on_navigation(move |url| allow_navigation(&nav_app, &nav_label, id, url));
+    let nav_window = window.to_owned();
+    builder = builder.on_navigation(move |url| allow_navigation(&nav_app, &nav_window, id, url));
     let load_app = app.clone();
     let load_window = window.to_owned();
-    builder = builder.on_page_load(move |webview, payload| {
+    builder = builder.on_page_load(move |_, payload| {
         let browser = load_app.state::<Browser>();
         {
             let mut inner = browser.lock();
             if let Some(tab) = inner.tabs.iter_mut().find(|t| t.id == id) {
                 tab.url = payload.url().to_string();
                 tab.loading = payload.event() == PageLoadEvent::Started;
-                if payload.url().scheme() == "https"
-                    && tab
-                        .insecure
-                        .as_deref()
-                        .and_then(|i| Url::parse(i).ok())
-                        .is_some_and(|i| i.host_str() != payload.url().host_str())
-                {
-                    tab.insecure = None;
-                }
             }
         }
-        let _ = webview;
         publish(&load_app, &load_window);
     });
     let title_app = app.clone();
@@ -430,13 +570,17 @@ fn open_tab<R: Runtime>(app: &AppHandle<R>, window: &str, target: &str) -> Resul
     let popup_app = app.clone();
     let popup_window = window.to_owned();
     builder = builder.on_new_window(move |url, _| {
-        // Pop-ups werden zu Tabs im selben Fenster (nie ein fremdes Fenster).
+        // Pop-ups werden zu Tabs im selben Fenster (nie ein fremdes Fenster), im Hintergrund
+        // und begrenzt – eine Seite kann so weder den Fokus stehlen noch Tabs fluten.
         if navigable(&url) {
+            let allowed = popup_allowed(&mut popup_app.state::<Browser>().lock(), &popup_window);
             let app = popup_app.clone();
             let window = popup_window.clone();
             std::thread::spawn(move || {
-                if open_tab(&app, &window, url.as_str()).is_ok() {
-                    layout(&app, &window);
+                if !allowed {
+                    notice(&app, &window, "Pop-up blockiert (zu viele in kurzer Zeit).");
+                } else if open_tab(&app, &window, url.as_str(), false).is_ok() {
+                    notice(&app, &window, "Pop-up als Tab im Hintergrund geöffnet.");
                     publish(&app, &window);
                 }
             });
@@ -451,7 +595,7 @@ fn open_tab<R: Runtime>(app: &AppHandle<R>, window: &str, target: &str) -> Resul
                 &download_app,
                 &download_window,
                 if success {
-                    "Download gespeichert. Ist der AEGIS-Echtzeit-Wächter an, prüft er die Datei."
+                    "Download gespeichert (bleibt auch nach Ghost-Fenstern im Download-Ordner). Ist der AEGIS-Echtzeit-Wächter an, prüft er die Datei."
                 } else {
                     "Download nicht abgeschlossen."
                 },
@@ -460,54 +604,108 @@ fn open_tab<R: Runtime>(app: &AppHandle<R>, window: &str, target: &str) -> Resul
         true
     });
     let win = app.get_window(window).ok_or("Fenster unbekannt.")?;
-    let webview = win
-        .add_child(
-            builder,
-            LogicalPosition::new(0.0, CHROME_HEIGHT),
-            LogicalSize::new(1280.0, 700.0),
-        )
-        .map_err(|e| e.to_string())?;
-    install_filter(&browser, &webview);
-    {
-        let mut inner = browser.lock();
-        if let Some(info) = inner.windows.iter_mut().find(|w| w.label == window) {
-            info.active = Some(id);
-        }
-    }
-    layout(app, window);
-    Ok(id)
+    win.add_child(
+        builder,
+        LogicalPosition::new(0.0, CHROME_HEIGHT),
+        LogicalSize::new(1280.0, 700.0),
+    )
+    .map_err(|e| e.to_string())
 }
 
-/// Werbe-/Tracker-Blocker in WebView2 einhängen (nur Windows).
-fn install_filter<R: Runtime>(browser: &Browser, webview: &Webview<R>) {
+/// Blocker und Prüfungen in WebView2 einhängen (nur Windows). Läuft vor der ersten Seite:
+/// WebView-Aufrufe werden der Reihe nach im UI-Faden ausgeführt, `navigate` folgt danach.
+fn prepare<R: Runtime>(app: &AppHandle<R>, webview: &Webview<R>, window: &str, id: u32) {
     #[cfg(windows)]
     {
-        let blocker = Arc::clone(&browser.blocker);
-        let enabled = browser.lock().settings.block_trackers;
-        if enabled {
-            let _ = webview.with_webview(move |platform| {
-                let check = move |url: &str, source: &str, kind: &str| {
-                    blocker.read().is_ok_and(|b| {
-                        b.blocks(
-                            url,
-                            source,
-                            aegis_browser_core::blocker::Kind::from_name(kind),
-                        )
-                    })
-                };
-                let _ =
-                    aegis_winffi::webview::block_requests(&platform.controller(), Box::new(check));
-            });
-        }
+        let app = app.clone();
+        let window = window.to_owned();
+        let _ = webview.with_webview(move |platform| {
+            let browser = app.state::<Browser>();
+            let blocker = Arc::clone(&browser.blocker);
+            let blocking = Arc::clone(&browser.blocking);
+            let frame_app = app.clone();
+            let frame_window = window.clone();
+            let done_app = app.clone();
+            let done_window = window.clone();
+            let ext_app = app.clone();
+            let ext_window = window.clone();
+            let hooks = aegis_winffi::webview::Hooks {
+                block: Box::new(move |url, source, kind| {
+                    blocking.load(Ordering::Relaxed)
+                        && blocker.read().is_ok_and(|b| {
+                            b.blocks(
+                                url,
+                                source,
+                                aegis_browser_core::blocker::Kind::from_name(kind),
+                            )
+                        })
+                }),
+                frame_allowed: Box::new(move |url| frame_allowed(&frame_app, &frame_window, url)),
+                completed: Box::new(move |url, ok| {
+                    completed(&done_app, &done_window, id, url, ok);
+                }),
+                external_refused: Box::new(move |scheme| {
+                    notice(
+                        &ext_app,
+                        &ext_window,
+                        &format!(
+                            "Die Seite wollte ein Programm über „{}:“ starten – abgebrochen.",
+                            scheme.chars().take(32).collect::<String>()
+                        ),
+                    );
+                }),
+            };
+            let installed = aegis_winffi::webview::install(&platform.controller(), hooks).is_ok();
+            if let Some(tab) = browser.lock().tabs.iter_mut().find(|t| t.id == id) {
+                tab.filtered = installed;
+            }
+            publish(&app, &window);
+        });
     }
     #[cfg(not(windows))]
     {
-        let _ = (browser, webview);
+        let _ = (app, webview, window, id);
     }
 }
 
-/// Regeln der Navigation (Links, Umleitungen, Eingaben): nur http/https; HTTPS-only hebt an.
-fn allow_navigation<R: Runtime>(app: &AppHandle<R>, label: &str, id: u32, url: &Url) -> bool {
+/// Eingebettete Seiten: nur Web- und Inhalts-Adressen; `http` nur ohne HTTPS-only oder mit
+/// Ausnahme des Nutzers.
+#[cfg(windows)]
+fn frame_allowed<R: Runtime>(app: &AppHandle<R>, window: &str, url: &str) -> bool {
+    let Ok(url) = Url::parse(url) else {
+        return false;
+    };
+    if !address::frame_navigable(&url) {
+        return false;
+    }
+    if url.scheme() != "http" {
+        return true;
+    }
+    let browser = app.state::<Browser>();
+    let inner = browser.lock();
+    !inner.settings.https_only || http_allowed(&inner, window, &url)
+}
+
+/// Hauptnavigation beendet: Erfolg über HTTPS → kein „HTTP erlauben“ mehr anbieten.
+#[cfg(windows)]
+fn completed<R: Runtime>(app: &AppHandle<R>, window: &str, id: u32, url: &str, ok: bool) {
+    let browser = app.state::<Browser>();
+    {
+        let mut inner = browser.lock();
+        if let Some(tab) = inner.tabs.iter_mut().find(|t| t.id == id)
+            && ok
+            && url.starts_with("https://")
+        {
+            tab.insecure = None;
+        }
+    }
+    publish(app, window);
+}
+
+/// Regeln der Navigation (Links, Umleitungen, Eingaben): nur http/https; HTTPS-only hebt an –
+/// leitet die Seite danach wieder auf dieselbe HTTP-Adresse um, bleibt es beim Angebot
+/// „über HTTP öffnen“ (keine Endlosschleife).
+fn allow_navigation<R: Runtime>(app: &AppHandle<R>, window: &str, id: u32, url: &Url) -> bool {
     if !navigable(url) {
         return false;
     }
@@ -516,19 +714,31 @@ fn allow_navigation<R: Runtime>(app: &AppHandle<R>, label: &str, id: u32, url: &
     }
     let browser = app.state::<Browser>();
     let mut inner = browser.lock();
-    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
-    if !inner.settings.https_only || inner.http_ok.contains(&host) {
+    if !inner.settings.https_only || http_allowed(&inner, window, url) {
         return true;
     }
-    if let Some(tab) = inner.tabs.iter_mut().find(|t| t.id == id) {
-        tab.insecure = Some(url.to_string());
-    }
+    let Some(tab) = inner.tabs.iter_mut().find(|t| t.id == id) else {
+        return false;
+    };
+    tab.insecure = Some(url.to_string());
+    let now = Instant::now();
+    let again = tab.upgraded.as_ref().is_some_and(|(last, at)| {
+        last == url.as_str() && now.saturating_duration_since(*at) < UPGRADE_LOOP
+    });
+    tab.upgraded = Some((url.to_string(), now));
     drop(inner);
-    let target = upgrade(url.clone());
     let app = app.clone();
-    let label = label.to_owned();
+    let window = window.to_owned();
+    let target = upgrade(url.clone());
     std::thread::spawn(move || {
-        if let Some(webview) = app.get_webview(&label) {
+        if again {
+            notice(
+                &app,
+                &window,
+                "Die Seite leitet von HTTPS zurück auf HTTP. Unverschlüsselt öffnet der Browser sie nur nach deinem Klick.",
+            );
+            publish(&app, &window);
+        } else if let Some(webview) = app.get_webview(&tab_label(id)) {
             let _ = webview.navigate(target);
         }
     });
@@ -568,7 +778,12 @@ pub fn browser_state<R: Runtime>(app: AppHandle<R>, webview: Webview<R>) -> View
 pub async fn tab_open<R: Runtime>(app: AppHandle<R>, webview: Webview<R>) -> Result<View, String> {
     let window = window_of(&webview);
     let home = app.state::<Browser>().lock().settings.home.clone();
-    open_tab(&app, &window, home.as_deref().unwrap_or("about:blank"))?;
+    open_tab(
+        &app,
+        &window,
+        home.as_deref().unwrap_or("about:blank"),
+        true,
+    )?;
     publish(&app, &window);
     Ok(browser_state(app, webview))
 }
@@ -601,7 +816,7 @@ pub async fn tab_close<R: Runtime>(
         remaining.is_empty()
     };
     if last {
-        open_tab(&app, &window, "about:blank")?;
+        open_tab(&app, &window, "about:blank", true)?;
     }
     layout(&app, &window);
     publish(&app, &window);
@@ -649,20 +864,38 @@ pub fn tab_go<R: Runtime>(
     Ok(browser_state(app, webview))
 }
 
+/// Zurück/Vor über WebView2 selbst – nicht über `history` im Skript der Seite (die Seite
+/// könnte es überschreiben und den Zurück-Knopf festhalten).
 fn history<R: Runtime>(
     app: &AppHandle<R>,
     webview: &Webview<R>,
     id: u32,
-    js: &str,
+    back: bool,
 ) -> Result<(), String> {
     let tab = tab_in(app, &window_of(webview), id)?;
-    tab.eval(js).map_err(|e| e.to_string())
+    #[cfg(windows)]
+    {
+        tab.with_webview(move |platform| {
+            let _ = aegis_winffi::webview::go(&platform.controller(), back);
+        })
+        .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        // Entwicklung unter Linux (WebKitGTK): über die Seite.
+        tab.eval(if back {
+            "history.back()"
+        } else {
+            "history.forward()"
+        })
+        .map_err(|e| e.to_string())
+    }
 }
 
 /// Zurück.
 #[tauri::command]
 pub fn tab_back<R: Runtime>(app: AppHandle<R>, webview: Webview<R>, id: u32) -> Result<(), String> {
-    history(&app, &webview, id, "history.back()")
+    history(&app, &webview, id, true)
 }
 
 /// Vor.
@@ -672,7 +905,7 @@ pub fn tab_forward<R: Runtime>(
     webview: Webview<R>,
     id: u32,
 ) -> Result<(), String> {
-    history(&app, &webview, id, "history.forward()")
+    history(&app, &webview, id, false)
 }
 
 /// Neu laden (gleiche Adresse, wieder mit allen Regeln).
@@ -710,9 +943,12 @@ pub fn tab_allow_http<R: Runtime>(
         if url.scheme() != "http" {
             return Err("Nichts zu erlauben.".into());
         }
-        inner
-            .http_ok
-            .insert(url.host_str().unwrap_or_default().to_ascii_lowercase());
+        let key = format!(
+            "{}|{}",
+            http_scope(&inner, &window),
+            url.host_str().unwrap_or_default().to_ascii_lowercase()
+        );
+        inner.http_ok.insert(key);
         url
     };
     tab.navigate(insecure).map_err(|e| e.to_string())?;
@@ -752,7 +988,7 @@ pub fn content_visible<R: Runtime>(app: AppHandle<R>, webview: Webview<R>, visib
     layout(&app, &window);
 }
 
-/// Einstellungen speichern (DoH und JavaScript gelten für neue Tabs bzw. nach Neustart).
+/// Einstellungen speichern (Blocker und HTTPS-only sofort, JavaScript für neue Tabs).
 #[tauri::command]
 pub fn settings_save<R: Runtime>(
     app: AppHandle<R>,
@@ -762,6 +998,9 @@ pub fn settings_save<R: Runtime>(
     let browser = app.state::<Browser>();
     let settings = settings.cleaned();
     browser.store.write_json("settings.json", &settings)?;
+    browser
+        .blocking
+        .store(settings.block_trackers, Ordering::Relaxed);
     browser.lock().settings = settings;
     Ok(browser_state(app.clone(), webview))
 }
@@ -851,14 +1090,15 @@ pub fn bookmark_remove<R: Runtime>(
     Ok(browser_state(app.clone(), webview))
 }
 
-/// Ghost-Fenster öffnen (InPrivate; mit `tor` nur, wenn ein Tor-/Arti-Proxy läuft).
+/// Ghost-Fenster öffnen (InPrivate; mit `tor` nur, wenn auf 9150/9050 ein SOCKS5-Proxy
+/// antwortet – ob das wirklich Tor ist, kann AEGIS nicht prüfen).
 #[tauri::command]
 pub async fn ghost_open<R: Runtime>(app: AppHandle<R>, tor: bool) -> Result<(), String> {
     let kind = if tor {
         let port = TOR_PORTS
             .into_iter()
-            .find(|p| tor_reachable(*p))
-            .ok_or("Tor läuft nicht. Starte den Tor Browser oder einen Tor-/Arti-Dienst (SOCKS auf Port 9150 oder 9050) und versuche es erneut.")?;
+            .find(|p| socks5_ready(*p))
+            .ok_or("Kein Tor-Proxy gefunden. Starte den Tor Browser oder einen Tor-/Arti-Dienst (SOCKS5 auf Port 9150 oder 9050) und versuche es erneut.")?;
         WindowKind::Ghost { tor: Some(port) }
     } else {
         WindowKind::Ghost { tor: None }

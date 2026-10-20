@@ -70,20 +70,29 @@ impl Store {
                     .duration_since(std::time::UNIX_EPOCH)
                     .map_or(0, |d| d.subsec_nanos()))
         ));
-        {
-            // Eigene Hilfsdatei (Einstellungen, Lesezeichen, Filterlisten).
-            // aegis-mutation: browser-store-write
-            #[allow(clippy::disallowed_methods)]
-            let mut file = std::fs::File::create_new(&tmp).map_err(|e| e.to_string())?;
-            file.write_all(body)
-                .and_then(|()| file.sync_all())
-                .map_err(|e| e.to_string())?;
-        }
+        // Eigene Hilfsdatei (Einstellungen, Lesezeichen, Filterlisten).
+        // aegis-mutation: browser-store-write
+        #[allow(clippy::disallowed_methods)]
+        let mut file = std::fs::File::create_new(&tmp).map_err(|e| e.to_string())?;
+        let written = file.write_all(body).and_then(|()| file.sync_all());
+        drop(file);
         // Ersetzt die eigene Datei durch die eben geschriebene Fassung.
         // aegis-mutation: browser-store-replace
         #[allow(clippy::disallowed_methods)]
-        std::fs::rename(&tmp, &target).map_err(|e| e.to_string())
+        let result = written.and_then(|()| std::fs::rename(&tmp, &target));
+        if result.is_err() {
+            discard(&tmp);
+        }
+        result.map_err(|e| e.to_string())
     }
+}
+
+/// Entfernt die eigene, eben angelegte Hilfsdatei nach einem Fehler (keine Reste).
+fn discard(tmp: &Path) {
+    // Nur die eigene Hilfsdatei mit eindeutigem Namen, die dieser Aufruf angelegt hat.
+    // aegis-mutation: browser-store-discard
+    #[allow(clippy::disallowed_methods)]
+    let _ = std::fs::remove_file(tmp);
 }
 
 fn read_limited(path: &Path, max: u64) -> Option<Vec<u8>> {

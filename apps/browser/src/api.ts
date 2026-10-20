@@ -3,14 +3,12 @@
  * (Fremdinhalte wie Seitentitel kommen hier als Text an und werden nur als Text gezeigt).
  */
 
-export type Doh = 'off' | 'quad9' | 'mullvad' | 'cloudflare';
 export type Search = 'duck_duck_go' | 'startpage' | 'brave';
 
 export interface Settings {
   readonly httpsOnly: boolean;
   readonly blockTrackers: boolean;
   readonly javascript: boolean;
-  readonly doh: Doh;
   readonly search: Search;
   readonly home: string | null;
 }
@@ -34,6 +32,8 @@ export interface View {
   readonly window: string;
   readonly ghost: boolean;
   readonly tor: boolean;
+  /** Port des SOCKS-Proxys im Tor-Modus. */
+  readonly proxyPort: number | null;
   readonly tabs: readonly TabView[];
   readonly active: number | null;
   readonly settings: Settings;
@@ -75,7 +75,6 @@ function oneOf<T extends string>(values: readonly T[], v: unknown, fallback: T):
   return (values as readonly unknown[]).includes(v) ? (v as T) : fallback;
 }
 
-export const dohValues = ['off', 'quad9', 'mullvad', 'cloudflare'] as const;
 export const searchValues = ['duck_duck_go', 'startpage', 'brave'] as const;
 
 export function parseSettings(v: unknown): Settings {
@@ -84,7 +83,6 @@ export function parseSettings(v: unknown): Settings {
     httpsOnly: o['httpsOnly'] !== false,
     blockTrackers: o['blockTrackers'] !== false,
     javascript: o['javascript'] !== false,
-    doh: oneOf(dohValues, o['doh'], 'quad9'),
     search: oneOf(searchValues, o['search'], 'duck_duck_go'),
     home: typeof o['home'] === 'string' ? o['home'].slice(0, 2048) : null,
   };
@@ -96,6 +94,10 @@ export function parseView(v: unknown): View {
     window: str(o['window'], 64),
     ghost: o['ghost'] === true,
     tor: o['tor'] === true,
+    proxyPort:
+      typeof o['proxyPort'] === 'number' && Number.isInteger(o['proxyPort'])
+        ? o['proxyPort']
+        : null,
     tabs: arr(o['tabs'])
       .filter(isObject)
       .slice(0, 64)
