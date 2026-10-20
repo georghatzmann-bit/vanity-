@@ -46,7 +46,7 @@ getrennte Bestätigung; es gibt kein automatisches Löschen nach Fristen, nur Er
 
 ## Installieren
 
-**`AEGIS-Setup.exe`** herunterladen und starten – eine einzige Datei, die alles enthält (AEGIS
+**`AEGIS-Setup.exe`** herunterladen ([Testversion](https://github.com/georghatzmann-bit/vanity-/releases/download/testversion/AEGIS-Setup.exe), wird nach jedem grünen CI-Lauf aktualisiert) und starten – eine einzige Datei, die alles enthält (AEGIS
 Suite und auf Wunsch den AEGIS Browser). Sie installiert ohne weiteren Download: Willkommen →
 Datenschutz → Pakete wählen → „Installieren“. Jedes Paket wird vor dem Start gegen seine
 eingebaute SHA-256-Prüfsumme geprüft und bleibt bis zum Ende gegen Austausch gesperrt.

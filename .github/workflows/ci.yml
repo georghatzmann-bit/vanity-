@@ -143,3 +143,39 @@ jobs:
         if: always()
         shell: bash
         run: mkdir -p target/tests/target target/tests/trybuild
+
+  # Testversion zum direkten Herunterladen (GitHub-Release „testversion“, Vorabversion) – vom
+  # Nutzer ausdrücklich gewünscht. Nur nach grünen Jobs und nur bei Push auf die eigenen
+  # Zweige. Eigener Job mit Schreibrecht nur für Releases: Er baut nichts und führt keinen Code
+  # aus dem Repository aus, er lädt nur das geprüfte Artefakt dieses Laufs hoch.
+  publish:
+    name: Testversion veröffentlichen
+    needs: [frontend, rust-linux, windows]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Release „testversion“ aktualisieren
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          gh run download "$RUN_ID" --repo "$REPO" --name aegis-windows-nsis --dir dist
+          ls -l dist
+          notes="Testversion (unsigniert) – Stand ${SHA}.
+
+          **AEGIS-Setup.exe** herunterladen und starten: Die Datei enthält alles (AEGIS Suite, auf Wunsch den AEGIS Browser) und installiert ohne weiteren Download.
+
+          Ehrlich: Ohne Code-Signing-Zertifikat warnt Windows SmartScreen („Weitere Informationen → Trotzdem ausführen“). Windows fragt einmal nach Administratorrechten (Schutzdienst)."
+          if gh release view testversion --repo "$REPO" >/dev/null 2>&1; then
+            gh release edit testversion --repo "$REPO" --prerelease --notes "$notes"
+          else
+            gh release create testversion --repo "$REPO" --target "$SHA" --prerelease \
+              --title "AEGIS Suite – Testversion" --notes "$notes"
+          fi
+          gh release upload testversion dist/*.exe --repo "$REPO" --clobber
