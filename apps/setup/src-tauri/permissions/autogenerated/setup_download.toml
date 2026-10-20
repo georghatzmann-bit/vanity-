@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-setup-download"
+description = "Enables the setup_download command without any pre-configured scope."
+commands.allow = ["setup_download"]
+
+[[permission]]
+identifier = "deny-setup-download"
+description = "Denies the setup_download command without any pre-configured scope."
+commands.deny = ["setup_download"]

@@ -345,3 +345,64 @@ pub fn launch(program: &Path, arguments: &str) -> io::Result<()> {
         )))
     }
 }
+
+/// Startet ein geprüftes Installationsprogramm (Windows fragt nach Administratorrechten, wenn
+/// es sie verlangt) und wartet auf sein Ende – für das Setup, nachdem der Nutzer
+/// „Installieren“ gewählt hat. Rückgabe: Exit-Code.
+///
+/// # Errors
+/// Start nicht möglich, in der UAC-Abfrage abgelehnt oder kein Prozess-Handle.
+pub fn run_and_wait(program: &Path, arguments: &str) -> io::Result<u32> {
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, INFINITE, WaitForSingleObject,
+    };
+    use windows_sys::Win32::UI::Shell::{
+        SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let verb = wide("open");
+    let file = wide(program);
+    let params = wide(arguments);
+    // SAFETY: SHELLEXECUTEINFOW ist eine reine Datenstruktur; alle Felder 0 sind gültig.
+    // aegis-unsafe: winffi-shell-run-info
+    #[allow(unsafe_code)]
+    let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+    info.cbSize = u32::try_from(size_of::<SHELLEXECUTEINFOW>()).unwrap_or(0);
+    info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+    info.lpVerb = verb.as_ptr();
+    info.lpFile = file.as_ptr();
+    info.lpParameters = params.as_ptr();
+    info.nShow = SW_SHOWNORMAL;
+    // SAFETY: `info` ist vollständig belegt, alle Zeichenketten sind nullterminiert und leben
+    // bis nach dem Aufruf.
+    // aegis-unsafe: winffi-shell-run
+    #[allow(unsafe_code)]
+    // Startet nur das geprüfte Installationsprogramm nach „Installieren“ im Setup.
+    // aegis-mutation: winffi-shell-run-call
+    #[allow(clippy::disallowed_methods)]
+    let ok = unsafe { ShellExecuteExW(&mut info) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let process = info.hProcess;
+    if process.is_null() {
+        return Err(io::Error::other("kein Prozess gestartet"));
+    }
+    // SAFETY: `process` ist das eigene Handle aus ShellExecuteExW; Warten und Exit-Code
+    // lesen ändern nichts; danach genau einmal schließen.
+    // aegis-unsafe: winffi-shell-run-wait
+    #[allow(unsafe_code)]
+    let result = unsafe {
+        let waited = WaitForSingleObject(process, INFINITE);
+        let mut code = 0u32;
+        let read = GetExitCodeProcess(process, &mut code);
+        CloseHandle(process);
+        if waited == WAIT_OBJECT_0 && read != 0 {
+            Ok(code)
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    };
+    result
+}

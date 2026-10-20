@@ -142,6 +142,7 @@ disallowed-methods = [
   { path = "windows_sys::Win32::UI::Shell::SHFileOperationW", reason = "Goldene Regel: Dateien verschieben/löschen über die Shell nur mit Freigabe (mutation-allowlist.txt)", allow-invalid = true },
   { path = "windows_sys::Win32::UI::WindowsAndMessaging::SystemParametersInfoW", reason = "Goldene Regel: Systemeinstellungen (z. B. Hintergrundbild) nur mit Freigabe (mutation-allowlist.txt)", allow-invalid = true },
   { path = "windows_sys::Win32::UI::Shell::ShellExecuteW", reason = "Goldene Regel: Programme starten nur als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },
+  { path = "windows_sys::Win32::UI::Shell::ShellExecuteExW", reason = "Goldene Regel: Programme starten nur als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },
   { path = "windows::Win32::UI::Shell::IFileOperation::PerformOperations", reason = "Goldene Regel: Dateien über die Shell verändern nur mit Freigabe (mutation-allowlist.txt)", allow-invalid = true },
   { path = "windows::Win32::UI::Shell::IFolderView::SelectAndPositionItems", reason = "Goldene Regel: Desktop-Symbole verschieben nur mit Freigabe (mutation-allowlist.txt)", allow-invalid = true },
   { path = "windows_sys::Win32::Storage::FileSystem::CreateFileW", reason = "Goldene Regel: Windows-Dateisystem verändern nur mit Freigabe bzw. als freigegebene Ausnahme (mutation-allowlist.txt)", allow-invalid = true },

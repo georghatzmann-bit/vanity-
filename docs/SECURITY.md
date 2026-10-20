@@ -425,6 +425,12 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Administratorrechten.
 - Ehrlich: Ohne Code-Signing-Zertifikat warnt SmartScreen; die Manifest-Signatur ersetzt das
   nicht für Windows, schützt aber AEGIS vor fremden Updates.
+- Setup (`apps/setup`, D-060): dieselbe Prüfung wie die Updates; Netz erst nach „Neueste
+  Version suchen“, Laden erst nach „Laden und prüfen“, Start erst nach „Installieren“. Der
+  Installationsordner muss ein lokaler Laufwerkspfad ohne `"`, `..`, Steuer- und Sonderzeichen
+  sein. Die Installationsprogramme werden vor dem Start erneut gegen die signierte Prüfsumme
+  geprüft (`ShellExecuteExW`, Exit-Code wird ausgewertet). Das Fenster hat nur die eigenen
+  Befehle (Capability-Test). Fehlt WebView2, öffnet es nach „Ja“ nur die Microsoft-Seite.
 
 ## Lieferkette
 

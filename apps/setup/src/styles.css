@@ -1,0 +1,10 @@
+/*
+ * Stile des Setups (nach '@aegis/ui/styles.css' eingebunden). Nur Design-Tokens, keine
+ * Rohfarben; das Fenster hat eine feste Größe.
+ */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}

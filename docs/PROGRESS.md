@@ -196,8 +196,11 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        Signierte Updates (`crates/update`, Release-Werkzeug `aegis-release`), Bereich „Updates“
        auf „Über AEGIS“ (Suche nur auf Klick, Installation nach Bestätigung), WinHTTP mit
        selbst geprüften Weiterleitungen. D-059.
-2. [ ] P13.2 `AEGIS-Setup.exe` (eigener kleiner Installer-Assistent mit Animation und Ton,
-       lädt das signierte Paket, prüft SHA-256, WebView2-Hinweis).
+2. [x] P13.2 `AEGIS-Setup.exe` (`apps/setup`): Assistent mit eigener Animation (Schild im
+       Fortschrittsring) und Klang, Datenschutz-Seite, Ordner und Pakete (Browser optional),
+       Laden mit Fortschritt, Signatur- und SHA-256-Prüfung, Installation erst nach Klick (still,
+       UAC durch Windows, erneute Prüfung, Exit-Code), AEGIS starten; WebView2-Prüfung mit
+       Hinweis auf die Microsoft-Seite. Browser- und Setup-Build in der Windows-CI. D-060.
 3. [ ] P13.3 README (Deutsch), Endtests, Sicherheits-Review P13, DoD.
 
 ## P12 – Privacy-Browser

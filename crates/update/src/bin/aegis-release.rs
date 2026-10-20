@@ -8,6 +8,7 @@
 //! aegis-release sign <geheime-datei> <version> <tag> <datei.exe>...
 //!     Gibt latest.json (signiertes Manifest) aus: SHA-256 und Größe je Datei, Adressen unter
 //!     https://github.com/georghatzmann-bit/vanity-/releases/download/<tag>/<name>.
+//!     Art nach Dateiname: `AEGIS-Setup*` = Setup, `AEGIS-Browser*` = Browser, sonst App.
 //! ```
 #![forbid(unsafe_code)]
 
@@ -65,9 +66,20 @@ fn sign_files(secret_path: &str, version: &str, tag: &str, files: &[String]) -> 
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .ok_or("Dateiname fehlt")?;
+        if !name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-+".contains(&b))
+        {
+            return Err(format!(
+                "{name}: Dateiname nur mit Buchstaben, Ziffern und ._-+ (z. B. AEGIS-Suite-0.2.0-x64-setup.exe)."
+            ));
+        }
         let bytes = std::fs::read(path).map_err(|e| format!("{file}: {e}"))?;
-        let kind = if name.to_ascii_lowercase().starts_with("aegis-setup") {
+        let lower = name.to_ascii_lowercase();
+        let kind = if lower.starts_with("aegis-setup") {
             Kind::Setup
+        } else if lower.starts_with("aegis-browser") {
+            Kind::Browser
         } else {
             Kind::App
         };

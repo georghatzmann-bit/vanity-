@@ -375,6 +375,7 @@ crates/winffi/src/http.rs :: winffi-http-receive :: Windows-FFI (HTTPS-Abruf, nu
 crates/winffi/src/http.rs :: winffi-http-status :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
 crates/winffi/src/http.rs :: winffi-http-read :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
 crates/winffi/src/http.rs :: winffi-http-location :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
+crates/winffi/src/http.rs :: winffi-http-length :: Windows-FFI (HTTPS-Abruf, nur GET): WinHTTP-Sitzung öffnen, Anfrage senden, Antwort lesen, Handles schließen – verändert nichts am System.
 crates/winffi/src/lan.rs :: winffi-lan-luid :: Windows-FFI (Heimnetz, nur lesend): Netze/Gateway, Nachbartabelle und WLAN-Sicherheit lesen, ICMP-Echo senden – verändert nichts am System.
 crates/winffi/src/clipboard.rs :: winffi-clipboard-alloc :: Windows-FFI (Passwort-Tresor): setzt Text in die Zwischenablage nur auf Klick „Kopieren“ (ohne Verlauf/Cloud) und leert genau diesen Inhalt nach 30 s wieder – sonst nichts.
 crates/winffi/src/clipboard.rs :: winffi-clipboard-fill :: Windows-FFI (Passwort-Tresor): setzt Text in die Zwischenablage nur auf Klick „Kopieren“ (ohne Verlauf/Cloud) und leert genau diesen Inhalt nach 30 s wieder – sonst nichts.
@@ -457,5 +458,11 @@ crates/service/src/scm.rs :: scm-uninstall-stop :: Deinstallation (vom Nutzer ge
 crates/service/src/scm.rs :: scm-uninstall-delete :: Deinstallation (vom Nutzer gestartet): entfernt den eigenen Dienst.
 crates/winffi/src/shell.rs :: winffi-shell-launch :: Windows-FFI: ShellExecuteW („open“) – startet ein Programm über die Shell (UAC bei Bedarf).
 crates/winffi/src/shell.rs :: winffi-shell-launch-call :: Startet nur das geprüfte Installationsprogramm eines Updates nach „Jetzt installieren“.
+crates/winffi/src/shell.rs :: winffi-shell-run-info :: Windows-FFI (Setup): leere Startangaben für ShellExecuteExW – verändert nichts.
+crates/winffi/src/shell.rs :: winffi-shell-run :: Windows-FFI (Setup): startet das geprüfte Installationsprogramm nach „Installieren“ (UAC durch Windows).
+crates/winffi/src/shell.rs :: winffi-shell-run-call :: Setup: startet nur das gegen die signierte Prüfsumme geprüfte Installationsprogramm, nachdem der Nutzer „Installieren“ gewählt hat.
+crates/winffi/src/shell.rs :: winffi-shell-run-wait :: Windows-FFI (Setup): wartet auf das Ende des eigenen Installationsprozesses und liest den Exit-Code – verändert nichts.
 apps/desktop/src-tauri/src/update.rs :: update-download-dir :: Updates: eigener Ordner im Temp-Verzeichnis für das geprüfte Installationsprogramm.
 apps/desktop/src-tauri/src/update.rs :: update-download-write :: Updates: schreibt das gegen Signatur und SHA-256 geprüfte Installationsprogramm in eine neue Datei.
+apps/setup/src-tauri/src/setup.rs :: setup-download-dir :: Setup: legt einen eigenen Ordner im Temp-Ordner des Kontos für die geprüften Installationsprogramme an (nur nach „Laden und prüfen“).
+apps/setup/src-tauri/src/setup.rs :: setup-download-write :: Setup: schreibt ein gegen die signierte Prüfsumme geprüftes Installationsprogramm in eine neue Datei (create_new, nie überschreiben).

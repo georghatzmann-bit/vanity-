@@ -11,10 +11,11 @@ use windows_sys::Win32::Networking::WinHttp::{
     INTERNET_DEFAULT_HTTPS_PORT, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_ADDREQ_FLAG_ADD,
     WINHTTP_FLAG_SECURE, WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2, WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3,
     WINHTTP_OPTION_REDIRECT_POLICY, WINHTTP_OPTION_REDIRECT_POLICY_NEVER,
-    WINHTTP_OPTION_SECURE_PROTOCOLS, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_LOCATION,
-    WINHTTP_QUERY_STATUS_CODE, WinHttpAddRequestHeaders, WinHttpCloseHandle, WinHttpConnect,
-    WinHttpOpen, WinHttpOpenRequest, WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse,
-    WinHttpSendRequest, WinHttpSetOption, WinHttpSetTimeouts,
+    WINHTTP_OPTION_SECURE_PROTOCOLS, WINHTTP_QUERY_CONTENT_LENGTH, WINHTTP_QUERY_FLAG_NUMBER,
+    WINHTTP_QUERY_FLAG_NUMBER64, WINHTTP_QUERY_LOCATION, WINHTTP_QUERY_STATUS_CODE,
+    WinHttpAddRequestHeaders, WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest,
+    WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest,
+    WinHttpSetOption, WinHttpSetTimeouts,
 };
 
 use crate::util::wide;
@@ -86,6 +87,22 @@ pub fn https_get(
     headers: &[(&str, &str)],
     max_bytes: usize,
     timeout_ms: i32,
+) -> io::Result<Response> {
+    https_get_progress(host, path, headers, max_bytes, timeout_ms, &mut |_, _| ())
+}
+
+/// Wie [`https_get`], meldet beim Lesen den Fortschritt: (gelesene Bytes, `Content-Length`
+/// oder 0, wenn unbekannt).
+///
+/// # Errors
+/// Wie [`https_get`].
+pub fn https_get_progress(
+    host: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+    max_bytes: usize,
+    timeout_ms: i32,
+    progress: &mut dyn FnMut(u64, u64),
 ) -> io::Result<Response> {
     if !valid_host(host)
         || !path.starts_with('/')
@@ -239,8 +256,23 @@ pub fn https_get(
     } else {
         None
     };
+    let mut length = 0u64;
+    let mut size = 8u32;
+    // SAFETY: Puffer ist ein u64 mit passender Länge; fehlt die Kopfzeile, bleibt er 0.
+    // aegis-unsafe: winffi-http-length
+    #[allow(unsafe_code)]
+    let _ = unsafe {
+        WinHttpQueryHeaders(
+            request.0,
+            WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER64,
+            ptr::null(),
+            (&raw mut length).cast(),
+            &mut size,
+            ptr::null_mut(),
+        )
+    };
     let mut body = Vec::new();
-    let mut chunk = vec![0u8; 16 * 1024];
+    let mut chunk = vec![0u8; 64 * 1024];
     loop {
         let mut read = 0u32;
         // SAFETY: gültiges Anfrage-Handle; Puffer mit angegebener Länge.
@@ -262,6 +294,7 @@ pub fn https_get(
             return Err(io::Error::other("Antwort zu groß"));
         }
         body.extend_from_slice(&chunk[..read]);
+        progress(u64::try_from(body.len()).unwrap_or(u64::MAX), length);
     }
     Ok(Response {
         status: u16::try_from(status).unwrap_or(0),

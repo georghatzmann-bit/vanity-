@@ -518,3 +518,18 @@ nur eigene Release-Adressen, Weiterleitungen nur auf GitHub-Hosts. Der Schlüsse
 Herausgebers wird vom Nutzer selbst erzeugt (`cargo run -p aegis-update --features sign --bin
 aegis-release -- keygen <datei>`); solange `release/update-public.key` leer ist, sind Updates
 abgeschaltet. Code-Signing (Authenticode) bleibt eine offene Entscheidung des Nutzers (Kosten).
+
+## D-060 – Setup-Assistent als kleine Tauri-App ohne eigenen Installer
+
+Status: angenommen (P13). `AEGIS-Setup.exe` ist eine einzelne Programmdatei (`apps/setup`,
+Tauri ohne Bundle): Willkommen mit eigener Animation (Schild im Fortschrittsring) und Klang
+(abschaltbar), Datenschutz-Seite mit ehrlichem SmartScreen-Hinweis, Ordner und Pakete (AEGIS
+Suite immer, AEGIS Browser auf Wunsch), Laden und Prüfen, Installieren, Fertig. Es nutzt
+dasselbe signierte `latest.json` wie die Updates (D-059, neue Art `browser`) und folgt nur
+Weiterleitungen auf GitHub-Hosts. Installiert wird erst nach „Installieren“ über die
+NSIS-Pakete (`/S /D=<Ordner>`, der Ordner wird streng geprüft, weil NSIS ihn ohne
+Anführungszeichen als letztes Argument nimmt); jede Datei wird direkt vor dem Start erneut
+geprüft, das Setup wartet auf den Exit-Code. WebView2: Fehlt die Laufzeit, öffnet das Setup nach
+„Ja“ nur die offizielle Microsoft-Seite – es lädt kein fremdes Programm selbst. Deinstallation
+bleibt Sache des NSIS-Uninstallers (D-059). Ohne eingebauten Signaturschlüssel lädt das Setup
+nichts und sagt das.

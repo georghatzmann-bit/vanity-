@@ -234,6 +234,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aegis-setup"
+version = "0.1.0"
+dependencies = [
+ "aegis-update",
+ "aegis-winffi",
+ "rfd 0.17.2",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
 name = "aegis-tools"
 version = "0.1.0"
 dependencies = [

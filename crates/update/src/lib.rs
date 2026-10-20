@@ -34,6 +34,8 @@ pub const MAX_FILE: u64 = 512 * 1024 * 1024;
 pub enum Kind {
     /// Installationsprogramm der App (NSIS, still installierbar).
     App,
+    /// Installationsprogramm des Privacy-Browsers (NSIS, für das Konto).
+    Browser,
     /// Setup-Programm (lädt die App selbst).
     Setup,
 }

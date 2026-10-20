@@ -8,6 +8,7 @@ coverage/
 .vite/
 apps/desktop/src-tauri/gen/
 apps/browser/src-tauri/gen/
+apps/setup/src-tauri/gen/
 
 # Test-Ausgaben
 playwright-report/
