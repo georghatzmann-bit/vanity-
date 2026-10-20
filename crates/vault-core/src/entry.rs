@@ -122,12 +122,19 @@ impl EntryInput {
             }
             out
         };
+        let urls = list(&self.urls, MAX_URL);
+        // Nur Adressen, die beim Ausfüllen eindeutig zuzuordnen sind (http/https, echter Host).
+        if let Some(bad) = urls.iter().find(|u| !crate::url::valid_stored(u)) {
+            return Err(format!(
+                "Diese Adresse kann AEGIS keiner Seite zuordnen: {bad} (z. B. https://bank.example)"
+            ));
+        }
         Ok(Self {
             title,
             username: clean(&self.username, MAX_USERNAME, false).trim().to_owned(),
             // Passwörter nicht trimmen – Leerzeichen können Absicht sein.
             password: clean(&self.password, MAX_PASSWORD, false),
-            urls: list(&self.urls, MAX_URL),
+            urls,
             notes: clean(&self.notes, MAX_NOTES, true),
             folder: clean(&self.folder, MAX_TITLE, false).trim().to_owned(),
             tags: list(&self.tags, 60),
@@ -233,6 +240,11 @@ mod tests {
         assert_eq!(v.folder, "Finanzen");
         assert_eq!(v.tags, vec!["wichtig"]);
         assert!(EntryInput::default().validated().is_err());
+        let mut bad = v.clone();
+        bad.urls = vec!["github.io".into()];
+        assert!(bad.validated().is_err());
+        bad.urls = vec!["javascript:alert(1)".into()];
+        assert!(bad.validated().is_err());
         assert!(!format!("{v:?}").contains("geheim"));
     }
 }

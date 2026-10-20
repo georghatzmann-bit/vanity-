@@ -1,6 +1,6 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor (Sandbox)**
+Stand: 2026-10-20 · **P0–P9 abgeschlossen** · nächste Phase: **P10 – Tools 1–11**
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
@@ -31,7 +31,7 @@ Stand: 2026-10-19 · **P0–P3 abgeschlossen** · nächste Phase: **P4 – Labor
 | P6 | Härtung, Persistenz, Treiber-Check, Kamera/Mikro/Zwischenablage/USB-Wächter | erledigt |
 | P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | erledigt |
 | P8 | Defender-Schalter | erledigt |
-| P9 | Tresor + Erweiterung | in Arbeit |
+| P9 | Tresor + Erweiterung | erledigt |
 | P10 | Tools 1–11 | offen |
 | P11 | Tools 12–22 + Animations-Feinschliff | offen |
 | P12 | Privacy-Browser | offen |
@@ -203,9 +203,15 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        Pipe der App nur fürs eigene Konto (Gegenstelle per Programmpfad geprüft); Adresse immer
        aus dem Absender des Hauptrahmens; Knopf im geschlossenen Schatten-Baum, Ausfüllen nur
        nach echtem Klick/Alt+↓; Popup; E2E mit harmlosem Test-Host (D-055).
-4. [ ] P9.4 Sicherheits-Review, Doku, DoD.
+4. [x] P9.4 Sicherheits-Review (separater Agent, P9-R1…R13 behoben, siehe SECURITY
+       Review-Protokoll), Doku, DoD.
 
-**Nächster Schritt:** P9.4 Sicherheits-Review (separater Agent), Befunde beheben, DoD.
+**DoD P9:** Tresor nur im App-Prozess des Kontos, Argon2id + AES-256-GCM mit gebundener Menge der
+Einträge, neuer Schlüssel bei jedem Master-Wechsel; Auto-Sperre, Fehlversuche, Zwischenablage
+ohne Verlauf (30 s, beim Sperren/Beenden geleert); CSV-Import nur aus eigener Exportdatei, nie
+fremde Browser-Passwörter; Erweiterung nur `nativeMessaging`, speichert nichts, Logins nur für
+die passende Seite, Ausfüllen nur auf echten, sichtbaren Klick; Host + Pipe nur fürs eigene Konto.
+Registrierung des Hosts und Auslieferung der Erweiterung folgen mit dem Setup (P13).
 
 ## P5 – Schutz-Werkzeuge
 
@@ -307,11 +313,11 @@ Software-Updates, Kamera/Mikro/Zwischenablage/USB-Wächter).
 | Review dokumentiert, Funde behoben | ✅ `docs/SECURITY.md` → Review-Protokoll |
 | `pnpm check` + E2E grün; CI Linux + Windows | ✅ lokal; CI siehe GitHub Actions |
 
-## Nächster Schritt
+## P4 – Labor (Sandbox)
 
-P4: Labor – Stufe 1 (Windows Sandbox mit Sonde, Einschalten nach Bestätigung), Stufe 2
-(Mini-Sandbox im AppContainer), Verhaltensbericht mit Einschätzung, Labor-Seite (Drag & Drop,
-Angebot für unbekannte Downloads – nie automatisch).
+Stufe 1 (Windows Sandbox mit Sonde, Einschalten nach Bestätigung), Stufe 2 (Mini-Sandbox im
+AppContainer), Verhaltensbericht mit Einschätzung, Labor-Seite (Drag & Drop, Angebot für
+unbekannte Downloads – nie automatisch).
 
 - ✅ P4.1: `aegis-sandbox` (`.wsb`, Sonde, Mini-Sandbox, Beobachtung, Bericht + Einschätzung, PNG),
   `aegis-winffi` (AppContainer, Job, Registry/Prozesse/TCP lesen, Bildschirmfotos).
@@ -322,4 +328,12 @@ Angebot für unbekannte Downloads – nie automatisch).
 - ✅ P4.3: Labor-Seite in der App (Drag & Drop, Stufe, Dauer, Netz nur VM, Bericht mit
   Einschätzung, Bildschirmfotos), Angebot „Im Labor prüfen“ im Wächter.
 - ✅ P4-Review (1 hoch, 6 mittel, 8 niedrig) behoben – siehe `docs/SECURITY.md`.
-- ⏳ Windows-CI für die Mini-Sandbox (Simulator) bestätigen, dann DoD P4.
+- ⏳ Windows-CI: Pipe-Transport grün; Prüfprozess-Token im Identitätswechsel (Fehler 5) behoben,
+  Bestätigung im nächsten Lauf, dann DoD P4.
+
+## Nächster Schritt
+
+P10: Tools 1–11 (Modul J) – jedes nur nach einer vom Nutzer angelegten und aktivierten Regel,
+immer mit Vorschau, Protokoll und Rückgängig. Danach P11 (Tools 12–22 + Animations-Feinschliff),
+P12 (Privacy-Browser), P13 (Setup, Updater, Deinstallation, README; dabei Host und Erweiterungen
+ausliefern und registrieren).

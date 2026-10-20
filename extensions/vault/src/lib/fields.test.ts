@@ -2,6 +2,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fill, passwordFields, usernameFor } from './fields';
 
+/** jsdom kennt kein Layout: alle Felder gelten als 200×30 oben links. */
+const rect = () => ({ top: 10, left: 10, bottom: 40, right: 210, width: 200, height: 30 });
+
 beforeEach(() => {
   document.body.replaceChildren();
 });
@@ -41,7 +44,7 @@ describe('Login-Felder', () => {
     }
     p.addEventListener('input', () => events.push('input'));
     p.addEventListener('change', () => events.push('change'));
-    fill(p, 'anna', 'geheim');
+    expect(fill(p, 'anna', 'geheim', rect)).toBe(true);
     expect((document.getElementById('u') as HTMLInputElement).value).toBe('anna');
     expect(p.value).toBe('geheim');
     expect(events).toEqual(['input', 'change']);
@@ -51,8 +54,24 @@ describe('Login-Felder', () => {
     form(`<form><input id="u" type="text" value="vorher"><input id="p" type="password"></form>`);
     const p = passwordFields(document)[0];
     if (p !== undefined) {
-      fill(p, '', 'geheim');
+      fill(p, '', 'geheim', rect);
     }
     expect((document.getElementById('u') as HTMLInputElement).value).toBe('vorher');
+  });
+
+  it('füllt nie in unsichtbare, winzige oder entfernte Felder', () => {
+    form(
+      `<form><input id="u" type="text"><div style="opacity:0.2"><input id="p" type="password"></div></form>`,
+    );
+    const p = document.getElementById('p') as HTMLInputElement;
+    expect(fill(p, 'anna', 'geheim', rect)).toBe(false);
+    expect(p.value).toBe('');
+    p.parentElement?.setAttribute('style', '');
+    const tiny = () => ({ top: 0, left: 0, bottom: 1, right: 1, width: 1, height: 1 });
+    expect(fill(p, 'anna', 'geheim', tiny)).toBe(false);
+    const away = () => ({ top: -500, left: 10, bottom: -470, right: 210, width: 200, height: 30 });
+    expect(fill(p, 'anna', 'geheim', away)).toBe(false);
+    expect(p.value).toBe('');
+    expect(fill(p, 'anna', 'geheim', rect)).toBe(true);
   });
 });

@@ -757,7 +757,8 @@ export const de = {
     oldMaster: 'Bisheriges Master-Passwort',
     newMaster: 'Neues Master-Passwort',
     change: 'Ändern',
-    changed: 'Master-Passwort geändert.',
+    changed:
+      'Master-Passwort geändert. Der Tresor ist mit einem neuen Schlüssel gespeichert; ältere Kopien (z. B. aus einer Datensicherung) öffnen sich weiter nur mit dem alten Passwort.',
     extension:
       'Browser-Erweiterung „AEGIS Tresor“: Sie füllt Logins nur auf der passenden Seite aus und speichert selbst nichts (Einrichtung: siehe Setup-Programm).',
   },

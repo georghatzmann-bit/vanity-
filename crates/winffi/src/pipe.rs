@@ -454,6 +454,41 @@ pub fn create_user_instance(name: &str, first: bool) -> io::Result<OwnedHandle> 
     own(handle)
 }
 
+/// Konto (SID), dem eine Pipe gehört – Server- oder Client-Ende.
+///
+/// # Errors
+/// Pipe nicht abfragbar.
+pub fn pipe_owner_sid(pipe: &impl AsRawHandle) -> io::Result<String> {
+    let mut owner: PSID = ptr::null_mut();
+    let mut sd: PSECURITY_DESCRIPTOR = ptr::null_mut();
+    // SAFETY: gültiges Pipe-Handle (Server-Ende: Besitzer; Client-Ende: READ_CONTROL);
+    // Ausgabezeiger gültig; `owner` zeigt in `sd`, das per LocalFree (SecurityDescriptor)
+    // freigegeben wird – erst nach dem Umwandeln der SID.
+    // aegis-unsafe: winffi-user-pipe-owner
+    #[allow(unsafe_code)]
+    let status = unsafe {
+        GetSecurityInfo(
+            pipe.as_raw_handle(),
+            SE_KERNEL_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            &mut owner,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &mut sd,
+        )
+    };
+    if status != 0 {
+        return Err(io::Error::from_raw_os_error(
+            i32::try_from(status).unwrap_or(i32::MAX),
+        ));
+    }
+    let sd = SecurityDescriptor(sd);
+    let sid = sid_to_string(owner);
+    drop(sd);
+    sid
+}
+
 /// Prozess-ID des verbundenen Clients.
 ///
 /// # Errors

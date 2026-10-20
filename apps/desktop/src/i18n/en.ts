@@ -749,7 +749,8 @@ export const en: Messages<typeof de> = {
     oldMaster: 'Current master password',
     newMaster: 'New master password',
     change: 'Change',
-    changed: 'Master password changed.',
+    changed:
+      'Master password changed. The vault is saved with a new key; older copies (e.g. from a backup) still open only with the old password.',
     extension:
       'Browser extension “AEGIS Vault”: it fills logins only on the matching site and stores nothing itself (setup: see the setup program).',
   },

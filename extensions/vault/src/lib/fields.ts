@@ -18,6 +18,46 @@ export function usable(input: HTMLInputElement): boolean {
   return true;
 }
 
+/** Sichtbarkeit samt Vorfahren (Produkt der Opazitäten). */
+export function effectiveOpacity(el: Element): number {
+  let opacity = 1;
+  for (let node: Element | null = el; node !== null; node = node.parentElement) {
+    const value = Number.parseFloat(getComputedStyle(node).opacity);
+    opacity *= Number.isNaN(value) ? 1 : value;
+  }
+  return opacity;
+}
+
+/** Rechteck, wie es der Nutzer sieht (für Tests austauschbar). */
+type RectOf = (
+  el: Element,
+) => Pick<DOMRect, 'top' | 'left' | 'bottom' | 'right' | 'width' | 'height'>;
+
+const rectOf: RectOf = (el) => el.getBoundingClientRect();
+
+/**
+ * Deutlich sichtbar? Ausgefüllt wird nur in Felder, die der Nutzer sehen kann: nicht
+ * durchsichtig (auch nicht über Vorfahren), nicht winzig, im sichtbaren Bereich. So landet ein
+ * Passwort nicht in einem versteckten Feld, das die Seite heimlich ausliest.
+ */
+export function clearlyVisible(el: HTMLElement, rect: RectOf = rectOf): boolean {
+  if (typeof el.checkVisibility === 'function') {
+    if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) {
+      return false;
+    }
+  }
+  if (effectiveOpacity(el) < 0.9) {
+    return false;
+  }
+  const r = rect(el);
+  const view = el.ownerDocument.defaultView;
+  const width = view?.innerWidth ?? 0;
+  const height = view?.innerHeight ?? 0;
+  return (
+    r.width >= 8 && r.height >= 8 && r.bottom > 0 && r.right > 0 && r.top < height && r.left < width
+  );
+}
+
 /** Alle nutzbaren Passwortfelder des Dokuments. */
 export function passwordFields(doc: Document): HTMLInputElement[] {
   return [...doc.querySelectorAll<HTMLInputElement>('input[type="password"]')].filter(usable);
@@ -49,11 +89,23 @@ export function setValue(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-/** Füllt Benutzername (falls Feld vorhanden und Wert nicht leer) und Passwort. */
-export function fill(password: HTMLInputElement, username: string, secret: string): void {
+/**
+ * Füllt Benutzername (falls Feld sichtbar und Wert nicht leer) und Passwort – nur, wenn das
+ * Passwortfeld deutlich sichtbar ist. `false`: nichts ausgefüllt.
+ */
+export function fill(
+  password: HTMLInputElement,
+  username: string,
+  secret: string,
+  rect: RectOf = rectOf,
+): boolean {
+  if (!usable(password) || !clearlyVisible(password, rect)) {
+    return false;
+  }
   const user = usernameFor(password);
-  if (user !== null && username !== '') {
+  if (user !== null && username !== '' && clearlyVisible(user, rect)) {
     setValue(user, username);
   }
   setValue(password, secret);
+  return true;
 }

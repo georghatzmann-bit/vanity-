@@ -14,7 +14,7 @@ const BANNER_CSS = `
 .box{position:fixed;inset:12px 12px auto auto;z-index:2147483647;max-width:420px;
   font:14px/1.45 var(--aegis-font);color:var(--aegis-text);background:var(--aegis-surface-2);
   border:1px solid var(--aegis-warn);border-radius:var(--aegis-radius);padding:12px 14px;
-  box-shadow:0 12px 32px -8px rgb(0 0 0 / .5);opacity:0;transform:translateY(-8px);
+  box-shadow:var(--aegis-shadow-lg);opacity:0;transform:translateY(-8px);
   transition:opacity .22s cubic-bezier(.05,.7,.1,1),transform .22s cubic-bezier(.05,.7,.1,1)}
 .box.in{opacity:1;transform:none}
 h2{margin:0 32px 6px 0;font-size:14px;font-weight:600;color:var(--aegis-warn)}

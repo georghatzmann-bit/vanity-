@@ -11,6 +11,8 @@ const de = {
   insecure:
     'Achtung: Diese Seite nutzt kein HTTPS. Das Passwort könnte unterwegs mitgelesen werden.',
   close: 'Schließen',
+  hidden:
+    'Nicht ausgefüllt: Das Feld ist nicht deutlich sichtbar oder die Seite hat die AEGIS-Anzeige verändert.',
   error: {
     locked: 'Der Tresor ist gesperrt. Entsperre ihn in der AEGIS-App und versuche es erneut.',
     app_not_running: 'AEGIS läuft nicht. Starte die AEGIS-App und entsperre den Tresor.',
@@ -24,7 +26,7 @@ const de = {
   popupLead: 'Logins für',
   popupFill: 'Einsetzen',
   popupFilled: 'Eingesetzt.',
-  popupNoField: 'Auf dieser Seite gibt es kein Passwortfeld.',
+  popupNoField: 'Auf dieser Seite gibt es kein deutlich sichtbares Passwortfeld.',
   popupNoPage:
     'Auf dieser Seite kann die Erweiterung nicht ausfüllen (keine Webseite oder vor der Installation geöffnet – dann neu laden).',
   popupHonest:
@@ -41,6 +43,7 @@ const en: Texts = {
   noUser: '(no username)',
   insecure: 'Warning: this site does not use HTTPS. The password could be read in transit.',
   close: 'Close',
+  hidden: 'Not filled: the field is not clearly visible or the page changed the AEGIS display.',
   error: {
     locked: 'The vault is locked. Unlock it in the AEGIS app and try again.',
     app_not_running: 'AEGIS is not running. Start the AEGIS app and unlock the vault.',
@@ -54,7 +57,7 @@ const en: Texts = {
   popupLead: 'Logins for',
   popupFill: 'Insert',
   popupFilled: 'Inserted.',
-  popupNoField: 'There is no password field on this page.',
+  popupNoField: 'There is no clearly visible password field on this page.',
   popupNoPage:
     'The extension cannot fill on this page (not a web page, or opened before installing – reload it then).',
   popupHonest:

@@ -95,6 +95,10 @@ struct FileFormat {
     kdf: KdfParams,
     salt: String,
     key: Sealed,
+    /// Zufallswert dieser Speicherung: Jeder Eintrag ist mit ihm, seiner Position und der
+    /// Gesamtzahl verknüpft – Entfernen, Vertauschen, Verdoppeln oder das Einmischen alter
+    /// Einträge fällt auf.
+    epoch: String,
     entries: Vec<SealedEntry>,
 }
 
@@ -153,8 +157,8 @@ fn key_aad(kdf: KdfParams, salt: &str) -> Vec<u8> {
     format!("{FORMAT}|{}|{}|{}|{salt}", kdf.m_kib, kdf.t, kdf.p).into_bytes()
 }
 
-fn entry_aad(id: &str) -> Vec<u8> {
-    format!("{FORMAT}|entry|{id}").into_bytes()
+fn entry_aad(id: &str, epoch: &str, index: usize, count: usize) -> Vec<u8> {
+    format!("{FORMAT}|entry|{epoch}|{index}/{count}|{id}").into_bytes()
 }
 
 /// Entsperrter Tresor im Speicher.
@@ -243,9 +247,17 @@ impl Vault {
                 .try_into()
                 .map_err(|_| VaultError::Corrupt("Schlüssel".into()))?,
         );
-        let mut entries = Vec::with_capacity(file.entries.len());
-        for sealed in &file.entries {
-            let plain = open(&key, &sealed.nonce, &sealed.ct, &entry_aad(&sealed.id))
+        if file.epoch.len() != 32 {
+            return Err(VaultError::Corrupt("Speicherkennung".into()));
+        }
+        let count = file.entries.len();
+        let mut entries: Vec<Entry> = Vec::with_capacity(count);
+        for (index, sealed) in file.entries.iter().enumerate() {
+            if entries.iter().any(|e| e.id == sealed.id) {
+                return Err(VaultError::Corrupt("Eintrag doppelt".into()));
+            }
+            let aad = entry_aad(&sealed.id, &file.epoch, index, count);
+            let plain = open(&key, &sealed.nonce, &sealed.ct, &aad)
                 .ok_or_else(|| VaultError::Corrupt("Eintrag manipuliert".into()))?;
             let entry: Entry = serde_json::from_slice(&plain)
                 .map_err(|_| VaultError::Corrupt("Eintrag unlesbar".into()))?;
@@ -268,10 +280,13 @@ impl Vault {
     /// # Errors
     /// Krypto nicht verfügbar.
     pub fn to_bytes(&self) -> Result<Vec<u8>, VaultError> {
-        let mut entries = Vec::with_capacity(self.entries.len());
-        for e in &self.entries {
+        let epoch = hex(&random::<16>()?);
+        let count = self.entries.len();
+        let mut entries = Vec::with_capacity(count);
+        for (index, e) in self.entries.iter().enumerate() {
             let plain = Zeroizing::new(serde_json::to_vec(e).map_err(|_| VaultError::Crypto)?);
-            let (nonce, ct) = seal(&self.key, &plain, &entry_aad(&e.id))?;
+            let aad = entry_aad(&e.id, &epoch, index, count);
+            let (nonce, ct) = seal(&self.key, &plain, &aad)?;
             entries.push(SealedEntry {
                 id: e.id.clone(),
                 nonce,
@@ -283,12 +298,15 @@ impl Vault {
             kdf: self.kdf,
             salt: self.salt.clone(),
             key: self.wrapped.clone(),
+            epoch,
             entries,
         })
         .map_err(|_| VaultError::Crypto)
     }
 
-    /// Master-Passwort ändern (Datenschlüssel bleibt, wird neu verpackt; neues Salz).
+    /// Master-Passwort ändern: neuer Datenschlüssel (alle Einträge werden beim Speichern damit
+    /// neu verschlüsselt), neues Salz. Alte Kopien der Datei bleiben nur mit dem alten Passwort
+    /// lesbar und verraten nichts über spätere Fassungen.
     ///
     /// # Errors
     /// Altes Passwort falsch, neues zu kurz.
@@ -304,7 +322,9 @@ impl Vault {
         .ok_or(VaultError::WrongPassword)?;
         let salt = hex(&random::<16>()?);
         let kek = derive(new, salt.as_bytes(), self.kdf)?;
-        let (nonce, ct) = seal(&kek, self.key.as_ref(), &key_aad(self.kdf, &salt))?;
+        let key: Key = Zeroizing::new(random::<32>()?);
+        let (nonce, ct) = seal(&kek, key.as_ref(), &key_aad(self.kdf, &salt))?;
+        self.key = key;
         self.salt = salt;
         self.wrapped = Sealed { nonce, ct };
         Ok(())
@@ -478,6 +498,34 @@ mod tests {
             Err(VaultError::Corrupt(_))
         ));
         assert!(Vault::open(b"kein json", "x").is_err());
+
+        let master = "ein langes Master-Passwort";
+        let corrupt = |file: &serde_json::Value| {
+            matches!(
+                Vault::open(&serde_json::to_vec(file).unwrap(), master),
+                Err(VaultError::Corrupt(_))
+            )
+        };
+        let original: serde_json::Value = serde_json::from_slice(&v.to_bytes().unwrap()).unwrap();
+        // Eintrag entfernen → Gesamtzahl passt nicht mehr.
+        let mut file = original.clone();
+        file["entries"].as_array_mut().unwrap().pop();
+        assert!(corrupt(&file));
+        // Eintrag verdoppeln.
+        let mut file = original.clone();
+        let copy = file["entries"][0].clone();
+        file["entries"].as_array_mut().unwrap()[2] = copy;
+        assert!(corrupt(&file));
+        // Reihenfolge tauschen.
+        let mut file = original.clone();
+        file["entries"].as_array_mut().unwrap().swap(0, 1);
+        assert!(corrupt(&file));
+        // Alten Eintrag aus einer früheren Speicherung einmischen (gleicher Schlüssel).
+        let older: serde_json::Value = serde_json::from_slice(&v.to_bytes().unwrap()).unwrap();
+        let mut file = original.clone();
+        file["entries"][1] = older["entries"][1].clone();
+        assert!(corrupt(&file));
+        assert!(Vault::open(&serde_json::to_vec(&original).unwrap(), master).is_ok());
     }
 
     #[test]
@@ -500,6 +548,17 @@ mod tests {
             Err(VaultError::WrongPassword)
         );
         v.change_master("ein langes Master-Passwort", "ein neues Master-Passwort")
+            .unwrap();
+        let before = v.to_bytes().unwrap();
+        let old_key = v.key.clone();
+        v.change_master("ein langes Master-Passwort", "ein neues Master-Passwort")
+            .unwrap_err();
+        v.change_master("ein neues Master-Passwort", "ein drittes Master-Passwort")
+            .unwrap();
+        // Neuer Datenschlüssel: Wer das alte Passwort und eine alte Kopie hat, liest nichts Neues.
+        assert_ne!(*old_key, *v.key);
+        assert!(Vault::open(&before, "ein neues Master-Passwort").is_ok());
+        v.change_master("ein drittes Master-Passwort", "ein neues Master-Passwort")
             .unwrap();
         let bytes = v.to_bytes().unwrap();
         assert!(Vault::open(&bytes, "ein langes Master-Passwort").is_err());

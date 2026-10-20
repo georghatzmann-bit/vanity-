@@ -106,12 +106,19 @@ pub fn parse_csv(text: &str) -> Result<Imported, String> {
             title: name,
             username: get(&row, username),
             password: get(&row, Some(password)),
-            urls: if address.is_empty() {
-                Vec::new()
+            // Nicht zuordenbare Adressen kommen in die Notiz statt in die Ausfüll-Liste.
+            urls: if crate::url::valid_stored(&address) {
+                vec![address.clone()]
             } else {
-                vec![address]
+                Vec::new()
             },
-            notes: get(&row, notes),
+            notes: if address.trim().is_empty() || crate::url::valid_stored(&address) {
+                get(&row, notes)
+            } else {
+                format!("{}\nAdresse: {address}", get(&row, notes))
+                    .trim()
+                    .to_owned()
+            },
             folder: get(&row, folder),
             tags: Vec::new(),
             favorite: matches!(get(&row, favorite).trim(), "1" | "true" | "TRUE"),

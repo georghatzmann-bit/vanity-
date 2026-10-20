@@ -73,6 +73,16 @@ pub enum Response {
     },
 }
 
+impl Drop for Response {
+    fn drop(&mut self) {
+        // Zugangsdaten nicht im freigegebenen Speicher liegen lassen.
+        if let Self::Fill { username, password } = self {
+            zeroize::Zeroize::zeroize(username);
+            zeroize::Zeroize::zeroize(password);
+        }
+    }
+}
+
 impl Response {
     /// Fehler mit Kennung.
     #[must_use]
@@ -174,7 +184,7 @@ mod tests {
             },
             Some(&v),
         );
-        let Response::Logins { logins } = logins else {
+        let Response::Logins { ref logins } = logins else {
             panic!("erwartet: Logins");
         };
         assert_eq!(logins.len(), 1);

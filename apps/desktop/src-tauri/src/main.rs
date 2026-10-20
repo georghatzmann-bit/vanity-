@@ -167,10 +167,13 @@ fn main() {
 }
 
 /// Ereignisse der laufenden App: Sobald sie bereit ist (Setup und Fenster stehen), ist eine
-/// Panic kein Startfehler mehr.
+/// Panic kein Startfehler mehr. Beim Beenden wird der Tresor gesperrt und eine eigene Kopie in
+/// der Zwischenablage geleert.
 fn on_run_event(event: &RunEvent) {
-    if let RunEvent::Ready = event {
-        startup_error::startup_finished();
+    match event {
+        RunEvent::Ready => startup_error::startup_finished(),
+        RunEvent::Exit => vault::shutdown(),
+        _ => {}
     }
 }
 

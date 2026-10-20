@@ -9,7 +9,7 @@ use aegis_vault_core::bridge::{Response, parse};
 use aegis_vault_host::{caller_allowed, read_message, write_message};
 
 fn reply(out: &mut impl Write, response: &Response) -> io::Result<()> {
-    let body = serde_json::to_vec(response).map_err(io::Error::other)?;
+    let body = zeroize::Zeroizing::new(serde_json::to_vec(response).map_err(io::Error::other)?);
     write_message(out, &body)
 }
 
@@ -38,7 +38,11 @@ fn forward(request: &[u8]) -> Response {
         .and_then(|pid| aegis_winffi::system::process_image_path(pid).ok());
     let same = matches!((&expected, &server), (Some(e), Some(s))
         if e.to_string_lossy().eq_ignore_ascii_case(&s.to_string_lossy()));
-    if !same {
+    // Und gehört die Pipe dem eigenen Konto (nicht einer fremden, vorher angelegten)?
+    let owned = aegis_winffi::pipe::pipe_owner_sid(&pipe)
+        .ok()
+        .is_some_and(|owner| owner == sid);
+    if !same || !owned {
         return Response::error("forbidden");
     }
     let mut line = request.to_vec();
@@ -46,7 +50,7 @@ fn forward(request: &[u8]) -> Response {
     if pipe.write_all(&line).is_err() {
         return Response::error("app_not_running");
     }
-    let mut answer = String::new();
+    let mut answer = zeroize::Zeroizing::new(String::new());
     let mut reader = io::BufReader::new((&mut pipe).take(1024 * 1024));
     if reader.read_line(&mut answer).is_err() {
         return Response::error("app_not_running");

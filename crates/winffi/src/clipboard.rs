@@ -5,6 +5,8 @@
 use std::io;
 use std::ptr;
 
+use zeroize::Zeroize;
+
 use windows_sys::Win32::Foundation::{GlobalFree, HANDLE, HWND};
 use windows_sys::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardOwner,
@@ -210,22 +212,34 @@ pub fn set_private_text(text: &str) -> io::Result<u32> {
         if unsafe { EmptyClipboard() } == 0 {
             return Err(io::Error::last_os_error());
         }
-        put(CF_UNICODETEXT, &bytes)?;
-        // Hinweise an Windows: nicht in den Verlauf, nicht in die Cloud, nicht überwachen.
-        put(
+        // Erst die Hinweise an Windows (nicht in den Verlauf, nicht in die Cloud, nicht
+        // überwachen), zuletzt der Text: Scheitert ein Schritt, steht kein Geheimnis ohne
+        // Hinweise in der Zwischenablage.
+        let placed = put(
             register("ExcludeClipboardContentFromMonitorProcessing"),
             &[0],
-        )?;
-        put(
-            register("CanIncludeInClipboardHistory"),
-            &0u32.to_le_bytes(),
-        )?;
-        put(register("CanUploadToCloudClipboard"), &0u32.to_le_bytes())?;
-        Ok(())
+        )
+        .and_then(|()| {
+            put(
+                register("CanIncludeInClipboardHistory"),
+                &0u32.to_le_bytes(),
+            )
+        })
+        .and_then(|()| put(register("CanUploadToCloudClipboard"), &0u32.to_le_bytes()))
+        .and_then(|()| put(CF_UNICODETEXT, &bytes));
+        if placed.is_err() {
+            // SAFETY: Zwischenablage ist noch geöffnet (`_opened`).
+            // aegis-unsafe: winffi-clipboard-empty-on-error
+            #[allow(unsafe_code)]
+            unsafe {
+                EmptyClipboard();
+            }
+        }
+        placed
     })();
-    // Eigene Kopien des Geheimnisses überschreiben.
-    wide.iter_mut().for_each(|u| *u = 0);
-    bytes.iter_mut().for_each(|b| *b = 0);
+    // Eigene Kopien des Geheimnisses überschreiben (nicht wegoptimierbar).
+    wide.zeroize();
+    bytes.zeroize();
     result.map(|()| sequence_number())
 }
 

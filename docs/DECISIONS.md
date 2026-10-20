@@ -392,8 +392,10 @@ Status: angenommen (P9). Der Tresor gehört dem Konto, nicht dem Rechner: Datei
 `vault.aegisvault` im App-Datenordner des Kontos, Ver- und Entschlüsselung im App-Prozess
 (Nutzerrechte). Der SYSTEM-Dienst sieht weder Datei noch Schlüssel. Format: Argon2id (64 MiB,
 3 Durchläufe, Parameter + Salz in der Datei; beim Öffnen 64 MiB–1 GiB, 3–20 Durchläufe erlaubt)
-verpackt einen zufälligen 256-Bit-Datenschlüssel; jeder Eintrag einzeln AES-256-GCM mit neuer
-Nonce bei jedem Speichern und der Kennung als AAD. Im Speicher `Zeroize`; die Oberfläche bekommt
+verpackt einen zufälligen 256-Bit-Datenschlüssel (bei jedem Wechsel des Master-Passworts neu,
+die Sicherung wird dann durch die neue Fassung ersetzt); jeder Eintrag einzeln AES-256-GCM mit
+neuer Nonce bei jedem Speichern, in der AAD Kennung, Position, Anzahl und eine zufällige
+Speicherkennung (Entfernen, Vertauschen, Verdoppeln, Einmischen alter Einträge fällt auf). Im Speicher `Zeroize`; die Oberfläche bekommt
 Passwörter nur auf Klick („Anzeigen“, „Bearbeiten“, Leck-Check). Auto-Sperre nach 1–60 Minuten
 Untätigkeit (Standard 5), Fehlversuche verzögern ab dem dritten (bis 60 s). „Kopieren“ setzt
 die Zwischenablage mit den Windows-Hinweisen „nicht in den Verlauf/die Cloud, nicht überwachen“
@@ -412,12 +414,17 @@ startet `aegis-vault-host.exe` (Registrierung unter HKCU, `allowed_origins` nur 
 Host prüft das Aufrufer-Argument zusätzlich). Der Host prüft jede Nachricht
 (`vault_core::bridge::parse`, ≤ 8 KiB, keine unbekannten Felder) und reicht sie über die Pipe
 `\\.\pipe\aegis-vault-<SID>` an die laufende App weiter. Die Pipe gehört dem Konto (DACL nur
-dessen SID); beide Seiten prüfen die Gegenstelle per Programmpfad im selben Ordner (App ↔ Host).
+dessen SID, Besitzer geprüft, der Name ist nie frei); beide Seiten prüfen die Gegenstelle per
+Programmpfad im selben Ordner (App ↔ Host), die App zusätzlich das Konto. Das ist keine Grenze
+gegen Programme desselben Kontos (die können den Host selbst starten) – die bleibt das Konto.
 Die Seitenadresse setzt der Hintergrund der Erweiterung aus dem Absender (nur Hauptrahmen,
 http/https, Herkunft = Adresse) – die Webseite kann keine Adresse vorgeben. Die App liefert nur
-Logins, deren gespeicherte Adresse zur Seite passt, Passwörter nur einzeln auf Abruf, höchstens
+Logins, deren gespeicherte Adresse zur Seite passt (Host oder Unteradresse, gleicher Port, wie im
+Browser zerlegt; einzelne Wörter und geteilte Endungen wie `github.io` nie), Passwörter nur einzeln auf Abruf, höchstens
 30 je Minute, und nur bei entsperrtem Tresor. Das Inhaltsskript läuft nur im Hauptrahmen, zeigt
-seinen Knopf in einem geschlossenen Schatten-Baum und füllt erst nach einem echten Klick
-(`isTrusted`) bzw. Alt+↓; Fokus allein fragt AEGIS nicht. Auf HTTP-Seiten warnt es. Grenze:
+seinen Knopf in einem geschlossenen Schatten-Baum in der obersten Ebene (Popover) und füllt erst
+nach einem echten Klick genau auf den sichtbaren Eintrag (`isTrusted`, Treffer-Prüfung, 500 ms
+Pause, Wächter gegen Veränderungen) bzw. Alt+↓ – und nur in deutlich sichtbare Felder; Fokus
+allein fragt AEGIS nicht. Auf HTTP-Seiten warnt es. Grenze:
 Ausgefüllte Werte stehen danach in der Seite – wie bei jedem Passwort-Manager.
 

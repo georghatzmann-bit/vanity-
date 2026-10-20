@@ -8,7 +8,8 @@
 //! - **Zwischenablage:** „Kopieren“ setzt den Text ohne Verlauf/Cloud und leert ihn nach 30 s,
 //!   wenn nichts anderes kopiert wurde.
 //! - **Fehlversuche:** ab dem dritten wächst die Wartezeit (bis 60 s).
-//! - **Speichern:** erst in eine Hilfsdatei, dann ersetzen; die vorige Fassung bleibt als `.bak`.
+//! - **Speichern:** erst in eine Hilfsdatei, dann ersetzen; die vorige Fassung bleibt als `.bak`
+//!   (nach einem Master-Wechsel die neue – die alte war mit dem alten Passwort lesbar).
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,9 +38,15 @@ struct Inner {
     failures: u32,
     retry_after: Option<Instant>,
     clipboard: Option<(u32, Instant)>,
+    /// Anlegen oder Entsperren läuft (Argon2id außerhalb der Sperre): kein zweiter Versuch
+    /// gleichzeitig – sonst ließen sich Fehlversuche parallel durchprobieren.
+    busy: bool,
     /// Zeitpunkte der letzten Ausfüll-Anfragen der Browser-Erweiterung (Begrenzung).
     #[cfg_attr(not(windows), allow(dead_code))]
     fills: std::collections::VecDeque<Instant>,
+    /// Zeitpunkte aller Anfragen der Erweiterung (Begrenzung).
+    #[cfg_attr(not(windows), allow(dead_code))]
+    requests: std::collections::VecDeque<Instant>,
 }
 
 static STATE: LazyLock<Mutex<Inner>> = LazyLock::new(|| {
@@ -50,7 +57,9 @@ static STATE: LazyLock<Mutex<Inner>> = LazyLock::new(|| {
         failures: 0,
         retry_after: None,
         clipboard: None,
+        busy: false,
         fills: std::collections::VecDeque::new(),
+        requests: std::collections::VecDeque::new(),
     })
 });
 static WATCHER: AtomicBool = AtomicBool::new(false);
@@ -87,7 +96,7 @@ fn start_watcher() {
                 let mut s = state();
                 let idle = Duration::from_secs(u64::from(s.lock_minutes) * 60);
                 if s.open.is_some() && s.last_activity.elapsed() >= idle {
-                    s.open = None;
+                    lock(&mut s);
                 }
                 if let Some((sequence, at)) = s.clipboard
                     && at.elapsed() >= Duration::from_secs(CLIPBOARD_SECONDS)
@@ -102,6 +111,20 @@ fn start_watcher() {
     }
 }
 
+/// Sperrt: Schlüssel und Einträge werden überschrieben, eine eigene Kopie in der
+/// Zwischenablage wird geleert.
+fn lock(s: &mut Inner) {
+    s.open = None;
+    if let Some((sequence, _)) = s.clipboard.take() {
+        clear_clipboard(sequence);
+    }
+}
+
+/// Beim Beenden der App: sperren und die Zwischenablage leeren.
+pub fn shutdown() {
+    lock(&mut state());
+}
+
 #[cfg(windows)]
 fn clear_clipboard(sequence: u32) {
     let _ = aegis_winffi::clipboard::clear_if_unchanged(sequence);
@@ -110,8 +133,21 @@ fn clear_clipboard(sequence: u32) {
 #[cfg(not(windows))]
 fn clear_clipboard(_sequence: u32) {}
 
+/// Was mit der Sicherung `.bak` geschieht.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Backup {
+    /// Vorige Fassung sichern.
+    Previous,
+    /// Neue Fassung auch als Sicherung (nach dem Master-Wechsel).
+    Fresh,
+}
+
 /// Schreibt die Tresordatei: Hilfsdatei, dann ersetzen; vorher die alte als `.bak`.
 fn save_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    save_file_with(path, bytes, Backup::Previous)
+}
+
+fn save_file_with(path: &Path, bytes: &[u8], backup: Backup) -> Result<(), String> {
     use std::io::Write;
     let dir = path.parent().ok_or("Ordner unbekannt")?;
     let tmp = path.with_extension("aegisvault.tmp");
@@ -130,7 +166,7 @@ fn save_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
             .and_then(|()| file.sync_all())
             .map_err(|e| format!("Speichern nicht möglich: {e}"))?;
     }
-    if path.exists() {
+    if backup == Backup::Previous && path.exists() {
         // Sicherung der vorigen Fassung (eigene Datei, wird beim nächsten Speichern ersetzt).
         // aegis-mutation: desktop-vault-backup
         #[allow(clippy::disallowed_methods)]
@@ -139,13 +175,69 @@ fn save_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
     // Ersetzt die eigene Tresordatei durch die eben geschriebene Fassung.
     // aegis-mutation: desktop-vault-replace
     #[allow(clippy::disallowed_methods)]
-    std::fs::rename(&tmp, path).map_err(|e| format!("Speichern nicht möglich: {e}"))
+    std::fs::rename(&tmp, path).map_err(|e| format!("Speichern nicht möglich: {e}"))?;
+    if backup == Backup::Fresh {
+        // Neue Fassung auch als Sicherung: Die alte bliebe mit dem alten Passwort lesbar.
+        // aegis-mutation: desktop-vault-backup-fresh
+        #[allow(clippy::disallowed_methods)]
+        std::fs::copy(path, &bak).map_err(|e| format!("Sicherung nicht ersetzt: {e}"))?;
+    }
+    Ok(())
 }
 
 fn save(s: &Inner) -> Result<(), String> {
+    save_with(s, Backup::Previous)
+}
+
+fn save_with(s: &Inner, backup: Backup) -> Result<(), String> {
     let (vault, path) = s.open.as_ref().ok_or(LOCKED)?;
-    let bytes = vault.to_bytes().map_err(|e| e.to_string())?;
-    save_file(path, &bytes)
+    let bytes = Zeroizing::new(vault.to_bytes().map_err(|e| e.to_string())?);
+    save_file_with(path, &bytes, backup)
+}
+
+/// Größte Tresordatei, die gelesen wird.
+const MAX_VAULT_FILE: u64 = 64 * 1024 * 1024;
+
+/// Hebt „läuft“ beim Verlassen auf (auch bei Fehlern).
+struct Busy;
+
+impl Busy {
+    fn take() -> Result<Self, String> {
+        let mut s = state();
+        if s.busy {
+            return Err("busy".into());
+        }
+        if s.retry_after.is_some_and(|t| t > Instant::now()) {
+            return Err("wait".into());
+        }
+        s.busy = true;
+        Ok(Self)
+    }
+}
+
+impl Drop for Busy {
+    fn drop(&mut self) {
+        state().busy = false;
+    }
+}
+
+/// Liest die Tresordatei (höchstens [`MAX_VAULT_FILE`]).
+fn read_vault(path: &Path) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let missing = || "Kein Tresor gefunden.".to_owned();
+    let file = std::fs::File::open(path).map_err(|_| missing())?;
+    let len = file.metadata().map_err(|_| missing())?.len();
+    if len > MAX_VAULT_FILE {
+        return Err("Die Tresordatei ist zu groß.".into());
+    }
+    let mut bytes = Vec::with_capacity(usize::try_from(len).unwrap_or(0));
+    file.take(MAX_VAULT_FILE + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| missing())?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_VAULT_FILE {
+        return Err("Die Tresordatei ist zu groß.".into());
+    }
+    Ok(bytes)
 }
 
 const LOCKED: &str = "locked";
@@ -200,6 +292,7 @@ pub async fn vault_setup<R: tauri::Runtime>(
 ) -> Result<(), String> {
     let master = Zeroizing::new(master);
     let path = vault_path(&app)?;
+    let busy = Busy::take()?;
     if path.exists() {
         return Err("Es gibt bereits einen Tresor.".into());
     }
@@ -209,11 +302,16 @@ pub async fn vault_setup<R: tauri::Runtime>(
     .await
     .map_err(|e| e.to_string())??;
     let bytes = vault.to_bytes().map_err(|e| e.to_string())?;
+    // Während Argon2id lief, könnte ein Tresor entstanden sein – nie überschreiben.
+    if path.exists() {
+        return Err("Es gibt bereits einen Tresor.".into());
+    }
     save_file(&path, &bytes)?;
     let mut s = state();
     s.open = Some((vault, path));
     s.last_activity = Instant::now();
     drop(s);
+    drop(busy);
     start_watcher();
     Ok(())
 }
@@ -226,17 +324,13 @@ pub async fn vault_unlock<R: tauri::Runtime>(
 ) -> Result<(), String> {
     let master = Zeroizing::new(master);
     let path = vault_path(&app)?;
-    {
-        let s = state();
-        if s.retry_after.is_some_and(|t| t > Instant::now()) {
-            return Err("wait".into());
-        }
-    }
-    // Lesen nur der eigenen Tresordatei (höchstens 64 MiB).
-    let bytes = std::fs::read(&path).map_err(|_| "Kein Tresor gefunden.".to_owned())?;
+    // Nur ein Versuch zugleich; die Wartezeit nach Fehlversuchen gilt für alle.
+    let busy = Busy::take()?;
+    let bytes = read_vault(&path)?;
     let result = tauri::async_runtime::spawn_blocking(move || Vault::open(&bytes, &master))
         .await
         .map_err(|e| e.to_string())?;
+    drop(busy);
     let mut s = state();
     match result {
         Ok(vault) => {
@@ -263,7 +357,7 @@ pub async fn vault_unlock<R: tauri::Runtime>(
 /// Sperren (Schlüssel und Einträge werden überschrieben).
 #[tauri::command]
 pub fn vault_lock() {
-    state().open = None;
+    lock(&mut state());
 }
 
 /// Auto-Sperre einstellen (1–60 Minuten).
@@ -459,7 +553,7 @@ pub async fn vault_change_master(old: String, new: String) -> Result<(), String>
                     VaultError::WrongPassword => "wrong_password".to_owned(),
                     other => other.to_string(),
                 })?;
-            save(s)
+            save_with(s, Backup::Fresh)
         })
     })
     .await
@@ -469,6 +563,26 @@ pub async fn vault_change_master(old: String, new: String) -> Result<(), String>
 /// Ausfüll-Anfragen der Erweiterung je Minute (danach „rate_limited“).
 #[cfg_attr(not(windows), allow(dead_code))]
 const FILLS_PER_MINUTE: usize = 30;
+/// Anfragen der Erweiterung insgesamt je Minute.
+#[cfg_attr(not(windows), allow(dead_code))]
+const REQUESTS_PER_MINUTE: usize = 120;
+
+/// Gleitendes Fenster von einer Minute: `true`, wenn noch Platz ist (und trägt ein).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn admit(queue: &mut std::collections::VecDeque<Instant>, max: usize) -> bool {
+    let now = Instant::now();
+    while queue
+        .front()
+        .is_some_and(|t| now.duration_since(*t) > Duration::from_secs(60))
+    {
+        queue.pop_front();
+    }
+    if queue.len() >= max {
+        return false;
+    }
+    queue.push_back(now);
+    true
+}
 
 /// Beantwortet eine Anfrage der Browser-Erweiterung (über Host und Pipe).
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -478,25 +592,21 @@ fn bridge_answer(line: &[u8]) -> aegis_vault_core::bridge::Response {
         return Response::error("invalid");
     };
     let mut s = state();
-    if matches!(request, Request::Fill { .. }) && s.open.is_some() {
-        let now = Instant::now();
-        while s
-            .fills
-            .front()
-            .is_some_and(|t| now.duration_since(*t) > Duration::from_secs(60))
+    if s.open.is_some() {
+        let s = &mut *s;
+        if !admit(&mut s.requests, REQUESTS_PER_MINUTE)
+            || (matches!(request, Request::Fill { .. }) && !admit(&mut s.fills, FILLS_PER_MINUTE))
         {
-            s.fills.pop_front();
-        }
-        if s.fills.len() >= FILLS_PER_MINUTE {
             return Response::error("rate_limited");
         }
-        s.fills.push_back(now);
     }
     handle(&request, s.open.as_ref().map(|(v, _)| v))
 }
 
 /// Startet die Brücke zur Browser-Erweiterung: eine Pipe nur für das eigene Konto; Anfragen
 /// werden nur vom Host `aegis-vault-host.exe` aus dem eigenen Programmordner angenommen.
+/// Grenze (ehrlich): Ein Programm desselben Kontos kann den Host ebenfalls starten – wie bei
+/// jedem Passwort-Manager schützt das Konto, nicht die Pfadprüfung.
 #[cfg(windows)]
 pub fn start_bridge() {
     let _ = std::thread::Builder::new()
@@ -504,13 +614,20 @@ pub fn start_bridge() {
         .spawn(bridge_loop);
 }
 
+/// Neue Instanz der eigenen Pipe – nur, wenn sie wirklich dem eigenen Konto gehört.
+#[cfg(windows)]
+fn own_instance(name: &str, sid: &str, first: bool) -> Option<std::os::windows::io::OwnedHandle> {
+    let instance = aegis_winffi::pipe::create_user_instance(name, first).ok()?;
+    (aegis_winffi::pipe::pipe_owner_sid(&instance)
+        .ok()
+        .as_deref()
+        == Some(sid))
+    .then_some(instance)
+}
+
 #[cfg(windows)]
 fn bridge_loop() {
-    use aegis_winffi::pipe::{
-        accept, client_process_id, create_user_instance, current_user_sid, disconnect,
-        vault_pipe_name,
-    };
-    use std::io::{BufRead, Read, Write};
+    use aegis_winffi::pipe::{accept, current_user_sid, disconnect, vault_pipe_name};
     let Ok(sid) = current_user_sid() else {
         return;
     };
@@ -521,45 +638,77 @@ fn bridge_loop() {
     else {
         return;
     };
-    let mut first = true;
+    // Immer eine lauschende Instanz: Die nächste entsteht, bevor die verbundene geschlossen
+    // wird – so ist der Name nie frei und kein anderes Konto kann ihn belegen. Muss die Pipe
+    // doch neu entstehen, dann nur als erste Instanz (sonst stoppt die Brücke).
+    let Some(mut listening) = own_instance(&name, &sid, true) else {
+        return;
+    };
     loop {
-        let instance = match create_user_instance(&name, first) {
-            Ok(i) => i,
-            // Name schon belegt (anderes Programm): keine Brücke statt einer unsicheren.
-            Err(_) if first => return,
-            Err(_) => {
-                std::thread::sleep(Duration::from_secs(1));
-                continue;
+        let Ok(conn) = accept(listening) else {
+            match own_instance(&name, &sid, true) {
+                Some(i) => {
+                    listening = i;
+                    continue;
+                }
+                None => return,
             }
         };
-        first = false;
-        let Ok(mut conn) = accept(instance) else {
-            continue;
-        };
-        let client = client_process_id(&conn)
-            .ok()
-            .and_then(|pid| aegis_winffi::system::process_image_path(pid).ok());
-        let allowed = client.is_some_and(|c| {
-            c.to_string_lossy()
-                .eq_ignore_ascii_case(&host.to_string_lossy())
-        });
-        if allowed {
-            let mut line = Vec::new();
-            let read = std::io::BufReader::new(
-                (&mut conn)
-                    .take(u64::try_from(aegis_vault_core::bridge::MAX_REQUEST + 1).unwrap_or(8193)),
-            )
-            .read_until(b'\n', &mut line);
+        let next = own_instance(&name, &sid, false);
+        serve(&conn, &host, &sid);
+        let _ = disconnect(&conn);
+        drop(conn);
+        match next.or_else(|| own_instance(&name, &sid, true)) {
+            Some(i) => listening = i,
+            None => return,
+        }
+    }
+}
+
+/// Eine Verbindung: Gegenstelle prüfen (Programm und Konto), eine Zeile lesen, antworten –
+/// höchstens 2 s, dann wird getrennt.
+#[cfg(windows)]
+fn serve(conn: &std::fs::File, host: &Path, sid: &str) {
+    use std::io::{BufRead, Read, Write};
+    let Ok(pid) = aegis_winffi::pipe::client_process_id(conn) else {
+        return;
+    };
+    let image = aegis_winffi::system::process_image_path(pid).ok();
+    let same_program = image.is_some_and(|c| {
+        c.to_string_lossy()
+            .eq_ignore_ascii_case(&host.to_string_lossy())
+    });
+    let same_account = aegis_winffi::system::process_user_sid(pid)
+        .ok()
+        .is_some_and(|s| s == sid);
+    if !same_program || !same_account {
+        return;
+    }
+    let (done, finished) = std::sync::mpsc::channel::<()>();
+    std::thread::scope(|scope| {
+        scope.spawn(move || {
+            let mut reader = conn;
+            let mut line = Zeroizing::new(Vec::new());
+            let limit = u64::try_from(aegis_vault_core::bridge::MAX_REQUEST + 1).unwrap_or(8193);
+            let read =
+                std::io::BufReader::new((&mut reader).take(limit)).read_until(b'\n', &mut line);
             if read.is_ok() {
                 let answer = Zeroizing::new(
                     serde_json::to_vec(&bridge_answer(line.trim_ascii())).unwrap_or_default(),
                 );
-                let _ = conn.write_all(&answer).and_then(|()| conn.write_all(b"\n"));
-                let _ = conn.flush();
+                let mut writer = conn;
+                let _ = writer
+                    .write_all(&answer)
+                    .and_then(|()| writer.write_all(b"\n"));
+                let _ = writer.flush();
             }
+            let _ = done.send(());
+        });
+        // Hängt die Gegenstelle, trennt die Brücke nach 2 s (beendet das blockierte Lesen).
+        if finished.recv_timeout(Duration::from_secs(2)).is_err() {
+            let _ = aegis_winffi::pipe::disconnect(conn);
         }
-        let _ = disconnect(&conn);
-    }
+    });
 }
 
 #[cfg(test)]

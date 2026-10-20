@@ -3,9 +3,21 @@
  * geschlossenen Schatten-Baum. Erst nach einem echten Klick (bzw. Alt+↓ im Feld) fragt es den
  * Hintergrund nach Logins für diese Seite, und erst nach Auswahl eines Logins füllt es aus.
  * Es liest keine Eingaben, speichert nichts und sendet nichts von selbst.
+ *
+ * Schutz gegen untergeschobene Klicks: Knopf und Menü liegen in der obersten Ebene (Popover),
+ * die Seite kann sie nicht überdecken; ändert die Seite Stil oder Attribute des Wirts, schließt
+ * alles. Ein Login wird erst nach einer kurzen Pause und nur per Klick genau auf den sichtbaren
+ * Eintrag (oder per Tastatur) gewählt, und ausgefüllt wird nur in deutlich sichtbare Felder.
  */
 
-import { fill, passwordFields, usable, usernameFor } from './lib/fields';
+import {
+  clearlyVisible,
+  effectiveOpacity,
+  fill,
+  passwordFields,
+  usable,
+  usernameFor,
+} from './lib/fields';
 import { texts } from './lib/i18n';
 import {
   parseHostResponse,
@@ -19,6 +31,7 @@ import { applyTheme } from './lib/theme';
 
 const CSS = `
 :host{all:initial}
+[popover]{inset:auto;margin:0;overflow:visible}
 .btn,.menu{position:fixed;z-index:2147483647;font:13px/1.4 var(--aegis-font);color:var(--aegis-text)}
 .btn{width:26px;height:26px;display:grid;place-items:center;padding:0;border:1px solid var(--aegis-border-strong);
   border-radius:6px;background:var(--aegis-surface-2);color:var(--aegis-accent);cursor:pointer;
@@ -27,7 +40,7 @@ const CSS = `
 .btn:hover{background:var(--aegis-surface-3)}
 .btn svg{width:16px;height:16px}
 .menu{min-width:240px;max-width:360px;padding:6px;border:1px solid var(--aegis-border-strong);border-radius:var(--aegis-radius);
-  background:var(--aegis-surface-2);box-shadow:0 12px 32px -8px rgb(0 0 0 / .5);
+  background:var(--aegis-surface-2);box-shadow:var(--aegis-shadow-lg);
   opacity:0;transform:translateY(-4px);transition:opacity .18s cubic-bezier(.05,.7,.1,1),transform .18s cubic-bezier(.05,.7,.1,1)}
 .menu.in{opacity:1;transform:none}
 h2{margin:4px 8px 6px;font-size:12px;font-weight:600;color:var(--aegis-text-muted);text-transform:uppercase;letter-spacing:.04em}
@@ -50,6 +63,55 @@ let field: HTMLInputElement | null = null;
 let ui: { host: HTMLElement; root: ShadowRoot; btn: HTMLButtonElement } | null = null;
 let menu: HTMLElement | null = null;
 let frame = 0;
+/** Zeitpunkt, ab dem Mausklicks auf Einträge zählen (gegen untergeschobene Doppelklicks). */
+let armedAt = 0;
+const ARM_MS = 500;
+let guard: MutationObserver | null = null;
+
+/** Zeigt ein Element in der obersten Ebene (falls der Browser das kann). */
+function lift(node: HTMLElement): void {
+  node.setAttribute('popover', 'manual');
+  try {
+    node.showPopover();
+  } catch {
+    // ohne Popover bleibt es ein festes Element – die Sichtprüfung gilt trotzdem
+  }
+}
+
+/** Ist unsere Oberfläche unverändert sichtbar (Wirt nicht durchsichtig, verdeckt, verformt)? */
+function intact(): boolean {
+  if (ui === null || !ui.host.isConnected) {
+    return false;
+  }
+  for (let node: Element | null = ui.host; node !== null; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (
+      style.filter !== 'none' ||
+      style.visibility === 'hidden' ||
+      style.display === 'none' ||
+      (node === ui.host && style.transform !== 'none')
+    ) {
+      return false;
+    }
+  }
+  return effectiveOpacity(ui.host) >= 0.99;
+}
+
+/** Liegt an der Klickstelle wirklich unser Element (nichts von der Seite darüber)? */
+function hit(e: MouseEvent, target: Element): boolean {
+  if (ui === null) {
+    return false;
+  }
+  // Tastatur (Enter/Leertaste auf dem fokussierten Eintrag) hat keine Klickstelle.
+  if (e.detail === 0) {
+    return true;
+  }
+  if (document.elementFromPoint(e.clientX, e.clientY) !== ui.host) {
+    return false;
+  }
+  const inner = ui.root.elementFromPoint(e.clientX, e.clientY);
+  return inner !== null && target.contains(inner);
+}
 
 function shield(): SVGSVGElement {
   const svg = document.createElementNS(SVG, 'svg');
@@ -76,6 +138,10 @@ function ensureUi(): NonNullable<typeof ui> {
   const host = document.createElement(`x-${tag}`);
   host.setAttribute('data-hint', '');
   const root = host.attachShadow({ mode: 'closed' });
+  // Ändert die Seite Stil, Klassen oder Attribute des Wirts, wird alles geschlossen.
+  guard?.disconnect();
+  guard = new MutationObserver(() => hide());
+  guard.observe(host, { attributes: true });
   applyTheme(root, ':host');
   const style = document.createElement('style');
   style.textContent = CSS;
@@ -88,12 +154,13 @@ function ensureUi(): NonNullable<typeof ui> {
   btn.append(shield());
   btn.addEventListener('mousedown', (e) => e.preventDefault()); // Fokus bleibt im Feld
   btn.addEventListener('click', (e) => {
-    if (e.isTrusted) {
-      toggleMenu();
+    if (e.isTrusted && intact() && hit(e, btn)) {
+      toggleMenu(false);
     }
   });
   root.append(style, btn);
   document.documentElement.append(host);
+  lift(btn);
   ui = { host, root, btn };
   return ui;
 }
@@ -143,6 +210,8 @@ function closeMenu(refocus: boolean): void {
 
 function hide(): void {
   closeMenu(false);
+  guard?.disconnect();
+  guard = null;
   ui?.host.remove();
   ui = null;
   field = null;
@@ -162,7 +231,7 @@ function line(text: string, className = ''): HTMLParagraphElement {
   return p;
 }
 
-function render(body: HTMLElement, answer: HostResponse): void {
+function render(body: HTMLElement, answer: HostResponse, focusFirst: boolean): void {
   body.replaceChildren();
   if (location.protocol === 'http:') {
     body.append(line(t.insecure, 'warn'));
@@ -185,7 +254,12 @@ function render(body: HTMLElement, answer: HostResponse): void {
     list.append(item(login, body));
   }
   body.append(list);
-  list.querySelector('button')?.focus();
+  armedAt = performance.now() + ARM_MS;
+  // Nur bei Tastaturbedienung gleich in die Liste – sonst würde ein zweiter Mausklick an
+  // derselben Stelle sofort einen Eintrag wählen.
+  if (focusFirst) {
+    list.querySelector('button')?.focus();
+  }
 }
 
 function item(login: Login, body: HTMLElement): HTMLLIElement {
@@ -199,16 +273,20 @@ function item(login: Login, body: HTMLElement): HTMLLIElement {
   sub.textContent = login.username === '' ? t.noUser : login.username;
   b.append(sub);
   b.addEventListener('click', (e) => {
-    if (!e.isTrusted) {
+    const pointer = e.detail !== 0;
+    if (!e.isTrusted || !intact() || !hit(e, b) || (pointer && performance.now() < armedAt)) {
       return;
     }
     const target = field;
     void ask({ type: 'fill', id: login.id }).then((answer) => {
-      if (answer.type === 'fill' && target !== null && target.isConnected) {
-        fill(target, answer.username, answer.password);
+      if (answer.type !== 'fill') {
+        render(body, answer, false);
+      } else if (target === null || !target.isConnected || !intact()) {
+        body.replaceChildren(line(t.hidden, 'warn'));
+      } else if (fill(target, answer.username, answer.password)) {
         closeMenu(true);
       } else {
-        render(body, answer.type === 'fill' ? { type: 'error', code: 'invalid' } : answer);
+        body.replaceChildren(line(t.hidden, 'warn'));
       }
     });
   });
@@ -235,7 +313,7 @@ function onMenuKey(e: KeyboardEvent): void {
   items[(next + items.length) % items.length]?.focus();
 }
 
-function toggleMenu(): void {
+function toggleMenu(byKeyboard: boolean): void {
   if (menu !== null) {
     closeMenu(true);
     return;
@@ -252,13 +330,14 @@ function toggleMenu(): void {
   body.append(line(t.loading, 'muted'));
   menu.append(title, body);
   root.append(menu);
+  lift(menu);
   btn.setAttribute('aria-expanded', 'true');
   place();
   const opened = menu;
   requestAnimationFrame(() => opened.classList.add('in'));
   void ask({ type: 'logins' }).then((answer) => {
     if (menu === opened) {
-      render(body, answer);
+      render(body, answer, byKeyboard);
     }
   });
 }
@@ -302,7 +381,7 @@ document.addEventListener(
     const inField = e.target === field || (field !== null && usernameFor(field) === e.target);
     if (inField && e.altKey && e.key === 'ArrowDown') {
       e.preventDefault();
-      toggleMenu();
+      toggleMenu(true);
     } else if (inField && e.key === 'Escape' && menu !== null) {
       closeMenu(true);
     }
@@ -345,7 +424,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
   const target =
     (field !== null && field.isConnected && usable(field) ? field : null) ??
-    passwordFields(document)[0] ??
+    passwordFields(document).find((p) => clearlyVisible(p)) ??
     null;
   if (target === null) {
     answer({ type: 'no_field' });
@@ -353,8 +432,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
   void ask({ type: 'fill', id: request.id }).then((r) => {
     if (r.type === 'fill') {
-      fill(target, r.username, r.password);
-      answer({ type: 'filled' });
+      answer(fill(target, r.username, r.password) ? { type: 'filled' } : { type: 'no_field' });
     } else {
       answer({ type: 'error', code: r.type === 'error' ? r.code : 'invalid' });
     }

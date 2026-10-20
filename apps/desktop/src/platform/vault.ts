@@ -133,6 +133,10 @@ export function parseStrength(raw: unknown): { level: StrengthLevel; bits: numbe
 export function vaultErrorCode(
   error: unknown,
 ): 'locked' | 'wrong_password' | 'wait' | 'windows_only' | null {
+  // „busy“ (ein anderer Versuch läuft noch) zeigt die Oberfläche wie „bitte warten“.
+  if (error === 'busy') {
+    return 'wait';
+  }
   return error === 'locked' ||
     error === 'wrong_password' ||
     error === 'wait' ||
