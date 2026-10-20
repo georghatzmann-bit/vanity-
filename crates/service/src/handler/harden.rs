@@ -847,9 +847,12 @@ mod sys {
         let newest = |points: &[aegis_hardening::restore::RestorePoint]| {
             points.iter().map(|p| p.sequence).max().unwrap_or(0)
         };
+        // Ohne lesbaren Ausgangsstand ließe sich ein neuer Punkt nicht nachweisen.
         let before = aegis_hardening::collect::restore_points()
             .map(|p| newest(&p))
-            .unwrap_or(0);
+            .map_err(|e| {
+                format!("Wiederherstellungspunkte nicht lesbar ({e}) – Computerschutz aus? Nichts geändert.")
+            })?;
         let script = format!(
             "Checkpoint-Computer -Description '{description}' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop"
         );
@@ -863,7 +866,12 @@ mod sys {
                 &script,
             ],
             Duration::from_secs(300),
-        )?;
+        )
+        .map_err(|e| {
+            format!(
+                "{e} – Windows legt den Punkt eventuell noch an; bitte die Liste gleich neu lesen."
+            )
+        })?;
         let created = aegis_hardening::collect::restore_points().is_ok_and(|points| {
             points
                 .iter()
@@ -1382,6 +1390,23 @@ impl<C: Clock, W: Durable> Service<C, W> {
             }
             Ok((steps, fix))
         });
+        if restore && let Ok((steps, _)) = &checked {
+            // Dauert oft eine Minute: ohne Dienst-Sperre ausführen (aufgeschobene Arbeit).
+            self.deferred = Some(super::backup::Deferred::restore(
+                permit,
+                Arc::clone(&system),
+                steps.clone(),
+            ));
+            // Wird durch das Ergebnis der aufgeschobenen Arbeit ersetzt.
+            return Response::Executed {
+                kind: ActionKind::ChangeSetting,
+                result: ExecutionResult::Failed {
+                    message: "läuft".into(),
+                },
+                entries: Vec::new(),
+                failures: Vec::new(),
+            };
+        }
         let (result, detail) = match checked {
             Err(message) => (
                 ExecutionResult::Failed {
@@ -1412,9 +1437,14 @@ impl<C: Clock, W: Durable> Service<C, W> {
                         }
                     }
                     None => {
-                        let _ = self
-                            .settings
-                            .update(|s| s.hardening_undo.retain(|r| r.id != value));
+                        // Nur ein ausgeführtes „Rückgängig“ verbraucht seinen eigenen Eintrag
+                        // (desselben Kontos); andere Pläne ohne Merk-Eintrag fassen nichts an.
+                        if undo {
+                            let _ = self.settings.update(|s| {
+                                s.hardening_undo
+                                    .retain(|r| !(r.id == value && r.owner == owner));
+                            });
+                        }
                         (ExecutionResult::Succeeded, String::new())
                     }
                 },

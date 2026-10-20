@@ -60,6 +60,20 @@ pub fn file_state(path: &Path) -> Option<(u64, i64)> {
     (meta.is_file() && !skip(&meta)).then(|| (meta.len(), unix(meta.modified())))
 }
 
+/// Zahl der Hardlinks einer Datei, ohne Links zu folgen (`None`: nicht lesbar).
+#[must_use]
+pub fn link_count(path: &Path) -> Option<u64> {
+    #[cfg(windows)]
+    {
+        aegis_winffi::fs::link_count_at(path).ok().map(u64::from)
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::symlink_metadata(path).ok().map(|m| m.nlink())
+    }
+}
+
 /// Grenzen eines Durchlaufs.
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {

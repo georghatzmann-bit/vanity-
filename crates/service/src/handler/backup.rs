@@ -104,6 +104,10 @@ enum Work {
     Update {
         packages: std::sync::Arc<dyn super::updates::PackageManager>,
     },
+    Restore {
+        system: std::sync::Arc<dyn super::harden::HardenSystem>,
+        steps: Vec<super::harden::Step>,
+    },
 }
 
 /// Lange Arbeit nach einem „Ja“ (Export, Ausdünnen, Software-Update) – mit der Erlaubnis als
@@ -123,6 +127,8 @@ pub enum DeferredOutcome {
     Pruned(Result<usize, String>),
     /// Software-Update: Meldung von winget.
     Updated(Result<String, String>),
+    /// Wiederherstellungspunkt angelegt.
+    Restored(Result<(), String>),
 }
 
 impl Deferred {
@@ -139,6 +145,25 @@ impl Deferred {
                 kind: DeferredKind::Prune,
             } => DeferredOutcome::Pruned(store.prune(&self.permit, user.identity().as_deref())),
             Work::Update { packages } => DeferredOutcome::Updated(packages.upgrade(&self.permit)),
+            Work::Restore { system, steps } => DeferredOutcome::Restored(
+                match super::harden::apply_steps(system.as_ref(), &self.permit, steps, user) {
+                    super::harden::Applied::Done(_) => Ok(()),
+                    super::harden::Applied::Failed(m)
+                    | super::harden::Applied::Partial { message: m, .. } => Err(m),
+                },
+            ),
+        }
+    }
+
+    /// Wiederherstellungspunkt nach dem „Ja“ (dauert oft eine Minute – ohne Dienst-Sperre).
+    pub(super) fn restore(
+        permit: ExecutionPermit,
+        system: std::sync::Arc<dyn super::harden::HardenSystem>,
+        steps: Vec<super::harden::Step>,
+    ) -> Self {
+        Self {
+            permit,
+            work: Work::Restore { system, steps },
         }
     }
 
@@ -677,9 +702,14 @@ impl<C: Clock, W: Durable> Service<C, W> {
                 format!("{n} Versionen gelöscht"),
             ),
             DeferredOutcome::Updated(Ok(message)) => (ExecutionResult::Succeeded, message),
+            DeferredOutcome::Restored(Ok(())) => (
+                ExecutionResult::Succeeded,
+                "Wiederherstellungspunkt angelegt".to_owned(),
+            ),
             DeferredOutcome::Exported(Err(m))
             | DeferredOutcome::Pruned(Err(m))
-            | DeferredOutcome::Updated(Err(m)) => {
+            | DeferredOutcome::Updated(Err(m))
+            | DeferredOutcome::Restored(Err(m)) => {
                 (ExecutionResult::Failed { message: m.clone() }, m)
             }
         };

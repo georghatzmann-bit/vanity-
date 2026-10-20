@@ -59,6 +59,9 @@ pub enum Undo {
         name: String,
         /// Wert vorher.
         previous: crate::tweaks::Value,
+        /// Von AEGIS gesetzter Wert – zurückgesetzt wird nur, solange er noch gilt.
+        #[serde(default)]
+        set: Option<crate::tweaks::Value>,
     },
     /// Voriges Desktop-Layout.
     DesktopLayout {
@@ -114,6 +117,16 @@ pub struct Run {
 }
 
 impl Run {
+    /// Gibt es ausgeführte Schritte, die sich zurücknehmen lassen? (Endgültig Gelöschtes nie.)
+    #[must_use]
+    pub fn undoable(&self) -> bool {
+        self.undone.is_none()
+            && self
+                .items
+                .iter()
+                .any(|i| i.status == Status::Done && i.undo.is_some())
+    }
+
     /// Zahl ausgeführter Schritte.
     #[must_use]
     pub fn done(&self) -> usize {
@@ -256,34 +269,88 @@ fn move_file(
     })
 }
 
-/// Überschreibt eine Datei einmal mit Zufallsdaten, benennt sie zufällig um und löscht sie.
-fn shred(path: &Path, size: u64) -> std::io::Result<()> {
+/// Überschreibt den Inhalt einmal mit Zufallsdaten (über das bereits geöffnete Handle).
+fn overwrite(file: &mut std::fs::File, size: u64) -> std::io::Result<()> {
     use std::io::{Seek, Write};
-    {
-        // Öffnet die freigegebene Datei zum Überschreiben (Link vorher ausgeschlossen).
-        // aegis-mutation: tools-shred-open
-        #[allow(clippy::disallowed_methods)]
-        let mut file = std::fs::OpenOptions::new().write(true).open(path)?;
-        file.seek(std::io::SeekFrom::Start(0))?;
-        let mut remaining = size;
-        let mut chunk = vec![0u8; 1024 * 1024];
-        while remaining > 0 {
-            let n = usize::try_from(remaining.min(chunk.len() as u64)).unwrap_or(chunk.len());
-            let part = chunk
-                .get_mut(..n)
-                .ok_or_else(|| std::io::Error::other("Puffer"))?;
-            fill_random(part)?;
-            file.write_all(part)?;
-            remaining -= n as u64;
-        }
-        file.sync_all()?;
+    file.seek(std::io::SeekFrom::Start(0))?;
+    let mut remaining = size;
+    let mut chunk = vec![0u8; 1024 * 1024];
+    while remaining > 0 {
+        let n = usize::try_from(remaining.min(chunk.len() as u64)).unwrap_or(chunk.len());
+        let part = chunk
+            .get_mut(..n)
+            .ok_or_else(|| std::io::Error::other("Puffer"))?;
+        fill_random(part)?;
+        file.write_all(part)?;
+        remaining -= n as u64;
     }
-    let hidden = path.with_file_name(uuid::Uuid::new_v4().simple().to_string());
-    rename(path, &hidden)?;
-    // Endgültiges Löschen der eben überschriebenen Datei – nur nach zweiter Bestätigung.
-    // aegis-mutation: tools-shred-remove
-    #[allow(clippy::disallowed_methods)]
-    std::fs::remove_file(&hidden)
+    file.sync_all()
+}
+
+/// Passt die geöffnete Datei noch zur Vorschau (Größe, Änderungszeit, genau ein Hardlink)?
+fn shred_checks(file: &std::fs::File, size: u64, modified: i64) -> std::io::Result<()> {
+    let meta = file.metadata()?;
+    if !meta.is_file() || meta.len() != size || crate::walk::unix(meta.modified()) != modified {
+        return Err(std::io::Error::other("seit der Vorschau verändert"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if meta.nlink() != 1 {
+            return Err(std::io::Error::other(
+                "Datei hat weitere Namen (Hardlinks) – nicht geschreddert",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Überschreibt eine Datei einmal mit Zufallsdaten und löscht sie – alles über **ein** Handle,
+/// das ohne Links geöffnet wurde (keine Lücke zwischen Prüfen und Überschreiben). Dateien mit
+/// mehreren Hardlinks werden abgelehnt (der Inhalt hinge noch an anderen Namen).
+fn shred(path: &Path, size: u64, modified: i64) -> std::io::Result<()> {
+    let after = |e: std::io::Error| {
+        std::io::Error::new(e.kind(), format!("überschrieben, aber nicht gelöscht: {e}"))
+    };
+    #[cfg(windows)]
+    {
+        let mut file = aegis_winffi::fs::open_for_shred(path)?;
+        shred_checks(&file, size, modified)?;
+        overwrite(&mut file, size)?;
+        // Endgültiges Löschen der eben überschriebenen Datei – nur nach zweiter Bestätigung.
+        aegis_winffi::fs::delete_by_handle(&file).map_err(after)
+    }
+    #[cfg(not(windows))]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        {
+            // Öffnet die freigegebene Datei zum Überschreiben, ohne einem Link zu folgen.
+            // aegis-mutation: tools-shred-open
+            #[allow(clippy::disallowed_methods)]
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .custom_flags(libc_nofollow())
+                .open(path)?;
+            shred_checks(&file, size, modified)?;
+            overwrite(&mut file, size)?;
+        }
+        let hidden = path.with_file_name(uuid::Uuid::new_v4().simple().to_string());
+        rename(path, &hidden).map_err(after)?;
+        // Endgültiges Löschen der eben überschriebenen Datei – nur nach zweiter Bestätigung.
+        // aegis-mutation: tools-shred-remove
+        #[allow(clippy::disallowed_methods)]
+        std::fs::remove_file(&hidden).map_err(after)
+    }
+}
+
+/// `O_NOFOLLOW` (Linux/macOS; nur Entwicklung).
+#[cfg(not(windows))]
+fn libc_nofollow() -> i32 {
+    if cfg!(target_os = "linux") {
+        0o400_000
+    } else {
+        0x100
+    }
 }
 
 fn fill_random(buffer: &mut [u8]) -> std::io::Result<()> {
@@ -377,6 +444,7 @@ fn step(op: &Op, platform: &dyn Platform, final_ok: bool) -> Item {
                                         key: key.clone(),
                                         name: name.clone(),
                                         previous,
+                                        set: Some(value.clone()),
                                     })
                                     .map_err(Err)
                             }
@@ -396,7 +464,7 @@ fn step(op: &Op, platform: &dyn Platform, final_ok: bool) -> Item {
                     Err(Ok("seit der Vorschau verändert"))
                 } else {
                     // Endgültig: kein Rückgängig (das hat der Nutzer zweimal bestätigt).
-                    return match shred(path, *size) {
+                    return match shred(path, *size, *modified) {
                         Ok(()) => Item {
                             label,
                             status: Status::Done,
@@ -460,7 +528,14 @@ fn reverse(undo: &Undo, platform: &dyn Platform) -> Result<(), String> {
             if file_state(now) != Some((*size, *modified)) {
                 return Err("Datei wurde inzwischen verändert oder verschoben".into());
             }
-            if std::fs::symlink_metadata(back).is_ok() {
+            // Nur Groß-/Kleinschreibung geändert (Umbenenner): unter Windows ist „back“ dieselbe
+            // Datei wie „now“ – das ist kein belegter Ort.
+            let case_only = now.parent() == back.parent()
+                && now.file_name().zip(back.file_name()).is_some_and(|(a, b)| {
+                    a != b
+                        && a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+                });
+            if !case_only && std::fs::symlink_metadata(back).is_ok() {
                 return Err("am alten Ort liegt inzwischen etwas anderes".into());
             }
             if let Some(parent) = back.parent() {
@@ -491,9 +566,17 @@ fn reverse(undo: &Undo, platform: &dyn Platform) -> Result<(), String> {
             key,
             name,
             previous,
+            set,
         } => {
             if !crate::tweaks::known(key, name) {
                 return Err("unbekannter Schalter".into());
+            }
+            // Inzwischen anders eingestellt (z. B. in den Windows-Einstellungen): nicht
+            // überschreiben.
+            if let Some(set) = set
+                && platform.registry_get(key, name).ok().as_ref() != Some(set)
+            {
+                return Err("inzwischen anders eingestellt – nicht zurückgesetzt".into());
             }
             platform
                 .registry_set(key, name, previous)
@@ -509,6 +592,13 @@ fn reverse(undo: &Undo, platform: &dyn Platform) -> Result<(), String> {
 /// Nimmt einen Lauf zurück (Schritte in umgekehrter Reihenfolge). Liefert Fehlermeldungen der
 /// Schritte, die nicht zurückgingen (z. B. Datei inzwischen verändert).
 pub fn undo(run: &mut Run, platform: &dyn Platform, now: i64) -> Vec<String> {
+    if !run.undoable() {
+        // Nichts als „zurückgenommen“ melden, was endgültig weg ist.
+        return vec![
+            "Nichts zurückzunehmen – endgültig gelöschte Dateien lassen sich nicht wiederherstellen."
+                .to_owned(),
+        ];
+    }
     let mut errors = Vec::new();
     for item in run.items.iter_mut().rev() {
         if item.status != Status::Done {

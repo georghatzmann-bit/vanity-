@@ -819,12 +819,12 @@ export const en: Messages<typeof de> = {
         'Turns programs at sign-in off or on – like Task Manager. Nothing is deleted. Change machine-wide entries in the persistence check (Hardening).',
     },
     ssdHint:
-      'Honestly: on SSDs and USB sticks, overwriting cannot guarantee that data is unrecoverable (the drive spreads writes itself). Only drive encryption such as BitLocker protects reliably there.',
+      'Honestly: on SSDs and USB sticks, overwriting cannot guarantee that data is unrecoverable (the drive spreads writes itself). Only drive encryption such as BitLocker protects reliably there. Copies elsewhere remain: shadow copies (“Previous versions”, also created by restore points), OneDrive, File History, backups. Compressed or sparse files and extra data streams are deleted but not securely overwritten. AEGIS refuses files with further names (hard links).',
     noFiles: 'No files chosen yet.',
     pickFiles: 'Choose files…',
     finalTitle: 'Delete for good?',
     finalText:
-      '{count} files will be overwritten and deleted. This cannot be undone – not even via the Recycle Bin.',
+      '{count} files will be overwritten and deleted. This cannot be undone – not even via the Recycle Bin. A Windows dialog then asks one last time.',
     finalConfirm: 'Yes, delete for good',
     renamePattern: 'Pattern ({name}, {n}, {date})',
     renameFind: 'Find',

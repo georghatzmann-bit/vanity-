@@ -172,7 +172,10 @@ describe('Werkzeuge 12–22', () => {
     fireEvent.click(within(preview).getByRole('button', { name: 'Ausführen' }));
     const again = await screen.findByRole('alertdialog', { name: 'Endgültig löschen?' });
     fireEvent.click(within(again).getByRole('button', { name: 'Ja, endgültig löschen' }));
-    expect(await within(panel).findByTestId('tool-result')).toHaveTextContent('1 ausgeführt');
+    const result = await within(panel).findByTestId('tool-result');
+    expect(result).toHaveTextContent('1 ausgeführt');
+    // Endgültig gelöscht: kein „Rückgängig“, das etwas versprechen würde.
+    expect(within(result).queryByRole('button', { name: 'Rückgängig' })).toBeNull();
     expect(tools.execute).toHaveBeenLastCalledWith('p1', 'a'.repeat(64), [], 'b'.repeat(32));
   });
 

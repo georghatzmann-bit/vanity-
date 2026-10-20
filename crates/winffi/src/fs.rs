@@ -280,6 +280,32 @@ pub fn is_name_surrogate(path: &Path) -> io::Result<bool> {
 /// # Errors
 /// Kein Zugriff (mit den Rechten des Aufrufers), in Benutzung, Link, falscher Typ.
 pub fn open_exclusive(path: &Path) -> io::Result<File> {
+    open_exclusive_with(path, GENERIC_READ | DELETE | FILE_READ_ATTRIBUTES)
+}
+
+/// Öffnet eine Datei zum Überschreiben und Löschen (Datei-Shredder, nur nach zweiter
+/// Bestätigung): wie [`open_exclusive`] – exklusiv, ohne Links, genau ein Hardlink –, dazu mit
+/// Schreibrecht. Überschrieben und gelöscht wird danach nur über dieses Handle.
+///
+/// # Errors
+/// Wie [`open_exclusive`].
+pub fn open_for_shred(path: &Path) -> io::Result<File> {
+    open_exclusive_with(
+        path,
+        GENERIC_READ | GENERIC_WRITE | DELETE | FILE_READ_ATTRIBUTES,
+    )
+}
+
+/// Zahl der Hardlinks einer Datei, ohne Links zu folgen (nur Attribute gelesen).
+///
+/// # Errors
+/// Nicht lesbar.
+pub fn link_count_at(path: &Path) -> io::Result<u32> {
+    let probe = open_attributes(path, false)?;
+    Ok(info(probe.as_raw_handle())?.nNumberOfLinks)
+}
+
+fn open_exclusive_with(path: &Path, access: u32) -> io::Result<File> {
     let probe = open_attributes(path, false)?;
     let tag = tag_info(probe.as_raw_handle())?;
     if tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY != 0 || is_surrogate(&tag) {
@@ -298,14 +324,7 @@ pub fn open_exclusive(path: &Path) -> io::Result<File> {
     // SAFETY: `probe` ist ein gültiges Handle; ReOpenFile öffnet dasselbe Dateiobjekt neu.
     // aegis-unsafe: winffi-open-exclusive
     #[allow(unsafe_code)]
-    let handle = own(unsafe {
-        ReOpenFile(
-            probe.as_raw_handle(),
-            GENERIC_READ | DELETE | FILE_READ_ATTRIBUTES,
-            0,
-            flags,
-        )
-    })?;
+    let handle = own(unsafe { ReOpenFile(probe.as_raw_handle(), access, 0, flags) })?;
     drop(probe);
     let info = info(handle.as_raw_handle())?;
     if info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY != 0 {

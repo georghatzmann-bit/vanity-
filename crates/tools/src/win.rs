@@ -39,8 +39,30 @@ fn bin_for(path: &Path) -> io::Result<PathBuf> {
     Ok(root.join("$Recycle.Bin").join(sid))
 }
 
+/// Langform eines Pfads (Kurznamen wie `RUNNER~1` aufgelöst): vorhandener Ordner aufgelöst,
+/// Dateiname angehängt. Windows trägt im Papierkorb die Langform ein.
+fn long_path(path: &Path) -> PathBuf {
+    let resolved = path
+        .parent()
+        .and_then(|dir| std::fs::canonicalize(dir).ok())
+        .zip(path.file_name())
+        .map(|(dir, name)| dir.join(name));
+    match resolved {
+        Some(p) => {
+            let text = p.to_string_lossy().into_owned();
+            text.strip_prefix(r"\\?\")
+                .filter(|rest| !rest.to_ascii_uppercase().starts_with("UNC\\"))
+                .map_or(p, PathBuf::from)
+        }
+        None => path.to_path_buf(),
+    }
+}
+
 fn same_path(a: &Path, b: &Path) -> bool {
-    aegis_winffi::fs::ordinal_eq_ignore_case(&a.to_string_lossy(), &b.to_string_lossy())
+    let eq = |x: &Path, y: &Path| {
+        aegis_winffi::fs::ordinal_eq_ignore_case(&x.to_string_lossy(), &y.to_string_lossy())
+    };
+    eq(a, b) || eq(&long_path(a), &long_path(b))
 }
 
 /// Windows (Konto des angemeldeten Nutzers).
@@ -50,6 +72,8 @@ pub struct WindowsPlatform;
 impl Platform for WindowsPlatform {
     fn recycle(&self, path: &Path) -> io::Result<Recycled> {
         let bin = bin_for(path)?;
+        // Langform vor dem Verschieben bestimmen (danach fehlt die Datei, der Ordner nicht).
+        let long = long_path(path);
         aegis_winffi::shell::recycle(path)?;
         // Den eben angelegten Eintrag wiederfinden: Originalpfad, jüngste Löschzeit.
         let mut best: Option<(u64, PathBuf)> = None;
@@ -62,7 +86,7 @@ impl Platform for WindowsPlatform {
                 continue;
             };
             if let Some(info) = parse_info(&bytes)
-                && same_path(&info.original, path)
+                && (same_path(&info.original, path) || same_path(&info.original, &long))
                 && best.as_ref().is_none_or(|(t, _)| info.deleted > *t)
             {
                 best = Some((info.deleted, entry.path()));
@@ -164,13 +188,23 @@ impl Platform for WindowsPlatform {
                     .ok_or_else(|| io::Error::other("DWORD zu kurz"))?,
             )),
             Some(v) if v.kind == REG_SZ => {
-                let units: Vec<u16> = v
+                let mut units: Vec<u16> = v
                     .bytes
                     .chunks_exact(2)
                     .map(|c| u16::from_le_bytes([c[0], c[1]]))
-                    .take_while(|u| *u != 0)
                     .collect();
-                Value::Text(String::from_utf16_lossy(&units))
+                // Genau ein abschließendes NUL ist üblich; alles andere ließe sich nicht exakt
+                // zurückschreiben – dann lieber gar nicht ändern.
+                while units.last() == Some(&0) {
+                    units.pop();
+                }
+                if v.bytes.len() % 2 != 0 || units.contains(&0) {
+                    return Err(io::Error::other("ungewöhnlicher Wert – nichts geändert"));
+                }
+                Value::Text(
+                    String::from_utf16(&units)
+                        .map_err(|_| io::Error::other("ungewöhnlicher Wert – nichts geändert"))?,
+                )
             }
             Some(_) => return Err(io::Error::other("unerwarteter Typ")),
         })
@@ -199,7 +233,23 @@ impl Platform for WindowsPlatform {
                     },
                 )
             }
-            Value::Absent => aegis_winffi::registry::delete_value(&Hive::CurrentUser, key, name),
+            Value::Absent => {
+                aegis_winffi::registry::delete_value(&Hive::CurrentUser, key, name)?;
+                // Schalter, deren Wirkung am Schlüssel selbst hängt (klassisches Kontextmenü):
+                // die selbst angelegten, jetzt leeren Schlüssel wieder entfernen – nur leere.
+                if crate::tweaks::removes_keys(key) {
+                    let mut current = key.to_owned();
+                    while crate::tweaks::removes_keys(&current)
+                        && aegis_winffi::registry::delete_empty_key(&Hive::CurrentUser, &current)?
+                    {
+                        match current.rsplit_once('\\') {
+                            Some((parent, _)) => current = parent.to_owned(),
+                            None => break,
+                        }
+                    }
+                }
+                Ok(())
+            }
         }
     }
 

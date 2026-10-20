@@ -1069,7 +1069,7 @@ function LogTool({ tools, version }: { readonly tools: ToolsApi; readonly versio
           {run.undone !== null ? (
             <p className="text-text-subtle">{notes.get(run.id) ?? t('toolbox.undone')}</p>
           ) : (
-            run.done > 0 && (
+            run.undoable && (
               <Button
                 size="sm"
                 variant="secondary"

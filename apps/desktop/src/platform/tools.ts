@@ -207,6 +207,8 @@ export interface ToolRun {
   readonly done: number;
   readonly skipped: number;
   readonly failed: number;
+  /** Lässt sich etwas zurücknehmen? (Shredder: nie.) */
+  readonly undoable: boolean;
   readonly items: readonly RunItem[];
 }
 
@@ -355,6 +357,7 @@ export function parseRun(v: unknown): ToolRun {
     done: num(o['done']),
     skipped: num(o['skipped']),
     failed: num(o['failed']),
+    undoable: o['undoable'] === true,
     items: arr(o['items']).map((i) => {
       const r = rec(i);
       return {

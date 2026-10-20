@@ -6,7 +6,8 @@ use std::ptr;
 
 use windows_sys::Win32::System::Registry::{
     HKEY, KEY_QUERY_VALUE, KEY_SET_VALUE, KEY_WOW64_64KEY, REG_DWORD, REG_OPTION_NON_VOLATILE,
-    RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
+    RegCloseKey, RegCreateKeyExW, RegDeleteKeyExW, RegDeleteValueW, RegOpenKeyExW,
+    RegQueryInfoKeyW, RegQueryValueExW, RegSetValueExW,
 };
 
 use crate::inspect::Hive;
@@ -212,4 +213,70 @@ pub fn delete_value(hive: &Hive, key: &str, name: &str) -> io::Result<()> {
     } else {
         status(code)
     }
+}
+
+/// Entfernt einen Schlüssel nur, wenn er **leer** ist (keine Werte, keine Unterschlüssel) –
+/// für „Rückgängig“ eines Schlüssels, den ein freigegebener Plan selbst angelegt hat. Fehlt er:
+/// kein Fehler. Liefert, ob er entfernt wurde.
+///
+/// # Errors
+/// Kein Zugriff.
+pub fn delete_empty_key(hive: &Hive, key: &str) -> io::Result<bool> {
+    let (root, path, _) = hive.root_and_prefix(key);
+    let wide_path = wide(&path);
+    let mut raw: HKEY = ptr::null_mut();
+    // SAFETY: nullterminierter Pfad; nur Leserecht zum Zählen.
+    // aegis-unsafe: winffi-registry-open-count
+    #[allow(unsafe_code)]
+    let code = unsafe {
+        RegOpenKeyExW(
+            root,
+            wide_path.as_ptr(),
+            0,
+            KEY_QUERY_VALUE | KEY_WOW64_64KEY,
+            &mut raw,
+        )
+    };
+    if code == NOT_FOUND {
+        return Ok(false);
+    }
+    status(code)?;
+    let handle = Key(raw);
+    let (mut subkeys, mut values) = (0u32, 0u32);
+    // SAFETY: Schlüssel offen; nur die beiden Zähler werden abgefragt, alle anderen
+    // Ausgaben sind Nullzeiger (laut Dokumentation erlaubt).
+    // aegis-unsafe: winffi-registry-count
+    #[allow(unsafe_code)]
+    let code = unsafe {
+        RegQueryInfoKeyW(
+            handle.0,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null(),
+            &mut subkeys,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &mut values,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
+    };
+    status(code)?;
+    drop(handle);
+    if subkeys != 0 || values != 0 {
+        return Ok(false);
+    }
+    // SAFETY: nullterminierter Pfad; RegDeleteKeyExW entfernt nur diesen (leeren) Schlüssel.
+    // aegis-unsafe: winffi-registry-delete-key
+    #[allow(unsafe_code)]
+    // Entfernt nur einen leeren Schlüssel, den der Plan selbst angelegt hatte („Rückgängig“).
+    // aegis-mutation: winffi-registry-delete-empty-key
+    #[allow(clippy::disallowed_methods)]
+    let code = unsafe { RegDeleteKeyExW(root, wide_path.as_ptr(), KEY_WOW64_64KEY, 0) };
+    if code == NOT_FOUND {
+        return Ok(false);
+    }
+    status(code).map(|()| true)
 }

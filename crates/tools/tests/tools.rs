@@ -476,3 +476,39 @@ fn windows_papierkorb_und_zurueck() {
     platform.restore(&item, &file).unwrap();
     assert_eq!(std::fs::read(&file).unwrap(), b"harmlos");
 }
+
+#[cfg(unix)]
+#[test]
+fn shredder_lehnt_hardlinks_ab() {
+    let dir = tempfile::tempdir().unwrap();
+    write_fixture(dir.path(), "Downloads/kopie.txt", b"geheim").unwrap();
+    aegis_core::testing::create_fixture_hardlink(dir.path(), "anderswo.txt", "Downloads/kopie.txt")
+        .unwrap();
+    let path = dir.path().join("Downloads/kopie.txt");
+    assert_eq!(aegis_tools::walk::link_count(&path), Some(2));
+    // Auch eine (fremd erstellte) Vorschau führt nicht zum Überschreiben.
+    use aegis_tools::plan::{Op, Plan, Tool};
+    let (size, modified) = aegis_tools::walk::file_state(&path).unwrap();
+    let plan = Plan::new(
+        Tool::Shredder,
+        vec![Op::Shred {
+            path: path.clone(),
+            size,
+            modified,
+        }],
+        now(),
+    );
+    let token = aegis_tools::plan::token();
+    let approved =
+        Approved::by_user_final(&plan, &plan.digest(), vec![], now(), &token, &token).unwrap();
+    let platform = LocalPlatform {
+        trash: dir.path().join("trash"),
+    };
+    let run = execute(approved, &platform, now());
+    assert_eq!(run.done(), 0, "{:?}", run.items);
+    assert_eq!(
+        std::fs::read(dir.path().join("anderswo.txt")).unwrap(),
+        b"geheim"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), b"geheim");
+}

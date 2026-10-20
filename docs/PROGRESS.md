@@ -1,6 +1,6 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-20 · **P0–P10 abgeschlossen** · nächste Phase: **P11 – Tools 12–22**
+Stand: 2026-10-20 · **P0–P11 abgeschlossen** · nächste Phase: **P12 – Privacy-Browser**
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
@@ -33,7 +33,7 @@ Stand: 2026-10-20 · **P0–P10 abgeschlossen** · nächste Phase: **P11 – Too
 | P8 | Defender-Schalter | erledigt |
 | P9 | Tresor + Erweiterung | erledigt |
 | P10 | Tools 1–11 | erledigt |
-| P11 | Tools 12–22 + Animations-Feinschliff | in Arbeit |
+| P11 | Tools 12–22 + Animations-Feinschliff | erledigt |
 | P12 | Privacy-Browser | offen |
 | P13 | Setup-Bootstrapper, Uninstaller, Updater, Abschlusstests, deutsches README | offen |
 | P14 | optional: ML-Modell, AMSI-Beobachter, Browser-Sandbox | offen |
@@ -205,7 +205,16 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        Ergebnisse der Werkzeuge, eigene 16-px-Variante des Logos (`logo-mark-16.svg`: Schild
        ohne feines Λ, kräftiger Scan-Balken) für die 16/24-px-Bilder in `icon.ico` und das
        Tray-Symbol.
-4. [ ] P11.4 Sicherheits-Review P11 (separater Agent), Befunde beheben, DoD.
+4. [x] P11.4 Sicherheits-Review P11 (separater Agent): 5 mittel, 5 niedrig behoben (Shredder
+       über ein Handle ohne Links und ohne Hardlinks, Fenster des Systems als letzte Bestätigung,
+       kein falsches „Rückgängig“, Wiederherstellungspunkt ohne Dienst-Sperre) – siehe
+       `docs/SECURITY.md`. Dazu Windows-CI: Papierkorb-Eintrag über die Langform des Pfads.
+
+**DoD P11:** 22 Werkzeuge vorhanden (13/14/20/21 als Verweise auf die Seiten der App), jedes
+mit Vorschau; verändernde nur nach „Ausführen“, mit Protokoll und Rückgängig – außer dem
+Shredder, der nur nach zweiter, getrennter Bestätigung (samt Fenster des Systems) endgültig
+löscht und das ehrlich sagt; Wiederherstellungspunkte nur über den Dienst nach „Ja“;
+Animationen nur über transform/opacity, reduzierte Bewegung respektiert.
 
 ## P10 – Windows-Tools 1–11
 
@@ -373,6 +382,5 @@ unbekannte Downloads – nie automatisch).
 
 ## Nächster Schritt
 
-P11.2: Wiederherstellungspunkte über den Dienst, dann Animations-Feinschliff und Review P11;
 P12 (Privacy-Browser), P13 (Setup, Updater, Deinstallation, README; dabei Host und Erweiterungen
 ausliefern und registrieren).

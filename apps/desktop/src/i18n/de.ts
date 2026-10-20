@@ -829,12 +829,12 @@ export const de = {
         'Schaltet Programme beim Anmelden aus oder an – wie der Task-Manager. Gelöscht wird nichts. Rechnerweite Einträge änderst du im Persistenz-Check (Härtung).',
     },
     ssdHint:
-      'Ehrlich: Auf SSDs und USB-Sticks kann Überschreiben keine Wiederherstellung garantieren (der Speicher verteilt Schreibvorgänge selbst). Wirksam schützt dort nur eine Laufwerksverschlüsselung wie BitLocker.',
+      'Ehrlich: Auf SSDs und USB-Sticks kann Überschreiben keine Wiederherstellung garantieren (der Speicher verteilt Schreibvorgänge selbst). Wirksam schützt dort nur eine Laufwerksverschlüsselung wie BitLocker. Kopien an anderen Orten bleiben: Schattenkopien („Vorherige Versionen“, auch durch Wiederherstellungspunkte), OneDrive, Dateiversionsverlauf, Backups. Komprimierte oder „sparse“ Dateien und zusätzliche Datenströme werden gelöscht, aber nicht sicher überschrieben. Dateien mit weiteren Namen (Hardlinks) lehnt AEGIS ab.',
     noFiles: 'Noch keine Dateien gewählt.',
     pickFiles: 'Dateien wählen …',
     finalTitle: 'Endgültig löschen?',
     finalText:
-      '{count} Dateien werden überschrieben und gelöscht. Das lässt sich nicht rückgängig machen – auch nicht über den Papierkorb.',
+      '{count} Dateien werden überschrieben und gelöscht. Das lässt sich nicht rückgängig machen – auch nicht über den Papierkorb. Danach fragt ein Fenster von Windows ein letztes Mal nach.',
     finalConfirm: 'Ja, endgültig löschen',
     renamePattern: 'Muster ({name}, {n}, {date})',
     renameFind: 'Suchen',

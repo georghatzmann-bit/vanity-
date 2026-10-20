@@ -77,12 +77,16 @@ pub fn parse(text: &str) -> Vec<HostEntry> {
         };
         for host in parts.take(64) {
             let host = host.to_ascii_lowercase();
-            let kind = if host == "localhost" || host == "localhost.localdomain" {
+            let bare = host.trim_end_matches('.');
+            let local = bare == "localhost" || bare == "localhost.localdomain";
+            // Bekannte Dienste – auch gesperrt (Schadsoftware blockiert gern Updates und
+            // Sicherheitsanbieter) – und `localhost` auf eine fremde Adresse sind verdächtig.
+            let kind = if local && loopback(address) {
                 Kind::Default
+            } else if local || watched(bare) {
+                Kind::Suspicious
             } else if loopback(address) {
                 Kind::Block
-            } else if watched(&host) {
-                Kind::Suspicious
             } else {
                 Kind::Redirect
             };
@@ -100,15 +104,18 @@ pub fn parse(text: &str) -> Vec<HostEntry> {
     out
 }
 
-/// Pfad der Hosts-Datei.
+/// Pfad der Hosts-Datei (Windows-Ordner vom System erfragt, nicht aus der veränderbaren
+/// Umgebungsvariable `SystemRoot`).
 #[must_use]
 pub fn path() -> std::path::PathBuf {
-    std::env::var_os("SystemRoot")
-        .map_or_else(
-            || std::path::PathBuf::from(r"C:\Windows"),
-            std::path::PathBuf::from,
-        )
-        .join(r"System32\drivers\etc\hosts")
+    #[cfg(windows)]
+    let windows = aegis_winffi::accounts::system_dir()
+        .ok()
+        .and_then(|system32| system32.parent().map(std::path::Path::to_path_buf))
+        .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"));
+    #[cfg(not(windows))]
+    let windows = std::path::PathBuf::from(r"C:\Windows");
+    windows.join(r"System32\drivers\etc\hosts")
 }
 
 #[cfg(test)]
@@ -132,5 +139,18 @@ mod tests {
             ]
         );
         assert_eq!(e[2].line, 4);
+        let tricks = parse(
+            "0.0.0.0 windowsupdate.com\n127.0.0.1 www.kaspersky.com.\n203.0.113.9 localhost\n::1 localhost\n",
+        );
+        let kinds: Vec<Kind> = tricks.iter().map(|x| x.kind).collect();
+        assert_eq!(
+            kinds,
+            [
+                Kind::Suspicious,
+                Kind::Suspicious,
+                Kind::Suspicious,
+                Kind::Default
+            ]
+        );
     }
 }

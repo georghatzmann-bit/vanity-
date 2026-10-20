@@ -479,6 +479,7 @@ export function fakeTools(): ToolsApi & { readonly runList: ToolRun[] } {
         at: 1_760_000_000,
         undone: null,
         done: p.items.length - skip.length,
+        undoable: !p.needsFinal && p.items.length > skip.length,
         skipped: skip.length,
         failed: 0,
         items: p.items.map((i, index) => ({

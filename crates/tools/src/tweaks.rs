@@ -231,6 +231,18 @@ pub fn is_on(tweak: &Tweak, current: &Value) -> bool {
     current == &tweak.on.owned()
 }
 
+/// Wurzel der Schlüssel, die der Schalter „klassisches Kontextmenü“ selbst anlegt.
+const CLASSIC_MENU_ROOT: &str = r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}";
+
+/// Liegt `key` in einem Bereich, den ein Schalter selbst anlegt und beim Ausschalten (leer)
+/// wieder entfernt? (Nur der CLSID-Schlüssel des klassischen Kontextmenüs, nicht `CLSID`.)
+#[must_use]
+pub fn removes_keys(key: &str) -> bool {
+    let k = key.to_ascii_lowercase();
+    let root = CLASSIC_MENU_ROOT.to_ascii_lowercase();
+    k == root || k.starts_with(&format!("{root}\\"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,5 +262,21 @@ mod tests {
         assert!(!is_on(ext, &Value::Absent));
         assert!(known(ADV, "hidefileext"));
         assert!(!known(ADV, "Shell"));
+    }
+
+    #[test]
+    fn nur_der_eigene_clsid_schluessel_wird_entfernt() {
+        let t = find("classic_context_menu").unwrap();
+        assert!(removes_keys(t.key));
+        assert!(removes_keys(
+            r"Software\Classes\CLSID\{86CA1AA0-34AA-4E8B-A509-50C905BAE2A2}"
+        ));
+        assert!(!removes_keys(r"Software\Classes\CLSID"));
+        assert!(!removes_keys(
+            r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}x"
+        ));
+        assert!(!removes_keys(
+            r"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo"
+        ));
     }
 }

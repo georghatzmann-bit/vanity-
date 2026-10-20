@@ -249,6 +249,7 @@ fn remember(plan: Plan, groups: Vec<DuplicateGroup>) -> PreviewView {
     while s.order.len() > MAX_PREVIEWS {
         let old = s.order.remove(0);
         s.previews.remove(&old);
+        s.finals.remove(&old);
     }
     view
 }
@@ -342,6 +343,13 @@ fn build<R: tauri::Runtime>(
                 if !aegis_tools::guard::allowed(&path) {
                     return Err("Diese Datei fasst AEGIS nicht an (Systemort).".into());
                 }
+                // Weitere Namen (Hardlinks): Überschreiben träfe auch diese – nie.
+                if aegis_tools::walk::link_count(&path) != Some(1) {
+                    return Err(
+                        "Diese Datei hat weitere Namen (Hardlinks) – der Shredder lehnt sie ab."
+                            .into(),
+                    );
+                }
                 ops.push(Op::Shred {
                     path,
                     size,
@@ -419,6 +427,8 @@ pub struct RunView {
     pub skipped: usize,
     /// Fehlgeschlagen.
     pub failed: usize,
+    /// Lässt sich (noch) etwas zurücknehmen? (Shredder: nie.)
+    pub undoable: bool,
     /// Schritte (Text, Ergebnis, Grund).
     pub items: Vec<RunItemView>,
 }
@@ -445,6 +455,7 @@ fn run_view(run: &Run) -> RunView {
         done: count(Status::Done) + count(Status::Undone),
         skipped: count(Status::Skipped),
         failed: count(Status::Failed),
+        undoable: run.undoable(),
         items: run
             .items
             .iter()
@@ -455,6 +466,29 @@ fn run_view(run: &Run) -> RunView {
             })
             .collect(),
     }
+}
+
+/// Letzte, getrennte Bestätigung für endgültiges Löschen in einem **Fenster des Systems**
+/// (nicht in der Web-Oberfläche – Skripte darin können es nicht beantworten). Standard bei
+/// Schließen: Abbrechen.
+fn native_final_confirm<R: tauri::Runtime>(app: &tauri::AppHandle<R>, plan: &Plan) -> bool {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+    let count = plan
+        .ops
+        .iter()
+        .filter(|o| matches!(o, Op::Shred { .. }))
+        .count();
+    app.dialog()
+        .message(format!(
+            "{count} Datei(en) werden überschrieben und endgültig gelöscht. Das lässt sich nicht rückgängig machen.\n\nWirklich endgültig löschen?"
+        ))
+        .title("AEGIS – Endgültig löschen")
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "Endgültig löschen".to_owned(),
+            "Abbrechen".to_owned(),
+        ))
+        .blocking_show()
 }
 
 /// Führt genau die Vorschau `id` aus (der Nutzer hat „Ausführen“ gewählt).
@@ -502,6 +536,10 @@ pub async fn tools_execute<R: tauri::Runtime>(
             Approved::by_user(&plan, &digest, skip, now())
         }
         .map_err(refused)?;
+        if needs_final && !native_final_confirm(&app, &plan) {
+            // Abgebrochen im Fenster des Systems: nichts gelöscht (Vorschau verbraucht).
+            return Err("Abgebrochen – nichts gelöscht.".to_owned());
+        }
         let platform = platform(&app)?;
         let run = execute(approved, platform.as_ref(), now());
         journal(&app)?
@@ -667,8 +705,15 @@ fn system_info() -> aegis_tools::health::SystemInfo {
         let cv = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
         let ubr = value(cv, "UBR");
         let build = value(cv, "CurrentBuild");
+        // `ProductName` sagt auf Windows 11 oft noch „Windows 10 …“ – maßgeblich ist der Build.
+        let product = value(cv, "ProductName");
+        let product = if build.parse::<u32>().is_ok_and(|b| b >= 22_000) {
+            product.replacen("Windows 10", "Windows 11", 1)
+        } else {
+            product
+        };
         aegis_tools::health::SystemInfo {
-            os: value(cv, "ProductName"),
+            os: product,
             version: value(cv, "DisplayVersion"),
             build: if ubr.is_empty() {
                 build

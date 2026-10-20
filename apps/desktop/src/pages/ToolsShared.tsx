@@ -225,7 +225,7 @@ export function PreviewFlow({
             ? t('toolbox.undone')
             : `${t('toolbox.undoPartial')} ${errors.join(' · ')}`,
         );
-        setRun({ ...run, undone: 1 });
+        setRun({ ...run, undone: 1, undoable: false });
         setBusy(false);
         onDone();
       },
@@ -354,7 +354,7 @@ export function PreviewFlow({
             })}
           </p>
           {undoText === null ? (
-            run.done > 0 && (
+            run.undoable && (
               <Button size="sm" variant="secondary" disabled={busy} onClick={undo}>
                 {t('toolbox.undo')}
               </Button>

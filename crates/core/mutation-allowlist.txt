@@ -436,3 +436,7 @@ crates/winffi/src/sysinfo.rs :: winffi-logical-drives :: Windows-FFI (Systeminfo
 crates/winffi/src/sysinfo.rs :: winffi-drive-type :: Windows-FFI (Systeminfo): GetDriveTypeW – nur Abfrage.
 crates/winffi/src/shell.rs :: winffi-recycle-guard :: Windows-FFI (Tools): COM-Tabelle (implement-Makro) des Papierkorb-Wächters – bricht endgültiges Löschen, Umbenennen, Kopieren ab.
 crates/winffi/src/shell.rs :: winffi-recycle-drive-type :: Windows-FFI (Tools): GetDriveTypeW – Papierkorb nur auf festen Laufwerken (nur Abfrage).
+crates/winffi/src/registry.rs :: winffi-registry-open-count :: Windows-FFI: öffnet einen Schlüssel nur lesend, um Werte und Unterschlüssel zu zählen.
+crates/winffi/src/registry.rs :: winffi-registry-count :: Windows-FFI: RegQueryInfoKeyW – zählt Werte und Unterschlüssel (nur lesend).
+crates/winffi/src/registry.rs :: winffi-registry-delete-key :: Windows-FFI: RegDeleteKeyExW für einen leeren Schlüssel, den ein freigegebener Plan selbst angelegt hatte.
+crates/winffi/src/registry.rs :: winffi-registry-delete-empty-key :: Windows-FFI: „Rückgängig“ eines selbst angelegten, inzwischen leeren Schlüssels (Explorer-Schalter), nur nach Freigabe.
