@@ -26,6 +26,8 @@ time = { workspace = true }
 aegis-netwatch = { workspace = true }
 # Passwort-Tresor (P9).
 aegis-vault-core = { workspace = true }
+# Windows-Tools (P10): Vorschau, Protokoll, Rückgängig.
+aegis-tools = { workspace = true }
 zeroize = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]

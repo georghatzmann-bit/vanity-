@@ -18,6 +18,16 @@ import { version as configuredVersion } from '../../src-tauri/tauri.conf.json';
 import { parseAppInfo, previewAppInfo, type AppInfo } from './appInfo.ts';
 import { parseLanReport, type LanReport } from './lan.ts';
 import { parseStrength, parseVaultList, parseVaultStatus, type VaultApi } from './vault.ts';
+import {
+  parseAutostart,
+  parseDefaults,
+  parseLayout,
+  parsePreview,
+  parseRule,
+  parseRun,
+  parseSpace,
+  type ToolsApi,
+} from './tools.ts';
 import { parseEmailResult, parseRange, type EmailResult, type RangeEntry } from './leak.ts';
 import {
   expectType,
@@ -128,6 +138,8 @@ export interface Platform {
   readonly leakEmailCheck: ((email: string, apiKey: string) => Promise<EmailResult>) | null;
   /** Passwort-Tresor (P9). `null` in der Vorschau. */
   readonly vault: VaultApi | null;
+  /** Windows-Tools (P10). `null` in der Vorschau. */
+  readonly tools: ToolsApi | null;
 }
 
 /** Ausgetauschte Krypto-Adresse (gekürzt). */
@@ -162,6 +174,11 @@ export type WindowsSettingsPage =
   | 'virus_protection'
   | 'core_isolation'
   | 'defender_settings';
+
+/** Nur lesende Abfrage der Werkzeuge (Speicherplatz, Autostart, Standardordner). */
+function toolsScan(request: Readonly<Record<string, string>>): Promise<unknown> {
+  return invoke<unknown>('tools_scan', { request });
+}
 
 /** Wandelt das Ergebnis des Auswahldialogs in eine Pfadliste. */
 export function toPathList(selection: unknown): readonly string[] {
@@ -248,6 +265,34 @@ export function createTauriPlatform(): Platform {
       invoke<unknown>('leak_password_range', { prefix }).then(parseRange),
     leakEmailCheck: (email, apiKey) =>
       invoke<unknown>('leak_email_check', { email, apiKey }).then(parseEmailResult),
+    tools: {
+      preview: (request) => invoke<unknown>('tools_preview', { request }).then(parsePreview),
+      execute: (id, digest, skip) =>
+        invoke<unknown>('tools_execute', { id, digest, skip }).then(parseRun),
+      runs: async () => {
+        const r = await invoke<unknown>('tools_runs');
+        return Array.isArray(r) ? r.map(parseRun) : [];
+      },
+      undo: async (id) => {
+        const r = await invoke<unknown>('tools_undo', { id });
+        return Array.isArray(r) ? r.filter((x): x is string => typeof x === 'string') : [];
+      },
+      space: (root) => toolsScan({ kind: 'space', root }).then(parseSpace),
+      autostart: () => toolsScan({ kind: 'autostart' }).then(parseAutostart),
+      defaults: () => toolsScan({ kind: 'defaults' }).then(parseDefaults),
+      rules: async () => {
+        const r = await invoke<unknown>('tools_rules');
+        return Array.isArray(r) ? r.map(parseRule) : [];
+      },
+      saveRule: (rule) => invoke<unknown>('tools_rule_save', { rule }).then(parseRule),
+      deleteRule: (id) => invoke<undefined>('tools_rule_delete', { id }),
+      layouts: async () => {
+        const r = await invoke<unknown>('tools_layouts');
+        return Array.isArray(r) ? r.map(parseLayout) : [];
+      },
+      saveLayout: (name) => invoke<unknown>('tools_layout_save', { name }).then(parseLayout),
+      deleteLayout: (name) => invoke<undefined>('tools_layout_delete', { name }),
+    },
     vault: {
       status: () => invoke<unknown>('vault_status').then(parseVaultStatus),
       setup: (master) => invoke<undefined>('vault_setup', { master }),
@@ -419,6 +464,7 @@ export function createBrowserPlatform(info: AppInfo): Platform {
     leakPasswordRange: null,
     leakEmailCheck: null,
     vault: null,
+    tools: null,
   };
 }
 

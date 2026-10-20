@@ -13,6 +13,7 @@ mod navigation;
 mod report;
 mod service;
 mod startup_error;
+mod tools;
 mod tray;
 mod vault;
 mod window;
@@ -74,6 +75,17 @@ fn main() {
             vault::vault_strength,
             vault::vault_import,
             vault::vault_change_master,
+            tools::tools_preview,
+            tools::tools_execute,
+            tools::tools_runs,
+            tools::tools_undo,
+            tools::tools_scan,
+            tools::tools_rules,
+            tools::tools_rule_save,
+            tools::tools_rule_delete,
+            tools::tools_layouts,
+            tools::tools_layout_save,
+            tools::tools_layout_delete,
             service::service_scan,
             service::service_list_quarantine,
             service::service_propose_quarantine,
@@ -149,6 +161,9 @@ fn main() {
             // Brücke zur Tresor-Erweiterung (nur eigenes Konto, nur unser Host).
             #[cfg(windows)]
             vault::start_bridge();
+            // Hintergrund-Überwachung der Werkzeug-Regeln (handelt nur nach eingeschalteten
+            // Regeln mit „im Hintergrund“).
+            tools::start_watcher(app.handle().clone());
             app.manage(app_info::AppInfo::detect(
                 app.package_info().version.to_string(),
                 tray_available,
@@ -209,6 +224,17 @@ mod test_support {
                 crate::vault::vault_strength,
                 crate::vault::vault_import,
                 crate::vault::vault_change_master,
+                crate::tools::tools_preview,
+                crate::tools::tools_execute,
+                crate::tools::tools_runs,
+                crate::tools::tools_undo,
+                crate::tools::tools_scan,
+                crate::tools::tools_rules,
+                crate::tools::tools_rule_save,
+                crate::tools::tools_rule_delete,
+                crate::tools::tools_layouts,
+                crate::tools::tools_layout_save,
+                crate::tools::tools_layout_delete,
                 crate::service::service_scan,
                 crate::service::service_list_quarantine,
                 crate::service::service_propose_quarantine,
@@ -288,7 +314,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 86] = [
+    const EXPECTED_PERMISSIONS: [&str; 97] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -317,6 +343,17 @@ mod tests {
         "allow-vault-strength",
         "allow-vault-import",
         "allow-vault-change-master",
+        "allow-tools-preview",
+        "allow-tools-execute",
+        "allow-tools-runs",
+        "allow-tools-undo",
+        "allow-tools-scan",
+        "allow-tools-rules",
+        "allow-tools-rule-save",
+        "allow-tools-rule-delete",
+        "allow-tools-layouts",
+        "allow-tools-layout-save",
+        "allow-tools-layout-delete",
         "allow-service-scan",
         "allow-service-list-quarantine",
         "allow-service-propose-quarantine",
@@ -601,6 +638,26 @@ mod tests {
                 ("vault_strength", json!({ "password": "x" })),
                 ("vault_import", json!({ "path": "" })),
                 ("vault_change_master", json!({ "old": "x", "new": "y" })),
+                (
+                    "tools_preview",
+                    json!({ "request": { "tool": "empty_folders", "root": "/aegis-test/gibt-es-nicht" } }),
+                ),
+                (
+                    "tools_execute",
+                    json!({ "id": "x", "digest": "y", "skip": [] }),
+                ),
+                ("tools_runs", json!({})),
+                ("tools_undo", json!({ "id": "x" })),
+                ("tools_scan", json!({ "request": { "kind": "defaults" } })),
+                ("tools_rules", json!({})),
+                (
+                    "tools_rule_save",
+                    json!({ "rule": { "id": "", "name": "", "enabled": false, "watch": false, "folder": "/", "condition": {}, "target": "" } }),
+                ),
+                ("tools_rule_delete", json!({ "id": "gibt-es-nicht" })),
+                ("tools_layouts", json!({})),
+                ("tools_layout_save", json!({ "name": "x" })),
+                ("tools_layout_delete", json!({ "name": "gibt-es-nicht" })),
                 (
                     "plugin:event|listen",
                     json!({

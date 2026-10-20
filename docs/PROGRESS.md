@@ -32,7 +32,7 @@ Stand: 2026-10-20 · **P0–P9 abgeschlossen** · nächste Phase: **P10 – Tool
 | P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | erledigt |
 | P8 | Defender-Schalter | erledigt |
 | P9 | Tresor + Erweiterung | erledigt |
-| P10 | Tools 1–11 | offen |
+| P10 | Tools 1–11 | in Arbeit |
 | P11 | Tools 12–22 + Animations-Feinschliff | offen |
 | P12 | Privacy-Browser | offen |
 | P13 | Setup-Bootstrapper, Uninstaller, Updater, Abschlusstests, deutsches README | offen |
@@ -188,6 +188,20 @@ eigenen LAN/WLAN; Leck-Check mit k-Anonymität; alle Prüfungen grün.
 nachgeprüft; „Wieder AN“ mit einem Klick; Manipulationsschutz nie umgangen (Anleitung +
 Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur Virenschutz.
 
+## P10 – Windows-Tools 1–11
+
+1. [x] P10.1 `crates/tools`: Vorschau (`Plan`, Prüfsumme), Freigabe (`Approved::by_user` /
+       `by_rule`), Ausführen mit Lageprüfung, Protokoll, Rückgängig, Systemorte tabu, ohne Links;
+       Windows: Papierkorb der Shell + Wiederfinden über `$I…`, Verschieben ohne Überschreiben,
+       Hintergrundbild, Autostart-Schalter (`StartupApproved`), Desktop-Symbole (`IFolderView`).
+       Werkzeuge 1 Sortierer, 2 Quellen-Ordner (Mark-of-the-Web), 3 Regeln + Hintergrund-
+       Überwachung, 4 Desktop-Layout, 5 Hintergrundbild, 6 Duplikate, 7 Speicherplatz, 8 Große &
+       alte Dateien, 9 Leere Ordner, 10 Cleaner (nur sichere Orte), 11 Autostart. App-Befehle
+       `tools_*`, Seite „Tools“ mit Vorschau/Abwählen/Ausführen/Rückgängig und Protokoll (D-057).
+2. [ ] P10.2 Sicherheits-Review (separater Agent), Befunde beheben, DoD.
+
+**Nächster Schritt:** P10.2 Review.
+
 ## P9 – Passwort-Tresor
 
 1. [x] P9.1 `crates/vault-core`: Format `AEGIS-VAULT-1` (Argon2id ≥ 64 MiB/3 Durchläufe,
@@ -331,12 +345,10 @@ unbekannte Downloads – nie automatisch).
 - ✅ P4.3: Labor-Seite in der App (Drag & Drop, Stufe, Dauer, Netz nur VM, Bericht mit
   Einschätzung, Bildschirmfotos), Angebot „Im Labor prüfen“ im Wächter.
 - ✅ P4-Review (1 hoch, 6 mittel, 8 niedrig) behoben – siehe `docs/SECURITY.md`.
-- ⏳ Windows-CI: Pipe-Transport grün; Prüfprozess-Token im Identitätswechsel (Fehler 5) behoben,
-  Bestätigung im nächsten Lauf, dann DoD P4.
+- ✅ Windows-CI grün (Pipe-Transport, Prüfprozess-Token im Identitätswechsel) – DoD P4 erfüllt.
 
 ## Nächster Schritt
 
-P10: Tools 1–11 (Modul J) – jedes nur nach einer vom Nutzer angelegten und aktivierten Regel,
-immer mit Vorschau, Protokoll und Rückgängig. Danach P11 (Tools 12–22 + Animations-Feinschliff),
+P10.2: Sicherheits-Review der Werkzeuge. Danach P11 (Tools 12–22 + Animations-Feinschliff),
 P12 (Privacy-Browser), P13 (Setup, Updater, Deinstallation, README; dabei Host und Erweiterungen
 ausliefern und registrieren).

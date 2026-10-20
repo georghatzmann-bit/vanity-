@@ -26,9 +26,7 @@ export type RouteId = (typeof routeIds)[number];
 export const DEFAULT_ROUTE: RouteId = 'dashboard';
 
 /** Module, die es noch nicht gibt, mit der Phase, in der sie kommen. */
-export const routePhases: Readonly<Partial<Record<RouteId, string>>> = {
-  tools: 'P10',
-};
+export const routePhases: Readonly<Partial<Record<RouteId, string>>> = {};
 
 export function isRouteId(value: string): value is RouteId {
   return (routeIds as readonly string[]).includes(value);

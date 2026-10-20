@@ -321,6 +321,12 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Pause) oder Alt+↓, nur in deutlich sichtbare Felder (E2E: synthetische Tasten, Unterrahmen,
   durchsichtige/veränderte Anzeige lösen nichts aus). Grenze: Ein Programm desselben Kontos kann
   den Host selbst starten – die Pfadprüfungen schützen davor nicht, das Konto ist die Grenze.
+- **Windows-Tools (P10, D-057):** in der App mit Nutzerrechten; Vorschau → Ausführen nur dieser
+  Vorschau (Prüfsumme, einmalig, 30 min) bzw. eingeschaltete Regel; Lageprüfung je Schritt,
+  nie überschreiben (MoveFileExW ohne REPLACE), Papierkorb statt Löschen, keine Links/Reparse-
+  Punkte, Systemorte tabu, Protokoll + Rückgängig. Tests mit Dummy-Dateien: Vorschau verändert
+  nichts (DirSnapshot), falsche/abgelaufene Prüfsumme und ausgeschaltete Regel führen nichts aus,
+  Rückgängig überschreibt nie.
 - **„Speichern?“ (P9.5, D-056):** abgeschickte Logins nur im Speicher des Hintergrunds (je Tab,
   ≤ 2 min); vor der Zustimmung geht nur der SHA-256 des Passworts an AEGIS; Speichern erst nach
   echtem Klick/Enter in der geschützten Frage, App: anlegen oder nur passenden Eintrag

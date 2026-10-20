@@ -38,9 +38,8 @@ describe('routes', () => {
 
   it('kennt alle Seiten und die Phasen der fehlenden Module (docs/PROGRESS.md)', () => {
     expect(routeIds).toHaveLength(14);
-    expect(routePhases).toEqual({
-      tools: 'P10',
-    });
+    // Seit P10 gibt es alle Module der App.
+    expect(routePhases).toEqual({});
     // Dashboard, Einstellungen und „Über AEGIS“ gibt es schon – ohne Phase.
     for (const route of ['dashboard', 'settings', 'about'] as const) {
       expect(routePhases[route]).toBeUndefined();

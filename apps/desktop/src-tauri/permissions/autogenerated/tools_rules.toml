@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tools-rules"
+description = "Enables the tools_rules command without any pre-configured scope."
+commands.allow = ["tools_rules"]
+
+[[permission]]
+identifier = "deny-tools-rules"
+description = "Denies the tools_rules command without any pre-configured scope."
+commands.deny = ["tools_rules"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tools-rule-save"
+description = "Enables the tools_rule_save command without any pre-configured scope."
+commands.allow = ["tools_rule_save"]
+
+[[permission]]
+identifier = "deny-tools-rule-save"
+description = "Denies the tools_rule_save command without any pre-configured scope."
+commands.deny = ["tools_rule_save"]

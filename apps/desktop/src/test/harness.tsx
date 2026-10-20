@@ -19,6 +19,7 @@ import type {
 } from '../platform/platform.ts';
 import { parseLanReport, type LanReport } from '../platform/lan.ts';
 import type { VaultApi, VaultEntryInput } from '../platform/vault.ts';
+import type { Preview, PreviewRequest, ToolRule, ToolRun, ToolsApi } from '../platform/tools.ts';
 import type { ServiceApi } from '../platform/service.ts';
 import { SETTINGS_STORAGE_KEY, SETTINGS_VERSION, type Settings } from '../settings/schema.ts';
 import type { StorageLike } from '../settings/store.ts';
@@ -136,6 +137,7 @@ export function fakePlatform(
           )
         : null,
     vault: kind === 'tauri' ? fakeVault() : null,
+    tools: kind === 'tauri' ? fakeTools() : null,
     leakEmailCheck:
       kind === 'tauri'
         ? vi.fn(() =>
@@ -405,5 +407,136 @@ export function stubMatchMedia(initial: Record<string, boolean> = {}) {
       values.set(query, value);
       targets.get(query)?.dispatchEvent(new Event('change'));
     },
+  };
+}
+
+/** Werkzeuge im Speicher: Vorschau → Ausführen → Protokoll → Rückgängig. */
+export function fakeTools(): ToolsApi & { readonly runList: ToolRun[] } {
+  const digest = 'a'.repeat(64);
+  const previews = new Map<string, Preview>();
+  const runList: ToolRun[] = [];
+  let rules: ToolRule[] = [];
+  let next = 1;
+  const preview = (request: PreviewRequest): Preview => {
+    const id = `p${next++}`;
+    const items =
+      request.tool === 'sort_downloads'
+        ? [
+            { label: 'Urlaub.jpg → Bilder/Urlaub.jpg', kind: 'move' as const, size: 2048 },
+            { label: 'Rechnung.pdf → Dokumente/Rechnung.pdf', kind: 'move' as const, size: 1024 },
+          ]
+        : request.tool === 'duplicates'
+          ? [{ label: 'Papierkorb: b/foto.jpg', kind: 'recycle' as const, size: 4096 }]
+          : [];
+    const p: Preview = {
+      id,
+      digest,
+      tool: request.tool,
+      items,
+      totalSize: items.reduce((sum, i) => sum + i.size, 0),
+      groups:
+        request.tool === 'duplicates'
+          ? [
+              {
+                size: 4096,
+                hash: digest,
+                files: [
+                  { path: 'a/foto.jpg', size: 4096, modified: 1 },
+                  { path: 'b/foto.jpg', size: 4096, modified: 2 },
+                ],
+              },
+            ]
+          : [],
+    };
+    previews.set(id, p);
+    return p;
+  };
+  return {
+    runList,
+    preview: vi.fn((request: PreviewRequest) => Promise.resolve(preview(request))),
+    execute: vi.fn((id: string, d: string, skip: readonly number[]) => {
+      const p = previews.get(id);
+      if (p === undefined || d !== digest) {
+        return Promise.reject(new Error('Vorschau abgelaufen'));
+      }
+      previews.delete(id);
+      const run: ToolRun = {
+        id: `r${next++}`,
+        tool: p.tool,
+        rule: null,
+        at: 1_760_000_000,
+        undone: null,
+        done: p.items.length - skip.length,
+        skipped: skip.length,
+        failed: 0,
+        items: p.items.map((i, index) => ({
+          label: i.label,
+          status: skip.includes(index) ? 'skipped' : 'done',
+          reason: skip.includes(index) ? 'abgewählt' : null,
+        })),
+      };
+      runList.unshift(run);
+      return Promise.resolve(run);
+    }),
+    runs: vi.fn(() => Promise.resolve([...runList])),
+    undo: vi.fn((id: string) => {
+      const index = runList.findIndex((r) => r.id === id);
+      const run = runList[index];
+      if (run !== undefined) {
+        runList[index] = { ...run, undone: 1_760_000_100 };
+      }
+      return Promise.resolve([]);
+    }),
+    space: vi.fn(() =>
+      Promise.resolve({
+        total: 3_000_000,
+        files: 3,
+        children: [
+          { path: 'Spiele', size: 2_000_000, files: 1 },
+          { path: 'Fotos', size: 1_000_000, files: 2 },
+        ],
+        largest: [{ path: 'Spiele/setup.iso', size: 2_000_000, modified: 1 }],
+        byCategory: [['archives', 2_000_000] as const, ['images', 1_000_000] as const],
+        disk: [50_000_000_000, 500_000_000_000] as const,
+      }),
+    ),
+    autostart: vi.fn(() =>
+      Promise.resolve([
+        {
+          entry: { location: 'run_user' as const, name: 'Chat-Programm' },
+          command: 'chat.exe --tray',
+          enabled: true,
+          editable: true,
+        },
+        {
+          entry: { location: 'run_machine' as const, name: 'Treiberhilfe' },
+          command: 'helper.exe',
+          enabled: true,
+          editable: false,
+        },
+      ]),
+    ),
+    defaults: vi.fn(() =>
+      Promise.resolve({
+        downloads: 'C:/Users/anna/Downloads',
+        pictures: 'C:/Users/anna/Pictures',
+        desktop: 'C:/Users/anna/Desktop',
+        cleaner: ['C:/Users/anna/AppData/Local/Temp'],
+        windows: true,
+      }),
+    ),
+    rules: vi.fn(() => Promise.resolve([...rules])),
+    saveRule: vi.fn((rule: ToolRule) => {
+      const saved = { ...rule, id: rule.id === '' ? `rule${next++}` : rule.id };
+      rules = [...rules.filter((r) => r.id !== saved.id), saved];
+      return Promise.resolve(saved);
+    }),
+    deleteRule: vi.fn((id: string) => {
+      rules = rules.filter((r) => r.id !== id);
+      return Promise.resolve();
+    }),
+    layouts: vi.fn(() => Promise.resolve([])),
+    saveLayout: vi.fn((name: string) => Promise.resolve({ name, saved: 1, icons: [] })),
+    deleteLayout: vi.fn(() => Promise.resolve()),
   };
 }

@@ -442,3 +442,24 @@ App legt einen Eintrag (Titel = Host, Adresse = Seite) an oder ersetzt nur das P
 passenden Eintrags (Adresse + Benutzername), höchstens 10 Mal je Minute, nur entsperrt, und
 speichert sofort. „Nicht jetzt“ verwirft. Die Erweiterung speichert weiterhin nichts dauerhaft.
 
+## D-057 – Windows-Tools: Vorschau, Freigabe genau dieser Vorschau, Protokoll, Rückgängig
+
+Status: angenommen (P10). Die Werkzeuge (Modul J) laufen in der App mit den Rechten des
+angemeldeten Nutzers, nicht im SYSTEM-Dienst – sie arbeiten an dessen eigenen Dateien und
+Einstellungen (`HKCU`). Jedes Werkzeug erstellt zuerst nur lesend eine Vorschau (`aegis_tools::
+plan::Plan`, feste Schrittliste, SHA-256-Prüfsumme, 30 Minuten gültig). Ausgeführt wird nur
+genau diese Vorschau: nach „Ausführen“ mit Kennung + Prüfsumme (die App verbraucht die
+Vorschau, abgewählte Schritte bleiben) oder durch eine vom Nutzer angelegte und eingeschaltete
+Regel mit „im Hintergrund“ (`Approved::by_rule`, nur Vorschauen dieser Regel). Jeder Schritt
+prüft vor dem Ausführen, ob die Lage noch der Vorschau entspricht (Größe, Änderungszeit, Ziel
+frei) – sonst wird er übersprungen. Nichts wird überschrieben (unter Windows `MoveFileExW` ohne
+REPLACE), nichts endgültig gelöscht (Papierkorb der Shell mit `FOF_ALLOWUNDO`; „Rückgängig“
+findet den Eintrag über die `$I…`-Begleitdatei wieder), Links und Abzweigungen werden nie
+verfolgt, Systemorte (Windows, Programme, ProgramData, Laufwerkswurzeln, Papierkorb) sind tabu.
+Jeder Lauf kommt ins Protokoll (`tools-journal.json`, 300 Läufe) und lässt sich zurücknehmen
+(umgekehrte Reihenfolge, nie überschreibend). Autostart: nur Einträge des Kontos über den
+Schalter `StartupApproved` wie im Task-Manager (rechnerweite nur Anzeige → Persistenz-Check im
+Dienst). Desktop-Symbole: dokumentierte Shell-Schnittstelle (`IFolderView`), keine fremden
+Prozesse. Hintergrund-Überwachung: alle 30 s, nur eingeschaltete Regeln mit „im Hintergrund“,
+neue Dateien erst nach 60 s Ruhe.
+

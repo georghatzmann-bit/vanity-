@@ -78,6 +78,14 @@ getrandom = "0.4.3"
 # Dienst (P2): Windows-API für Named Pipe mit Zugriffsliste und geschützten Datenordner;
 # Dienststeuerung (SCM).
 windows-sys = "0.61.2"
+windows = { version = "0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_System_Com",
+  "Win32_System_Ole",
+  "Win32_System_Variant",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
+] }
 windows-service = "0.8.1"
 tempfile = "3.27.0"
 proptest = "1.12.0"

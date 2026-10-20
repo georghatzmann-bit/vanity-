@@ -397,3 +397,32 @@ crates/winffi/src/pipe.rs :: winffi-pipe-client-pid :: Windows-FFI (Tresor-Brüc
 crates/winffi/src/pipe.rs :: winffi-user-pipe-owner :: Windows-FFI (Tresor-Brücke): liest den Besitzer einer Pipe (eigene Instanz bzw. Gegenstelle) – verändert nichts.
 crates/winffi/src/pipe.rs :: winffi-pipe-server-pid :: Windows-FFI (Tresor-Brücke): fragt die Prozess-ID des Pipe-Servers ab – verändert nichts.
 crates/vault-host/src/main.rs :: vault-host-pipe-open :: Native-Messaging-Host: öffnet nur die Pipe der AEGIS-App des eigenen Kontos zum Weiterreichen einer geprüften Anfrage – keine Datei, keine Nutzerdaten.
+crates/tools/src/exec.rs :: tools-create-dir :: Windows-Tools: legt nur Zielordner unter einem vom Nutzer gewählten Ort an (Vorschau zeigte das Ziel) bzw. stellt beim Rückgängig Ordner wieder her.
+crates/tools/src/exec.rs :: tools-move :: Windows-Tools (nur außerhalb von Windows, Entwicklung): verschiebt genau die freigegebene Datei, Ziel vorher frei geprüft.
+crates/tools/src/exec.rs :: tools-remove-empty-dir :: Windows-Tools „Leere Ordner“: entfernt nur einen leeren Ordner aus einer freigegebenen Vorschau (remove_dir scheitert bei Inhalt); Rückgängig legt ihn wieder an.
+crates/tools/src/journal.rs :: tools-journal-dir :: Windows-Tools: legt den eigenen App-Datenordner für das Protokoll an.
+crates/tools/src/journal.rs :: tools-journal-write :: Windows-Tools: schreibt die eigene Hilfsdatei des Protokolls (tools-journal.json.tmp).
+crates/tools/src/journal.rs :: tools-journal-replace :: Windows-Tools: ersetzt das eigene Protokoll durch die eben geschriebene Fassung.
+crates/tools/src/platform.rs :: tools-local-trash-dir :: Windows-Tools (nur außerhalb von Windows): legt den eigenen Papierkorb-Ordner im App-Datenordner an.
+crates/tools/src/platform.rs :: tools-local-trash-move :: Windows-Tools (nur außerhalb von Windows): verschiebt eine freigegebene Datei in den eigenen Papierkorb (umkehrbar).
+crates/tools/src/platform.rs :: tools-local-trash-restore :: Windows-Tools (nur außerhalb von Windows): holt eine Datei beim Rückgängig aus dem eigenen Papierkorb zurück (nie überschreibend).
+crates/tools/src/win.rs :: tools-recycle-info-remove :: Windows-Tools: entfernt nach dem Zurückholen die Begleitdatei $I… genau dieses Papierkorb-Eintrags (wie „Wiederherstellen“ im Papierkorb).
+crates/winffi/src/shell.rs :: winffi-shell-recycle :: Windows-FFI (Tools): SHFileOperationW mit FOF_ALLOWUNDO – Datei in den Papierkorb, ohne Dialog.
+crates/winffi/src/shell.rs :: winffi-shell-recycle-call :: Windows-FFI (Tools): Papierkorb (umkehrbar) nur für Schritte einer freigegebenen Werkzeug-Vorschau.
+crates/winffi/src/shell.rs :: winffi-move-no-replace :: Windows-FFI (Tools): MoveFileExW ohne REPLACE_EXISTING/COPY_ALLOWED – verschiebt, überschreibt nie.
+crates/winffi/src/shell.rs :: winffi-move-no-replace-call :: Windows-FFI (Tools): verschiebt nur Dateien aus einer freigegebenen Werkzeug-Vorschau bzw. beim Rückgängig.
+crates/winffi/src/shell.rs :: winffi-wallpaper-get :: Windows-FFI (Tools): liest das aktuelle Hintergrundbild (SPI_GETDESKWALLPAPER) – verändert nichts.
+crates/winffi/src/shell.rs :: winffi-wallpaper-get-call :: Windows-FFI (Tools): SystemParametersInfoW nur lesend (SPI_GETDESKWALLPAPER).
+crates/winffi/src/shell.rs :: winffi-wallpaper-set :: Windows-FFI (Tools): setzt das Hintergrundbild des Kontos (SPI_SETDESKWALLPAPER).
+crates/winffi/src/shell.rs :: winffi-wallpaper-set-call :: Windows-FFI (Tools): Hintergrundbild nur aus einer freigegebenen Werkzeug-Vorschau bzw. beim Rückgängig.
+crates/winffi/src/desktop.rs :: winffi-desktop-com-init :: Windows-FFI (Tools): CoInitializeEx für den aufrufenden Faden (mit Gegenstück).
+crates/winffi/src/desktop.rs :: winffi-desktop-com-uninit :: Windows-FFI (Tools): CoUninitialize als Gegenstück zum erfolgreichen CoInitializeEx.
+crates/winffi/src/desktop.rs :: winffi-desktop-pidl-free :: Windows-FFI (Tools): gibt Item-IDs des Desktops frei (CoTaskMemFree).
+crates/winffi/src/desktop.rs :: winffi-desktop-view :: Windows-FFI (Tools): holt die Ordneransicht des Desktops über IShellWindows/IServiceProvider – nur lesend.
+crates/winffi/src/desktop.rs :: winffi-desktop-items :: Windows-FFI (Tools): liest Namen und Positionen der Desktop-Symbole – verändert nichts.
+crates/winffi/src/desktop.rs :: winffi-desktop-auto-arrange :: Windows-FFI (Tools): fragt „Automatisch anordnen“ ab (S_OK/S_FALSE) – verändert nichts.
+crates/winffi/src/desktop.rs :: winffi-desktop-position :: Windows-FFI (Tools): IFolderView::SelectAndPositionItems mit SVSI_POSITIONITEM – setzt nur Positionen.
+crates/winffi/src/desktop.rs :: winffi-desktop-position-call :: Windows-FFI (Tools): Desktop-Symbole nur aus einer freigegebenen Werkzeug-Vorschau bzw. beim Rückgängig verschieben.
+apps/desktop/src-tauri/src/tools.rs :: desktop-tools-dir :: Windows-Tools: legt den eigenen App-Datenordner für Regeln und Desktop-Layouts an.
+apps/desktop/src-tauri/src/tools.rs :: desktop-tools-write :: Windows-Tools: schreibt die eigene Hilfsdatei der Regeln bzw. Desktop-Layouts des Nutzers (vom Nutzer gespeichert).
+apps/desktop/src-tauri/src/tools.rs :: desktop-tools-replace :: Windows-Tools: ersetzt die eigene Datei der Regeln bzw. Desktop-Layouts durch die eben geschriebene Fassung.

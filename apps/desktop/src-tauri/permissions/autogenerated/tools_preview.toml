@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tools-preview"
+description = "Enables the tools_preview command without any pre-configured scope."
+commands.allow = ["tools_preview"]
+
+[[permission]]
+identifier = "deny-tools-preview"
+description = "Denies the tools_preview command without any pre-configured scope."
+commands.deny = ["tools_preview"]

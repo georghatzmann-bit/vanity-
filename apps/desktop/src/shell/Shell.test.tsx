@@ -61,7 +61,8 @@ describe('Seitenleiste', () => {
       '#/realtime',
     );
     expect(within(nav()).getByRole('link', { name: 'Scan' })).toHaveAttribute('href', '#/scan');
-    expect(within(nav()).getByRole('link', { name: 'Tools, folgt in P10' })).toBeInTheDocument();
+    // Seit P10 gibt es alle Module – kein „folgt in …“ mehr.
+    expect(within(nav()).getByRole('link', { name: 'Tools' })).toHaveAttribute('href', '#/tools');
     expect(within(nav()).getByRole('link', { name: 'Einstellungen' })).toBeInTheDocument();
   });
 

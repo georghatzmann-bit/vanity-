@@ -59,6 +59,7 @@ dependencies = [
  "aegis-core",
  "aegis-netwatch",
  "aegis-sandbox",
+ "aegis-tools",
  "aegis-vault-core",
  "aegis-winffi",
  "base64 0.22.1",
@@ -176,6 +177,15 @@ dependencies = [
 [[package]]
 name = "aegis-tools"
 version = "0.1.0"
+dependencies = [
+ "aegis-core",
+ "aegis-winffi",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "uuid",
+]
 
 [[package]]
 name = "aegis-vault-core"
@@ -205,6 +215,7 @@ dependencies = [
 name = "aegis-winffi"
 version = "0.1.0"
 dependencies = [
+ "windows 0.62.2",
  "windows-sys 0.61.2",
  "zeroize",
 ]
