@@ -34,6 +34,7 @@ pub mod harden;
 pub mod hardening;
 pub mod network;
 pub mod persistence;
+pub mod restore;
 mod safe;
 pub mod updates;
 
@@ -1687,6 +1688,10 @@ impl<C: Clock, W: Durable> Service<C, W> {
             // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
             Request::DefenderStatus {} => self.defender_finish(defender::read_status(), user),
             Request::ProposeDefender { change } => self.propose_defender(&change, user),
+            Request::RestorePoints {} => restore::restore_response(restore::read_points(), user),
+            Request::ProposeRestorePoint { description } => {
+                self.propose_restore_point(&description, user)
+            }
             // Über die Pipe außerhalb der Sperre (siehe transport); hier für direkte Aufrufe.
             Request::HardeningStatus { fresh } => match self.hardening_cached(user) {
                 Some(cached) if !fresh => cached,
@@ -2327,7 +2332,7 @@ impl<C: Clock, W: Durable> Service<C, W> {
                     matches!(t, Target::Setting { id } if id == aegis_quarantine::backup::BACKUP_SETTING)
                 });
                 let harden = plan.targets().iter().any(|t| {
-                    matches!(t, Target::Setting { id } if id == harden::FIX_SETTING || id == harden::UNDO_SETTING || id == persistence::AUTORUN_SETTING || id == network::BLOCK_SETTING || id == defender::DEFENDER_SETTING)
+                    matches!(t, Target::Setting { id } if id == harden::FIX_SETTING || id == harden::UNDO_SETTING || id == persistence::AUTORUN_SETTING || id == network::BLOCK_SETTING || id == defender::DEFENDER_SETTING || id == restore::RESTORE_SETTING)
                 });
                 return if bait {
                     self.apply_baits(permit, user)

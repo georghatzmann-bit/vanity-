@@ -1262,6 +1262,22 @@ export const en: Messages<typeof de> = {
       unknownOwner: 'unknown program',
     },
   },
+  restore: {
+    title: 'Restore points',
+    intro:
+      'A restore point saves system settings, drivers and programs – not your files. Create one before bigger changes; it is created only after your Yes.',
+    reload: 'Reload',
+    unavailable:
+      'Windows returns no restore points – System Protection is probably off (Control Panel → System → System Protection). Windows only.',
+    empty: 'No restore points yet.',
+    unnamed: '(no description)',
+    description: 'Description of the new point',
+    defaultDescription: 'Before changes with AEGIS',
+    create: 'Create point…',
+    adminOnly: 'Administrator rights required (start the app as administrator).',
+    honest:
+      'Honestly: Windows creates at most one point per 24 hours. AEGIS never deletes or rolls back points – use “System Restore” in Windows for that.',
+  },
   updates: {
     title: 'Software updates',
     intro:

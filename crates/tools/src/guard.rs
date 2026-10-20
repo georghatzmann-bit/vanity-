@@ -133,6 +133,15 @@ pub fn allowed(path: &Path) -> bool {
 mod tests {
     use super::*;
 
+    /// Ein Ordner im Profil (je System ein absoluter Pfad).
+    fn home(rest: &str) -> PathBuf {
+        if cfg!(windows) {
+            PathBuf::from(r"C:\Users\anna").join(rest)
+        } else {
+            PathBuf::from("/home/anna").join(rest)
+        }
+    }
+
     #[test]
     fn systemorte_sind_tabu() {
         assert!(!allowed(Path::new("relativ/x")));
@@ -140,9 +149,9 @@ mod tests {
         assert!(!allowed(Path::new("/home")));
         assert!(!allowed(Path::new("/home/a/../../etc")));
         assert!(!lexically_allowed(Path::new("C:\\Windows\\System32\\x")));
-        assert!(lexically_allowed(Path::new("/home/anna/windows/projekt")));
+        assert!(lexically_allowed(&home("windows/projekt")));
         assert!(!lexically_allowed(Path::new("/d/$Recycle.Bin/S-1/x")));
-        assert!(lexically_allowed(Path::new("/home/anna/Downloads")));
+        assert!(lexically_allowed(&home("Downloads")));
     }
 
     #[cfg(windows)]

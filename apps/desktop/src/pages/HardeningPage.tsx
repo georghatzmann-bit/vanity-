@@ -30,6 +30,7 @@ import { PageBody, PageHeader } from './PageHeader.tsx';
 import { PersistencePanel } from './PersistencePanel.tsx';
 import { DevicesPanel } from './DevicesPanel.tsx';
 import { UpdatesPanel } from './UpdatesPanel.tsx';
+import { RestorePanel } from './RestorePanel.tsx';
 import { ServiceNotice } from './ServiceNotice.tsx';
 import { useConsentFlow } from './useConsentFlow.tsx';
 
@@ -304,6 +305,13 @@ export function HardeningPage() {
               )}
             </Panel>
           </div>
+          {service !== null && (
+            <RestorePanel
+              service={service}
+              start={(load) => void flow.start(load)}
+              version={version}
+            />
+          )}
           {service !== null && (
             <PersistencePanel
               service={service}

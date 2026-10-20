@@ -1446,6 +1446,7 @@ impl HardenSystem for FakeSystem {
                     }
                 },
             },
+            Step::RestorePoint { description } => Step::RestorePoint { description },
         })
     }
 
@@ -1817,4 +1818,42 @@ fn defender_schalter_nur_nach_ja_admin_und_nie_gegen_manipulationsschutz() {
     assert_eq!(done["result"]["status"], "failed", "{done}");
     assert!(done.to_string().contains("Manipulationsschutz"), "{done}");
     assert_eq!(fake.applied.lock().unwrap().len(), before);
+}
+
+#[test]
+fn wiederherstellungspunkt_nur_nach_ja_admin_und_bereinigt() {
+    let (mut h, fake) = harden_harness();
+    // Nur lesen: liefert (ohne Windows) keine Liste, aber eine Antwort.
+    let r = h.send(json!({"type": "restore_points"}));
+    assert_eq!(r["type"], "restore_points", "{r}");
+    assert!(r["state"]["points"].is_null(), "{r}");
+    // Nur Administratoren; leere Beschreibung abgelehnt.
+    let r = h.send_as(
+        json!({"type": "propose_restore_point", "description": "Vor Härtung"}),
+        &Standard,
+    );
+    assert_eq!(r["code"], "admin", "{r}");
+    let r = h.send(json!({"type": "propose_restore_point", "description": "'\";|"}));
+    assert_eq!(r["code"], "input", "{r}");
+    // „Nein“ → nichts; „Ja“ → genau ein Schritt mit bereinigter Beschreibung.
+    let p = h.send(json!({"type": "propose_restore_point", "description": "Vor Härtung'; x"}));
+    assert_eq!(p["type"], "proposal", "{p}");
+    assert!(p.to_string().contains("Vor Härtung x"), "{p}");
+    assert_eq!(h.answer(&p, "decline")["type"], "nothing_done");
+    assert!(fake.applied.lock().unwrap().is_empty());
+    let p = h.send(json!({"type": "propose_restore_point", "description": "Vor Härtung"}));
+    let done = h.answer(&p, "execute");
+    assert_eq!(done["result"]["status"], "succeeded", "{done}");
+    assert_eq!(
+        fake.applied.lock().unwrap().as_slice(),
+        &[Step::RestorePoint {
+            description: "Vor Härtung".into()
+        }]
+    );
+    // Kein „Rückgängig“-Eintrag (AEGIS löscht keine Punkte).
+    let status = h.send(json!({"type": "hardening_status", "fresh": true}));
+    assert!(
+        status["state"]["undo"].as_array().is_none_or(Vec::is_empty),
+        "{status}"
+    );
 }

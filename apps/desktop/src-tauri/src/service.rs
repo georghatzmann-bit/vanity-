@@ -610,6 +610,21 @@ pub async fn service_propose_defender(change: String) -> Result<Value, String> {
     send(json!({ "type": "propose_defender", "change": change })).await
 }
 
+/// Wiederherstellungspunkte von Windows (nur lesend).
+#[tauri::command]
+pub async fn service_restore_points() -> Result<Value, String> {
+    send(json!({ "type": "restore_points" })).await
+}
+
+/// Neuen Wiederherstellungspunkt vorschlagen – angelegt erst nach „Ja“ im Dienst.
+#[tauri::command]
+pub async fn service_propose_restore_point(description: String) -> Result<Value, String> {
+    if description.trim().is_empty() || description.chars().count() > 64 {
+        return Err("Bitte eine kurze Beschreibung angeben.".to_owned());
+    }
+    send(json!({ "type": "propose_restore_point", "description": description })).await
+}
+
 /// AEGIS-Firewall-Regel für ein Programm anlegen (`block`) bzw. entfernen vorschlagen – nur
 /// nach „Ja“.
 #[tauri::command]

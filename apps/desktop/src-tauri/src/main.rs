@@ -121,6 +121,8 @@ fn main() {
             service::service_firewall_status,
             service::service_defender_status,
             service::service_propose_defender,
+            service::service_restore_points,
+            service::service_propose_restore_point,
             service::service_propose_firewall_block,
             service::service_software_updates,
             service::service_propose_software_update,
@@ -270,6 +272,8 @@ mod test_support {
                 crate::service::service_firewall_status,
                 crate::service::service_defender_status,
                 crate::service::service_propose_defender,
+                crate::service::service_restore_points,
+                crate::service::service_propose_restore_point,
                 crate::service::service_propose_firewall_block,
                 crate::service::service_software_updates,
                 crate::service::service_propose_software_update,
@@ -314,7 +318,7 @@ mod tests {
     /// Start); die Oberfläche ruft sie nie auf.
     /// `hide` fehlt ebenfalls: Verstecken entscheidet Rust (`allow-hide-to-tray`), damit ohne
     /// Symbol im Infobereich kein unsichtbarer Prozess entsteht.
-    const EXPECTED_PERMISSIONS: [&str; 97] = [
+    const EXPECTED_PERMISSIONS: [&str; 99] = [
         "core:window:allow-minimize",
         "core:window:allow-toggle-maximize",
         "core:window:allow-internal-toggle-maximize",
@@ -389,6 +393,8 @@ mod tests {
         "allow-service-firewall-status",
         "allow-service-defender-status",
         "allow-service-propose-defender",
+        "allow-service-restore-points",
+        "allow-service-propose-restore-point",
         "allow-service-propose-firewall-block",
         "allow-service-software-updates",
         "allow-service-propose-software-update",
@@ -742,6 +748,11 @@ mod tests {
                 (
                     "service_propose_defender",
                     json!({ "change": "realtime_on" }),
+                ),
+                ("service_restore_points", json!({})),
+                (
+                    "service_propose_restore_point",
+                    json!({"description": "Vor Härtung"}),
                 ),
                 (
                     "service_propose_firewall_block",

@@ -78,6 +78,8 @@
     "allow-service-firewall-status",
     "allow-service-defender-status",
     "allow-service-propose-defender",
+    "allow-service-restore-points",
+    "allow-service-propose-restore-point",
     "allow-service-propose-firewall-block",
     "allow-service-software-updates",
     "allow-service-propose-software-update",

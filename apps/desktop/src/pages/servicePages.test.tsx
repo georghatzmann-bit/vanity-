@@ -239,6 +239,13 @@ function fakeService(overrides: Partial<ServiceApi> = {}): ServiceApi {
     proposeFirewallBlock: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     defenderStatus: vi.fn(() => Promise.resolve(defenderState())),
     proposeDefender: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
+    restorePoints: vi.fn(() =>
+      Promise.resolve({
+        points: [{ sequence: 7, description: 'Windows Update', created: '2026-10-18 09:12' }],
+        admin: true,
+      }),
+    ),
+    proposeRestorePoint: vi.fn(() => Promise.resolve(proposal('Einstellung ändern'))),
     devicesStatus: vi.fn(() =>
       Promise.resolve({
         available: true,
@@ -1561,6 +1568,21 @@ describe('Härtung', () => {
     );
     expect(key).toHaveValue('');
     expect(JSON.stringify({ ...window.localStorage })).not.toContain('0123456789abcdef');
+  });
+
+  it('Wiederherstellungspunkte: Liste und neuer Punkt nur als Vorschlag', async () => {
+    const service = fakeService();
+    renderApp({ platform: fakePlatform('tauri', undefined, service), hash: '#/hardening' });
+    const panel = await screen.findByTestId('restore-panel');
+    expect(await within(panel).findByText('Windows Update')).toBeInTheDocument();
+    const field = within(panel).getByLabelText('Beschreibung des neuen Punkts');
+    fireEvent.change(field, { target: { value: '  Vor dem Treiber-Update ' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Punkt anlegen …' }));
+    await waitFor(() =>
+      expect(service.proposeRestorePoint).toHaveBeenCalledWith('Vor dem Treiber-Update'),
+    );
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(service.decide).not.toHaveBeenCalled();
   });
 
   it('Defender: Schalter nur als Vorschlag, danach echter Stand', async () => {

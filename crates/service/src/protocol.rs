@@ -111,6 +111,10 @@ pub enum Request {
     /// Defender-Änderung vorschlagen (`realtime_off`, `realtime_on`, `report_only_on`,
     /// `report_only_off`) – nur nach „Ja“, nur Administratoren.
     ProposeDefender { change: String },
+    /// Wiederherstellungspunkte von Windows (nur lesend).
+    RestorePoints {},
+    /// Neuen Wiederherstellungspunkt vorschlagen – nur nach „Ja“, nur Administratoren.
+    ProposeRestorePoint { description: String },
     /// Ein Paket aus der letzten Abfrage aktualisieren vorschlagen – nur nach „Ja“.
     ProposeSoftwareUpdate { id: String },
     /// Rückfall-Kopien ein- (`on`, Grenze in MiB) bzw. ausschalten vorschlagen.
@@ -320,6 +324,10 @@ pub enum Response {
     /// Defender-Schalter.
     Defender {
         state: Box<crate::handler::defender::DefenderState>,
+    },
+    /// Wiederherstellungspunkte.
+    RestorePoints {
+        state: crate::handler::restore::RestoreState,
     },
     /// Geräte & Privatsphäre.
     Devices {

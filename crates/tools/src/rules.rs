@@ -325,7 +325,7 @@ mod tests {
             name: " Claude ".into(),
             enabled: true,
             watch: false,
-            folder: PathBuf::from("/home/anna/Downloads"),
+            folder: std::env::temp_dir().join("Downloads"),
             condition: Condition {
                 extensions: vec![".ZIP".into(), "x/y".into()],
                 ..Condition::default()

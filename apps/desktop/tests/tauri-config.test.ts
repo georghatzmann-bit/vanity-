@@ -106,6 +106,9 @@ const JUSTIFIED_PERMISSIONS: Readonly<Record<string, string>> = {
   'allow-service-defender-status': 'Defender-Schalter (P8): Status von Microsoft Defender lesen',
   'allow-service-propose-defender':
     'Defender-Schalter (P8): Änderung nur als Plan mit Ja, nur feste Kennungen',
+  'allow-service-restore-points': 'Wiederherstellungspunkte lesen (nur lesend)',
+  'allow-service-propose-restore-point':
+    'Wiederherstellungspunkt vorschlagen (erst nach Ja im Dienst)',
   'allow-service-propose-firewall-block':
     'Dienst: AEGIS-Regel „Netz für Programm sperren“ vorschlagen (erst nach „Ja“)',
   'allow-service-software-updates':

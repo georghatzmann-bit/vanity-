@@ -323,6 +323,17 @@ pub fn serve_connection<C: Clock, W: Durable, S: Read + Write>(
                     }
                 }
             }
+            // Wiederherstellungspunkte (WMI) außerhalb der Dienst-Sperre.
+            Ok(Request::RestorePoints {}) => {
+                match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {
+                    None => busy(),
+                    Some(slot) => {
+                        let points = crate::handler::restore::read_points();
+                        drop(slot);
+                        crate::handler::restore::restore_response(points, user)
+                    }
+                }
+            }
             // Geräte (WMI) außerhalb der Dienst-Sperre.
             Ok(Request::DevicesStatus {}) => {
                 match Slot::try_take(&RUNNING_FACTS, MAX_PARALLEL_FACTS) {

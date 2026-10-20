@@ -197,7 +197,10 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        18 Hosts-Datei-Ansicht (nur lesend, verdächtige Umleitungen), 22 Systeminfo & Gesundheit
        (nur lesend); 13 Programm-Updates, 14 Treiber, 20 Prozess-/Netzwerk-Monitor und
        21 Gaming-/Fokus-Modus verweisen auf die vorhandenen Seiten.
-2. [ ] P11.2 17 Wiederherstellungspunkte über den Dienst (Vorschlag, „Ja“, Liste).
+2. [x] P11.2 17 Wiederherstellungspunkte über den Dienst: Liste (WMI `SystemRestore`, außerhalb
+       der Dienst-Sperre), neuer Punkt nur als Plan nach „Ja“, nur Administratoren, bereinigte
+       Beschreibung, `Checkpoint-Computer` vom festen Systemort, danach nachgeprüft; AEGIS löscht
+       und spielt keine Punkte zurück. Bereich auf der Seite „Härtung“ (vor dem Beheben).
 3. [ ] P11.3 Animations-Feinschliff, Review, DoD.
 
 ## P10 – Windows-Tools 1–11

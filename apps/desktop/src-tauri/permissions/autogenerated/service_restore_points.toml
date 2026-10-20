@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-service-restore-points"
+description = "Enables the service_restore_points command without any pre-configured scope."
+commands.allow = ["service_restore_points"]
+
+[[permission]]
+identifier = "deny-service-restore-points"
+description = "Denies the service_restore_points command without any pre-configured scope."
+commands.deny = ["service_restore_points"]

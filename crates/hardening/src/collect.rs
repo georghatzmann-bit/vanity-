@@ -181,7 +181,8 @@ pub fn connections_without_proxy(blob: &[u8]) -> Option<Vec<u8>> {
 #[cfg(windows)]
 pub use self::windows::{
     capability_uses, collect, defender_status, devices, fix_state, machine_autorun_named,
-    machine_autoruns, machine_autoruns_of, profile_sids, proxy_of, user_registry_autoruns,
+    machine_autoruns, machine_autoruns_of, profile_sids, proxy_of, restore_points,
+    user_registry_autoruns,
 };
 
 #[cfg(windows)]
@@ -608,6 +609,38 @@ mod windows {
             }
             Err(_) => None,
         }
+    }
+
+    /// Vorhandene Wiederherstellungspunkte (Werkzeug 17) – nur lesend (WMI).
+    ///
+    /// # Errors
+    /// Nicht lesbar (Computerschutz aus, Namensraum fehlt, keine Rechte).
+    pub fn restore_points() -> Result<Vec<crate::restore::RestorePoint>, String> {
+        let rows = query(
+            r"ROOT\DEFAULT",
+            "SELECT SequenceNumber, Description, CreationTime, RestorePointType FROM SystemRestore",
+            false,
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(crate::restore::newest_first(
+            rows.iter()
+                .filter_map(|r| {
+                    Some(crate::restore::RestorePoint {
+                        sequence: v_u32(r, "SequenceNumber")?,
+                        description: v_string(r, "Description")
+                            .unwrap_or_default()
+                            .chars()
+                            .filter(|c| !c.is_control())
+                            .take(crate::restore::MAX_DESCRIPTION)
+                            .collect(),
+                        created: v_string(r, "CreationTime")
+                            .and_then(|t| crate::restore::wmi_time(&t))
+                            .unwrap_or_default(),
+                        kind: v_u32(r, "RestorePointType").unwrap_or(0),
+                    })
+                })
+                .collect(),
+        ))
     }
 
     /// Zustand von Microsoft Defender für den Defender-Schalter (P8) – nur lesend (WMI und

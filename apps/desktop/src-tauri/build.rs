@@ -73,6 +73,8 @@ const APP_COMMANDS: &[&str] = &[
     "service_firewall_status",
     "service_defender_status",
     "service_propose_defender",
+    "service_restore_points",
+    "service_propose_restore_point",
     "service_propose_firewall_block",
     "service_software_updates",
     "service_propose_software_update",

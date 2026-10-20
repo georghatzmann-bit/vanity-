@@ -164,6 +164,11 @@ pub enum Step {
         /// Befehl.
         command: aegis_defender_switch::Command,
     },
+    /// Wiederherstellungspunkt anlegen (`Checkpoint-Computer`, P11; bereinigte Beschreibung).
+    RestorePoint {
+        /// Beschreibung (nur Buchstaben, Ziffern, Leerzeichen, `.,-_()`).
+        description: String,
+    },
 }
 
 const FIREWALL_PROFILES: [&str; 3] = ["domainprofile", "privateprofile", "publicprofile"];
@@ -228,6 +233,9 @@ impl Step {
                 present: false,
             } => format!("Windows-Firewall: Regel „{name}“ ({program}) entfernen"),
             Self::Defender { command } => command.describe(),
+            Self::RestorePoint { description } => {
+                format!("Wiederherstellungspunkt „{description}“ anlegen")
+            }
         }
     }
 
@@ -768,6 +776,11 @@ mod sys {
             Step::Defender { command } => Step::Defender {
                 command: defender_before(command)?,
             },
+            // Legt nur etwas an, das Windows selbst verwaltet – kein Gegenstück (AEGIS löscht
+            // keine Wiederherstellungspunkte).
+            Step::RestorePoint { description } => Step::RestorePoint {
+                description: description.clone(),
+            },
         })
     }
 
@@ -823,6 +836,46 @@ mod sys {
         }
     }
 
+    /// Legt einen Wiederherstellungspunkt an und prüft danach, ob Windows ihn wirklich angelegt
+    /// hat (höchstens einer je 24 Stunden, nur mit eingeschaltetem Computerschutz).
+    fn restore_point_apply(description: &str) -> Result<(), String> {
+        // Nur die bereinigte Beschreibung (ohne Anführungszeichen) gelangt in den Befehl.
+        if aegis_hardening::restore::clean_description(description).as_deref() != Some(description)
+        {
+            return Err("Ungültige Beschreibung".into());
+        }
+        let newest = |points: &[aegis_hardening::restore::RestorePoint]| {
+            points.iter().map(|p| p.sequence).max().unwrap_or(0)
+        };
+        let before = aegis_hardening::collect::restore_points()
+            .map(|p| newest(&p))
+            .unwrap_or(0);
+        let script = format!(
+            "Checkpoint-Computer -Description '{description}' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop"
+        );
+        run_for(
+            r"WindowsPowerShell\v1.0\powershell.exe",
+            &[
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &script,
+            ],
+            Duration::from_secs(300),
+        )?;
+        let created = aegis_hardening::collect::restore_points().is_ok_and(|points| {
+            points
+                .iter()
+                .any(|p| p.sequence > before && p.description == description)
+        });
+        if created {
+            Ok(())
+        } else {
+            Err("Windows hat keinen neuen Punkt angelegt – meist, weil es heute schon einen gibt (höchstens einer je 24 Stunden) oder der Computerschutz für Laufwerk C: aus ist.".into())
+        }
+    }
+
     fn tool(name: &str) -> Result<PathBuf, String> {
         aegis_winffi::accounts::system_dir()
             .map(|dir| dir.join(name))
@@ -831,6 +884,11 @@ mod sys {
 
     /// Startet ein Windows-Werkzeug vom festen Systemort (höchstens 30 s).
     fn run(exe: &str, args: &[&str]) -> Result<(), String> {
+        run_for(exe, args, Duration::from_secs(30))
+    }
+
+    /// Wie [`run`], mit eigener Frist (Wiederherstellungspunkte brauchen länger).
+    fn run_for(exe: &str, args: &[&str], limit: Duration) -> Result<(), String> {
         let path = tool(exe)?;
         // Führt einen Schritt eines freigegebenen Härtungs-Plans aus (netsh, net, schtasks bzw.
         // PowerShell für Set-/Remove-MpPreference
@@ -844,7 +902,7 @@ mod sys {
             .stderr(std::process::Stdio::null())
             .spawn();
         let mut child = child.map_err(|e| format!("{exe} startet nicht: {e}"))?;
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let deadline = Instant::now() + limit;
         loop {
             if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
                 return if status.success() {
@@ -956,6 +1014,7 @@ mod sys {
                 ],
             ),
             Step::Defender { command } => defender_apply(command),
+            Step::RestorePoint { description } => restore_point_apply(description),
         }
     }
 }
@@ -1239,10 +1298,17 @@ impl<C: Clock, W: Durable> Service<C, W> {
         let defender = plan.targets().iter().any(
             |t| matches!(t, Target::Setting { id } if id == super::defender::DEFENDER_SETTING),
         );
+        let restore = plan
+            .targets()
+            .iter()
+            .any(|t| matches!(t, Target::Setting { id } if id == super::restore::RESTORE_SETTING));
         let owner = user.identity();
         let system = Arc::clone(&self.harden_system);
         // Schritte neu bestimmen – sie müssen genau denen im Plan entsprechen.
-        let steps: Result<(Vec<Step>, Option<String>), String> = if defender {
+        let steps: Result<(Vec<Step>, Option<String>), String> = if restore {
+            // Nichts zu merken: ein Punkt verändert nichts und wird nie von AEGIS gelöscht.
+            super::restore::restore_steps(value).map(|s| (s, None))
+        } else if defender {
             // Kein allgemeines „Rückgängig“: Zurückschalten geht über die Defender-Seite mit
             // allen Prüfungen. Vor dem Ausführen den Stand frisch lesen und erneut prüfen –
             // er kann sich seit dem Vorschlag geändert haben (z. B. Manipulationsschutz an).

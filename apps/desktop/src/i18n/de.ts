@@ -1278,6 +1278,22 @@ export const de = {
       unknownOwner: 'unbekanntes Programm',
     },
   },
+  restore: {
+    title: 'Wiederherstellungspunkte',
+    intro:
+      'Ein Wiederherstellungspunkt sichert Systemeinstellungen, Treiber und Programme – nicht deine Dateien. Lege vor größeren Änderungen einen an; angelegt wird erst nach deinem Ja.',
+    reload: 'Neu lesen',
+    unavailable:
+      'Windows liefert keine Wiederherstellungspunkte – der Computerschutz ist vermutlich aus (Systemsteuerung → System → Computerschutz). Nur unter Windows.',
+    empty: 'Noch keine Wiederherstellungspunkte.',
+    unnamed: '(ohne Beschreibung)',
+    description: 'Beschreibung des neuen Punkts',
+    defaultDescription: 'Vor Änderungen mit AEGIS',
+    create: 'Punkt anlegen …',
+    adminOnly: 'Nur mit Administratorrechten (App als Administrator starten).',
+    honest:
+      'Ehrlich: Windows legt höchstens einen Punkt je 24 Stunden an. AEGIS löscht keine Punkte und spielt keine zurück – das geht in Windows unter „Systemwiederherstellung“.',
+  },
   updates: {
     title: 'Software-Updates',
     intro:

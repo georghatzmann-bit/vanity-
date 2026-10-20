@@ -741,6 +741,10 @@ export interface ServiceApi {
   defenderStatus(): Promise<DefenderState>;
   /** Defender-Änderung vorschlagen (nur Administratoren, nur nach „Ja“). */
   proposeDefender(change: DefenderChange): Promise<Proposal>;
+  /** Wiederherstellungspunkte von Windows (nur lesend). */
+  restorePoints(): Promise<RestoreState>;
+  /** Neuen Wiederherstellungspunkt vorschlagen (nur Administratoren, nur nach „Ja“). */
+  proposeRestorePoint(description: string): Promise<Proposal>;
   /** Rückfall-Kopien ein- (`true`, Grenze in MiB) bzw. ausschalten vorschlagen. */
   proposeBackup(on: boolean, quotaMb: number): Promise<Proposal>;
   /** Version zurückholen vorschlagen. */
@@ -1448,6 +1452,37 @@ export function parseDevices(response: unknown): DevicesState {
           ? [{ kind, name: str(d['name']), id: str(d['id']), external: d['external'] === true }]
           : [];
       }),
+  };
+}
+
+/** Ein Wiederherstellungspunkt von Windows. */
+export interface RestorePoint {
+  readonly sequence: number;
+  readonly description: string;
+  readonly created: string;
+}
+
+/** Wiederherstellungspunkte; `points === null`: Windows liefert keine (Computerschutz aus). */
+export interface RestoreState {
+  readonly points: readonly RestorePoint[] | null;
+  readonly admin: boolean;
+}
+
+export function parseRestore(response: unknown): RestoreState {
+  const r = expectType(response, 'restore_points');
+  const st = isObject(r['state']) ? r['state'] : {};
+  return {
+    points: Array.isArray(st['points'])
+      ? arr(st['points'])
+          .filter(isObject)
+          .map((p) => ({
+            sequence: typeof p['sequence'] === 'number' ? p['sequence'] : 0,
+            description: str(p['description']).slice(0, 64),
+            created: str(p['created']).slice(0, 20),
+          }))
+          .slice(0, 64)
+      : null,
+    admin: st['admin'] === true,
   };
 }
 
