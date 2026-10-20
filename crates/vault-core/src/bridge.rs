@@ -11,6 +11,83 @@ use crate::vault::Vault;
 pub const MAX_LOGINS: usize = 20;
 /// Größte Anfrage (Bytes).
 pub const MAX_REQUEST: usize = 8 * 1024;
+/// Längster Benutzername bzw. längstes Passwort beim Speichern (Bytes).
+pub const MAX_FIELD: usize = 1024;
+
+fn sha256_hex(text: &str) -> String {
+    use sha2::Digest as _;
+    sha2::Sha256::digest(text.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// Einträge mit passender Adresse und gleichem Benutzernamen (Groß/klein egal).
+fn same_login<'a>(
+    vault: &'a Vault,
+    origin: &'a str,
+    username: &'a str,
+) -> impl Iterator<Item = &'a crate::entry::Entry> + 'a {
+    vault.entries().iter().filter(move |e| {
+        e.username.trim().eq_ignore_ascii_case(username.trim())
+            && e.urls.iter().any(|u| matches(u, origin))
+    })
+}
+
+/// Speichert einen Login aus der Erweiterung (nur [`Request::Save`]; sonst `invalid`).
+/// Mit `id` wird nur das Passwort dieses Eintrags ersetzt – und nur, wenn er zur Seite und zum
+/// Benutzernamen passt; ohne `id` entsteht ein neuer Eintrag (Titel = Host).
+#[must_use]
+pub fn save(request: &Request, vault: &mut Vault, now: i64) -> Response {
+    let Request::Save {
+        origin,
+        username,
+        password,
+        id,
+    } = request
+    else {
+        return Response::error("invalid");
+    };
+    if let Some(id) = id {
+        let Some(existing) = same_login(vault, origin, username).find(|e| &e.id == id) else {
+            return Response::error("no_match");
+        };
+        // EntryInput überschreibt sich beim Verlassen selbst (ZeroizeOnDrop).
+        let input = crate::entry::EntryInput {
+            title: existing.title.clone(),
+            username: existing.username.clone(),
+            password: password.clone(),
+            urls: existing.urls.clone(),
+            notes: existing.notes.clone(),
+            folder: existing.folder.clone(),
+            tags: existing.tags.clone(),
+            favorite: existing.favorite,
+        };
+        let result = vault.update(id, &input, now);
+        return match result {
+            Ok(()) => Response::Saved { updated: true },
+            Err(_) => Response::error("invalid"),
+        };
+    }
+    let host = crate::url::origin_parts(origin)
+        .map(|(_, h)| h)
+        .unwrap_or_default();
+    let input = crate::entry::EntryInput {
+        title: host,
+        username: username.clone(),
+        password: password.clone(),
+        urls: vec![origin.clone()],
+        notes: String::new(),
+        folder: String::new(),
+        tags: Vec::new(),
+        favorite: false,
+    };
+    let result = vault.add(&input, now);
+    match result {
+        Ok(_) => Response::Saved { updated: false },
+        Err(_) => Response::error("invalid"),
+    }
+}
 
 /// Anfrage der Erweiterung.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -30,6 +107,39 @@ pub enum Request {
         /// Adresse der Seite.
         origin: String,
     },
+    /// Ist ein eben abgeschickter Login neu, geändert oder schon gespeichert? Das Passwort kommt
+    /// nur als SHA-256 (hex) – der Klartext erst nach „Speichern“.
+    Check {
+        /// Adresse der Seite.
+        origin: String,
+        /// Benutzername.
+        username: String,
+        /// SHA-256 des Passworts (64 Hex-Zeichen, klein).
+        password_sha256: String,
+    },
+    /// Login speichern (der Nutzer hat in der Erweiterung „Speichern“/„Aktualisieren“ geklickt).
+    Save {
+        /// Adresse der Seite.
+        origin: String,
+        /// Benutzername.
+        username: String,
+        /// Passwort.
+        password: String,
+        /// Bestehender Eintrag (aus `Check`), dessen Passwort ersetzt wird.
+        id: Option<String>,
+    },
+}
+
+/// Ergebnis von [`Request::Check`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckState {
+    /// Kein passender Eintrag.
+    New,
+    /// Gleicher Benutzer, anderes Passwort.
+    Update,
+    /// Schon so gespeichert.
+    Same,
 }
 
 /// Ein Login (ohne Passwort).
@@ -64,6 +174,18 @@ pub enum Response {
         /// Passwort.
         password: String,
     },
+    /// Ergebnis der Prüfung vor dem Speichern.
+    Check {
+        /// Neu, geändert oder gleich.
+        state: CheckState,
+        /// Eintrag bei `update`.
+        id: Option<String>,
+    },
+    /// Gespeichert.
+    Saved {
+        /// Bestehender Eintrag aktualisiert (sonst neu angelegt).
+        updated: bool,
+    },
     /// Tresor gesperrt.
     Locked,
     /// Fehler (`invalid`, `no_match`, `rate_limited`, `app_not_running`, `forbidden`).
@@ -71,6 +193,15 @@ pub enum Response {
         /// Kennung.
         code: String,
     },
+}
+
+impl Drop for Request {
+    fn drop(&mut self) {
+        // Passwort aus „Speichern“ nicht im freigegebenen Speicher liegen lassen.
+        if let Self::Save { password, .. } = self {
+            zeroize::Zeroize::zeroize(password);
+        }
+    }
 }
 
 impl Drop for Response {
@@ -120,6 +251,36 @@ pub fn parse(bytes: &[u8]) -> Result<Request, String> {
                 return Err("ungültige Anfrage".into());
             }
         }
+        Request::Check {
+            origin,
+            username,
+            password_sha256,
+        } => {
+            if !valid_origin(origin)
+                || username.len() > MAX_FIELD
+                || password_sha256.len() != 64
+                || !password_sha256
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            {
+                return Err("ungültige Anfrage".into());
+            }
+        }
+        Request::Save {
+            origin,
+            username,
+            password,
+            id,
+        } => {
+            if !valid_origin(origin)
+                || username.len() > MAX_FIELD
+                || password.is_empty()
+                || password.len() > MAX_FIELD
+                || id.as_ref().is_some_and(|i| i.is_empty() || i.len() > 64)
+            {
+                return Err("ungültige Anfrage".into());
+            }
+        }
     }
     Ok(request)
 }
@@ -155,6 +316,34 @@ pub fn handle(request: &Request, vault: Option<&Vault>) -> Response {
             },
             _ => Response::error("no_match"),
         },
+        Request::Check {
+            origin,
+            username,
+            password_sha256,
+        } => {
+            let mut update = None;
+            for e in same_login(vault, origin, username) {
+                if &sha256_hex(&e.password) == password_sha256 {
+                    return Response::Check {
+                        state: CheckState::Same,
+                        id: None,
+                    };
+                }
+                update.get_or_insert_with(|| e.id.clone());
+            }
+            match update {
+                Some(id) => Response::Check {
+                    state: CheckState::Update,
+                    id: Some(id),
+                },
+                None => Response::Check {
+                    state: CheckState::New,
+                    id: None,
+                },
+            }
+        }
+        // Speichern braucht den veränderbaren Tresor (`save`).
+        Request::Save { .. } => Response::error("invalid"),
     }
 }
 
@@ -243,5 +432,98 @@ mod tests {
         assert!(parse(br#"{"type":"export_all"}"#).is_err());
         assert!(parse(br#"{"type":"status","x":1}"#).is_err());
         assert!(parse(&vec![b' '; MAX_REQUEST + 1]).is_err());
+    }
+
+    #[test]
+    fn pruefen_und_speichern() {
+        let (mut v, id) = vault();
+        let check = |v: &Vault, user: &str, pw: &str| {
+            handle(
+                &Request::Check {
+                    origin: "https://bank.example".into(),
+                    username: user.into(),
+                    password_sha256: sha256_hex(pw),
+                },
+                Some(v),
+            )
+        };
+        assert_eq!(
+            check(&v, "ANNA", "geheim"),
+            Response::Check {
+                state: CheckState::Same,
+                id: None
+            }
+        );
+        assert_eq!(
+            check(&v, "anna", "neu"),
+            Response::Check {
+                state: CheckState::Update,
+                id: Some(id.clone())
+            }
+        );
+        assert_eq!(
+            check(&v, "bert", "x"),
+            Response::Check {
+                state: CheckState::New,
+                id: None
+            }
+        );
+        // Speichern nur über `save`, nie über `handle`.
+        let save_req = |user: &str, pw: &str, id: Option<String>, origin: &str| Request::Save {
+            origin: origin.into(),
+            username: user.into(),
+            password: pw.into(),
+            id,
+        };
+        assert_eq!(
+            handle(
+                &save_req("anna", "neu", None, "https://bank.example"),
+                Some(&v)
+            ),
+            Response::error("invalid")
+        );
+        // Aktualisieren: nur passender Eintrag (Adresse + Benutzer).
+        assert_eq!(
+            save(
+                &save_req("anna", "neu", Some(id.clone()), "https://evil.test"),
+                &mut v,
+                5
+            ),
+            Response::error("no_match")
+        );
+        assert_eq!(
+            save(
+                &save_req("bert", "neu", Some(id.clone()), "https://bank.example"),
+                &mut v,
+                5
+            ),
+            Response::error("no_match")
+        );
+        assert_eq!(
+            save(
+                &save_req("anna", "neu", Some(id.clone()), "https://bank.example"),
+                &mut v,
+                5
+            ),
+            Response::Saved { updated: true }
+        );
+        assert_eq!(v.get(&id).unwrap().password, "neu");
+        assert_eq!(v.get(&id).unwrap().title, "Bank");
+        // Neu: Titel = Host, Adresse = Seite.
+        assert_eq!(
+            save(
+                &save_req("bert", "pw2", None, "https://shop.example"),
+                &mut v,
+                6
+            ),
+            Response::Saved { updated: false }
+        );
+        let bert = v.entries().iter().find(|e| e.username == "bert").unwrap();
+        assert_eq!(bert.title, "shop.example");
+        assert_eq!(bert.urls, vec!["https://shop.example"]);
+        // Prüfung der Eingaben.
+        assert!(parse(br#"{"type":"save","origin":"https://a.example","username":"u","password":"","id":null}"#).is_err());
+        assert!(parse(br#"{"type":"check","origin":"https://a.example","username":"u","password_sha256":"xyz"}"#).is_err());
+        assert!(parse(br#"{"type":"check","origin":"https://a.example","username":"u","password_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#).is_ok());
     }
 }

@@ -321,6 +321,11 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Pause) oder Alt+↓, nur in deutlich sichtbare Felder (E2E: synthetische Tasten, Unterrahmen,
   durchsichtige/veränderte Anzeige lösen nichts aus). Grenze: Ein Programm desselben Kontos kann
   den Host selbst starten – die Pfadprüfungen schützen davor nicht, das Konto ist die Grenze.
+- **„Speichern?“ (P9.5, D-056):** abgeschickte Logins nur im Speicher des Hintergrunds (je Tab,
+  ≤ 2 min); vor der Zustimmung geht nur der SHA-256 des Passworts an AEGIS; Speichern erst nach
+  echtem Klick/Enter in der geschützten Frage, App: anlegen oder nur passenden Eintrag
+  aktualisieren, 10/min, nur entsperrt (E2E: Klartext erst nach „Speichern“, keine Frage bei
+  schon gespeichertem Login).
 - **Defender-Schalter (P8):** nur dokumentierte Cmdlets mit festem Wortlaut (keine Eingaben im
   Befehl), PowerShell aus `System32` mit `-NoProfile -NonInteractive`, nur Administratoren,
   nur nach „Ja“, nur aus frischem Status; Manipulationsschutz an → kein Plan zum Abschalten.

@@ -2,7 +2,8 @@
  * Inhaltsskript (nur Hauptrahmen): zeigt an Passwortfeldern einen kleinen AEGIS-Knopf in einem
  * geschlossenen Schatten-Baum. Erst nach einem echten Klick (bzw. Alt+↓ im Feld) fragt es den
  * Hintergrund nach Logins für diese Seite, und erst nach Auswahl eines Logins füllt es aus.
- * Es liest keine Eingaben, speichert nichts und sendet nichts von selbst.
+ * Eingaben liest es nur beim Absenden eines Login-Formulars (für „Speichern?“, siehe save.ts);
+ * es speichert nichts und füllt nichts von selbst aus.
  *
  * Schutz gegen untergeschobene Klicks: Knopf und Menü liegen in der obersten Ebene (Popover),
  * die Seite kann sie nicht überdecken; ändert die Seite Stil oder Attribute des Wirts, schließt
@@ -10,14 +11,8 @@
  * Eintrag (oder per Tastatur) gewählt, und ausgefüllt wird nur in deutlich sichtbare Felder.
  */
 
-import {
-  clearlyVisible,
-  effectiveOpacity,
-  fill,
-  passwordFields,
-  usable,
-  usernameFor,
-} from './lib/fields';
+import { clearlyVisible, fill, passwordFields, usable, usernameFor } from './lib/fields';
+import { hit as hitAt, intact as intactHost, lift, randomHost, watchHost } from './lib/guard';
 import { texts } from './lib/i18n';
 import {
   parseHostResponse,
@@ -28,6 +23,7 @@ import {
   type PopupAnswer,
 } from './lib/messages';
 import { applyTheme } from './lib/theme';
+import { offerSave, watchLogins } from './save';
 
 const CSS = `
 :host{all:initial}
@@ -68,49 +64,14 @@ let armedAt = 0;
 const ARM_MS = 500;
 let guard: MutationObserver | null = null;
 
-/** Zeigt ein Element in der obersten Ebene (falls der Browser das kann). */
-function lift(node: HTMLElement): void {
-  node.setAttribute('popover', 'manual');
-  try {
-    node.showPopover();
-  } catch {
-    // ohne Popover bleibt es ein festes Element – die Sichtprüfung gilt trotzdem
-  }
-}
-
-/** Ist unsere Oberfläche unverändert sichtbar (Wirt nicht durchsichtig, verdeckt, verformt)? */
+/** Ist unsere Oberfläche unverändert sichtbar? */
 function intact(): boolean {
-  if (ui === null || !ui.host.isConnected) {
-    return false;
-  }
-  for (let node: Element | null = ui.host; node !== null; node = node.parentElement) {
-    const style = getComputedStyle(node);
-    if (
-      style.filter !== 'none' ||
-      style.visibility === 'hidden' ||
-      style.display === 'none' ||
-      (node === ui.host && style.transform !== 'none')
-    ) {
-      return false;
-    }
-  }
-  return effectiveOpacity(ui.host) >= 0.99;
+  return ui !== null && intactHost(ui.host);
 }
 
-/** Liegt an der Klickstelle wirklich unser Element (nichts von der Seite darüber)? */
+/** Liegt an der Klickstelle wirklich unser Element? */
 function hit(e: MouseEvent, target: Element): boolean {
-  if (ui === null) {
-    return false;
-  }
-  // Tastatur (Enter/Leertaste auf dem fokussierten Eintrag) hat keine Klickstelle.
-  if (e.detail === 0) {
-    return true;
-  }
-  if (document.elementFromPoint(e.clientX, e.clientY) !== ui.host) {
-    return false;
-  }
-  const inner = ui.root.elementFromPoint(e.clientX, e.clientY);
-  return inner !== null && target.contains(inner);
+  return ui !== null && hitAt(e, ui.host, ui.root, target);
 }
 
 function shield(): SVGSVGElement {
@@ -132,16 +93,11 @@ function ensureUi(): NonNullable<typeof ui> {
     return ui;
   }
   // Neutraler, zufälliger Name: Seiten sollen den Knopf nicht gezielt erkennen können.
-  const tag = [...crypto.getRandomValues(new Uint8Array(4))]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-  const host = document.createElement(`x-${tag}`);
-  host.setAttribute('data-hint', '');
+  const host = randomHost();
   const root = host.attachShadow({ mode: 'closed' });
   // Ändert die Seite Stil, Klassen oder Attribute des Wirts, wird alles geschlossen.
   guard?.disconnect();
-  guard = new MutationObserver(() => hide());
-  guard.observe(host, { attributes: true });
+  guard = watchHost(host, hide);
   applyTheme(root, ':host');
   const style = document.createElement('style');
   style.textContent = CSS;
@@ -398,6 +354,9 @@ document.addEventListener(
   },
   true,
 );
+
+watchLogins();
+offerSave();
 
 window.addEventListener('scroll', schedule, { capture: true, passive: true });
 window.addEventListener('resize', schedule, { passive: true });

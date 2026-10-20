@@ -206,11 +206,14 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
 4. [x] P9.4 Sicherheits-Review (separater Agent, P9-R1…R13 behoben, siehe SECURITY
        Review-Protokoll), Doku, DoD.
 
+5. [x] P9.5 „Speichern?“ nach dem Anmelden: Erkennung beim Absenden, Prüfung per SHA-256,
+       Frage mit Klick-Schutz, Anlegen/Aktualisieren in der App (D-056, Tests + E2E).
+
 **DoD P9:** Tresor nur im App-Prozess des Kontos, Argon2id + AES-256-GCM mit gebundener Menge der
 Einträge, neuer Schlüssel bei jedem Master-Wechsel; Auto-Sperre, Fehlversuche, Zwischenablage
 ohne Verlauf (30 s, beim Sperren/Beenden geleert); CSV-Import nur aus eigener Exportdatei, nie
-fremde Browser-Passwörter; Erweiterung nur `nativeMessaging`, speichert nichts, Logins nur für
-die passende Seite, Ausfüllen nur auf echten, sichtbaren Klick; Host + Pipe nur fürs eigene Konto.
+fremde Browser-Passwörter; Erweiterung nur `nativeMessaging`, speichert nichts dauerhaft, Logins nur für
+die passende Seite, Ausfüllen nur auf echten, sichtbaren Klick, „Speichern?“ erst nach Klick; Host + Pipe nur fürs eigene Konto.
 Registrierung des Hosts und Auslieferung der Erweiterung folgen mit dem Setup (P13).
 
 ## P5 – Schutz-Werkzeuge

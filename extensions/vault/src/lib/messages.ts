@@ -24,13 +24,47 @@ export type ErrorCode =
 /** Antwort von AEGIS (über den Native-Messaging-Host), geprüft. */
 export type HostResponse =
   | { readonly type: 'status'; readonly unlocked: boolean }
+  | { readonly type: 'check'; readonly state: CheckState; readonly id: string | null }
+  | { readonly type: 'saved'; readonly updated: boolean }
   | { readonly type: 'logins'; readonly logins: readonly Login[] }
   | { readonly type: 'fill'; readonly username: string; readonly password: string }
   | { readonly type: 'error'; readonly code: ErrorCode };
 
+/** Ergebnis der Prüfung vor dem Speichern. */
+export type CheckState = 'new' | 'update' | 'same';
+
 /** Anfragen des Inhaltsskripts an den Hintergrund (ohne Adresse!). */
 export type PageRequest =
-  { readonly type: 'logins' } | { readonly type: 'fill'; readonly id: string };
+  | { readonly type: 'logins' }
+  | { readonly type: 'fill'; readonly id: string }
+  | { readonly type: 'submitted'; readonly username: string; readonly password: string }
+  | { readonly type: 'pending' }
+  | { readonly type: 'save-pending' }
+  | { readonly type: 'dismiss-pending' };
+
+/** Ein Login, der auf „Speichern?“ wartet (ohne Passwort). */
+export interface Pending {
+  readonly host: string;
+  readonly username: string;
+  readonly state: 'new' | 'update' | 'locked';
+}
+
+/** Antwort des Hintergrunds auf `pending`. */
+export function parsePending(v: unknown): Pending | null {
+  if (!isRecord(v) || v.type !== 'pending' || !text(v.host, 260) || !text(v.username)) {
+    return null;
+  }
+  const state = v.state;
+  return state === 'new' || state === 'update' || state === 'locked'
+    ? { host: v.host, username: v.username, state }
+    : null;
+}
+
+/** Ungefähr dieselbe Website (gleiche letzte zwei Namensteile bzw. gleicher Host)? */
+export function sameSite(a: string, b: string): boolean {
+  const tail = (h: string) => h.split('.').slice(-2).join('.');
+  return a === b || (a.includes('.') && b.includes('.') && tail(a) === tail(b));
+}
 
 /** Anfragen des Popups an das Inhaltsskript des aktiven Tabs. */
 export type PopupRequest =
@@ -113,6 +147,21 @@ export function parsePageRequest(v: unknown): PageRequest | null {
   if (v.type === 'fill' && Object.keys(v).length === 2 && text(v.id, 64) && ID.test(v.id)) {
     return { type: 'fill', id: v.id };
   }
+  if (
+    v.type === 'submitted' &&
+    Object.keys(v).length === 3 &&
+    text(v.username, 1024) &&
+    text(v.password, 1024) &&
+    v.password !== ''
+  ) {
+    return { type: 'submitted', username: v.username, password: v.password };
+  }
+  if (
+    (v.type === 'pending' || v.type === 'save-pending' || v.type === 'dismiss-pending') &&
+    Object.keys(v).length === 1
+  ) {
+    return { type: v.type };
+  }
   return null;
 }
 
@@ -157,6 +206,19 @@ export function parseHostResponse(v: unknown): HostResponse {
       return text(v.username) && text(v.password, 4096)
         ? { type: 'fill', username: v.username, password: v.password }
         : invalid;
+    case 'check': {
+      const state = v.state;
+      const id = v.id === null || v.id === undefined ? null : v.id;
+      if (
+        (state === 'new' || state === 'update' || state === 'same') &&
+        (id === null || (text(id, 64) && ID.test(id)))
+      ) {
+        return { type: 'check', state, id };
+      }
+      return invalid;
+    }
+    case 'saved':
+      return typeof v.updated === 'boolean' ? { type: 'saved', updated: v.updated } : invalid;
     case 'locked':
       return { type: 'error', code: 'locked' };
     case 'error':

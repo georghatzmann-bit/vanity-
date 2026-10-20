@@ -11,6 +11,14 @@ const de = {
   insecure:
     'Achtung: Diese Seite nutzt kein HTTPS. Das Passwort könnte unterwegs mitgelesen werden.',
   close: 'Schließen',
+  saveTitle: 'Login in AEGIS speichern?',
+  saveUpdateTitle: 'Neues Passwort in AEGIS übernehmen?',
+  save: 'Speichern',
+  saveUpdate: 'Aktualisieren',
+  saveLater: 'Nicht jetzt',
+  saved: 'Im AEGIS-Tresor gespeichert.',
+  savedUpdated: 'Passwort im AEGIS-Tresor aktualisiert.',
+  saveLocked: 'Der Tresor ist gesperrt – entsperre ihn in der AEGIS-App, dann „Speichern“.',
   hidden:
     'Nicht ausgefüllt: Das Feld ist nicht deutlich sichtbar oder die Seite hat die AEGIS-Anzeige verändert.',
   error: {
@@ -43,6 +51,14 @@ const en: Texts = {
   noUser: '(no username)',
   insecure: 'Warning: this site does not use HTTPS. The password could be read in transit.',
   close: 'Close',
+  saveTitle: 'Save login in AEGIS?',
+  saveUpdateTitle: 'Use the new password in AEGIS?',
+  save: 'Save',
+  saveUpdate: 'Update',
+  saveLater: 'Not now',
+  saved: 'Saved in the AEGIS vault.',
+  savedUpdated: 'Password updated in the AEGIS vault.',
+  saveLocked: 'The vault is locked – unlock it in the AEGIS app, then “Save”.',
   hidden: 'Not filled: the field is not clearly visible or the page changed the AEGIS display.',
   error: {
     locked: 'The vault is locked. Unlock it in the AEGIS app and try again.',

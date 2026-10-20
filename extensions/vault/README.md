@@ -12,6 +12,10 @@ das Recht `nativeMessaging` (D-055).
 
 Das Popup (Symbol in der Leiste) listet dieselben Logins für den aktiven Tab.
 
+Nach dem Anmelden fragt die Erweiterung „Login in AEGIS speichern?“ bzw. „Aktualisieren?“ –
+der Login wartet bis dahin nur im Speicher (höchstens 2 Minuten), AEGIS sieht vorher nur eine
+Prüfsumme des Passworts (D-056).
+
 ## Verbindung
 
 `background.ts` → `chrome.runtime.sendNativeMessage('com.aegis.vault')` →

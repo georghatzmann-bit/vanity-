@@ -5,7 +5,9 @@ import {
   pageOrigin,
   parseHostResponse,
   parsePageRequest,
+  parsePending,
   parsePopupRequest,
+  sameSite,
 } from './messages';
 
 const ID = 'mfhpbiifllddbcddpanidjedgmbglhon';
@@ -103,5 +105,61 @@ describe('Antworten von AEGIS', () => {
       'forbidden',
     );
     expect(nativeErrorCode('Native host has exited.')).toBe('app_not_running');
+  });
+});
+
+describe('Speichern?', () => {
+  it('abgeschickter Login: nur Benutzer + Passwort, keine Adresse', () => {
+    expect(parsePageRequest({ type: 'submitted', username: 'a', password: 'p' })).toEqual({
+      type: 'submitted',
+      username: 'a',
+      password: 'p',
+    });
+    expect(parsePageRequest({ type: 'submitted', username: 'a', password: '' })).toBeNull();
+    expect(
+      parsePageRequest({ type: 'submitted', username: 'a', password: 'p', origin: 'https://x' }),
+    ).toBeNull();
+    expect(
+      parsePageRequest({ type: 'submitted', username: 'a', password: 'p'.repeat(1025) }),
+    ).toBeNull();
+    expect(parsePageRequest({ type: 'save-pending' })).toEqual({ type: 'save-pending' });
+    expect(parsePageRequest({ type: 'save-pending', id: 'x' })).toBeNull();
+  });
+
+  it('wartender Login und Antworten', () => {
+    expect(
+      parsePending({ type: 'pending', host: 'bank.example', username: 'a', state: 'update' }),
+    ).toEqual({
+      host: 'bank.example',
+      username: 'a',
+      state: 'update',
+    });
+    expect(parsePending({ type: 'none' })).toBeNull();
+    expect(parsePending({ type: 'pending', host: 'b', username: 'a', state: 'same' })).toBeNull();
+    expect(parseHostResponse({ type: 'check', state: 'update', id: 'a1' })).toEqual({
+      type: 'check',
+      state: 'update',
+      id: 'a1',
+    });
+    expect(parseHostResponse({ type: 'check', state: 'new', id: null })).toEqual({
+      type: 'check',
+      state: 'new',
+      id: null,
+    });
+    expect(parseHostResponse({ type: 'check', state: 'maybe', id: null })).toEqual({
+      type: 'error',
+      code: 'invalid',
+    });
+    expect(parseHostResponse({ type: 'saved', updated: false })).toEqual({
+      type: 'saved',
+      updated: false,
+    });
+  });
+
+  it('gleiche Website', () => {
+    expect(sameSite('login.bank.example', 'www.bank.example')).toBe(true);
+    expect(sameSite('bank.example', 'bank.example')).toBe(true);
+    expect(sameSite('bank.example', 'evil.example')).toBe(false);
+    expect(sameSite('localhost', 'bank.example')).toBe(false);
   });
 });

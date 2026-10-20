@@ -47,6 +47,9 @@ struct Inner {
     /// Zeitpunkte aller Anfragen der Erweiterung (Begrenzung).
     #[cfg_attr(not(windows), allow(dead_code))]
     requests: std::collections::VecDeque<Instant>,
+    /// Zeitpunkte der Speichern-Anfragen der Erweiterung (Begrenzung).
+    #[cfg_attr(not(windows), allow(dead_code))]
+    saves: std::collections::VecDeque<Instant>,
 }
 
 static STATE: LazyLock<Mutex<Inner>> = LazyLock::new(|| {
@@ -60,6 +63,7 @@ static STATE: LazyLock<Mutex<Inner>> = LazyLock::new(|| {
         busy: false,
         fills: std::collections::VecDeque::new(),
         requests: std::collections::VecDeque::new(),
+        saves: std::collections::VecDeque::new(),
     })
 });
 static WATCHER: AtomicBool = AtomicBool::new(false);
@@ -563,6 +567,9 @@ pub async fn vault_change_master(old: String, new: String) -> Result<(), String>
 /// Ausfüll-Anfragen der Erweiterung je Minute (danach „rate_limited“).
 #[cfg_attr(not(windows), allow(dead_code))]
 const FILLS_PER_MINUTE: usize = 30;
+/// Speichern-Anfragen der Erweiterung je Minute.
+#[cfg_attr(not(windows), allow(dead_code))]
+const SAVES_PER_MINUTE: usize = 10;
 /// Anfragen der Erweiterung insgesamt je Minute.
 #[cfg_attr(not(windows), allow(dead_code))]
 const REQUESTS_PER_MINUTE: usize = 120;
@@ -596,9 +603,22 @@ fn bridge_answer(line: &[u8]) -> aegis_vault_core::bridge::Response {
         let s = &mut *s;
         if !admit(&mut s.requests, REQUESTS_PER_MINUTE)
             || (matches!(request, Request::Fill { .. }) && !admit(&mut s.fills, FILLS_PER_MINUTE))
+            || (matches!(request, Request::Save { .. }) && !admit(&mut s.saves, SAVES_PER_MINUTE))
         {
             return Response::error("rate_limited");
         }
+    }
+    if matches!(request, Request::Save { .. }) {
+        // Der Nutzer hat in der Erweiterung „Speichern“ gewählt: anlegen bzw. Passwort ersetzen
+        // und sofort sichern.
+        let Some((vault, _)) = s.open.as_mut() else {
+            return Response::Locked;
+        };
+        let answer = aegis_vault_core::bridge::save(&request, vault, now_unix());
+        if matches!(answer, Response::Saved { .. }) && save(&s).is_err() {
+            return Response::error("invalid");
+        }
+        return answer;
     }
     handle(&request, s.open.as_ref().map(|(v, _)| v))
 }
@@ -742,5 +762,11 @@ mod tests {
             Response::Locked
         );
         assert_eq!(bridge_answer(b"kaputt"), Response::error("invalid"));
+        assert_eq!(
+            bridge_answer(
+                br#"{"type":"save","origin":"https://bank.example","username":"a","password":"p","id":null}"#
+            ),
+            Response::Locked
+        );
     }
 }

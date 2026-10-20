@@ -40,7 +40,9 @@ function fakeHost(dir: string, port: number): string {
     script,
     `#!${process.execPath}
 import { appendFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 const origin = 'http://bank.test:${port}';
+const known = createHash('sha256').update('nur-ein-testwert').digest('hex');
 let buf = Buffer.alloc(0);
 function reply(o) {
   const body = Buffer.from(JSON.stringify(o));
@@ -62,6 +64,13 @@ process.stdin.on('data', (chunk) => {
       reply(msg.origin === origin && msg.id === 'a1'
         ? { type: 'fill', username: 'anna@example.test', password: 'nur-ein-testwert' }
         : { type: 'error', code: 'no_match' });
+    } else if (msg.type === 'check') {
+      const anna = msg.origin === origin && msg.username === 'anna@example.test';
+      reply(anna && msg.password_sha256 === known
+        ? { type: 'check', state: 'same', id: null }
+        : anna ? { type: 'check', state: 'update', id: 'a1' } : { type: 'check', state: 'new', id: null });
+    } else if (msg.type === 'save') {
+      reply({ type: 'saved', updated: msg.id !== null });
     } else {
       reply({ type: 'error', code: 'invalid' });
     }
@@ -77,7 +86,7 @@ interface Fixtures {
   port: number;
   profile: string;
   context: BrowserContext;
-  hostLog: () => { type: string; origin?: string; id?: string }[];
+  hostLog: () => Record<string, unknown>[];
 }
 
 export const test = base.extend<Fixtures>({
@@ -139,7 +148,7 @@ export const test = base.extend<Fixtures>({
             .trim()
             .split('\n')
             .filter((l) => l !== '')
-            .map((l) => JSON.parse(l) as { type: string; origin?: string; id?: string })
+            .map((l) => JSON.parse(l) as Record<string, unknown>)
         : [];
     });
   },

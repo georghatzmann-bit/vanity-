@@ -428,3 +428,17 @@ Pause, Wächter gegen Veränderungen) bzw. Alt+↓ – und nur in deutlich sicht
 allein fragt AEGIS nicht. Auf HTTP-Seiten warnt es. Grenze:
 Ausgefüllte Werte stehen danach in der Seite – wie bei jedem Passwort-Manager.
 
+## D-056 – Tresor-Erweiterung: „Speichern?“ nach dem Anmelden
+
+Status: angenommen (P9.5). Beim Absenden eines Login-Formulars (Formular-Absenden, echter Klick
+auf einen Absende-Knopf oder Enter im Passwortfeld) liest das Inhaltsskript Benutzername und
+Passwort und gibt sie an den Hintergrund der Erweiterung – dort warten sie **nur im Speicher**,
+je Tab, höchstens 2 Minuten. AEGIS erfährt vorher nur den SHA-256 des Passworts, um „neu“,
+„geändert“ oder „schon gespeichert“ zu erkennen (Antwort ohne Geheimnisse). Die Frage
+„Speichern?“/„Aktualisieren?“ erscheint auf derselben Website (auch nach Weiterleitung) mit den
+Schutzmaßnahmen des Ausfüll-Menüs (oberste Ebene, Wächter, echte Klickstelle, 500 ms Pause,
+kein Vorfokus); erst ein Klick bzw. Enter auf „Speichern“ schickt den Klartext an die App. Die
+App legt einen Eintrag (Titel = Host, Adresse = Seite) an oder ersetzt nur das Passwort des
+passenden Eintrags (Adresse + Benutzername), höchstens 10 Mal je Minute, nur entsperrt, und
+speichert sofort. „Nicht jetzt“ verwirft. Die Erweiterung speichert weiterhin nichts dauerhaft.
+

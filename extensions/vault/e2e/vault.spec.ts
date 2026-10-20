@@ -102,6 +102,47 @@ test('Untergeschobene Klicks: durchsichtige oder veränderte Anzeige löst nicht
   await expect(page.locator('#p')).toHaveValue('');
 });
 
+test('Speichern? nach dem Anmelden: erst Prüfsumme, Klartext nur nach „Speichern“', async ({
+  context,
+  port,
+  hostLog,
+}) => {
+  const page = await context.newPage();
+  await page.goto(`http://bank.test:${port}/login`);
+  await page.locator('#u').fill('bert@example.test');
+  await page.locator('#p').fill('ein-neues-testpasswort');
+  await page.getByRole('button', { name: 'Anmelden' }).click();
+  await expect.poll(() => hostLog().map((m) => m.type)).toEqual(['check']);
+  const [check] = hostLog();
+  expect(check?.username).toBe('bert@example.test');
+  expect(check?.origin).toBe(`http://bank.test:${port}`);
+  expect(JSON.stringify(hostLog())).not.toContain('ein-neues-testpasswort');
+  // Die Frage erscheint auf der Folgeseite; per Tastatur hinein und „Speichern“.
+  await expect(page.locator('[data-hint]')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Anmelden' }).focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => hostLog().map((m) => m.type)).toEqual(['check', 'save']);
+  expect(hostLog()[1]).toEqual({
+    type: 'save',
+    origin: `http://bank.test:${port}`,
+    username: 'bert@example.test',
+    password: 'ein-neues-testpasswort',
+    id: null,
+  });
+});
+
+test('Schon gespeicherter Login: keine Frage', async ({ context, port, hostLog }) => {
+  const page = await context.newPage();
+  await page.goto(`http://bank.test:${port}/login`);
+  await page.locator('#u').fill('anna@example.test');
+  await page.locator('#p').fill('nur-ein-testwert');
+  await page.getByRole('button', { name: 'Anmelden' }).click();
+  await expect.poll(() => hostLog().map((m) => m.type)).toEqual(['check']);
+  await page.waitForTimeout(1500);
+  await expect(page.locator('[data-hint]')).toHaveCount(0);
+});
+
 test('Popup ohne Webseite erklärt ehrlich und ist barrierefrei', async ({ context }) => {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${EXTENSION_ID}/popup.html`);
