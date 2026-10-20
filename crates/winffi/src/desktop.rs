@@ -34,10 +34,10 @@ fn err(e: &windows::core::Error) -> io::Error {
 }
 
 /// COM für diesen Faden (wird beim Verlassen wieder abgemeldet).
-struct Com(bool);
+pub(crate) struct Com(bool);
 
 impl Com {
-    fn init() -> Self {
+    pub(crate) fn init() -> Self {
         // SAFETY: Einmal je Aufruf; bei Erfolg (auch S_FALSE) folgt genau ein CoUninitialize.
         // aegis-unsafe: winffi-desktop-com-init
         #[allow(unsafe_code)]

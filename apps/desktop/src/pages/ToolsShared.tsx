@@ -133,6 +133,9 @@ export function FolderPicker({
 }
 
 /** Vorschau → Auswahl → Ausführen → Ergebnis → Rückgängig. */
+/** Schritte je Seite der Vorschau. */
+const PAGE = 300;
+
 export function PreviewFlow({
   tools,
   request,
@@ -151,7 +154,11 @@ export function PreviewFlow({
   const [run, setRun] = useState<ToolRun | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [undoText, setUndoText] = useState<string | null>(null);
-  const shown = preview?.items.slice(0, 300) ?? [];
+  // Nur angezeigte Schritte laufen: Was (noch) nicht zu sehen ist, wird nie ausgeführt.
+  const [limit, setLimit] = useState(PAGE);
+  const shown = preview?.items.slice(0, limit) ?? [];
+  const hidden = (preview?.items.length ?? 0) - shown.length;
+  const selected = shown.length - [...skip].filter((i) => i < shown.length).length;
 
   const make = () => {
     if (request === null) {
@@ -165,6 +172,7 @@ export function PreviewFlow({
       (p) => {
         setPreview(p);
         setSkip(new Set());
+        setLimit(PAGE);
         setBusy(false);
       },
       (e: unknown) => {
@@ -181,7 +189,8 @@ export function PreviewFlow({
       return;
     }
     setBusy(true);
-    tools.execute(preview.id, preview.digest, [...skip], confirm).then(
+    const notShown = preview.items.map((_, i) => i).filter((i) => i >= shown.length);
+    tools.execute(preview.id, preview.digest, [...skip, ...notShown], confirm).then(
       (r) => {
         setRun(r);
         setPreview(null);
@@ -252,13 +261,13 @@ export function PreviewFlow({
             <>
               <p className="text-sm font-medium text-text">
                 {t('toolbox.previewSummary', {
-                  count: String(preview.items.length - skip.size),
+                  count: String(selected),
                   size: formatBytes(preview.totalSize, locale),
                 })}
               </p>
               {preview.groups.length > 0 && (
                 <ul className="space-y-2 text-sm">
-                  {preview.groups.slice(0, 50).map((g) => (
+                  {preview.groups.slice(0, Math.ceil(limit / 6)).map((g) => (
                     <li key={g.hash} className="rounded-lg border border-border p-2">
                       {g.files.map((f, i) => (
                         <div key={f.path} className="flex flex-wrap gap-x-2">
@@ -300,10 +309,15 @@ export function PreviewFlow({
                   </li>
                 ))}
               </ul>
-              {preview.items.length > shown.length && (
-                <p className="text-xs text-text-subtle">
-                  {t('toolbox.previewMore', { count: String(preview.items.length - shown.length) })}
-                </p>
+              {hidden > 0 && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-xs text-text-muted">
+                    {t('toolbox.previewMore', { count: String(hidden) })}
+                  </p>
+                  <Button size="sm" variant="ghost" onClick={() => setLimit(limit + PAGE)}>
+                    {t('toolbox.previewShowMore')}
+                  </Button>
+                </div>
               )}
             </>
           )}
@@ -311,7 +325,7 @@ export function PreviewFlow({
             <Button
               variant="primary"
               loading={busy}
-              disabled={preview.items.length === 0 || skip.size === preview.items.length}
+              disabled={selected === 0}
               onClick={() => execute()}
             >
               {t('toolbox.execute')}
@@ -355,7 +369,7 @@ export function PreviewFlow({
         tone="danger"
         title={t('toolbox.finalTitle')}
         description={t('toolbox.finalText', {
-          count: String((preview?.items.length ?? 0) - skip.size),
+          count: String(selected),
         })}
         onClose={() => setChallenge(null)}
         footer={

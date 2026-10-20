@@ -88,7 +88,17 @@ impl Platform for WindowsPlatform {
             .ok_or_else(|| io::Error::other("ohne Begleitdatei"))?;
         // Nur aus dem Papierkorb des Kontos und nur, wenn die Begleitdatei den Ort nennt.
         let bin = bin_for(original)?;
-        if !info_path.starts_with(&bin) || !item.data.starts_with(&bin) {
+        // Genau ein `$I…`/`$R…`-Paar direkt im Papierkorb des Kontos (gleiche Endung).
+        let name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().into_owned());
+        let pair = name(info_path).zip(name(&item.data)).is_some_and(|(i, r)| {
+            i.strip_prefix("$I")
+                .zip(r.strip_prefix("$R"))
+                .is_some_and(|(a, b)| !a.is_empty() && a == b)
+        });
+        if info_path.parent() != Some(bin.as_path())
+            || item.data.parent() != Some(bin.as_path())
+            || !pair
+        {
             return Err(io::Error::other("nicht aus dem Papierkorb dieses Kontos"));
         }
         let info = parse_info(&std::fs::read(info_path)?)

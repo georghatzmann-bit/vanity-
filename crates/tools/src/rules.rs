@@ -75,6 +75,11 @@ pub struct Rule {
     pub condition: Condition,
     /// Name des Unterordners im Regel-Ordner.
     pub target: String,
+    /// Seit wann „im Hintergrund“ gilt (Unix-Sekunden; setzt die App beim Speichern). Die
+    /// Überwachung fasst nur Dateien an, die danach angekommen sind – den Bestand nie ohne
+    /// Vorschau.
+    #[serde(default)]
+    pub watch_since: Option<i64>,
 }
 
 /// Höchstzahl Regeln.
@@ -83,10 +88,22 @@ pub const MAX_RULES: usize = 100;
 /// Gültiger Ordnername (ein Teil, keine Sonder- oder reservierten Namen)?
 #[must_use]
 pub fn valid_folder_name(name: &str) -> bool {
-    let reserved = [
-        "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "lpt1", "lpt2", "lpt3",
-    ];
-    !name.trim().is_empty()
+    // Reservierte Gerätenamen, auch mit Endung (`CON.txt`) und hochgestellten Ziffern.
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end()
+        .to_lowercase();
+    let device = ["con", "prn", "aux", "nul", "conin$", "conout$", "clock$"]
+        .contains(&stem.as_str())
+        || ["com", "lpt"].iter().any(|p| {
+            stem.strip_prefix(p).is_some_and(|n| {
+                ["1", "2", "3", "4", "5", "6", "7", "8", "9", "¹", "²", "³"].contains(&n)
+            })
+        });
+    !device
+        && !name.trim().is_empty()
         && name.len() <= 120
         && name == name.trim()
         && !name.ends_with('.')
@@ -94,7 +111,6 @@ pub fn valid_folder_name(name: &str) -> bool {
         && !name.chars().any(char::is_control)
         && name != "."
         && name != ".."
-        && !reserved.contains(&name.to_ascii_lowercase().as_str())
 }
 
 impl Rule {
@@ -156,7 +172,13 @@ pub fn origin_host(path: &Path) -> Option<String> {
     {
         let mut stream = path.as_os_str().to_owned();
         stream.push(":Zone.Identifier");
-        let text = std::fs::read(stream).ok()?;
+        // Höchstens 64 KiB lesen (ein Datenstrom kann beliebig groß sein).
+        let mut text = Vec::new();
+        std::io::Read::read_to_end(
+            &mut std::io::Read::take(std::fs::File::open(stream).ok()?, 64 * 1024 + 1),
+            &mut text,
+        )
+        .ok()?;
         if text.len() > 64 * 1024 {
             return None;
         }
@@ -206,13 +228,20 @@ pub fn movable_files(folder: &Path, now: i64, settle: i64) -> Vec<FileInfo> {
 /// Vorschau für Regeln eines Ordners (erste passende eingeschaltete Regel gewinnt).
 #[must_use]
 pub fn plan(rules: &[Rule], folder: &Path, now: i64, settle: i64) -> Plan {
+    plan_since(rules, folder, now, settle, None)
+}
+
+fn plan_since(rules: &[Rule], folder: &Path, now: i64, settle: i64, since: Option<i64>) -> Plan {
     let active: Vec<&Rule> = rules
         .iter()
         .filter(|r| r.enabled && r.folder == folder)
         .collect();
     let mut ops = Vec::new();
     if crate::guard::allowed(folder) {
-        for f in movable_files(folder, now, settle) {
+        for f in movable_files(folder, now, settle)
+            .into_iter()
+            .filter(|f| since.is_none_or(|s| f.created.max(f.modified) >= s))
+        {
             let needs_origin = active.iter().any(|r| !r.condition.source_host.is_empty());
             let origin = if needs_origin {
                 origin_host(&f.path)
@@ -236,13 +265,27 @@ pub fn plan(rules: &[Rule], folder: &Path, now: i64, settle: i64) -> Plan {
     Plan::new(Tool::Rules, ops, now)
 }
 
-/// Vorschau für genau eine Regel (Hintergrund-Überwachung; trägt die Regel-Kennung, damit nur
-/// diese Regel sie freigeben kann).
+/// Vorschau für genau eine Regel (trägt die Regel-Kennung, damit nur diese Regel sie
+/// freigeben kann). Mit `watch_since` (Hintergrund-Überwachung) nur Dateien, die seitdem
+/// angekommen sind.
 #[must_use]
 pub fn plan_for_rule(rule: &Rule, now: i64, settle: i64) -> Plan {
-    let mut p = plan(std::slice::from_ref(rule), &rule.folder, now, settle);
+    let since = if rule.watch {
+        Some(rule.watch_since.unwrap_or(now))
+    } else {
+        None
+    };
+    let mut p = plan_since(std::slice::from_ref(rule), &rule.folder, now, settle, since);
     p.rule = Some(rule.id.clone());
     p
+}
+
+/// Vorschau einer Regel für „jetzt anwenden“ von Hand: der ganze Bestand im Ordner.
+#[must_use]
+pub fn plan_now(rule: &Rule, now: i64, settle: i64) -> Plan {
+    let mut once = rule.clone();
+    once.enabled = true;
+    plan(std::slice::from_ref(&once), &once.folder, now, settle)
 }
 
 #[cfg(test)]
@@ -288,12 +331,15 @@ mod tests {
                 ..Condition::default()
             },
             target: "Claude-Tools".into(),
+            watch_since: None,
         };
         let ok = rule.clone().validated().unwrap();
         assert_eq!(ok.name, "Claude");
         assert_eq!(ok.condition.extensions, vec!["zip"]);
         assert!(!ok.id.is_empty());
-        for bad in ["..", "a/b", "CON", "x:", ""] {
+        for bad in [
+            "..", "a/b", "CON", "x:", "", "nul.zip", "COM9", "LPT¹", "conout$",
+        ] {
             let mut r = rule.clone();
             r.target = bad.into();
             assert!(r.validated().is_err(), "{bad}");

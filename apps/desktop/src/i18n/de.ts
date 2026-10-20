@@ -940,7 +940,8 @@ export const de = {
     previewTitle: 'Vorschau',
     previewEmpty: 'Nichts zu tun – die Vorschau ist leer.',
     previewSummary: '{count} Schritte · {size}',
-    previewMore: '… und {count} weitere (alle werden ausgeführt, außer abgewählte)',
+    previewMore: '{count} weitere Schritte noch nicht angezeigt – sie werden nicht ausgeführt.',
+    previewShowMore: 'Weitere anzeigen',
     keep: 'bleibt',
     execute: 'Ausführen',
     discard: 'Verwerfen',
@@ -965,9 +966,13 @@ export const de = {
     ruleName: 'Name',
     ruleEnabled: 'Eingeschaltet',
     ruleWatch: 'Im Hintergrund (alle 30 s)',
+    ruleWatchHint:
+      'Im Hintergrund gilt die Regel nur für Dateien, die ab dem Einschalten ankommen. Vorhandene Dateien: „Jetzt anwenden (Vorschau)“.',
     ruleExtensions: 'Endungen (z. B. zip, pdf)',
     ruleNameContains: 'Name enthält',
     ruleSource: 'Herkunft endet auf (z. B. claude.ai)',
+    ruleSourceHint:
+      'Die Herkunft notiert Windows beim Herunterladen. Sie ist ein Hinweis, kein Beweis – wer die Datei ändern kann, kann auch sie ändern.',
     ruleSave: 'Regel speichern',
     ruleApply: 'Jetzt anwenden (Vorschau)',
     ruleDelete: 'Regel löschen',

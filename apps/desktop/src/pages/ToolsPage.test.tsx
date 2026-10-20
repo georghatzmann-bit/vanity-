@@ -124,6 +124,33 @@ describe('Werkzeuge', () => {
   });
 });
 
+describe('Lange Vorschau', () => {
+  it('nicht angezeigte Schritte laufen nie, „Weitere anzeigen“ blendet sie ein', async () => {
+    const tools = fakeTools();
+    renderApp({ platform: withTools(tools), hash: '#/tools' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Cleaner' }));
+    const panel = await screen.findByTestId('tool-cleaner');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Vorschau erstellen' }));
+    const preview = await within(panel).findByTestId('tool-preview');
+    expect(preview).toHaveTextContent('300 Schritte');
+    expect(preview).toHaveTextContent('5 weitere Schritte noch nicht angezeigt');
+    fireEvent.click(within(preview).getByRole('button', { name: 'Ausführen' }));
+    await within(panel).findByTestId('tool-result');
+    expect(tools.execute).toHaveBeenCalledWith(
+      'p1',
+      'a'.repeat(64),
+      [300, 301, 302, 303, 304],
+      undefined,
+    );
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Vorschau erstellen' }));
+    const again = await within(panel).findByTestId('tool-preview');
+    fireEvent.click(within(again).getByRole('button', { name: 'Weitere anzeigen' }));
+    expect(again).toHaveTextContent('305 Schritte');
+    expect(within(again).getAllByRole('checkbox')).toHaveLength(305);
+  });
+});
+
 describe('Werkzeuge 12–22', () => {
   it('Shredder: erst zweiter Dialog, ohne ihn passiert nichts', async () => {
     const tools = fakeTools();

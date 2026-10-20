@@ -88,6 +88,7 @@ pub fn source_rule(folder: &Path, mapping: &SourceMapping) -> Rule {
             ..Condition::default()
         },
         target: mapping.target.clone(),
+        watch_since: None,
     }
 }
 
@@ -122,13 +123,49 @@ fn hash_file(path: &Path, limit: u64) -> Option<String> {
     )
 }
 
+/// Wer eine Datei wirklich ist: aufgelöster Pfad (Groß/klein, Kurznamen, Links), unter
+/// Windows ohne Unterschied der Schreibweise. Zwei Pfade derselben Datei sind kein Duplikat.
+fn identity(path: &Path) -> Option<String> {
+    let canonical = std::fs::canonicalize(path).ok()?;
+    let text = canonical.to_string_lossy().into_owned();
+    Some(if cfg!(windows) {
+        text.to_lowercase()
+    } else {
+        text
+    })
+}
+
+/// Wurzeln ohne Doppelte und ohne Ordner, die schon in einer anderen Wurzel liegen.
+fn distinct_roots(roots: &[PathBuf]) -> Vec<PathBuf> {
+    let mut resolved: Vec<(PathBuf, PathBuf)> = roots
+        .iter()
+        .filter(|r| allowed(r))
+        .filter_map(|r| std::fs::canonicalize(r).ok().map(|c| (r.clone(), c)))
+        .collect();
+    resolved.sort_by_key(|(_, c)| c.as_os_str().len());
+    let mut kept: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for (root, canonical) in resolved {
+        let inside = kept.iter().any(|(_, k)| {
+            let (k, c) = (identity(k), identity(&canonical));
+            k.zip(c).is_some_and(|(k, c)| {
+                c == k || c.starts_with(&format!("{k}{}", std::path::MAIN_SEPARATOR))
+            })
+        });
+        if !inside {
+            kept.push((root, canonical));
+        }
+    }
+    kept.into_iter().map(|(r, _)| r).collect()
+}
+
 /// 6 Duplikat-Finder: gleiche Größe, dann gleicher Inhalt. Behalten wird die älteste Datei
-/// (bei Gleichstand der kürzere Pfad); die übrigen gehen in den Papierkorb.
+/// (bei Gleichstand der kürzere Pfad); die übrigen gehen in den Papierkorb. Dieselbe Datei
+/// unter zwei Pfaden (verschachtelte Ordner, Schreibweise, Links) zählt nur einmal.
 #[must_use]
 pub fn duplicates(roots: &[PathBuf], min_size: u64, now: i64) -> (Vec<DuplicateGroup>, Plan) {
     let mut by_size: HashMap<u64, Vec<FileInfo>> = HashMap::new();
-    for root in roots.iter().filter(|r| allowed(r)) {
-        for f in files(root, Limits::default()) {
+    for root in distinct_roots(roots) {
+        for f in files(&root, Limits::default()) {
             if f.size >= min_size.max(1) && !is_partial(&f.path) {
                 by_size.entry(f.size).or_default().push(f);
             }
@@ -137,7 +174,15 @@ pub fn duplicates(roots: &[PathBuf], min_size: u64, now: i64) -> (Vec<DuplicateG
     let mut groups = Vec::new();
     for (size, candidates) in by_size.into_iter().filter(|(_, v)| v.len() > 1) {
         let mut by_hash: HashMap<String, Vec<FileInfo>> = HashMap::new();
+        let mut seen = std::collections::HashSet::new();
         for f in candidates {
+            // Ohne feste Identität kein Kandidat; jede Datei nur einmal.
+            let Some(id) = identity(&f.path) else {
+                continue;
+            };
+            if !seen.insert(id) {
+                continue;
+            }
             if let Some(h) = hash_file(&f.path, size) {
                 by_hash.entry(h).or_default().push(f);
             }
@@ -269,13 +314,21 @@ pub fn large_old(roots: &[PathBuf], min_size: u64, days: u32, now: i64) -> Plan 
 #[must_use]
 pub fn empty_folders(root: &Path, now: i64) -> Plan {
     let mut empty: Vec<PathBuf> = Vec::new();
+    let mut known = std::collections::HashSet::new();
     if allowed(root) {
-        for dir in dirs_deepest_first(root, Limits::default()) {
+        for dir in dirs_deepest_first(
+            root,
+            Limits {
+                depth: 32,
+                files: 100_000,
+            },
+        ) {
             let Ok(entries) = std::fs::read_dir(&dir) else {
                 continue;
             };
-            let only_empty_dirs = entries.flatten().all(|e| empty.contains(&e.path()));
+            let only_empty_dirs = entries.flatten().all(|e| known.contains(&e.path()));
             if only_empty_dirs {
+                known.insert(dir.clone());
                 empty.push(dir);
             }
         }

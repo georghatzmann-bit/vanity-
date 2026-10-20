@@ -120,17 +120,28 @@ fn regel_handelt_nur_eingeschaltet() {
             ..Condition::default()
         },
         target: "Archive".into(),
+        watch_since: Some(0),
     }
     .validated()
     .unwrap();
     let plan = plan_for_rule(&rule, now(), 60);
     assert!(plan.ops.is_empty(), "ausgeschaltete Regel plant nichts");
     rule.enabled = true;
+    // Eben erst „im Hintergrund“ eingeschaltet: der Bestand bleibt (nur neue Dateien).
+    rule.watch_since = Some(now());
+    assert!(plan_for_rule(&rule, now(), 60).ops.is_empty());
+    rule.watch_since = Some(0);
     let plan = plan_for_rule(&rule, now(), 60);
     assert_eq!(plan.ops.len(), 1);
     let mut other = rule.clone();
     other.id = "andere".into();
     assert_eq!(Approved::by_rule(&plan, &other).unwrap_err(), Refused::Rule);
+    let mut paused = rule.clone();
+    paused.watch = false;
+    assert_eq!(
+        Approved::by_rule(&plan, &paused).unwrap_err(),
+        Refused::Rule
+    );
     let run = execute(Approved::by_rule(&plan, &rule).unwrap(), &platform, now());
     assert_eq!(run.done(), 1);
     assert!(downloads.join("Archive/tool.zip").exists());
@@ -383,4 +394,85 @@ fn schalter_nur_aus_der_festen_liste_mit_rueckgaengig() {
     );
     assert!(undo(&mut run, &fake, now()).is_empty());
     assert_eq!(fake.registry_get(ext.key, ext.name).unwrap(), Value::Absent);
+}
+
+#[test]
+fn duplikate_verschachtelte_ordner_nie_die_einzige_kopie() {
+    let (dir, downloads, platform) = setup();
+    write_fixture(dir.path(), "Downloads/einzig.bin", b"nur einmal da").unwrap();
+    write_fixture(dir.path(), "Downloads/sub/auch.bin", b"auch nur einmal").unwrap();
+    // Dieselbe Wurzel doppelt und ein Unterordner: keine Gruppe, kein Schritt.
+    let roots = vec![downloads.clone(), downloads.clone(), downloads.join("sub")];
+    let (groups, plan) = duplicates(&roots, 1, now());
+    assert!(groups.is_empty(), "{groups:?}");
+    assert!(plan.ops.is_empty());
+    let _ = platform;
+}
+
+#[cfg(unix)]
+#[test]
+fn zielordner_als_link_wird_nie_verfolgt() {
+    let (dir, downloads, platform) = setup();
+    write_fixture(dir.path(), "Downloads/a.zip", b"zip").unwrap();
+    create_fixture_dir(dir.path(), "aussen").unwrap();
+    // `Downloads/Archive` zeigt woandershin: der Schritt darf dort nichts ablegen.
+    aegis_core::testing::create_fixture_symlink(
+        dir.path(),
+        "Downloads/Archive",
+        &dir.path().join("aussen"),
+    )
+    .unwrap();
+    let plan = sort_downloads(&downloads, &[Category::Archives], now());
+    assert_eq!(plan.ops.len(), 1, "{:?}", plan.ops);
+    let run = execute(
+        Approved::by_user(&plan, &plan.digest(), vec![], now()).unwrap(),
+        &platform,
+        now(),
+    );
+    assert_eq!(run.done(), 0, "{:?}", run.items);
+    assert!(downloads.join("a.zip").exists());
+    assert!(!dir.path().join("aussen/a.zip").exists());
+    // Ein gewählter Ordner, der selbst ein Link ist, ist kein erlaubter Ort.
+    assert!(!aegis_tools::guard::allowed(&downloads.join("Archive")));
+}
+
+#[test]
+fn leere_pruefsumme_gibt_keine_freigabe() {
+    let plan = sort_downloads(Path::new("/nicht/vorhanden"), &[], now());
+    assert!(Approved::by_user(&plan, "", vec![], now()).is_err());
+}
+
+#[test]
+fn kaputtes_protokoll_wird_beiseitegelegt_nicht_ueberschrieben() {
+    let (dir, downloads, platform) = setup();
+    write_fixture(dir.path(), "Downloads/x.pdf", b"pdf").unwrap();
+    write_fixture(dir.path(), "journal.json", b"[{\"kaputt\"").unwrap();
+    let journal = Journal::new(dir.path().join("journal.json"));
+    let plan = sort_downloads(&downloads, &[], now());
+    let run = execute(
+        Approved::by_user(&plan, &plan.digest(), vec![], now()).unwrap(),
+        &platform,
+        now(),
+    );
+    journal.append(run).unwrap();
+    assert_eq!(journal.load().len(), 1);
+    let aside = std::fs::read_dir(dir.path())
+        .unwrap()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().contains("broken-"))
+        .count();
+    assert_eq!(aside, 1, "unlesbare Fassung bleibt erhalten");
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_papierkorb_und_zurueck() {
+    use aegis_tools::win::WindowsPlatform;
+    let dir = tempfile::tempdir().unwrap();
+    let file = write_fixture(dir.path(), "papierkorb-test.txt", b"harmlos").unwrap();
+    let platform = WindowsPlatform;
+    let item = platform.recycle(&file).unwrap();
+    assert!(!file.exists());
+    platform.restore(&item, &file).unwrap();
+    assert_eq!(std::fs::read(&file).unwrap(), b"harmlos");
 }

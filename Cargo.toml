@@ -86,6 +86,7 @@ windows = { version = "0.62.2", features = [
   "Win32_UI_Shell",
   "Win32_UI_Shell_Common",
 ] }
+windows-core = "0.62.2"
 windows-service = "0.8.1"
 tempfile = "3.27.0"
 proptest = "1.12.0"

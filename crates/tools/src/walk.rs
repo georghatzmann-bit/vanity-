@@ -14,6 +14,9 @@ pub struct FileInfo {
     pub size: u64,
     /// Letzte Änderung (Unix-Sekunden).
     pub modified: i64,
+    /// Angelegt an diesem Ort (Unix-Sekunden; sonst wie `modified`).
+    #[serde(skip)]
+    pub created: i64,
 }
 
 /// Unix-Sekunden einer Zeit (0, wenn unbekannt).
@@ -33,10 +36,17 @@ pub fn skip(meta: &std::fs::Metadata) -> bool {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
-        // REPARSE_POINT (Abzweigung, Cloud-Platzhalter) oder SYSTEM.
+        // REPARSE_POINT (Abzweigung, Cloud-Platzhalter), SYSTEM oder ausgelagert (OFFLINE,
+        // RECALL_ON_OPEN, RECALL_ON_DATA_ACCESS – Lesen würde die Datei zurückholen).
         const REPARSE: u32 = 0x400;
         const SYSTEM: u32 = 0x4;
-        if meta.file_attributes() & (REPARSE | SYSTEM) != 0 {
+        const OFFLINE: u32 = 0x1000;
+        const RECALL_ON_OPEN: u32 = 0x4_0000;
+        const RECALL_ON_DATA_ACCESS: u32 = 0x40_0000;
+        if meta.file_attributes()
+            & (REPARSE | SYSTEM | OFFLINE | RECALL_ON_OPEN | RECALL_ON_DATA_ACCESS)
+            != 0
+        {
             return true;
         }
     }
@@ -68,6 +78,12 @@ impl Default for Limits {
     }
 }
 
+/// Namen, die sich nicht als Text darstellen lassen (Windows: einzelne Surrogate), fasst kein
+/// Werkzeug an – Vorschau, Prüfsumme und Protokoll brauchen den genauen Namen.
+fn readable(path: &Path) -> bool {
+    path.to_str().is_some()
+}
+
 /// Alle Dateien unter `root` (ohne Links, Reparse-Punkte, Systemdateien).
 #[must_use]
 pub fn files(root: &Path, limits: Limits) -> Vec<FileInfo> {
@@ -81,7 +97,7 @@ pub fn files(root: &Path, limits: Limits) -> Vec<FileInfo> {
             let Ok(meta) = std::fs::symlink_metadata(entry.path()) else {
                 continue;
             };
-            if skip(&meta) {
+            if skip(&meta) || !readable(&entry.path()) {
                 continue;
             }
             if meta.is_dir() {
@@ -89,10 +105,13 @@ pub fn files(root: &Path, limits: Limits) -> Vec<FileInfo> {
                     stack.push((entry.path(), depth + 1));
                 }
             } else if meta.is_file() {
+                let modified = unix(meta.modified());
+                let created = unix(meta.created());
                 out.push(FileInfo {
                     path: entry.path(),
                     size: meta.len(),
-                    modified: unix(meta.modified()),
+                    modified,
+                    created: if created == 0 { modified } else { created },
                 });
                 if out.len() >= limits.files {
                     return out;
@@ -103,7 +122,7 @@ pub fn files(root: &Path, limits: Limits) -> Vec<FileInfo> {
     out
 }
 
-/// Unterordner unter `root` (ohne Links), tiefste zuerst.
+/// Unterordner unter `root` (ohne Links), tiefste zuerst; höchstens `limits.files` Ordner.
 #[must_use]
 pub fn dirs_deepest_first(root: &Path, limits: Limits) -> Vec<PathBuf> {
     let mut out = Vec::new();
@@ -116,9 +135,14 @@ pub fn dirs_deepest_first(root: &Path, limits: Limits) -> Vec<PathBuf> {
             let Ok(meta) = std::fs::symlink_metadata(entry.path()) else {
                 continue;
             };
-            if meta.is_dir() && !skip(&meta) && depth < limits.depth {
+            if meta.is_dir() && !skip(&meta) && readable(&entry.path()) && depth < limits.depth {
                 out.push((entry.path(), depth + 1));
                 stack.push((entry.path(), depth + 1));
+                // Obergrenze auch für Ordner (sehr große Bäume).
+                if out.len() >= limits.files {
+                    stack.clear();
+                    break;
+                }
             }
         }
     }

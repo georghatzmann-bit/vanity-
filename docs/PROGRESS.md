@@ -1,6 +1,6 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-20 · **P0–P9 abgeschlossen** · nächste Phase: **P10 – Tools 1–11**
+Stand: 2026-10-20 · **P0–P10 abgeschlossen** · nächste Phase: **P11 – Tools 12–22**
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
@@ -32,8 +32,8 @@ Stand: 2026-10-20 · **P0–P9 abgeschlossen** · nächste Phase: **P10 – Tool
 | P7 | Netzwerk, Firewall-Übersicht, Web-Schutz, Heimnetz, Leck-Check | erledigt |
 | P8 | Defender-Schalter | erledigt |
 | P9 | Tresor + Erweiterung | erledigt |
-| P10 | Tools 1–11 | in Arbeit |
-| P11 | Tools 12–22 + Animations-Feinschliff | offen |
+| P10 | Tools 1–11 | erledigt |
+| P11 | Tools 12–22 + Animations-Feinschliff | in Arbeit |
 | P12 | Privacy-Browser | offen |
 | P13 | Setup-Bootstrapper, Uninstaller, Updater, Abschlusstests, deutsches README | offen |
 | P14 | optional: ML-Modell, AMSI-Beobachter, Browser-Sandbox | offen |
@@ -210,9 +210,14 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        Überwachung, 4 Desktop-Layout, 5 Hintergrundbild, 6 Duplikate, 7 Speicherplatz, 8 Große &
        alte Dateien, 9 Leere Ordner, 10 Cleaner (nur sichere Orte), 11 Autostart. App-Befehle
        `tools_*`, Seite „Tools“ mit Vorschau/Abwählen/Ausführen/Rückgängig und Protokoll (D-057).
-2. [ ] P10.2 Sicherheits-Review (separater Agent), Befunde beheben, DoD.
+2. [x] P10.2 Sicherheits-Review (separater Agent): 1 kritisch, 1 hoch, 7 mittel, 8 niedrig
+       behoben (Papierkorb ohne stilles Löschen, Duplikat-Identität, keine Links in Pfaden,
+       nur angezeigte Schritte, `watch_since`, Protokoll-Sperre) – siehe `docs/SECURITY.md`.
 
-**Nächster Schritt:** P10.2 Review.
+**DoD P10:** Jedes Werkzeug zeigt zuerst eine Vorschau und tut ohne „Ausführen“ (bzw. eine
+eingeschaltete Regel mit „im Hintergrund“) nichts; nur angezeigte, nicht abgewählte Schritte
+laufen; nichts wird überschrieben oder endgültig gelöscht; jeder Lauf steht im Protokoll und
+lässt sich zurücknehmen; Systemorte und Links sind tabu.
 
 ## P9 – Passwort-Tresor
 
@@ -361,6 +366,6 @@ unbekannte Downloads – nie automatisch).
 
 ## Nächster Schritt
 
-P10.2: Sicherheits-Review der Werkzeuge. Danach P11 (Tools 12–22 + Animations-Feinschliff),
+P11.2: Wiederherstellungspunkte über den Dienst, dann Animations-Feinschliff und Review P11;
 P12 (Privacy-Browser), P13 (Setup, Updater, Deinstallation, README; dabei Host und Erweiterungen
 ausliefern und registrieren).

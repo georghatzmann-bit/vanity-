@@ -308,6 +308,7 @@ function RuleEditor({
         value={condition.sourceHost}
         onChange={(v) => setRule({ ...rule, condition: { ...condition, sourceHost: v } })}
       />
+      <p className="text-xs text-text-muted">{t('toolbox.ruleSourceHint')}</p>
       <TextField
         label={t('toolbox.target')}
         value={rule.target}
@@ -323,6 +324,7 @@ function RuleEditor({
         checked={rule.watch}
         onCheckedChange={(watch) => setRule({ ...rule, watch })}
       />
+      <p className="text-xs text-text-muted">{t('toolbox.ruleWatchHint')}</p>
       {error !== null && (
         <p role="alert" className="text-sm text-danger">
           <SafeText value={error} />

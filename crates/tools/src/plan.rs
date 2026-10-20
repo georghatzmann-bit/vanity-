@@ -174,14 +174,24 @@ impl Plan {
         self.ops.iter().any(|o| matches!(o, Op::Shred { .. }))
     }
 
-    /// Prüfsumme über Kennung, Werkzeug, Regel und alle Schritte.
+    /// Prüfsumme über Kennung, Werkzeug, Regel und alle Schritte. Lässt sich die Vorschau
+    /// nicht darstellen (z. B. ein Name ohne gültigen Text), ist sie leer – und keine
+    /// Freigabe passt (schließt sicher).
     #[must_use]
     pub fn digest(&self) -> String {
-        let body = serde_json::to_vec(self).unwrap_or_default();
+        let Ok(body) = serde_json::to_vec(self) else {
+            return String::new();
+        };
         Sha256::digest(&body)
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect()
+    }
+
+    /// Passt `digest` zu dieser Vorschau (nie bei leerer Prüfsumme)?
+    fn digest_ok(&self, digest: &str) -> bool {
+        let own = self.digest();
+        !own.is_empty() && own == digest
     }
 }
 
@@ -228,7 +238,7 @@ impl<'a> Approved<'a> {
         skip: Vec<usize>,
         now: i64,
     ) -> Result<Self, Refused> {
-        if plan.digest() != digest {
+        if !plan.digest_ok(digest) {
             return Err(Refused::Digest);
         }
         if now - plan.created > PLAN_TTL {
@@ -257,7 +267,7 @@ impl<'a> Approved<'a> {
         expected: &str,
         answer: &str,
     ) -> Result<Self, Refused> {
-        if plan.digest() != digest {
+        if !plan.digest_ok(digest) {
             return Err(Refused::Digest);
         }
         if now - plan.created > PLAN_TTL {
@@ -273,12 +283,17 @@ impl<'a> Approved<'a> {
         })
     }
 
-    /// Eine vom Nutzer angelegte und aktivierte Regel trägt die Vorschau.
+    /// Eine vom Nutzer angelegte, eingeschaltete Regel mit „im Hintergrund“ trägt die
+    /// Vorschau (`rule` frisch geladen, unmittelbar vor dem Ausführen).
     ///
     /// # Errors
-    /// Regel aus oder fremd.
+    /// Regel aus, nicht im Hintergrund, fremd oder Vorschau nicht darstellbar.
     pub fn by_rule(plan: &'a Plan, rule: &crate::rules::Rule) -> Result<Self, Refused> {
-        if !rule.enabled || plan.rule.as_deref() != Some(rule.id.as_str()) {
+        if !rule.enabled
+            || !rule.watch
+            || plan.rule.as_deref() != Some(rule.id.as_str())
+            || plan.digest().is_empty()
+        {
             return Err(Refused::Rule);
         }
         if plan.needs_final() {

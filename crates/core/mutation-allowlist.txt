@@ -401,13 +401,14 @@ crates/tools/src/exec.rs :: tools-create-dir :: Windows-Tools: legt nur Zielordn
 crates/tools/src/exec.rs :: tools-move :: Windows-Tools (nur außerhalb von Windows, Entwicklung): verschiebt genau die freigegebene Datei, Ziel vorher frei geprüft.
 crates/tools/src/exec.rs :: tools-remove-empty-dir :: Windows-Tools „Leere Ordner“: entfernt nur einen leeren Ordner aus einer freigegebenen Vorschau (remove_dir scheitert bei Inhalt); Rückgängig legt ihn wieder an.
 crates/tools/src/journal.rs :: tools-journal-dir :: Windows-Tools: legt den eigenen App-Datenordner für das Protokoll an.
-crates/tools/src/journal.rs :: tools-journal-write :: Windows-Tools: schreibt die eigene Hilfsdatei des Protokolls (tools-journal.json.tmp).
+crates/tools/src/journal.rs :: tools-journal-write :: Windows-Tools: schreibt eine eigene Hilfsdatei des Protokolls (eindeutiger Name, create_new).
 crates/tools/src/journal.rs :: tools-journal-replace :: Windows-Tools: ersetzt das eigene Protokoll durch die eben geschriebene Fassung.
+crates/tools/src/journal.rs :: tools-journal-aside :: Windows-Tools: legt ein unlesbares eigenes Protokoll beiseite (umbenennen statt überschreiben).
 crates/tools/src/platform.rs :: tools-local-trash-dir :: Windows-Tools (nur außerhalb von Windows): legt den eigenen Papierkorb-Ordner im App-Datenordner an.
 crates/tools/src/platform.rs :: tools-local-trash-move :: Windows-Tools (nur außerhalb von Windows): verschiebt eine freigegebene Datei in den eigenen Papierkorb (umkehrbar).
 crates/tools/src/platform.rs :: tools-local-trash-restore :: Windows-Tools (nur außerhalb von Windows): holt eine Datei beim Rückgängig aus dem eigenen Papierkorb zurück (nie überschreibend).
 crates/tools/src/win.rs :: tools-recycle-info-remove :: Windows-Tools: entfernt nach dem Zurückholen die Begleitdatei $I… genau dieses Papierkorb-Eintrags (wie „Wiederherstellen“ im Papierkorb).
-crates/winffi/src/shell.rs :: winffi-shell-recycle :: Windows-FFI (Tools): SHFileOperationW mit FOF_ALLOWUNDO – Datei in den Papierkorb, ohne Dialog.
+crates/winffi/src/shell.rs :: winffi-shell-recycle :: Windows-FFI (Tools): IFileOperation mit FOFX_RECYCLEONDELETE + Wächter – nur Papierkorb, nie endgültig (bricht sonst ab).
 crates/winffi/src/shell.rs :: winffi-shell-recycle-call :: Windows-FFI (Tools): Papierkorb (umkehrbar) nur für Schritte einer freigegebenen Werkzeug-Vorschau.
 crates/winffi/src/shell.rs :: winffi-move-no-replace :: Windows-FFI (Tools): MoveFileExW ohne REPLACE_EXISTING/COPY_ALLOWED – verschiebt, überschreibt nie.
 crates/winffi/src/shell.rs :: winffi-move-no-replace-call :: Windows-FFI (Tools): verschiebt nur Dateien aus einer freigegebenen Werkzeug-Vorschau bzw. beim Rückgängig.
@@ -424,11 +425,14 @@ crates/winffi/src/desktop.rs :: winffi-desktop-auto-arrange :: Windows-FFI (Tool
 crates/winffi/src/desktop.rs :: winffi-desktop-position :: Windows-FFI (Tools): IFolderView::SelectAndPositionItems mit SVSI_POSITIONITEM – setzt nur Positionen.
 crates/winffi/src/desktop.rs :: winffi-desktop-position-call :: Windows-FFI (Tools): Desktop-Symbole nur aus einer freigegebenen Werkzeug-Vorschau bzw. beim Rückgängig verschieben.
 apps/desktop/src-tauri/src/tools.rs :: desktop-tools-dir :: Windows-Tools: legt den eigenen App-Datenordner für Regeln und Desktop-Layouts an.
-apps/desktop/src-tauri/src/tools.rs :: desktop-tools-write :: Windows-Tools: schreibt die eigene Hilfsdatei der Regeln bzw. Desktop-Layouts des Nutzers (vom Nutzer gespeichert).
+apps/desktop/src-tauri/src/tools.rs :: desktop-tools-write :: Windows-Tools: schreibt eine eigene Hilfsdatei der Regeln bzw. Desktop-Layouts des Nutzers (vom Nutzer gespeichert; eindeutiger Name, create_new).
 apps/desktop/src-tauri/src/tools.rs :: desktop-tools-replace :: Windows-Tools: ersetzt die eigene Datei der Regeln bzw. Desktop-Layouts durch die eben geschriebene Fassung.
+apps/desktop/src-tauri/src/tools.rs :: desktop-tools-aside :: Windows-Tools: legt eine unlesbare eigene Regel- bzw. Layout-Datei beiseite (umbenennen statt überschreiben).
 crates/tools/src/exec.rs :: tools-shred-open :: Windows-Tools „Datei-Shredder“: öffnet genau die freigegebene Datei zum Überschreiben – nur nach zweiter, getrennter Bestätigung (Links vorher ausgeschlossen).
 crates/tools/src/exec.rs :: tools-shred-remove :: Windows-Tools „Datei-Shredder“: löscht die eben überschriebene Datei endgültig – nur nach zweiter, getrennter Bestätigung.
 crates/winffi/src/sysinfo.rs :: winffi-memory-status :: Windows-FFI (Systeminfo): GlobalMemoryStatusEx – nur Abfrage.
 crates/winffi/src/sysinfo.rs :: winffi-uptime :: Windows-FFI (Systeminfo): GetTickCount64 – nur Abfrage.
 crates/winffi/src/sysinfo.rs :: winffi-logical-drives :: Windows-FFI (Systeminfo): GetLogicalDrives – nur Abfrage.
 crates/winffi/src/sysinfo.rs :: winffi-drive-type :: Windows-FFI (Systeminfo): GetDriveTypeW – nur Abfrage.
+crates/winffi/src/shell.rs :: winffi-recycle-guard :: Windows-FFI (Tools): COM-Tabelle (implement-Makro) des Papierkorb-Wächters – bricht endgültiges Löschen, Umbenennen, Kopieren ab.
+crates/winffi/src/shell.rs :: winffi-recycle-drive-type :: Windows-FFI (Tools): GetDriveTypeW – Papierkorb nur auf festen Laufwerken (nur Abfrage).

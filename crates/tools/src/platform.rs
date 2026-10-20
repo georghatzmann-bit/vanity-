@@ -103,7 +103,13 @@ impl Platform for LocalPlatform {
         if std::fs::symlink_metadata(original).is_ok() {
             return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Ziel belegt"));
         }
-        if !item.data.starts_with(&self.trash) {
+        // Genau `trash/<Kennung>/<Name>` – keine anderen Orte, keine `..`.
+        let in_trash = item.data.parent().and_then(Path::parent) == Some(self.trash.as_path())
+            && !item
+                .data
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir));
+        if !in_trash {
             return Err(io::Error::other("nicht aus dem eigenen Papierkorb"));
         }
         // Holt die Datei aus dem eigenen Papierkorb an ihren Ort zurück (Rückgängig).

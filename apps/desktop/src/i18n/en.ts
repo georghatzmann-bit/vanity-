@@ -926,7 +926,8 @@ export const en: Messages<typeof de> = {
     previewTitle: 'Preview',
     previewEmpty: 'Nothing to do – the preview is empty.',
     previewSummary: '{count} steps · {size}',
-    previewMore: '… and {count} more (all run except unticked ones)',
+    previewMore: '{count} more steps not shown yet – they will not run.',
+    previewShowMore: 'Show more',
     keep: 'stays',
     execute: 'Run',
     discard: 'Discard',
@@ -951,9 +952,13 @@ export const en: Messages<typeof de> = {
     ruleName: 'Name',
     ruleEnabled: 'Switched on',
     ruleWatch: 'In the background (every 30 s)',
+    ruleWatchHint:
+      'In the background the rule only applies to files that arrive after you switch it on. Existing files: “Apply now (preview)”.',
     ruleExtensions: 'Extensions (e.g. zip, pdf)',
     ruleNameContains: 'Name contains',
     ruleSource: 'Origin ends with (e.g. claude.ai)',
+    ruleSourceHint:
+      'Windows records the origin when a file is downloaded. It is a hint, not proof – anyone who can change the file can change it too.',
     ruleSave: 'Save rule',
     ruleApply: 'Apply now (preview)',
     ruleDelete: 'Delete rule',

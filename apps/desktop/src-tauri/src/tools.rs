@@ -17,7 +17,7 @@ use aegis_tools::exec::{Item, Run, Status, execute, undo};
 use aegis_tools::journal::Journal;
 use aegis_tools::plan::{Approved, Op, Plan, Refused, Tool};
 use aegis_tools::platform::Platform;
-use aegis_tools::rules::{MAX_RULES, Rule, plan_for_rule};
+use aegis_tools::rules::{MAX_RULES, Rule, plan_for_rule, plan_now};
 use aegis_tools::tools::{
     DuplicateGroup, SETTLE, SourceMapping, Space, cleaner, cleaner_locations, duplicates,
     empty_folders, large_old, sort_downloads, source_folders, space,
@@ -254,7 +254,9 @@ fn remember(plan: Plan, groups: Vec<DuplicateGroup>) -> PreviewView {
 }
 
 fn checked(path: &std::path::Path) -> Result<(), String> {
-    if aegis_tools::guard::allowed(path) && path.is_dir() {
+    // Ordner selbst kein Link/keine Abzweigung (`allowed` prüft alle Teile des Pfads).
+    let plain_dir = std::fs::symlink_metadata(path).is_ok_and(|m| m.is_dir());
+    if aegis_tools::guard::allowed(path) && plain_dir {
         Ok(())
     } else {
         Err("Diesen Ordner fasst AEGIS nicht an (Systemort oder nicht vorhanden).".into())
@@ -281,13 +283,9 @@ fn build<R: tauri::Runtime>(
                 .iter()
                 .find(|r| r.id == id)
                 .ok_or("Regel nicht gefunden.")?;
-            let mut once = rule.clone();
             // Von Hand „jetzt anwenden“: auch eine ausgeschaltete Regel darf eine Vorschau
-            // zeigen; ausgeführt wird sie nur nach „Ausführen“.
-            once.enabled = true;
-            let mut plan = plan_for_rule(&once, t, SETTLE);
-            plan.rule = None;
-            (plan, Vec::new())
+            // zeigen (ganzer Bestand); ausgeführt wird sie nur nach „Ausführen“.
+            (plan_now(rule, t, SETTLE), Vec::new())
         }
         PreviewRequest::Wallpaper { path } => {
             let ok = matches!(aegis_tools::category::category_of(&path), Category::Images)
@@ -799,13 +797,34 @@ fn layouts_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf,
     Ok(data_dir(app)?.join("tools-desktop-layouts.json"))
 }
 
+/// Sperre für Lesen-Ändern-Schreiben der eigenen Regel- und Layout-Dateien.
+static FILES: Mutex<()> = Mutex::new(());
+
+fn files_lock() -> MutexGuard<'static, ()> {
+    FILES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Liest eine eigene JSON-Datei. Fehlt sie: leer. Ist sie unlesbar, wird sie beiseitegelegt
+/// (`….broken-<Zeit>.json`) statt beim nächsten Speichern überschrieben.
 fn read_json<T: serde::de::DeserializeOwned + Default>(path: &std::path::Path) -> T {
-    std::fs::symlink_metadata(path)
-        .ok()
-        .filter(|m| m.is_file() && m.len() <= 4 * 1024 * 1024)
-        .and_then(|_| std::fs::read(path).ok())
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+    let Ok(meta) = std::fs::symlink_metadata(path) else {
+        return T::default();
+    };
+    let parsed = (meta.is_file() && meta.len() <= 4 * 1024 * 1024)
+        .then(|| std::fs::read(path).ok())
+        .flatten()
+        .and_then(|b| serde_json::from_slice(&b).ok());
+    if let Some(value) = parsed {
+        return value;
+    }
+    let aside = path.with_extension(format!("broken-{}.json", now()));
+    // Eigene, unlesbare Datei beiseitelegen statt überschreiben.
+    // aegis-mutation: desktop-tools-aside
+    #[allow(clippy::disallowed_methods)]
+    let _ = std::fs::rename(path, aside);
+    T::default()
 }
 
 fn write_json<T: Serialize>(path: &std::path::Path, value: &T) -> Result<(), String> {
@@ -817,12 +836,12 @@ fn write_json<T: Serialize>(path: &std::path::Path, value: &T) -> Result<(), Str
         #[allow(clippy::disallowed_methods)]
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    let tmp = path.with_extension("json.tmp");
+    let tmp = path.with_extension(format!("{}.tmp", aegis_tools::plan::token()));
     {
-        // Eigene Hilfsdatei (Regeln bzw. Layouts des Nutzers).
+        // Eigene Hilfsdatei (Regeln bzw. Layouts des Nutzers; eindeutiger Name).
         // aegis-mutation: desktop-tools-write
         #[allow(clippy::disallowed_methods)]
-        let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        let mut file = std::fs::File::create_new(&tmp).map_err(|e| e.to_string())?;
         file.write_all(&body)
             .and_then(|()| file.sync_all())
             .map_err(|e| e.to_string())?;
@@ -833,8 +852,17 @@ fn write_json<T: Serialize>(path: &std::path::Path, value: &T) -> Result<(), Str
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
+/// Regeln aus der Datei – jede wird wie beim Speichern geprüft; ungültige fallen weg.
 fn load_rules<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Vec<Rule>, String> {
-    Ok(read_json(&rules_path(app)?))
+    let rules: Vec<Rule> = read_json(&rules_path(app)?);
+    Ok(rules
+        .into_iter()
+        .filter_map(|r| {
+            let id = r.id.clone();
+            r.validated().ok().filter(|v| !id.is_empty() && v.id == id)
+        })
+        .take(MAX_RULES)
+        .collect())
 }
 
 fn load_layouts<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Vec<Layout>, String> {
@@ -853,8 +881,25 @@ pub fn tools_rule_save<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     rule: Rule,
 ) -> Result<Rule, String> {
-    let rule = rule.validated()?;
+    let mut rule = rule.validated()?;
+    let _guard = files_lock();
     let mut rules = load_rules(&app)?;
+    // „Im Hintergrund“ gilt ab jetzt nur für neue Dateien: Beim Einschalten (oder wenn sich
+    // Ordner bzw. Bedingung ändern) setzt die App den Zeitpunkt, sonst bleibt er.
+    let old = rules.iter().find(|r| r.id == rule.id);
+    rule.watch_since = match old {
+        Some(o)
+            if o.watch
+                && rule.watch
+                && o.folder == rule.folder
+                && o.condition == rule.condition
+                && o.target == rule.target =>
+        {
+            o.watch_since
+        }
+        _ if rule.watch => Some(now()),
+        _ => None,
+    };
     match rules.iter_mut().find(|r| r.id == rule.id) {
         Some(slot) => *slot = rule.clone(),
         None => {
@@ -875,6 +920,7 @@ pub fn tools_rule_delete<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     id: String,
 ) -> Result<(), String> {
+    let _guard = files_lock();
     let mut rules = load_rules(&app)?;
     let before = rules.len();
     rules.retain(|r| r.id != id);
@@ -915,6 +961,7 @@ pub fn tools_layout_save<R: tauri::Runtime>(
         icons,
     }
     .validated()?;
+    let _guard = files_lock();
     let mut layouts = load_layouts(&app)?;
     layouts.retain(|l| l.name != layout.name);
     layouts.push(layout.clone());
@@ -929,6 +976,7 @@ pub fn tools_layout_delete<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     name: String,
 ) -> Result<(), String> {
+    let _guard = files_lock();
     let mut layouts = load_layouts(&app)?;
     let before = layouts.len();
     layouts.retain(|l| l.name != name);
@@ -939,24 +987,35 @@ pub fn tools_layout_delete<R: tauri::Runtime>(
 }
 
 /// Ein Durchgang der Hintergrund-Überwachung: jede eingeschaltete Regel mit „im Hintergrund“
-/// prüft ihren Ordner; gefundene Dateien werden verschoben und protokolliert.
-fn watch_once<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+/// prüft ihren Ordner; neu angekommene Dateien werden verschoben und protokolliert. Liefert
+/// `false`, wenn das Protokoll nicht schreibbar ist – dann hält die Überwachung an (ohne
+/// Protokoll kein Rückgängig).
+fn watch_once<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> bool {
     let (Ok(rules), Ok(journal), Ok(platform)) = (load_rules(app), journal(app), platform(app))
     else {
-        return;
+        return true;
     };
     for rule in rules.iter().filter(|r| r.enabled && r.watch) {
         let plan = plan_for_rule(rule, now(), SETTLE);
         if plan.ops.is_empty() {
             continue;
         }
-        if let Ok(approved) = Approved::by_rule(&plan, rule) {
+        // Unmittelbar vor dem Ausführen frisch laden: ausgeschaltet oder geändert → nichts.
+        let fresh = load_rules(app)
+            .ok()
+            .and_then(|all| all.into_iter().find(|r| r.id == rule.id));
+        let Some(fresh) = fresh.filter(|f| f == rule) else {
+            continue;
+        };
+        if let Ok(approved) = Approved::by_rule(&plan, &fresh) {
             let run = execute(approved, platform.as_ref(), now());
-            if run.done() > 0 {
-                let _ = journal.append(run);
+            if run.done() > 0 && journal.append(run).is_err() {
+                eprintln!("AEGIS-Werkzeuge: Protokoll nicht schreibbar – Überwachung angehalten");
+                return false;
             }
         }
     }
+    true
 }
 
 /// Startet die Hintergrund-Überwachung (einmal; tut nichts, solange keine Regel sie verlangt).
@@ -969,7 +1028,11 @@ pub fn start_watcher<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
         .spawn(move || {
             loop {
                 std::thread::sleep(Duration::from_secs(WATCH_SECONDS));
-                watch_once(&app);
+                if !watch_once(&app) {
+                    // Nächstes Speichern einer Regel startet sie wieder.
+                    WATCHING.store(false, Ordering::SeqCst);
+                    break;
+                }
             }
         });
     if spawned.is_err() {

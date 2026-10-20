@@ -463,3 +463,12 @@ Dienst). Desktop-Symbole: dokumentierte Shell-Schnittstelle (`IFolderView`), kei
 Prozesse. Hintergrund-Überwachung: alle 30 s, nur eingeschaltete Regeln mit „im Hintergrund“,
 neue Dateien erst nach 60 s Ruhe.
 
+Nachtrag P10.2 (Review): Papierkorb über `IFileOperation` mit Wächter – geht ein Element nicht
+in den Papierkorb, passiert nichts (endgültiges Löschen gibt es nur im Shredder mit zweiter
+Bestätigung). Kein vorhandener Teil eines Pfads darf ein Link oder eine Junction sein (Cloud-
+Platzhalter zählen nicht); Zielordner entstehen Ebene für Ebene. Ausgeführt werden nur
+Schritte, die die Vorschau angezeigt hat. „Im Hintergrund“ gilt ab dem Einschalten
+(`watch_since`), der Bestand nur per Vorschau. Bewusst offen: Ein Skript im eigenen App-Fenster
+könnte Vorschau und „Ausführen“ selbst aufrufen (anders als beim Dienst gibt es keine Einmal-
+Kennung im Dialog); dagegen stehen CSP, SafeText und keine HTML-Einfügungen. Der Shredder
+verlangt zusätzlich die nur im zweiten Dialog gezeigte Kennung.

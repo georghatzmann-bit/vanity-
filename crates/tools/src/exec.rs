@@ -167,11 +167,35 @@ pub fn free_name(target: &Path) -> Option<PathBuf> {
         .find(|p| std::fs::symlink_metadata(p).is_err())
 }
 
+/// Legt fehlende Zielordner Ebene für Ebene an und prüft danach jede Ebene: kein vorhandener
+/// Teil darf ein Link oder eine Abzweigung sein (sonst landete die Datei woanders).
 fn ensure_dir(dir: &Path) -> std::io::Result<()> {
-    // Legt nur Zielordner unter einem vom Nutzer gewählten Ort an (Vorschau zeigte das Ziel).
-    // aegis-mutation: tools-create-dir
-    #[allow(clippy::disallowed_methods)]
-    std::fs::create_dir_all(dir)
+    let linked = || std::io::Error::other("Zielpfad enthält einen Link oder eine Abzweigung");
+    if !crate::guard::link_free(dir) {
+        return Err(linked());
+    }
+    let mut missing: Vec<&Path> = dir
+        .ancestors()
+        .take_while(|a| std::fs::symlink_metadata(a).is_err())
+        .collect();
+    missing.reverse();
+    for level in missing {
+        // Legt nur Zielordner unter einem vom Nutzer gewählten Ort an (Vorschau zeigte das
+        // Ziel); `create_dir` legt genau eine Ebene an.
+        // aegis-mutation: tools-create-dir
+        #[allow(clippy::disallowed_methods)]
+        let made = std::fs::create_dir(level);
+        match made {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+        let meta = std::fs::symlink_metadata(level)?;
+        if !meta.is_dir() || crate::guard::is_link(&meta) {
+            return Err(linked());
+        }
+    }
+    Ok(())
 }
 
 fn rename(from: &Path, to: &Path) -> std::io::Result<()> {
@@ -219,6 +243,9 @@ fn move_file(
     };
     if let Some(parent) = target.parent() {
         ensure_dir(parent).map_err(Err)?;
+    }
+    if !allowed(&target) {
+        return Err(Ok("geschützter Ort"));
     }
     rename(from, &target).map_err(Err)?;
     Ok(Undo::MoveBack {

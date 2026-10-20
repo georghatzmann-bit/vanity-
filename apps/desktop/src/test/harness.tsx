@@ -429,7 +429,13 @@ export function fakeTools(): ToolsApi & { readonly runList: ToolRun[] } {
           ? [{ label: 'Papierkorb: b/foto.jpg', kind: 'recycle' as const, size: 4096 }]
           : request.tool === 'shredder'
             ? [{ label: 'Endgültig löschen: geheim.txt', kind: 'shred' as const, size: 10 }]
-            : [];
+            : request.tool === 'cleaner'
+              ? Array.from({ length: 305 }, (_, i) => ({
+                  label: `Papierkorb: alt-${i}.tmp`,
+                  kind: 'recycle' as const,
+                  size: 1,
+                }))
+              : [];
     const p: Preview = {
       needsFinal: request.tool === 'shredder',
       id,
