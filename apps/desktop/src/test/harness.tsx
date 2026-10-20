@@ -427,11 +427,14 @@ export function fakeTools(): ToolsApi & { readonly runList: ToolRun[] } {
           ]
         : request.tool === 'duplicates'
           ? [{ label: 'Papierkorb: b/foto.jpg', kind: 'recycle' as const, size: 4096 }]
-          : [];
+          : request.tool === 'shredder'
+            ? [{ label: 'Endgültig löschen: geheim.txt', kind: 'shred' as const, size: 10 }]
+            : [];
     const p: Preview = {
+      needsFinal: request.tool === 'shredder',
       id,
       digest,
-      tool: request.tool,
+      tool: request.tool === 'tweaks' ? 'explorer_tweaks' : request.tool,
       items,
       totalSize: items.reduce((sum, i) => sum + i.size, 0),
       groups:
@@ -454,10 +457,13 @@ export function fakeTools(): ToolsApi & { readonly runList: ToolRun[] } {
   return {
     runList,
     preview: vi.fn((request: PreviewRequest) => Promise.resolve(preview(request))),
-    execute: vi.fn((id: string, d: string, skip: readonly number[]) => {
+    execute: vi.fn((id: string, d: string, skip: readonly number[], confirm?: string) => {
       const p = previews.get(id);
       if (p === undefined || d !== digest) {
         return Promise.reject(new Error('Vorschau abgelaufen'));
+      }
+      if (p.needsFinal && confirm !== 'b'.repeat(32)) {
+        return Promise.reject(new Error(`confirm_final:${'b'.repeat(32)}`));
       }
       previews.delete(id);
       const run: ToolRun = {
@@ -538,5 +544,36 @@ export function fakeTools(): ToolsApi & { readonly runList: ToolRun[] } {
     layouts: vi.fn(() => Promise.resolve([])),
     saveLayout: vi.fn((name: string) => Promise.resolve({ name, saved: 1, icons: [] })),
     deleteLayout: vi.fn(() => Promise.resolve()),
+    tweaks: vi.fn(() =>
+      Promise.resolve([
+        { id: 'show_extensions' as const, group: 'explorer' as const, on: false },
+        { id: 'no_advertising_id' as const, group: 'privacy' as const, on: true },
+      ]),
+    ),
+    hosts: vi.fn(() =>
+      Promise.resolve({
+        path: 'C:/Windows/System32/drivers/etc/hosts',
+        entries: [
+          { line: 1, address: '127.0.0.1', host: 'localhost', kind: 'default' as const },
+          { line: 2, address: '203.0.113.5', host: 'www.paypal.com', kind: 'suspicious' as const },
+        ],
+      }),
+    ),
+    system: vi.fn(() =>
+      Promise.resolve({
+        info: {
+          os: 'Windows 11 Pro',
+          version: '24H2',
+          build: '26100.1',
+          cpu: 'Beispiel-CPU',
+          cores: 8,
+          memory: [16_000_000_000, 8_000_000_000] as const,
+          uptime: 20 * 86_400,
+          drives: [{ root: 'C:/', free: 50_000_000_000, total: 500_000_000_000 }],
+          computer: 'ANNA-PC',
+        },
+        findings: ['long_uptime' as const],
+      }),
+    ),
   };
 }

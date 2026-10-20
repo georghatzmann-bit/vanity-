@@ -31,6 +31,14 @@ pub enum Tool {
     Cleaner,
     /// 11 Autostart.
     Autostart,
+    /// 12 Datei-Shredder.
+    Shredder,
+    /// 15 Batch-Umbenenner.
+    Rename,
+    /// 16 Explorer-Tweaks.
+    ExplorerTweaks,
+    /// 19 Datenschutz-Einstellungen.
+    Privacy,
 }
 
 /// Ein Schritt.
@@ -74,6 +82,24 @@ pub enum Op {
         /// Einschalten?
         enable: bool,
     },
+    /// Registrierungswert unter `HKCU` setzen (nur Schalter aus [`crate::tweaks::TWEAKS`]).
+    Registry {
+        /// Schlüssel unter `HKCU`.
+        key: String,
+        /// Wertname.
+        name: String,
+        /// Neuer Wert.
+        value: crate::tweaks::Value,
+    },
+    /// Datei überschreiben und löschen (endgültig – nur mit zweiter Bestätigung).
+    Shred {
+        /// Datei.
+        path: PathBuf,
+        /// Größe bei der Vorschau.
+        size: u64,
+        /// Änderungszeit bei der Vorschau.
+        modified: i64,
+    },
     /// Desktop-Symbole an gespeicherte Stellen setzen.
     DesktopLayout {
         /// Gespeichertes Layout.
@@ -95,6 +121,16 @@ impl Op {
                 if *enable { "an" } else { "aus" },
                 entry.name
             ),
+            Self::Registry { key, name, value } => format!(
+                "HKCU\\{key}\\{} = {}",
+                if name.is_empty() { "(Standard)" } else { name },
+                match value {
+                    crate::tweaks::Value::Dword(v) => v.to_string(),
+                    crate::tweaks::Value::Text(t) => format!("„{t}“"),
+                    crate::tweaks::Value::Absent => "(entfernt)".to_owned(),
+                }
+            ),
+            Self::Shred { path, .. } => format!("Endgültig löschen: {}", path.display()),
             Self::DesktopLayout { layout } => format!(
                 "Desktop-Layout „{}“ ({} Symbole)",
                 layout.name,
@@ -132,6 +168,12 @@ impl Plan {
         }
     }
 
+    /// Enthält die Vorschau endgültiges Löschen (zweite Bestätigung nötig)?
+    #[must_use]
+    pub fn needs_final(&self) -> bool {
+        self.ops.iter().any(|o| matches!(o, Op::Shred { .. }))
+    }
+
     /// Prüfsumme über Kennung, Werkzeug, Regel und alle Schritte.
     #[must_use]
     pub fn digest(&self) -> String {
@@ -148,6 +190,8 @@ impl Plan {
 pub struct Approved<'a> {
     pub(crate) plan: &'a Plan,
     pub(crate) skip: Vec<usize>,
+    /// Zweite Bestätigung für endgültiges Löschen liegt vor.
+    pub(crate) final_ok: bool,
 }
 
 /// Freigabe abgelehnt.
@@ -159,10 +203,18 @@ pub enum Refused {
     Rule,
     /// Vorschau zu alt.
     Expired,
+    /// Endgültiges Löschen braucht die zweite, getrennte Bestätigung.
+    NeedsFinal,
 }
 
 /// Wie lange eine Vorschau gilt (Sekunden).
 pub const PLAN_TTL: i64 = 30 * 60;
+
+/// Zufällige Kennung (32 Hex-Zeichen), z. B. für die zweite Bestätigung.
+#[must_use]
+pub fn token() -> String {
+    uuid::Uuid::new_v4().simple().to_string()
+}
 
 impl<'a> Approved<'a> {
     /// Der Nutzer hat „Ausführen“ für genau diese Vorschau gewählt (`digest` aus der Vorschau,
@@ -182,7 +234,43 @@ impl<'a> Approved<'a> {
         if now - plan.created > PLAN_TTL {
             return Err(Refused::Expired);
         }
-        Ok(Self { plan, skip })
+        if plan.needs_final() {
+            return Err(Refused::NeedsFinal);
+        }
+        Ok(Self {
+            plan,
+            skip,
+            final_ok: false,
+        })
+    }
+
+    /// Wie [`Approved::by_user`], dazu die zweite, getrennte Bestätigung für endgültiges
+    /// Löschen: `answer` muss die Kennung sein, die die App nur im zweiten Dialog zeigt.
+    ///
+    /// # Errors
+    /// Prüfsumme falsch, abgelaufen oder zweite Bestätigung fehlt/falsch.
+    pub fn by_user_final(
+        plan: &'a Plan,
+        digest: &str,
+        skip: Vec<usize>,
+        now: i64,
+        expected: &str,
+        answer: &str,
+    ) -> Result<Self, Refused> {
+        if plan.digest() != digest {
+            return Err(Refused::Digest);
+        }
+        if now - plan.created > PLAN_TTL {
+            return Err(Refused::Expired);
+        }
+        if expected.len() < 16 || expected != answer {
+            return Err(Refused::NeedsFinal);
+        }
+        Ok(Self {
+            plan,
+            skip,
+            final_ok: true,
+        })
     }
 
     /// Eine vom Nutzer angelegte und aktivierte Regel trägt die Vorschau.
@@ -193,9 +281,13 @@ impl<'a> Approved<'a> {
         if !rule.enabled || plan.rule.as_deref() != Some(rule.id.as_str()) {
             return Err(Refused::Rule);
         }
+        if plan.needs_final() {
+            return Err(Refused::NeedsFinal);
+        }
         Ok(Self {
             plan,
             skip: Vec::new(),
+            final_ok: false,
         })
     }
 }

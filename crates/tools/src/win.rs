@@ -11,9 +11,14 @@ use aegis_winffi::registry::{RawValue, read_raw, write_raw};
 use crate::autostart::{Entry, EntryRef, Location, approved_enabled, approved_value};
 use crate::platform::{Platform, Recycled};
 use crate::recycle::parse_info;
+use crate::tweaks::Value;
 
 /// `REG_BINARY`.
 const REG_BINARY: u32 = 3;
+/// `REG_SZ`.
+const REG_SZ: u32 = 1;
+/// `REG_DWORD`.
+const REG_DWORD: u32 = 4;
 const RUN: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
 fn filetime_now() -> u64 {
@@ -134,6 +139,58 @@ impl Platform for WindowsPlatform {
                 bytes: approved_value(enable, filetime_now()),
             },
         )
+    }
+
+    fn registry_get(&self, key: &str, name: &str) -> io::Result<Value> {
+        if !crate::tweaks::known(key, name) {
+            return Err(io::Error::other("unbekannter Schalter"));
+        }
+        Ok(match read_raw(&Hive::CurrentUser, key, name)? {
+            None => Value::Absent,
+            Some(v) if v.kind == REG_DWORD => Value::Dword(u32::from_le_bytes(
+                v.bytes
+                    .get(..4)
+                    .and_then(|b| b.try_into().ok())
+                    .ok_or_else(|| io::Error::other("DWORD zu kurz"))?,
+            )),
+            Some(v) if v.kind == REG_SZ => {
+                let units: Vec<u16> = v
+                    .bytes
+                    .chunks_exact(2)
+                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .take_while(|u| *u != 0)
+                    .collect();
+                Value::Text(String::from_utf16_lossy(&units))
+            }
+            Some(_) => return Err(io::Error::other("unerwarteter Typ")),
+        })
+    }
+
+    fn registry_set(&self, key: &str, name: &str, value: &Value) -> io::Result<()> {
+        // Nur Schalter aus der festen Liste, nur HKCU.
+        if !crate::tweaks::known(key, name) {
+            return Err(io::Error::other("unbekannter Schalter"));
+        }
+        match value {
+            Value::Dword(v) => write_raw(&Hive::CurrentUser, key, name, &RawValue::dword(*v)),
+            Value::Text(t) => {
+                let bytes: Vec<u8> = t
+                    .encode_utf16()
+                    .chain(std::iter::once(0))
+                    .flat_map(u16::to_le_bytes)
+                    .collect();
+                write_raw(
+                    &Hive::CurrentUser,
+                    key,
+                    name,
+                    &RawValue {
+                        kind: REG_SZ,
+                        bytes,
+                    },
+                )
+            }
+            Value::Absent => aegis_winffi::registry::delete_value(&Hive::CurrentUser, key, name),
+        }
     }
 
     fn apply_desktop_layout(

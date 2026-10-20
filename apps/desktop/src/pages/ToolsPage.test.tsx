@@ -33,7 +33,7 @@ describe('Werkzeuge', () => {
     fireEvent.click(within(preview).getByRole('button', { name: 'Ausführen' }));
     const result = await within(panel).findByTestId('tool-result');
     expect(result).toHaveTextContent('1 ausgeführt · 1 übersprungen · 0 fehlgeschlagen');
-    expect(tools.execute).toHaveBeenCalledWith('p1', 'a'.repeat(64), [1]);
+    expect(tools.execute).toHaveBeenCalledWith('p1', 'a'.repeat(64), [1], undefined);
     fireEvent.click(within(result).getByRole('button', { name: 'Rückgängig' }));
     expect(await within(result).findByText('Zurückgenommen.')).toBeInTheDocument();
     expect(tools.undo).toHaveBeenCalledWith(tools.runList[0]?.id);
@@ -120,6 +120,68 @@ describe('Werkzeuge', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Analysieren' }));
     const report = await screen.findByTestId('space-report');
     await waitFor(() => expect(report).toHaveTextContent('Spiele'));
+    expect(tools.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('Werkzeuge 12–22', () => {
+  it('Shredder: erst zweiter Dialog, ohne ihn passiert nichts', async () => {
+    const tools = fakeTools();
+    renderApp({ platform: withTools(tools, ['C:/Users/anna/geheim.txt']), hash: '#/tools' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Datei-Shredder' }));
+    const panel = await screen.findByTestId('tool-shredder');
+    expect(panel).toHaveTextContent('BitLocker');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Dateien wählen …' }));
+    await within(panel).findByText('C:/Users/anna/geheim.txt');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Vorschau erstellen' }));
+    const preview = await within(panel).findByTestId('tool-preview');
+    fireEvent.click(within(preview).getByRole('button', { name: 'Ausführen' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Endgültig löschen?' });
+    expect(tools.runList).toHaveLength(0);
+    // Abbrechen: nichts gelöscht.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Abbrechen' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(tools.runList).toHaveLength(0);
+    fireEvent.click(within(preview).getByRole('button', { name: 'Ausführen' }));
+    const again = await screen.findByRole('alertdialog', { name: 'Endgültig löschen?' });
+    fireEvent.click(within(again).getByRole('button', { name: 'Ja, endgültig löschen' }));
+    expect(await within(panel).findByTestId('tool-result')).toHaveTextContent('1 ausgeführt');
+    expect(tools.execute).toHaveBeenLastCalledWith('p1', 'a'.repeat(64), [], 'b'.repeat(32));
+  });
+
+  it('Explorer-Schalter: Vorschau mit genau der Änderung', async () => {
+    const tools = fakeTools();
+    renderApp({ platform: withTools(tools), hash: '#/tools' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Explorer-Tweaks' }));
+    const list = await screen.findByTestId('tweaks-explorer');
+    fireEvent.click(within(list).getByRole('switch', { name: 'Dateiendungen anzeigen' }));
+    fireEvent.click(
+      within(screen.getByTestId('tool-explorer_tweaks')).getByRole('button', {
+        name: 'Vorschau erstellen',
+      }),
+    );
+    await waitFor(() =>
+      expect(tools.preview).toHaveBeenCalledWith({
+        tool: 'tweaks',
+        changes: [{ id: 'show_extensions', on: true }],
+      }),
+    );
+  });
+
+  it('Hosts und Systeminfo: nur lesend, ehrliche Hinweise', async () => {
+    const tools = fakeTools();
+    renderApp({ platform: withTools(tools), hash: '#/tools' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Hosts-Datei' }));
+    expect(await screen.findByText(/1 verdächtige Umleitungen/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Systeminfo' }));
+    const report = await screen.findByTestId('system-report');
+    expect(report).toHaveTextContent('Windows 11 Pro');
+    expect(report).toHaveTextContent('Seit über 14 Tagen nicht neu gestartet');
+    fireEvent.click(screen.getByRole('button', { name: 'Weitere' }));
+    expect(screen.getByRole('link', { name: 'Programm-Updates' })).toHaveAttribute(
+      'href',
+      '#/hardening',
+    );
     expect(tools.execute).not.toHaveBeenCalled();
   });
 });

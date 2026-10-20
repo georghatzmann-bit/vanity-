@@ -58,6 +58,16 @@ pub trait Platform {
         &self,
         layout: &crate::desktop::Layout,
     ) -> io::Result<crate::desktop::Layout>;
+    /// Wert unter `HKCU` lesen.
+    ///
+    /// # Errors
+    /// Nicht lesbar oder unbekannter Typ.
+    fn registry_get(&self, key: &str, name: &str) -> io::Result<crate::tweaks::Value>;
+    /// Wert unter `HKCU` setzen (`Absent` = entfernen).
+    ///
+    /// # Errors
+    /// Nicht möglich.
+    fn registry_set(&self, key: &str, name: &str, value: &crate::tweaks::Value) -> io::Result<()>;
 }
 
 fn unsupported() -> io::Error {
@@ -122,6 +132,19 @@ impl Platform for LocalPlatform {
         &self,
         _layout: &crate::desktop::Layout,
     ) -> io::Result<crate::desktop::Layout> {
+        Err(unsupported())
+    }
+
+    fn registry_get(&self, _key: &str, _name: &str) -> io::Result<crate::tweaks::Value> {
+        Err(unsupported())
+    }
+
+    fn registry_set(
+        &self,
+        _key: &str,
+        _name: &str,
+        _value: &crate::tweaks::Value,
+    ) -> io::Result<()> {
         Err(unsupported())
     }
 }

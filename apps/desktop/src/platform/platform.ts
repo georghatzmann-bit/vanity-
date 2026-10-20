@@ -21,11 +21,14 @@ import { parseStrength, parseVaultList, parseVaultStatus, type VaultApi } from '
 import {
   parseAutostart,
   parseDefaults,
+  parseHosts,
   parseLayout,
   parsePreview,
   parseRule,
   parseRun,
   parseSpace,
+  parseSystem,
+  parseTweaks,
   type ToolsApi,
 } from './tools.ts';
 import { parseEmailResult, parseRange, type EmailResult, type RangeEntry } from './leak.ts';
@@ -267,8 +270,10 @@ export function createTauriPlatform(): Platform {
       invoke<unknown>('leak_email_check', { email, apiKey }).then(parseEmailResult),
     tools: {
       preview: (request) => invoke<unknown>('tools_preview', { request }).then(parsePreview),
-      execute: (id, digest, skip) =>
-        invoke<unknown>('tools_execute', { id, digest, skip }).then(parseRun),
+      execute: (id, digest, skip, confirm) =>
+        invoke<unknown>('tools_execute', { id, digest, skip, confirm: confirm ?? null }).then(
+          parseRun,
+        ),
       runs: async () => {
         const r = await invoke<unknown>('tools_runs');
         return Array.isArray(r) ? r.map(parseRun) : [];
@@ -280,6 +285,9 @@ export function createTauriPlatform(): Platform {
       space: (root) => toolsScan({ kind: 'space', root }).then(parseSpace),
       autostart: () => toolsScan({ kind: 'autostart' }).then(parseAutostart),
       defaults: () => toolsScan({ kind: 'defaults' }).then(parseDefaults),
+      tweaks: () => toolsScan({ kind: 'tweaks' }).then(parseTweaks),
+      hosts: () => toolsScan({ kind: 'hosts' }).then(parseHosts),
+      system: () => toolsScan({ kind: 'system' }).then(parseSystem),
       rules: async () => {
         const r = await invoke<unknown>('tools_rules');
         return Array.isArray(r) ? r.map(parseRule) : [];

@@ -26,6 +26,10 @@ export const toolIds = [
   'empty_folders',
   'cleaner',
   'autostart',
+  'shredder',
+  'rename',
+  'explorer_tweaks',
+  'privacy',
 ] as const;
 export type ToolId = (typeof toolIds)[number];
 
@@ -70,10 +74,93 @@ export type PreviewRequest =
       readonly tool: 'autostart';
       readonly changes: readonly { readonly entry: AutostartRef; readonly enable: boolean }[];
     }
-  | { readonly tool: 'desktop_layout'; readonly name: string };
+  | { readonly tool: 'desktop_layout'; readonly name: string }
+  | { readonly tool: 'shredder'; readonly paths: readonly string[] }
+  | { readonly tool: 'rename'; readonly folder: string; readonly options: RenameOptions }
+  | {
+      readonly tool: 'tweaks';
+      readonly changes: readonly { readonly id: string; readonly on: boolean }[];
+    };
+
+export interface RenameOptions {
+  readonly pattern: string;
+  readonly find: string;
+  readonly replace: string;
+  readonly start: number;
+  readonly digits: number;
+  readonly case: 'keep' | 'lower' | 'upper';
+  readonly extensions: readonly string[];
+}
+
+export const tweakIds = [
+  'show_extensions',
+  'show_hidden',
+  'open_this_pc',
+  'taskbar_left',
+  'hide_task_view',
+  'classic_context_menu',
+  'no_advertising_id',
+  'no_tailored_experiences',
+  'no_launch_tracking',
+  'no_start_suggestions',
+  'no_settings_suggestions',
+  'no_tips',
+  'no_language_list',
+  'no_ink_collection',
+  'no_text_collection',
+  'no_online_speech',
+  'no_bing_search',
+] as const;
+export type TweakId = (typeof tweakIds)[number];
+
+export interface TweakState {
+  readonly id: TweakId;
+  readonly group: 'explorer' | 'privacy';
+  readonly on: boolean;
+}
+
+export type HostKind = 'default' | 'block' | 'suspicious' | 'redirect';
+
+export interface HostsReport {
+  readonly path: string;
+  readonly entries: readonly {
+    readonly line: number;
+    readonly address: string;
+    readonly host: string;
+    readonly kind: HostKind;
+  }[];
+}
+
+export type HealthFinding = 'low_disk' | 'critical_disk' | 'long_uptime' | 'low_memory';
+
+export interface SystemReport {
+  readonly info: {
+    readonly os: string;
+    readonly version: string;
+    readonly build: string;
+    readonly cpu: string;
+    readonly cores: number;
+    readonly memory: readonly [number, number] | null;
+    readonly uptime: number;
+    readonly drives: readonly {
+      readonly root: string;
+      readonly free: number;
+      readonly total: number;
+    }[];
+    readonly computer: string;
+  };
+  readonly findings: readonly HealthFinding[];
+}
 
 export type ItemKind =
-  'move' | 'recycle' | 'remove_empty_dir' | 'set_wallpaper' | 'autostart' | 'desktop_layout';
+  | 'move'
+  | 'recycle'
+  | 'remove_empty_dir'
+  | 'set_wallpaper'
+  | 'autostart'
+  | 'desktop_layout'
+  | 'registry'
+  | 'shred';
 
 export interface PreviewItem {
   readonly label: string;
@@ -94,6 +181,7 @@ export interface DuplicateGroup {
 }
 
 export interface Preview {
+  readonly needsFinal: boolean;
   readonly id: string;
   readonly digest: string;
   readonly tool: ToolId;
@@ -170,7 +258,12 @@ export interface DesktopLayout {
 
 export interface ToolsApi {
   preview(request: PreviewRequest): Promise<Preview>;
-  execute(id: string, digest: string, skip: readonly number[]): Promise<ToolRun>;
+  /**
+   * Führt die Vorschau aus. Bei endgültigem Löschen kommt zuerst der Fehler
+   * `confirm_final:<kennung>`; erst mit dieser Kennung aus dem zweiten Dialog (`confirm`)
+   * passiert etwas.
+   */
+  execute(id: string, digest: string, skip: readonly number[], confirm?: string): Promise<ToolRun>;
   runs(): Promise<readonly ToolRun[]>;
   undo(id: string): Promise<readonly string[]>;
   space(root: string): Promise<SpaceReport>;
@@ -182,6 +275,9 @@ export interface ToolsApi {
   layouts(): Promise<readonly DesktopLayout[]>;
   saveLayout(name: string): Promise<DesktopLayout>;
   deleteLayout(name: string): Promise<void>;
+  tweaks(): Promise<readonly TweakState[]>;
+  hosts(): Promise<HostsReport>;
+  system(): Promise<SystemReport>;
 }
 
 type Rec = Record<string, unknown>;
@@ -204,6 +300,8 @@ const itemKinds: readonly ItemKind[] = [
   'set_wallpaper',
   'autostart',
   'desktop_layout',
+  'registry',
+  'shred',
 ];
 const statuses: readonly ItemStatus[] = ['done', 'skipped', 'failed', 'undone'];
 const locations: readonly AutostartLocation[] = [
@@ -226,6 +324,7 @@ export function parsePreview(v: unknown): Preview {
     throw new TypeError('tools_preview: unerwartete Antwort.');
   }
   return {
+    needsFinal: o['needsFinal'] === true,
     id,
     digest,
     tool: oneOf(toolIds, o['tool'], 'rules'),
@@ -358,4 +457,76 @@ export function formatBytes(bytes: number, locale: string): string {
   }
   const digits = unit === 0 || value >= 100 ? 0 : 1;
   return `${value.toLocaleString(locale, { maximumFractionDigits: digits })} ${units[unit] ?? 'B'}`;
+}
+
+/** Kennung der zweiten Bestätigung aus dem Fehler von `execute` (sonst `null`). */
+export function finalChallenge(error: unknown): string | null {
+  const text = error instanceof Error ? error.message : String(error);
+  const match = /^confirm_final:([0-9a-f]{16,64})$/.exec(text);
+  return match?.[1] ?? null;
+}
+
+export function parseTweaks(v: unknown): readonly TweakState[] {
+  return arr(rec(v)['tweaks']).flatMap((x) => {
+    const o = rec(x);
+    const id = o['id'];
+    if (typeof id !== 'string' || !(tweakIds as readonly string[]).includes(id)) {
+      return [];
+    }
+    return {
+      id: id as TweakId,
+      group: o['group'] === 'privacy' ? 'privacy' : 'explorer',
+      on: o['on'] === true,
+    };
+  });
+}
+
+const hostKinds: readonly HostKind[] = ['default', 'block', 'suspicious', 'redirect'];
+
+export function parseHosts(v: unknown): HostsReport {
+  const o = rec(rec(v)['hosts']);
+  return {
+    path: str(o['path']),
+    entries: arr(o['entries']).map((e) => {
+      const r = rec(e);
+      return {
+        line: num(r['line']),
+        address: str(r['address']),
+        host: str(r['host']),
+        kind: oneOf(hostKinds, r['kind'], 'redirect'),
+      };
+    }),
+  };
+}
+
+const findings: readonly HealthFinding[] = [
+  'low_disk',
+  'critical_disk',
+  'long_uptime',
+  'low_memory',
+];
+
+export function parseSystem(v: unknown): SystemReport {
+  const o = rec(rec(v)['system']);
+  const i = rec(o['info']);
+  const memory = arr(i['memory']);
+  return {
+    info: {
+      os: str(i['os']),
+      version: str(i['version']),
+      build: str(i['build']),
+      cpu: str(i['cpu']),
+      cores: num(i['cores']),
+      memory: memory.length === 2 ? [num(memory[0]), num(memory[1])] : null,
+      uptime: num(i['uptime']),
+      drives: arr(i['drives']).map((d) => {
+        const r = rec(d);
+        return { root: str(r['root']), free: num(r['free']), total: num(r['total']) };
+      }),
+      computer: str(i['computer']),
+    },
+    findings: arr(o['findings']).filter((f): f is HealthFinding =>
+      (findings as readonly unknown[]).includes(f),
+    ),
+  };
 }

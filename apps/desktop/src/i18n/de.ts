@@ -785,9 +785,29 @@ export const de = {
       empty_folders: 'Leere Ordner',
       cleaner: 'Cleaner',
       autostart: 'Autostart',
+      shredder: 'Datei-Shredder',
+      rename: 'Umbenennen',
+      explorer_tweaks: 'Explorer-Tweaks',
+      privacy: 'Datenschutz',
+      hosts: 'Hosts-Datei',
+      system: 'Systeminfo',
+      more: 'Weitere',
       log: 'Protokoll',
     },
     hint: {
+      shredder:
+        'Überschreibt Dateien und löscht sie endgültig – ohne Papierkorb und ohne Rückgängig. Deshalb fragt AEGIS ein zweites Mal.',
+      rename:
+        'Benennt Dateien in einem Ordner nach Muster um – jeder alte und neue Name steht in der Vorschau. Nie überschreibend.',
+      explorer_tweaks:
+        'Praktische Einstellungen für Explorer und Taskleiste (nur dein Konto). Rückgängig stellt den vorigen Wert wieder her.',
+      privacy:
+        'Datenschutz-Einstellungen von Windows übersichtlich an einer Stelle (nur dein Konto, keine Richtlinien). Rückgängig stellt alles wieder her.',
+      hosts:
+        'Zeigt die Hosts-Datei: Sperren, Umleitungen und verdächtige Umleitungen bekannter Dienste – nur lesend.',
+      system:
+        'Windows-Version, Prozessor, Speicher, Laufwerke und ein kurzer Gesundheits-Check – nur lesend.',
+      more: 'Diese Werkzeuge hat AEGIS schon an anderer Stelle – hier der direkte Weg.',
       sort_downloads:
         'Verschiebt Dateien direkt im Ordner in Unterordner nach Art (Bilder, Dokumente, Archive …). Halbe Downloads und Dateien der letzten Minute bleiben liegen.',
       source_folders:
@@ -807,6 +827,87 @@ export const de = {
         'Räumt nur sichere Orte auf, die Windows und Programme neu erzeugen: Temp-Ordner, Absturzberichte. Alles geht in den Papierkorb.',
       autostart:
         'Schaltet Programme beim Anmelden aus oder an – wie der Task-Manager. Gelöscht wird nichts. Rechnerweite Einträge änderst du im Persistenz-Check (Härtung).',
+    },
+    ssdHint:
+      'Ehrlich: Auf SSDs und USB-Sticks kann Überschreiben keine Wiederherstellung garantieren (der Speicher verteilt Schreibvorgänge selbst). Wirksam schützt dort nur eine Laufwerksverschlüsselung wie BitLocker.',
+    noFiles: 'Noch keine Dateien gewählt.',
+    pickFiles: 'Dateien wählen …',
+    finalTitle: 'Endgültig löschen?',
+    finalText:
+      '{count} Dateien werden überschrieben und gelöscht. Das lässt sich nicht rückgängig machen – auch nicht über den Papierkorb.',
+    finalConfirm: 'Ja, endgültig löschen',
+    renamePattern: 'Muster ({name}, {n}, {date})',
+    renameFind: 'Suchen',
+    renameReplace: 'Ersetzen durch',
+    renameStart: 'Erste Nummer',
+    renameDigits: 'Stellen der Nummer',
+    renameCase: 'Schreibweise',
+    case: {
+      keep: 'unverändert',
+      lower: 'klein',
+      upper: 'GROSS',
+    },
+    renameHelp:
+      'Die Endung bleibt. Namen, die es schon gibt oder die doppelt entstünden, werden übersprungen.',
+    tweak: {
+      show_extensions: 'Dateiendungen anzeigen',
+      show_hidden: 'Versteckte Dateien anzeigen',
+      open_this_pc: 'Explorer öffnet „Dieser PC“',
+      taskbar_left: 'Taskleiste links ausrichten (Windows 11)',
+      hide_task_view: 'Taskansicht-Knopf ausblenden',
+      classic_context_menu: 'Klassisches Kontextmenü (Windows 11)',
+      no_advertising_id: 'Keine Werbe-ID für Apps',
+      no_tailored_experiences: 'Keine Tipps aus Diagnosedaten',
+      no_launch_tracking: 'Programmstarts nicht für Start/Suche merken',
+      no_start_suggestions: 'Keine Vorschläge im Start',
+      no_settings_suggestions: 'Keine vorgeschlagenen Inhalte in den Einstellungen',
+      no_tips: 'Keine Tipps und Tricks',
+      no_language_list: 'Webseiten nicht die Sprachliste zeigen',
+      no_ink_collection: 'Keine Freihand-Daten sammeln',
+      no_text_collection: 'Keine Eingabe-Daten sammeln',
+      no_online_speech: 'Online-Spracherkennung aus',
+      no_bing_search: 'Keine Websuche (Bing) im Start',
+    },
+    tweaksHint:
+      'Manche Änderungen wirken erst nach dem Neustart des Explorers oder einer Neuanmeldung.',
+    hostsSuspicious: '{count} verdächtige Umleitungen bekannter Dienste – prüfen!',
+    hostsClean: 'Keine verdächtigen Umleitungen.',
+    hostsEmpty: 'Keine Einträge (nur Kommentare).',
+    hostsKind: {
+      default: 'Standard',
+      block: 'Sperre',
+      suspicious: 'verdächtig',
+      redirect: 'Umleitung',
+    },
+    hostsHint:
+      'Ändern kann die Hosts-Datei nur ein Administrator. AEGIS zeigt sie nur an; bei verdächtigen Einträgen hilft ein vollständiger Scan.',
+    sysOs: 'Windows',
+    sysComputer: 'Rechner',
+    sysCpu: 'Prozessor',
+    sysMemory: 'Arbeitsspeicher',
+    sysUptime: 'Läuft seit',
+    uptimeValue: '{days} Tagen, {hours} Stunden',
+    memoryValue: '{free} frei von {total}',
+    healthOk: 'Alles im grünen Bereich.',
+    health: {
+      low_disk:
+        'Ein Laufwerk hat weniger als 10 % frei – aufräumen hilft (Speicherplatz, Cleaner).',
+      critical_disk: 'Ein Laufwerk hat weniger als 2 GB frei – Windows-Updates können scheitern.',
+      long_uptime:
+        'Seit über 14 Tagen nicht neu gestartet – manche Updates warten auf einen Neustart.',
+      low_memory: 'Der Arbeitsspeicher ist fast voll – schließe nicht benötigte Programme.',
+    },
+    link: {
+      updates: 'Programm-Updates',
+      updatesHint: 'Veraltete Programme über winget aktualisieren (Härtung).',
+      drivers: 'Treiber-Übersicht',
+      driversHint: 'Geladene Treiber, verwundbare Treiber sperren (Härtung).',
+      monitor: 'Prozess- & Netzwerk-Monitor',
+      monitorHint: 'Verbindungen je Programm, neue Ziele, Firewall (Netzwerk).',
+      focus: 'Gaming-/Fokus-Modus',
+      focusHint: 'Hinweise und Scans pausieren, solange du spielst (Echtzeit-Wächter).',
+      restore: 'Wiederherstellungspunkte',
+      restoreHint: 'Punkte ansehen und vor Änderungen einen anlegen (Härtung).',
     },
     folder: 'Ordner',
     folders: 'Ordner',

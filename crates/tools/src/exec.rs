@@ -51,6 +51,15 @@ pub enum Undo {
         /// Vorher an?
         enabled: bool,
     },
+    /// Voriger Registrierungswert.
+    Registry {
+        /// Schlüssel unter `HKCU`.
+        key: String,
+        /// Wertname.
+        name: String,
+        /// Wert vorher.
+        previous: crate::tweaks::Value,
+    },
     /// Voriges Desktop-Layout.
     DesktopLayout {
         /// Layout vor dem Setzen.
@@ -198,7 +207,16 @@ fn move_file(
     if file_state(from) != Some((size, modified)) {
         return Err(Ok("seit der Vorschau verändert"));
     }
-    let target = free_name(to).ok_or(Ok("kein freier Zielname"))?;
+    // Nur Groß-/Kleinschreibung ändert sich (Umbenenner): dieselbe Datei, kein „(2)“.
+    let same_file = from.parent() == to.parent()
+        && from.file_name().zip(to.file_name()).is_some_and(|(a, b)| {
+            a != b && a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+        });
+    let target = if same_file {
+        to.to_path_buf()
+    } else {
+        free_name(to).ok_or(Ok("kein freier Zielname"))?
+    };
     if let Some(parent) = target.parent() {
         ensure_dir(parent).map_err(Err)?;
     }
@@ -211,7 +229,42 @@ fn move_file(
     })
 }
 
-fn step(op: &Op, platform: &dyn Platform) -> Item {
+/// Überschreibt eine Datei einmal mit Zufallsdaten, benennt sie zufällig um und löscht sie.
+fn shred(path: &Path, size: u64) -> std::io::Result<()> {
+    use std::io::{Seek, Write};
+    {
+        // Öffnet die freigegebene Datei zum Überschreiben (Link vorher ausgeschlossen).
+        // aegis-mutation: tools-shred-open
+        #[allow(clippy::disallowed_methods)]
+        let mut file = std::fs::OpenOptions::new().write(true).open(path)?;
+        file.seek(std::io::SeekFrom::Start(0))?;
+        let mut remaining = size;
+        let mut chunk = vec![0u8; 1024 * 1024];
+        while remaining > 0 {
+            let n = usize::try_from(remaining.min(chunk.len() as u64)).unwrap_or(chunk.len());
+            let part = chunk
+                .get_mut(..n)
+                .ok_or_else(|| std::io::Error::other("Puffer"))?;
+            fill_random(part)?;
+            file.write_all(part)?;
+            remaining -= n as u64;
+        }
+        file.sync_all()?;
+    }
+    let hidden = path.with_file_name(uuid::Uuid::new_v4().simple().to_string());
+    rename(path, &hidden)?;
+    // Endgültiges Löschen der eben überschriebenen Datei – nur nach zweiter Bestätigung.
+    // aegis-mutation: tools-shred-remove
+    #[allow(clippy::disallowed_methods)]
+    std::fs::remove_file(&hidden)
+}
+
+fn fill_random(buffer: &mut [u8]) -> std::io::Result<()> {
+    // Zufall des Betriebssystems (kein Muster, das sich wiedererkennen ließe).
+    getrandom::fill(buffer).map_err(|e| std::io::Error::other(e.to_string()))
+}
+
+fn step(op: &Op, platform: &dyn Platform, final_ok: bool) -> Item {
     let label = op.label();
     let result: Result<Undo, Result<&'static str, std::io::Error>> =
         match op {
@@ -280,6 +333,53 @@ fn step(op: &Op, platform: &dyn Platform) -> Item {
                             .map_err(Err)
                     }
                 }),
+            Op::Registry { key, name, value } => {
+                if !crate::tweaks::known(key, name) {
+                    Err(Ok("unbekannter Schalter"))
+                } else {
+                    platform
+                        .registry_get(key, name)
+                        .map_err(Err)
+                        .and_then(|previous| {
+                            if &previous == value {
+                                Err(Ok("schon so"))
+                            } else {
+                                platform
+                                    .registry_set(key, name, value)
+                                    .map(|()| Undo::Registry {
+                                        key: key.clone(),
+                                        name: name.clone(),
+                                        previous,
+                                    })
+                                    .map_err(Err)
+                            }
+                        })
+                }
+            }
+            Op::Shred {
+                path,
+                size,
+                modified,
+            } => {
+                if !final_ok {
+                    Err(Ok("zweite Bestätigung fehlt"))
+                } else if !allowed(path) {
+                    Err(Ok("geschützter Ort"))
+                } else if file_state(path) != Some((*size, *modified)) {
+                    Err(Ok("seit der Vorschau verändert"))
+                } else {
+                    // Endgültig: kein Rückgängig (das hat der Nutzer zweimal bestätigt).
+                    return match shred(path, *size) {
+                        Ok(()) => Item {
+                            label,
+                            status: Status::Done,
+                            reason: None,
+                            undo: None,
+                        },
+                        Err(e) => failed(label, &e),
+                    };
+                }
+            }
             Op::DesktopLayout { layout } => platform
                 .apply_desktop_layout(layout)
                 .map(|previous| Undo::DesktopLayout { previous })
@@ -304,7 +404,7 @@ pub fn execute(approved: Approved<'_>, platform: &dyn Platform, now: i64) -> Run
             if approved.skip.contains(&i) {
                 skipped(op.label(), "abgewählt")
             } else {
-                step(op, platform)
+                step(op, platform, approved.final_ok)
             }
         })
         .collect();
@@ -360,6 +460,18 @@ fn reverse(undo: &Undo, platform: &dyn Platform) -> Result<(), String> {
         Undo::Autostart { entry, enabled } => platform
             .set_autostart(entry, *enabled)
             .map_err(|e| e.to_string()),
+        Undo::Registry {
+            key,
+            name,
+            previous,
+        } => {
+            if !crate::tweaks::known(key, name) {
+                return Err("unbekannter Schalter".into());
+            }
+            platform
+                .registry_set(key, name, previous)
+                .map_err(|e| e.to_string())
+        }
         Undo::DesktopLayout { previous } => platform
             .apply_desktop_layout(previous)
             .map(|_| ())

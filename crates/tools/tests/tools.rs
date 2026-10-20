@@ -13,6 +13,7 @@ use aegis_tools::exec::{Status, execute, undo};
 use aegis_tools::journal::Journal;
 use aegis_tools::plan::{Approved, Refused};
 use aegis_tools::platform::LocalPlatform;
+use aegis_tools::platform::Platform as _;
 use aegis_tools::rules::{Condition, Rule, plan_for_rule};
 use aegis_tools::tools::{cleaner, duplicates, empty_folders, large_old, sort_downloads, space};
 
@@ -213,4 +214,173 @@ fn rueckgaengig_ueberschreibt_nie() {
     assert_eq!(errors.len(), 1);
     assert_eq!(std::fs::read(downloads.join("brief.docx")).unwrap(), b"neu");
     assert!(downloads.join("Dokumente/brief.docx").exists());
+}
+
+#[test]
+fn shredder_nur_mit_zweiter_bestaetigung_und_ohne_rueckgaengig() {
+    use aegis_tools::plan::{Op, Plan, Tool};
+    let (dir, downloads, platform) = setup();
+    let path = write_fixture(dir.path(), "Downloads/geheim.txt", b"vertraulich").unwrap();
+    let (size, modified) = aegis_tools::walk::file_state(&path).unwrap();
+    let plan = Plan::new(
+        Tool::Shredder,
+        vec![Op::Shred {
+            path: path.clone(),
+            size,
+            modified,
+        }],
+        now(),
+    );
+    assert!(plan.needs_final());
+    // Ein „Ausführen“ allein reicht nicht, auch keine Regel, auch keine falsche Kennung.
+    assert_eq!(
+        Approved::by_user(&plan, &plan.digest(), vec![], now()).unwrap_err(),
+        Refused::NeedsFinal
+    );
+    let expected = aegis_tools::plan::token();
+    assert_eq!(
+        Approved::by_user_final(&plan, &plan.digest(), vec![], now(), &expected, "falsch")
+            .unwrap_err(),
+        Refused::NeedsFinal
+    );
+    assert!(path.exists());
+    let approved =
+        Approved::by_user_final(&plan, &plan.digest(), vec![], now(), &expected, &expected)
+            .unwrap();
+    let mut run = execute(approved, &platform, now());
+    assert_eq!(run.done(), 1);
+    assert!(!path.exists());
+    assert!(
+        std::fs::read_dir(&downloads).unwrap().next().is_none(),
+        "kein Rest"
+    );
+    assert!(run.items[0].undo.is_none());
+    undo(&mut run, &platform, now());
+    assert!(!path.exists());
+}
+
+#[test]
+fn umbenenner_vorschau_ausfuehren_rueckgaengig() {
+    use aegis_tools::rename::{Options, plan};
+    let (dir, downloads, platform) = setup();
+    write_fixture(dir.path(), "Downloads/IMG_2.jpg", b"b").unwrap();
+    write_fixture(dir.path(), "Downloads/IMG_1.jpg", b"a").unwrap();
+    write_fixture(dir.path(), "Downloads/Urlaub 02.jpg", b"schon da").unwrap();
+    let before = DirSnapshot::capture(dir.path()).unwrap();
+    let options = Options {
+        pattern: "Urlaub {n}".into(),
+        start: 1,
+        digits: 2,
+        ..Options::default()
+    };
+    let p = plan(&downloads, &options, now());
+    assert_unchanged(&before, &DirSnapshot::capture(dir.path()).unwrap());
+    // IMG_1 → Urlaub 01; IMG_2 → „Urlaub 02“ gibt es schon → übergangen; die vorhandene
+    // „Urlaub 02“ bekommt die nächste Nummer. Nichts wird überschrieben.
+    assert_eq!(p.ops.len(), 2, "{:?}", p.ops);
+    let mut run = execute(
+        Approved::by_user(&p, &p.digest(), vec![], now()).unwrap(),
+        &platform,
+        now(),
+    );
+    assert_eq!(run.done(), 2);
+    assert!(downloads.join("Urlaub 01.jpg").exists());
+    assert!(downloads.join("IMG_2.jpg").exists());
+    assert_eq!(
+        std::fs::read(downloads.join("Urlaub 03.jpg")).unwrap(),
+        b"schon da"
+    );
+    assert!(undo(&mut run, &platform, now()).is_empty());
+    assert!(downloads.join("IMG_1.jpg").exists());
+    assert_eq!(
+        std::fs::read(downloads.join("Urlaub 02.jpg")).unwrap(),
+        b"schon da"
+    );
+}
+
+#[test]
+fn schalter_nur_aus_der_festen_liste_mit_rueckgaengig() {
+    use aegis_tools::plan::{Op, Plan, Tool};
+    use aegis_tools::tweaks::Value;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+
+    struct Fake(RefCell<HashMap<(String, String), Value>>);
+    impl aegis_tools::platform::Platform for Fake {
+        fn recycle(&self, _: &Path) -> std::io::Result<aegis_tools::platform::Recycled> {
+            Err(std::io::Error::other("x"))
+        }
+        fn restore(&self, _: &aegis_tools::platform::Recycled, _: &Path) -> std::io::Result<()> {
+            Err(std::io::Error::other("x"))
+        }
+        fn wallpaper(&self) -> std::io::Result<PathBuf> {
+            Err(std::io::Error::other("x"))
+        }
+        fn set_wallpaper(&self, _: &Path) -> std::io::Result<()> {
+            Err(std::io::Error::other("x"))
+        }
+        fn autostart_enabled(&self, _: &aegis_tools::autostart::EntryRef) -> std::io::Result<bool> {
+            Err(std::io::Error::other("x"))
+        }
+        fn set_autostart(
+            &self,
+            _: &aegis_tools::autostart::EntryRef,
+            _: bool,
+        ) -> std::io::Result<()> {
+            Err(std::io::Error::other("x"))
+        }
+        fn apply_desktop_layout(
+            &self,
+            _: &aegis_tools::desktop::Layout,
+        ) -> std::io::Result<aegis_tools::desktop::Layout> {
+            Err(std::io::Error::other("x"))
+        }
+        fn registry_get(&self, key: &str, name: &str) -> std::io::Result<Value> {
+            Ok(self
+                .0
+                .borrow()
+                .get(&(key.to_owned(), name.to_owned()))
+                .cloned()
+                .unwrap_or(Value::Absent))
+        }
+        fn registry_set(&self, key: &str, name: &str, value: &Value) -> std::io::Result<()> {
+            self.0
+                .borrow_mut()
+                .insert((key.to_owned(), name.to_owned()), value.clone());
+            Ok(())
+        }
+    }
+
+    let fake = Fake(RefCell::new(HashMap::new()));
+    let ext = aegis_tools::tweaks::find("show_extensions").unwrap();
+    let plan = Plan::new(
+        Tool::ExplorerTweaks,
+        vec![
+            Op::Registry {
+                key: ext.key.into(),
+                name: ext.name.into(),
+                value: ext.on.owned(),
+            },
+            // Nicht in der Liste → wird nie gesetzt.
+            Op::Registry {
+                key: r"Software\Microsoft\Windows\CurrentVersion\Run".into(),
+                name: "Boese".into(),
+                value: Value::Text("x.exe".into()),
+            },
+        ],
+        now(),
+    );
+    let mut run = execute(
+        Approved::by_user(&plan, &plan.digest(), vec![], now()).unwrap(),
+        &fake,
+        now(),
+    );
+    assert_eq!(run.done(), 1);
+    assert_eq!(run.items[1].status, Status::Skipped);
+    assert_eq!(
+        fake.registry_get(ext.key, ext.name).unwrap(),
+        Value::Dword(0)
+    );
+    assert!(undo(&mut run, &fake, now()).is_empty());
+    assert_eq!(fake.registry_get(ext.key, ext.name).unwrap(), Value::Absent);
 }

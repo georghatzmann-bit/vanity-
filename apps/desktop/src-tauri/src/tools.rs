@@ -34,6 +34,8 @@ const WATCH_SECONDS: u64 = 30;
 struct State {
     previews: HashMap<String, Plan>,
     order: Vec<String>,
+    /// Kennung der zweiten Bestätigung je Vorschau (nur im zweiten Dialog gezeigt).
+    finals: HashMap<String, String>,
 }
 
 static STATE: LazyLock<Mutex<State>> = LazyLock::new(|| Mutex::new(State::default()));
@@ -143,6 +145,33 @@ pub enum PreviewRequest {
         /// Name des gespeicherten Layouts.
         name: String,
     },
+    /// 12 Datei-Shredder (endgültig; zweite Bestätigung).
+    Shredder {
+        /// Dateien.
+        paths: Vec<PathBuf>,
+    },
+    /// 15 Batch-Umbenenner.
+    Rename {
+        /// Ordner.
+        folder: PathBuf,
+        /// Einstellungen.
+        options: aegis_tools::rename::Options,
+    },
+    /// 16/19 Explorer- und Datenschutz-Schalter.
+    Tweaks {
+        /// Gewünschte Schalter (`id` aus der festen Liste).
+        changes: Vec<TweakChange>,
+    },
+}
+
+/// Gewünschter Schalter.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TweakChange {
+    /// Kennung aus `aegis_tools::tweaks::TWEAKS`.
+    pub id: String,
+    /// An?
+    pub on: bool,
 }
 
 /// Gewünschter Autostart-Schalter.
@@ -170,6 +199,8 @@ pub struct PreviewItem {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewView {
+    /// Endgültiges Löschen dabei (zweite Bestätigung nötig)?
+    pub needs_final: bool,
     /// Kennung.
     pub id: String,
     /// Prüfsumme (kommt mit „Ausführen“ zurück).
@@ -192,6 +223,8 @@ fn item(op: &Op) -> PreviewItem {
         Op::SetWallpaper { .. } => ("set_wallpaper", 0),
         Op::Autostart { .. } => ("autostart", 0),
         Op::DesktopLayout { .. } => ("desktop_layout", 0),
+        Op::Registry { .. } => ("registry", 0),
+        Op::Shred { size, .. } => ("shred", *size),
     };
     PreviewItem {
         label: op.label(),
@@ -202,6 +235,7 @@ fn item(op: &Op) -> PreviewItem {
 
 fn remember(plan: Plan, groups: Vec<DuplicateGroup>) -> PreviewView {
     let view = PreviewView {
+        needs_final: plan.needs_final(),
         id: plan.id.clone(),
         digest: plan.digest(),
         tool: plan.tool,
@@ -301,6 +335,48 @@ fn build<R: tauri::Runtime>(
                 .collect();
             (Plan::new(Tool::Autostart, ops, t), Vec::new())
         }
+        PreviewRequest::Shredder { paths } => {
+            let mut ops = Vec::new();
+            for path in paths.into_iter().take(500) {
+                let Some((size, modified)) = aegis_tools::walk::file_state(&path) else {
+                    return Err("Nur einzelne Dateien (keine Ordner oder Verknüpfungen).".into());
+                };
+                if !aegis_tools::guard::allowed(&path) {
+                    return Err("Diese Datei fasst AEGIS nicht an (Systemort).".into());
+                }
+                ops.push(Op::Shred {
+                    path,
+                    size,
+                    modified,
+                });
+            }
+            (Plan::new(Tool::Shredder, ops, t), Vec::new())
+        }
+        PreviewRequest::Rename { folder, options } => {
+            checked(&folder)?;
+            (aegis_tools::rename::plan(&folder, &options, t), Vec::new())
+        }
+        PreviewRequest::Tweaks { changes } => {
+            let platform = platform(app)?;
+            let mut ops = Vec::new();
+            let mut tool = Tool::ExplorerTweaks;
+            for c in changes {
+                let tweak = aegis_tools::tweaks::find(&c.id).ok_or("Unbekannter Schalter.")?;
+                if tweak.group == aegis_tools::tweaks::Group::Privacy {
+                    tool = Tool::Privacy;
+                }
+                let value = if c.on { tweak.on } else { tweak.off }.owned();
+                if platform.registry_get(tweak.key, tweak.name).ok().as_ref() == Some(&value) {
+                    continue;
+                }
+                ops.push(Op::Registry {
+                    key: tweak.key.to_owned(),
+                    name: tweak.name.to_owned(),
+                    value,
+                });
+            }
+            (Plan::new(tool, ops, t), Vec::new())
+        }
         PreviewRequest::DesktopLayout { name } => {
             let layout = load_layouts(app)?
                 .into_iter()
@@ -390,18 +466,44 @@ pub async fn tools_execute<R: tauri::Runtime>(
     id: String,
     digest: String,
     skip: Vec<usize>,
+    confirm: Option<String>,
 ) -> Result<RunView, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        // Die Vorschau wird verbraucht: Ein zweites „Ausführen“ derselben Vorschau gibt es nicht.
-        let plan = state()
-            .previews
-            .remove(&id)
-            .ok_or("Vorschau abgelaufen – bitte neu erstellen.")?;
-        let approved = Approved::by_user(&plan, &digest, skip, now()).map_err(|e| match e {
+        let refused = |e: Refused| match e {
             Refused::Digest => "Vorschau passt nicht – bitte neu erstellen.".to_owned(),
             Refused::Expired => "Vorschau abgelaufen – bitte neu erstellen.".to_owned(),
             Refused::Rule => "Regel nicht aktiv.".to_owned(),
-        })?;
+            Refused::NeedsFinal => "Zweite Bestätigung fehlt.".to_owned(),
+        };
+        let mut s = state();
+        let needs_final = s.previews.get(&id).is_some_and(Plan::needs_final);
+        if needs_final && confirm.is_none() {
+            // Erstes „Ausführen“: noch nichts tun, sondern die zweite, getrennte Bestätigung
+            // anfordern (die Oberfläche zeigt dafür einen eigenen Dialog).
+            let challenge = aegis_tools::plan::token();
+            s.finals.insert(id.clone(), challenge.clone());
+            return Err(format!("confirm_final:{challenge}"));
+        }
+        // Die Vorschau wird verbraucht: Ein zweites „Ausführen“ derselben Vorschau gibt es nicht.
+        let plan = s
+            .previews
+            .remove(&id)
+            .ok_or("Vorschau abgelaufen – bitte neu erstellen.")?;
+        let expected = s.finals.remove(&id).unwrap_or_default();
+        drop(s);
+        let approved = if needs_final {
+            Approved::by_user_final(
+                &plan,
+                &digest,
+                skip,
+                now(),
+                &expected,
+                confirm.as_deref().unwrap_or_default(),
+            )
+        } else {
+            Approved::by_user(&plan, &digest, skip, now())
+        }
+        .map_err(refused)?;
         let platform = platform(&app)?;
         let run = execute(approved, platform.as_ref(), now());
         journal(&app)?
@@ -463,6 +565,41 @@ pub enum ScanRequest {
     Autostart {},
     /// Standardordner (Downloads, Bilder, Desktop) und Cleaner-Orte.
     Defaults {},
+    /// 16/19 Stand der Explorer- und Datenschutz-Schalter.
+    Tweaks {},
+    /// 18 Hosts-Datei.
+    Hosts {},
+    /// 22 Systeminfo & Gesundheits-Check.
+    System {},
+}
+
+/// Stand eines Schalters.
+#[derive(Debug, Serialize)]
+pub struct TweakState {
+    /// Kennung.
+    pub id: &'static str,
+    /// Gruppe.
+    pub group: aegis_tools::tweaks::Group,
+    /// An?
+    pub on: bool,
+}
+
+/// Hosts-Datei.
+#[derive(Debug, Serialize)]
+pub struct HostsView {
+    /// Pfad.
+    pub path: PathBuf,
+    /// Einträge.
+    pub entries: Vec<aegis_tools::hosts::HostEntry>,
+}
+
+/// Systeminfo samt Hinweisen.
+#[derive(Debug, Serialize)]
+pub struct SystemView {
+    /// Daten.
+    pub info: aegis_tools::health::SystemInfo,
+    /// Hinweise.
+    pub findings: Vec<aegis_tools::health::Finding>,
 }
 
 /// Standardordner.
@@ -499,6 +636,79 @@ pub enum ScanResponse {
         /// Ordner.
         defaults: Defaults,
     },
+    /// Schalter.
+    Tweaks {
+        /// Stand.
+        tweaks: Vec<TweakState>,
+    },
+    /// Hosts-Datei.
+    Hosts {
+        /// Inhalt.
+        hosts: HostsView,
+    },
+    /// Systeminfo.
+    System {
+        /// Daten.
+        system: SystemView,
+    },
+}
+
+/// Systeminfo lesen (nur Windows liefert alles; sonst das, was plattformunabhängig geht).
+fn system_info() -> aegis_tools::health::SystemInfo {
+    let cores = std::thread::available_parallelism().map_or(0, std::num::NonZero::get);
+    #[cfg(windows)]
+    {
+        use aegis_winffi::inspect::{Hive, read_values};
+        let value = |key: &str, name: &str| {
+            read_values(&Hive::LocalMachine, key)
+                .into_iter()
+                .find(|v| v.name.eq_ignore_ascii_case(name))
+                .map(|v| v.data)
+                .unwrap_or_default()
+        };
+        let cv = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+        let ubr = value(cv, "UBR");
+        let build = value(cv, "CurrentBuild");
+        aegis_tools::health::SystemInfo {
+            os: value(cv, "ProductName"),
+            version: value(cv, "DisplayVersion"),
+            build: if ubr.is_empty() {
+                build
+            } else {
+                format!("{build}.{ubr}")
+            },
+            cpu: value(
+                r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
+                "ProcessorNameString",
+            )
+            .trim()
+            .to_owned(),
+            cores,
+            memory: aegis_winffi::sysinfo::memory().ok(),
+            uptime: aegis_winffi::sysinfo::uptime_seconds(),
+            drives: aegis_winffi::sysinfo::fixed_drives()
+                .into_iter()
+                .filter_map(|root| {
+                    aegis_winffi::fs::disk_space(&root)
+                        .ok()
+                        .map(|(free, total)| aegis_tools::health::Drive {
+                            root: root.display().to_string(),
+                            free,
+                            total,
+                        })
+                })
+                .collect(),
+            computer: std::env::var("COMPUTERNAME").unwrap_or_default(),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        aegis_tools::health::SystemInfo {
+            os: std::env::consts::OS.to_owned(),
+            cores,
+            ..aegis_tools::health::SystemInfo::default()
+        }
+    }
 }
 
 /// Nur lesende Abfrage (Speicherplatz, Autostart, Standardordner).
@@ -524,6 +734,45 @@ pub async fn tools_scan<R: tauri::Runtime>(
             #[cfg(not(windows))]
             let entries = Vec::new();
             Ok(ScanResponse::Autostart { entries })
+        }
+        ScanRequest::Tweaks {} => {
+            let platform = platform(&app)?;
+            Ok(ScanResponse::Tweaks {
+                tweaks: aegis_tools::tweaks::TWEAKS
+                    .iter()
+                    .map(|t| TweakState {
+                        id: t.id,
+                        group: t.group,
+                        on: platform
+                            .registry_get(t.key, t.name)
+                            .is_ok_and(|v| aegis_tools::tweaks::is_on(t, &v)),
+                    })
+                    .collect(),
+            })
+        }
+        ScanRequest::Hosts {} => {
+            let path = aegis_tools::hosts::path();
+            let meta = std::fs::symlink_metadata(&path)
+                .map_err(|_| "Hosts-Datei nicht lesbar.".to_owned())?;
+            if !meta.is_file() || meta.len() > 4 * 1024 * 1024 {
+                return Err("Hosts-Datei nicht lesbar.".into());
+            }
+            let text = std::fs::read(&path).map_err(|_| "Hosts-Datei nicht lesbar.".to_owned())?;
+            Ok(ScanResponse::Hosts {
+                hosts: HostsView {
+                    entries: aegis_tools::hosts::parse(&String::from_utf8_lossy(&text)),
+                    path,
+                },
+            })
+        }
+        ScanRequest::System {} => {
+            let info = system_info();
+            Ok(ScanResponse::System {
+                system: SystemView {
+                    findings: aegis_tools::health::check(&info),
+                    info,
+                },
+            })
         }
         ScanRequest::Defaults {} => {
             let p = app.path();

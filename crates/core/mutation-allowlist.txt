@@ -426,3 +426,9 @@ crates/winffi/src/desktop.rs :: winffi-desktop-position-call :: Windows-FFI (Too
 apps/desktop/src-tauri/src/tools.rs :: desktop-tools-dir :: Windows-Tools: legt den eigenen App-Datenordner für Regeln und Desktop-Layouts an.
 apps/desktop/src-tauri/src/tools.rs :: desktop-tools-write :: Windows-Tools: schreibt die eigene Hilfsdatei der Regeln bzw. Desktop-Layouts des Nutzers (vom Nutzer gespeichert).
 apps/desktop/src-tauri/src/tools.rs :: desktop-tools-replace :: Windows-Tools: ersetzt die eigene Datei der Regeln bzw. Desktop-Layouts durch die eben geschriebene Fassung.
+crates/tools/src/exec.rs :: tools-shred-open :: Windows-Tools „Datei-Shredder“: öffnet genau die freigegebene Datei zum Überschreiben – nur nach zweiter, getrennter Bestätigung (Links vorher ausgeschlossen).
+crates/tools/src/exec.rs :: tools-shred-remove :: Windows-Tools „Datei-Shredder“: löscht die eben überschriebene Datei endgültig – nur nach zweiter, getrennter Bestätigung.
+crates/winffi/src/sysinfo.rs :: winffi-memory-status :: Windows-FFI (Systeminfo): GlobalMemoryStatusEx – nur Abfrage.
+crates/winffi/src/sysinfo.rs :: winffi-uptime :: Windows-FFI (Systeminfo): GetTickCount64 – nur Abfrage.
+crates/winffi/src/sysinfo.rs :: winffi-logical-drives :: Windows-FFI (Systeminfo): GetLogicalDrives – nur Abfrage.
+crates/winffi/src/sysinfo.rs :: winffi-drive-type :: Windows-FFI (Systeminfo): GetDriveTypeW – nur Abfrage.

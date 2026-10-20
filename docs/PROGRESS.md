@@ -188,6 +188,18 @@ eigenen LAN/WLAN; Leck-Check mit k-Anonymität; alle Prüfungen grün.
 nachgeprüft; „Wieder AN“ mit einem Klick; Manipulationsschutz nie umgangen (Anleitung +
 Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur Virenschutz.
 
+## P11 – Windows-Tools 12–22 + Animations-Feinschliff
+
+1. [x] P11.1 Werkzeuge 12 Datei-Shredder (einmal Zufall, umbenennen, löschen – nur nach
+       zweiter, getrennter Bestätigung; ehrlicher SSD/BitLocker-Hinweis), 15 Batch-Umbenenner
+       (Muster, Suchen/Ersetzen, Zählung, Groß/klein, Vorschau), 16 Explorer-Tweaks und
+       19 Datenschutz-Schalter (nur bekannte `HKCU`-Werte, Rückgängig auf den vorigen Wert),
+       18 Hosts-Datei-Ansicht (nur lesend, verdächtige Umleitungen), 22 Systeminfo & Gesundheit
+       (nur lesend); 13 Programm-Updates, 14 Treiber, 20 Prozess-/Netzwerk-Monitor und
+       21 Gaming-/Fokus-Modus verweisen auf die vorhandenen Seiten.
+2. [ ] P11.2 17 Wiederherstellungspunkte über den Dienst (Vorschlag, „Ja“, Liste).
+3. [ ] P11.3 Animations-Feinschliff, Review, DoD.
+
 ## P10 – Windows-Tools 1–11
 
 1. [x] P10.1 `crates/tools`: Vorschau (`Plan`, Prüfsumme), Freigabe (`Approved::by_user` /

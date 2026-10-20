@@ -14,12 +14,16 @@ pub mod category;
 pub mod desktop;
 pub mod exec;
 pub mod guard;
+pub mod health;
+pub mod hosts;
 pub mod journal;
 pub mod plan;
 pub mod platform;
 pub mod recycle;
+pub mod rename;
 pub mod rules;
 pub mod tools;
+pub mod tweaks;
 pub mod walk;
 #[cfg(windows)]
 pub mod win;
