@@ -46,11 +46,13 @@ getrennte Bestätigung; es gibt kein automatisches Löschen nach Fristen, nur Er
 
 ## Installieren
 
-1. **`AEGIS-Setup.exe`** von der [Release-Seite](https://github.com/georghatzmann-bit/vanity-/releases)
-   laden und starten. Das Setup zeigt, was es tut, lädt erst nach deinem Klick, prüft jede
-   Datei (Ed25519-Signatur der Angaben, SHA-256) und installiert erst nach „Installieren“.
-   Optional installiert es den AEGIS Browser mit.
-2. Alternativ das Installationsprogramm `AEGIS-Suite-<Version>-x64-setup.exe` direkt starten.
+**`AEGIS-Setup.exe`** herunterladen und starten – eine einzige Datei, die alles enthält (AEGIS
+Suite und auf Wunsch den AEGIS Browser). Sie installiert ohne weiteren Download: Willkommen →
+Datenschutz → Pakete wählen → „Installieren“. Jedes Paket wird vor dem Start gegen seine
+eingebaute SHA-256-Prüfsumme geprüft und bleibt bis zum Ende gegen Austausch gesperrt.
+
+(Wird das Setup ohne eingebettete Pakete gebaut, lädt es die Pakete stattdessen über die
+signierten Angaben der Release-Seite – siehe „Release veröffentlichen“.)
 
 Windows fragt einmal nach Administratorrechten: Der Schutzdienst (`aegis-service`) und der
 Native-Messaging-Host werden für den Rechner eingerichtet – immer in

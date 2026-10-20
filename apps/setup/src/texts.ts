@@ -9,7 +9,7 @@ const de = {
   stepDone: 'Fertig',
   welcome: 'Willkommen bei AEGIS',
   welcomeText:
-    'Dieses Setup lädt die neueste AEGIS Suite, prüft jede Datei und installiert sie erst, wenn du „Installieren“ wählst.',
+    'Dieses Setup richtet die AEGIS Suite ein. Es prüft jede Datei und installiert erst, wenn du „Installieren“ wählst.',
   sound: 'Klang',
   start: 'Los geht’s',
   next: 'Weiter',
@@ -39,6 +39,8 @@ const de = {
     'Dieses Setup wurde ohne Signaturschlüssel gebaut und lädt deshalb nichts. Lade das Installationsprogramm direkt von der Release-Seite.',
   notWindows: 'Installiert wird nur unter Windows 10/11 (64 Bit).',
   downloadInstall: 'Laden und prüfen',
+  offline:
+    'Diese Setup-Datei enthält bereits alles – es wird nichts heruntergeladen. „Installieren“ prüft die Pakete und installiert sofort.',
   downloading: 'Lade {name} …',
   verifying: 'Prüfe {name} …',
   verified: '{name} geprüft ✓',
@@ -68,7 +70,7 @@ const en: Record<TextKey, string> = {
   stepDone: 'Done',
   welcome: 'Welcome to AEGIS',
   welcomeText:
-    'This setup downloads the latest AEGIS Suite, checks every file and only installs it once you choose “Install”.',
+    'This setup installs AEGIS Suite. It checks every file and only installs once you choose “Install”.',
   sound: 'Sound',
   start: 'Let’s go',
   next: 'Next',
@@ -97,6 +99,8 @@ const en: Record<TextKey, string> = {
     'This setup was built without a signing key and therefore downloads nothing. Get the installer directly from the release page.',
   notWindows: 'Installation only works on Windows 10/11 (64-bit).',
   downloadInstall: 'Download and check',
+  offline:
+    'This setup file already contains everything – nothing is downloaded. “Install” checks the packages and installs right away.',
   downloading: 'Downloading {name}…',
   verifying: 'Checking {name}…',
   verified: '{name} checked ✓',

@@ -18,6 +18,8 @@ const info: Info = {
   enabled: true,
   defaultDir: 'C:\\Program Files\\AEGIS Suite',
   windows: true,
+  offline: false,
+  components: [],
 };
 
 const offer: Offer = {
@@ -40,7 +42,10 @@ function fakeApi(overrides: Partial<Info> = {}) {
       emit?.({ name: 'AEGIS-Suite-0.2.0-x64-setup.exe', done: 6, total: 12, stage: 'download' });
       return Promise.resolve();
     }),
-    install: vi.fn(() => Promise.resolve()),
+    install: vi.fn((browser: boolean) => {
+      void browser;
+      return Promise.resolve();
+    }),
     launch: vi.fn(() => Promise.resolve()),
     onProgress: vi.fn((listener: (p: Progress) => void) => {
       emit = listener;
@@ -85,11 +90,34 @@ describe('Setup-Assistent', () => {
     expect(screen.getByText('Alles geladen und geprüft.')).toBeTruthy();
     expect(api.install).not.toHaveBeenCalled();
     fireEvent.click(install);
-    await waitFor(() => expect(api.install).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.install).toHaveBeenCalledWith(true));
     expect(await screen.findByText('AEGIS ist installiert')).toBeTruthy();
     expect(api.launch).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'AEGIS starten' }));
     await waitFor(() => expect(api.launch).toHaveBeenCalledTimes(1));
+  });
+
+  it('Offline-Setup: alles eingebettet, kein Netz, Installieren startet sofort', async () => {
+    const api = fakeApi({
+      enabled: false,
+      offline: true,
+      components: offer.components,
+    });
+    render(<App api={api} lang="de" />);
+    await toOptions();
+    expect(await screen.findByTestId('offline')).toHaveTextContent('enthält bereits alles');
+    // Kein Hinweis auf fehlenden Schlüssel, keine Suche, kein Download.
+    expect(screen.queryByTestId('disabled')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Neueste Version suchen' })).toBeNull();
+    const found = screen.getByTestId('offer');
+    expect(found).toHaveTextContent('Version 0.1.0');
+    fireEvent.click(within(found).getByRole('switch', { name: /AEGIS Browser/ }));
+    expect(api.install).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Installieren' }));
+    await waitFor(() => expect(api.install).toHaveBeenCalledWith(true));
+    expect(await screen.findByText('AEGIS ist installiert')).toBeTruthy();
+    expect(api.check).not.toHaveBeenCalled();
+    expect(api.download).not.toHaveBeenCalled();
   });
 
   it('ohne Signaturschlüssel lädt das Setup nichts und sagt das', async () => {
@@ -123,6 +151,8 @@ describe('Setup-Assistent', () => {
       enabled: false,
       defaultDir: '',
       windows: false,
+      offline: false,
+      components: [],
     });
     const o = parseOffer({
       version: '1.0.0',

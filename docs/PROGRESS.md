@@ -208,6 +208,9 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        Downgrade, Tresor nicht per Kästchen löschbar, Updates mit angehaltenem Dienst, Löschen
        des Datenordners ohne Links) – siehe `docs/SECURITY.md`.
 
+5. [x] P13.5 Offline-Setup: `AEGIS-Setup.exe` enthält AEGIS Suite und Browser und installiert
+       ohne Download („Installieren“ prüft und installiert sofort); Bau in der Windows-CI.
+
 **DoD P13:** `AEGIS-Setup.exe` mit eigener Animation und Klang lädt nur nach Klick, prüft
 Signatur, Datum, Version und SHA-256 und installiert erst nach „Installieren“; WebView2-Prüfung
 mit Hinweis; Installer bringt Dienst, Prüfprozess, Labor-Sonde, Tresor-Host und Erweiterungen

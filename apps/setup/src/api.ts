@@ -8,6 +8,10 @@ export interface Info {
   readonly enabled: boolean;
   readonly defaultDir: string;
   readonly windows: boolean;
+  /** Offline-Setup: alles eingebettet, kein Download nötig. */
+  readonly offline: boolean;
+  /** Eingebettete Pakete (nur Offline-Setup). */
+  readonly components: readonly Component[];
 }
 
 export interface Component {
@@ -35,7 +39,7 @@ export interface SetupApi {
   info(): Promise<Info>;
   check(): Promise<Offer>;
   download(browser: boolean): Promise<void>;
-  install(): Promise<void>;
+  install(browser: boolean): Promise<void>;
   launch(): Promise<void>;
   onProgress(listener: (p: Progress) => void): Promise<() => void>;
 }
@@ -47,6 +51,19 @@ const isObject = (v: unknown): v is Json =>
 const str = (v: unknown, max = 4096) => (typeof v === 'string' ? v.slice(0, max) : '');
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
 
+function parseComponents(v: unknown): readonly Component[] {
+  const list = Array.isArray(v) ? (v as unknown[]) : [];
+  return list
+    .filter(isObject)
+    .filter((c) => c['kind'] === 'app' || c['kind'] === 'browser')
+    .slice(0, 8)
+    .map((c) => ({
+      kind: c['kind'] === 'browser' ? ('browser' as const) : ('app' as const),
+      name: str(c['name'], 200),
+      size: num(c['size']),
+    }));
+}
+
 export function parseInfo(v: unknown): Info {
   const o = isObject(v) ? v : {};
   return {
@@ -54,6 +71,8 @@ export function parseInfo(v: unknown): Info {
     enabled: o['enabled'] === true,
     defaultDir: str(o['defaultDir'], 260),
     windows: o['windows'] === true,
+    offline: o['offline'] === true,
+    components: parseComponents(o['components']),
   };
 }
 
@@ -67,15 +86,7 @@ export function parseOffer(v: unknown): Offer {
         ? o['published']
         : '',
     notes: str(o['notes'], 2000),
-    components: list
-      .filter(isObject)
-      .filter((c) => c['kind'] === 'app' || c['kind'] === 'browser')
-      .slice(0, 8)
-      .map((c) => ({
-        kind: c['kind'] === 'browser' ? ('browser' as const) : ('app' as const),
-        name: str(c['name'], 200),
-        size: num(c['size']),
-      })),
+    components: parseComponents(list),
   };
 }
 
@@ -107,7 +118,7 @@ export async function tauriApi(): Promise<SetupApi> {
     info: async () => parseInfo(await invoke<unknown>('setup_info')),
     check: async () => parseOffer(await invoke<unknown>('setup_check')),
     download: (browser) => invoke('setup_download', { browser }),
-    install: () => invoke('setup_install'),
+    install: (browser) => invoke('setup_install', { browser }),
     launch: () => invoke('setup_launch'),
     onProgress: (listener) =>
       listen<unknown>('setup://progress', (e) => listener(parseProgress(e.payload))),

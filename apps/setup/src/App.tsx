@@ -1,8 +1,9 @@
 /**
  * Setup-Assistent: Willkommen → Datenschutz → Ordner & Pakete → Laden/Prüfen/Installieren →
- * Fertig. Netz erst nach „Neueste Version suchen“, Laden erst nach „Laden und prüfen“,
- * Installieren erst nach „Installieren“. Fehler werden ehrlich gezeigt, nichts geschieht von
- * selbst.
+ * Fertig. Offline-Setup (alles eingebettet): ohne Netz, „Installieren“ prüft und installiert
+ * sofort. Online-Setup: Netz erst nach „Neueste Version suchen“, Laden erst nach „Laden und
+ * prüfen“, Installieren erst nach „Installieren“. Fehler werden ehrlich gezeigt, nichts
+ * geschieht von selbst.
  */
 import { Button, SafeText, Toggle, getUiSound, useSoundEnabled } from '@aegis/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -102,20 +103,26 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
   const install = () => {
     setError(null);
     setPhase('installing');
-    api.install().then(
+    setStep('install');
+    api.install(browser).then(
       () => {
         setPhase('idle');
         setStep('done');
         getUiSound().bootChime();
       },
       (e: unknown) => {
-        setPhase('ready');
+        setPhase(offline ? 'idle' : 'ready');
         fail(e);
       },
     );
   };
 
+  const offline = info?.offline === true;
   const canInstall = info !== null && info.enabled && info.windows;
+  // Offline-Setup: Die Pakete sind eingebettet – kein Suchen, kein Laden.
+  const shown: Offer | null = offline
+    ? { version: info.version, published: '', notes: '', components: info.components }
+    : offer;
   const shieldValue =
     phase === 'installing' || phase === 'ready'
       ? 1
@@ -213,7 +220,7 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
             {info !== null && !info.windows && (
               <p className="text-sm text-warn">{t('notWindows')}</p>
             )}
-            {info !== null && !info.enabled && (
+            {info !== null && !info.enabled && !offline && (
               <p className="text-sm text-warn" data-testid="disabled">
                 {t('disabled')}
               </p>
@@ -228,7 +235,12 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
               </p>
               <p className="text-xs text-text-subtle">{t('dirHint')}</p>
             </div>
-            {offer === null ? (
+            {offline && (
+              <p className="text-sm text-success" data-testid="offline">
+                {t('offline')}
+              </p>
+            )}
+            {shown === null ? (
               <Button
                 variant="secondary"
                 loading={busy}
@@ -241,19 +253,19 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
             ) : (
               <div className="space-y-2 text-sm" data-testid="offer">
                 <p className="font-medium">
-                  {t('offer', { version: offer.version })}
-                  {offer.published !== '' && (
+                  {t('offer', { version: shown.version })}
+                  {shown.published !== '' && (
                     <span className="ml-2 text-xs font-normal text-text-subtle">
-                      {t('published', { date: offer.published })}
+                      {t('published', { date: shown.published })}
                     </span>
                   )}
                 </p>
-                {offer.notes !== '' && (
+                {shown.notes !== '' && (
                   <p className="whitespace-pre-line text-text-muted">
-                    <SafeText value={offer.notes} mono={false} breakAll={false} />
+                    <SafeText value={shown.notes} mono={false} breakAll={false} />
                   </p>
                 )}
-                {offer.components.map((c) =>
+                {shown.components.map((c) =>
                   c.kind === 'app' ? (
                     <p key={c.name} className="text-text-muted">
                       ✓ {t('app')} – {megabytes(c.size, lang)} ({t('required')})
@@ -273,9 +285,15 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
               <Button variant="ghost" onClick={() => go('privacy')}>
                 {t('back')}
               </Button>
-              <Button variant="primary" disabled={offer === null} onClick={download}>
-                {t('downloadInstall')}
-              </Button>
+              {offline ? (
+                <Button variant="primary" disabled={info?.windows !== true} onClick={install}>
+                  {t('install')}
+                </Button>
+              ) : (
+                <Button variant="primary" disabled={offer === null} onClick={download}>
+                  {t('downloadInstall')}
+                </Button>
+              )}
             </div>
           </section>
         )}

@@ -12,6 +12,64 @@ use aegis_update::{Artifact, Kind, Manifest};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Runtime};
 
+/// Ein eingebettetes Paket (Offline-Setup, siehe `build.rs`).
+pub struct Package {
+    /// Art.
+    pub kind: Kind,
+    /// Name beim Entpacken.
+    pub name: &'static str,
+    /// SHA-256 beim Bauen.
+    pub sha256: &'static str,
+    /// Inhalt.
+    pub bytes: &'static [u8],
+}
+
+mod payload {
+    use super::{Kind, Package};
+
+    // Vom Build-Skript: Pfad und SHA-256 jedes Pakets (leer = nicht eingebettet).
+    const APP: &[u8] = include_bytes!(env!("AEGIS_SETUP_APP"));
+    const BROWSER: &[u8] = include_bytes!(env!("AEGIS_SETUP_BROWSER"));
+
+    /// Eingebettete Pakete (leer im Online-Setup).
+    pub fn packages() -> Vec<Package> {
+        [
+            (
+                Kind::App,
+                "AEGIS-Suite-Setup.exe",
+                env!("AEGIS_SETUP_APP_SHA256"),
+                APP,
+            ),
+            (
+                Kind::Browser,
+                "AEGIS-Browser-Setup.exe",
+                env!("AEGIS_SETUP_BROWSER_SHA256"),
+                BROWSER,
+            ),
+        ]
+        .into_iter()
+        .filter(|(_, _, sha256, bytes)| !bytes.is_empty() && !sha256.is_empty())
+        .map(|(kind, name, sha256, bytes)| Package {
+            kind,
+            name,
+            sha256,
+            bytes,
+        })
+        .collect()
+    }
+}
+
+/// Signierte Angabe eines eingebetteten Pakets (für dieselbe Prüfung wie beim Download).
+fn embedded_artifact(package: &Package) -> Artifact {
+    Artifact {
+        kind: package.kind,
+        name: package.name.to_owned(),
+        url: String::new(),
+        sha256: package.sha256.to_owned(),
+        size: u64::try_from(package.bytes.len()).unwrap_or(u64::MAX),
+    }
+}
+
 /// Ordnername unter „Programme“.
 pub const PRODUCT_DIR: &str = "AEGIS Suite";
 /// Programmdatei der App im Installationsordner.
@@ -75,6 +133,10 @@ pub struct Info {
     default_dir: String,
     /// Windows (nur dort wird installiert).
     windows: bool,
+    /// Offline-Setup: Pakete sind eingebettet, es wird nichts geladen.
+    offline: bool,
+    /// Eingebettete Pakete.
+    components: Vec<Component>,
 }
 
 /// Ein ladbares Paket.
@@ -160,6 +222,15 @@ pub fn setup_info<R: Runtime>(app: AppHandle<R>) -> Info {
         enabled: aegis_update::enabled(),
         default_dir: default_dir().display().to_string(),
         windows: cfg!(windows),
+        offline: !payload::packages().is_empty(),
+        components: payload::packages()
+            .iter()
+            .map(|p| Component {
+                kind: kind_name(p.kind),
+                name: p.name.to_owned(),
+                size: u64::try_from(p.bytes.len()).unwrap_or(u64::MAX),
+            })
+            .collect(),
     }
 }
 
@@ -344,14 +415,57 @@ fn store_locked(body: &[u8], artifact: &Artifact) -> Result<(PathBuf, std::fs::F
     Ok((path, file))
 }
 
+/// Packt die eingebetteten Pakete (AEGIS Suite immer, Browser auf Wunsch) aus – in neue,
+/// gesperrte Dateien – und prüft sie gegen die beim Bauen berechnete Prüfsumme.
+fn unpack<R: Runtime>(app: &AppHandle<R>, browser: bool) -> Result<Vec<Downloaded>, String> {
+    payload::packages()
+        .iter()
+        .filter(|p| p.kind == Kind::App || (browser && p.kind == Kind::Browser))
+        .map(|p| {
+            let artifact = embedded_artifact(p);
+            let _ = app.emit(
+                "setup://progress",
+                Progress {
+                    name: artifact.name.clone(),
+                    done: artifact.size,
+                    total: artifact.size,
+                    stage: "verify",
+                },
+            );
+            #[cfg(windows)]
+            {
+                let (path, file) = store_locked(p.bytes, &artifact)?;
+                Ok(Downloaded {
+                    kind: artifact.kind,
+                    path,
+                    artifact,
+                    file,
+                })
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = artifact;
+                Err("Das Setup installiert nur unter Windows.".to_owned())
+            }
+        })
+        .collect()
+}
+
 /// Startet die geprüften Installationsprogramme (der Nutzer hat „Installieren“ gewählt):
 /// zuerst AEGIS Suite still nach „Programme“ (Windows fragt nach Administratorrechten), danach
-/// – falls gewählt – den Browser für dieses Konto.
+/// – falls gewählt – den Browser für dieses Konto. Offline-Setup: Die Pakete kommen aus dem
+/// Setup selbst (`browser` wählt den Browser); sonst die zuvor geladenen.
 #[tauri::command]
-pub async fn setup_install() -> Result<(), String> {
+pub async fn setup_install<R: Runtime>(app: AppHandle<R>, browser: bool) -> Result<(), String> {
     let busy = Busy::take()?;
     let dir = install_dir(&default_dir().display().to_string())?;
     let mut files = with_state(|s| std::mem::take(&mut s.downloaded));
+    if files.is_empty() && !payload::packages().is_empty() {
+        let handle = app.clone();
+        files = tauri::async_runtime::spawn_blocking(move || unpack(&handle, browser))
+            .await
+            .map_err(|e| e.to_string())??;
+    }
     if !files.iter().any(|d| d.kind == Kind::App) {
         with_state(|s| s.downloaded = files);
         return Err("Bitte zuerst herunterladen.".into());
@@ -461,9 +575,24 @@ mod tests {
     }
 
     #[test]
-    fn ohne_angaben_kein_download_und_keine_installation() {
-        let result = tauri::async_runtime::block_on(setup_install());
-        assert!(result.is_err());
+    fn eingebettete_pakete_werden_wie_downloads_geprueft() {
+        // Entwicklungs-Build: nichts eingebettet (Online-Setup).
+        assert!(payload::packages().is_empty());
+        let package = Package {
+            kind: Kind::App,
+            name: "AEGIS-Suite-Setup.exe",
+            sha256: "56d3fe6e0a2c2e0b3f8ad2b8d1d2c8fb5d8a5d0f1b3b7f1bfa5d3f2c55ad2c88",
+            bytes: b"harmlos",
+        };
+        let artifact = embedded_artifact(&package);
+        assert_eq!(artifact.size, 7);
+        // Falsche Prüfsumme: abgelehnt (genau wie bei einem Download).
+        assert!(aegis_update::check_file(package.bytes, &artifact).is_err());
+        let ok = Package {
+            sha256: Box::leak(aegis_update::sha256_hex(b"harmlos").into_boxed_str()),
+            ..package
+        };
+        assert!(aegis_update::check_file(ok.bytes, &embedded_artifact(&ok)).is_ok());
         assert_eq!(kind_name(Kind::Browser), "browser");
     }
 }

@@ -541,3 +541,10 @@ Manifeste tragen ein Datum (älter als 400 Tage: abgelehnt) und eine kontextgebu
 keine Downgrades. Updates laufen mit `/UPDATE` (keine Deinstallation, keine Datenfragen), der
 Hook hält den Dienst vorher an. Das „App-Daten löschen“-Kästchen der Tauri-Vorlage ist
 abgeschaltet (es löschte den Tresor ohne zweite Bestätigung).
+
+Nachtrag (Offline-Setup): `AEGIS-Setup.exe` bettet die Installationsprogramme von AEGIS Suite
+und AEGIS Browser beim Bauen ein (`AEGIS_SETUP_PAYLOAD_DIR`, `include_bytes!` – nur Daten,
+kein erzeugter Quelltext). Es installiert dann ohne Netz und ohne Signaturschlüssel: Die
+Pakete werden in gesperrte Dateien entpackt und gegen die beim Bauen berechnete SHA-256
+geprüft. Die Echtheit der Setup-Datei selbst sichert erst ein Code-Signing-Zertifikat. Die
+Windows-CI baut dieses Offline-Setup (Artefakt `aegis-windows-nsis`).
