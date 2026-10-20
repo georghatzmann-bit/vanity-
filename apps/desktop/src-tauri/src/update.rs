@@ -214,6 +214,11 @@ fn store_locked(
     let path = dir.join(&artifact.name);
     let mut file = aegis_winffi::fs::create_locked(&path).map_err(|e| e.to_string())?;
     aegis_update::store_checked(&mut file, body, artifact)?;
+    drop(file);
+    // Für den Start nur lesend neu öffnen (ein Handle mit Schreibrecht verhindert den Start)
+    // – weiter gegen Austausch gesperrt – und aus diesem Handle erneut prüfen.
+    let mut file = aegis_winffi::fs::open_read_locked(&path).map_err(|e| e.to_string())?;
+    aegis_update::recheck(&mut file, artifact)?;
     Ok((path, file))
 }
 

@@ -377,8 +377,10 @@ pub fn create_new(path: &Path) -> io::Result<File> {
 }
 
 /// Legt eine **neue** Datei an, die gegen Austausch gesperrt bleibt, solange das Handle offen
-/// ist: andere dürfen sie nur lesen (kein Schreiben, Umbenennen oder Löschen) – für geprüfte
-/// Installationsprogramme zwischen Prüfung und Start. Ohne Links, nie überschreiben.
+/// ist: andere dürfen sie nur lesen (kein Schreiben, Umbenennen oder Löschen) – zum Schreiben
+/// geprüfter Installationsprogramme. Zum Starten danach schließen und mit
+/// [`open_read_locked`] neu öffnen (ein Handle mit Schreibrecht verhindert den Start). Ohne
+/// Links, nie überschreiben.
 ///
 /// # Errors
 /// Ziel existiert, kein Zugriff, Link im Pfad.
@@ -406,6 +408,41 @@ pub fn create_locked(path: &Path) -> io::Result<File> {
         return Err(e);
     }
     Ok(file)
+}
+
+/// Öffnet eine Datei **nur lesend** und sperrt sie gegen Austausch, solange das Handle offen
+/// ist: andere dürfen sie lesen und ausführen, aber nicht schreiben, umbenennen oder löschen.
+/// Für geprüfte Installationsprogramme zwischen der letzten Prüfung und dem Start – ein
+/// Handle mit Schreibrecht (wie von [`create_locked`]) würde Windows den Start verweigern
+/// („Ein anderes Programm greift gerade auf diese Datei zu“). Ohne Links.
+///
+/// # Errors
+/// Datei fehlt, wird gerade geschrieben, ist ein Link oder Pfad weicht ab.
+pub fn open_read_locked(path: &Path) -> io::Result<File> {
+    let name = wide(path);
+    // SAFETY: `name` ist nullterminiert; nur Lesezugriff, OPEN_EXISTING, ohne Links zu folgen.
+    // aegis-unsafe: winffi-open-read-locked
+    #[allow(unsafe_code)]
+    // Nur Lesen (OPEN_EXISTING) – die Sperre verhindert Änderungen durch andere.
+    // aegis-mutation: winffi-open-read-locked-call
+    #[allow(clippy::disallowed_methods)]
+    let handle = unsafe {
+        CreateFileW(
+            name.as_ptr(),
+            GENERIC_READ,
+            FILE_SHARE_READ,
+            ptr::null(),
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
+            ptr::null_mut(),
+        )
+    };
+    let handle = own(handle)?;
+    if is_surrogate(&tag_info(handle.as_raw_handle())?) {
+        return Err(io::Error::other("Link statt Datei – abgelehnt"));
+    }
+    ensure_same_path(handle.as_raw_handle(), path)?;
+    Ok(File::from(handle))
 }
 
 /// Markiert die geöffnete Datei zum Löschen; entfernt wird sie beim Schließen des (einzigen)

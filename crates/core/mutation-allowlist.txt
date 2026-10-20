@@ -108,6 +108,8 @@ crates/winffi/src/fs.rs :: winffi-create-new :: Windows-FFI: legt eine Datei nur
 crates/winffi/src/fs.rs :: winffi-create-new-file :: Windows: legt eine Datei nur NEU an (CREATE_NEW); nur aus restore(ExecutionPermit) erreichbar.
 crates/winffi/src/fs.rs :: winffi-create-locked :: Windows-FFI: CreateFileW (CREATE_NEW, ohne Links, nur Lese-Freigabe) für geprüfte Installationsprogramme.
 crates/winffi/src/fs.rs :: winffi-create-locked-file :: Legt nur eine neue Datei an (nie überschreiben) – geprüfte Installationsprogramme im eigenen Temp-Ordner, gegen Austausch gesperrt bis zum Start.
+crates/winffi/src/fs.rs :: winffi-open-read-locked :: Windows-FFI: CreateFileW nur lesend (OPEN_EXISTING, ohne Links, nur Lese-Freigabe) – sperrt ein geprüftes Installationsprogramm bis zum Start gegen Austausch.
+crates/winffi/src/fs.rs :: winffi-open-read-locked-call :: Öffnet nur lesend (OPEN_EXISTING); die Lese-Freigabe verhindert Schreiben, Umbenennen und Löschen durch andere.
 crates/winffi/src/fs.rs :: winffi-delete-by-handle-call :: Windows: markiert eine exklusiv geöffnete Datei zum Löschen über ihr Handle; nur aus quarantine/restore (ExecutionPermit).
 crates/winffi/src/fs.rs :: winffi-create-secure-dir-call :: Windows: legt AEGIS-eigene Datenordner direkt mit Zugriffsliste SYSTEM/Administratoren an.
 crates/winffi/src/fs.rs :: winffi-open-existing-dir-call :: Windows: öffnet den vorhandenen AEGIS-Datenordner ohne Abzweigungen zu folgen, um Besitzer zu prüfen und die Zugriffsliste zu setzen.
@@ -468,3 +470,5 @@ crates/winffi/src/shell.rs :: winffi-shell-run-wait :: Windows-FFI (Setup): wart
 apps/desktop/src-tauri/src/update.rs :: update-download-dir :: Updates: eigener Ordner im Temp-Verzeichnis für das geprüfte Installationsprogramm.
 apps/setup/src-tauri/src/setup.rs :: setup-download-dir :: Setup: legt einen neuen, zufällig benannten eigenen Ordner im Temp-Ordner des Kontos für die geprüften Installationsprogramme an (nur nach „Laden und prüfen“).
 crates/service/src/server.rs :: service-purge-data :: Deinstallation: löscht den eigenen Datenordner (ProgramData\AEGIS) nur nach zwei getrennten Bestätigungen im Deinstallationsprogramm; folgt keinen Links.
+apps/setup/src-tauri/src/setup.rs :: setup-test-write-denied :: Test: versucht eine gesperrte Kopie von whoami.exe im eigenen Temp-Ordner zum Schreiben zu öffnen (muss scheitern).
+apps/setup/src-tauri/src/setup.rs :: setup-test-rename-denied :: Test: versucht eine gesperrte Kopie von whoami.exe im eigenen Temp-Ordner umzubenennen (muss scheitern).

@@ -412,6 +412,11 @@ fn store_locked(body: &[u8], artifact: &Artifact) -> Result<(PathBuf, std::fs::F
     let path = dir.join(&artifact.name);
     let mut file = aegis_winffi::fs::create_locked(&path).map_err(|e| e.to_string())?;
     aegis_update::store_checked(&mut file, body, artifact)?;
+    drop(file);
+    // Für den Start nur lesend neu öffnen (ein Handle mit Schreibrecht verhindert den Start)
+    // – weiter gegen Austausch gesperrt – und aus diesem Handle erneut prüfen.
+    let mut file = aegis_winffi::fs::open_read_locked(&path).map_err(|e| e.to_string())?;
+    aegis_update::recheck(&mut file, artifact)?;
     Ok((path, file))
 }
 
@@ -594,5 +599,39 @@ mod tests {
         };
         assert!(aegis_update::check_file(ok.bytes, &embedded_artifact(&ok)).is_ok());
         assert_eq!(kind_name(Kind::Browser), "browser");
+    }
+
+    /// Regression (Testversion): Das gesperrte, geprüfte Paket muss sich starten lassen und
+    /// darf sich währenddessen nicht ändern lassen. Prüfling: eine Kopie von `whoami.exe`.
+    #[cfg(windows)]
+    #[test]
+    fn entpacktes_paket_ist_startbar_und_gegen_austausch_gesperrt() {
+        let system = std::env::var_os("SystemRoot")
+            .map(PathBuf::from)
+            .unwrap()
+            .join("System32")
+            .join("whoami.exe");
+        let bytes = std::fs::read(&system).unwrap();
+        let artifact = Artifact {
+            kind: Kind::App,
+            name: "AEGIS-Test-whoami.exe".into(),
+            url: String::new(),
+            sha256: aegis_update::sha256_hex(&bytes),
+            size: u64::try_from(bytes.len()).unwrap(),
+        };
+        let (path, file) = store_locked(&bytes, &artifact).unwrap();
+        // Gesperrt: Schreiben und Umbenennen scheitern, solange das Setup das Handle hält.
+        // aegis-mutation: setup-test-write-denied
+        #[allow(clippy::disallowed_methods)]
+        let write = std::fs::OpenOptions::new().write(true).open(&path);
+        assert!(write.is_err());
+        // aegis-mutation: setup-test-rename-denied
+        #[allow(clippy::disallowed_methods)]
+        let renamed = std::fs::rename(&path, path.with_extension("bak"));
+        assert!(renamed.is_err());
+        // Startbar wie im Setup (ShellExecuteEx) – vorher: „Ein anderes Programm greift
+        // gerade auf diese Datei zu“.
+        assert_eq!(aegis_winffi::shell::run_and_wait(&path, "").unwrap(), 0);
+        drop(file);
     }
 }

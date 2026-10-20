@@ -211,6 +211,13 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
 5. [x] P13.5 Offline-Setup: `AEGIS-Setup.exe` enthält AEGIS Suite und Browser und installiert
        ohne Download („Installieren“ prüft und installiert sofort); Bau in der Windows-CI.
 
+6. [x] P13.6 Testversion als GitHub-Release „testversion“ (direkter Download der `.exe`).
+7. [x] P13.7 Fehler aus dem ersten echten Windows-Test: Das Setup hielt das entpackte Paket mit
+       Schreibrecht offen – Windows verweigerte den Start („Ein anderes Programm greift gerade
+       auf diese Datei zu“). Jetzt: schreiben, schließen, nur lesend gesperrt neu öffnen,
+       erneut prüfen, starten (gilt auch für den Updater); Windows-Regressionstest startet
+       eine gesperrte Kopie über ShellExecuteEx.
+
 **DoD P13:** `AEGIS-Setup.exe` mit eigener Animation und Klang lädt nur nach Klick, prüft
 Signatur, Datum, Version und SHA-256 und installiert erst nach „Installieren“; WebView2-Prüfung
 mit Hinweis; Installer bringt Dienst, Prüfprozess, Labor-Sonde, Tresor-Host und Erweiterungen
