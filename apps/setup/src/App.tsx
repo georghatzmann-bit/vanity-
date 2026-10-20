@@ -102,7 +102,7 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
   const install = () => {
     setError(null);
     setPhase('installing');
-    api.install(dir).then(
+    api.install().then(
       () => {
         setPhase('idle');
         setStep('done');
@@ -113,14 +113,6 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
         fail(e);
       },
     );
-  };
-
-  const pick = () => {
-    api.pickDir(dir).then((picked) => {
-      if (picked !== null) {
-        setDir(picked);
-      }
-    }, fail);
   };
 
   const canInstall = info !== null && info.enabled && info.windows;
@@ -226,20 +218,16 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
                 {t('disabled')}
               </p>
             )}
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium">{t('dir')}</span>
-              <span className="flex gap-2">
-                <input
-                  className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 text-sm focus:border-accent focus:outline-none"
-                  value={dir}
-                  spellCheck={false}
-                  onChange={(e) => setDir(e.target.value)}
-                />
-                <Button size="sm" variant="secondary" onClick={pick} disabled={!info?.windows}>
-                  {t('change')}
-                </Button>
-              </span>
-            </label>
+            <div className="space-y-1 text-sm">
+              <p className="font-medium">{t('dir')}</p>
+              <p
+                className="rounded-lg border border-border bg-surface-2 px-3 py-2"
+                data-testid="install-dir"
+              >
+                <SafeText value={dir} mono={false} breakAll={false} />
+              </p>
+              <p className="text-xs text-text-subtle">{t('dirHint')}</p>
+            </div>
             {offer === null ? (
               <Button
                 variant="secondary"
@@ -252,7 +240,14 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
               </Button>
             ) : (
               <div className="space-y-2 text-sm" data-testid="offer">
-                <p className="font-medium">{t('offer', { version: offer.version })}</p>
+                <p className="font-medium">
+                  {t('offer', { version: offer.version })}
+                  {offer.published !== '' && (
+                    <span className="ml-2 text-xs font-normal text-text-subtle">
+                      {t('published', { date: offer.published })}
+                    </span>
+                  )}
+                </p>
                 {offer.notes !== '' && (
                   <p className="whitespace-pre-line text-text-muted">
                     <SafeText value={offer.notes} mono={false} breakAll={false} />
@@ -278,11 +273,7 @@ export function App({ api, lang }: { readonly api: SetupApi; readonly lang: Lang
               <Button variant="ghost" onClick={() => go('privacy')}>
                 {t('back')}
               </Button>
-              <Button
-                variant="primary"
-                disabled={offer === null || dir.trim() === ''}
-                onClick={download}
-              >
+              <Button variant="primary" disabled={offer === null} onClick={download}>
                 {t('downloadInstall')}
               </Button>
             </div>

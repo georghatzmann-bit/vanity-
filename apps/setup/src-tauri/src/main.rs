@@ -5,6 +5,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![forbid(unsafe_code)]
 
+mod navigation;
 mod setup;
 mod webview2;
 
@@ -13,16 +14,30 @@ fn main() {
         webview2::offer_download();
         return;
     }
+    let context = tauri::generate_context!();
+    let config = context.config();
+    let use_https_scheme = config
+        .app
+        .windows
+        .iter()
+        .any(|window| window.use_https_scheme);
+    // Vite-Server nur im Entwicklungs-Build.
+    let dev_url = if cfg!(dev) {
+        config.build.dev_url.clone()
+    } else {
+        None
+    };
+    let policy = navigation::NavigationPolicy::new(use_https_scheme, dev_url.as_ref());
     let result = tauri::Builder::default()
+        .plugin(navigation::guard(policy))
         .invoke_handler(tauri::generate_handler![
             setup::setup_info,
             setup::setup_check,
             setup::setup_download,
             setup::setup_install,
             setup::setup_launch,
-            setup::setup_pick_dir,
         ])
-        .run(tauri::generate_context!());
+        .run(context);
     if let Err(error) = result {
         eprintln!("AEGIS-Setup konnte nicht starten: {error}");
         std::process::exit(1);

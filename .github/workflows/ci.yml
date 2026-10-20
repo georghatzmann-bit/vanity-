@@ -108,11 +108,11 @@ jobs:
       - run: cargo clippy --workspace --all-targets --all-features --release --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: pnpm test
-      # Das Installationsprogramm bringt Dienst, Prüfprozess, Tresor-Host und die Erweiterungen
+      # Das Installationsprogramm bringt Dienst, Prüfprozess, Labor-Sonde, Tresor-Host und die Erweiterungen
       # mit (apps/desktop/src-tauri/windows/hooks.nsh) – vorher bauen.
       - name: Dienst, Host und Erweiterungen bauen
         run: |
-          cargo build --release --locked -p aegis-service -p aegis-vault-host
+          cargo build --release --locked -p aegis-service -p aegis-vault-host -p aegis-sandbox --bins
           pnpm --filter @aegis/vault-extension --filter @aegis/webshield build
       # Argumente nach `--` reicht die Tauri-CLI an `cargo build` weiter.
       - name: Tauri-Build (NSIS)

@@ -533,3 +533,11 @@ geprüft, das Setup wartet auf den Exit-Code. WebView2: Fehlt die Laufzeit, öff
 „Ja“ nur die offizielle Microsoft-Seite – es lädt kein fremdes Programm selbst. Deinstallation
 bleibt Sache des NSIS-Uninstallers (D-059). Ohne eingebauten Signaturschlüssel lädt das Setup
 nichts und sagt das.
+
+Nachtrag P13.4 (Review): Installiert wird fest nach `C:\Program Files\AEGIS Suite` (der Dienst
+läuft als SYSTEM; ein frei gewählter Ordner könnte für Nutzer beschreibbar sein) – die Auswahl
+im Setup entfiel. Heruntergeladene Pakete bleiben bis zum Start gegen Austausch gesperrt;
+Manifeste tragen ein Datum (älter als 400 Tage: abgelehnt) und eine kontextgebundene Signatur;
+keine Downgrades. Updates laufen mit `/UPDATE` (keine Deinstallation, keine Datenfragen), der
+Hook hält den Dienst vorher an. Das „App-Daten löschen“-Kästchen der Tauri-Vorlage ist
+abgeschaltet (es löschte den Tresor ohne zweite Bestätigung).

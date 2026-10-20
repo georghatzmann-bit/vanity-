@@ -72,10 +72,67 @@ pub const DISPLAY_NAME: &str = "AEGIS Suite – Schutzdienst";
 /// Legt den Dienst an (automatischer Start, Konto LocalSystem, Argument `service`) und startet
 /// ihn. Nur vom Installationsprogramm aufgerufen (mit Administratorrechten, nach der
 /// Entscheidung des Nutzers zu installieren). Ist er schon da, wird nur der Pfad aktualisiert.
+/// Abgelehnt, wenn die Programmdatei nicht in einem eigenen, geschützten Ordner unter
+/// „Programme“ liegt; Fehler, wenn sich der Dienst gleich wieder beendet.
 ///
 /// # Errors
-/// Keine Rechte oder SCM meldet einen Fehler.
-pub fn install(exe: &std::path::Path) -> windows_service::Result<()> {
+/// Ort unsicher, keine Rechte, SCM meldet einen Fehler oder Dienst beendet sich.
+pub fn install(exe: &std::path::Path) -> Result<(), String> {
+    use windows_service::service::ServiceAccess;
+    use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
+
+    trusted_location(exe)?;
+    install_service(exe).map_err(|e| e.to_string())?;
+    // Läuft er wirklich? (Er beendet sich z. B., wenn der Datenordner nicht sicher ist.)
+    let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
+        .map_err(|e| e.to_string())?;
+    let service = manager
+        .open_service(SERVICE_NAME, ServiceAccess::QUERY_STATUS)
+        .map_err(|e| e.to_string())?;
+    for _ in 0..20 {
+        std::thread::sleep(Duration::from_millis(250));
+        if service
+            .query_status()
+            .map_err(|e| e.to_string())?
+            .current_state
+            == ServiceState::Stopped
+        {
+            return Err("Der Schutzdienst wurde angelegt, hat sich aber gleich wieder beendet (Datenordner prüfen).".into());
+        }
+    }
+    Ok(())
+}
+
+/// Der Dienst läuft als SYSTEM – seine Programmdatei muss deshalb unter „Programme“ liegen
+/// (dort dürfen nur Administratoren schreiben) und samt Ordner SYSTEM/Administratoren gehören.
+fn trusted_location(exe: &std::path::Path) -> Result<(), String> {
+    use aegis_winffi::inspect::{Hive, read_values};
+    let program_files = read_values(
+        &Hive::LocalMachine,
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion",
+    )
+    .into_iter()
+    .find(|v| v.name.eq_ignore_ascii_case("ProgramFilesDir"))
+    .map(|v| std::path::PathBuf::from(v.data))
+    .ok_or("Ordner „Programme“ unbekannt")?;
+    let exe = aegis_winffi::long_path(exe).map_err(|e| e.to_string())?;
+    let dir = exe.parent().ok_or("kein Ordner")?;
+    let inside = dir.parent().is_some_and(|p| {
+        p.as_os_str()
+            .eq_ignore_ascii_case(program_files.as_os_str())
+    });
+    let owned = |p: &std::path::Path| aegis_winffi::owner_is_trusted(p).unwrap_or(false);
+    if !inside || !owned(dir) || !owned(&exe) {
+        return Err(format!(
+            "{} liegt nicht in einem eigenen Ordner unter {} mit Besitzer SYSTEM/Administratoren – der Dienst wird nicht eingerichtet.",
+            exe.display(),
+            program_files.display()
+        ));
+    }
+    Ok(())
+}
+
+fn install_service(exe: &std::path::Path) -> windows_service::Result<()> {
     use windows_service::service::{
         ServiceAccess, ServiceErrorControl, ServiceInfo, ServiceStartType,
     };
@@ -129,6 +186,41 @@ pub fn install(exe: &std::path::Path) -> windows_service::Result<()> {
     Ok(())
 }
 
+/// Hält den Dienst an, ohne ihn zu entfernen (Installationsprogramm vor dem Ersetzen der
+/// Dateien bei einem Update). Fehlt er: kein Fehler.
+///
+/// # Errors
+/// Keine Rechte oder SCM meldet einen Fehler.
+pub fn stop() -> windows_service::Result<()> {
+    use windows_service::service::ServiceAccess;
+    use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
+
+    let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)?;
+    let Ok(service) = manager.open_service(
+        SERVICE_NAME,
+        ServiceAccess::QUERY_STATUS | ServiceAccess::STOP,
+    ) else {
+        return Ok(());
+    };
+    stop_and_wait(&service)
+}
+
+fn stop_and_wait(service: &windows_service::service::Service) -> windows_service::Result<()> {
+    if service.query_status()?.current_state != ServiceState::Stopped {
+        // Installation/Deinstallation: hält den eigenen Dienst an.
+        // aegis-mutation: scm-stop
+        #[allow(clippy::disallowed_methods)]
+        let _ = service.stop();
+        for _ in 0..50 {
+            if service.query_status()?.current_state == ServiceState::Stopped {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    }
+    Ok(())
+}
+
 /// Hält den Dienst an und entfernt ihn (nur vom Deinstallationsprogramm aufgerufen, nach der
 /// Entscheidung des Nutzers zu deinstallieren). Fehlt er: kein Fehler.
 ///
@@ -145,18 +237,7 @@ pub fn uninstall() -> windows_service::Result<()> {
     ) else {
         return Ok(());
     };
-    if service.query_status()?.current_state != ServiceState::Stopped {
-        // Deinstallation: hält den eigenen Dienst an.
-        // aegis-mutation: scm-uninstall-stop
-        #[allow(clippy::disallowed_methods)]
-        let _ = service.stop();
-        for _ in 0..50 {
-            if service.query_status()?.current_state == ServiceState::Stopped {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(200));
-        }
-    }
+    stop_and_wait(&service)?;
     // Deinstallation: entfernt den eigenen Dienst.
     // aegis-mutation: scm-uninstall-delete
     #[allow(clippy::disallowed_methods)]

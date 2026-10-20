@@ -22,6 +22,7 @@ const info: Info = {
 
 const offer: Offer = {
   version: '0.2.0',
+  published: '2026-10-20',
   notes: 'Neu: <b>Browser</b>',
   components: [
     { kind: 'app', name: 'AEGIS-Suite-0.2.0-x64-setup.exe', size: 12 * 1024 * 1024 },
@@ -39,12 +40,8 @@ function fakeApi(overrides: Partial<Info> = {}) {
       emit?.({ name: 'AEGIS-Suite-0.2.0-x64-setup.exe', done: 6, total: 12, stage: 'download' });
       return Promise.resolve();
     }),
-    install: vi.fn((dir: string) => {
-      void dir;
-      return Promise.resolve();
-    }),
+    install: vi.fn(() => Promise.resolve()),
     launch: vi.fn(() => Promise.resolve()),
-    pickDir: vi.fn(() => Promise.resolve('D:\\Apps\\AEGIS Suite')),
     onProgress: vi.fn((listener: (p: Progress) => void) => {
       emit = listener;
       return Promise.resolve(() => undefined);
@@ -65,20 +62,22 @@ describe('Setup-Assistent', () => {
     const api = fakeApi();
     render(<App api={api} lang="de" />);
     await toOptions();
-    const field = await screen.findByLabelText('Installationsordner');
-    await waitFor(() => expect(field).toHaveValue('C:\\Program Files\\AEGIS Suite'));
+    // Fester Ordner unter „Programme“ – keine Auswahl.
+    await waitFor(() =>
+      expect(screen.getByTestId('install-dir')).toHaveTextContent('C:\\Program Files\\AEGIS Suite'),
+    );
+    expect(screen.queryByRole('button', { name: /Ändern/ })).toBeNull();
     // Kein Netz von selbst.
     expect(api.check).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Laden und prüfen' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Neueste Version suchen' }));
     const found = await screen.findByTestId('offer');
     expect(found).toHaveTextContent('Version 0.2.0');
+    expect(found).toHaveTextContent('veröffentlicht am 2026-10-20 (signiert)');
     // Hinweise der Angaben nur als Text.
     expect(found.querySelector('b')).toBeNull();
     expect(found).toHaveTextContent('12,0 MB');
     fireEvent.click(within(found).getByRole('switch', { name: /AEGIS Browser/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Ändern …' }));
-    await waitFor(() => expect(field).toHaveValue('D:\\Apps\\AEGIS Suite'));
     expect(api.download).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Laden und prüfen' }));
     await waitFor(() => expect(api.download).toHaveBeenCalledWith(true));
@@ -86,7 +85,7 @@ describe('Setup-Assistent', () => {
     expect(screen.getByText('Alles geladen und geprüft.')).toBeTruthy();
     expect(api.install).not.toHaveBeenCalled();
     fireEvent.click(install);
-    await waitFor(() => expect(api.install).toHaveBeenCalledWith('D:\\Apps\\AEGIS Suite'));
+    await waitFor(() => expect(api.install).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('AEGIS ist installiert')).toBeTruthy();
     expect(api.launch).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'AEGIS starten' }));
@@ -127,12 +126,14 @@ describe('Setup-Assistent', () => {
     });
     const o = parseOffer({
       version: '1.0.0',
+      published: '2026-10-20<b>',
       components: [
         { kind: 'evil', name: 'x', size: 1 },
         { kind: 'browser', name: 'b', size: -5 },
       ],
     });
     expect(o.components).toEqual([{ kind: 'browser', name: 'b', size: 0 }]);
+    expect(o.published).toBe('');
     expect(parseProgress({ stage: 'boom', done: 'x' })).toEqual({
       name: '',
       done: 0,

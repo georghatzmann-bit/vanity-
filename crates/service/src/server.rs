@@ -527,6 +527,33 @@ where
 // Verändernde Aufrufe – nur AEGIS-eigene Daten, jeweils markiert.
 // ---------------------------------------------------------------------------------------
 
+/// Löscht den Datenordner des Dienstes endgültig (Quarantäne, Protokolle, Einstellungen) –
+/// **nur** vom Deinstallationsprogramm aufgerufen, nachdem der Nutzer zweimal getrennt „Ja“
+/// gesagt hat. Links und Abzweigungen darin werden nur selbst entfernt, nie verfolgt
+/// (`remove_dir_all` der Standardbibliothek). Fehlt der Ordner: kein Fehler.
+///
+/// # Errors
+/// Ordner unbekannt oder nicht löschbar.
+pub fn purge_data() -> io::Result<()> {
+    let config = ServerConfig::default_for_platform()
+        .ok_or_else(|| io::Error::other("Datenordner unbekannt"))?;
+    purge_dir(&config.data_dir)
+}
+
+fn purge_dir(dir: &Path) -> io::Result<()> {
+    match std::fs::symlink_metadata(dir) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+        Ok(_) => {
+            // Endgültiges Löschen des eigenen Datenordners nach zwei Bestätigungen im
+            // Deinstallationsprogramm.
+            // aegis-mutation: service-purge-data
+            #[allow(clippy::disallowed_methods)]
+            std::fs::remove_dir_all(dir)
+        }
+    }
+}
+
 /// Windows: mit Zugriffsliste anlegen bzw. Besitzer/Links prüfen (`aegis-winffi`); auch alle
 /// vorhandenen Inhalte müssen SYSTEM/Administratoren gehören und dürfen keine Links sein
 /// (sonst könnte ein früher hineingelegter Schlüssel oder Eintrag eines Nutzers verwendet
@@ -629,4 +656,22 @@ fn truncate_torn_tail(path: &Path, valid_len: u64) -> io::Result<()> {
     #[allow(clippy::disallowed_methods)]
     let result = file.set_len(valid_len);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::purge_dir;
+    use aegis_core::testing::write_fixture;
+
+    #[test]
+    fn datenordner_loeschen_nur_der_ordner_und_fehlend_ist_kein_fehler() {
+        let root = tempfile::tempdir().unwrap();
+        let data = root.path().join("AEGIS");
+        write_fixture(root.path(), "AEGIS/quarantine/eintrag.bin", b"harmlos").unwrap();
+        write_fixture(root.path(), "nachbar.txt", b"bleibt").unwrap();
+        purge_dir(&data).unwrap();
+        assert!(!data.exists());
+        assert!(root.path().join("nachbar.txt").exists());
+        purge_dir(&data).unwrap();
+    }
 }

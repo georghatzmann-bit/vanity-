@@ -27,6 +27,14 @@ pub const MANIFEST_PATH: &str = "/georghatzmann-bit/vanity-/releases/latest/down
 pub const MAX_MANIFEST: usize = 256 * 1024;
 /// Größte Datei eines Updates.
 pub const MAX_FILE: u64 = 512 * 1024 * 1024;
+/// Signiert wird `SIGNING_CONTEXT` + Manifest (Domänen-Trennung: eine AEGIS-Signatur passt
+/// nie auf etwas anderes).
+pub const SIGNING_CONTEXT: &[u8] = b"AEGIS-Update-Manifest-v1\n";
+/// Ältere Angaben gelten als veraltet (Schutz vor dem Wiedereinspielen alter, gültig
+/// signierter Manifeste).
+pub const MAX_AGE_DAYS: i64 = 400;
+/// Pfad-Anfang der eigenen Release-Seiten auf github.com (Weiterleitungen nur dorthin).
+pub const REPO_PATH: &str = "/georghatzmann-bit/vanity-/";
 
 /// Art einer Datei.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,7 +70,7 @@ pub struct Artifact {
 pub struct Manifest {
     /// Version (`1.2.3`).
     pub version: String,
-    /// Veröffentlicht (RFC 3339).
+    /// Veröffentlicht (`JJJJ-MM-TT`, UTC).
     pub published: String,
     /// Kurze Hinweise zur Version.
     pub notes: String,
@@ -128,7 +136,10 @@ fn valid_hex(text: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-fn valid_name(name: &str) -> bool {
+/// Zulässiger Dateiname einer Release-Datei (`.exe`, nur Buchstaben, Ziffern und `._-`) –
+/// gilt gleich für das Release-Werkzeug und die Prüfung.
+#[must_use]
+pub fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 120
         && name.ends_with(".exe")
@@ -138,15 +149,79 @@ fn valid_name(name: &str) -> bool {
         && !name.starts_with('.')
 }
 
-/// Version als Zahlen (`1.2.3` → `[1, 2, 3]`); `None` bei anderem Format.
+/// Version als Zahlen (`1.2.3` → `[1, 2, 3]`); `None` bei anderem Format (streng: nur
+/// Ziffern, keine führenden Nullen, kein Vorzeichen, kein Präfix).
 #[must_use]
 pub fn parse_version(text: &str) -> Option<[u64; 3]> {
-    let mut parts = text.trim().trim_start_matches('v').split('.');
+    let mut parts = text.split('.');
     let mut out = [0u64; 3];
     for slot in &mut out {
-        *slot = parts.next()?.parse().ok()?;
+        let part = parts.next()?;
+        if part.is_empty()
+            || part.len() > 9
+            || !part.bytes().all(|b| b.is_ascii_digit())
+            || (part.len() > 1 && part.starts_with('0'))
+        {
+            return None;
+        }
+        *slot = part.parse().ok()?;
     }
     parts.next().is_none().then_some(out)
+}
+
+/// Tage seit 1970-01-01 für ein Datum `JJJJ-MM-TT` (`None` bei anderem Format).
+#[must_use]
+pub fn date_days(text: &str) -> Option<i64> {
+    let bytes = text.as_bytes();
+    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+        return None;
+    }
+    let num = |r: std::ops::Range<usize>| -> Option<i64> {
+        let part = text.get(r)?;
+        part.bytes()
+            .all(|b| b.is_ascii_digit())
+            .then(|| part.parse().ok())?
+    };
+    let (y, m, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    // Algorithmus „days_from_civil“ (H. Hinnant).
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146_097 + doe - 719_468)
+}
+
+/// Heutiges Datum (UTC) als `JJJJ-MM-TT`.
+#[must_use]
+pub fn today() -> String {
+    let days = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_secs() / 86_400).unwrap_or(0));
+    // Umkehrung von `date_days` („civil_from_days“).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// Sind die Angaben frisch genug (veröffentlicht vor höchstens [`MAX_AGE_DAYS`] Tagen und
+/// nicht mehr als einen Tag in der Zukunft)?
+#[must_use]
+pub fn fresh(published: &str, today: &str) -> bool {
+    date_days(published)
+        .zip(date_days(today))
+        .is_some_and(|(p, t)| p <= t + 1 && t - p <= MAX_AGE_DAYS)
 }
 
 /// Ist `candidate` neuer als `current`?
@@ -172,7 +247,7 @@ pub fn verify_with(bytes: &[u8], key: &VerifyingKey) -> Result<Manifest, Error> 
         .and_then(|b| b.try_into().ok())
         .ok_or(Error::Signature)?;
     key.verify_strict(
-        signed.manifest.as_bytes(),
+        &signing_payload(&signed.manifest),
         &Signature::from_bytes(&signature),
     )
     .map_err(|_| Error::Signature)?;
@@ -180,6 +255,9 @@ pub fn verify_with(bytes: &[u8], key: &VerifyingKey) -> Result<Manifest, Error> 
         serde_json::from_str(&signed.manifest).map_err(|e| Error::Format(e.to_string()))?;
     if parse_version(&manifest.version).is_none() {
         return Err(Error::Invalid("Version".into()));
+    }
+    if date_days(&manifest.published).is_none() {
+        return Err(Error::Invalid("Datum".into()));
     }
     if manifest.files.is_empty() || manifest.files.len() > 8 {
         return Err(Error::Invalid("Dateien".into()));
@@ -198,6 +276,14 @@ pub fn verify_with(bytes: &[u8], key: &VerifyingKey) -> Result<Manifest, Error> 
         }
     }
     Ok(manifest)
+}
+
+/// Die signierten Bytes: Kontext + Manifest-Text.
+#[must_use]
+pub fn signing_payload(manifest: &str) -> Vec<u8> {
+    let mut payload = SIGNING_CONTEXT.to_vec();
+    payload.extend_from_slice(manifest.as_bytes());
+    payload
 }
 
 /// Wie [`verify_with`], mit dem eingebauten Schlüssel.
@@ -237,6 +323,40 @@ pub fn check_file(bytes: &[u8], artifact: &Artifact) -> Result<(), Error> {
     Ok(())
 }
 
+/// Schreibt die geladene Datei in `file` (frisch angelegt, gegen Austausch gesperrt) und
+/// prüft sie danach **aus derselben Datei** gegen die signierte Angabe.
+///
+/// # Errors
+/// Schreiben/Lesen fehlgeschlagen oder Datei passt nicht.
+pub fn store_checked<F>(file: &mut F, body: &[u8], artifact: &Artifact) -> Result<(), String>
+where
+    F: std::io::Read + std::io::Write + std::io::Seek,
+{
+    file.write_all(body)
+        .and_then(|()| file.flush())
+        .map_err(|e| e.to_string())?;
+    recheck(file, artifact)
+}
+
+/// Prüft die Datei hinter `file` (vom Anfang gelesen) erneut gegen die signierte Angabe –
+/// unmittelbar vor dem Start.
+///
+/// # Errors
+/// Lesen fehlgeschlagen oder Datei passt nicht.
+pub fn recheck<F>(file: &mut F, artifact: &Artifact) -> Result<(), String>
+where
+    F: std::io::Read + std::io::Seek,
+{
+    use std::io::Read as _;
+    file.seek(std::io::SeekFrom::Start(0))
+        .map_err(|e| e.to_string())?;
+    let mut bytes = Vec::with_capacity(usize::try_from(artifact.size).unwrap_or(0));
+    std::io::Read::take(file.by_ref(), artifact.size.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    check_file(&bytes, artifact).map_err(|e| e.to_string())
+}
+
 /// Host und Pfad einer erlaubten Download-Adresse (für den HTTPS-Abruf).
 #[must_use]
 pub fn host_and_path(url: &str) -> Option<(&'static str, String)> {
@@ -249,7 +369,7 @@ pub fn host_and_path(url: &str) -> Option<(&'static str, String)> {
                 && part != ".."
                 && part
                     .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b"._-+".contains(&b))
+                    .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
         });
     ok.then(|| {
         (
@@ -303,6 +423,10 @@ pub fn redirect_target(current_host: &str, location: &str) -> Option<(&'static s
         return None;
     };
     let host = DOWNLOAD_HOSTS.into_iter().find(|h| *h == host)?;
+    // Auf github.com nur die eigenen Release-Seiten (nicht fremde Projekte).
+    if host == "github.com" && !path.starts_with(REPO_PATH) {
+        return None;
+    }
     clean(&path).then_some((host, path))
 }
 
@@ -344,13 +468,14 @@ pub mod sign {
     use base64::engine::general_purpose::STANDARD;
     use ed25519_dalek::{Signer, SigningKey};
 
-    use super::{Manifest, Signed};
+    use super::{Manifest, Signed, signing_payload};
 
     /// Neues Schlüsselpaar: (geheim, öffentlich), je Base64.
     ///
     /// # Errors
     /// Kein Zufall vom Betriebssystem.
     pub fn keypair() -> Result<(String, String), String> {
+        // (Öffentlicher Schlüssel zum geheimen: `public_of`.)
         let mut seed = [0u8; 32];
         getrandom::fill(&mut seed).map_err(|e| e.to_string())?;
         let key = SigningKey::from_bytes(&seed);
@@ -359,6 +484,19 @@ pub mod sign {
             STANDARD.encode(key.to_bytes()),
             STANDARD.encode(key.verifying_key().to_bytes()),
         ))
+    }
+
+    /// Öffentlicher Schlüssel (Base64) zum geheimen Schlüssel (Base64).
+    ///
+    /// # Errors
+    /// Schlüssel ungültig.
+    pub fn public_of(secret: &str) -> Result<String, String> {
+        let bytes: [u8; 32] = STANDARD
+            .decode(secret.trim())
+            .ok()
+            .and_then(|b| b.try_into().ok())
+            .ok_or("geheimer Schlüssel ungültig")?;
+        Ok(STANDARD.encode(SigningKey::from_bytes(&bytes).verifying_key().to_bytes()))
     }
 
     /// Signiert ein Manifest mit dem geheimen Schlüssel (Base64).
@@ -373,7 +511,7 @@ pub mod sign {
             .ok_or("geheimer Schlüssel ungültig")?;
         let key = SigningKey::from_bytes(&bytes);
         let text = serde_json::to_string(manifest).map_err(|e| e.to_string())?;
-        let signature = key.sign(text.as_bytes());
+        let signature = key.sign(&signing_payload(&text));
         Ok(Signed {
             manifest: text,
             signature: STANDARD.encode(signature.to_bytes()),
@@ -393,7 +531,7 @@ mod tests {
     fn manifest(url: &str) -> Manifest {
         Manifest {
             version: "1.2.0".into(),
-            published: "2026-10-20T00:00:00Z".into(),
+            published: "2026-10-20".into(),
             notes: "Test".into(),
             files: vec![Artifact {
                 kind: Kind::App,
@@ -407,7 +545,7 @@ mod tests {
 
     fn signed(m: &Manifest, key: &SigningKey) -> Vec<u8> {
         let text = serde_json::to_string(m).unwrap_or_default();
-        let sig = key.sign(text.as_bytes());
+        let sig = key.sign(&signing_payload(&text));
         serde_json::to_vec(&Signed {
             manifest: text,
             signature: STANDARD.encode(sig.to_bytes()),
@@ -435,6 +573,24 @@ mod tests {
             verify_with(&serde_json::to_vec(&tampered).unwrap(), &k.verifying_key()),
             Err(Error::Signature)
         );
+        // Signatur ohne Kontext (z. B. über dieselben Bytes für einen anderen Zweck): abgelehnt.
+        let text = serde_json::to_string(&m).unwrap();
+        let bare = serde_json::to_vec(&Signed {
+            signature: STANDARD.encode(k.sign(text.as_bytes()).to_bytes()),
+            manifest: text,
+        })
+        .unwrap();
+        assert_eq!(
+            verify_with(&bare, &k.verifying_key()),
+            Err(Error::Signature)
+        );
+        // Datum muss JJJJ-MM-TT sein.
+        let mut undated = m.clone();
+        undated.published = "gestern".into();
+        assert!(matches!(
+            verify_with(&signed(&undated, &k), &k.verifying_key()),
+            Err(Error::Invalid(_))
+        ));
     }
 
     #[test]
@@ -502,8 +658,11 @@ mod tests {
             ))
         );
         assert_eq!(
-            redirect_target("github.com", "https://GitHub.com:443/x"),
-            Some(("github.com", "/x".to_owned()))
+            redirect_target(
+                "github.com",
+                "https://GitHub.com:443/georghatzmann-bit/vanity-/x"
+            ),
+            Some(("github.com", "/georghatzmann-bit/vanity-/x".to_owned()))
         );
         for bad in [
             "http://github.com/x",
@@ -521,6 +680,12 @@ mod tests {
         }
         // Relativ nur auf erlaubtem Host.
         assert_eq!(redirect_target("evil.example", "/x"), None);
+        // Auf github.com nur die eigenen Release-Seiten.
+        assert_eq!(
+            redirect_target("github.com", "https://github.com/someone/else/x"),
+            None
+        );
+        assert_eq!(redirect_target("github.com", "/someone/else/x"), None);
     }
 
     #[test]
@@ -548,7 +713,7 @@ mod tests {
         let mut count = 0;
         let endless = get_following("github.com", "/a", |_, _| {
             count += 1;
-            Ok(hop("/a"))
+            Ok(hop("/georghatzmann-bit/vanity-/a"))
         });
         assert!(endless.is_err());
         assert_eq!(count, MAX_REDIRECTS + 1);
@@ -572,7 +737,48 @@ mod tests {
         assert!(!newer("1.0.0", "1.0.0"));
         assert!(!newer("1.0.0", "0.9.0"));
         assert!(!newer("1.0.0", "1.0"));
-        assert_eq!(parse_version("v2.10.3"), Some([2, 10, 3]));
+        assert_eq!(parse_version("2.10.3"), Some([2, 10, 3]));
+        assert_eq!(parse_version("0.0.0"), Some([0, 0, 0]));
+        for bad in [
+            "v2.10.3", "+1.2.3", "01.2.3", "1.2.3.4", "1.-2.3", " 1.2.3", "1.2.3a", "",
+        ] {
+            assert_eq!(parse_version(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn gespeichert_und_erneut_geprueft() {
+        let m = manifest(URL);
+        let mut file = std::io::Cursor::new(Vec::new());
+        assert!(store_checked(&mut file, b"harmlos", &m.files[0]).is_ok());
+        assert!(recheck(&mut file, &m.files[0]).is_ok());
+        // Nachträglich verändert (gleiche Länge oder länger): abgelehnt.
+        file.get_mut().clone_from(&b"harmlo5".to_vec());
+        assert!(recheck(&mut file, &m.files[0]).is_err());
+        file.get_mut().clone_from(&b"harmlos und mehr".to_vec());
+        assert!(recheck(&mut file, &m.files[0]).is_err());
+    }
+
+    #[test]
+    fn datum_und_frische() {
+        assert_eq!(date_days("1970-01-01"), Some(0));
+        assert_eq!(date_days("2000-03-01"), Some(11_017));
+        assert_eq!(date_days("2026-10-20"), Some(20_746));
+        for bad in [
+            "2026-1-20",
+            "2026-13-01",
+            "2026-10-32",
+            "2026-10-20T00:00:00Z",
+            "abcd-ef-gh",
+        ] {
+            assert_eq!(date_days(bad), None, "{bad}");
+        }
+        assert!(date_days(&today()).is_some());
+        assert!(fresh("2026-10-20", "2026-10-20"));
+        assert!(fresh("2025-10-01", "2026-10-20"));
+        assert!(!fresh("2025-01-01", "2026-10-20"));
+        assert!(!fresh("2026-10-25", "2026-10-20"));
+        assert!(!fresh("neu", "2026-10-20"));
     }
 
     #[test]

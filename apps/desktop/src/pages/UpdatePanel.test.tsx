@@ -14,6 +14,7 @@ const base: UpdateView = {
   enabled: true,
   current: '0.1.0',
   latest: null,
+  published: null,
   notes: '',
   newer: false,
   ready: false,
@@ -24,7 +25,13 @@ function fakeUpdates(enabled = true) {
   const api = {
     status: vi.fn(() => Promise.resolve(view)),
     check: vi.fn(() => {
-      view = { ...view, latest: '0.2.0', newer: true, notes: 'Neu: <b>Schutz</b>' };
+      view = {
+        ...view,
+        latest: '0.2.0',
+        published: '2026-10-20',
+        newer: true,
+        notes: 'Neu: <b>Schutz</b>',
+      };
       return Promise.resolve(view);
     }),
     download: vi.fn(() => {
@@ -59,6 +66,7 @@ describe('UpdatePanel', () => {
     expect(updates.check).not.toHaveBeenCalled();
     fireEvent.click(check);
     await within(panel).findByText('Version 0.2.0 ist verfügbar (installiert: 0.1.0).');
+    expect(within(panel).getByText('Veröffentlicht am 2026-10-20 (signiert).')).toBeTruthy();
     // Fremde Hinweise nur als Text.
     expect(within(panel).getByText('Neu: <b>Schutz</b>')).toBeTruthy();
     expect(updates.download).not.toHaveBeenCalled();
@@ -93,11 +101,19 @@ describe('UpdatePanel', () => {
       enabled: false,
       current: '',
       latest: null,
+      published: null,
       notes: '',
       newer: false,
       ready: false,
     });
-    const v = parseUpdate({ enabled: 'ja', latest: 7, notes: 'x'.repeat(5000), newer: true });
+    const v = parseUpdate({
+      enabled: 'ja',
+      latest: 7,
+      published: '20.10.2026<script>',
+      notes: 'x'.repeat(5000),
+      newer: true,
+    });
+    expect(v.published).toBeNull();
     expect(v.enabled).toBe(false);
     expect(v.latest).toBeNull();
     expect(v.notes).toHaveLength(2000);

@@ -92,7 +92,8 @@ pub fn https_get(
 }
 
 /// Wie [`https_get`], meldet beim Lesen den Fortschritt: (gelesene Bytes, `Content-Length`
-/// oder 0, wenn unbekannt).
+/// oder 0, wenn unbekannt). Eine angekündigte Größe über `max_bytes` wird sofort abgelehnt;
+/// der ganze Abruf darf höchstens dreimal `timeout_ms` dauern.
 ///
 /// # Errors
 /// Wie [`https_get`].
@@ -271,8 +272,18 @@ pub fn https_get_progress(
             ptr::null_mut(),
         )
     };
-    let mut body = Vec::new();
+    // Eine angekündigte Größe über der Grenze gar nicht erst lesen; sonst genau so viel
+    // Platz vorsehen (kein Verdoppeln großer Puffer).
+    if usize::try_from(length).map_or(true, |l| l > max_bytes) {
+        return Err(io::Error::other("Antwort zu groß"));
+    }
+    let mut body = Vec::with_capacity(usize::try_from(length).unwrap_or(0));
     let mut chunk = vec![0u8; 64 * 1024];
+    // Gesamtfrist: Ein Server, der Byte für Byte tröpfelt, hält den Abruf nicht ewig auf.
+    let deadline = std::time::Instant::now()
+        + std::time::Duration::from_millis(
+            u64::try_from(timeout_ms).unwrap_or(0).saturating_mul(3),
+        );
     loop {
         let mut read = 0u32;
         // SAFETY: gültiges Anfrage-Handle; Puffer mit angegebener Länge.
@@ -295,6 +306,12 @@ pub fn https_get_progress(
         }
         body.extend_from_slice(&chunk[..read]);
         progress(u64::try_from(body.len()).unwrap_or(u64::MAX), length);
+        if std::time::Instant::now() > deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "Abruf dauert zu lange",
+            ));
+        }
     }
     Ok(Response {
         status: u16::try_from(status).unwrap_or(0),

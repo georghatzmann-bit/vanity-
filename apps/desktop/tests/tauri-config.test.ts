@@ -273,14 +273,35 @@ describe('Installer (NSIS)', () => {
     expect(nsis.installerHooks).toBe('windows/hooks.nsh');
   });
 
-  it('Deinstallation behält die Daten, außer nach zwei Bestätigungen (still: immer behalten)', () => {
+  it('Deinstallation behält die Daten, außer nach zwei Bestätigungen (still und bei Updates: immer behalten)', () => {
     const hooks = readFileSync(new URL('../src-tauri/windows/hooks.nsh', import.meta.url), 'utf8');
-    const deleteAt = hooks.indexOf('RMDir /r "$COMMONAPPDATA\\AEGIS"');
+    const deleteAt = hooks.indexOf('purge-data --confirmed-twice');
     expect(deleteAt).toBeGreaterThan(0);
-    const before = hooks.slice(0, deleteAt);
+    const before = hooks.slice(hooks.indexOf('!macro NSIS_HOOK_PREUNINSTALL'), deleteAt);
     expect(before.match(/MessageBox MB_YESNO[^\n]*\/SD IDNO/g)).toHaveLength(2);
+    expect(before).toContain('${If} $UpdateMode <> 1');
+    // Das Kästchen „App-Daten löschen“ der Vorlage würde den Tresor mit einem Klick löschen.
+    expect(before).toContain('StrCpy $DeleteAppDataCheckboxState 0');
+    // Kein eigenes rekursives Löschen des Datenordners (das folgt Abzweigungen).
+    expect(hooks).not.toContain('RMDir /r "$COMMONAPPDATA');
     expect(hooks).toContain('aegis-service.exe" install');
     expect(hooks).toContain('aegis-service.exe" uninstall');
+  });
+
+  it('installiert nur nach „Programme“, hält den Dienst vor dem Ersetzen an, keine Downgrades', () => {
+    const hooks = readFileSync(new URL('../src-tauri/windows/hooks.nsh', import.meta.url), 'utf8');
+    const pre = hooks.slice(
+      hooks.indexOf('!macro NSIS_HOOK_PREINSTALL'),
+      hooks.indexOf('!macro NSIS_HOOK_POSTINSTALL'),
+    );
+    expect(pre).toContain('StrCmp $INSTDIR "$PROGRAMFILES64\\${PRODUCTNAME}"');
+    expect(pre).toContain('aegis-service.exe" stop');
+    expect(hooks).toContain('aegis-sandbox-probe.exe');
+    expect(tauriConfig.bundle.windows.allowDowngrades).toBe(false);
+    expect(tauriConfig.bundle.windows.webviewInstallMode).toEqual({
+      type: 'embedBootstrapper',
+      silent: true,
+    });
   });
 
   it('spricht Deutsch zuerst, Englisch als zweite Sprache (Rückfall: Deutsch)', () => {

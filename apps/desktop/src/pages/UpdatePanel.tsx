@@ -77,6 +77,11 @@ export function UpdatePanel({ updates }: { readonly updates: UpdatesApi }) {
             <p className="font-medium text-text">
               {t('updater.available', { version: view.latest, current: view.current })}
             </p>
+            {view.published !== null && (
+              <p className="text-xs text-text-subtle">
+                {t('updater.published', { date: view.published })}
+              </p>
+            )}
             {view.notes !== '' && (
               <p className="whitespace-pre-line text-text-muted">
                 <SafeText value={view.notes} />

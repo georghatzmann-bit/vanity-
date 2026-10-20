@@ -53,7 +53,9 @@ getrennte Bestätigung; es gibt kein automatisches Löschen nach Fristen, nur Er
 2. Alternativ das Installationsprogramm `AEGIS-Suite-<Version>-x64-setup.exe` direkt starten.
 
 Windows fragt einmal nach Administratorrechten: Der Schutzdienst (`aegis-service`) und der
-Native-Messaging-Host werden für den Rechner eingerichtet. Die App selbst läuft danach als
+Native-Messaging-Host werden für den Rechner eingerichtet – immer in
+`C:\Program Files\AEGIS Suite`, weil der Dienst mit Systemrechten läuft und sein Ordner nur
+für Administratoren beschreibbar sein darf. Die App selbst läuft danach als
 normaler Nutzer. Fehlt die WebView2-Laufzeit (unter Windows 11 immer vorhanden), hilft das Setup
 beim Nachinstallieren über die offizielle Microsoft-Seite.
 
@@ -64,14 +66,16 @@ Entwicklermodus → „Entpackte Erweiterung laden“.
 ## Updates
 
 „Über AEGIS → Updates“: AEGIS sucht nur nach Updates, wenn du klickst. Angenommen werden nur
-Angaben mit gültiger Signatur des Herausgebers; jede Datei wird vor dem Start gegen ihre
-Prüfsumme geprüft. Installiert wird erst nach „Jetzt installieren“ und Bestätigung.
+Angaben mit gültiger Signatur des Herausgebers, die nicht veraltet sind und keine ältere
+Version anbieten; jede Datei bleibt bis zum Start gegen Austausch gesperrt und wird direkt vor
+dem Start gegen ihre Prüfsumme geprüft. Installiert wird erst nach „Jetzt installieren“ und Bestätigung.
 
 ## Deinstallieren
 
 Windows-Einstellungen → Apps → **AEGIS Suite** → Deinstallieren. Der Dienst wird angehalten und
 entfernt, Registrierungen werden gelöscht. Quarantäne, Prüfprotokoll und Einstellungen
 (`C:\ProgramData\AEGIS`) bleiben erhalten – außer du bestätigst das Löschen **zweimal**.
+Dein Passwort-Tresor bleibt in jedem Fall erhalten. Updates ersetzen nur die Programmdateien.
 
 ## Datenschutz
 

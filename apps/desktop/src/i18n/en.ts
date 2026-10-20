@@ -1268,14 +1268,15 @@ export const en: Messages<typeof de> = {
       'AEGIS only looks for updates when you click here. Only updates with a valid publisher signature are accepted; every file is checked against its checksum before it starts.',
     check: 'Check for updates',
     disabled:
-      'Updates are switched off in this build – no publisher signing key is built in. New versions are then available via the setup.',
+      'Updates are switched off in this build – no publisher signing key is built in. New versions are then available on the project’s release page.',
     upToDate: 'AEGIS is up to date (version {version}).',
     available: 'Version {version} is available (installed: {current}).',
+    published: 'Published on {date} (signed).',
     download: 'Download and verify',
     install: 'Install now…',
     confirmTitle: 'Install update?',
     confirmText:
-      'AEGIS will close for this; Windows asks for administrator rights. Your data and the quarantine are kept.',
+      'AEGIS will close for this; Windows asks for administrator rights. The update only replaces the program files – your data, the vault and the quarantine are kept.',
     installNow: 'Install now',
     cancel: 'Cancel',
     honest:

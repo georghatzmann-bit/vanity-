@@ -25,3 +25,4 @@ pub mod worker;
 
 pub use handler::Service;
 pub use protocol::{Request, Response};
+pub use server::purge_data;

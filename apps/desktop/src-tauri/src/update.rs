@@ -1,7 +1,9 @@
 //! Signierte Updates (P13): Nur auf Klick wird das Manifest der neuesten Version geladen
 //! (HTTPS, GitHub Releases), seine Ed25519-Signatur gegen den eingebauten Schlüssel geprüft,
 //! die Datei geladen und gegen SHA-256 und Größe geprüft. Installiert wird erst nach
-//! „Jetzt installieren“ – unmittelbar davor wird die Datei erneut geprüft.
+//! „Jetzt installieren“ – unmittelbar davor wird die Datei erneut geprüft. Sie liegt in einem
+//! neuen, zufällig benannten Ordner und bleibt vom Speichern bis zum Start gegen Austausch
+//! gesperrt (eigenes Handle, andere dürfen nur lesen). Zu alte Angaben werden abgelehnt.
 
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -9,10 +11,18 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use aegis_update::{Kind, Manifest};
 use serde::Serialize;
 
+/// Geprüft gespeichertes Installationsprogramm (Handle hält die Sperre).
+#[derive(Debug)]
+#[cfg_attr(not(windows), allow(dead_code))]
+struct Downloaded {
+    path: PathBuf,
+    file: std::fs::File,
+}
+
 #[derive(Debug, Default)]
 struct State {
     manifest: Option<Manifest>,
-    downloaded: Option<PathBuf>,
+    downloaded: Option<Downloaded>,
 }
 
 static STATE: Mutex<State> = Mutex::new(State {
@@ -34,6 +44,8 @@ pub struct UpdateView {
     current: String,
     /// Neueste Version laut signiertem Manifest.
     latest: Option<String>,
+    /// Veröffentlicht am (`JJJJ-MM-TT`).
+    published: Option<String>,
     /// Hinweise zur neuesten Version.
     notes: String,
     /// Neuer als die laufende?
@@ -62,6 +74,7 @@ fn view(current: &str) -> UpdateView {
                     .collect()
             })
             .unwrap_or_default(),
+        published: s.manifest.as_ref().map(|m| m.published.clone()),
         latest,
         ready: s.downloaded.is_some(),
     }
@@ -104,7 +117,14 @@ fn fetch_manifest() -> Result<Manifest, String> {
             aegis_update::MANIFEST_PATH,
             |host, path| fetch(host, path, aegis_update::MAX_MANIFEST, 20_000),
         )?;
-        aegis_update::verify(&body).map_err(|e| e.to_string())
+        let manifest = aegis_update::verify(&body).map_err(|e| e.to_string())?;
+        if !aegis_update::fresh(&manifest.published, &aegis_update::today()) {
+            return Err(format!(
+                "Die Update-Angaben stammen vom {} und sind damit zu alt (oder das Datum stimmt nicht) – möglicherweise eine veraltete Kopie. Bitte später erneut versuchen.",
+                manifest.published
+            ));
+        }
+        Ok(manifest)
     }
     #[cfg(not(windows))]
     {
@@ -147,17 +167,16 @@ pub async fn update_download<R: tauri::Runtime>(
         .find(|f| f.kind == Kind::App)
         .cloned()
         .ok_or("Das Update enthält kein Installationsprogramm.")?;
-    let path = tauri::async_runtime::spawn_blocking(move || download(&artifact))
+    let downloaded = tauri::async_runtime::spawn_blocking(move || download(&artifact))
         .await
         .map_err(|e| e.to_string())??;
-    state().downloaded = Some(path);
+    state().downloaded = Some(downloaded);
     Ok(view(&current(&app)))
 }
 
-fn download(artifact: &aegis_update::Artifact) -> Result<PathBuf, String> {
+fn download(artifact: &aegis_update::Artifact) -> Result<Downloaded, String> {
     #[cfg(windows)]
     {
-        use std::io::Write;
         let (host, path) =
             aegis_update::host_and_path(&artifact.url).ok_or("Unzulässige Adresse.")?;
         let limit = usize::try_from(artifact.size).map_err(|e| e.to_string())?;
@@ -165,25 +184,8 @@ fn download(artifact: &aegis_update::Artifact) -> Result<PathBuf, String> {
             fetch(host, path, limit, 600_000)
         })?;
         aegis_update::check_file(&body, artifact).map_err(|e| e.to_string())?;
-        let dir = std::env::temp_dir().join(format!(
-            "AEGIS-Update-{}",
-            aegis_update::sha256_hex(artifact.sha256.as_bytes())
-                .get(..16)
-                .unwrap_or_default()
-        ));
-        // Eigener Ordner für das geprüfte Installationsprogramm.
-        // aegis-mutation: update-download-dir
-        #[allow(clippy::disallowed_methods)]
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let target = dir.join(format!("{}-{}", std::process::id(), artifact.name));
-        // Neue Datei mit dem geprüften Inhalt (nie überschreiben).
-        // aegis-mutation: update-download-write
-        #[allow(clippy::disallowed_methods)]
-        let mut file = std::fs::File::create_new(&target).map_err(|e| e.to_string())?;
-        file.write_all(&body)
-            .and_then(|()| file.sync_all())
-            .map_err(|e| e.to_string())?;
-        Ok(target)
+        let (path, file) = store_locked(&body, artifact)?;
+        Ok(Downloaded { path, file })
     }
     #[cfg(not(windows))]
     {
@@ -192,34 +194,56 @@ fn download(artifact: &aegis_update::Artifact) -> Result<PathBuf, String> {
     }
 }
 
+/// Speichert das geprüfte Installationsprogramm in einem neuen, zufällig benannten Ordner des
+/// Temp-Ordners – in einer neuen Datei, die gegen Austausch gesperrt bleibt, solange das
+/// zurückgegebene Handle offen ist – und prüft es aus dieser Datei erneut.
+#[cfg(windows)]
+fn store_locked(
+    body: &[u8],
+    artifact: &aegis_update::Artifact,
+) -> Result<(PathBuf, std::fs::File), String> {
+    use std::hash::{BuildHasher, Hasher};
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write(artifact.sha256.as_bytes());
+    hasher.write_u32(std::process::id());
+    let dir = std::env::temp_dir().join(format!("AEGIS-Update-{:016x}", hasher.finish()));
+    // Neuer eigener Ordner (schlägt fehl, wenn es ihn schon gibt – kein fremder Ordner).
+    // aegis-mutation: update-download-dir
+    #[allow(clippy::disallowed_methods)]
+    std::fs::create_dir(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(&artifact.name);
+    let mut file = aegis_winffi::fs::create_locked(&path).map_err(|e| e.to_string())?;
+    aegis_update::store_checked(&mut file, body, artifact)?;
+    Ok((path, file))
+}
+
 /// Startet das geprüfte Installationsprogramm (der Nutzer hat „Jetzt installieren“ gewählt)
-/// und beendet die App, damit ihre Dateien ersetzt werden können.
+/// als Update (`/UPDATE`: Dateien ersetzen, keine Deinstallation, Daten bleiben) und beendet
+/// die App, damit ihre Dateien ersetzt werden können.
 #[tauri::command]
 pub fn update_install<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
-    let (path, artifact) = {
-        let s = state();
-        let path = s
-            .downloaded
-            .clone()
-            .ok_or("Kein geprüftes Update geladen.")?;
-        let artifact = s
-            .manifest
-            .as_ref()
-            .and_then(|m| m.files.iter().find(|f| f.kind == Kind::App).cloned())
-            .ok_or("Kein geprüftes Update geladen.")?;
-        (path, artifact)
-    };
-    // Unmittelbar vor dem Start erneut prüfen (die Datei liegt im Temp-Ordner des Kontos).
-    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
-    aegis_update::check_file(&bytes, &artifact).map_err(|e| e.to_string())?;
+    let mut s = state();
+    let artifact = s
+        .manifest
+        .as_ref()
+        .and_then(|m| m.files.iter().find(|f| f.kind == Kind::App).cloned())
+        .ok_or("Kein geprüftes Update geladen.")?;
+    let downloaded = s
+        .downloaded
+        .as_mut()
+        .ok_or("Kein geprüftes Update geladen.")?;
+    // Unmittelbar vor dem Start erneut prüfen – aus der gesperrten Datei selbst.
+    aegis_update::recheck(&mut downloaded.file, &artifact)?;
     #[cfg(windows)]
     {
-        aegis_winffi::shell::launch(&path, "").map_err(|e| e.to_string())?;
+        aegis_winffi::shell::launch(&downloaded.path, "/UPDATE").map_err(|e| e.to_string())?;
+        drop(s);
         app.exit(0);
         Ok(())
     }
     #[cfg(not(windows))]
     {
+        drop(s);
         let _ = app;
         Err("Updates gibt es nur unter Windows.".into())
     }

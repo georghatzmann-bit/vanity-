@@ -8,7 +8,6 @@ const APP_COMMANDS: &[&str] = &[
     "setup_download",
     "setup_install",
     "setup_launch",
-    "setup_pick_dir",
 ];
 
 fn main() {

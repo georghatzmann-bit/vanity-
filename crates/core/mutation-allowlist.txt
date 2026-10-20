@@ -106,6 +106,8 @@ crates/winffi/src/fs.rs :: winffi-final-path :: Windows-FFI: liest den tatsächl
 crates/winffi/src/fs.rs :: winffi-open-exclusive :: Windows-FFI: öffnet eine Nutzerdatei exklusiv mit Löschrecht, ohne Links zu folgen; gelöscht wird nur über delete_by_handle nach Freigabe.
 crates/winffi/src/fs.rs :: winffi-create-new :: Windows-FFI: legt eine Datei nur NEU an (CREATE_NEW, ohne Links) – Wiederherstellen ohne Überschreiben.
 crates/winffi/src/fs.rs :: winffi-create-new-file :: Windows: legt eine Datei nur NEU an (CREATE_NEW); nur aus restore(ExecutionPermit) erreichbar.
+crates/winffi/src/fs.rs :: winffi-create-locked :: Windows-FFI: CreateFileW (CREATE_NEW, ohne Links, nur Lese-Freigabe) für geprüfte Installationsprogramme.
+crates/winffi/src/fs.rs :: winffi-create-locked-file :: Legt nur eine neue Datei an (nie überschreiben) – geprüfte Installationsprogramme im eigenen Temp-Ordner, gegen Austausch gesperrt bis zum Start.
 crates/winffi/src/fs.rs :: winffi-delete-by-handle-call :: Windows: markiert eine exklusiv geöffnete Datei zum Löschen über ihr Handle; nur aus quarantine/restore (ExecutionPermit).
 crates/winffi/src/fs.rs :: winffi-create-secure-dir-call :: Windows: legt AEGIS-eigene Datenordner direkt mit Zugriffsliste SYSTEM/Administratoren an.
 crates/winffi/src/fs.rs :: winffi-open-existing-dir-call :: Windows: öffnet den vorhandenen AEGIS-Datenordner ohne Abzweigungen zu folgen, um Besitzer zu prüfen und die Zugriffsliste zu setzen.
@@ -450,11 +452,12 @@ apps/browser/src-tauri/src/store.rs :: browser-store-write :: Browser: schreibt 
 apps/browser/src-tauri/src/store.rs :: browser-store-replace :: Browser: ersetzt die eigene Datei durch die eben geschriebene Fassung.
 apps/browser/src-tauri/src/store.rs :: browser-store-discard :: entfernt nach einem Schreibfehler die eben selbst angelegte Hilfsdatei mit eindeutigem Namen im eigenen Datenordner des Browsers.
 crates/update/src/bin/aegis-release.rs :: release-keygen-secret :: Release-Werkzeug (nur Herausgeber): schreibt den neuen geheimen Signaturschlüssel in eine neue Datei (create_new, nie überschreiben).
+crates/update/src/bin/aegis-release.rs :: release-keygen-options :: Release-Werkzeug des Herausgebers: Optionen für eine neue Schlüsseldatei (create_new, unter Unix nur für den Eigentümer lesbar).
 crates/service/src/scm.rs :: scm-install-update-config :: Installation (Setup, UAC, vom Nutzer gestartet): zeigt den vorhandenen Schutzdienst auf die neue Programmdatei.
 crates/service/src/scm.rs :: scm-install-create :: Installation (Setup, UAC, vom Nutzer gestartet): legt den Schutzdienst an.
 crates/service/src/scm.rs :: scm-install-description :: Installation: Beschreibung des eigenen Dienstes.
 crates/service/src/scm.rs :: scm-install-start :: Installation: startet den eben angelegten eigenen Dienst.
-crates/service/src/scm.rs :: scm-uninstall-stop :: Deinstallation (vom Nutzer gestartet): hält den eigenen Dienst an.
+crates/service/src/scm.rs :: scm-stop :: Installation/Update bzw. Deinstallation (vom Nutzer gestartet): hält den eigenen Dienst an.
 crates/service/src/scm.rs :: scm-uninstall-delete :: Deinstallation (vom Nutzer gestartet): entfernt den eigenen Dienst.
 crates/winffi/src/shell.rs :: winffi-shell-launch :: Windows-FFI: ShellExecuteW („open“) – startet ein Programm über die Shell (UAC bei Bedarf).
 crates/winffi/src/shell.rs :: winffi-shell-launch-call :: Startet nur das geprüfte Installationsprogramm eines Updates nach „Jetzt installieren“.
@@ -463,6 +466,5 @@ crates/winffi/src/shell.rs :: winffi-shell-run :: Windows-FFI (Setup): startet d
 crates/winffi/src/shell.rs :: winffi-shell-run-call :: Setup: startet nur das gegen die signierte Prüfsumme geprüfte Installationsprogramm, nachdem der Nutzer „Installieren“ gewählt hat.
 crates/winffi/src/shell.rs :: winffi-shell-run-wait :: Windows-FFI (Setup): wartet auf das Ende des eigenen Installationsprozesses und liest den Exit-Code – verändert nichts.
 apps/desktop/src-tauri/src/update.rs :: update-download-dir :: Updates: eigener Ordner im Temp-Verzeichnis für das geprüfte Installationsprogramm.
-apps/desktop/src-tauri/src/update.rs :: update-download-write :: Updates: schreibt das gegen Signatur und SHA-256 geprüfte Installationsprogramm in eine neue Datei.
-apps/setup/src-tauri/src/setup.rs :: setup-download-dir :: Setup: legt einen eigenen Ordner im Temp-Ordner des Kontos für die geprüften Installationsprogramme an (nur nach „Laden und prüfen“).
-apps/setup/src-tauri/src/setup.rs :: setup-download-write :: Setup: schreibt ein gegen die signierte Prüfsumme geprüftes Installationsprogramm in eine neue Datei (create_new, nie überschreiben).
+apps/setup/src-tauri/src/setup.rs :: setup-download-dir :: Setup: legt einen neuen, zufällig benannten eigenen Ordner im Temp-Ordner des Kontos für die geprüften Installationsprogramme an (nur nach „Laden und prüfen“).
+crates/service/src/server.rs :: service-purge-data :: Deinstallation: löscht den eigenen Datenordner (ProgramData\AEGIS) nur nach zwei getrennten Bestätigungen im Deinstallationsprogramm; folgt keinen Links.

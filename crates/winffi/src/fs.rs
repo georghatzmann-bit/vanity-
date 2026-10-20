@@ -376,6 +376,38 @@ pub fn create_new(path: &Path) -> io::Result<File> {
     Ok(file)
 }
 
+/// Legt eine **neue** Datei an, die gegen Austausch gesperrt bleibt, solange das Handle offen
+/// ist: andere dürfen sie nur lesen (kein Schreiben, Umbenennen oder Löschen) – für geprüfte
+/// Installationsprogramme zwischen Prüfung und Start. Ohne Links, nie überschreiben.
+///
+/// # Errors
+/// Ziel existiert, kein Zugriff, Link im Pfad.
+pub fn create_locked(path: &Path) -> io::Result<File> {
+    let name = wide(path);
+    // SAFETY: `name` ist nullterminiert; CREATE_NEW schlägt fehl, wenn das Ziel existiert.
+    // aegis-unsafe: winffi-create-locked
+    #[allow(unsafe_code)]
+    // aegis-mutation: winffi-create-locked-file
+    #[allow(clippy::disallowed_methods)]
+    let handle = unsafe {
+        CreateFileW(
+            name.as_ptr(),
+            GENERIC_READ | GENERIC_WRITE | DELETE,
+            FILE_SHARE_READ,
+            ptr::null(),
+            CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
+            ptr::null_mut(),
+        )
+    };
+    let file = File::from(own(handle)?);
+    if let Err(e) = ensure_same_path(file.as_raw_handle(), path) {
+        delete_by_handle(&file)?;
+        return Err(e);
+    }
+    Ok(file)
+}
+
 /// Markiert die geöffnete Datei zum Löschen; entfernt wird sie beim Schließen des (einzigen)
 /// Handles. Der Name wird dafür nicht erneut aufgelöst. Schreibgeschützte Dateien werden
 /// ebenfalls entfernt (ab Windows 10 1809; sonst wie bisher mit Fehlermeldung).

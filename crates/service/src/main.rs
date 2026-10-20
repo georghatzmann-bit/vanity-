@@ -13,7 +13,7 @@ use aegis_service::server::{ServerConfig, run};
 
 fn usage() -> ! {
     eprintln!(
-        "Aufruf: aegis-service run [--data-dir ORDNER] [--endpoint NAME] | aegis-service service | aegis-service install | aegis-service uninstall"
+        "Aufruf: aegis-service run [--data-dir ORDNER] [--endpoint NAME] | aegis-service service | aegis-service install | aegis-service stop | aegis-service uninstall | aegis-service purge-data --confirmed-twice"
     );
     std::process::exit(2);
 }
@@ -59,6 +59,21 @@ fn main() {
                 .and_then(|exe| aegis_service::scm::install(&exe).map_err(|e| e.to_string()));
             if let Err(e) = result {
                 eprintln!("aegis-service: Installation fehlgeschlagen: {e}");
+                std::process::exit(1);
+            }
+        }
+        // Installationsprogramm vor dem Ersetzen der Dateien (Update).
+        #[cfg(windows)]
+        Some("stop") => {
+            if let Err(e) = aegis_service::scm::stop() {
+                eprintln!("aegis-service: Anhalten fehlgeschlagen: {e}");
+                std::process::exit(1);
+            }
+        }
+        // Nur das Deinstallationsprogramm nach zwei getrennten Bestätigungen des Nutzers.
+        Some("purge-data") if args.get(1).map(String::as_str) == Some("--confirmed-twice") => {
+            if let Err(e) = aegis_service::purge_data() {
+                eprintln!("aegis-service: Daten konnten nicht gelöscht werden: {e}");
                 std::process::exit(1);
             }
         }

@@ -1,6 +1,6 @@
 # AEGIS Suite – Fortschritt
 
-Stand: 2026-10-20 · **P0–P12 abgeschlossen**, P13 im Abschluss (Review) · danach optional **P14**
+Stand: 2026-10-20 · **P0–P13 abgeschlossen** · optional: **P14**
 
 ## Werkzeug-Check (Entwicklungs-Container)
 
@@ -35,7 +35,7 @@ Stand: 2026-10-20 · **P0–P12 abgeschlossen**, P13 im Abschluss (Review) · da
 | P10 | Tools 1–11 | erledigt |
 | P11 | Tools 12–22 + Animations-Feinschliff | erledigt |
 | P12 | Privacy-Browser | erledigt |
-| P13 | Setup-Bootstrapper, Uninstaller, Updater, Abschlusstests, deutsches README | in Arbeit (Review) |
+| P13 | Setup-Bootstrapper, Uninstaller, Updater, Abschlusstests, deutsches README | erledigt |
 | P14 | optional: ML-Modell, AMSI-Beobachter, Browser-Sandbox | offen |
 
 ## P0 – erledigt
@@ -201,7 +201,32 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        Laden mit Fortschritt, Signatur- und SHA-256-Prüfung, Installation erst nach Klick (still,
        UAC durch Windows, erneute Prüfung, Exit-Code), AEGIS starten; WebView2-Prüfung mit
        Hinweis auf die Microsoft-Seite. Browser- und Setup-Build in der Windows-CI. D-060.
-3. [ ] P13.3 README (Deutsch), Endtests, Sicherheits-Review P13, DoD.
+3. [x] P13.3 Deutsches README (Funktionen, ehrliche Grenzen, Installieren/Updates/
+       Deinstallieren, Datenschutz, Bauen, Release-Ablauf).
+4. [x] P13.4 Sicherheits-Review P13 (separater Agent): 1 hoch, 5 mittel, Niedriges – behoben
+       (fester Ordner unter „Programme“, Dateien bis zum Start gesperrt, Datum/Frische und kein
+       Downgrade, Tresor nicht per Kästchen löschbar, Updates mit angehaltenem Dienst, Löschen
+       des Datenordners ohne Links) – siehe `docs/SECURITY.md`.
+
+**DoD P13:** `AEGIS-Setup.exe` mit eigener Animation und Klang lädt nur nach Klick, prüft
+Signatur, Datum, Version und SHA-256 und installiert erst nach „Installieren“; WebView2-Prüfung
+mit Hinweis; Installer bringt Dienst, Prüfprozess, Labor-Sonde, Tresor-Host und Erweiterungen
+mit und registriert sie; signierter Updater (nur auf Klick, Installation nach Bestätigung);
+Deinstallation entfernt Dienst und Registrierungen, Daten nur nach zwei Bestätigungen;
+deutsches README. Offen beim Herausgeber: Signaturschlüssel erzeugen (`aegis-release keygen`),
+Code-Signing-Zertifikat, Projektlizenz.
+
+## Abschluss – Definition of Done (gesamt)
+
+| Kriterium | Status |
+| --- | --- |
+| Goldene Regel: nichts verändert ohne „Ja“ (Plan, Digest, Einmal-Freigabe, Audit) | ✅ `crates/core` (Tests, `mutation_guard`), `crates/service/tests/flow.rs` |
+| Verändernde APIs nur mit Markierung + Allowlist; `unsafe` nur in `winffi` | ✅ `mutation_guard` (Clippy `disallowed-methods`) |
+| Endgültiges Löschen nur nach zweiter, getrennter Bestätigung | ✅ Quarantäne, Shredder, Deinstallation |
+| Tests nur mit EICAR/Dummies; Linux + Windows-CI | ✅ `pnpm check`, E2E, GitHub Actions (`windows-latest`) |
+| Ehrliche Oberfläche (kein Kernel-Treiber, Grenzen von Browser/Tor/Updates) | ✅ Texte + README |
+| Sicherheits-Reviews je Phase, Befunde behoben oder bewusst offen | ✅ `docs/SECURITY.md` → Review-Protokoll |
+| Keine Telemetrie, Netz nur auf Klick/Opt-in | ✅ Reviews P7, P12, P13 |
 
 ## P12 – Privacy-Browser
 
@@ -418,4 +443,5 @@ unbekannte Downloads – nie automatisch).
 
 ## Nächster Schritt
 
-P13.2 Setup-Assistent, P13.3 README + Review.
+Alle Pflicht-Phasen erledigt. Optional P14 (ML-Modell, AMSI-Beobachter, Browser-Sandbox, Tabs
+als rohe WebView2-Controller). Beim Herausgeber: Signaturschlüssel, Code-Signing, Lizenz.

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Nur das Setup-Fenster: eigene Befehle (Angaben laden, Pakete laden und prüfen, Installieren, AEGIS starten, Ordner wählen) und das Hören auf den Fortschritt.",
+  "description": "Nur das Setup-Fenster: eigene Befehle (Angaben laden, Pakete laden und prüfen, Installieren, AEGIS starten) und das Hören auf den Fortschritt.",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
@@ -10,7 +10,6 @@
     "allow-setup-check",
     "allow-setup-download",
     "allow-setup-install",
-    "allow-setup-launch",
-    "allow-setup-pick-dir"
+    "allow-setup-launch"
   ]
 }

@@ -19,17 +19,19 @@ const de = {
   privacy2:
     'Verbindungen nur zu GitHub (Releases von AEGIS); auf Wunsch zu Microsoft für WebView2.',
   privacy3:
-    'Jedes Paket ist über signierte Angaben (Ed25519) und seine SHA-256-Prüfsumme abgesichert – geprüft wird vor und direkt vor dem Start.',
+    'Jedes Paket ist über signierte Angaben (Ed25519) und seine SHA-256-Prüfsumme abgesichert. Nach der Prüfung bleibt die Datei bis zum Ende der Installation gegen Austausch gesperrt und wird direkt vor dem Start noch einmal geprüft. Veraltete Angaben und ältere Versionen werden abgelehnt.',
   privacy4:
     'AEGIS schützt ohne Kernel-Treiber: Es erkennt, warnt und isoliert auf Wunsch, blockiert Programme aber nicht vor dem Start.',
   smartscreen:
     'Ehrlich: Solange AEGIS kein Code-Signing-Zertifikat hat, warnt Windows SmartScreen beim Start der Installationsprogramme. Das ist bei neuer Software normal.',
   optionsTitle: 'Ordner und Pakete',
   dir: 'Installationsordner',
-  change: 'Ändern …',
+  dirHint:
+    'Immer unter „Programme“: Der Schutzdienst läuft mit Systemrechten, deshalb darf nur ein Administrator in seinen Ordner schreiben.',
   check: 'Neueste Version suchen',
   checking: 'Suche …',
   offer: 'Version {version}',
+  published: 'veröffentlicht am {date} (signiert)',
   app: 'AEGIS Suite (Schutz, Werkzeuge, Dienst)',
   browser: 'AEGIS Browser (Privacy-Browser, für dieses Konto)',
   required: 'erforderlich',
@@ -46,7 +48,7 @@ const de = {
   installing: 'Installiere … das kann einen Moment dauern.',
   doneTitle: 'AEGIS ist installiert',
   doneText:
-    'Der Schutzdienst läuft. AEGIS verändert nichts ohne dein ausdrückliches „Ja“ – es scannt, meldet und erklärt.',
+    'Der Schutzdienst ist eingerichtet und läuft. AEGIS verändert nichts ohne dein ausdrückliches „Ja“ – es scannt, meldet und erklärt.',
   launch: 'AEGIS starten',
   close: 'Schließen',
   error: 'Etwas hat nicht geklappt',
@@ -75,17 +77,19 @@ const en: Record<TextKey, string> = {
   privacy1: 'No telemetry, no account, no ads.',
   privacy2: 'Connections only to GitHub (AEGIS releases); on request to Microsoft for WebView2.',
   privacy3:
-    'Every package is secured by signed metadata (Ed25519) and its SHA-256 checksum – checked after download and again right before it starts.',
+    'Every package is secured by signed metadata (Ed25519) and its SHA-256 checksum. After the check the file stays locked against replacement until the installation ends and is checked once more right before it starts. Outdated metadata and older versions are refused.',
   privacy4:
     'AEGIS protects without a kernel driver: it detects, warns and isolates on request, but does not block programs before they start.',
   smartscreen:
     'Honestly: as long as AEGIS has no code-signing certificate, Windows SmartScreen warns when the installers start. That is normal for new software.',
   optionsTitle: 'Folder and packages',
   dir: 'Install folder',
-  change: 'Change…',
+  dirHint:
+    'Always under “Program Files”: the protection service runs with system rights, so only an administrator may write to its folder.',
   check: 'Look for the latest version',
   checking: 'Looking…',
   offer: 'Version {version}',
+  published: 'published on {date} (signed)',
   app: 'AEGIS Suite (protection, tools, service)',
   browser: 'AEGIS Browser (privacy browser, for this account)',
   required: 'required',
@@ -102,7 +106,7 @@ const en: Record<TextKey, string> = {
   installing: 'Installing… this can take a moment.',
   doneTitle: 'AEGIS is installed',
   doneText:
-    'The protection service is running. AEGIS changes nothing without your explicit “Yes” – it scans, reports and explains.',
+    'The protection service is set up and running. AEGIS changes nothing without your explicit “Yes” – it scans, reports and explains.',
   launch: 'Start AEGIS',
   close: 'Close',
   error: 'Something went wrong',

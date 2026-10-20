@@ -1,8 +1,11 @@
 //! Ablauf des Setups: signierte Angaben holen, gewählte Pakete laden und prüfen, die geprüften
 //! Installationsprogramme nach „Installieren“ starten. Nichts passiert ohne Klick; jede Datei
-//! wird vor dem Start erneut gegen die signierte Prüfsumme geprüft.
+//! liegt in einem neuen, zufällig benannten Ordner, bleibt vom Speichern bis zum Ende der
+//! Installation gegen Austausch gesperrt und wird direkt vor dem Start erneut geprüft.
+//! Installiert wird immer nach „Programme“ (der Schutzdienst läuft als SYSTEM).
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use aegis_update::{Artifact, Kind, Manifest};
@@ -14,16 +17,45 @@ pub const PRODUCT_DIR: &str = "AEGIS Suite";
 /// Programmdatei der App im Installationsordner.
 pub const APP_EXE: &str = "aegis.exe";
 
+/// Geprüft gespeichertes Paket (das Handle hält die Sperre gegen Austausch).
+#[derive(Debug)]
+#[cfg_attr(not(windows), allow(dead_code))]
+struct Downloaded {
+    kind: Kind,
+    path: PathBuf,
+    artifact: Artifact,
+    file: std::fs::File,
+}
+
 #[derive(Debug, Default)]
 struct State {
     manifest: Option<Manifest>,
-    /// Geprüft geladene Dateien (Art, Pfad, signierte Angabe).
-    downloaded: Vec<(Kind, PathBuf, Artifact)>,
+    /// Geprüft geladene Pakete.
+    downloaded: Vec<Downloaded>,
     /// Installationsordner nach erfolgreicher Installation.
     installed: Option<PathBuf>,
 }
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
+/// Läuft gerade ein Laden oder eine Installation? (kein doppelter Start)
+static BUSY: AtomicBool = AtomicBool::new(false);
+
+/// Hält `BUSY`, solange es lebt.
+struct Busy;
+
+impl Busy {
+    fn take() -> Result<Self, String> {
+        BUSY.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .map(|_| Self)
+            .map_err(|_| "Das Setup arbeitet schon – bitte warten.".to_owned())
+    }
+}
+
+impl Drop for Busy {
+    fn drop(&mut self) {
+        BUSY.store(false, Ordering::SeqCst);
+    }
+}
 
 fn with_state<T>(f: impl FnOnce(&mut State) -> T) -> T {
     let mut guard: MutexGuard<'_, Option<State>> =
@@ -39,7 +71,7 @@ pub struct Info {
     version: String,
     /// Signaturschlüssel eingebaut (sonst kann das Setup nichts prüfen und lädt nichts).
     enabled: bool,
-    /// Vorschlag für den Installationsordner.
+    /// Installationsordner (immer unter „Programme“).
     default_dir: String,
     /// Windows (nur dort wird installiert).
     windows: bool,
@@ -59,6 +91,7 @@ pub struct Component {
 #[serde(rename_all = "camelCase")]
 pub struct Offer {
     version: String,
+    published: String,
     notes: String,
     components: Vec<Component>,
 }
@@ -132,15 +165,29 @@ pub fn setup_info<R: Runtime>(app: AppHandle<R>) -> Info {
 
 /// Holt und prüft die signierten Angaben der neuesten Version (Netz nur nach Klick).
 #[tauri::command]
-pub async fn setup_check() -> Result<Offer, String> {
+pub async fn setup_check<R: Runtime>(app: AppHandle<R>) -> Result<Offer, String> {
     if !aegis_update::enabled() {
         return Err("Dieses Setup wurde ohne Signaturschlüssel gebaut und kann Downloads nicht prüfen. Lade das Installationsprogramm direkt von der Release-Seite.".into());
     }
     let manifest = tauri::async_runtime::spawn_blocking(fetch_manifest)
         .await
         .map_err(|e| e.to_string())??;
+    let own = app.package_info().version.to_string();
+    if aegis_update::newer(&manifest.version, &own) {
+        return Err(format!(
+            "Die Angaben nennen Version {}, älter als dieses Setup ({own}) – abgelehnt (kein Zurückstufen).",
+            manifest.version
+        ));
+    }
+    if !aegis_update::fresh(&manifest.published, &aegis_update::today()) {
+        return Err(format!(
+            "Die Angaben stammen vom {} und sind damit zu alt (oder das Datum stimmt nicht) – möglicherweise eine veraltete Kopie.",
+            manifest.published
+        ));
+    }
     let offer = Offer {
         version: manifest.version.clone(),
+        published: manifest.published.clone(),
         notes: manifest.notes.clone(),
         components: manifest
             .files
@@ -209,6 +256,7 @@ fn fetch_manifest() -> Result<Manifest, String> {
 /// Größe und SHA-256 der signierten Angaben. Fortschritt als `setup://progress`.
 #[tauri::command]
 pub async fn setup_download<R: Runtime>(app: AppHandle<R>, browser: bool) -> Result<(), String> {
+    let busy = Busy::take()?;
     let manifest = with_state(|s| s.manifest.clone()).ok_or("Bitte zuerst die Angaben laden.")?;
     let wanted: Vec<Artifact> = manifest
         .files
@@ -220,32 +268,31 @@ pub async fn setup_download<R: Runtime>(app: AppHandle<R>, browser: bool) -> Res
     let files = tauri::async_runtime::spawn_blocking(move || {
         wanted
             .into_iter()
-            .map(|artifact| {
-                download(&handle, &artifact).map(|path| (artifact.kind, path, artifact))
-            })
+            .map(|artifact| download(&handle, artifact))
             .collect::<Result<Vec<_>, String>>()
     })
     .await
     .map_err(|e| e.to_string())??;
     with_state(|s| s.downloaded = files);
+    drop(busy);
     Ok(())
 }
 
-fn download<R: Runtime>(app: &AppHandle<R>, artifact: &Artifact) -> Result<PathBuf, String> {
+fn download<R: Runtime>(app: &AppHandle<R>, artifact: Artifact) -> Result<Downloaded, String> {
+    let (name, total) = (artifact.name.clone(), artifact.size);
     let emit = |done: u64, stage: &'static str| {
         let _ = app.emit(
             "setup://progress",
             Progress {
-                name: artifact.name.clone(),
+                name: name.clone(),
                 done,
-                total: artifact.size,
+                total,
                 stage,
             },
         );
     };
     #[cfg(windows)]
     {
-        use std::io::Write;
         let (host, path) =
             aegis_update::host_and_path(&artifact.url).ok_or("Unzulässige Adresse.")?;
         let limit = usize::try_from(artifact.size).map_err(|e| e.to_string())?;
@@ -260,25 +307,15 @@ fn download<R: Runtime>(app: &AppHandle<R>, artifact: &Artifact) -> Result<PathB
             })
         })?;
         emit(artifact.size, "verify");
-        aegis_update::check_file(&body, artifact).map_err(|e| e.to_string())?;
-        let dir = std::env::temp_dir().join(format!(
-            "AEGIS-Setup-{}",
-            artifact.sha256.get(..16).unwrap_or_default()
-        ));
-        // Eigener Ordner für die geprüften Installationsprogramme.
-        // aegis-mutation: setup-download-dir
-        #[allow(clippy::disallowed_methods)]
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let target = dir.join(format!("{}-{}", std::process::id(), artifact.name));
-        // Neue Datei mit dem geprüften Inhalt (nie überschreiben).
-        // aegis-mutation: setup-download-write
-        #[allow(clippy::disallowed_methods)]
-        let mut file = std::fs::File::create_new(&target).map_err(|e| e.to_string())?;
-        file.write_all(&body)
-            .and_then(|()| file.sync_all())
-            .map_err(|e| e.to_string())?;
+        aegis_update::check_file(&body, &artifact).map_err(|e| e.to_string())?;
+        let (path, file) = store_locked(&body, &artifact)?;
         emit(artifact.size, "ok");
-        Ok(target)
+        Ok(Downloaded {
+            kind: artifact.kind,
+            path,
+            artifact,
+            file,
+        })
     }
     #[cfg(not(windows))]
     {
@@ -287,51 +324,83 @@ fn download<R: Runtime>(app: &AppHandle<R>, artifact: &Artifact) -> Result<PathB
     }
 }
 
+/// Speichert ein geprüftes Paket in einem neuen, zufällig benannten Ordner des Temp-Ordners –
+/// in einer neuen Datei, die gegen Austausch gesperrt bleibt, solange das Handle offen ist –
+/// und prüft es aus dieser Datei erneut.
+#[cfg(windows)]
+fn store_locked(body: &[u8], artifact: &Artifact) -> Result<(PathBuf, std::fs::File), String> {
+    use std::hash::{BuildHasher, Hasher};
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write(artifact.sha256.as_bytes());
+    hasher.write_u32(std::process::id());
+    let dir = std::env::temp_dir().join(format!("AEGIS-Setup-{:016x}", hasher.finish()));
+    // Neuer eigener Ordner (schlägt fehl, wenn es ihn schon gibt – kein fremder Ordner).
+    // aegis-mutation: setup-download-dir
+    #[allow(clippy::disallowed_methods)]
+    std::fs::create_dir(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(&artifact.name);
+    let mut file = aegis_winffi::fs::create_locked(&path).map_err(|e| e.to_string())?;
+    aegis_update::store_checked(&mut file, body, artifact)?;
+    Ok((path, file))
+}
+
 /// Startet die geprüften Installationsprogramme (der Nutzer hat „Installieren“ gewählt):
-/// zuerst AEGIS Suite still in `dir` (Windows fragt nach Administratorrechten), danach – falls
-/// gewählt – den Browser für dieses Konto.
+/// zuerst AEGIS Suite still nach „Programme“ (Windows fragt nach Administratorrechten), danach
+/// – falls gewählt – den Browser für dieses Konto.
 #[tauri::command]
-pub async fn setup_install(dir: String) -> Result<(), String> {
-    let dir = install_dir(&dir)?;
-    let files = with_state(|s| s.downloaded.clone());
-    if !files.iter().any(|(k, _, _)| *k == Kind::App) {
+pub async fn setup_install() -> Result<(), String> {
+    let busy = Busy::take()?;
+    let dir = install_dir(&default_dir().display().to_string())?;
+    let mut files = with_state(|s| std::mem::take(&mut s.downloaded));
+    if !files.iter().any(|d| d.kind == Kind::App) {
+        with_state(|s| s.downloaded = files);
         return Err("Bitte zuerst herunterladen.".into());
     }
     let target = dir.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    let (files, result) = tauri::async_runtime::spawn_blocking(move || {
         // Die App zuerst, der Browser danach.
-        let mut ordered = files;
-        ordered.sort_by_key(|(k, _, _)| *k != Kind::App);
-        for (kind, path, artifact) in &ordered {
-            let args = if *kind == Kind::App {
+        files.sort_by_key(|d| d.kind != Kind::App);
+        let mut result = Ok(());
+        for d in &mut files {
+            let args = if d.kind == Kind::App {
                 format!("/S /D={}", target.display())
             } else {
                 "/S".to_owned()
             };
-            run_checked(path, artifact, &args)?;
+            result = run_checked(d, &args);
+            if result.is_err() {
+                break;
+            }
         }
-        Ok::<(), String>(())
+        (files, result)
     })
     .await
-    .map_err(|e| e.to_string())??;
+    .map_err(|e| e.to_string())?;
+    // Die Dateien bleiben bis hierher gesperrt; danach gibt das Setup sie frei.
+    drop(files);
+    result?;
     with_state(|s| s.installed = Some(dir));
+    drop(busy);
     Ok(())
 }
 
-/// Prüft die Datei unmittelbar vor dem Start erneut und startet sie.
-fn run_checked(path: &Path, artifact: &Artifact, args: &str) -> Result<(), String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    aegis_update::check_file(&bytes, artifact).map_err(|e| e.to_string())?;
+/// Prüft die gesperrte Datei unmittelbar vor dem Start erneut und startet sie (Warten auf das
+/// Ende, Exit-Code ausgewertet).
+fn run_checked(d: &mut Downloaded, args: &str) -> Result<(), String> {
+    aegis_update::recheck(&mut d.file, &d.artifact)?;
     #[cfg(windows)]
     {
-        let code = aegis_winffi::shell::run_and_wait(path, args).map_err(|e| {
+        let code = aegis_winffi::shell::run_and_wait(&d.path, args).map_err(|e| {
             format!(
                 "{} ließ sich nicht starten (Administratorrechte abgelehnt?): {e}",
-                artifact.name
+                d.artifact.name
             )
         })?;
         if code != 0 {
-            return Err(format!("{} meldet Fehler {code}.", artifact.name));
+            return Err(format!(
+                "{} meldet Fehler {code} – die Installation ist nicht vollständig.",
+                d.artifact.name
+            ));
         }
         Ok(())
     }
@@ -360,39 +429,6 @@ pub fn setup_launch<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     {
         let _ = app;
         Err("Das Setup installiert nur unter Windows.".into())
-    }
-}
-
-/// Ordner wählen (Windows-Dialog).
-#[tauri::command]
-pub async fn setup_pick_dir(current: String) -> Result<Option<String>, String> {
-    #[cfg(windows)]
-    {
-        let start = install_dir(&current)
-            .ok()
-            .and_then(|p| p.parent().map(Path::to_path_buf))
-            .unwrap_or_else(default_dir);
-        let picked = tauri::async_runtime::spawn_blocking(move || {
-            rfd::FileDialog::new()
-                .set_title("Installationsordner wählen")
-                .set_directory(start)
-                .pick_folder()
-        })
-        .await
-        .map_err(|e| e.to_string())?;
-        Ok(picked.map(|p| {
-            // Unter dem gewählten Ordner einen eigenen „AEGIS Suite“-Ordner anlegen lassen.
-            if p.file_name().is_some_and(|n| n == PRODUCT_DIR) {
-                p.display().to_string()
-            } else {
-                p.join(PRODUCT_DIR).display().to_string()
-            }
-        }))
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = current;
-        Err("Ordner wählen gibt es nur unter Windows.".into())
     }
 }
 
@@ -426,7 +462,7 @@ mod tests {
 
     #[test]
     fn ohne_angaben_kein_download_und_keine_installation() {
-        let result = tauri::async_runtime::block_on(setup_install(r"C:\AEGIS".into()));
+        let result = tauri::async_runtime::block_on(setup_install());
         assert!(result.is_err());
         assert_eq!(kind_name(Kind::Browser), "browser");
     }

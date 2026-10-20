@@ -79,16 +79,22 @@ pub enum Scanner {
 }
 
 impl Scanner {
-    /// Sucht `aegis-scanworker` neben dem laufenden Programm (bzw. einen Ordner darüber,
-    /// wie bei `cargo test`).
+    /// Sucht `aegis-scanworker` neben dem laufenden Programm. Nur in Entwicklungs-Builds auch
+    /// einen Ordner darüber (wie bei `cargo test`) – im installierten Dienst nie außerhalb des
+    /// eigenen, geschützten Programmordners.
     #[must_use]
     pub fn locate_worker() -> Option<PathBuf> {
         let exe = std::env::current_exe().ok()?;
         let name = format!("{WORKER_NAME}{}", std::env::consts::EXE_SUFFIX);
         let dir = exe.parent()?;
-        [dir.join(&name), dir.parent()?.join(&name)]
-            .into_iter()
-            .find(|p| p.is_file())
+        let beside = dir.join(&name);
+        if beside.is_file() {
+            return Some(beside);
+        }
+        if cfg!(debug_assertions) {
+            return Some(dir.parent()?.join(&name)).filter(|p| p.is_file());
+        }
+        None
     }
 
     /// Prüft Dateien und Ordner.

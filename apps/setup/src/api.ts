@@ -18,6 +18,8 @@ export interface Component {
 
 export interface Offer {
   readonly version: string;
+  /** Veröffentlicht am (`JJJJ-MM-TT`). */
+  readonly published: string;
   readonly notes: string;
   readonly components: readonly Component[];
 }
@@ -33,9 +35,8 @@ export interface SetupApi {
   info(): Promise<Info>;
   check(): Promise<Offer>;
   download(browser: boolean): Promise<void>;
-  install(dir: string): Promise<void>;
+  install(): Promise<void>;
   launch(): Promise<void>;
-  pickDir(current: string): Promise<string | null>;
   onProgress(listener: (p: Progress) => void): Promise<() => void>;
 }
 
@@ -61,6 +62,10 @@ export function parseOffer(v: unknown): Offer {
   const list = Array.isArray(o['components']) ? (o['components'] as unknown[]) : [];
   return {
     version: str(o['version'], 32),
+    published:
+      typeof o['published'] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o['published'])
+        ? o['published']
+        : '',
     notes: str(o['notes'], 2000),
     components: list
       .filter(isObject)
@@ -102,12 +107,8 @@ export async function tauriApi(): Promise<SetupApi> {
     info: async () => parseInfo(await invoke<unknown>('setup_info')),
     check: async () => parseOffer(await invoke<unknown>('setup_check')),
     download: (browser) => invoke('setup_download', { browser }),
-    install: (dir) => invoke('setup_install', { dir }),
+    install: () => invoke('setup_install'),
     launch: () => invoke('setup_launch'),
-    pickDir: async (current) => {
-      const picked = await invoke<unknown>('setup_pick_dir', { current });
-      return typeof picked === 'string' ? picked.slice(0, 260) : null;
-    },
     onProgress: (listener) =>
       listen<unknown>('setup://progress', (e) => listener(parseProgress(e.payload))),
   };

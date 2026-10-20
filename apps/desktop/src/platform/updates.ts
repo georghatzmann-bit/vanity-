@@ -5,6 +5,8 @@ export interface UpdateView {
   readonly enabled: boolean;
   readonly current: string;
   readonly latest: string | null;
+  /** Veröffentlicht am (`JJJJ-MM-TT`). */
+  readonly published: string | null;
   readonly notes: string;
   readonly newer: boolean;
   /** Geprüft heruntergeladen. */
@@ -25,6 +27,10 @@ export function parseUpdate(v: unknown): UpdateView {
     enabled: o['enabled'] === true,
     current: text(o['current'], 32),
     latest: typeof o['latest'] === 'string' ? o['latest'].slice(0, 32) : null,
+    published:
+      typeof o['published'] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o['published'])
+        ? o['published']
+        : null,
     notes: text(o['notes'], 2000),
     newer: o['newer'] === true,
     ready: o['ready'] === true,

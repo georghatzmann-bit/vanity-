@@ -14,7 +14,7 @@
 
 use std::path::Path;
 
-use aegis_update::{Artifact, Kind, Manifest, RELEASE_PREFIX, sha256_hex, sign};
+use aegis_update::{Artifact, Kind, Manifest, RELEASE_PREFIX, sha256_hex, sign, valid_name};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -32,10 +32,22 @@ fn main() {
 fn keygen(secret_path: &Path) -> Result<(), String> {
     use std::io::Write;
     let (secret, public) = sign::keypair()?;
+    let mut options = std::fs::OpenOptions::new();
+    // Neue Datei (nie überschreiben) für den geheimen Schlüssel.
+    // aegis-mutation: release-keygen-options
+    #[allow(clippy::disallowed_methods)]
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        // Nur für den Eigentümer lesbar.
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
     // Neue Datei für den geheimen Schlüssel des Herausgebers (nie überschreiben).
     // aegis-mutation: release-keygen-secret
     #[allow(clippy::disallowed_methods)]
-    let mut file = std::fs::File::create_new(secret_path)
+    let mut file = options
+        .open(secret_path)
         .map_err(|e| format!("{}: {e} (Datei existiert schon?)", secret_path.display()))?;
     file.write_all(secret.as_bytes())
         .and_then(|()| file.sync_all())
@@ -66,12 +78,9 @@ fn sign_files(secret_path: &str, version: &str, tag: &str, files: &[String]) -> 
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .ok_or("Dateiname fehlt")?;
-        if !name
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"._-+".contains(&b))
-        {
+        if !valid_name(&name) {
             return Err(format!(
-                "{name}: Dateiname nur mit Buchstaben, Ziffern und ._-+ (z. B. AEGIS-Suite-0.2.0-x64-setup.exe)."
+                "{name}: Dateiname nur mit Buchstaben, Ziffern und ._- und Endung .exe (z. B. AEGIS-Suite-0.2.0-x64-setup.exe)."
             ));
         }
         let bytes = std::fs::read(path).map_err(|e| format!("{file}: {e}"))?;
@@ -93,11 +102,21 @@ fn sign_files(secret_path: &str, version: &str, tag: &str, files: &[String]) -> 
     }
     let manifest = Manifest {
         version: version.to_owned(),
-        published: String::new(),
+        published: aegis_update::today(),
         notes: String::new(),
         files: artifacts,
     };
     let signed = sign::sign(&manifest, &secret)?;
+    // Selbstprüfung: Das Ergebnis muss die Prüfung der App bestehen.
+    let public = aegis_update::public_key(&sign::public_of(&secret)?)
+        .ok_or("öffentlicher Schlüssel ungültig")?;
+    let bytes = serde_json::to_vec(&signed).map_err(|e| e.to_string())?;
+    aegis_update::verify_with(&bytes, &public).map_err(|e| format!("Selbstprüfung: {e}"))?;
+    if aegis_update::public_key(aegis_update::PUBLIC_KEY).is_some_and(|k| k != public) {
+        eprintln!(
+            "Achtung: Der Schlüssel passt nicht zu release/update-public.key – diese Angaben würde die App ablehnen."
+        );
+    }
     println!(
         "{}",
         serde_json::to_string_pretty(&signed).map_err(|e| e.to_string())?

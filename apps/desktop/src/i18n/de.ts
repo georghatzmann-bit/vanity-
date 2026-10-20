@@ -1284,14 +1284,15 @@ export const de = {
       'AEGIS sucht nur nach Updates, wenn du hier klickst. Angenommen werden nur Updates mit gültiger Signatur des Herausgebers; jede Datei wird vor dem Start gegen ihre Prüfsumme geprüft.',
     check: 'Nach Updates suchen',
     disabled:
-      'In diesem Build sind Updates abgeschaltet – es ist kein Signaturschlüssel des Herausgebers eingebaut. Neue Versionen gibt es dann über das Setup.',
+      'In diesem Build sind Updates abgeschaltet – es ist kein Signaturschlüssel des Herausgebers eingebaut. Neue Versionen gibt es dann auf der Release-Seite des Projekts.',
     upToDate: 'AEGIS ist aktuell (Version {version}).',
     available: 'Version {version} ist verfügbar (installiert: {current}).',
+    published: 'Veröffentlicht am {date} (signiert).',
     download: 'Herunterladen und prüfen',
     install: 'Jetzt installieren …',
     confirmTitle: 'Update installieren?',
     confirmText:
-      'AEGIS wird dafür beendet; Windows fragt nach Administratorrechten. Deine Daten und die Quarantäne bleiben erhalten.',
+      'AEGIS wird dafür beendet; Windows fragt nach Administratorrechten. Das Update ersetzt nur die Programmdateien – deine Daten, der Tresor und die Quarantäne bleiben erhalten.',
     installNow: 'Jetzt installieren',
     cancel: 'Abbrechen',
     honest:
