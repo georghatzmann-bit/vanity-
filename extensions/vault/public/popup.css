@@ -1,0 +1,41 @@
+/* Popup: schmal, Farben nur über --aegis-* (theme.ts). */
+body {
+  min-height: 0;
+  width: 340px;
+}
+main {
+  padding: 16px;
+}
+h1 {
+  font-size: 1.1rem;
+  line-height: 1.5rem;
+  margin-bottom: 4px;
+}
+.logins {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.logins li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--aegis-border);
+}
+.logins li:first-child {
+  border-top: 0;
+}
+.who {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.who span {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--aegis-text-muted);
+}
+.small {
+  font-size: 0.8rem;
+}

@@ -37,6 +37,9 @@ struct Inner {
     failures: u32,
     retry_after: Option<Instant>,
     clipboard: Option<(u32, Instant)>,
+    /// Zeitpunkte der letzten Ausfüll-Anfragen der Browser-Erweiterung (Begrenzung).
+    #[cfg_attr(not(windows), allow(dead_code))]
+    fills: std::collections::VecDeque<Instant>,
 }
 
 static STATE: LazyLock<Mutex<Inner>> = LazyLock::new(|| {
@@ -47,6 +50,7 @@ static STATE: LazyLock<Mutex<Inner>> = LazyLock::new(|| {
         failures: 0,
         retry_after: None,
         clipboard: None,
+        fills: std::collections::VecDeque::new(),
     })
 });
 static WATCHER: AtomicBool = AtomicBool::new(false);
@@ -462,6 +466,102 @@ pub async fn vault_change_master(old: String, new: String) -> Result<(), String>
     .map_err(|e| e.to_string())?
 }
 
+/// Ausfüll-Anfragen der Erweiterung je Minute (danach „rate_limited“).
+#[cfg_attr(not(windows), allow(dead_code))]
+const FILLS_PER_MINUTE: usize = 30;
+
+/// Beantwortet eine Anfrage der Browser-Erweiterung (über Host und Pipe).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn bridge_answer(line: &[u8]) -> aegis_vault_core::bridge::Response {
+    use aegis_vault_core::bridge::{Request, Response, handle, parse};
+    let Ok(request) = parse(line) else {
+        return Response::error("invalid");
+    };
+    let mut s = state();
+    if matches!(request, Request::Fill { .. }) && s.open.is_some() {
+        let now = Instant::now();
+        while s
+            .fills
+            .front()
+            .is_some_and(|t| now.duration_since(*t) > Duration::from_secs(60))
+        {
+            s.fills.pop_front();
+        }
+        if s.fills.len() >= FILLS_PER_MINUTE {
+            return Response::error("rate_limited");
+        }
+        s.fills.push_back(now);
+    }
+    handle(&request, s.open.as_ref().map(|(v, _)| v))
+}
+
+/// Startet die Brücke zur Browser-Erweiterung: eine Pipe nur für das eigene Konto; Anfragen
+/// werden nur vom Host `aegis-vault-host.exe` aus dem eigenen Programmordner angenommen.
+#[cfg(windows)]
+pub fn start_bridge() {
+    let _ = std::thread::Builder::new()
+        .name("aegis-vault-bridge".into())
+        .spawn(bridge_loop);
+}
+
+#[cfg(windows)]
+fn bridge_loop() {
+    use aegis_winffi::pipe::{
+        accept, client_process_id, create_user_instance, current_user_sid, disconnect,
+        vault_pipe_name,
+    };
+    use std::io::{BufRead, Read, Write};
+    let Ok(sid) = current_user_sid() else {
+        return;
+    };
+    let name = vault_pipe_name(&sid);
+    let Some(host) = std::env::current_exe()
+        .ok()
+        .map(|p| p.with_file_name("aegis-vault-host.exe"))
+    else {
+        return;
+    };
+    let mut first = true;
+    loop {
+        let instance = match create_user_instance(&name, first) {
+            Ok(i) => i,
+            // Name schon belegt (anderes Programm): keine Brücke statt einer unsicheren.
+            Err(_) if first => return,
+            Err(_) => {
+                std::thread::sleep(Duration::from_secs(1));
+                continue;
+            }
+        };
+        first = false;
+        let Ok(mut conn) = accept(instance) else {
+            continue;
+        };
+        let client = client_process_id(&conn)
+            .ok()
+            .and_then(|pid| aegis_winffi::system::process_image_path(pid).ok());
+        let allowed = client.is_some_and(|c| {
+            c.to_string_lossy()
+                .eq_ignore_ascii_case(&host.to_string_lossy())
+        });
+        if allowed {
+            let mut line = Vec::new();
+            let read = std::io::BufReader::new(
+                (&mut conn)
+                    .take(u64::try_from(aegis_vault_core::bridge::MAX_REQUEST + 1).unwrap_or(8193)),
+            )
+            .read_until(b'\n', &mut line);
+            if read.is_ok() {
+                let answer = Zeroizing::new(
+                    serde_json::to_vec(&bridge_answer(line.trim_ascii())).unwrap_or_default(),
+                );
+                let _ = conn.write_all(&answer).and_then(|()| conn.write_all(b"\n"));
+                let _ = conn.flush();
+            }
+        }
+        let _ = disconnect(&conn);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -478,5 +578,20 @@ mod tests {
             b"eins"
         );
         assert!(!path.with_extension("aegisvault.tmp").exists());
+    }
+
+    #[test]
+    fn bruecke_gesperrt_und_ungueltig() {
+        use aegis_vault_core::bridge::Response;
+        state().open = None;
+        assert_eq!(
+            bridge_answer(br#"{"type":"status"}"#),
+            Response::Status { unlocked: false }
+        );
+        assert_eq!(
+            bridge_answer(br#"{"type":"fill","id":"x","origin":"https://bank.example"}"#),
+            Response::Locked
+        );
+        assert_eq!(bridge_answer(b"kaputt"), Response::error("invalid"));
     }
 }

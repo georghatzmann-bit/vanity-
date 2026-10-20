@@ -1,0 +1,101 @@
+/* Gemeinsame Gestaltung der Erweiterungsseiten. Farben nur über --aegis-* (theme.ts). */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  font: 15px/1.5 var(--aegis-font);
+  color: var(--aegis-text);
+  background: var(--aegis-bg);
+}
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+h1 {
+  margin: 0 0 12px;
+  font-size: 1.75rem;
+  line-height: 2.25rem;
+  font-weight: 650;
+}
+h2 {
+  margin: 28px 0 8px;
+  font-size: 1rem;
+}
+p {
+  margin: 0 0 12px;
+}
+.muted {
+  color: var(--aegis-text-muted);
+}
+.card {
+  border: 1px solid var(--aegis-border);
+  border-radius: var(--aegis-radius);
+  background: var(--aegis-surface-1);
+  padding: 16px 18px;
+  margin: 16px 0;
+}
+.danger {
+  border-color: var(--aegis-danger);
+}
+.danger strong {
+  color: var(--aegis-danger);
+}
+.host {
+  font-family: ui-monospace, Consolas, monospace;
+  word-break: break-all;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+}
+button {
+  font: inherit;
+  border-radius: var(--aegis-radius);
+  padding: 8px 16px;
+  cursor: pointer;
+  border: 1px solid var(--aegis-border-strong);
+  background: var(--aegis-surface-2);
+  color: var(--aegis-text);
+}
+button.primary {
+  border-color: var(--aegis-accent);
+  background: var(--aegis-accent);
+  color: var(--aegis-on-accent);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--aegis-focus);
+  outline-offset: 2px;
+}
+label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 10px 0;
+}
+input[type='checkbox'] {
+  margin-top: 4px;
+  accent-color: var(--aegis-accent);
+}
+ul {
+  padding-left: 20px;
+}
+a {
+  color: var(--aegis-accent);
+}
+.ok {
+  color: var(--aegis-success);
+}
+.fail {
+  color: var(--aegis-warn);
+}

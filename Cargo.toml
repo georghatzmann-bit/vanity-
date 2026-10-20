@@ -18,6 +18,7 @@ aegis-sandbox = { path = "crates/sandbox" }
 aegis-hardening = { path = "crates/hardening" }
 aegis-netwatch = { path = "crates/netwatch" }
 aegis-vault-core = { path = "crates/vault-core" }
+aegis-vault-host = { path = "crates/vault-host" }
 aegis-tools = { path = "crates/tools" }
 aegis-defender-switch = { path = "crates/defender-switch" }
 aegis-quarantine = { path = "crates/quarantine" }

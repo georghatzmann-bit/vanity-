@@ -146,6 +146,9 @@ fn main() {
             }
             let tray_available =
                 window::close_to_tray_available(app.tray_by_id(tray::TRAY_ID).is_some());
+            // Brücke zur Tresor-Erweiterung (nur eigenes Konto, nur unser Host).
+            #[cfg(windows)]
+            vault::start_bridge();
             app.manage(app_info::AppInfo::detect(
                 app.package_info().version.to_string(),
                 tray_available,

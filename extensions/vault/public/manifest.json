@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "AEGIS Tresor",
+  "short_name": "AEGIS Tresor",
+  "version": "0.1.0",
+  "description": "Füllt Logins aus deinem AEGIS-Passwort-Tresor aus – nur auf der passenden Seite. Speichert selbst nichts.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw1f4SaK5viGF7qmMix3C3NQpnUkwoszY2n6Ez+Fm3y47DExyzQeaE3Or225lVcBXvOelhze83xZCZDhbLLDt1knLIknQxkaBH6fLb9BMnQxIRMCcxUfRou5gh1en1hgPOq5YGa27cFkZP7qJQDs4317FvNywpmE1XatEqTBMTMsUNaYmUaz0eGfoFJDSiAhkS0YzGkJg+ntHhwRDygrRYt+xE0cl6jZgwchADMxJwK9dL8mWcXAORLC8bok66igmMj3jm5AmO+OykMQBootoERiNErblQ17AL0rsKxvENQCx+gQdcew2KCnt47ajGNnhyJUXMXN860hcAy32Fjp8FwIDAQAB",
+  "minimum_chrome_version": "121",
+  "icons": {
+    "32": "icons/32.png",
+    "128": "icons/128.png"
+  },
+  "action": {
+    "default_title": "AEGIS Tresor",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "32": "icons/32.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["nativeMessaging"],
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+  }
+}

@@ -198,10 +198,14 @@ Windows-Sicherheit öffnen); jede Umschaltung im Prüfprotokoll und Verlauf; nur
        Zwischenablage ohne Verlauf + 30 s, Sicherung `.bak`) und Seite „Tresor“ (anlegen,
        entsperren, Suche, Ordner, Favoriten, Schlagwörter, Generator, Stärke, Mehrfach-/Leck-Check,
        CSV-Import, Master-Passwort ändern) (D-054).
-3. [ ] P9.3 Browser-Erweiterung über Native Messaging (HKCU, nur unsere ID).
+3. [x] P9.3 Browser-Erweiterung `extensions/vault` (MV3, einziges Recht `nativeMessaging`,
+       speichert nichts) + Host `aegis-vault-host.exe` (nur unsere feste Erweiterungs-ID) +
+       Pipe der App nur fürs eigene Konto (Gegenstelle per Programmpfad geprüft); Adresse immer
+       aus dem Absender des Hauptrahmens; Knopf im geschlossenen Schatten-Baum, Ausfüllen nur
+       nach echtem Klick/Alt+↓; Popup; E2E mit harmlosem Test-Host (D-055).
 4. [ ] P9.4 Sicherheits-Review, Doku, DoD.
 
-**Nächster Schritt:** P9.3 Browser-Erweiterung + Native Messaging.
+**Nächster Schritt:** P9.4 Sicherheits-Review (separater Agent), Befunde beheben, DoD.
 
 ## P5 – Schutz-Werkzeuge
 

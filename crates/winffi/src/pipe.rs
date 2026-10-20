@@ -16,9 +16,10 @@ use windows_sys::Win32::Security::{
 };
 use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX};
 use windows_sys::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeServerSessionId,
-    ImpersonateNamedPipeClient, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
-    PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
+    ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
+    GetNamedPipeServerProcessId, GetNamedPipeServerSessionId, ImpersonateNamedPipeClient,
+    PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
+    PIPE_WAIT,
 };
 use windows_sys::Win32::System::Threading::{
     GetCurrentProcess, GetCurrentThread, OpenProcessToken, OpenThreadToken,
@@ -386,4 +387,101 @@ pub(crate) fn sid_to_string(sid: PSID) -> io::Result<String> {
     #[allow(unsafe_code)]
     let _ = unsafe { LocalFree(text.cast()) };
     Ok(String::from_utf16_lossy(&units))
+}
+
+/// SID des eigenen Prozesses (`S-1-5-21-…`).
+///
+/// # Errors
+/// Token nicht lesbar.
+pub fn current_user_sid() -> io::Result<String> {
+    let mut token: HANDLE = ptr::null_mut();
+    // SAFETY: Pseudo-Handle des eigenen Prozesses; Ausgabezeiger gültig.
+    // aegis-unsafe: winffi-user-pipe-token
+    #[allow(unsafe_code)]
+    let ok = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let token = own(token)?;
+    token_user(token.as_raw_handle(), sid_to_string)?
+}
+
+/// Name der Tresor-Pipe eines Kontos (je Konto eigener Name).
+#[must_use]
+pub fn vault_pipe_name(sid: &str) -> String {
+    format!(r"\\.\pipe\aegis-vault-{sid}")
+}
+
+/// Legt eine Pipe-Instanz an, auf die **nur das eigene Konto** zugreifen darf (Tresor-Brücke
+/// zur Browser-Erweiterung). `first`: wie [`create_instance`].
+///
+/// # Errors
+/// Name belegt oder Zugriffsliste ungültig.
+pub fn create_user_instance(name: &str, first: bool) -> io::Result<OwnedHandle> {
+    let sid = current_user_sid()?;
+    if !sid.starts_with("S-1-")
+        || !sid
+            .bytes()
+            .all(|b| b.is_ascii_digit() || b == b'-' || b == b'S')
+    {
+        return Err(io::Error::other("unerwartete SID"));
+    }
+    let sd = SecurityDescriptor::from_sddl(&format!("O:{sid}D:P(A;;GA;;;{sid})"))?;
+    let attributes = sd.attributes();
+    let name = wide(name);
+    let open_mode = PIPE_ACCESS_DUPLEX
+        | if first {
+            FILE_FLAG_FIRST_PIPE_INSTANCE
+        } else {
+            0
+        };
+    // SAFETY: `name` nullterminiert, `attributes` verweist auf eine gültige
+    // Sicherheitsbeschreibung, die bis nach dem Aufruf lebt (`sd`).
+    // aegis-unsafe: winffi-user-pipe-create
+    #[allow(unsafe_code)]
+    let handle = unsafe {
+        CreateNamedPipeW(
+            name.as_ptr(),
+            open_mode,
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+            4,
+            64 * 1024,
+            64 * 1024,
+            0,
+            &attributes,
+        )
+    };
+    own(handle)
+}
+
+/// Prozess-ID des verbundenen Clients.
+///
+/// # Errors
+/// Abfrage nicht möglich.
+pub fn client_process_id(pipe: &File) -> io::Result<u32> {
+    let mut pid = 0u32;
+    // SAFETY: gültiges Pipe-Handle; Ausgabezeiger gültig.
+    // aegis-unsafe: winffi-pipe-client-pid
+    #[allow(unsafe_code)]
+    let ok = unsafe { GetNamedPipeClientProcessId(pipe.as_raw_handle(), &mut pid) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(pid)
+}
+
+/// Prozess-ID des Servers einer geöffneten Pipe (Client-Seite).
+///
+/// # Errors
+/// Abfrage nicht möglich.
+pub fn server_process_id(pipe: &File) -> io::Result<u32> {
+    let mut pid = 0u32;
+    // SAFETY: gültiges Pipe-Handle; Ausgabezeiger gültig.
+    // aegis-unsafe: winffi-pipe-server-pid
+    #[allow(unsafe_code)]
+    let ok = unsafe { GetNamedPipeServerProcessId(pipe.as_raw_handle(), &mut pid) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(pid)
 }

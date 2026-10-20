@@ -27,6 +27,7 @@ wird hier **vor** der Nutzung eingetragen (Name, Herkunft, Lizenz, Nutzungsart, 
 | argon2 0.6 (+ blake2, password-hash) | RustCrypto | MIT/Apache-2.0 | Datei-Safe: Schlüssel aus dem Passwort (Argon2id, P5) | 2026-10-19 |
 | wmi 0.18 (+ futures 0.3) | ohadravid / rust-lang | MIT/Apache-2.0 | Härtung: WMI-Abfragen nur lesend (BitLocker, TPM, Defender, Sicherheitscenter, Updates; P6) | 2026-10-19 |
 | axe-core / @axe-core/playwright 4.14 | Deque | MPL-2.0 | nur Tests, nicht ausgeliefert | 2026-10-19 |
+| jsdom 30 | jsdom/jsdom | MIT | nur Tests (DOM in vitest), nicht ausgeliefert | 2026-10-19 |
 | Block List Project – ransomware, scam (P7.3) | github.com/blocklistproject/Lists | Unlicense (Repository-Lizenz; die Kopfzeilen der Listen nennen MIT – beides frei, Herkunft wird genannt) | gebündelt als `extensions/webshield/public/rules/bundled.json` (Skript `update-webshield-lists.mjs`) | 2026-10-19 |
 | Block List Project – phishing, fraud (P7.3) | github.com/blocklistproject/Lists | Unlicense / MIT (wie oben) | von der Erweiterung zur Laufzeit geladen (abschaltbar) | 2026-10-19 |
 | Phishing.Database (P7.3) | github.com/Phishing-Database/Phishing.Database | MIT | `phishing-domains-ACTIVE.txt`, von der Erweiterung zur Laufzeit geladen (abschaltbar) | 2026-10-19 |

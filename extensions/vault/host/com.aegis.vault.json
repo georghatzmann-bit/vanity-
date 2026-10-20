@@ -1,0 +1,7 @@
+{
+  "name": "com.aegis.vault",
+  "description": "AEGIS Tresor – Native-Messaging-Host",
+  "path": "aegis-vault-host.exe",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://mfhpbiifllddbcddpanidjedgmbglhon/"]
+}

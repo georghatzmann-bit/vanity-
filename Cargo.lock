@@ -191,6 +191,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aegis-vault-host"
+version = "0.1.0"
+dependencies = [
+ "aegis-vault-core",
+ "aegis-winffi",
+ "serde_json",
+]
+
+[[package]]
 name = "aegis-winffi"
 version = "0.1.0"
 dependencies = [

@@ -403,3 +403,21 @@ nicht Schutzbereich – keine Dienst-Freigabe nötig). CSV-Import nur aus einer 
 Exportdatei (Chrome/Edge, Firefox, Bitwarden) mit Hinweis, sie danach zu löschen. Leck-Check je
 Eintrag über die HIBP-Range-API (nur Präfix, D-052). Es gibt bewusst keinen Klartext-Export.
 
+## D-055 – Tresor-Erweiterung: Native Messaging → Host → Pipe der App
+
+Status: angenommen (P9.3). Die Erweiterung „AEGIS Tresor“ (MV3) hat nur das Recht
+`nativeMessaging` – keinen Speicher, keine Tabs, keine Host-Rechte – und behält nichts. Ihre ID
+ist über den `key` im Manifest fest (`mfhpbiifllddbcddpanidjedgmbglhon`, Test). Der Browser
+startet `aegis-vault-host.exe` (Registrierung unter HKCU, `allowed_origins` nur diese ID; der
+Host prüft das Aufrufer-Argument zusätzlich). Der Host prüft jede Nachricht
+(`vault_core::bridge::parse`, ≤ 8 KiB, keine unbekannten Felder) und reicht sie über die Pipe
+`\\.\pipe\aegis-vault-<SID>` an die laufende App weiter. Die Pipe gehört dem Konto (DACL nur
+dessen SID); beide Seiten prüfen die Gegenstelle per Programmpfad im selben Ordner (App ↔ Host).
+Die Seitenadresse setzt der Hintergrund der Erweiterung aus dem Absender (nur Hauptrahmen,
+http/https, Herkunft = Adresse) – die Webseite kann keine Adresse vorgeben. Die App liefert nur
+Logins, deren gespeicherte Adresse zur Seite passt, Passwörter nur einzeln auf Abruf, höchstens
+30 je Minute, und nur bei entsperrtem Tresor. Das Inhaltsskript läuft nur im Hauptrahmen, zeigt
+seinen Knopf in einem geschlossenen Schatten-Baum und füllt erst nach einem echten Klick
+(`isTrusted`) bzw. Alt+↓; Fokus allein fragt AEGIS nicht. Auf HTTP-Seiten warnt es. Grenze:
+Ausgefüllte Werte stehen danach in der Seite – wie bei jedem Passwort-Manager.
+

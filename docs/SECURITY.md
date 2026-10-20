@@ -311,6 +311,12 @@ Technisch umgesetzt in `crates/core` (siehe `docs/ARCHITECTURE.md`, Abschnitt �
   Grenzen: Schadsoftware mit den Rechten des Kontos kann den entsperrten Prozess auslesen oder
   Eingaben mitschneiden – wie bei jedem Passwort-Manager; das Master-Passwort ist der einzige
   Schutz der Datei.
+- **Tresor-Erweiterung (P9.3):** nur `nativeMessaging`, kein Speicher (D-055). Kette
+  Erweiterung → Host (feste ID, Aufrufer geprüft, Nachrichten ≤ 8 KiB/≤ 1 MiB) → Pipe nur fürs
+  eigene Konto (DACL = SID, höchstens 4 Instanzen) → App; Gegenstellen gegenseitig per
+  Programmpfad geprüft. Adresse nur aus dem Absender (Hauptrahmen, http/https), Logins nur für
+  passende Einträge, Passwort einzeln, Begrenzung 30/min, nur entsperrt. Ausfüllen nur nach
+  echtem Klick oder Alt+↓ (E2E: synthetische Tasten und Unterrahmen lösen nichts aus).
 - **Defender-Schalter (P8):** nur dokumentierte Cmdlets mit festem Wortlaut (keine Eingaben im
   Befehl), PowerShell aus `System32` mit `-NoProfile -NonInteractive`, nur Administratoren,
   nur nach „Ja“, nur aus frischem Status; Manipulationsschutz an → kein Plan zum Abschalten.

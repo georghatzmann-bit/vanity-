@@ -12,6 +12,7 @@
 //! Diese Bibliothek liest und schreibt keine Dateien (nur Bytes) – rein und testbar.
 #![forbid(unsafe_code)]
 
+pub mod bridge;
 pub mod entry;
 pub mod generate;
 pub mod import;

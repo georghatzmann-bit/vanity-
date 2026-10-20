@@ -389,3 +389,8 @@ apps/desktop/src-tauri/src/vault.rs :: desktop-vault-backup :: Passwort-Tresor: 
 apps/desktop/src-tauri/src/vault.rs :: desktop-vault-replace :: Passwort-Tresor: ersetzt die eigene Tresordatei durch die eben geschriebene Fassung (Umbenennen der Hilfsdatei).
 crates/winffi/src/process.rs :: winffi-token-restricted :: Windows-FFI (Prüfprozess, nur lesend): fragt ab, ob ein Token eingeschränkt ist bzw. demselben Konto gehört – verändert nichts.
 crates/winffi/src/process.rs :: winffi-token-same-user :: Windows-FFI (Prüfprozess, nur lesend): fragt ab, ob ein Token eingeschränkt ist bzw. demselben Konto gehört – verändert nichts.
+crates/winffi/src/pipe.rs :: winffi-user-pipe-token :: Windows-FFI (Tresor-Brücke): liest die SID des eigenen Prozesses – verändert nichts.
+crates/winffi/src/pipe.rs :: winffi-user-pipe-create :: Windows-FFI (Tresor-Brücke): legt eine Named Pipe an, auf die nur das eigene Konto zugreifen darf (keine Datei, keine Nutzerdaten).
+crates/winffi/src/pipe.rs :: winffi-pipe-client-pid :: Windows-FFI (Tresor-Brücke): fragt die Prozess-ID des Pipe-Clients ab – verändert nichts.
+crates/winffi/src/pipe.rs :: winffi-pipe-server-pid :: Windows-FFI (Tresor-Brücke): fragt die Prozess-ID des Pipe-Servers ab – verändert nichts.
+crates/vault-host/src/main.rs :: vault-host-pipe-open :: Native-Messaging-Host: öffnet nur die Pipe der AEGIS-App des eigenen Kontos zum Weiterreichen einer geprüften Anfrage – keine Datei, keine Nutzerdaten.
