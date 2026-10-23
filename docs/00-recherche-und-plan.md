@@ -214,19 +214,13 @@ Später: weitere Versionen (19.40 zuerst, weil Erbium sie schon voll unterstütz
 
 ---
 
-## 4. Offene Fragen an dich
+## 4. Entscheidungen (23.10.2026)
 
-1. **Lizenz**: Ist GPL-3.0 für das ganze Projekt okay? (Empfehlung: ja – sonst dürften wir
-   weder Erbium noch LawinServer verwenden und müssten den Game Server komplett neu schreiben.)
-2. **Game-Server-Basis**: Erbium als saubere Grundlage nehmen und Magnesium-Funktionen gezielt
-   (mit Credit) übernehmen? (Empfehlung: ja. Magnesium ist ~330.000 Zeilen mit vielen
-   Extras, die wir nicht brauchen.)
-3. **Startmethode**: Alle OG-Launcher (auch Reboot) starten die Epic-Hilfsprogramme
-   (`FortniteLauncher.exe`, `…_EAC.exe`) und halten sie sofort an. Dazu kommen Start-Argumente
-   „ohne BattlEye“ und ein fester Platzhalter-Token. Easy Anti-Cheat läuft dabei nie. Das
-   ist nötig, damit der alte Build überhaupt startet. Es hilft nicht, im echten Fortnite zu
-   cheaten: Unser Spiel redet nur mit deinem eigenen Backend und alte Builds kommen nicht auf
-   Epics Server. Trotzdem sage ich es dir offen, weil du „keine Anti-Cheat-Umgehung“
-   geschrieben hast. Ist das so für dich okay?
-4. **Name**: Soll das Projekt „Vanity“ heißen (wie das Repo)? Die alte „Jarvis“-README würde
-   ich in Phase 1 ersetzen.
+Alle vier Punkte wurden so bestätigt:
+
+1. **Lizenz GPL-3.0** für das ganze Projekt. Das Projekt ist für den eigenen Gebrauch, der
+   Quellcode liegt öffentlich im Repo `vanity-` – das passt zur GPL. Alle Quellen werden genannt.
+2. **Erbium als Grundlage** für den Game Server, Magnesium-Funktionen gezielt mit Credit.
+3. **Startmethode wie bei allen OG-Launchern** (Hilfsprozesse angehalten, Platzhalter-Token),
+   mit den Sicherheitsgrenzen aus Abschnitt 3 (nur alte Builds, nur eigenes Backend).
+4. **Name: Vanity.**

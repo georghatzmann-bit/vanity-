@@ -1,0 +1,23 @@
+# Node
+node_modules/
+dist/
+*.log
+.vite/
+
+# Rust / Tauri
+target/
+launcher/src-tauri/gen/schemas/
+
+# Visual Studio (ab Phase 2)
+.vs/
+x64/
+*.user
+*.aps
+*.ipch
+
+# System
+.DS_Store
+Thumbs.db
+
+# Screenshots aus der lokalen Prüfung
+.screenshots/

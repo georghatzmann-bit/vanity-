@@ -1,0 +1,237 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Vanity – Farben und Maße
+ * Eine Akzentfarbe (Violett). Grün/Orange/Rot nur für Status.
+ * Abstände nach 4er-Raster, Ecken 8 px, drei Textgrößen (20/14/12 px).
+ */
+:root {
+  --radius: 0.5rem;
+
+  --background: #0f1115;
+  --foreground: #e8eaf0;
+
+  --card: #161922;
+  --card-foreground: #e8eaf0;
+  --popover: #181b25;
+  --popover-foreground: #e8eaf0;
+
+  /* Füllfarbe für Knöpfe (weiße Schrift: Kontrast 4,75) */
+  --primary: #7457f5;
+  --primary-foreground: #ffffff;
+  /* Akzent als Schrift auf dunklem Grund (Kontrast 6,9) */
+  --primary-text: #a78bfa;
+
+  --secondary: #1e2230;
+  --secondary-foreground: #e8eaf0;
+  --muted: #1a1d27;
+  --muted-foreground: #9096a8;
+  --accent: #232738;
+  --accent-foreground: #e8eaf0;
+
+  --destructive: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+
+  --border: rgb(255 255 255 / 0.07);
+  --input: rgb(255 255 255 / 0.1);
+  --ring: #8b72ff;
+
+  --surface-glass: rgb(22 25 34 / 0.62);
+  --surface-glass-strong: rgb(24 27 37 / 0.82);
+
+  --font-system: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-code: "Cascadia Mono", "Cascadia Code", Consolas, "JetBrains Mono", ui-monospace,
+    monospace;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-system);
+  --font-mono: var(--font-code);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-system);
+    font-size: 14px;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* Text in Eingabefeldern und Logs darf markiert werden */
+  input,
+  textarea,
+  .selectable {
+    user-select: text;
+  }
+
+  ::selection {
+    background: rgb(116 87 245 / 0.45);
+  }
+
+  /* Dünne, unauffällige Scrollbalken */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 0.08);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(255 255 255 / 0.16);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* Glas-Fläche: halbdurchsichtig mit Unschärfe, dazu eine feine Lichtkante oben */
+  .glass {
+    background: var(--surface-glass);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.05),
+      0 0 0 1px rgb(255 255 255 / 0.04);
+  }
+
+  /* Wenn der Glas-Effekt in den Einstellungen aus ist: feste Fläche */
+  .no-glass .glass,
+  .no-glass .glass-strong {
+    background: var(--card);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .glass-strong {
+    background: var(--surface-glass-strong);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+  }
+
+  /* Leuchtender Hauptknopf */
+  .glow-primary {
+    box-shadow:
+      0 0 0 1px rgb(167 139 250 / 0.35),
+      0 8px 32px -8px rgb(116 87 245 / 0.75);
+  }
+}
+
+/* Hintergrund: langsam treibende Farbflächen hinter dem Glas */
+.aurora {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  filter: blur(80px);
+  opacity: 0.5;
+}
+.aurora > span {
+  position: absolute;
+  border-radius: 999px;
+  animation: aurora-drift 48s ease-in-out infinite alternate;
+}
+.aurora > span:nth-child(1) {
+  width: 46%;
+  height: 46%;
+  left: 8%;
+  top: 4%;
+  background: #5b3fd9;
+}
+.aurora > span:nth-child(2) {
+  width: 38%;
+  height: 40%;
+  right: 6%;
+  top: 22%;
+  background: #1f4fd1;
+  animation-duration: 60s;
+  animation-delay: -12s;
+}
+.aurora > span:nth-child(3) {
+  width: 30%;
+  height: 34%;
+  left: 38%;
+  bottom: 2%;
+  background: #8a2fc9;
+  opacity: 0.6;
+  animation-duration: 72s;
+  animation-delay: -30s;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(6%, 4%, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-4%, 6%, 0) scale(0.95);
+  }
+}
+
+.reduce-motion .aurora > span,
+.static-background .aurora > span {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora > span {
+    animation: none;
+  }
+}
+
+/* Feines Punktraster über dem Hintergrund für mehr Tiefe */
+.dot-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse at 50% 0%, black 30%, transparent 75%);
+}
