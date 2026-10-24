@@ -109,7 +109,9 @@ jobs:
 
   windows:
     name: Installer bauen
-    needs: [check, backend]
+    # native hat continue-on-error, zählt also auch bei Fehlern als fertig – so sind die DLLs
+    # garantiert hochgeladen, bevor der Installer sie einsammelt (vorher ein Wettlauf).
+    needs: [check, backend, native]
     runs-on: windows-latest
     permissions:
       contents: write
