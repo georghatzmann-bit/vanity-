@@ -6,7 +6,7 @@ jedem Punkt, der nicht klappt: Screenshot + Log an mich (siehe unten „Was ich 
 ## Herunterladen
 
 Direkter Link (immer der neueste Stand):
-**https://github.com/georghatzmann-bit/vanity-/releases/download/testversion/Vanity-Setup.exe**
+**https://github.com/georghatzmann-bit/vanity-/releases/download/vanity-testversion/Vanity-Setup.exe**
 
 Windows meldet evtl. „Der Computer wurde durch Windows geschützt“, weil der Installer nicht
 signiert ist → **Weitere Informationen** → **Trotzdem ausführen**. Installiert nur für deinen

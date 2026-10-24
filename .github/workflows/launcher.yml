@@ -7,7 +7,7 @@
 #  4. windows – alles einsammeln (DLLs, Backend, Node) und den Installer bauen (Windows)
 #
 # Der fertige Installer liegt danach unter „Artifacts“ und zusätzlich als Vorab-Release
-# „testversion“ mit direktem Link.
+# „vanity-testversion“ mit direktem Link.
 name: Launcher
 
 on:
@@ -107,6 +107,8 @@ jobs:
     name: Installer bauen
     needs: [check, backend]
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -188,12 +190,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Direkter Download-Link: Vorab-Release „testversion“ (nur auf dem eigenen Zweig)
+      # Direkter Download-Link: Vorab-Release „vanity-testversion“ (nur auf dem eigenen Zweig)
       - name: Als Testversion veröffentlichen
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: testversion
+          tag_name: vanity-testversion
           name: Vanity – Testversion
           prerelease: true
           body: |
