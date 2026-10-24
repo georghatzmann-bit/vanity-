@@ -16,7 +16,7 @@ namespace MagnesiumAtomicPchDetail
 #include "framework.h"
 #include <SDK/Includes.h>
 using namespace SDK;
-#include "Erbium/Public/Utils.h"
+#include <Erbium/Public/Utils.h>
 #include <numeric>
 #include <algorithm>
 #include "libcurl/curl.h"

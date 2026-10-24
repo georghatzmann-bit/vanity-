@@ -1,7 +1,7 @@
 #pragma once
 #include "../../pch.h"
 #include "FortInventory.h"
-#include "../../../Magnesium/Erbium/Public/Configuration.h"
+#include <Erbium/Public/Configuration.h>
 
 class AFortPhysicsPawn : public AActor
 {

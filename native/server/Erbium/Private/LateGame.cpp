@@ -4,7 +4,7 @@
 #include <FortniteGame/Public/FortInventory.h>
 #include <FortniteGame/Public/FortPlayerControllerAthena.h>
 #include <FortniteGame/Public/FortControllerComponent_VictoryCrowns.h>
-#include "../Magnesium/Erbium/Public/Misc.h"
+#include <Erbium/Public/Misc.h>
 #include "../Public/Configuration.h"
 
 #include <random>

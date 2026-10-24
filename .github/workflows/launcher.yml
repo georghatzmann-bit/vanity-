@@ -90,17 +90,21 @@ jobs:
       - uses: microsoft/setup-msbuild@v2
       - name: DLLs bauen
         run: msbuild native\Vanity.sln /t:Restore,Build /p:Configuration=Release /p:Platform=x64 /m
+      # Auch wenn ein Projekt scheitert: alles einsammeln, was gebaut wurde (z. B. die Umleitung),
+      # damit der Installer nicht ohne DLLs dasteht.
       - name: DLLs einsammeln
+        if: always()
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dlls | Out-Null
-          Get-ChildItem native\bin\Release\vanity_*.dll | Copy-Item -Destination dlls\
-          Get-ChildItem dlls
+          Get-ChildItem native\bin\Release\vanity_*.dll -ErrorAction SilentlyContinue | Copy-Item -Destination dlls\
+          Write-Host "Gebaute DLLs:"; Get-ChildItem dlls -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v6
+        if: always()
         with:
           name: dlls
           path: dlls/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
   windows:
