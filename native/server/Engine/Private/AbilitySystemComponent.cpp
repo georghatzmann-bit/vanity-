@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "../Public/AbilitySystemComponent.h"
-#include "../../Erbium/Public/Finders.h"
-#include "../../FortniteGame/Public/FortKismetLibrary.h"
-#include "../../FortniteGame/Public/FortWeapon.h"
+#include <Erbium/Public/Finders.h>
+#include <FortniteGame/Public/FortKismetLibrary.h>
+#include <FortniteGame/Public/FortWeapon.h>
 
 uint64 ConstructAbilitySpec;
 uint64 GiveAbility_;

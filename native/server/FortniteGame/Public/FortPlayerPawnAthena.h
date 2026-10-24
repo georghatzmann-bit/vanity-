@@ -1,7 +1,7 @@
 #pragma once
 #include "../../pch.h"
 #include "GameplayTagContainer.h"
-#include "../../Engine/Public/CurveTable.h"
+#include <Engine/Public/CurveTable.h>
 
 class AFortPlayerControllerAthena;
 class UFortItemDefinition;

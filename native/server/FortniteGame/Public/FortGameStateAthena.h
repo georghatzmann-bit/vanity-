@@ -1,7 +1,7 @@
 #pragma once
 #include "../../pch.h"
 #include "FortPlaylistAthena.h"
-#include "../../Engine/Public/CurveTable.h"
+#include <Engine/Public/CurveTable.h>
 #include "FortPlayerStateAthena.h"
 #include "LevelStreamingDynamic.h"
 

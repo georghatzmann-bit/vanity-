@@ -1,6 +1,6 @@
 #pragma once
 #include "../../pch.h"
-#include "../../Engine/Public/CurveTable.h"
+#include <Engine/Public/CurveTable.h>
 #include "FortInventory.h"
 #include "FortGameMode.h"
 

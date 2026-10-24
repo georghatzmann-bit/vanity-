@@ -1,0 +1,321 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B03}</ProjectGuid>
+    <RootNamespace>Erbium</RootNamespace>
+    <TargetName>vanity_server</TargetName>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>Magnesium</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>.;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>.;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;ERBIUM_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;ERBIUM_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;ERBIUM_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalOptions>
+
+/ignore:4098 %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;ERBIUM_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\third_party\minhook\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalOptions>
+
+/ignore:4098 %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\SDK\Containers.h" />
+    <ClInclude Include="..\SDK\Core.h" />
+    <ClInclude Include="..\SDK\Defs.h" />
+    <ClInclude Include="..\SDK\Engine.h" />
+    <ClInclude Include="..\SDK\Includes.h" />
+    <ClInclude Include="..\SDK\Memcury.h" />
+    <ClInclude Include="..\SDK\Offsets.h" />
+    <ClInclude Include="EmbeddedImage.h" />
+    <ClInclude Include="Engine\Public\AbilitySystemComponent.h" />
+    <ClInclude Include="Engine\Public\CurveTable.h" />
+    <ClInclude Include="Engine\Public\DataTable.h" />
+    <ClInclude Include="Engine\Public\DataTableFunctionLibrary.h" />
+    <ClInclude Include="Engine\Public\NetDriver.h" />
+    <ClInclude Include="Engine\Public\Texture.h" />
+    <ClInclude Include="Erbium\Plugins\CrashReporter\Public\CrashReporter.h" />
+    <ClInclude Include="Erbium\Public\Calendar.h" />
+    <ClInclude Include="Erbium\Public\Configuration.h" />
+    <ClInclude Include="Erbium\Public\Events.h" />
+    <ClInclude Include="Erbium\Public\Finders.h" />
+    <ClInclude Include="Erbium\Public\AutoHosting.h" />
+    <ClInclude Include="Erbium\Public\ArenaTelemetry.h" />
+    <ClInclude Include="Erbium\Private\ArenaTelemetryPolicy.h" />
+    <ClInclude Include="Erbium\Private\ArenaTelemetryWire.h" />
+    <ClInclude Include="Erbium\Public\AssetHotfixBaselineSampler.h" />
+    <ClInclude Include="Erbium\Public\AssetHotfixRevisionPlanner.h" />
+    <ClInclude Include="Erbium\Public\AssetHotfixRollback.h" />
+    <ClInclude Include="Erbium\Public\GUI.h" />
+    <ClInclude Include="Erbium\Public\HotfixReload.h" />
+    <ClInclude Include="Erbium\Public\PlayerLoadout.h" />
+    <ClInclude Include="Erbium\Public\LateGame.h" />
+    <ClInclude Include="Erbium\Public\MinHook.h" />
+    <ClInclude Include="Erbium\Public\Misc.h" />
+    <ClInclude Include="Erbium\Public\Utils.h" />
+    <ClInclude Include="Erbium\Support\Public\AIDebugLogger.h" />
+    <ClInclude Include="Erbium\Support\Public\AINameGenerator.h" />
+    <ClInclude Include="Erbium\Support\Public\AISkillProfile.h" />
+    <ClInclude Include="Erbium\Support\Public\FaultGuard.h" />
+    <ClInclude Include="Erbium\Support\Public\SupportTypes.h" />
+    <ClInclude Include="Erbium\Support\Public\VersionFeatureAdapter.h" />
+    <ClInclude Include="FortniteGame\Public\BattleRoyaleGamePhaseLogic.h" />
+    <ClInclude Include="FortniteGame\Public\CustomSafeZoneRuntime.h" />
+    <ClInclude Include="FortniteGame\Public\BuildingContainer.h" />
+    <ClInclude Include="FortniteGame\Public\BuildingFoundation.h" />
+    <ClInclude Include="FortniteGame\Public\FortAthenaSpawningPolicyManager.h" />
+    <ClInclude Include="FortniteGame\Public\BuildingItemCollectorActor.h" />
+    <ClInclude Include="FortniteGame\Public\BuildingSMActor.h" />
+    <ClInclude Include="FortniteGame\Public\FortAthenaCreativePortal.h" />
+    <ClInclude Include="FortniteGame\Public\FortCreativeMoveTool.h" />
+    <ClInclude Include="FortniteGame\Public\FortAthenaMutator.h" />
+    <ClInclude Include="FortniteGame\Public\FortCheatManager.h" />
+    <ClInclude Include="FortniteGame\Public\FortControllerComponent_VictoryCrowns.h" />
+    <ClInclude Include="FortniteGame\Public\FortGameMode.h" />
+    <ClInclude Include="FortniteGame\Public\FortGameSessionAthena.h" />
+    <ClInclude Include="FortniteGame\Public\FortGameStateAthena.h" />
+    <ClInclude Include="FortniteGame\Public\FortInventory.h" />
+    <ClInclude Include="FortniteGame\Public\FortKismetLibrary.h" />
+    <ClInclude Include="FortniteGame\Public\FortLootPackage.h" />
+    <ClInclude Include="FortniteGame\Public\FortMinigame.h" />
+    <ClInclude Include="FortniteGame\Public\FortMissionLibrary.h" />
+    <ClInclude Include="FortniteGame\Public\FortPhysicsPawn.h" />
+    <ClInclude Include="FortniteGame\Public\FortPlayerControllerAthena.h" />
+    <ClInclude Include="FortniteGame\Public\FortPlayerPawnAthena.h" />
+    <ClInclude Include="FortniteGame\Public\FortPlayerStateAthena.h" />
+    <ClInclude Include="FortniteGame\Public\FortPlaylistAthena.h" />
+    <ClInclude Include="FortniteGame\Public\FortQuestManager.h" />
+    <ClInclude Include="FortniteGame\Public\FortSafeZoneIndicator.h" />
+    <ClInclude Include="FortniteGame\Public\FortVolume.h" />
+    <ClInclude Include="FortniteGame\Public\FortVehicleMods.h" />
+    <ClInclude Include="FortniteGame\Public\FortVehicleSeatWeaponComponent.h" />
+    <ClInclude Include="FortniteGame\Public\FortWeapon.h" />
+    <ClInclude Include="FortniteGame\Public\FortWeaponMods.h" />
+    <ClInclude Include="FortniteGame\Public\GameplayTagContainer.h" />
+    <ClInclude Include="FortniteGame\Public\LevelStreamingDynamic.h" />
+    <ClInclude Include="framework.h" />
+    <ClInclude Include="ImGui\imconfig.h" />
+    <ClInclude Include="ImGui\imgui.h" />
+    <ClInclude Include="ImGui\imgui_impl_dx11.h" />
+    <ClInclude Include="ImGui\imgui_impl_win32.h" />
+    <ClInclude Include="ImGui\imgui_internal.h" />
+    <ClInclude Include="ImGui\imstb_rectpack.h" />
+    <ClInclude Include="ImGui\imstb_textedit.h" />
+    <ClInclude Include="ImGui\imstb_truetype.h" />
+    <ClInclude Include="ImGui\imgui_stdlib.h" />
+    <ClInclude Include="json.hpp" />
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="Resource.h" />
+    <ClInclude Include="SplashImage.h" />
+    <ClInclude Include="stb_image.h" />
+    <ClInclude Include="stb_image_write.h" />
+    <ClInclude Include="bcdec.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Engine\Private\AbilitySystemComponent.cpp" />
+    <ClCompile Include="Engine\Private\NetDriver.cpp" />
+    <ClCompile Include="Erbium\Plugins\CrashReporter\Private\CrashReporter.cpp" />
+    <ClCompile Include="Erbium\Private\AutoHosting.cpp" />
+    <ClCompile Include="Erbium\Private\ArenaTelemetry.cpp" />
+    <ClCompile Include="Erbium\Private\dllmain.cpp" />
+    <ClCompile Include="Erbium\Private\Events.cpp" />
+    <ClCompile Include="Erbium\Private\AssetHotfixBaselineSampler.cpp" />
+    <ClCompile Include="Erbium\Private\AssetHotfixRevisionPlanner.cpp" />
+    <ClCompile Include="Erbium\Private\AssetHotfixRollback.cpp" />
+    <ClCompile Include="Erbium\Private\Finders.cpp" />
+    <ClCompile Include="Erbium\Private\GUI.cpp" />
+    <ClCompile Include="Erbium\Private\HotfixReload.cpp" />
+    <ClCompile Include="Erbium\Private\PlayerLoadout.cpp" />
+    <ClCompile Include="Erbium\Private\LateGame.cpp" />
+    <ClCompile Include="Erbium\Private\Misc.cpp" />
+    <ClCompile Include="Erbium\Support\Private\VersionFeatureAdapter.cpp" />
+    <ClCompile Include="FortniteGame\Private\BattleRoyaleGamePhaseLogic.cpp" />
+    <ClCompile Include="FortniteGame\Private\CustomSafeZoneRuntime.cpp" />
+    <ClCompile Include="FortniteGame\Private\BuildingFoundation.cpp" />
+    <ClCompile Include="FortniteGame\Private\BuildingSMActor.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortAthenaCreativePortal.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortCreativeMoveTool.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortAthenaMutator.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortGameMode.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortInventory.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortKismetLibrary.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortLootPackage.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortMinigame.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortMissionLibrary.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortPhysicsPawn.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortPlayerControllerAthena.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortPlayerPawnAthena.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortQuestManager.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortVehicleMods.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortVehicleSeatWeaponComponent.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortWeaponMods.cpp" />
+    <ClCompile Include="FortniteGame\Private\FortWeaponRanged.cpp" />
+    <ClCompile Include="ImGui\imgui.cpp" />
+    <ClCompile Include="ImGui\imgui_draw.cpp" />
+    <ClCompile Include="ImGui\imgui_impl_dx11.cpp" />
+    <ClCompile Include="ImGui\imgui_impl_win32.cpp" />
+    <ClCompile Include="ImGui\imgui_tables.cpp" />
+    <ClCompile Include="ImGui\imgui_widgets.cpp" />
+    <ClCompile Include="ImGui\imgui_stdlib.cpp" />
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resources.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Erbium\Resources\TrickshotPresets\BlockWinner_15Bandit.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\minhook\minhook.vcxproj">
+      <Project>{6b1d5c3a-0f2e-4c8b-9a61-2d3e4f5a6b01}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

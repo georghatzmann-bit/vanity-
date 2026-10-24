@@ -2,9 +2,9 @@
 #include "../Public/BattleRoyaleGamePhaseLogic.h"
 #include "../Public/CustomSafeZoneRuntime.h"
 #include "../Public/FortPlayerControllerAthena.h"
-#include "../../Erbium/Public/Configuration.h"
-#include "../../Erbium/Public/GUI.h"
-#include "../../Erbium/Support/Public/VersionFeatureAdapter.h"
+#include <Erbium/Public/Configuration.h>
+#include <Erbium/Public/GUI.h>
+#include <Erbium/Support/Public/VersionFeatureAdapter.h>
 
 uint64_t SetGamePhase_ = 0;
 

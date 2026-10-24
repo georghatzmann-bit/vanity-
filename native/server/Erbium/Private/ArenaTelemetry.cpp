@@ -4,12 +4,12 @@
 #include "ArenaTelemetryWire.h"
 
 #include "../Public/GUI.h"
-#include "../../Engine/Public/NetDriver.h"
-#include "../../FortniteGame/Public/FortGameMode.h"
-#include "../../FortniteGame/Public/FortGameStateAthena.h"
-#include "../../FortniteGame/Public/FortPlayerControllerAthena.h"
-#include "../../FortniteGame/Public/FortPlayerStateAthena.h"
-#include "../../FortniteGame/Public/FortPlaylistAthena.h"
+#include <Engine/Public/NetDriver.h>
+#include <FortniteGame/Public/FortGameMode.h>
+#include <FortniteGame/Public/FortGameStateAthena.h>
+#include <FortniteGame/Public/FortPlayerControllerAthena.h>
+#include <FortniteGame/Public/FortPlayerStateAthena.h>
+#include <FortniteGame/Public/FortPlaylistAthena.h>
 #include "../../json.hpp"
 
 #include <algorithm>

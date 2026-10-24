@@ -19,7 +19,7 @@ fi
 
 INC="-imsvc $XWIN/crt/include -imsvc $XWIN/sdk/include/ucrt -imsvc $XWIN/sdk/include/um -imsvc $XWIN/sdk/include/shared -imsvc $XWIN/sdk/include/winrt"
 # gemeinsame Flags: C++ neuste, Ausnahmen, statische Laufzeit, MSVC-Kompatibilität, nur prüfen
-COMMON="--target=x86_64-pc-windows-msvc /std:c++latest /EHsc /MT -fms-compatibility -fms-extensions -fms-compatibility-version=19.40 -Wno-everything -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH -D_WINDOWS -D_USRDLL -DNDEBUG -DWIN32_LEAN_AND_MEAN $INC"
+COMMON="--target=x86_64-pc-windows-msvc /std:c++latest /EHsc /MT -fms-compatibility -fms-extensions -fms-compatibility-version=19.40 -Wno-everything -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH -DUNICODE -D_UNICODE -D_WINDOWS -D_USRDLL -DNDEBUG -DWIN32_LEAN_AND_MEAN $INC"
 
 check_one() {
   local name="$1"; shift

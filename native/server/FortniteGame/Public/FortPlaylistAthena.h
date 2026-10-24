@@ -1,10 +1,10 @@
 #pragma once
 #include "../../pch.h"
-#include "../../Engine/Public/DataTable.h"
-#include "../../Engine/Public/DataTableFunctionLibrary.h"
-#include "../../Engine/Public/CurveTable.h"
+#include <Engine/Public/DataTable.h>
+#include <Engine/Public/DataTableFunctionLibrary.h>
+#include <Engine/Public/CurveTable.h>
 #include "GameplayTagContainer.h"
-#include "../../Engine/Public/AbilitySystemComponent.h"
+#include <Engine/Public/AbilitySystemComponent.h>
 
 struct FUIExtension final
 {

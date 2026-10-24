@@ -4,8 +4,8 @@
 #include "../Public/FortPlayerStateAthena.h"
 #include "../Public/FortGameStateAthena.h"
 #include "../Public/FortVolume.h"
-#include "../../Erbium/Support/Public/FaultGuard.h"
-#include "../../Erbium/Support/Public/VersionFeatureAdapter.h"
+#include <Erbium/Support/Public/FaultGuard.h>
+#include <Erbium/Support/Public/VersionFeatureAdapter.h>
 #include <unordered_map>
 #include <vector>
 

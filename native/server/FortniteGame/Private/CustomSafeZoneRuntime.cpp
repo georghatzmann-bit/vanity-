@@ -3,9 +3,9 @@
 #include "../Public/BattleRoyaleGamePhaseLogic.h"
 #include "../Public/FortGameMode.h"
 #include "../Public/FortGameStateAthena.h"
-#include "../../Erbium/Public/Configuration.h"
-#include "../../Erbium/Public/GUI.h"
-#include "../../Erbium/Support/Public/VersionFeatureAdapter.h"
+#include <Erbium/Public/Configuration.h>
+#include <Erbium/Public/GUI.h>
+#include <Erbium/Support/Public/VersionFeatureAdapter.h>
 
 #include <algorithm>
 #include <cassert>

@@ -1,13 +1,13 @@
 #include "pch.h"
 #include "../Public/BuildingSMActor.h"
-#include "../../Engine/Public/DataTableFunctionLibrary.h"
+#include <Engine/Public/DataTableFunctionLibrary.h>
 #include "../Public/FortGameStateAthena.h"
 #include "../Public/FortGameMode.h"
 #include "../Public/FortWeapon.h"
 #include "../Public/FortKismetLibrary.h"
 #include "../Public/FortPlayerControllerAthena.h"
-#include "../../Engine/Public/AbilitySystemComponent.h"
-#include "../../Erbium/Public/Configuration.h"
+#include <Engine/Public/AbilitySystemComponent.h>
+#include <Erbium/Public/Configuration.h>
 
 void ABuildingSMActor::OnDamageServer(ABuildingSMActor* Actor, float Damage,
     FGameplayTagContainer DamageTags, FVector Momentum, __int64 HitInfo, AActor* InstigatedBy,

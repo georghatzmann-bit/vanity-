@@ -2,7 +2,7 @@
 #include "../Public/HotfixReload.h"
 #include "../Public/AssetHotfixRollback.h"
 
-#include "../../Engine/Public/NetDriver.h"
+#include <Engine/Public/NetDriver.h>
 #include "../Support/Public/FaultGuard.h"
 #include "../Support/Public/VersionFeatureAdapter.h"
 

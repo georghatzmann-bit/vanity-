@@ -5,8 +5,8 @@
 #include "../Public/FortGameStateAthena.h"
 #include "../Public/FortAthenaMutator.h"
 #include "../Public/FortKismetLibrary.h"
-#include "../../Erbium/Public/Configuration.h"
-#include "../../Erbium/Support/Public/VersionFeatureAdapter.h"
+#include <Erbium/Public/Configuration.h>
+#include <Erbium/Support/Public/VersionFeatureAdapter.h>
 #include "../Public/FortWeapon.h"
 #include "../Public/FortWeaponMods.h"
 #include <ShlObj.h>

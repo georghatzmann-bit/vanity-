@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../../FortniteGame/Public/FortGameMode.h"
-#include "../../FortniteGame/Public/FortGameStateAthena.h"
-#include "../../../SDK/Engine.h"
-#include "../../../SDK/Offsets.h"
-#include "../../../SDK/Core.h"
+#include <FortniteGame/Public/FortGameMode.h>
+#include <FortniteGame/Public/FortGameStateAthena.h>
+#include <SDK/Engine.h>
+#include <SDK/Offsets.h>
+#include <SDK/Core.h>
 #include "Configuration.h"
 #include "GUI.h"
 #include "Utils.h"

@@ -1,7 +1,7 @@
 #pragma once
 #include "../../pch.h"
 #include "../Public/FortInventory.h"
-#include "../../Engine/Public/DataTable.h"
+#include <Engine/Public/DataTable.h>
 
 class UFortControllerComponent_VictoryCrowns : public UFortControllerComponent
 {

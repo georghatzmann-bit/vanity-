@@ -2,7 +2,7 @@
 #include "../../pch.h"
 #include "FortInventory.h"
 #include "FortGameStateAthena.h"
-#include "../../Engine/Public/DataTable.h"
+#include <Engine/Public/DataTable.h>
 
 struct FFortGameFeatureLootTableData
 {

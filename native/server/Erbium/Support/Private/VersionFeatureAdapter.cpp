@@ -8,10 +8,10 @@
 #include "../../Public/Finders.h"
 #include "../../Public/GUI.h"
 #include "../../Public/PlayerLoadout.h"
-#include "../../../FortniteGame/Public/BattleRoyaleGamePhaseLogic.h"
-#include "../../../FortniteGame/Public/FortKismetLibrary.h"
-#include "../../../FortniteGame/Public/FortPlayerControllerAthena.h"
-#include "../../../FortniteGame/Public/FortWeapon.h"
+#include <FortniteGame/Public/BattleRoyaleGamePhaseLogic.h>
+#include <FortniteGame/Public/FortKismetLibrary.h>
+#include <FortniteGame/Public/FortPlayerControllerAthena.h>
+#include <FortniteGame/Public/FortWeapon.h>
 #include <cstdarg>
 #include <unordered_map>
 #include <unordered_set>

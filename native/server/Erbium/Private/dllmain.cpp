@@ -3,17 +3,15 @@
 #include <thread>
 #include <iostream>
 #include "../Public/Finders.h"
-#include "../../FortniteGame/Public/FortInventory.h"
+#include <FortniteGame/Public/FortInventory.h>
 #include <chrono>
 #include "../Public/Configuration.h"
 #include "../Public/AutoHosting.h"
 #include "../Public/Misc.h"
 #include "../Public/GUI.h"
-#include "../../Erbium/Plugins/CrashReporter/Public/CrashReporter.h"
-#include "../../FortniteGame/Public/FortPlayerControllerAthena.h"
-#include "../../Engine/Public/NetDriver.h"
-#pragma comment(lib, "libcurl/libcurl.lib")
-#pragma comment(lib, "libcurl/zlib.lib")
+#include <Erbium/Plugins/CrashReporter/Public/CrashReporter.h>
+#include <FortniteGame/Public/FortPlayerControllerAthena.h>
+#include <Engine/Public/NetDriver.h>
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Wldap32.lib")
 #pragma comment(lib, "Crypt32.lib")

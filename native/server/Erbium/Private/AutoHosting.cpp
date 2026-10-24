@@ -578,7 +578,7 @@ namespace AutoHosting
                 return {};
             }
 
-            return fs::path(LocalAppData) / L"Magnesium" / L"auto_hosting.json";
+            return fs::path(LocalAppData) / L"Vanity" / L"server" / L"auto_hosting.json";
         }
 
         nlohmann::json CapturePreferences()

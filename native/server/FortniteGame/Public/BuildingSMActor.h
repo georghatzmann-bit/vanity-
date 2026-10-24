@@ -2,7 +2,7 @@
 #include "../../pch.h"
 #include "FortPlayerStateAthena.h"
 #include "GameplayTagContainer.h"
-#include "../../Engine/Public/CurveTable.h"
+#include <Engine/Public/CurveTable.h>
 
 class AFortPlayerControllerAthena;
 class UFortDecoItemDefinition;

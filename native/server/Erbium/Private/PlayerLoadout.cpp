@@ -1,12 +1,12 @@
 #include "pch.h"
 
 #include "../Public/PlayerLoadout.h"
-#include "../../Engine/Public/Texture.h"
-#include "../../Engine/Public/NetDriver.h"
-#include "../../FortniteGame/Public/FortInventory.h"
-#include "../../FortniteGame/Public/FortPlayerControllerAthena.h"
-#include "../../FortniteGame/Public/FortWeapon.h"
-#include "../../ImGui/imgui.h"
+#include <Engine/Public/Texture.h>
+#include <Engine/Public/NetDriver.h>
+#include <FortniteGame/Public/FortInventory.h>
+#include <FortniteGame/Public/FortPlayerControllerAthena.h>
+#include <FortniteGame/Public/FortWeapon.h>
+#include <ImGui/imgui.h>
 
 #include <d3d11.h>
 #include <array>

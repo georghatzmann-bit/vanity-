@@ -1,7 +1,7 @@
 #pragma once
 #include "pch.h"
-#include "../../FortniteGame/Public/FortPlayerControllerAthena.h"
-#include "../../FortniteGame/Public/BuildingSMActor.h"
+#include <FortniteGame/Public/FortPlayerControllerAthena.h>
+#include <FortniteGame/Public/BuildingSMActor.h>
 #include "../Support/Public/FaultGuard.h"
 
 uint64_t FindGIsClient()

@@ -1,6 +1,6 @@
 #pragma once
 #include "../../pch.h"
-#include "../../FortniteGame/Public/FortPlayerControllerAthena.h"
+#include <FortniteGame/Public/FortPlayerControllerAthena.h>
 
 struct FObjectReplicationBridgeFilterConfig
 {

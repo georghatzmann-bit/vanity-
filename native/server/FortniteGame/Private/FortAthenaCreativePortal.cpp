@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "../Public/FortAthenaCreativePortal.h"
 #include "../Public/FortGameStateAthena.h"
-#include "../../Erbium/Public/Configuration.h"
-#include "../../Erbium/Support/Public/VersionFeatureAdapter.h"
+#include <Erbium/Public/Configuration.h>
+#include <Erbium/Support/Public/VersionFeatureAdapter.h>
 
 namespace
 {

@@ -6,8 +6,8 @@
 #include "../Public/FortPlayerStateAthena.h"
 #include "../Public/BattleRoyaleGamePhaseLogic.h"
 #include "../Public/FortGameMode.h"
-#include "../../Erbium/Public/Configuration.h"
-#include "../../Erbium/Public/GUI.h"
+#include <Erbium/Public/Configuration.h>
+#include <Erbium/Public/GUI.h>
 
 #include <algorithm>
 #include <array>

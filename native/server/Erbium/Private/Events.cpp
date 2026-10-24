@@ -2,9 +2,9 @@
 #include "../Public/Events.h"
 #include "../Public/Configuration.h"
 #include "../Support/Public/VersionFeatureAdapter.h"
-#include "../../Engine/Public/NetDriver.h"
-#include "../../FortniteGame/Public/FortGameMode.h"
-#include "../../FortniteGame/Public/BattleRoyaleGamePhaseLogic.h"
+#include <Engine/Public/NetDriver.h>
+#include <FortniteGame/Public/FortGameMode.h>
+#include <FortniteGame/Public/BattleRoyaleGamePhaseLogic.h>
 #include <limits>
 
 struct FPhaseDataLayerEntry

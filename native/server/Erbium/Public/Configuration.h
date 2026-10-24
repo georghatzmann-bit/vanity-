@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../../SDK/Engine.h"
+#include <SDK/Engine.h>
 #include <atomic>
 #include <cmath>
 #include <memory>

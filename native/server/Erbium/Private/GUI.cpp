@@ -2,10 +2,10 @@
 #include "../../Resource.h"
 #include "../Public/GUI.h"
 #include <d3d11.h>
-#include "../../ImGui/imgui.h"
-#include "../../ImGui/imgui_stdlib.h"
-#include "../../ImGui/imgui_impl_win32.h"
-#include "../../ImGui/imgui_impl_dx11.h"
+#include <ImGui/imgui.h>
+#include <ImGui/imgui_stdlib.h>
+#include <ImGui/imgui_impl_win32.h>
+#include <ImGui/imgui_impl_dx11.h>
 #include "../Public/Calendar.h"
 #include "../Public/AutoHosting.h"
 #include "../Public/Configuration.h"
@@ -13,19 +13,19 @@
 #include "../Public/Misc.h"
 #include "../Public/PlayerLoadout.h"
 #include "../Support/Public/FaultGuard.h"
-#include "../../FortniteGame/Public/BattleRoyaleGamePhaseLogic.h"
-#include "../../FortniteGame/Public/FortAthenaMutator.h"
-#include "../../FortniteGame/Public/BuildingSMActor.h"
-#include "../../FortniteGame/Public/GameplayTagContainer.h"
-#include "../../Engine/Public/NetDriver.h"
-#include "../../FortniteGame/Public/FortPhysicsPawn.h"
-#include "../../FortniteGame/Public/FortVehicleMods.h"
-#include "../../FortniteGame/Public/FortPlayerPawnAthena.h"
-#include "../../FortniteGame/Public/FortPlayerStateAthena.h"
-#include "../../FortniteGame/Public/FortGameStateAthena.h"
-#include "../../FortniteGame/Public/FortGameMode.h"
-#include "../../FortniteGame/Public/CustomSafeZoneRuntime.h"
-#include "../../Engine/Public/Texture.h"
+#include <FortniteGame/Public/BattleRoyaleGamePhaseLogic.h>
+#include <FortniteGame/Public/FortAthenaMutator.h>
+#include <FortniteGame/Public/BuildingSMActor.h>
+#include <FortniteGame/Public/GameplayTagContainer.h>
+#include <Engine/Public/NetDriver.h>
+#include <FortniteGame/Public/FortPhysicsPawn.h>
+#include <FortniteGame/Public/FortVehicleMods.h>
+#include <FortniteGame/Public/FortPlayerPawnAthena.h>
+#include <FortniteGame/Public/FortPlayerStateAthena.h>
+#include <FortniteGame/Public/FortGameStateAthena.h>
+#include <FortniteGame/Public/FortGameMode.h>
+#include <FortniteGame/Public/CustomSafeZoneRuntime.h>
+#include <Engine/Public/Texture.h>
 #include <sstream>
 #include <fstream>
 #include <string>
@@ -4468,7 +4468,7 @@ namespace SafeZoneMap
             if (SUCCEEDED(SHGetFolderPathW(
                     nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, localAppData)))
             {
-                result = std::wstring(localAppData) + L"\\Magnesium\\Maps";
+                result = std::wstring(localAppData) + L"\\Vanity\\server\\Maps";
             }
             else
             {
@@ -7196,7 +7196,7 @@ namespace TrickshotManager
         if (FAILED(SHGetFolderPathA(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, Path)))
             return {};
 
-        fs::path Directory = fs::path(Path) / "Magnesium" / "trickshots";
+        fs::path Directory = fs::path(Path) / "Vanity" / "server" / "trickshots";
         std::error_code Error;
         fs::create_directories(Directory, Error);
         return Error ? fs::path{} : Directory;

@@ -6,10 +6,10 @@
 #include "../Public/FortPlayerPawnAthena.h"
 #include "../Public/FortWeapon.h"
 #include "../Public/LevelStreamingDynamic.h"
-#include "../../Engine/Public/NetDriver.h"
-#include "../../Erbium/Public/Configuration.h"
-#include "../../Erbium/Public/ArenaTelemetry.h"
-#include "../../Erbium/Private/ArenaTelemetryPolicy.h"
+#include <Engine/Public/NetDriver.h>
+#include <Erbium/Public/Configuration.h>
+#include <Erbium/Public/ArenaTelemetry.h>
+#include <Erbium/Private/ArenaTelemetryPolicy.h>
 
 #include <cmath>
 #include <cstdlib>

@@ -7,11 +7,11 @@
 #include "../Public/FortWeapon.h"
 #include "../Public/FortWeaponMods.h"
 #include "../Public/FortPhysicsPawn.h"
-#include "../../Engine/Public/NetDriver.h"
-#include "../../Erbium/Public/Configuration.h"
-#include "../../Erbium/Public/GUI.h"
-#include "../../Erbium/Public/PlayerLoadout.h"
-#include "../../Erbium/Support/Public/FaultGuard.h"
+#include <Engine/Public/NetDriver.h>
+#include <Erbium/Public/Configuration.h>
+#include <Erbium/Public/GUI.h>
+#include <Erbium/Public/PlayerLoadout.h>
+#include <Erbium/Support/Public/FaultGuard.h>
 
 #include <array>
 

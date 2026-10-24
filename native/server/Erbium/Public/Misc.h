@@ -44,7 +44,7 @@ namespace LoadoutManager
         char path[MAX_PATH];
         if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path)))
         {
-            std::string fullPath = std::string(path) + "\\Magnesium\\loadouts";
+            std::string fullPath = std::string(path) + "\\Vanity\\server\\loadouts";
             std::filesystem::create_directories(fullPath);
             return fullPath;
         }

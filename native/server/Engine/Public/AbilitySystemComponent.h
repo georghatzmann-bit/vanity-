@@ -1,6 +1,6 @@
 #pragma once
 #include "../../pch.h"
-#include "../../FortniteGame/Public/FortPlayerPawnAthena.h"
+#include <FortniteGame/Public/FortPlayerPawnAthena.h>
 
 struct FGameplayAbilitySpecHandle
 {

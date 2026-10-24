@@ -3,7 +3,7 @@
 #include "../Public/BuildingContainer.h"
 #include "../Public/FortAthenaMutator.h"
 #include "../Public/FortGameMode.h"
-#include "../../Erbium/Public/Configuration.h"
+#include <Erbium/Public/Configuration.h>
 
 struct FFortLootLevelData
 {

@@ -21,7 +21,7 @@
 
 #include "pch.h"
 
-#include "../ImGui/imgui.h"
+#include <ImGui/imgui.h>
 #ifndef IMGUI_DISABLE
 #include "imgui_stdlib.h"
 

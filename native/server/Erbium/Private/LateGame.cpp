@@ -1,9 +1,9 @@
 #include "pch.h"
 #include "../Public/LateGame.h"
 #include "../Public/Utils.h"
-#include "../../FortniteGame/Public/FortInventory.h"
-#include "../../FortniteGame/Public/FortPlayerControllerAthena.h"
-#include "../../FortniteGame/Public/FortControllerComponent_VictoryCrowns.h"
+#include <FortniteGame/Public/FortInventory.h>
+#include <FortniteGame/Public/FortPlayerControllerAthena.h>
+#include <FortniteGame/Public/FortControllerComponent_VictoryCrowns.h>
 #include "../Magnesium/Erbium/Public/Misc.h"
 #include "../Public/Configuration.h"
 

@@ -5,7 +5,7 @@
 #include "../Public/BuildingFoundation.h"
 #include "../Public/BuildingSMActor.h"
 #include "../Public/FortLootPackage.h"
-#include "../../Erbium/Support/Public/VersionFeatureAdapter.h"
+#include <Erbium/Support/Public/VersionFeatureAdapter.h>
 
 extern uint64_t CantBuild_;
 

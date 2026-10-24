@@ -1,6 +1,6 @@
 #pragma once
 #include "SupportTypes.h"
-#include "../../../FortniteGame/Public/FortGameMode.h"
+#include <FortniteGame/Public/FortGameMode.h>
 
 enum class EPlayerAIAircraftDropState : uint8_t
 {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../Engine/Public/NetDriver.h"
+#include <Engine/Public/NetDriver.h>
 
 #include <Windows.h>
 #include <Shellapi.h>

@@ -1,6 +1,6 @@
 #pragma once
 #include "../../pch.h"
-#include "../../Engine/Public/AbilitySystemComponent.h"
+#include <Engine/Public/AbilitySystemComponent.h>
 #include "GameplayTagContainer.h"
 
 struct FUniqueNetIdRepl

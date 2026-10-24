@@ -5,11 +5,11 @@
 #include <tlhelp32.h>
 #include "../Public/Configuration.h"
 #include "../Public/GUI.h"
-#include "../../FortniteGame/Public/FortPlayerControllerAthena.h"
-#include "../../Engine/Public/NetDriver.h"
-#include "../../FortniteGame/Public/FortGameMode.h"
-#include "../../FortniteGame/Public/FortWeapon.h"
-#include "../../FortniteGame/Public/FortKismetLibrary.h"
+#include <FortniteGame/Public/FortPlayerControllerAthena.h>
+#include <Engine/Public/NetDriver.h>
+#include <FortniteGame/Public/FortGameMode.h>
+#include <FortniteGame/Public/FortWeapon.h>
+#include <FortniteGame/Public/FortKismetLibrary.h>
 
 const std::unordered_map<std::string, std::string> Misc::ItemNames = {
     { "ar", "WID_Assault_Auto_Athena_R_Ore_T03" },
