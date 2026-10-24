@@ -6,6 +6,7 @@
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -77,15 +78,24 @@ pub struct Running {
     stopping: bool,
 }
 
+/// Signale aus den Spiel-Logs, auf die der Startablauf wartet (gesetzt in `stream_logs`).
+#[derive(Default)]
+pub struct Signals {
+    pub server_login: AtomicBool,
+    pub server_listening: AtomicBool,
+    pub game_login: AtomicBool,
+}
+
 pub struct Engine {
     pub app: AppHandle,
     pub config: Mutex<Config>,
     pub running: Mutex<Running>,
+    pub signals: Arc<Signals>,
 }
 
 impl Engine {
     pub fn new(app: AppHandle) -> Self {
-        Engine { config: Mutex::new(vanity_core::profiles::load()), running: Mutex::new(Running::default()), app }
+        Engine { config: Mutex::new(vanity_core::profiles::load()), running: Mutex::new(Running::default()), signals: Arc::new(Signals::default()), app }
     }
 
     // --- Pfade ---------------------------------------------------------------
@@ -233,6 +243,14 @@ impl Engine {
             return Err(format!("{} nicht gefunden", version::SHIPPING_EXE));
         }
 
+        // Log-Signale dieser Rolle zurücksetzen – `stream_logs` setzt sie neu
+        if host {
+            self.signals.server_login.store(false, Ordering::SeqCst);
+            self.signals.server_listening.store(false, Ordering::SeqCst);
+        } else {
+            self.signals.game_login.store(false, Ordering::SeqCst);
+        }
+
         // Hilfs-Prozesse pausiert starten (laufen nie – der alte Build prüft nur, ob sie da sind).
         let mut helper_pids = Vec::new();
         for name in [version::LAUNCHER_EXE, version::EAC_EXE] {
@@ -275,6 +293,7 @@ impl Engine {
         let source = if host { "server" } else { "game" };
         let app = self.app.clone();
         let engine_src = source.to_string();
+        let signals = self.signals.clone();
         let mut readers: Vec<Box<dyn std::io::Read + Send>> = Vec::new();
         if let Some(o) = child.stdout.take() {
             readers.push(Box::new(o));
@@ -285,6 +304,7 @@ impl Engine {
         for reader in readers {
             let app = app.clone();
             let source = engine_src.clone();
+            let signals = signals.clone();
             std::thread::spawn(move || {
                 let buf = BufReader::new(reader);
                 for line in buf.lines() {
@@ -306,6 +326,12 @@ impl Engine {
                         },
                     );
                     if let Some(d) = detection {
+                        match d {
+                            Detection::LoggedIn if host => signals.server_login.store(true, Ordering::SeqCst),
+                            Detection::LoggedIn => signals.game_login.store(true, Ordering::SeqCst),
+                            Detection::ServerListening if host => signals.server_listening.store(true, Ordering::SeqCst),
+                            _ => {}
+                        }
                         let _ = app.emit("detect", serde_json::json!({ "source": source, "kind": format!("{d:?}") }));
                     }
                 }
@@ -343,71 +369,115 @@ impl Engine {
         self.emit_step(2); // Umleitung ist in launch_instance geladen
         self.emit_services();
 
-        // Auf Anmeldung + Server-DLL warten passiert über die Log-Erkennung;
-        // hier verbinden wir uns mit der Steuer-Pipe, sobald der Server bereit ist.
+        // Schritt 3: Anmeldung des Servers (im Log erkannt) → danach die Server-DLL laden.
         self.emit_step(3);
         self.inject_after_login(server_pid, true, &build);
 
-        // Auf „Server bereit“ über die Pipe warten
+        // Schritt 4: dein Spiel startet parallel – der Server lädt im Hintergrund die Karte.
         self.emit_step(4);
-        let (tx, rx) = channel::<ServerEvent>();
-        let link = ServerLink::connect_wait(tx, Duration::from_secs(90));
-        match link {
-            Some(link) => {
-                let link = Arc::new(link);
-                self.running.lock().unwrap().link = Some(link.clone());
-                self.spawn_server_event_loop(rx);
-                self.apply_profile_to_server(&link, &profile);
-                self.log("launcher", "info", "Vanity", "Game Server bereit", None);
-            }
-            None => {
-                self.log("launcher", "warning", "Vanity", "Server meldet sich nicht über die Pipe – läuft er?", None);
-            }
-        }
-
-        // Spiel-Fortnite
-        self.emit_step(5);
         let game_pid = self.launch_instance(&build, &profile, false, false)?;
         self.running.lock().unwrap().game = Some(Instance { pid: game_pid, helper_pids: vec![], host: false });
         self.inject_after_login(game_pid, false, &build);
-
-        self.emit_step(6);
         self.emit_services();
-        self.toast("success", "Gestartet", "Backend, Server und dein Spiel laufen.");
+
+        // Schritt 5/6 im Hintergrund: warten, bis der Game Server auf Port 7777 hört, dann
+        // (falls die Server-DLL eine hat) die Steuer-Pipe verbinden und „Lobby bereit“ melden.
+        self.emit_step(5);
+        let app = self.app.clone();
+        let profile_bg = profile.clone();
+        std::thread::spawn(move || {
+            let engine = app.state::<Engine>();
+            let listening = engine.wait_signal(|s| &s.server_listening, Duration::from_secs(300));
+            if engine.running.lock().unwrap().stopping {
+                return;
+            }
+            if !listening {
+                engine.toast(
+                    "error",
+                    "Game Server meldet sich nicht",
+                    "Im Server-Log fehlt „IpNetDriver listening“. Schau ins Live-Log (Quelle Server) und unter Abstürze.",
+                );
+                return;
+            }
+            engine.log("launcher", "info", "Vanity", "Game Server hört auf Port 7777", None);
+            let (tx, rx) = channel::<ServerEvent>();
+            match ServerLink::connect_wait(tx, Duration::from_secs(5)) {
+                Some(link) => {
+                    let link = Arc::new(link);
+                    engine.running.lock().unwrap().link = Some(link.clone());
+                    engine.spawn_server_event_loop(rx);
+                    engine.apply_profile_to_server(&link, &profile_bg);
+                    engine.log("launcher", "info", "Vanity", "Steuer-Pipe zum Server verbunden", None);
+                }
+                None => {
+                    engine.log(
+                        "launcher",
+                        "info",
+                        "Vanity",
+                        "Keine Steuer-Pipe – der Server wird über sein eigenes Fenster bedient",
+                        None,
+                    );
+                }
+            }
+            engine.emit_step(6);
+            engine.emit_services();
+            engine.toast("success", "Server bereit", "Drück im Spiel auf „Spielen“ – das Match läuft auf 127.0.0.1.");
+        });
         Ok(())
     }
 
-    /// Wartet (in einem Thread) auf die Anmeldung und lädt dann die passende DLL nach.
-    /// Da die Log-Erkennung asynchron ist, pollen wir hier einfach kurz und laden nach
-    /// einer kurzen Wartezeit – die DLLs selbst warten intern, bis das Spiel bereit ist.
+    /// Wartet (höchstens `timeout`) auf ein Log-Signal; bricht ab, wenn gestoppt wird.
+    fn wait_signal(&self, pick: impl Fn(&Signals) -> &AtomicBool, timeout: Duration) -> bool {
+        let start = std::time::Instant::now();
+        while start.elapsed() < timeout {
+            if pick(&self.signals).load(Ordering::SeqCst) {
+                return true;
+            }
+            if self.running.lock().unwrap().stopping {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        false
+    }
+
+    /// Lädt die passende DLL in die Instanz, sobald das Log die Anmeldung zeigt
+    /// (höchstens 3 Minuten warten, dann trotzdem laden). Läuft in einem eigenen Thread.
     fn inject_after_login(&self, pid: u32, host: bool, build: &BuildInfo) {
         let dll_name = if host { DLL_SERVER } else { DLL_CLIENT };
         let Some(dll) = self.dll_path(dll_name) else {
-            self.log("launcher", "error", "Vanity", &format!("{dll_name} fehlt im Launcher"), None);
+            self.log(
+                "launcher",
+                "warning",
+                "Vanity",
+                &format!("{dll_name} fehlt im Launcher – dieser Teil wird übersprungen"),
+                None,
+            );
             return;
         };
+        let _ = build; // Versions-Sonderfälle (Chapter 1) braucht 19.10 nicht
         let app = self.app.clone();
-        let is_cc1 = build.version.split('.').next().and_then(|s| s.parse::<u32>().ok()).is_some_and(|m| m < 10);
         std::thread::spawn(move || {
-            // kurze Grundwartezeit, dann laden; die DLL initialisiert sich selbst, wenn das Spiel so weit ist
-            std::thread::sleep(Duration::from_secs(if host { 8 } else { 12 }));
-            if is_cc1 {
-                // Chapter 1 braucht zusätzlich den Speicherleck-Fix – hier nicht relevant für 19.10
+            let engine = app.state::<Engine>();
+            let who = if host { "Server" } else { "Spiel" };
+            let seen = engine.wait_signal(|s| if host { &s.server_login } else { &s.game_login }, Duration::from_secs(180));
+            if engine.running.lock().unwrap().stopping {
+                return;
             }
+            if !seen {
+                engine.log(
+                    "launcher",
+                    "warning",
+                    "Vanity",
+                    &format!("{who}: keine Anmeldung im Log erkannt – lade {dll_name} trotzdem"),
+                    None,
+                );
+            }
+            // kurze Schonfrist, damit die Lobby-Welt steht
+            std::thread::sleep(Duration::from_secs(if host { 3 } else { 6 }));
             match proc::load_helper(pid, &dll) {
-                Ok(_) => {
-                    let _ = app.emit("log:line", LogLinePayload {
-                        source: if host { "server".into() } else { "game".into() },
-                        level: "info".into(), category: "Vanity".into(),
-                        message: format!("{dll_name} geladen"), detected: None, time: now_hms(),
-                    });
-                }
-                Err(e) => {
-                    let _ = app.emit("log:line", LogLinePayload {
-                        source: "launcher".into(), level: "error".into(), category: "Vanity".into(),
-                        message: format!("{dll_name} konnte nicht geladen werden: {e}"), detected: None, time: now_hms(),
-                    });
-                }
+                Ok(_) => engine.log(if host { "server" } else { "game" }, "info", "Vanity", &format!("{dll_name} geladen"), None),
+                Err(e) => engine.log("launcher", "error", "Vanity", &format!("{dll_name} konnte nicht geladen werden: {e}"), None),
             }
         });
     }

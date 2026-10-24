@@ -18,8 +18,8 @@ export function runDemoLaunch() {
     set({
       services: {
         backend: step >= 1 ? "running" : "starting",
-        server: step < 1 ? "stopped" : step >= 5 ? "running" : "starting",
-        game: step < 5 ? "stopped" : step >= launchSteps.length ? "running" : "starting",
+        server: step < 1 ? "stopped" : step >= 6 ? "running" : "starting",
+        game: step < 4 ? "stopped" : step >= 5 ? "running" : "starting",
       },
     });
     if (step >= launchSteps.length) {

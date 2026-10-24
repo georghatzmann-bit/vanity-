@@ -45,6 +45,7 @@ pub fn run() {
             commands::remove_bots,
             commands::get_client_settings,
             commands::set_client_settings,
+            commands::set_trickshot_presets,
             commands::vanity_paths,
         ])
         .run(tauri::generate_context!())

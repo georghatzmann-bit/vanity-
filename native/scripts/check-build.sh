@@ -76,8 +76,9 @@ run_server() {
 
 run_client() {
   local d="$HERE/client"
-  local inc="-I $d -I $d/src -I $HERE/third_party/minhook/include -I $HERE/third_party/imgui -I $HERE/third_party/imgui/backends"
-  mapfile -t files < <(cd "$d" && find . -name '*.cpp' -not -path './Tests/*' | sed 's|^\./||')
+  # Includes laufen relativ ("../Public/…") und ueber den Projektordner (pch.h, SDK/…).
+  local inc="-I $d -I $HERE/third_party/minhook/include"
+  mapfile -t files < <(cd "$d" && find . -name '*.cpp' | sed 's|^\./||')
   check_one client "$d" "$inc" "${files[@]}"
 }
 

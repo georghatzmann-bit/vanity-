@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vanity Ingame-Menü (vanity_client.dll). Basis: ATLAS Console (ATLAS Console Attribution License v1.0),
+     Projektdatei von Vanity neu geschrieben: statische Laufzeit, MinHook per Projektverweis, gemeinsame Ausgabeordner. -->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B04}</ProjectGuid>
+    <RootNamespace>client</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <TargetName>vanity_client</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\third_party\minhook\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;ATLAS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="ATLAS\ImGui\imgui.cpp" />
+    <ClCompile Include="ATLAS\ImGui\imgui_draw.cpp" />
+    <ClCompile Include="ATLAS\ImGui\imgui_impl_dx11.cpp" />
+    <ClCompile Include="ATLAS\ImGui\imgui_impl_dx12.cpp" />
+    <ClCompile Include="ATLAS\ImGui\imgui_impl_win32.cpp" />
+    <ClCompile Include="ATLAS\ImGui\imgui_stdlib.cpp" />
+    <ClCompile Include="ATLAS\ImGui\imgui_tables.cpp" />
+    <ClCompile Include="ATLAS\ImGui\imgui_widgets.cpp" />
+    <ClCompile Include="ATLAS\Private\AssetHotfixBaselineSampler.cpp" />
+    <ClCompile Include="ATLAS\Private\AssetHotfixRevisionPlanner.cpp" />
+    <ClCompile Include="ATLAS\Private\Client.cpp" />
+    <ClCompile Include="ATLAS\Private\dllmain.cpp" />
+    <ClCompile Include="ATLAS\Private\Finders.cpp" />
+    <ClCompile Include="ATLAS\Private\GUI.cpp" />
+    <ClCompile Include="ATLAS\Private\HotfixReload.cpp" />
+    <ClCompile Include="ATLAS\Private\LoadoutTelemetry.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="framework.h" />
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="SDK\Containers.h" />
+    <ClInclude Include="SDK\Core.h" />
+    <ClInclude Include="SDK\Defs.h" />
+    <ClInclude Include="SDK\Engine.h" />
+    <ClInclude Include="SDK\Includes.h" />
+    <ClInclude Include="SDK\Memcury.h" />
+    <ClInclude Include="SDK\Offsets.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\minhook\minhook.vcxproj">
+      <Project>{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B01}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

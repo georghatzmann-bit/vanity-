@@ -151,13 +151,13 @@ export const credits: { group: string; items: Credit[] }[] = [
       { name: "Erbium / ErbiumClient", author: "Ploosh", license: "GPL-3.0", url: "https://github.com/plooshi/Erbium", use: "Basis von Magnesium; Teile im Ingame-Menü" },
       { name: "Tellurium", author: "Ploosh", license: "BSD-3-Clause", url: "https://github.com/plooshi/Tellurium", use: "Grundlage für die Umleitung (vanity_redirect.dll)" },
       { name: "LawinServer", author: "Lawin0129", license: "GPL-3.0", url: "https://github.com/Lawin0129/LawinServer", use: "Grundlage für das Backend" },
+      { name: "ATLAS Console", author: "cipherfps, ralz und Mitwirkende", license: "ATLAS Console Attribution License v1.0", url: "https://github.com/Ralzify/ATLAS-Client", use: "Grundlage für das Ingame-Menü (vanity_client.dll) – Vanity basiert hier auf ATLAS Console" },
     ],
   },
   {
     group: "Vorbilder (nur gelesen)",
     items: [
       { name: "Reboot Launcher", author: "Auties00", license: "keine Lizenz", url: "https://github.com/Auties00/reboot_launcher", use: "Startablauf und Log-Erkennung" },
-      { name: "ATLAS-Client", author: "ralz, cipherfps", license: "eigene Lizenz", url: "https://github.com/Ralzify/ATLAS-Client", use: "Idee: Befehle im Spiel-Takt ausführen" },
     ],
   },
   {

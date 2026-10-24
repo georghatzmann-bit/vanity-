@@ -9,7 +9,6 @@ betroffen sind, und der Original-Lizenztext liegt im jeweiligen Unterordner bei.
 | Projekt | Autor | Lizenz | Wofür |
 |---|---|---|---|
 | [Reboot Launcher](https://github.com/Auties00/reboot_launcher) | Auties00 | keine Lizenz-Datei (alle Rechte vorbehalten) | Startablauf, Log-Erkennung, Versionserkennung – nur gelesen und nachgebaut |
-| [ATLAS-Client](https://github.com/Ralzify/ATLAS-Client) | ralz, cipherfps | ATLAS Console Attribution License v1.0 | Idee: Befehle nur im Game-Thread ausführen – nur gelesen |
 
 ## Backend
 
@@ -18,15 +17,16 @@ betroffen sind, und der Original-Lizenztext liegt im jeweiligen Unterordner bei.
 | [LawinServer](https://github.com/Lawin0129/LawinServer) | Lawin0129 | GPL-3.0 | Grundlage des Backends – liegt in `backend/lawinserver/` (Stand 70414917, 16.10.2026), alle Änderungen in `backend/lawinserver/VANITY_CHANGES.md` |
 | [Express](https://expressjs.com), [ws](https://github.com/websockets/ws) und weitere npm-Pakete | siehe `backend/dist/THIRD_PARTY_LICENSES.txt` | MIT u. a. | Webserver und WebSocket |
 
-## Geplant für spätere Phasen
+## Spiel-DLLs (Quellcode übernommen, liegt in `native/`)
 
 | Projekt | Autor | Lizenz | Wofür |
 |---|---|---|---|
-| [Erbium](https://github.com/plooshi/Erbium) | Ploosh | GPL-3.0 | Grundlage Game Server (Phase 4) |
-| [Magnesium](https://github.com/Ralzify/Magnesium) | Ploosh, ralz, cipher | BSD-3-Clause | einzelne Funktionen (Bots, Trickshot, Lategame) |
-| [Tellurium](https://github.com/plooshi/Tellurium) | Ploosh | BSD-3-Clause | Grundlage Umleitungs-DLL (Phase 2) |
-| [MinHook](https://github.com/TsudaKageyu/minhook) | Tsuda Kageyu | BSD-2-Clause | Funktions-Hooks |
-| [Dear ImGui](https://github.com/ocornut/imgui) | Omar Cornut | MIT | Ingame-Menü |
+| [Magnesium](https://github.com/Ralzify/Magnesium) | Ploosh, ralz, cipher | BSD-3-Clause | Grundlage des Game Servers `vanity_server.dll` (`native/server/`, Bots, Trickshot, Lategame) |
+| [Erbium](https://github.com/plooshi/Erbium) | Ploosh | GPL-3.0 | Basis von Magnesium; SDK im Ingame-Menü |
+| [Tellurium](https://github.com/plooshi/Tellurium) | Ploosh | BSD-3-Clause | Grundlage der Umleitung `vanity_redirect.dll` (`native/redirect/`) |
+| [ATLAS Console / ATLAS-Client](https://github.com/Ralzify/ATLAS-Client) | ralz, cipherfps und Mitwirkende | ATLAS Console Attribution License v1.0 (`native/client/LICENSE-ATLAS.txt`) | Grundlage des Ingame-Menüs `vanity_client.dll` (`native/client/`). **Vanity basiert beim Ingame-Menü auf ATLAS Console von cipherfps, ralz und Mitwirkenden.** Änderungen siehe `native/client/README.md` |
+| [MinHook](https://github.com/TsudaKageyu/minhook) | Tsuda Kageyu | BSD-2-Clause | Funktions-Hooks (`native/third_party/minhook/`, aus Quellcode gebaut) |
+| [Dear ImGui](https://github.com/ocornut/imgui) | Omar Cornut | MIT | Menüs im Spiel und im Server-Fenster |
 | [Memcury](https://github.com/kem0x/Memcury) | Kareem Olim | MIT | Muster-Suche im Speicher |
 
 ## Launcher (Phase 1)

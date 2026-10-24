@@ -7,6 +7,7 @@ import {
   inTauri,
   onEvent,
   type ClientSettings,
+  type TrickshotPreset,
   type Config,
   type LogLine,
   type Services,
@@ -34,10 +35,10 @@ export const launchSteps = [
   { label: "Backend", hint: "Port 3551" },
   { label: "Server-Fortnite", hint: "ohne Grafik" },
   { label: "Umleitung", hint: "alles an 127.0.0.1" },
-  { label: "Anmeldung", hint: "im Log erkannt" },
-  { label: "Game Server", hint: "Port 7777" },
-  { label: "Dein Spiel", hint: "mit -d3d11" },
-  { label: "Lobby", hint: "bereit zum Spielen" },
+  { label: "Anmeldung", hint: "Server meldet sich an" },
+  { label: "Dein Spiel", hint: "startet parallel" },
+  { label: "Game Server", hint: "lädt die Karte, Port 7777" },
+  { label: "Lobby", hint: "im Spiel auf „Spielen“" },
 ] as const;
 
 const emptyConfig: Config = {
@@ -47,6 +48,7 @@ const emptyConfig: Config = {
   profiles: [],
   activeProfileId: "",
   friends: [],
+  trickshotPresets: [],
 };
 
 interface AppState {
@@ -68,6 +70,7 @@ interface AppState {
 
   clientSettings: ClientSettings;
   saveClientSettings: (patch: Partial<ClientSettings>) => Promise<void>;
+  saveTrickshotPresets: (presets: TrickshotPreset[]) => Promise<void>;
 
   init: () => Promise<void>;
 }
@@ -95,10 +98,19 @@ export const useApp = create<AppState>()((set, get) => ({
 
   clientSettings: defaultClientSettings,
   saveClientSettings: async (patch) => {
-    const next = { ...get().clientSettings, ...patch };
+    const cur = get().clientSettings;
+    const next = { ...cur, ...patch, preferences: { ...cur.preferences, ...(patch.preferences ?? {}) } };
     set({ clientSettings: next });
     try {
       await api.setClientSettings(next);
+    } catch (e) {
+      toast.error("Konnte nicht speichern", { description: String(e) });
+    }
+  },
+  saveTrickshotPresets: async (presets) => {
+    try {
+      const config = await api.setTrickshotPresets(presets);
+      set({ config });
     } catch (e) {
       toast.error("Konnte nicht speichern", { description: String(e) });
     }

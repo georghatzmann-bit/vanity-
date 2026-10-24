@@ -9,6 +9,7 @@ use vanity_core::profiles::{self, Config, Friend, Profile, Settings};
 use vanity_core::version::{self, BuildInfo, DetectReport};
 
 use crate::engine::Engine;
+use vanity_core::profiles::TrickshotPreset;
 
 type E<'a> = State<'a, Arc<Engine>>;
 type R<T> = Result<T, String>;
@@ -195,6 +196,14 @@ pub fn remove_bots(engine: E) -> R<()> {
     engine.server_exec("delbot")
 }
 
+#[tauri::command]
+pub fn set_trickshot_presets(engine: E, presets: Vec<TrickshotPreset>) -> Config {
+    let mut c = engine.config.lock().unwrap();
+    c.trickshot_presets = presets;
+    let _ = profiles::save(&c);
+    c.clone()
+}
+
 // --- Einstellungen des Ingame-Menüs (client.json, auch von der Client-DLL gelesen) ------------
 
 fn client_settings_path() -> PathBuf {
@@ -202,10 +211,18 @@ fn client_settings_path() -> PathBuf {
 }
 
 fn default_client_settings() -> serde_json::Value {
+    // Gleiches Format wie die Ingame-Menü-DLL (ATLAS-Console-Basis) – beide lesen/schreiben dieselbe Datei.
     serde_json::json!({
-        "menuKey": 120, "joinKey": 116, "consoleKey": 119,
-        "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": false,
-        "fov": 80, "console": true, "joinIp": "", "presets": []
+        "hotkey": 120,       // F9 – Menü
+        "joinHotkey": 116,   // F5 – schnell beitreten
+        "consoleMode": 0,    // 0 = Vanity-Konsole, 1 = Original-Unreal-Konsole
+        "preferences": {
+            "saveTogglePreferences": true, "slashKey": true,
+            "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": true,
+            "mobileBuilds": false, "inGameFog": true, "firstPerson": false,
+            "sprintByDefault": true, "respawnsEnabled": true
+        },
+        "commands": [], "macros": []
     })
 }
 
@@ -216,6 +233,17 @@ pub fn get_client_settings() -> serde_json::Value {
         if let Ok(serde_json::Value::Object(saved)) = serde_json::from_slice::<serde_json::Value>(&bytes) {
             if let serde_json::Value::Object(base) = &mut value {
                 for (k, v) in saved {
+                    if k == "preferences" {
+                        // feldweise übernehmen, damit fehlende Schalter ihre Vorgabe behalten
+                        if let (Some(serde_json::Value::Object(defaults)), serde_json::Value::Object(saved_prefs)) =
+                            (base.get_mut("preferences"), v)
+                        {
+                            for (pk, pv) in saved_prefs {
+                                defaults.insert(pk, pv);
+                            }
+                        }
+                        continue;
+                    }
                     base.insert(k, v);
                 }
             }

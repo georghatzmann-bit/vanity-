@@ -66,6 +66,7 @@ export interface Config {
   profiles: Profile[];
   activeProfileId: string;
   friends: Friend[];
+  trickshotPresets: TrickshotPreset[];
 }
 
 export interface DetectReport {
@@ -110,17 +111,37 @@ export interface Toast {
   description: string;
 }
 
-export interface ClientSettings {
-  menuKey: number;
-  joinKey: number;
-  consoleKey: number;
+/** Schalter, die das Ingame-Menü (ATLAS-Console-Basis) unter „preferences“ speichert. */
+export interface ClientPreferences {
+  saveTogglePreferences: boolean;
+  slashKey: boolean;
   editOnRelease: boolean;
   resetOnRelease: boolean;
   disablePreEdits: boolean;
-  fov: number;
-  console: boolean;
-  joinIp: string;
-  presets: { name: string; commands: string[] }[];
+  mobileBuilds: boolean;
+  inGameFog: boolean;
+  firstPerson: boolean;
+  sprintByDefault: boolean;
+  respawnsEnabled: boolean;
+}
+
+/** Inhalt von %APPDATA%\Vanity\client.json – Launcher und F9-Menü teilen sich die Datei. */
+export interface ClientSettings {
+  /** Taste fürs Menü (Windows-Tastencode), Standard F9 */
+  hotkey: number;
+  /** Taste für „schnell beitreten“, Standard F5 */
+  joinHotkey: number;
+  /** 0 = Vanity-Konsole, 1 = Original-Unreal-Konsole */
+  consoleMode: number;
+  preferences: ClientPreferences;
+  /** eigene Befehls-Tasten und Makros – werden im Spiel angelegt, hier nur durchgereicht */
+  commands: unknown[];
+  macros: unknown[];
+}
+
+export interface TrickshotPreset {
+  name: string;
+  commands: string[];
 }
 
 export const defaultSettings: Settings = {
@@ -138,16 +159,23 @@ export const defaultSettings: Settings = {
 };
 
 export const defaultClientSettings: ClientSettings = {
-  menuKey: 120,
-  joinKey: 116,
-  consoleKey: 119,
-  editOnRelease: true,
-  resetOnRelease: true,
-  disablePreEdits: false,
-  fov: 80,
-  console: true,
-  joinIp: "",
-  presets: [],
+  hotkey: 120,
+  joinHotkey: 116,
+  consoleMode: 0,
+  preferences: {
+    saveTogglePreferences: true,
+    slashKey: true,
+    editOnRelease: true,
+    resetOnRelease: true,
+    disablePreEdits: true,
+    mobileBuilds: false,
+    inGameFog: true,
+    firstPerson: false,
+    sprintByDefault: true,
+    respawnsEnabled: true,
+  },
+  commands: [],
+  macros: [],
 };
 
 // ---- Platzhalter für die Browser-Vorschau ------------------------------------------------
@@ -159,6 +187,7 @@ let demoConfig: Config = {
   profiles: demoProfiles,
   activeProfileId: demoProfiles[0].id,
   friends: demoFriends,
+  trickshotPresets: [],
 };
 let demoClient: ClientSettings = { ...defaultClientSettings };
 
@@ -229,6 +258,9 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
         ["Tailscale", "100.88.41.3:7777"],
         ["Radmin VPN", "26.120.7.55:7777"],
       ];
+    case "set_trickshot_presets":
+      demoConfig = { ...demoConfig, trickshotPresets: (args?.presets ?? []) as TrickshotPreset[] };
+      return demoConfig;
     case "get_client_settings":
       return demoClient;
     case "set_client_settings":
@@ -261,6 +293,7 @@ export const api = {
   shareAddresses: () => call<[string, string][]>("share_addresses"),
   getClientSettings: () => call<ClientSettings>("get_client_settings"),
   setClientSettings: (value: ClientSettings) => call<void>("set_client_settings", { value }),
+  setTrickshotPresets: (presets: TrickshotPreset[]) => call<Config>("set_trickshot_presets", { presets }),
   paths: () => call<{ config: string; logs: string; crashes: string; fortniteLogs: string }>("vanity_paths"),
 
   hostAndPlay: (profileId: string) => call<void>("host_and_play", { profileId }),

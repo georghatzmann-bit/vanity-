@@ -8,6 +8,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "redirect", "redirect\redire
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "server", "server\server.vcxproj", "{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B03}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "client", "client\client.vcxproj", "{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B04}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -26,6 +28,10 @@ Global
 		{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B03}.Debug|x64.Build.0 = Debug|x64
 		{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B03}.Release|x64.ActiveCfg = Release|x64
 		{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B03}.Release|x64.Build.0 = Release|x64
+		{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B04}.Debug|x64.ActiveCfg = Debug|x64
+		{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B04}.Debug|x64.Build.0 = Debug|x64
+		{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B04}.Release|x64.ActiveCfg = Release|x64
+		{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B04}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -94,9 +94,12 @@ Befehle in eine Warteschlange, die im Spiel-Takt (Game-Thread) abgearbeitet wird
 
 ## Ingame-Menü (Client-DLL)
 
-- Liest beim Laden `%APPDATA%\Vanity\client.json`, schreibt Änderungen zurück:
-  `{ "menuKey": 120, "joinKey": 116, "consoleKey": 119, "editOnRelease": true, "resetOnRelease": true,
-     "disablePreEdits": false, "fov": 80, "console": true, "joinIp": "" }` (Tasten = Windows-VK-Codes).
+- Liest beim Laden `%APPDATA%\Vanity\client.json`, schreibt Änderungen zurück. Format (von ATLAS Console übernommen,
+  der Launcher schreibt dasselbe): `{ "hotkey": 120, "joinHotkey": 116, "consoleMode": 0,
+  "preferences": { "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": true, "respawnsEnabled": true,
+  "firstPerson": false, "sprintByDefault": true, "inGameFog": true, "mobileBuilds": false, "slashKey": true,
+  "saveTogglePreferences": true }, "commands": [], "macros": [] }` (Tasten = Windows-VK-Codes).
+  Trickshot-Presets liegen **nicht** hier, sondern in der Launcher-`config.json` (`trickshotPresets`).
 - Alles, was Spiel-Objekte anfasst, läuft im Spiel-Takt. Eigene Threads legen nur Befehle in eine Warteschlange.
 - Host-Funktionen (Bus, Sturm, Bots, Items, Wegpunkte) schickt das Menü als `cheat <befehl>` an den Server;
   der Server prüft selbst, ob der Absender der Host ist.

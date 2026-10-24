@@ -1,8 +1,4 @@
-// Vanity Ingame-Menü – vendored SDK
-// Quelle: Erbium SDK von Ploosh (https://github.com/plooshi/Erbium), GPL-3.0 – siehe LICENSE-Erbium.txt.
-// Memcury von Kareem Olim (https://github.com/kem0x/Memcury), MIT – siehe LICENSE-Memcury.txt.
-// Vanity-Änderungen sind mit "// [Vanity]" markiert.
-// https://github.com/kem0x/memcury
+﻿// https://github.com/kem0x/memcury
 
 #pragma once
 
@@ -42,32 +38,34 @@
                -AddHook: Adds a hook to the VEH Hook system.
                -RemoveHook: Removes a hook from the VEH Hook system.
 */
-#include <DbgHelp.h>
-#include <Windows.h>
-#include <format>
-#include <intrin.h>
-#include <source_location>
-#include <stdexcept>
 #include <string>
-#include <type_traits>
+#include <format>
 #include <vector>
+#include <stdexcept>
+#include <type_traits>
+#include <intrin.h>
+#include <Windows.h>
+#include <source_location>
+#include <DbgHelp.h>
+#include <shellapi.h>
 #pragma comment(lib, "Dbghelp.lib")
 
-// [Vanity] Fehler werden nur geloggt – nie MessageBox, nie Thread einfrieren.
-void MemcuryWarn(const char* Message);
-#define MemcuryAssert(cond) \
-    if (!(cond)) \
-    { \
-        MemcuryWarn(#cond); \
-    }
+#define MemcuryAssert(cond)                                              \
+        if (!(cond))                                                         \
+        {                                                                    \
+            MessageBoxA(nullptr, #cond, __FUNCTION__, MB_ICONERROR | MB_OK); \
+            Memcury::Safety::FreezeCurrentThread();                          \
+        }
 
-#define MemcuryAssertM(cond, msg) \
-    if (!(cond)) \
-    { \
-        MemcuryWarn(msg); \
-    }
+#define MemcuryAssertM(cond, msg)                                      \
+        if (!(cond))                                                       \
+        {                                                                  \
+            MessageBoxA(nullptr, msg, __FUNCTION__, MB_ICONERROR | MB_OK); \
+        }
 
-#define MemcuryThrow(msg) MemcuryWarn(msg);
+#define MemcuryThrow(msg)                                          \
+        MessageBoxA(nullptr, msg, __FUNCTION__, MB_ICONERROR | MB_OK); \
+        Memcury::Safety::FreezeCurrentThread();
 
 extern uint64_t ImageBase;
 inline bool bUE51 = false;
@@ -120,19 +118,52 @@ namespace Memcury
             return { dllStart, dllEnd };
         }
 
-        inline auto CopyToClipboard(std::string str)
+        inline void CopyToClipboard(const std::string& str)
         {
-            auto mem = GlobalAlloc(GMEM_FIXED, str.size() + 1);
-            memcpy(mem, str.c_str(), str.size() + 1);
+            if (!OpenClipboard(nullptr))
+                return;
 
-            OpenClipboard(nullptr);
             EmptyClipboard();
-            SetClipboardData(CF_TEXT, mem);
-            CloseClipboard();
 
-            GlobalFree(mem);
+            HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, str.size() + 1);
+
+            if (!hMem)
+            {
+                CloseClipboard();
+                return;
+            }
+
+            void* ptr = GlobalLock(hMem);
+
+            if (!ptr)
+            {
+                GlobalFree(hMem);
+                CloseClipboard();
+                return;
+            }
+
+            memcpy(ptr, str.c_str(), str.size() + 1);
+            GlobalUnlock(hMem);
+
+            SetClipboardData(CF_TEXT, hMem);
+
+            CloseClipboard();
         }
-    } // namespace Util
+
+        inline bool OpenURL(const std::wstring& url)
+        {
+            HINSTANCE result = ShellExecuteW(
+                nullptr,
+                L"open",
+                url.c_str(),
+                nullptr,
+                nullptr,
+                SW_SHOWNORMAL
+            );
+
+            return reinterpret_cast<intptr_t>(result) > 32;
+        }
+    }
 
     namespace Safety
     {
@@ -169,7 +200,16 @@ namespace Memcury
 
             for (ULONG frame = 0;; frame++)
             {
-                result = StackWalk64(IMAGE_FILE_MACHINE_AMD64, process, thread, &stack, ctx, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
+                result = StackWalk64(
+                    IMAGE_FILE_MACHINE_AMD64,
+                    process,
+                    thread,
+                    &stack,
+                    ctx,
+                    NULL,
+                    SymFunctionTableAccess64,
+                    SymGetModuleBase64,
+                    NULL);
 
                 if (!result)
                     break;
@@ -188,14 +228,14 @@ namespace Memcury
                 printf("[%lu] Name: %s - Address: %p  - Module: %s\n", frame, symbolInfo->Name, (void*)symbolInfo->Address, module);
             }
         }
-    } // namespace Safety
+    }
 
     namespace Globals
     {
         constexpr const bool bLogging = true;
 
         static const char* moduleName = nullptr;
-    } // namespace Globals
+    }
 
     namespace ASM
     {
@@ -300,18 +340,24 @@ namespace Memcury
 
         inline auto byteIsAscii(uint8_t byte) -> bool
         {
-            static constexpr bool isAscii[0x100] = { false, false, false, false, false, false, false, false, false, true,  true,  false, false, true,  false, false, false, false, false, false, false, false,
-                                                     false, false, false, false, false, false, false, false, false, false, true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,
-                                                     true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,
-                                                     true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,
-                                                     true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,
-                                                     true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, false, false, false, false,
-                                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-                                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-                                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-                                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-                                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-                                                     false, false, false, false, false, false, false, false, false, false, false, false, false, false };
+            static constexpr bool isAscii[0x100] = {
+                false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, false,
+                false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+                true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false,
+                false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+                false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+                false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+                false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+                false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+                false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+                false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+                false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false
+            };
 
             return isAscii[byte];
         }
@@ -343,7 +389,7 @@ namespace Memcury
             }
             return bytes;
         }
-    } // namespace ASM
+    }
 
     namespace PE
     {
@@ -355,7 +401,7 @@ namespace Memcury
         inline auto GetModuleBase() -> uintptr_t
         {
             return ImageBase;
-            // return Globals::moduleName == 0 ? ImageBase : uint64_t(GetModuleHandleA(Globals::moduleName));
+            //return Globals::moduleName == 0 ? ImageBase : uint64_t(GetModuleHandleA(Globals::moduleName));
         }
 
         inline auto GetDOSHeader() -> PIMAGE_DOS_HEADER
@@ -467,8 +513,7 @@ namespace Memcury
 
             auto RelativeOffset(uint32_t offset, uint32_t off2 = 0) -> Address
             {
-                if (_address)
-                    _address = ((_address + offset + 4 + off2) + *(int32_t*)(_address + offset));
+                if (_address) _address = ((_address + offset + 4 + off2) + *(int32_t*)(_address + offset));
                 return *this;
             }
 
@@ -563,7 +608,7 @@ namespace Memcury
                 return address >= GetSectionStart() && address < GetSectionEnd();
             }
         };
-    } // namespace PE
+    }
 
     class Scanner
     {
@@ -583,25 +628,25 @@ namespace Memcury
         static auto FindPatternEx(HANDLE handle, const char* pattern, const char* mask, uint64_t begin, uint64_t end) -> Scanner
         {
             auto scan = [](const char* pattern, const char* mask, char* begin, unsigned int size) -> char*
-            {
-                size_t patternLen = strlen(mask);
-                for (unsigned int i = 0; i < size - patternLen; i++)
                 {
-                    bool found = true;
-                    for (unsigned int j = 0; j < patternLen; j++)
+                    size_t patternLen = strlen(mask);
+                    for (unsigned int i = 0; i < size - patternLen; i++)
                     {
-                        if (mask[j] != '?' && pattern[j] != *(begin + i + j))
+                        bool found = true;
+                        for (unsigned int j = 0; j < patternLen; j++)
                         {
-                            found = false;
-                            break;
+                            if (mask[j] != '?' && pattern[j] != *(begin + i + j))
+                            {
+                                found = false;
+                                break;
+                            }
                         }
-                    }
 
-                    if (found)
-                        return (begin + i);
-                }
-                return nullptr;
-            };
+                        if (found)
+                            return (begin + i);
+                    }
+                    return nullptr;
+                };
 
             uint64_t match = NULL;
             SIZE_T bytesRead;
@@ -724,7 +769,7 @@ namespace Memcury
                     }
                 }
             }
-            else
+            else 
             {
                 __m128i t = _mm_set1_epi8((char)startingByte);
 
@@ -826,6 +871,7 @@ namespace Memcury
                     }
                 }
 
+
                 int offset2 = _mm_movemask_epi8(_mm_cmpeq_epi8(bytes, t2));
 
                 if (offset2 != 0)
@@ -837,7 +883,7 @@ namespace Memcury
                         {
                             if (PE::Address(&scanBytes[i + q]).RelativeOffset(1).GetAs<void*>() == Pointer)
                             {
-                                add = PE::Address(&scanBytes[i + q]);
+                                add = PE::Address(&scanBytes[i + q - 1]);
 
                                 // LOG_INFO(LogDev, "1add: 0x{:x}", add.Get() - __int64(GetModuleHandleW(0)));
 
@@ -893,7 +939,7 @@ namespace Memcury
 
             DWORD i = 0x0;
             if (HasAVX2)
-            {
+            { 
                 __m256i t = _mm256_set1_epi8((char)0x8d);
                 // scan only text section
                 for (; i < textSection.GetSectionSize() - (textSection.GetSectionSize() % 32); i += 32)
@@ -909,7 +955,7 @@ namespace Memcury
                         int c = offset & (1 << q);
                         if (c)
                         {
-                            // if (scanBytes[i + q + 1] == ASM::LEA)
+                            //if (scanBytes[i + q + 1] == ASM::LEA)
                             if ((scanBytes[i + q - 1] & 0xFB) == 0x48)
                             {
                                 auto stringAdd = PE::Address(&scanBytes[i + q]).RelativeOffset(2);
@@ -930,7 +976,7 @@ namespace Memcury
                                     }
 
                                     // Check if the first char is printable
-                                    // if (ASM::byteIsAscii(strBytes[0]))
+                                    //if (ASM::byteIsAscii(strBytes[0]))
                                     {
                                         if constexpr (!bIsPtr)
                                         {
@@ -1006,7 +1052,7 @@ namespace Memcury
                                 if (rdataSection.isInSection(stringAdd))
                                 {
                                     auto strBytes = stringAdd.GetAs<std::uint8_t*>();
-
+                                    
                                     if (bUE51 && bIsInFunc)
                                     {
                                         auto pointerToRef = *(LPVOID*)strBytes;
@@ -1018,7 +1064,7 @@ namespace Memcury
                                     }
 
                                     // Check if the first char is printable
-                                    // if (ASM::byteIsAscii(strBytes[0]))
+                                    //if (ASM::byteIsAscii(strBytes[0]))
                                     {
                                         if constexpr (!bIsPtr)
                                         {
@@ -1079,7 +1125,7 @@ namespace Memcury
                 {
                     if constexpr (bIsWide)
                     {
-                        // std::wstring wstr = std::wstring(string);
+                        //std::wstring wstr = std::wstring(string);
 
                         // auto aaa = (L"failed FindStringRef " + std::wstring(string));
                         // MessageBoxA(0, std::string(aaa.begin(), aaa.end()).c_str(), "Memcury", MB_ICONERROR);
@@ -1097,21 +1143,21 @@ namespace Memcury
                 {
                     for (int i = 0; i < 300; i++)
                     {
-                        // if (!bSkunky ? (*(uint8_t*)(add.Get() - i) == 0x48 && *(uint8_t*)(add.Get() - i + 1) == 0x83) :
-                        //     (*(uint8_t*)(add.Get() - i) == 0x4C && *(uint8_t*)(add.Get() - i + 1) == 0x8B && *(uint8_t*)(add.Get() - i + 2) == 0xDC))
+                        //if (!bSkunky ? (*(uint8_t*)(add.Get() - i) == 0x48 && *(uint8_t*)(add.Get() - i + 1) == 0x83) :
+                        //    (*(uint8_t*)(add.Get() - i) == 0x4C && *(uint8_t*)(add.Get() - i + 1) == 0x8B && *(uint8_t*)(add.Get() - i + 2) == 0xDC))
                         if (*(uint8_t*)(add.Get() - i) == 0x48 && *(uint8_t*)(add.Get() - i + 1) == 0x83 && *(uint8_t*)(add.Get() - i + 2) == 0xEC)
                         {
-                            int sub = 0;
-                            if (*(uint8_t*)(add.Get() - i - 3) == 0x4C && *(uint8_t*)(add.Get() - i - 2) == 0x8B && *(uint8_t*)(add.Get() - i - 1) == 0xDC)
-                                sub = 3;
-                            // MessageBoxA(0, std::format("0x{:x}", (__int64(add.Get() - i) - __int64(GetModuleHandleW(0)))).c_str(), "Memcury", MB_OK);
+                           int sub = 0;
+                           if (*(uint8_t*)(add.Get() - i - 3) == 0x4C && *(uint8_t*)(add.Get() - i - 2) == 0x8B && *(uint8_t*)(add.Get() - i - 1) == 0xDC)
+                              sub = 3;
+                           // MessageBoxA(0, std::format("0x{:x}", (__int64(add.Get() - i) - __int64(GetModuleHandleW(0)))).c_str(), "Memcury", MB_OK);
 
-                            auto beginFunc = Scanner(add.Get() - i - sub);
+                           auto beginFunc = Scanner(add.Get() - i - sub);
 
-                            auto ref = FindPointerRef(beginFunc.GetAs<void*>());
+                           auto ref = FindPointerRef(beginFunc.GetAs<void*>());
 
-                            if (ref.Get())
-                                return ref;
+                           if (ref.Get())
+                               return ref;
                         }
                     }
                 }
@@ -1129,8 +1175,7 @@ namespace Memcury
         inline auto ScanFor(std::vector<uint8_t> opcodesToFind, bool forward = true, int toSkip = 0, int bytesToSkip = 1, int Radius = 2048, bool bIgnoreFF = false) -> Scanner
         {
             const auto scanBytes = _address.GetAs<std::uint8_t*>();
-            if (!scanBytes)
-                return *this;
+            if (!scanBytes) return *this;
 
             bool bFound = false;
 
@@ -1221,8 +1266,8 @@ namespace Memcury
             for (auto i = (forward ? 1 : -1); forward ? (i < 2048) : (i > -2048); forward ? i++ : i--)
             {
                 if ( // ASM::byteIsA(scanBytes[i], ASM::MNEMONIC::JMP_REL8) ||
-                     // ASM::byteIsA(scanBytes[i], ASM::MNEMONIC::JMP_REL32) ||
-                     // ASM::byteIsA(scanBytes[i], ASM::MNEMONIC::JMP_EAX) ||
+                    // ASM::byteIsA(scanBytes[i], ASM::MNEMONIC::JMP_REL32) ||
+                    // ASM::byteIsA(scanBytes[i], ASM::MNEMONIC::JMP_EAX) ||
                     ASM::byteIsA(scanBytes[i], ASM::MNEMONIC::RETN_REL8) || ASM::byteIsA(scanBytes[i], ASM::MNEMONIC::RETN) || ASM::byteIsA(scanBytes[i], ASM::MNEMONIC::INT3))
                 {
                     _address = (uintptr_t)&scanBytes[i + 1];
@@ -1334,19 +1379,8 @@ namespace Memcury
         void WriteAbsoluteJump(void* jumpLocation, void* destination)
         {
             uint8_t absJumpInstructions[] = {
-                ASM::Mnemonic("CMOVNS"),
-                0xBA,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x00, // mov r10, addr
-                0x41,
-                0xFF,
-                0xE2 // jmp r10
+                ASM::Mnemonic("CMOVNS"), 0xBA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov r10, addr
+                0x41, 0xFF, 0xE2 // jmp r10
             };
 
             auto destination64 = (uint64_t)destination;
@@ -1497,7 +1531,8 @@ namespace Memcury
         {
             if (Exception->ExceptionRecord->ExceptionCode == STATUS_GUARD_PAGE_VIOLATION)
             {
-                auto Itr = std::find_if(Hooks.begin(), Hooks.end(), [Rip = Exception->ContextRecord->Rip](const HOOK_INFO& Hook) { return Hook.Original == (void*)Rip; });
+                auto Itr = std::find_if(Hooks.begin(), Hooks.end(), [Rip = Exception->ContextRecord->Rip](const HOOK_INFO& Hook)
+                    { return Hook.Original == (void*)Rip; });
                 if (Itr != Hooks.end())
                 {
                     Exception->ContextRecord->Rip = (uintptr_t)Itr->Detour;
@@ -1555,7 +1590,8 @@ namespace Memcury
 
         inline bool RemoveHook(void* Original)
         {
-            auto Itr = std::find_if(Hooks.begin(), Hooks.end(), [Original](const HOOK_INFO& Hook) { return Hook.Original == Original; });
+            auto Itr = std::find_if(Hooks.begin(), Hooks.end(), [Original](const HOOK_INFO& Hook)
+                { return Hook.Original == Original; });
 
             if (Itr == Hooks.end())
             {
@@ -1571,8 +1607,8 @@ namespace Memcury
 
             return false;
         }
-    } // namespace VEHHook
-} // namespace Memcury
+    }
+}
 
 inline bool IsBadReadPtr(void* p)
 {
@@ -1582,8 +1618,7 @@ inline bool IsBadReadPtr(void* p)
         DWORD mask = (PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY);
         bool b = !(mbi.Protect & mask);
         // check the page is not a guard page
-        if (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS))
-            b = true;
+        if (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) b = true;
 
         return b;
     }
@@ -1629,7 +1664,7 @@ inline uintptr_t FindFunctionCall(const wchar_t* Name, const std::vector<uint8_t
 inline bool IsNullSub(uint64_t Addr)
 {
     // if (*(uint8_t*)(Addr) == 0xEB && *(uint8_t*)(Addr + 1) == 0xF7) // positive sp value has been detected, the output may be wrong!
-    // return true;
+       // return true;
 
     return *(uint8_t*)(Addr) == 0xC3 || *(uint8_t*)(Addr) == 0xC2;
 }

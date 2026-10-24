@@ -6,19 +6,22 @@ für das aktuelle Fortnite.
 
 > Vanity ist nicht mit Epic Games verbunden. „Fortnite“ ist eine Marke von Epic Games, Inc.
 
+> **Quellen:** Vanity baut auf freien Projekten auf – Backend aus LawinServer, Game Server aus Magnesium/Erbium, Umleitung aus Tellurium.
+> Vanity basiert beim Ingame-Menü auf **ATLAS Console** von cipherfps, ralz und Mitwirkenden. Alle Lizenzen: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
 ## Stand
 
 | Phase | Inhalt | Status |
 |---|---|---|
 | 0 | Recherche + Plan | fertig – siehe [`docs/00-recherche-und-plan.md`](docs/00-recherche-und-plan.md) |
-| 1 | Launcher-Oberfläche (nur Design) | fertig, wartet auf deinen Test – [`docs/01-phase-1-test.md`](docs/01-phase-1-test.md) |
-| 2 | Fortnite 19.10 starten + Logs | – |
-| 3 | Backend + Lobby | – |
-| 4 | Game Server, Match auf 127.0.0.1 | – |
-| 5 | Ingame-Menü (F9) | – |
-| 6 | Bots | – |
-| 7 | Trickshot-Modus + Match-Steuerung | – |
-| 8 | Feinschliff, Absturz-Analyse, Installer | – |
+| 1 | Launcher-Oberfläche | fertig |
+| 2 | Fortnite 19.10 starten + Logs | im Installer – [`docs/03-test-vollversion.md`](docs/03-test-vollversion.md) |
+| 3 | Backend + Lobby | im Installer (Backend aus LawinServer) |
+| 4 | Game Server, Match auf 127.0.0.1 | im Installer (`vanity_server.dll` aus Magnesium) – Steuerung vorerst über das Server-Fenster |
+| 5 | Ingame-Menü (F9) | im Bau (`vanity_client.dll` auf Basis von ATLAS Console) |
+| 6 | Bots | im Server-Fenster (Magnesium) – Launcher-Steuerung folgt |
+| 7 | Trickshot-Modus + Match-Steuerung | im Server-Fenster – Launcher-Steuerung (Steuer-Pipe) folgt |
+| 8 | Feinschliff, Absturz-Analyse, Installer | Absturz-Analyse + Installer fertig, Feinschliff läuft |
 
 ## Aufbau
 

@@ -112,6 +112,15 @@ impl Default for Settings {
     }
 }
 
+/// Ein Trickshot-Preset: Name + Server-Befehle, die nacheinander an den Game Server gehen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrickshotPreset {
+    pub name: String,
+    #[serde(default)]
+    pub commands: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
@@ -127,6 +136,8 @@ pub struct Config {
     pub active_profile_id: String,
     #[serde(default)]
     pub friends: Vec<Friend>,
+    #[serde(default)]
+    pub trickshot_presets: Vec<TrickshotPreset>,
 }
 
 fn config_version() -> u32 {
@@ -142,6 +153,7 @@ impl Default for Config {
             profiles: vec![],
             active_profile_id: String::new(),
             friends: vec![],
+            trickshot_presets: Vec::new(),
         }
     }
 }
