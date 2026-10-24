@@ -50,7 +50,7 @@ export const demoProfiles: Profile[] = [
     playerName: "georg",
     launchArgs: "-d3d11",
     headlessServer: true,
-    playlist: "Playlist_Respawn_24",
+    playlist: "Playlist_ShowdownAlt_Duos",
     lategame: false,
     tags: ["Team Rumble", "Trickshot"],
   },
@@ -70,13 +70,24 @@ export const demoProfiles: Profile[] = [
 
 /** Playlists, die der Game Server kennt (Kurzname → Anzeige). */
 export const playlists = [
+  // Namen, die der Game Server (vanity_server.dll) kennt – siehe docs/02-architektur.md, Steuer-Pipe
   { id: "Playlist_DefaultSolo", label: "Solo" },
   { id: "Playlist_DefaultDuo", label: "Duos" },
   { id: "Playlist_Trios", label: "Trios" },
   { id: "Playlist_DefaultSquad", label: "Squads" },
-  { id: "Playlist_Respawn_24", label: "Team Rumble" },
   { id: "Playlist_ShowdownAlt_Solo", label: "Arena Solo" },
   { id: "Playlist_ShowdownAlt_Duos", label: "Arena Duos" },
+  { id: "Playlist_ShowdownAlt_Trios", label: "Arena Trios" },
+  { id: "Playlist_ShowdownAlt_Squads", label: "Arena Squads" },
+  { id: "Playlist_Showdown_Solo", label: "Turnier Solo" },
+  { id: "Playlist_Showdown_Duos", label: "Turnier Duos" },
+  { id: "Playlist_NoBuildBR_Solo", label: "Zero Build Solo" },
+  { id: "Playlist_NoBuildBR_Duo", label: "Zero Build Duos" },
+  { id: "Playlist_NoBuildBR_Trio", label: "Zero Build Trios" },
+  { id: "Playlist_NoBuildBR_Squad", label: "Zero Build Squads" },
+  { id: "Playlist_ShowdownAlt_NoBuildBR_Solo", label: "Arena Zero Build Solo" },
+  { id: "Playlist_ShowdownAlt_NoBuildBR_Duos", label: "Arena Zero Build Duos" },
+  { id: "Playlist_Playground", label: "Playground" },
 ];
 
 export function playlistLabel(id: string): string {

@@ -18,9 +18,9 @@ für das aktuelle Fortnite.
 | 2 | Fortnite 19.10 starten + Logs | im Installer – [`docs/03-test-vollversion.md`](docs/03-test-vollversion.md) |
 | 3 | Backend + Lobby | im Installer (Backend aus LawinServer) |
 | 4 | Game Server, Match auf 127.0.0.1 | im Installer (`vanity_server.dll` aus Magnesium) – Steuerung vorerst über das Server-Fenster |
-| 5 | Ingame-Menü (F9) | im Bau (`vanity_client.dll` auf Basis von ATLAS Console) |
+| 5 | Ingame-Menü (F9) | im Installer (`vanity_client.dll`, Basis ATLAS Console) – wartet auf Test |
 | 6 | Bots | im Server-Fenster (Magnesium) – Launcher-Steuerung folgt |
-| 7 | Trickshot-Modus + Match-Steuerung | im Server-Fenster – Launcher-Steuerung (Steuer-Pipe) folgt |
+| 7 | Trickshot-Modus + Match-Steuerung | Steuer-Pipe Launcher ↔ Server eingebaut (Playlist, Lategame, Start, Bots, Befehle); Trickshot-Presets über das Server-Fenster – wartet auf Test |
 | 8 | Feinschliff, Absturz-Analyse, Installer | Absturz-Analyse + Installer fertig, Feinschliff läuft |
 
 ## Aufbau
