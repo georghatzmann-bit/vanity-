@@ -380,14 +380,49 @@ impl Engine {
         self.inject_after_login(game_pid, false, &build);
         self.emit_services();
 
-        // Schritt 5/6 im Hintergrund: warten, bis der Game Server auf Port 7777 hört, dann
-        // (falls die Server-DLL eine hat) die Steuer-Pipe verbinden und „Lobby bereit“ melden.
+        // Schritt 5/6 im Hintergrund: erst die Steuer-Pipe der Server-DLL verbinden (Playlist/Lategame
+        // übertragen, „Match starten“ freischalten), dann warten, bis der Game Server auf Port 7777 hört.
         self.emit_step(5);
         let app = self.app.clone();
         let profile_bg = profile.clone();
         std::thread::spawn(move || {
             let engine = app.state::<Engine>();
-            let listening = engine.wait_signal(|s| &s.server_listening, Duration::from_secs(300));
+
+            // 1) Steuer-Pipe – erscheint, sobald die Server-DLL läuft (bis 4 Minuten warten)
+            let (tx, rx) = channel::<ServerEvent>();
+            let started = std::time::Instant::now();
+            let mut link = None;
+            while started.elapsed() < Duration::from_secs(240) {
+                if engine.running.lock().unwrap().stopping {
+                    return;
+                }
+                if let Some(l) = ServerLink::connect(tx.clone()) {
+                    link = Some(l);
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(500));
+            }
+            match link {
+                Some(link) => {
+                    let link = Arc::new(link);
+                    engine.running.lock().unwrap().link = Some(link.clone());
+                    engine.spawn_server_event_loop(rx);
+                    engine.apply_profile_to_server(&link, &profile_bg);
+                    engine.log("launcher", "info", "Vanity", "Steuer-Pipe zum Server verbunden – Playlist und Lategame übertragen", None);
+                    engine.toast(
+                        "info",
+                        "Server wartet auf den Start",
+                        "Seite Match → „Match starten“ (oder im Server-Fenster START SERVER). Danach lädt der Server die Karte.",
+                    );
+                }
+                None => {
+                    engine.log("launcher", "info", "Vanity", "Keine Steuer-Pipe – der Server wird über sein eigenes Fenster bedient", None);
+                    engine.toast("info", "Server-Fenster", "Im Fenster „Magnesium“ Playlist wählen und START SERVER drücken.");
+                }
+            }
+
+            // 2) Auf „hört auf Port 7777“ warten – der Start ist Handarbeit, deshalb großzügig (30 Minuten)
+            let listening = engine.wait_signal(|s| &s.server_listening, Duration::from_secs(1800));
             if engine.running.lock().unwrap().stopping {
                 return;
             }
@@ -400,25 +435,6 @@ impl Engine {
                 return;
             }
             engine.log("launcher", "info", "Vanity", "Game Server hört auf Port 7777", None);
-            let (tx, rx) = channel::<ServerEvent>();
-            match ServerLink::connect_wait(tx, Duration::from_secs(5)) {
-                Some(link) => {
-                    let link = Arc::new(link);
-                    engine.running.lock().unwrap().link = Some(link.clone());
-                    engine.spawn_server_event_loop(rx);
-                    engine.apply_profile_to_server(&link, &profile_bg);
-                    engine.log("launcher", "info", "Vanity", "Steuer-Pipe zum Server verbunden", None);
-                }
-                None => {
-                    engine.log(
-                        "launcher",
-                        "info",
-                        "Vanity",
-                        "Keine Steuer-Pipe – der Server wird über sein eigenes Fenster bedient",
-                        None,
-                    );
-                }
-            }
             engine.emit_step(6);
             engine.emit_services();
             engine.toast("success", "Server bereit", "Drück im Spiel auf „Spielen“ – das Match läuft auf 127.0.0.1.");
@@ -489,6 +505,14 @@ impl Engine {
                 let _ = app.emit("server:event", serde_json::json!({ "event": ev.event, "data": ev.rest }));
                 if ev.event == "trickshot" {
                     let _ = app.emit("trickshot", serde_json::Value::Object(ev.rest.clone()));
+                }
+                // Abgelehnte Befehle als Hinweis zeigen (der Server erklärt, warum)
+                if ev.event == "reply" && ev.rest.get("ok").and_then(|v| v.as_bool()) == Some(false) {
+                    let msg = ev.rest.get("message").and_then(|v| v.as_str()).unwrap_or("Befehl abgelehnt").to_string();
+                    let _ = app.emit("toast", Toast { kind: "warning".into(), title: "Server".into(), description: msg });
+                }
+                if ev.event == "matchEnd" {
+                    let _ = app.emit("toast", Toast { kind: "info".into(), title: "Match beendet".into(), description: "Der Server meldet das Ende der Runde.".into() });
                 }
             }
         });

@@ -41,6 +41,9 @@ Auf der Startseite **Host & Play** drücken. Die Zeitleiste zeigt sieben Schritt
       Das ist das Server-Fenster – es bleibt offen, solange der Server läuft. Nicht schließen.
 - [ ] Gleichzeitig startet **dein Spiel** (Schritt *Dein Spiel*) – normaler Fortnite-Start mit Lobby.
       Melde dich nicht an, es gibt kein Login: Vanity meldet dich automatisch an (Name aus Einstellungen).
+- [ ] Kurz nach dem Server-Fenster: Hinweis **„Server wartet auf den Start“** (die Steuer-Pipe steht).
+      Jetzt **Seite Match → „Match starten“** drücken – oder im Server-Fenster unten links **START SERVER**.
+      Vorher ggf. Playlist/Lategame auf der Match-Seite setzen (gilt nur vor dem Start).
 - [ ] Nach 1–3 Minuten (Karte laden): Server-Log zeigt `IpNetDriver listening on port 7777`,
       Vanity meldet **„Server bereit“** (Schritt *Game Server*, dann *Lobby*).
 
@@ -60,7 +63,7 @@ nochmal Spielen drücken.
 
 ## Schritt 4 – Server-Fenster (Magnesium) kennenlernen
 
-Im Server-Fenster steuerst du das Match, bis die Launcher-Steuerung (Steuer-Pipe) fertig ist:
+Vieles geht auch im Launcher (Seite Match: Playlist, Lategame, Bus, Bots, Items). Das Server-Fenster kann mehr:
 
 - [ ] **Playlist**: Knöpfe wie „Solos“, „Duos“, „Tournament Solos“ (Arena), „Zero Build …“.
       Vor dem Start wählen, dann Match starten.

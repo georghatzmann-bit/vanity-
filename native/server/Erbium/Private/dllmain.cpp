@@ -9,6 +9,7 @@
 #include "../Public/AutoHosting.h"
 #include "../Public/Misc.h"
 #include "../Public/GUI.h"
+#include "../Public/VanityControl.h" // [Vanity] Steuer-Pipe fuer den Launcher
 #include <Erbium/Plugins/CrashReporter/Public/CrashReporter.h>
 #include <FortniteGame/Public/FortPlayerControllerAthena.h>
 #include <Engine/Public/NetDriver.h>
@@ -304,6 +305,8 @@ void Main()
 
         CreateThread(0, 0, (LPTHREAD_START_ROUTINE)GUI::Init, 0, 0, 0);
     }
+
+    VanityControl::Start(); // [Vanity] Launcher kann Playlist/Start/Befehle ueber die Pipe steuern
 
     bool bCompatibilityPatchesPrepared = false;
     if (ShouldPrepareCompatibilityBeforeStart())

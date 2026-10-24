@@ -8,6 +8,7 @@
 #include <ImGui/imgui_impl_dx11.h>
 #include "../Public/Calendar.h"
 #include "../Public/AutoHosting.h"
+#include "../Public/VanityControl.h" // [Vanity]
 #include "../Public/Configuration.h"
 #include "../Public/Events.h"
 #include "../Public/Misc.h"
@@ -4793,6 +4794,7 @@ void GUI::SafeZoneMapGameTick()
     TrickshotManager::GameThreadTick();
     ABuildingSMActor::TickSavedTrapAttachments();
     AFortPlayerPawnAthena::TickPendingPlayerMapIcons();
+    VanityControl::GameThreadTick(); // [Vanity] Befehle vom Launcher
 }
 
 bool GameTextureBridge::ExtractToRGBA(const UTexture2D* Texture, std::vector<unsigned char>& RGBA,

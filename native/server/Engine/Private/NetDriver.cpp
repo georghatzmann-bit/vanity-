@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "../Public/NetDriver.h"
 #include <Erbium/Public/AutoHosting.h>
+#include <Erbium/Public/VanityControl.h> // [Vanity]
 #include <Erbium/Public/ArenaTelemetry.h>
 #include <Erbium/Public/Calendar.h>
 #include <Erbium/Public/Configuration.h>
@@ -1654,6 +1655,7 @@ namespace
 
             ArenaTelemetry::OnMatchEnded(GameMode, GameState);
             AutoHosting::OnAuthoritativeMatchEnded();
+            VanityControl::EmitMatchEnd(); // [Vanity]
 
             const char* Source = bExplicitEnd ? "explicit winner path" : (bWaitingPostMatch
                         ? "WaitingPostMatch" : (bUsingModernPhase ? "modern phase"
