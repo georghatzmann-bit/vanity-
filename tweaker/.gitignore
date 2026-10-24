@@ -1,0 +1,2 @@
+# Nur die fertigen ZIPs einchecken, nicht die entpackten Ordner
+dist/TweakWerk-*/

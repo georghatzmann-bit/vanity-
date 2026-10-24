@@ -1,0 +1,357 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TweakWerk" Width="1060" Height="740" MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen" Background="#0D1117" Foreground="#E6EDF3"
+        FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True">
+  <Window.Resources>
+    <Style x:Key="Card" TargetType="Border">
+      <Setter Property="Background" Value="#161B22"/>
+      <Setter Property="BorderBrush" Value="#30363D"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Padding" Value="18,14"/>
+      <Setter Property="Margin" Value="0,0,0,10"/>
+    </Style>
+
+    <Style x:Key="Switch" TargetType="CheckBox">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <Grid Width="48" Height="26" Background="Transparent">
+              <Border x:Name="Track" CornerRadius="13" Background="#30363D"/>
+              <Ellipse x:Name="Knob" Width="20" Height="20" Fill="#E6EDF3" HorizontalAlignment="Left" Margin="3,0,0,0"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Track" Property="Background" Value="#22C55E"/>
+                <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/>
+                <Setter TargetName="Knob" Property="Margin" Value="0,0,3,0"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.35"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="Btn" TargetType="Button">
+      <Setter Property="Background" Value="#2DD4BF"/>
+      <Setter Property="Foreground" Value="#0D1117"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Padding" Value="16,9"/>
+      <Setter Property="Margin" Value="0,0,10,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="BtnGhost" TargetType="Button" BasedOn="{StaticResource Btn}">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="#E6EDF3"/>
+      <Setter Property="BorderBrush" Value="#30363D"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style x:Key="BtnPro" TargetType="Button" BasedOn="{StaticResource Btn}">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background">
+        <Setter.Value>
+          <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#A855F7" Offset="0"/>
+            <GradientStop Color="#EC4899" Offset="1"/>
+          </LinearGradientBrush>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="TabItem">
+      <Setter Property="Foreground" Value="#8B949E"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Width" Value="200"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabItem">
+            <Border x:Name="Bd" Padding="14,10" Margin="0,2" CornerRadius="8" Background="Transparent">
+              <ContentPresenter ContentSource="Header"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#161B22"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#12302C"/>
+                <Setter Property="Foreground" Value="#2DD4BF"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="Icon" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+      <Setter Property="Width" Value="26"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="H1" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="24"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+    <Style x:Key="Sub" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="#8B949E"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Margin" Value="0,0,0,16"/>
+    </Style>
+    <Style x:Key="H2" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="16"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,0,0,6"/>
+    </Style>
+    <Style x:Key="Muted" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="#8B949E"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style x:Key="InfoLabel" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="#8B949E"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style x:Key="InfoValue" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Margin" Value="0,4,0,0"/>
+    </Style>
+    <Style TargetType="CheckBox">
+      <Setter Property="Foreground" Value="#E6EDF3"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="130"/>
+    </Grid.RowDefinitions>
+
+    <!-- Kopfzeile -->
+    <Border Grid.Row="0" Padding="20,14" BorderBrush="#21262D" BorderThickness="0,0,0,1">
+      <DockPanel LastChildFill="False">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets" FontSize="22" Foreground="#2DD4BF" VerticalAlignment="Center" Margin="0,0,10,0"/>
+          <TextBlock Text="TweakWerk" FontSize="20" FontWeight="Bold" VerticalAlignment="Center"/>
+          <Border x:Name="EditionBadge" CornerRadius="6" Padding="8,2" Margin="12,0,0,0" Background="#30363D" VerticalAlignment="Center">
+            <TextBlock x:Name="EditionText" Text="GRATIS" FontSize="11" FontWeight="Bold"/>
+          </Border>
+          <TextBlock x:Name="VersionText" Text="" Foreground="#6E7681" FontSize="11" VerticalAlignment="Center" Margin="10,0,0,0"/>
+        </StackPanel>
+        <Button x:Name="BtnPro" DockPanel.Dock="Right" Style="{StaticResource BtnPro}" Margin="0" Content="Pro freischalten"/>
+      </DockPanel>
+    </Border>
+
+    <!-- Hauptbereich -->
+    <TabControl x:Name="Tabs" Grid.Row="1" TabStripPlacement="Left" Background="Transparent" BorderThickness="0" Padding="0" Margin="12,12,0,0">
+
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE80F;"/><TextBlock Text="Übersicht"/></StackPanel>
+        </TabItem.Header>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,4,24,12">
+          <StackPanel>
+            <TextBlock Style="{StaticResource H1}" Text="Mehr aus deinem PC holen. Ehrlich."/>
+            <TextBlock Style="{StaticResource Sub}" Text="Jede Änderung wird vorher gesichert und lässt sich mit einem Klick rückgängig machen. Keine Wunder-Versprechen: Nur Einstellungen, die wirklich etwas bringen."/>
+
+            <UniformGrid Columns="3" Margin="0,0,0,6">
+              <Border Style="{StaticResource Card}" Margin="0,0,10,10"><StackPanel><TextBlock Style="{StaticResource InfoLabel}" Text="WINDOWS"/><TextBlock x:Name="InfoWindows" Style="{StaticResource InfoValue}" Text="…"/></StackPanel></Border>
+              <Border Style="{StaticResource Card}" Margin="0,0,10,10"><StackPanel><TextBlock Style="{StaticResource InfoLabel}" Text="PROZESSOR"/><TextBlock x:Name="InfoCpu" Style="{StaticResource InfoValue}" Text="…"/></StackPanel></Border>
+              <Border Style="{StaticResource Card}" Margin="0,0,0,10"><StackPanel><TextBlock Style="{StaticResource InfoLabel}" Text="GRAFIKKARTE"/><TextBlock x:Name="InfoGpu" Style="{StaticResource InfoValue}" Text="…"/></StackPanel></Border>
+              <Border Style="{StaticResource Card}" Margin="0,0,10,10"><StackPanel><TextBlock Style="{StaticResource InfoLabel}" Text="ARBEITSSPEICHER"/><TextBlock x:Name="InfoRam" Style="{StaticResource InfoValue}" Text="…"/></StackPanel></Border>
+              <Border Style="{StaticResource Card}" Margin="0,0,10,10"><StackPanel><TextBlock Style="{StaticResource InfoLabel}" Text="SYSTEMLAUFWERK"/><TextBlock x:Name="InfoDisk" Style="{StaticResource InfoValue}" Text="…"/></StackPanel></Border>
+              <Border Style="{StaticResource Card}" Margin="0,0,0,10"><StackPanel><TextBlock Style="{StaticResource InfoLabel}" Text="GERÄT"/><TextBlock x:Name="InfoDevice" Style="{StaticResource InfoValue}" Text="…"/></StackPanel></Border>
+            </UniformGrid>
+
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <TextBlock Style="{StaticResource H2}" Text="Schnellstart"/>
+                <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,12" Text="1. Wiederherstellungspunkt erstellen (dein Rettungsanker).  2. Empfohlene Einstellungen anwenden.  3. Spiel starten und vergleichen."/>
+                <WrapPanel>
+                  <Button x:Name="BtnRestore" Style="{StaticResource BtnGhost}" Content="Wiederherstellungspunkt erstellen"/>
+                  <Button x:Name="BtnRecommended" Style="{StaticResource Btn}" Content="Empfohlene Einstellungen anwenden"/>
+                </WrapPanel>
+                <TextBlock x:Name="RestoreStatus" Style="{StaticResource Muted}" Margin="0,10,0,0" Text=""/>
+              </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <TextBlock Style="{StaticResource H2}" Text="Was TweakWerk NICHT macht"/>
+                <TextBlock Style="{StaticResource Muted}" Text="✖  Virenschutz, Firewall oder Windows-Updates abschalten&#x0a;✖  Placebo-Tweaks einbauen, die nur gut klingen&#x0a;✖  „+200 FPS“ versprechen. Wie viel es bringt, hängt von deinem PC ab. Auf aufgeräumten PCs sind es oft nur ein paar Prozent, dafür stabilere Frametimes."/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE7FC;"/><TextBlock Text="Gaming"/></StackPanel>
+        </TabItem.Header>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,4,24,12">
+          <StackPanel>
+            <TextBlock Style="{StaticResource H1}" Text="Gaming"/>
+            <TextBlock Style="{StaticResource Sub}" Text="Schalter an = Tweak aktiv. Schalter aus = zurück zum vorherigen Zustand."/>
+            <StackPanel x:Name="GamingTweaks"/>
+
+            <Border x:Name="GpuSection" Style="{StaticResource Card}" Margin="0,8,0,10">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Style="{StaticResource H2}" Text="Spiele auf der starken Grafikkarte"/>
+                  <Border x:Name="GpuProBadge" CornerRadius="6" Padding="6,1" Margin="8,0,0,6" Background="#A855F7" VerticalAlignment="Center"><TextBlock Text="PRO" FontSize="10" FontWeight="Bold" Foreground="White"/></Border>
+                </StackPanel>
+                <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,12" Text="Wichtig bei Laptops mit zwei Grafikchips: Windows startet Spiele manchmal auf dem schwachen Chip. Hier legst du fest, dass ein Spiel immer die starke Grafikkarte nutzt."/>
+                <StackPanel x:Name="GpuList" Margin="0,0,0,10"/>
+                <WrapPanel>
+                  <Button x:Name="BtnGpuAdd" Style="{StaticResource BtnGhost}" Content="Spiel hinzufügen (.exe)"/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE774;"/><TextBlock Text="Netzwerk"/></StackPanel>
+        </TabItem.Header>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,4,24,12">
+          <StackPanel>
+            <TextBlock Style="{StaticResource H1}" Text="Netzwerk &amp; Ping"/>
+            <TextBlock Style="{StaticResource Sub}" Text="Erst messen, dann optimieren."/>
+
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <TextBlock Style="{StaticResource H2}" Text="Ping-Test"/>
+                <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,12" Text="Misst deine Verbindungszeit zu Rechenzentren, in denen viele Spieleserver stehen. Dein Ping im Spiel kann etwas abweichen. Für die genauesten Werte: per LAN-Kabel und ohne laufende Downloads testen."/>
+                <WrapPanel Margin="0,0,0,8">
+                  <Button x:Name="BtnPing" Style="{StaticResource Btn}" Content="Ping testen"/>
+                  <Button x:Name="BtnFlushDns" Style="{StaticResource BtnGhost}" Content="DNS-Cache leeren"/>
+                </WrapPanel>
+                <StackPanel x:Name="PingResults"/>
+              </StackPanel>
+            </Border>
+
+            <StackPanel x:Name="NetworkTweaks"/>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE74D;"/><TextBlock Text="Aufräumen"/></StackPanel>
+        </TabItem.Header>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,4,24,12">
+          <StackPanel>
+            <TextBlock Style="{StaticResource H1}" Text="Aufräumen"/>
+            <TextBlock Style="{StaticResource Sub}" Text="Löscht nur temporäre Dateien, die älter als 24 Stunden sind. Dateien, die gerade benutzt werden, bleiben automatisch liegen."/>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <TextBlock Style="{StaticResource H2}" Text="Temporäre Dateien"/>
+                <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,12" Text="Spart Speicherplatz. Mehr FPS bringt das nicht, aber auf vollen Laufwerken wird Windows träge."/>
+                <CheckBox x:Name="ChkRecycle" Content="Auch den Papierkorb leeren" Margin="0,0,0,12"/>
+                <WrapPanel><Button x:Name="BtnClean" Style="{StaticResource Btn}" Content="Jetzt aufräumen"/></WrapPanel>
+                <TextBlock x:Name="CleanResult" Style="{StaticResource Muted}" Margin="0,10,0,0" Text=""/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE768;"/><TextBlock Text="Autostart"/></StackPanel>
+        </TabItem.Header>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,4,24,12">
+          <StackPanel>
+            <TextBlock Style="{StaticResource H1}" Text="Autostart"/>
+            <TextBlock Style="{StaticResource Sub}" Text="Programme, die mit Windows starten, kosten Arbeitsspeicher und verlangsamen den Start. Hier schaltest du sie aus. Gelöscht wird nichts, du kannst sie jederzeit wieder einschalten."/>
+            <StackPanel x:Name="StartupPanel">
+              <Border Style="{StaticResource Card}" Background="#1F1A0E" BorderBrush="#5C4813">
+                <TextBlock Style="{StaticResource Muted}" Foreground="#E3B341" Text="Schalte nur aus, was du kennst. Finger weg von Treibern (Audio, Touchpad, Grafik) und deinem Virenschutz."/>
+              </Border>
+              <WrapPanel Margin="0,0,0,10"><Button x:Name="BtnStartupRefresh" Style="{StaticResource BtnGhost}" Content="Liste aktualisieren"/></WrapPanel>
+              <StackPanel x:Name="StartupList"/>
+            </StackPanel>
+            <Border x:Name="StartupLocked" Style="{StaticResource Card}">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Style="{StaticResource H2}" Text="Autostart-Manager"/>
+                  <Border CornerRadius="6" Padding="6,1" Margin="8,0,0,6" Background="#A855F7" VerticalAlignment="Center"><TextBlock Text="PRO" FontSize="10" FontWeight="Bold" Foreground="White"/></Border>
+                </StackPanel>
+                <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,12" Text="Sieh auf einen Blick, was alles mit Windows startet, und schalte unnötige Programme mit einem Klick aus."/>
+                <WrapPanel><Button x:Name="BtnProStartup" Style="{StaticResource BtnPro}" Content="Pro freischalten"/></WrapPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Icon}" Text="&#xE81C;"/><TextBlock Text="Sicherung"/></StackPanel>
+        </TabItem.Header>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,4,24,12">
+          <StackPanel>
+            <TextBlock Style="{StaticResource H1}" Text="Sicherung"/>
+            <TextBlock Style="{StaticResource Sub}" Text="Dein Sicherheitsnetz. Hier machst du alles rückgängig."/>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <TextBlock Style="{StaticResource H2}" Text="Alles zurücksetzen"/>
+                <TextBlock Style="{StaticResource Muted}" Margin="0,0,0,12" Text="Stellt den Zustand vor TweakWerk wieder her, für alle Schalter. Autostart-Einträge und Grafikkarten-Zuordnungen änderst du direkt in ihrem Bereich."/>
+                <TextBlock x:Name="BackupInfo" Margin="0,0,0,12" Text=""/>
+                <WrapPanel>
+                  <Button x:Name="BtnUndoAll" Style="{StaticResource Btn}" Content="Alle Änderungen rückgängig machen"/>
+                  <Button x:Name="BtnRestore2" Style="{StaticResource BtnGhost}" Content="Wiederherstellungspunkt erstellen"/>
+                  <Button x:Name="BtnOpenData" Style="{StaticResource BtnGhost}" Content="Sicherungsordner öffnen"/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+              <StackPanel>
+                <TextBlock Style="{StaticResource H2}" Text="Notfall"/>
+                <TextBlock Style="{StaticResource Muted}" Text="Falls Windows nach einer Änderung komisch reagiert: Windows-Taste drücken, „Wiederherstellungspunkt“ eingeben, „Systemwiederherstellung“ öffnen und den Punkt „TweakWerk Sicherung“ auswählen."/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+
+    <!-- Protokoll -->
+    <Border Grid.Row="2" Background="#0A0D12" BorderBrush="#21262D" BorderThickness="0,1,0,0" Padding="16,8">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource InfoLabel}" Text="PROTOKOLL" Margin="0,0,0,4"/>
+        <TextBox x:Name="LogBox" IsReadOnly="True" Background="Transparent" Foreground="#8B949E" BorderThickness="0"
+                 FontFamily="Consolas" FontSize="12" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap"/>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>

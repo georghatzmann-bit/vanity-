@@ -1,8 +1,12 @@
 # vanity-
 
-## 💚 Business: Digitale Vorlagen verkaufen
+## ⚡ TweakWerk: Gaming-Optimizer (aktuelles Projekt)
 
-Alles zum Geldverdienen liegt im Ordner [`business/`](business/README.md). **Start hier: [`business/README.md`](business/README.md)**
+Ehrlicher FPS- und Ping-Optimizer für Windows, Gratis- und Pro-Version. **Start hier: [`tweaker/README.md`](tweaker/README.md)**
+
+## 💚 Finanzplaner: Digitale Vorlagen verkaufen
+
+Excel-Finanzplaner für Etsy. **Start hier: [`business/README.md`](business/README.md)**
 
 ## Jarvis
 
