@@ -157,11 +157,13 @@ namespace
             return false;
         }
 
-        struct
+        // Direkt im Parameterblock aufbauen (keine Kopie): FString gibt seinen Speicher im Destruktor frei,
+        // eine Zuweisung aus einem Zwischenwert würde den Puffer zu früh freigeben.
+        const std::wstring Wide = Widen(Text);
+        struct FParams
         {
             FString Msg;
-        } Params{};
-        Params.Msg = FString(Widen(Text).c_str());
+        } Params{ FString(Wide.c_str()) };
 
         if (!GuardedProcessEvent(Controller, Function, &Params))
         {
