@@ -1,10 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Gemeinsam fuer alle Vanity-DLLs: Ausgabe- und Zwischenordner.
-     Alles andere (Toolset, Laufzeit) steht in den einzelnen .vcxproj, damit es keine
-     Ueberraschungen durch die Import-Reihenfolge gibt. -->
 <Project>
+  <!-- Gemeinsame Ausgabe aller Projekte: DLLs/Libs nach native\bin\<Konfiguration>\,
+       Zwischendateien getrennt je Projekt nach native\obj\<Projekt>\<Konfiguration>\.
+       Wichtig: $(MSBuildProjectName) statt $(ProjectName) – letzteres ist hier noch leer, dann teilen
+       sich alle Projekte eine vc143.pdb und der parallele Build bricht mit C1041 ab. -->
   <PropertyGroup>
     <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <IntDir>$(SolutionDir)obj\$(MSBuildProjectName)\$(Configuration)\</IntDir>
   </PropertyGroup>
 </Project>
