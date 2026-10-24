@@ -32,7 +32,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "Georg Hatzmann",
     "category": "Game",
     "shortDescription": "Launcher für OG-Fortnite-Privatserver",
@@ -47,9 +49,16 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["German"],
+        "languages": [
+          "German"
+        ],
         "displayLanguageSelector": false
       }
+    },
+    "resources": {
+      "resources/dlls/*": "dlls/",
+      "resources/backend/**/*": "backend/",
+      "resources/node/*": "node/"
     }
   }
 }
