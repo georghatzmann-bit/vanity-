@@ -194,3 +194,55 @@ pub fn spawn_bots(engine: E, count: u32) -> R<()> {
 pub fn remove_bots(engine: E) -> R<()> {
     engine.server_exec("delbot")
 }
+
+// --- Einstellungen des Ingame-Menüs (client.json, auch von der Client-DLL gelesen) ------------
+
+fn client_settings_path() -> PathBuf {
+    profiles::config_dir().join("client.json")
+}
+
+fn default_client_settings() -> serde_json::Value {
+    serde_json::json!({
+        "menuKey": 120, "joinKey": 116, "consoleKey": 119,
+        "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": false,
+        "fov": 80, "console": true, "joinIp": "", "presets": []
+    })
+}
+
+#[tauri::command]
+pub fn get_client_settings() -> serde_json::Value {
+    let mut value = default_client_settings();
+    if let Ok(bytes) = std::fs::read(client_settings_path()) {
+        if let Ok(serde_json::Value::Object(saved)) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+            if let serde_json::Value::Object(base) = &mut value {
+                for (k, v) in saved {
+                    base.insert(k, v);
+                }
+            }
+        }
+    }
+    value
+}
+
+#[tauri::command]
+pub fn set_client_settings(value: serde_json::Value) -> R<()> {
+    let path = client_settings_path();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let json = serde_json::to_vec_pretty(&value).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn vanity_paths() -> serde_json::Value {
+    let local = dirs::data_local_dir().unwrap_or_default().join("Vanity");
+    serde_json::json!({
+        "config": profiles::config_dir().to_string_lossy(),
+        "logs": local.join("logs").to_string_lossy(),
+        "crashes": crash::crashes_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
+        "fortniteLogs": dirs::data_local_dir().unwrap_or_default().join("FortniteGame").join("Saved").join("Logs").to_string_lossy(),
+    })
+}

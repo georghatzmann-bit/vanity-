@@ -15,7 +15,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusPill, statusLabel } from "@/components/common";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { servicesForStep, useUi, type PageId, type ServiceStatus } from "@/lib/store";
+import { useApp, type PageId, type ServiceStatus } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { LogoMark } from "./Logo";
 
@@ -61,9 +61,9 @@ const footerItems: NavItem[] = [
 
 export function Sidebar() {
   const wide = useMediaQuery("(min-width: 1200px)");
-  const page = useUi((s) => s.page);
-  const setPage = useUi((s) => s.setPage);
-  const services = servicesForStep(useUi((s) => s.launchStep));
+  const page = useApp((s) => s.page);
+  const setPage = useApp((s) => s.setPage);
+  const services = useApp((s) => s.services);
 
   const renderItem = (item: NavItem) => (
     <NavButton
@@ -160,7 +160,7 @@ function NavButton({
   );
 }
 
-type Services = ReturnType<typeof servicesForStep>;
+type Services = { backend: ServiceStatus; server: ServiceStatus; game: ServiceStatus };
 
 /** Eine Zeile für alle drei Dienste – Details im Tooltip. */
 function ServiceSummary({ services, wide }: { services: Services; wide: boolean }) {

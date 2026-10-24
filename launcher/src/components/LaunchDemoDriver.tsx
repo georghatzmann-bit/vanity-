@@ -1,33 +1,37 @@
-import { useEffect } from "react";
 import { toast } from "sonner";
-import { launchSteps, useUi } from "@/lib/store";
+import { launchSteps, useApp } from "@/lib/store";
 
 /** Wie lange jeder Vorschau-Schritt dauert (ms). */
 const stepDurations = [700, 1100, 600, 1200, 1300, 1000, 700];
 
+let timer: number | undefined;
+
 /**
- * Schaltet den Vorschau-Startablauf Schritt für Schritt weiter – auch wenn
- * man währenddessen die Seite wechselt. Ab Phase 2 kommen die Schritte
- * stattdessen von der Rust-Seite.
+ * Nur für die Browser-Vorschau: spielt den Startablauf als Animation ab.
+ * Im echten Launcher kommen die Schritte als Ereignisse aus Rust.
  */
-export function LaunchDemoDriver() {
-  const launchStep = useUi((s) => s.launchStep);
-  const setLaunchStep = useUi((s) => s.setLaunchStep);
-  const running = launchStep >= 0 && launchStep < launchSteps.length;
+export function runDemoLaunch() {
+  window.clearTimeout(timer);
+  const set = useApp.setState;
+  const run = (step: number) => {
+    set({ launchStep: step });
+    set({
+      services: {
+        backend: step >= 1 ? "running" : "starting",
+        server: step < 1 ? "stopped" : step >= 5 ? "running" : "starting",
+        game: step < 5 ? "stopped" : step >= launchSteps.length ? "running" : "starting",
+      },
+    });
+    if (step >= launchSteps.length) {
+      toast.success("Lobby erreicht (Vorschau)", { description: "Im echten Launcher läuft hier Fortnite." });
+      return;
+    }
+    timer = window.setTimeout(() => run(step + 1), stepDurations[step] ?? 800);
+  };
+  run(0);
+}
 
-  useEffect(() => {
-    if (!running) return;
-    const timer = window.setTimeout(() => {
-      const next = launchStep + 1;
-      setLaunchStep(next);
-      if (next >= launchSteps.length) {
-        toast.success("Lobby erreicht (Vorschau)", {
-          description: "So läuft „Host & Play“ ab Phase 4 wirklich ab.",
-        });
-      }
-    }, stepDurations[launchStep] ?? 800);
-    return () => window.clearTimeout(timer);
-  }, [launchStep, running, setLaunchStep]);
-
-  return null;
+export function stopDemoLaunch() {
+  window.clearTimeout(timer);
+  useApp.setState({ launchStep: -1, services: { backend: "stopped", server: "stopped", game: "stopped" } });
 }

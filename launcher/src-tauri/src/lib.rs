@@ -43,6 +43,9 @@ pub fn run() {
             commands::server_start_match,
             commands::spawn_bots,
             commands::remove_bots,
+            commands::get_client_settings,
+            commands::set_client_settings,
+            commands::vanity_paths,
         ])
         .run(tauri::generate_context!())
         .expect("Vanity konnte nicht gestartet werden");

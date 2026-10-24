@@ -1,0 +1,60 @@
+#pragma once
+#include "../../pch.h"
+#include "FortInventory.h"
+#include "../../Engine/Public/AbilitySystemComponent.h"
+#include "FortPhysicsPawn.h"
+
+struct FFortAbilitySetHandle final
+{
+public:
+    USCRIPTSTRUCT_COMMON_MEMBERS(FFortAbilitySetHandle);
+
+    TWeakObjectPtr<UAbilitySystemComponent> TargetAbilitySystemComponent;
+    TArray<FGameplayAbilitySpecHandle> GrantedAbilityHandles;
+    TArray<FActiveGameplayEffectHandle> AppliedEffectHandles;
+    TArray<FGuid> ItemGuidsForAdditionalItems;
+};
+
+class AFortWeapon : public AActor
+{
+public:
+    UCLASS_COMMON_MEMBERS(AFortWeapon);
+
+    DEFINE_PROP(ItemEntryGuid, FGuid);
+    DEFINE_PROP(WeaponData, UFortWeaponItemDefinition*);
+    DEFINE_PROP(WeaponLevel, int32);
+    DEFINE_PROP(AmmoCount, int32);
+    DEFINE_PROP(ContextTrapItemDefinition, UFortItemDefinition*);
+    DEFINE_PROP(PrimaryAbilitySpecHandle, FGameplayAbilitySpecHandle);
+    DEFINE_PROP(SecondaryAbilitySpecHandle, FGameplayAbilitySpecHandle);
+    DEFINE_PROP(ReloadAbilitySpecHandle, FGameplayAbilitySpecHandle);
+    DEFINE_PROP(ImpactAbilitySpecHandle, FGameplayAbilitySpecHandle);
+    DEFINE_PROP(ReticleTraceOverrideSpecHandle, FGameplayAbilitySpecHandle);
+    DEFINE_PROP(EquippedAbilityHandles, TArray<FGameplayAbilitySpecHandle>);
+    DEFINE_PROP(EquippedAbilitySetHandles, TArray<FFortAbilitySetHandle>);
+    DEFINE_PROP(MountedWeaponInfoRepped, FMountedWeaponInfoRepped);
+    DEFINE_BITFIELD_PROP(bCompletedWeaponLoad);
+
+    DEFINE_FUNC(ServerReleaseWeaponAbility, void);
+    DEFINE_FUNC(OnRep_MountedWeaponInfoRepped, void);
+};
+
+class AFortWeaponRanged : public AFortWeapon
+{
+public:
+    UCLASS_COMMON_MEMBERS(AFortWeaponRanged);
+
+    DefUHookOg(ServerLWProjectile_SetDamageStartAndDirection_);
+    DefUHookOg(ServerLWProjectile_EndActiveAbility_);
+    DefUHookOg(ServerStopProjectileRequest_);
+    DefUHookOg(MulticastProjectileRequestUnreliable_);
+    DefUHookOg(MulticastStopProjectileRequestUnreliable_);
+    DefUHookOg(ServerNotifyPawnHit_);
+
+    static void NotifyServerAbilityActivationStarted(UObject* AbilitySourceObject);
+    static void NotifyServerAbilityActivated(UObject* AbilitySourceObject);
+    static void NotifyServerAbilityActivationFailed(UObject* AbilitySourceObject);
+    static void TickProjectileRelays();
+
+    InitPostLoadHooks;
+};

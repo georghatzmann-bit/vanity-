@@ -1,12 +1,11 @@
 import { useEffect, useRef, type ComponentType } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
-import { LaunchDemoDriver } from "@/components/LaunchDemoDriver";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Background } from "@/components/layout/Background";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TitleBar } from "@/components/layout/TitleBar";
-import { useUi, type PageId } from "@/lib/store";
+import { useApp, type PageId } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AboutPage } from "@/pages/AboutPage";
 import { CrashesPage } from "@/pages/CrashesPage";
@@ -33,10 +32,16 @@ const pages: Record<PageId, ComponentType> = {
 };
 
 export function App() {
-  const page = useUi((s) => s.page);
-  const appearance = useUi((s) => s.appearance);
+  const page = useApp((s) => s.page);
+  const ready = useApp((s) => s.ready);
+  const init = useApp((s) => s.init);
+  const settings = useApp((s) => s.config.settings);
   const Page = pages[page];
   const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    init();
+  }, [init]);
 
   // Kein Browser-Kontextmenü (Neu laden, Untersuchen …) im fertigen Launcher
   useEffect(() => {
@@ -47,14 +52,14 @@ export function App() {
   }, []);
 
   return (
-    <MotionConfig reducedMotion={appearance.reduceMotion ? "always" : "user"}>
+    <MotionConfig reducedMotion={settings.reduceMotion ? "always" : "user"}>
       <TooltipProvider delayDuration={250}>
         <div
           className={cn(
             "relative flex h-full flex-col overflow-hidden",
-            !appearance.glass && "no-glass",
-            appearance.reduceMotion && "reduce-motion",
-            !appearance.animatedBackground && "static-background",
+            !settings.glass && "no-glass",
+            settings.reduceMotion && "reduce-motion",
+            !settings.animatedBackground && "static-background",
           )}
         >
           <Background />
@@ -62,25 +67,26 @@ export function App() {
           <div className="relative flex min-h-0 flex-1">
             <Sidebar />
             <main ref={mainRef} className="relative min-w-0 flex-1 overflow-y-auto">
-              <AnimatePresence
-                mode="wait"
-                initial={false}
-                onExitComplete={() => mainRef.current?.scrollTo({ top: 0 })}
-              >
-                <motion.div
-                  key={page}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
+              {ready && (
+                <AnimatePresence
+                  mode="wait"
+                  initial={false}
+                  onExitComplete={() => mainRef.current?.scrollTo({ top: 0 })}
                 >
-                  <Page />
-                </motion.div>
-              </AnimatePresence>
+                  <motion.div
+                    key={page}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
+                  >
+                    <Page />
+                  </motion.div>
+                </AnimatePresence>
+              )}
             </main>
           </div>
           <Toaster position="bottom-right" />
-          <LaunchDemoDriver />
         </div>
       </TooltipProvider>
     </MotionConfig>
