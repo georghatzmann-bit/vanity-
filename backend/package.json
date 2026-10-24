@@ -1,0 +1,38 @@
+{
+  "name": "vanity-backend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Lokales Fortnite-Backend für Vanity (basiert auf LawinServer, GPL-3.0)",
+  "license": "GPL-3.0-only",
+  "type": "commonjs",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && node scripts/build.mjs",
+    "start": "node dist/main.js",
+    "test": "node test/smoke.mjs"
+  },
+  "dependencies": {
+    "cookie-parser": "1.4.7",
+    "express": "4.22.3",
+    "ini": "2.0.0",
+    "uuid": "8.3.2",
+    "ws": "8.22.0",
+    "xml-parser": "1.2.1",
+    "xmlbuilder": "15.1.1"
+  },
+  "devDependencies": {
+    "@types/express": "4.17.25",
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "typescript": "6.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.28.0"
+}
