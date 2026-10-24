@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Etsy-Titelbild</title>
+<!-- Vorlage fuer das Etsy-Titelbild (2400x1800). Wird von tools/render_images.js als PNG gespeichert. -->
+<style>
+  html, body { margin: 0; }
+  body {
+    width: 2400px; height: 1800px; overflow: hidden;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(135deg, #1f5f5b 0%, #164643 100%);
+    color: #fff; position: relative;
+  }
+  .text { position: absolute; left: 130px; top: 150px; width: 900px; }
+  .tag {
+    display: inline-block; background: #ffd666; color: #3b2f00; font-weight: 800;
+    font-size: 42px; padding: 14px 32px; border-radius: 999px; letter-spacing: .02em;
+  }
+  h1 { font-size: 150px; line-height: 1; margin: 50px 0 30px; letter-spacing: -0.03em; }
+  .sub { font-size: 54px; line-height: 1.3; opacity: .92; margin-bottom: 60px; }
+  ul { list-style: none; padding: 0; margin: 0; font-size: 46px; line-height: 1.9; }
+  li::before { content: "✓ "; color: #8fe3a0; font-weight: 800; }
+  .shot {
+    position: absolute; right: -80px; top: 190px; width: 1400px;
+    border-radius: 28px; overflow: hidden; background: #fff;
+    box-shadow: 0 40px 100px rgba(0,0,0,.35); transform: rotate(-2deg);
+  }
+  .shot img { width: 100%; display: block; }
+  .foot { position: absolute; left: 130px; bottom: 120px; font-size: 40px; opacity: .85; }
+</style>
+</head>
+<body>
+  <div class="text">
+    <span class="tag">SOFORT-DOWNLOAD</span>
+    <h1>Finanz&shy;planer 2027</h1>
+    <div class="sub">Haushaltsbuch, Budget, Sparziele &amp; Schulden-Plan</div>
+    <ul>
+      <li>Rechnet alles automatisch</li>
+      <li>Budget-Ampel pro Kategorie</li>
+      <li>Kein Abo, keine App</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="../website/img/dashboard.png" alt=""></div>
+  <div class="foot">Excel · Google Sheets · LibreOffice</div>
+</body>
+</html>
