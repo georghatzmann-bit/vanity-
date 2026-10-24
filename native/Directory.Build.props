@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gemeinsam fuer alle Vanity-DLLs: Ausgabe- und Zwischenordner.
+     Alles andere (Toolset, Laufzeit) steht in den einzelnen .vcxproj, damit es keine
+     Ueberraschungen durch die Import-Reihenfolge gibt. -->
+<Project>
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)obj\$(ProjectName)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+</Project>

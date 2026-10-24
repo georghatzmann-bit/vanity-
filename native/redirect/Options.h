@@ -18,3 +18,8 @@ constexpr bool bHasPushWidget = false; // fortnite: enable if you have gs closin
 constexpr bool UseBackendParam = false; // for phoenix/paradise launcher
 constexpr bool ManualMapping = false; // if you're using EAC & a manual mapper, then enable this for the dll to work
 constexpr bool FixMemLeak = true; // memory leak fix
+
+// VANITY: Sicherheitsgrenze – nur Modi, die ausschliesslich an das eigene Backend umleiten.
+// Die Modi Hybrid/Dev reden teils mit Epics echten Servern und sind fuer Vanity nicht erlaubt.
+static_assert(URLSet == Default || URLSet == All,
+              "Vanity erlaubt nur Default oder All (nur eigenes Backend), nicht Hybrid/Dev.");
