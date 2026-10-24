@@ -1,0 +1,379 @@
+<title>Malerbetrieb Mustermann</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Demo-Entwurf: Website für einen Malerbetrieb. Innenanstrich, Fassade, Tapezieren, Lackierarbeiten.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+  /* Layout: wie ein Firmenwagen. Telefonnummer immer sichtbar, Farbfaecher als Erkennungszeichen, ruhige Bloecke darunter. */
+  :root {
+    --paper: #f5f6f3;
+    --card: #ffffff;
+    --ink: #1d2225;
+    --muted: #59636a;
+    --line: #d9ded9;
+    --accent: #2c5fa3;      /* Malerkrepp-Blau */
+    --accent-ink: #ffffff;
+    --tape: #f1c232;        /* gelbes Abdeckband, nur fuer den Demo-Hinweis */
+    --tape-ink: #2a2100;
+    --shadow: 0 1px 2px rgba(20, 30, 40, .06), 0 8px 24px rgba(20, 30, 40, .06);
+
+    /* RAL-Toene (Inhalt, gleich in beiden Themes) */
+    --ral9010: #f1ede1; --ral9010-t: #3b382f;
+    --ral1015: #e6d2b5; --ral1015-t: #4a3b26;
+    --ral3012: #c6846d; --ral3012-t: #2e1710;
+    --ral6021: #89ac76; --ral6021-t: #1d2b14;
+    --ral5014: #637d96; --ral5014-t: #ffffff;
+    --ral7016: #383e42; --ral7016-t: #f1ede1;
+
+    --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+    --font-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+    --step--1: .875rem; --step-0: 1rem; --step-1: 1.2rem; --step-2: 1.6rem; --step-3: 2.2rem; --step-4: clamp(2.4rem, 6vw, 3.9rem);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #14181b; --card: #1b2125; --ink: #e8ebe8; --muted: #9ba5ab; --line: #2b3237;
+      --accent: #74a2e0; --accent-ink: #0d1520; --tape: #e2b43a; --tape-ink: #1e1700;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14181b; --card: #1b2125; --ink: #e8ebe8; --muted: #9ba5ab; --line: #2b3237;
+    --accent: #74a2e0; --accent-ink: #0d1520; --tape: #e2b43a; --tape-ink: #1e1700;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: var(--font-body); font-size: var(--step-0); line-height: 1.6;
+  }
+  h1, h2, h3 { font-family: var(--font-display); line-height: 1.05; margin: 0; text-wrap: balance; letter-spacing: .005em; }
+  h2 { font-size: var(--step-3); }
+  h3 { font-size: var(--step-1); letter-spacing: .01em; }
+  p { margin: 0; }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 3px solid var(--accent); outline-offset: 2px;
+  }
+
+  .wrap {
+    max-width: 1120px; margin-inline: auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .eyebrow { font-size: var(--step--1); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .section { padding-block: clamp(48px, 8vw, 88px); }
+  .section-head { display: grid; gap: 10px; margin-bottom: 32px; max-width: 62ch; }
+  .section-head p { color: var(--muted); }
+
+  /* Demo-Hinweis */
+  .demo { background: var(--tape); color: var(--tape-ink); font-size: var(--step--1); font-weight: 600; }
+  .demo .wrap { padding-block: 8px; display: flex; gap: 8px 16px; flex-wrap: wrap; justify-content: space-between; }
+
+  /* Kopf */
+  .top { border-bottom: 1px solid var(--line); background: var(--card); }
+  .top .wrap { padding-block: 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand { display: grid; line-height: 1; }
+  .brand b { font-family: var(--font-display); font-size: 1.7rem; letter-spacing: .01em; }
+  .brand span { font-size: var(--step--1); color: var(--muted); margin-top: 4px; }
+  .phone { display: flex; align-items: center; gap: 12px; }
+  .phone .num { font-family: var(--font-display); font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; user-select: all; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;
+    background: var(--accent); color: var(--accent-ink); border: 2px solid var(--accent); cursor: pointer; font: inherit; font-weight: 600;
+  }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn:hover { filter: brightness(1.06); }
+
+  /* Hero */
+  .hero { overflow: clip; }
+  .hero .wrap { padding-block: clamp(40px, 7vw, 80px); display: grid; grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: center; }
+  .hero h1 { font-size: var(--step-4); }
+  .hero .lead { font-size: var(--step-1); color: var(--muted); margin-top: 18px; max-width: 52ch; }
+  .hero .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 28px; font-size: var(--step--1); color: var(--muted); }
+  .facts li { list-style: none; display: flex; gap: 8px; align-items: center; }
+  .facts ul { display: contents; }
+  .facts li::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
+
+  /* Farbfaecher */
+  .fan { position: relative; width: 100%; max-width: 400px; aspect-ratio: 1 / 1; margin-inline: auto; }
+  .blade {
+    position: absolute; left: calc(50% - 31px); bottom: 7%; width: 62px; height: 80%;
+    border-radius: 10px 10px 8px 8px; background: var(--c); color: var(--t);
+    transform-origin: 50% calc(100% - 24px);
+    transform: rotate(calc((var(--i) - 2.5) * 13deg));
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .18), inset 0 0 0 1px rgba(0, 0, 0, .06);
+    display: flex; justify-content: center; align-items: flex-start; padding-top: 12px;
+    animation: open 900ms cubic-bezier(.2, .8, .2, 1) both;
+    animation-delay: calc(var(--i) * 60ms);
+  }
+  .blade span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: .78rem; font-weight: 600; letter-spacing: .04em; white-space: nowrap; }
+  .blade span b { font-family: var(--font-display); font-size: .95rem; letter-spacing: .06em; margin-left: 6px; }
+  .fan::after {
+    content: ""; position: absolute; left: calc(50% - 9px); bottom: calc(7% + 15px); width: 18px; height: 18px;
+    border-radius: 50%; background: var(--card); border: 3px solid var(--muted);
+  }
+  @keyframes open { from { transform: rotate(0deg); } }
+  @media (prefers-reduced-motion: reduce) { .blade { animation: none; } }
+
+  /* Leistungen */
+  .services { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .service { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: grid; gap: 8px; align-content: start; }
+  .service .chip { width: 34px; height: 10px; border-radius: 3px; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); }
+  .service p { color: var(--muted); font-size: .97rem; }
+
+  /* Ablauf */
+  .band { background: var(--card); border-block: 1px solid var(--line); }
+  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; counter-reset: step; }
+  .step { display: grid; gap: 8px; align-content: start; }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    font-family: var(--font-display); font-size: 2.6rem; line-height: 1; color: var(--accent);
+  }
+  .step p { color: var(--muted); }
+
+  /* Oberflaechenguete */
+  .q-scale { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-top: 8px; }
+  .q { padding: 16px; display: grid; gap: 4px; border-right: 1px solid var(--line); background: var(--card); }
+  .q:last-child { border-right: 0; }
+  .q b { font-family: var(--font-display); font-size: 1.5rem; }
+  .q span { font-size: var(--step--1); color: var(--muted); }
+
+  /* Referenzen */
+  .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .shot {
+    aspect-ratio: 4 / 3; max-width: 100%; border-radius: 10px; border: 1px dashed var(--muted);
+    background: linear-gradient(135deg, var(--c) 0 55%, color-mix(in srgb, var(--c) 70%, #000) 55% 100%);
+    display: flex; align-items: flex-end; padding: 12px;
+  }
+  .shot span { background: var(--card); color: var(--ink); font-size: var(--step--1); font-weight: 600; padding: 4px 10px; border-radius: 6px; }
+
+  .note { background: var(--card); border: 1px dashed var(--muted); border-radius: 10px; padding: 18px 20px; color: var(--muted); margin-top: 16px; }
+
+  /* Kontakt */
+  .contact { display: grid; grid-template-columns: .9fr 1.1fr; gap: 32px; align-items: start; }
+  .contact-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 24px; display: grid; gap: 18px; }
+  .contact-card .num { font-family: var(--font-display); font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; user-select: all; }
+  .hours { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .hours td { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .hours td + td { text-align: right; }
+  form { display: grid; gap: 14px; }
+  label { display: grid; gap: 6px; font-weight: 600; font-size: .95rem; }
+  input, textarea {
+    font: inherit; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); width: 100%;
+  }
+  textarea { min-height: 120px; resize: vertical; }
+  .sent { background: var(--card); border: 2px solid var(--accent); border-radius: 10px; padding: 16px 18px; }
+
+  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: var(--step--1); }
+  footer .wrap { padding-block: 24px 96px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+
+  /* Anruf-Leiste am Handy */
+  .callbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: none;
+    background: var(--accent); color: var(--accent-ink);
+    padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    align-items: center; justify-content: space-between; gap: 12px; font-weight: 600;
+  }
+  .callbar a { color: var(--accent-ink); font-family: var(--font-display); font-size: 1.35rem; text-decoration: none; font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 860px) {
+    .hero .wrap, .contact { grid-template-columns: minmax(0, 1fr); }
+    .services, .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .fan { max-width: 320px; }
+  }
+  @media (max-width: 560px) {
+    .services, .gallery, .steps { grid-template-columns: minmax(0, 1fr); }
+    .q-scale { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .q:nth-child(2) { border-right: 0; }
+    .q:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+    .top .phone .btn { display: none; }
+    .callbar { display: flex; }
+    .fan { max-width: 280px; }
+  }
+</style>
+
+<div class="demo">
+  <div class="wrap">
+    <span>Demo-Entwurf: So könnte Ihre neue Website aussehen</span>
+    <span>Mit Ihren Fotos, Texten und Kontaktdaten</span>
+  </div>
+</div>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <b>Malerbetrieb Mustermann</b>
+      <span>Meisterbetrieb in Musterstadt</span>
+    </div>
+    <div class="phone">
+      <span class="num">0123 456 789</span>
+      <a class="btn" href="tel:+49123456789">Anrufen</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow">Maler- und Lackierarbeiten</p>
+        <h1 style="margin-top: 12px">Wände, Fassaden, Lack. Sauber gemacht in Musterstadt und Umgebung.</h1>
+        <p class="lead">Malermeister Max Mustermann und sein Team kommen zur kostenlosen Besichtigung, nennen Ihnen einen Festpreis und übergeben besenrein. Möbel abgedeckt, Kanten sauber abgeklebt.</p>
+        <div class="actions">
+          <a class="btn" href="#kontakt">Kostenlose Besichtigung anfragen</a>
+          <a class="btn ghost" href="#leistungen">Unsere Leistungen</a>
+        </div>
+        <div class="facts">
+          <ul>
+            <li>Meisterbetrieb seit 1998</li>
+            <li>Festpreis nach Besichtigung</li>
+            <li>Angebot in 3 Werktagen</li>
+          </ul>
+        </div>
+      </div>
+      <div class="fan" aria-hidden="true">
+        <div class="blade" style="--i:0; --c:var(--ral7016); --t:var(--ral7016-t)"><span>Anthrazitgrau<b>RAL 7016</b></span></div>
+        <div class="blade" style="--i:1; --c:var(--ral5014); --t:var(--ral5014-t)"><span>Taubenblau<b>RAL 5014</b></span></div>
+        <div class="blade" style="--i:2; --c:var(--ral6021); --t:var(--ral6021-t)"><span>Blassgrün<b>RAL 6021</b></span></div>
+        <div class="blade" style="--i:3; --c:var(--ral3012); --t:var(--ral3012-t)"><span>Beigerot<b>RAL 3012</b></span></div>
+        <div class="blade" style="--i:4; --c:var(--ral1015); --t:var(--ral1015-t)"><span>Hellelfenbein<b>RAL 1015</b></span></div>
+        <div class="blade" style="--i:5; --c:var(--ral9010); --t:var(--ral9010-t)"><span>Reinweiß<b>RAL 9010</b></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="leistungen">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Leistungen</p>
+        <h2>Alles rund um Farbe, Wand und Oberfläche</h2>
+        <p>Für Privathaushalte, Vermieter und Gewerbe. Auf Wunsch mit Farbberatung vor Ort.</p>
+      </div>
+      <div class="services">
+        <article class="service" style="--c:var(--ral9010)"><span class="chip"></span><h3>Innenanstrich</h3><p>Wohnungen, Treppenhäuser, Büros. Auch kurzfristig vor Ein- oder Auszug.</p></article>
+        <article class="service" style="--c:var(--ral7016)"><span class="chip"></span><h3>Fassadenanstrich</h3><p>Reinigung, Rissbehandlung und Anstrich. Gerüst organisieren wir mit.</p></article>
+        <article class="service" style="--c:var(--ral1015)"><span class="chip"></span><h3>Tapezieren</h3><p>Raufaser, Vlies, Mustertapeten und Glasfaser. Alte Tapeten entfernen inklusive.</p></article>
+        <article class="service" style="--c:var(--ral5014)"><span class="chip"></span><h3>Lackierarbeiten</h3><p>Türen, Zargen, Fenster, Heizkörper und Geländer. Glatt, ohne Läufer.</p></article>
+        <article class="service" style="--c:var(--ral6021)"><span class="chip"></span><h3>Spachteltechnik</h3><p>Glatte Wände in jeder Oberflächengüte von Q1 bis Q4, auch für Streiflicht.</p></article>
+        <article class="service" style="--c:var(--ral3012)"><span class="chip"></span><h3>Bodenbeläge</h3><p>Vinyl, Designbelag und Teppich verlegen. Sockelleisten passend lackiert.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section band">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">So läuft es ab</p>
+        <h2>Vom Anruf bis zur Übergabe</h2>
+      </div>
+      <div class="steps">
+        <div class="step"><h3>Anfrage</h3><p>Sie rufen an oder schreiben uns. Wir melden uns am selben Werktag.</p></div>
+        <div class="step"><h3>Besichtigung</h3><p>Wir messen vor Ort aus und beraten Sie zu Farbe und Material. Kostenlos.</p></div>
+        <div class="step"><h3>Festpreis</h3><p>Innerhalb von 3 Werktagen bekommen Sie ein schriftliches Angebot ohne Überraschungen.</p></div>
+        <div class="step"><h3>Ausführung</h3><p>Pünktlicher Start, abgedeckte Möbel, besenreine Übergabe mit gemeinsamer Abnahme.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Wie glatt soll die Wand werden?</p>
+        <h2>Oberflächengüte Q1 bis Q4</h2>
+        <p>Die Stufe bestimmt, wie oft gespachtelt und geschliffen wird. Wir sagen Ihnen ehrlich, welche Stufe Ihr Raum braucht.</p>
+      </div>
+      <div class="q-scale">
+        <div class="q"><b>Q1</b><span>Grundverspachtelung, für Fliesen oder Dämmung darüber</span></div>
+        <div class="q"><b>Q2</b><span>Standard für Raufaser und strukturierte Anstriche</span></div>
+        <div class="q"><b>Q3</b><span>Für glatte Anstriche und feine Tapeten</span></div>
+        <div class="q"><b>Q4</b><span>Vollflächig gespachtelt, auch bei Streiflicht makellos</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section band">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Referenzen</p>
+        <h2>Unsere Arbeiten</h2>
+        <p>Hier zeigen wir Ihre echten Vorher-nachher-Fotos.</p>
+      </div>
+      <div class="gallery">
+        <div class="shot" style="--c:var(--ral1015)"><span>Ihr Foto: Wohnzimmer, Q3 + Anstrich</span></div>
+        <div class="shot" style="--c:var(--ral5014)"><span>Ihr Foto: Fassade vorher/nachher</span></div>
+        <div class="shot" style="--c:var(--ral6021)"><span>Ihr Foto: Treppenhaus</span></div>
+      </div>
+      <p class="note">Platz für Ihre Google-Bewertungen. Die fertige Website verlinkt direkt auf Ihr Google-Profil, damit Kunden Ihre echten Bewertungen sehen.</p>
+    </div>
+  </section>
+
+  <section class="section" id="kontakt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Kontakt</p>
+        <h2>Besichtigungstermin vereinbaren</h2>
+        <p>Wir arbeiten in Musterstadt, Beispieldorf, Nordheim, Talhausen und im Umkreis von 25 km.</p>
+      </div>
+      <div class="contact">
+        <div class="contact-card">
+          <div>
+            <p class="eyebrow">Telefon</p>
+            <p class="num">0123 456 789</p>
+          </div>
+          <div>
+            <p class="eyebrow">E-Mail</p>
+            <p style="user-select: all">info@maler-mustermann.de</p>
+          </div>
+          <div>
+            <p class="eyebrow">Adresse</p>
+            <p>Musterstraße 12<br>12345 Musterstadt</p>
+          </div>
+          <div>
+            <p class="eyebrow">Erreichbar</p>
+            <table class="hours">
+              <tr><td>Montag bis Donnerstag</td><td>7:00 – 17:00</td></tr>
+              <tr><td>Freitag</td><td>7:00 – 14:00</td></tr>
+              <tr><td>Samstag</td><td>nach Vereinbarung</td></tr>
+            </table>
+          </div>
+        </div>
+        <div>
+          <form id="anfrage" novalidate>
+            <label for="name">Ihr Name<input id="name" name="name" autocomplete="name" placeholder="Erika Beispiel" required></label>
+            <label for="tel">Telefon für Rückruf<input id="tel" name="tel" type="tel" autocomplete="tel" placeholder="0170 1234567" required></label>
+            <label for="msg">Was soll gemacht werden?<textarea id="msg" name="msg" placeholder="z. B. 3-Zimmer-Wohnung streichen, ca. 75 m², Decken weiß, eine Wand farbig"></textarea></label>
+            <button class="btn" type="submit">Rückruf anfordern</button>
+            <p id="sent" class="sent" hidden>Demo: Auf der fertigen Website kommt diese Anfrage direkt per E-Mail im Postfach des Betriebs an.</p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Malerbetrieb Mustermann · Musterstadt</span>
+    <span><a href="#kontakt">Impressum</a> · <a href="#kontakt">Datenschutz</a></span>
+  </div>
+</footer>
+
+<div class="callbar">
+  <span>Jetzt anrufen</span>
+  <a href="tel:+49123456789">0123 456 789</a>
+</div>
+
+<script>
+  document.getElementById("anfrage").addEventListener("submit", function (e) {
+    e.preventDefault();
+    document.getElementById("sent").hidden = false;
+  });
+</script>
