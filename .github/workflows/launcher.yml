@@ -1,26 +1,29 @@
-# Baut den Vanity-Launcher aus dem Quellcode.
-# 1. Prüfen: TypeScript-Typen + Oberfläche bauen (schnell, Linux)
-# 2. Windows: fertigen Installer (.exe) bauen und als „Artifact“ zum Herunterladen ablegen
+# Baut Vanity komplett aus dem Quellcode und legt den fertigen Installer zum Download ab.
+#
+# Reihenfolge:
+#  1. check   – Oberfläche: TypeScript prüfen + bauen (Linux, schnell) und Rust-Logik testen
+#  2. backend – Backend zu einer dist/ bündeln (Linux)
+#  3. native  – die drei Spiel-DLLs mit Visual Studio bauen (Windows)
+#  4. windows – alles einsammeln (DLLs, Backend, Node) und den Installer bauen (Windows)
+#
+# Der fertige Installer liegt danach unter „Artifacts“ und zusätzlich als Vorab-Release
+# „testversion“ mit direktem Link.
 name: Launcher
 
 on:
   push:
-    paths:
-      - "launcher/**"
-      - ".github/workflows/launcher.yml"
+    paths: ["launcher/**", "backend/**", "native/**", ".github/workflows/launcher.yml"]
   pull_request:
-    paths:
-      - "launcher/**"
-      - ".github/workflows/launcher.yml"
+    paths: ["launcher/**", "backend/**", "native/**", ".github/workflows/launcher.yml"]
   workflow_dispatch:
 
 concurrency:
   group: launcher-${{ github.ref }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    working-directory: launcher
+env:
+  NODE_WIN_VERSION: "22.22.0"
+  NODE_WIN_SHA256: "c97fa376d2becdc8863fcd3ca2dd9a83a9f3468ee7ccf7a6d076ec66a645c77a"
 
 jobs:
   check:
@@ -37,14 +40,72 @@ jobs:
           cache: pnpm
           cache-dependency-path: launcher/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+        working-directory: launcher
       - name: Typen prüfen
         run: pnpm typecheck
+        working-directory: launcher
       - name: Oberfläche bauen
         run: pnpm build
+        working-directory: launcher
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Rust-Logik testen
+        run: cargo test
+        working-directory: launcher/core
+
+  backend:
+    name: Backend bauen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: backend/package.json
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: backend
+      - name: Backend testen und bündeln
+        run: |
+          pnpm build
+          pnpm test
+        working-directory: backend
+      - uses: actions/upload-artifact@v6
+        with:
+          name: backend-dist
+          path: backend/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  native:
+    name: Spiel-DLLs bauen
+    runs-on: windows-latest
+    # Wenn der native Build (noch) scheitert, soll trotzdem ein Installer entstehen,
+    # damit Oberfläche, Import und Absturz-Analyse schon getestet werden können.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: microsoft/setup-msbuild@v2
+      - name: DLLs bauen
+        run: msbuild native\Vanity.sln /t:Restore,Build /p:Configuration=Release /p:Platform=x64 /m
+      - name: DLLs einsammeln
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dlls | Out-Null
+          Get-ChildItem native\bin\Release\vanity_*.dll | Copy-Item -Destination dlls\
+          Get-ChildItem dlls
+      - uses: actions/upload-artifact@v6
+        with:
+          name: dlls
+          path: dlls/
+          if-no-files-found: error
+          retention-days: 7
 
   windows:
-    name: Windows-Installer bauen
-    needs: check
+    name: Installer bauen
+    needs: [check, backend]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -60,13 +121,85 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: launcher/src-tauri -> target
+
       - run: pnpm install --frozen-lockfile
+        working-directory: launcher
+
+      # Backend holen
+      - uses: actions/download-artifact@v7
+        with:
+          name: backend-dist
+          path: launcher/src-tauri/resources/backend
+
+      # DLLs holen – falls der native Build scheiterte, kommen Platzhalter zum Einsatz
+      - name: DLLs holen (falls vorhanden)
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          name: dlls
+          path: launcher/src-tauri/resources/dlls
+
+      - name: Node für Windows mitliefern
+        shell: pwsh
+        working-directory: launcher/src-tauri/resources
+        run: |
+          $v = "${{ env.NODE_WIN_VERSION }}"
+          Invoke-WebRequest "https://nodejs.org/dist/v$v/node-v$v-win-x64.zip" -OutFile node.zip
+          $hash = (Get-FileHash node.zip -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne "${{ env.NODE_WIN_SHA256 }}") { throw "Node-Pruefsumme stimmt nicht: $hash" }
+          Expand-Archive node.zip -DestinationPath nodetmp -Force
+          New-Item -ItemType Directory -Force -Path node | Out-Null
+          Copy-Item "nodetmp\node-v$v-win-x64\node.exe" node\node.exe
+          Remove-Item node.zip, nodetmp -Recurse -Force
+
+      - name: Ressourcen prüfen
+        shell: pwsh
+        working-directory: launcher/src-tauri/resources
+        run: |
+          # .gitkeep-Platzhalter entfernen, damit keine leeren Marker mitgebündelt werden
+          Get-ChildItem -Recurse -Filter .gitkeep | Remove-Item -Force
+          if (-not (Test-Path node\node.exe)) { throw "node.exe fehlt" }
+          if (-not (Test-Path backend\main.js)) { throw "Backend fehlt" }
+          $dlls = @(Get-ChildItem dlls\*.dll -ErrorAction SilentlyContinue)
+          if ($dlls.Count -eq 0) {
+            Write-Warning "Keine DLLs – Installer enthaelt nur Oberflaeche + Backend (Spiel-Teile fehlen)."
+            # leere Platzhalter, damit das Bundle-Glob nicht fehlschlaegt
+            New-Item -ItemType Directory -Force -Path dlls | Out-Null
+            Set-Content dlls\PLATZHALTER.txt "Die Spiel-DLLs wurden in diesem Build nicht erzeugt."
+          } else {
+            Write-Host "DLLs im Build:"; $dlls | ForEach-Object { Write-Host "  $($_.Name)" }
+          }
+
       - name: Installer bauen
         run: pnpm tauri build
-      - name: Installer hochladen
-        uses: actions/upload-artifact@v6
+        working-directory: launcher
+
+      - name: Installer mit festem Namen ablegen
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem launcher\src-tauri\target\release\bundle\nsis\*.exe | Select-Object -First 1
+          Copy-Item $exe.FullName Vanity-Setup.exe
+          Write-Host "Installer: $($exe.Name) -> Vanity-Setup.exe"
+
+      - uses: actions/upload-artifact@v6
         with:
-          name: Vanity-Installer-${{ github.sha }}
-          path: launcher/src-tauri/target/release/bundle/nsis/*.exe
+          name: Vanity-Installer
+          path: Vanity-Setup.exe
           if-no-files-found: error
           retention-days: 30
+
+      # Direkter Download-Link: Vorab-Release „testversion“ (nur auf dem eigenen Zweig)
+      - name: Als Testversion veröffentlichen
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: testversion
+          name: Vanity – Testversion
+          prerelease: true
+          body: |
+            Automatisch gebauter Installer vom letzten Stand (${{ github.sha }}).
+            **Zum Testen, nicht für den Dauergebrauch.** Windows-Warnung: „Weitere Informationen“ → „Trotzdem ausführen“.
+          files: Vanity-Setup.exe
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
