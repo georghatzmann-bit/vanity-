@@ -287,8 +287,56 @@ impl Engine {
             return Err(format!("Umleitung konnte nicht geladen werden ({e}) – Start abgebrochen, damit nichts an Epic geht"));
         }
         self.log("launcher", "info", "Vanity", "Umleitung geladen", None);
+        self.watch_early_exit(pid, host);
 
         Ok(pid)
+    }
+
+    /// Beendet sich Fortnite in den ersten Minuten von selbst, erklären wir warum: Die Umleitung
+    /// beendet das Spiel absichtlich, wenn sie die Version nicht kennt (steht dann in redirect.log).
+    fn watch_early_exit(&self, pid: u32, host: bool) {
+        let app = self.app.clone();
+        let log_path = self.data_local().join("logs").join("redirect.log");
+        std::thread::spawn(move || {
+            let started = std::time::Instant::now();
+            while started.elapsed() < Duration::from_secs(240) {
+                std::thread::sleep(Duration::from_secs(2));
+                let engine = app.state::<Engine>();
+                if engine.running.lock().unwrap().stopping {
+                    return;
+                }
+                if proc::is_running(pid) {
+                    continue;
+                }
+                // Prozess ist weg – war es die Umleitung?
+                let who = if host { "Server-Fortnite" } else { "dein Spiel" };
+                let marker = format!("pid={pid} ");
+                let redirect_error = std::fs::read_to_string(&log_path)
+                    .ok()
+                    .and_then(|text| {
+                        text.lines()
+                            .filter(|l| l.contains(&marker) && l.contains("FEHLER"))
+                            .last()
+                            .map(str::to_string)
+                    });
+                match redirect_error {
+                    Some(line) => {
+                        engine.log("launcher", "error", "Vanity", &format!("{who}: Umleitung kennt diese Version nicht – {line}"), None);
+                        engine.toast(
+                            "error",
+                            "Umleitung passt nicht zu dieser Version",
+                            "Die Umleitungs-DLL hat ihre Ankerpunkte in diesem Build nicht gefunden und das Spiel sicherheitshalber beendet. Details: Logs → redirect.log.",
+                        );
+                    }
+                    None => {
+                        engine.log("launcher", "warning", "Vanity", &format!("{who} hat sich nach {} s beendet", started.elapsed().as_secs()), None);
+                        engine.toast("warning", "Fortnite hat sich beendet", "Schau unter Abstürze und im Live-Log nach dem Grund.");
+                    }
+                }
+                engine.emit_services();
+                return;
+            }
+        });
     }
 
     /// Liest stdout/stderr der Instanz zeilenweise und schickt sie an die Oberfläche.
