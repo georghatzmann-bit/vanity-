@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "about": "Vanity-Parkours: fertige Trickshot-Strecken aus Sprung-Objekten. Alle Angaben in Metern relativ zu dir: x = nach vorne (Blickrichtung), y = nach rechts, z = nach oben. Der Server sucht für jedes Objekt den ersten Namen, den deine Fortnite-Version kennt.",
+  "kinds": {
+    "trampoline": { "label": "Trampolin", "summon": ["tire", "umbrella"] },
+    "launcher": { "label": "Sprung-Geysir", "summon": ["geyser", "airvent", "ufobouncer"] },
+    "sideLauncher": { "label": "Seitwärts-Schleuder", "summon": ["ufobouncer", "geyser", "airvent"] }
+  },
+  "snipers": ["reaper_sr", "hunterbolt_sr", "heavy_sr", "bolt_sr", "hunting_sr", "semi"],
+  "parkours": [
+    {
+      "id": "erster-sprung",
+      "name": "Erster Sprung",
+      "level": 1,
+      "description": "Lauf übers Trampolin, flieg hoch und triff den Bot vor dir.",
+      "height": 25,
+      "platform": [3, 3],
+      "elements": [
+        { "kind": "trampoline", "at": [9, 0, -1] }
+      ],
+      "bots": [
+        { "at": [40, 0, 0], "hp": 50 }
+      ]
+    },
+    {
+      "id": "geysir-shot",
+      "name": "Geysir-Shot",
+      "level": 1,
+      "description": "Stell dich auf den Geysir, er schießt dich hoch. Oben drehen und schießen.",
+      "height": 25,
+      "platform": [3, 3],
+      "elements": [
+        { "kind": "launcher", "at": [4, 0, 0] }
+      ],
+      "bots": [
+        { "at": [55, 0, 0], "hp": 50 }
+      ]
+    },
+    {
+      "id": "trampolin-treppe",
+      "name": "Trampolin-Treppe",
+      "level": 2,
+      "description": "Vier Trampoline, jedes etwas höher. Von einem zum nächsten hüpfen, am Ende Schuss.",
+      "height": 25,
+      "platform": [3, 3],
+      "elements": [
+        { "kind": "trampoline", "at": [9, 0, -1] },
+        { "kind": "trampoline", "at": [18, 0, 1] },
+        { "kind": "trampoline", "at": [27, 0, 3] },
+        { "kind": "trampoline", "at": [36, 0, 5] }
+      ],
+      "bots": [
+        { "at": [70, 0, 0], "hp": 50 }
+      ]
+    },
+    {
+      "id": "doppel-ziel",
+      "name": "Doppel-Ziel",
+      "level": 2,
+      "description": "Ein Geysir, zwei Bots links und rechts. Schaffst du beide in einem Flug?",
+      "height": 25,
+      "platform": [3, 3],
+      "elements": [
+        { "kind": "launcher", "at": [4, 0, 0] }
+      ],
+      "bots": [
+        { "at": [40, -15, 0], "hp": 50 },
+        { "at": [40, 15, 0], "hp": 50 }
+      ]
+    },
+    {
+      "id": "spin-runde",
+      "name": "360er-Runde",
+      "level": 2,
+      "description": "Kurzer Abstand zum Bot – zum Üben von Drehungen (360er) vor dem Schuss.",
+      "height": 25,
+      "platform": [3, 3],
+      "elements": [
+        { "kind": "launcher", "at": [3, 0, 0] }
+      ],
+      "bots": [
+        { "at": [22, 0, 0], "hp": 50 }
+      ]
+    },
+    {
+      "id": "weitschuss",
+      "name": "Weitschuss",
+      "level": 3,
+      "description": "Hoch oben starten, der Bot steht weit weg und tiefer. Für lange Schüsse.",
+      "height": 60,
+      "platform": [3, 3],
+      "elements": [
+        { "kind": "trampoline", "at": [9, 0, -1] }
+      ],
+      "bots": [
+        { "at": [120, 0, -25], "hp": 50 }
+      ]
+    },
+    {
+      "id": "kette",
+      "name": "Sprung-Kette",
+      "level": 3,
+      "description": "Geysir, Trampolin, Geysir – eine Kette durch die Luft. Unterwegs zwei Bots.",
+      "height": 25,
+      "platform": [3, 3],
+      "elements": [
+        { "kind": "launcher", "at": [4, 0, 0] },
+        { "kind": "trampoline", "at": [22, 0, -4] },
+        { "kind": "launcher", "at": [40, 0, -6], "platform": [1, 1] }
+      ],
+      "bots": [
+        { "at": [32, 18, 4], "hp": 50 },
+        { "at": [70, 0, 0], "hp": 50 }
+      ]
+    },
+    {
+      "id": "boden-kurs",
+      "name": "Boden-Kurs",
+      "level": 1,
+      "description": "Alles direkt vor dir am Boden – am besten auf einer flachen Wiese starten.",
+      "height": 0,
+      "platform": [0, 0],
+      "elements": [
+        { "kind": "trampoline", "at": [8, 0, 0] },
+        { "kind": "launcher", "at": [16, 0, 0] }
+      ],
+      "bots": [
+        { "at": [40, 0, 0], "hp": 50, "platform": [0, 0] },
+        { "at": [45, 8, 0], "hp": 50, "platform": [0, 0] }
+      ]
+    },
+    {
+      "id": "freies-ueben",
+      "name": "Freies Üben",
+      "level": 1,
+      "description": "Große Plattform in der Luft mit drei Bots drumherum. Mach, was du willst.",
+      "height": 30,
+      "platform": [5, 5],
+      "elements": [
+        { "kind": "launcher", "at": [0, 0, 0] },
+        { "kind": "trampoline", "at": [8, 8, 0] }
+      ],
+      "bots": [
+        { "at": [35, 0, 0], "hp": 50 },
+        { "at": [-30, 20, 5], "hp": 50 },
+        { "at": [0, -40, -5], "hp": 50 }
+      ]
+    }
+  ]
+}
