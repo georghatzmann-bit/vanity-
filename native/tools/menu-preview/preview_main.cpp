@@ -4,9 +4,11 @@
 #include <windows.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "softraster.h"
 #if VANITY_PREVIEW_TRICKSHOT
 #include "ATLAS/Public/VanityTrickshotTab.h"
@@ -59,13 +61,17 @@ int main(int Argc, char** Argv)
     }
     const std::vector<uint8_t> Bg = LoadRgba(Background, W, H);
 
-    struct Shot { const char* Name; int Tab; bool Menu; bool Console; bool Toast; };
+    struct Shot { const char* Name; int Tab; bool Menu; bool Console; bool Toast; float Scroll = -1.f; }; // Scroll: 0 = oben, 1 = ganz unten
 #if VANITY_PREVIEW_TRICKSHOT
     const Shot Shots[] = {
-        { "f9-1-main", 0, true, false, false },
-        { "f9-2-commands", 1, true, false, false },
-        { "f9-3-config", 2, true, false, false },
+        { "f9-1-start", 0, true, false, false },
+        { "f9-1b-start-unten", 0, true, false, false, 1.f },
+        { "f9-2-befehle", 1, true, false, false },
+        { "f9-3-einstellungen", 2, true, false, false },
+        { "f9-3b-einstellungen-unten", 2, true, false, false, 1.f },
         { "f9-4-trickshot", 3, true, false, false },
+        { "f9-4b-trickshot-mitte", 3, true, false, false, 0.5f },
+        { "f9-4c-trickshot-unten", 3, true, false, false, 1.f },
         { "f9-5-credits", 4, true, false, false },
         { "f9-6-konsole", 0, false, true, false },
         { "f9-7-trickshot-banner", 0, false, false, true },
@@ -116,6 +122,13 @@ int main(int Argc, char** Argv)
                 ImGui::SetWindowPos("##atlas_main", ImVec2((W - 760.f) * 0.5f, (H - 820.f) * 0.5f));
             }
             GUI_Render();
+            if (S.Scroll >= 0.f && Frame >= 2)
+            {
+                // Inhalt des Reiters scrollen, wie mit dem Mausrad
+                for (ImGuiWindow* Win : GImGui->Windows)
+                    if (std::strstr(Win->Name, "##content"))
+                        ImGui::SetScrollY(Win, Win->ScrollMax.y * S.Scroll);
+            }
             ImGui::Render();
             if (Frame + 1 == Frames)
             {
