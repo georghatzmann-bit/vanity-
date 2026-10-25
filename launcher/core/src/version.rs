@@ -16,10 +16,11 @@ pub const EAC_EXE: &str = "FortniteClient-Win64-Shipping_EAC.exe";
 pub const CRASH_REPORT_EXE: &str = "CrashReportClient.exe";
 pub const AFTERMATH_DLL: &str = "GFSDK_Aftermath_Lib.dll";
 
-/// Versionen, die Vanity starten darf. Alles andere wird abgelehnt.
-pub const SUPPORTED: &[(&str, u32)] = &[("19.10", 18675304)];
-/// Versionen, an denen gearbeitet wird (werden angezeigt, aber nicht gestartet).
-pub const PLANNED: &[&str] = &["19.40"];
+/// Versionen, die wirklich getestet wurden (von dir bestätigt). Nur die bekommen „getestet“.
+pub const TESTED: &[&str] = &["19.10"];
+/// Älteste Version, mit der die Bauteile (Umleitung aus Tellurium, Game Server aus Erbium/Magnesium)
+/// umgehen können. Alles ab hier wird gestartet – ungetestete Versionen mit Hinweis.
+pub const MIN_VERSION: (u32, u32) = (1, 7);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,11 +48,15 @@ pub struct BuildInfo {
     pub launch_args: String,
 }
 
+/// Wie gut Vanity eine Version kennt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Support {
+    /// getestet – darauf ist alles abgestimmt
     Supported,
-    Planned,
+    /// die Bauteile kennen die Version, getestet wurde sie nicht – Start wird versucht
+    Experimental,
+    /// zu alt (vor `MIN_VERSION`) oder Version unlesbar
     Unsupported,
 }
 
@@ -151,22 +156,29 @@ pub fn season_for(version: &str) -> String {
         11..=18 => (2, (major - 10).to_string()),
         19..=22 => (3, (major - 18).to_string()),
         23..=27 => (4, if major == 27 { "OG".to_string() } else { (major - 22).to_string() }),
-        28..=32 => (5, (major - 27).to_string()),
-        _ => return "Unbekannte Season".to_string(),
+        28..=32 => (5, if major == 32 { "Remix".to_string() } else { (major - 27).to_string() }),
+        33..=36 => (6, (major - 32).to_string()),
+        0 => return "Unbekannte Season".to_string(),
+        _ => return format!("Version {major} · neuere Season"),
     };
     format!("Chapter {chapter} · Season {season}")
 }
 
-pub fn support_for(version: &str, changelist: Option<u32>) -> Support {
-    if SUPPORTED
-        .iter()
-        .any(|(v, cl)| *v == version && changelist.is_none_or(|c| c == *cl))
-    {
-        Support::Supported
-    } else if PLANNED.contains(&version) {
-        Support::Planned
-    } else {
-        Support::Unsupported
+/// „19.10“ → (19, 10); „1.7.2“ → (1, 7). None, wenn vorne keine Zahl steht.
+pub fn parse_major_minor(version: &str) -> Option<(u32, u32)> {
+    let mut parts = version.split('.');
+    let major: u32 = parts.next()?.parse().ok()?;
+    let minor: u32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    Some((major, minor))
+}
+
+pub fn support_for(version: &str, _changelist: Option<u32>) -> Support {
+    if TESTED.contains(&version) {
+        return Support::Supported;
+    }
+    match parse_major_minor(version) {
+        Some(v) if v >= MIN_VERSION => Support::Experimental,
+        _ => Support::Unsupported,
     }
 }
 
@@ -345,11 +357,17 @@ pub fn detect_build(folder: &Path) -> DetectReport {
 
     let support = support_for(&v.version, v.changelist);
     checks.push(Check {
-        ok: support == Support::Supported,
+        ok: support != Support::Unsupported,
         text: match support {
-            Support::Supported => "Version wird unterstützt".into(),
-            Support::Planned => format!("Version {} kommt bald – noch nicht startbar", v.version),
-            Support::Unsupported => format!("Version {} wird (noch) nicht unterstützt", v.version),
+            Support::Supported => format!("Version {} ist getestet", v.version),
+            Support::Experimental => format!(
+                "Version {} ist ungetestet – die Bauteile kennen sie, der Start wird versucht",
+                v.version
+            ),
+            Support::Unsupported => format!(
+                "Version {} ist zu alt – Vanity braucht mindestens {}.{}",
+                v.version, MIN_VERSION.0, MIN_VERSION.1
+            ),
         },
     });
 
@@ -425,11 +443,17 @@ mod tests {
     }
 
     #[test]
-    fn support_only_1910() {
+    fn support_tiers() {
         assert_eq!(support_for("19.10", Some(18675304)), Support::Supported);
-        assert_eq!(support_for("19.10", Some(1)), Support::Unsupported);
-        assert_eq!(support_for("19.40", None), Support::Planned);
-        assert_eq!(support_for("30.00", None), Support::Unsupported);
+        assert_eq!(support_for("19.40", None), Support::Experimental);
+        assert_eq!(support_for("30.00", None), Support::Experimental);
+        assert_eq!(support_for("1.7.2", None), Support::Experimental);
+        assert_eq!(support_for("1.6", None), Support::Unsupported);
+        assert_eq!(support_for("Cert", None), Support::Unsupported);
+        assert_eq!(parse_major_minor("33.20"), Some((33, 20)));
+        assert_eq!(season_for("33.20"), "Chapter 6 · Season 1");
+        assert_eq!(season_for("32.00"), "Chapter 5 · Season Remix");
+        assert_eq!(season_for("40.00"), "Version 40 · neuere Season");
     }
 
     #[test]

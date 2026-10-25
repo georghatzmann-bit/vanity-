@@ -7,6 +7,8 @@ für das aktuelle Fortnite.
 > Vanity ist nicht mit Epic Games verbunden. „Fortnite“ ist eine Marke von Epic Games, Inc.
 
 > **Quellen:** Vanity baut auf freien Projekten auf – Backend aus LawinServer, Game Server aus Magnesium/Erbium, Umleitung aus Tellurium.
+> **Versionen:** Vanity startet jede Version ab 1.7 (Chapter 1 bis Chapter 6 und neuer). Getestet ist bisher 19.10; alle anderen laufen als „ungetestet“ mit – Details in [`docs/02-architektur.md`](docs/02-architektur.md#versionen).
+>
 > Vanity basiert beim Ingame-Menü auf **ATLAS Console** von cipherfps, ralz und Mitwirkenden. Alle Lizenzen: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 ## Stand

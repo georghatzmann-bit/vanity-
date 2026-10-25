@@ -19,9 +19,13 @@ export const demoBuilds: BuildInfo[] = [
 ];
 
 export const versionSupport = [
-  { version: "19.10", label: "Chapter 3 · Season 1", level: "supported", note: "Erste Version, auf die alles abgestimmt wird" },
-  { version: "19.40", label: "Chapter 3 · Season 1", level: "planned", note: "Als Nächstes" },
-  { version: "3.4 – 18.40", label: "Chapter 1 + 2", level: "later", note: "Später, Schritt für Schritt" },
+  { version: "19.10", label: "Chapter 3 · Season 1", level: "supported", note: "Getestet – darauf ist alles abgestimmt" },
+  { version: "1.7 – 10.40", label: "Chapter 1", level: "experimental", note: "Ungetestet. Die Bauteile kennen diese Versionen; sehr alte Builds brauchen mehr Geduld beim Start" },
+  { version: "11.00 – 18.40", label: "Chapter 2", level: "experimental", note: "Ungetestet" },
+  { version: "19.00 – 22.40", label: "Chapter 3", level: "experimental", note: "Ungetestet (außer 19.10)" },
+  { version: "23.00 – 27.11", label: "Chapter 4 + OG", level: "experimental", note: "Ungetestet" },
+  { version: "28.00 – 32.11", label: "Chapter 5 + Remix", level: "experimental", note: "Ungetestet. Neues Netzwerk (Iris) ab UE 5.3 – der Server kennt es" },
+  { version: "33.00 und neuer", label: "Chapter 6 und neuer", level: "experimental", note: "Ungetestet. Nur DirectX 12 – „-d3d11“ wird hier weggelassen" },
 ] as const;
 
 export const demoFriends: Friend[] = [

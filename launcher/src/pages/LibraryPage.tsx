@@ -45,7 +45,7 @@ export function LibraryPage() {
         </motion.button>
       </Reveal>
 
-      <Panel title="Unterstützte Versionen" description="Vanity startet nur Builds, die es sicher als alt erkennt. Neue Versionen kommen nach und nach dazu.">
+      <Panel title="Welche Versionen gehen" description="Vanity startet jede Version ab 1.7 – von Chapter 1 bis zu den neuesten Kapiteln. Getestet ist bisher nur 19.10; alle anderen sind ungetestet, die Bauteile sind aber dafür gebaut.">
         <ul className="flex flex-col gap-2">
           {versionSupport.map((v) => (
             <li key={v.version} className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3">
@@ -66,14 +66,15 @@ export function LibraryPage() {
 
 function BuildCard({ build, active, onOpen, onRemove }: { build: BuildInfo; active: boolean; onOpen: () => void; onRemove: () => void }) {
   const supported = build.support === "supported";
+  const tooOld = build.support === "unsupported";
   return (
     <motion.article whileHover={{ y: -2 }} transition={{ duration: 0.15 }} className="glass overflow-hidden rounded-xl">
       <div className="relative h-28 overflow-hidden bg-gradient-to-br from-primary/40 via-[#2a1f6e]/40 to-[#1f4fd1]/20">
         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "repeating-linear-gradient(115deg, #fff 0 1px, transparent 1px 18px)" }} />
         <span className="absolute right-4 bottom-1 text-5xl font-bold tracking-tighter text-white/15">{build.version}</span>
-        <span className={cn("absolute top-4 left-4 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium", supported ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>
+        <span className={cn("absolute top-4 left-4 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium", supported ? "bg-success/15 text-success" : tooOld ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}>
           {supported ? <ShieldCheck className="size-3.5" /> : <Clock className="size-3.5" />}
-          {supported ? "Unterstützt" : build.support === "planned" ? "Geplant" : "Nicht unterstützt"}
+          {supported ? "Getestet" : tooOld ? "Zu alt" : "Ungetestet"}
         </span>
         {active && <span className="absolute top-4 right-4 rounded-md bg-black/30 px-2 py-1 text-xs font-medium">Aktiv</span>}
       </div>
@@ -99,8 +100,9 @@ function BuildCard({ build, active, onOpen, onRemove }: { build: BuildInfo; acti
 
 function SupportBadge({ level }: { level: string }) {
   const map: Record<string, { icon: typeof Check; text: string; cls: string }> = {
-    supported: { icon: Check, text: "Unterstützt", cls: "bg-success/15 text-success" },
-    planned: { icon: Clock, text: "Geplant", cls: "bg-primary/15 text-primary-text" },
+    supported: { icon: Check, text: "Getestet", cls: "bg-success/15 text-success" },
+    experimental: { icon: Clock, text: "Ungetestet", cls: "bg-warning/15 text-warning" },
+    unsupported: { icon: CircleDashed, text: "Zu alt", cls: "bg-white/[0.06] text-muted-foreground" },
     later: { icon: CircleDashed, text: "Später", cls: "bg-white/[0.06] text-muted-foreground" },
   };
   const m = map[level] ?? map.later;

@@ -234,8 +234,11 @@ impl Engine {
 
     /// Startet eine Fortnite-Instanz, lädt die Umleitung und liest das Log mit.
     fn launch_instance(&self, build: &BuildInfo, profile: &Profile, host: bool, headless: bool) -> Result<u32, String> {
-        if build.support != Support::Supported {
-            return Err(format!("Version {} wird (noch) nicht unterstützt", build.version));
+        if build.support == Support::Unsupported {
+            return Err(format!("Version {} ist zu alt für Vanity", build.version));
+        }
+        if build.support == Support::Experimental {
+            self.log("launcher", "warning", "Vanity", &format!("Version {} ist ungetestet – ich versuche es trotzdem", build.version), None);
         }
         let bin = Path::new(&build.binaries);
         let exe = bin.join(version::SHIPPING_EXE);
@@ -265,7 +268,7 @@ impl Engine {
         let env = vec![("OPENSSL_ia32cap".to_string(), "~0x20000000".to_string())];
         let host_name = self.config.lock().unwrap().settings.player_name.clone();
         let player = if host { host_name.as_str() } else { profile.player_name.as_str() };
-        let args = launchargs::build(player, host, headless, &profile.launch_args);
+        let args = launchargs::build(player, host, headless, &profile.launch_args, &build.version);
         let who = if host { "Server-Fortnite" } else { "dein Spiel" };
         self.log("launcher", "info", "Vanity", &format!("Starte {who}: {}", args.join(" ")), None);
 

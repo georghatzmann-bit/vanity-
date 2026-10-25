@@ -11,7 +11,8 @@ export const inTauri = isTauri();
 
 // ---- Typen (entsprechen den Rust-Strukturen in launcher/core) ----------------------------
 
-export type Support = "supported" | "planned" | "unsupported";
+/** supported = getestet, experimental = ungetestet aber startbar, unsupported = zu alt */
+export type Support = "supported" | "experimental" | "unsupported";
 
 export interface BuildInfo {
   id: string;

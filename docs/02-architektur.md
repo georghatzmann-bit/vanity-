@@ -34,6 +34,28 @@ seinem Ressourcen-Ordner unter `dlls/`, das Backend unter `backend/main.js`, Nod
 
 Vanity ändert nichts im Build-Ordner und nichts in den Ordnern anderer Launcher.
 
+## Versionen
+
+Vanity startet **jede Version ab 1.7** (Chapter 1 bis zu den neuesten Kapiteln). Die Bauteile stammen aus
+Projekten, die genau dafür gebaut sind: Umleitung aus Tellurium, Game Server aus Erbium/Magnesium,
+Ingame-Menü aus ATLAS Console, Backend aus LawinServer – alle arbeiten mit Muster-Suche statt fester
+Adressen und haben Sonderfälle für viele Versionen.
+
+| Stufe (`Support`) | Bedeutung | Anzeige |
+|---|---|---|
+| `supported` | wirklich getestet (Liste `TESTED` in `launcher/core/src/version.rs`, derzeit 19.10) | „Getestet“ |
+| `experimental` | ab `MIN_VERSION` (1.7), ungetestet – wird gestartet, mit Hinweis im Log | „Ungetestet“ |
+| `unsupported` | älter als 1.7 oder Version unlesbar – wird nicht gestartet | „Zu alt“ |
+
+Regeln je Version stehen in `launcher/core/src/launchargs.rs` (`VersionRules`), berechnet aus der Versionsnummer:
+
+| Versionen | Regel |
+|---|---|
+| ab 33.00 (Chapter 6) | kein DirectX 11 mehr – `-d3d11` wird aus den Profil-Argumenten entfernt |
+| alle | gleiche Platzhalter-Anmeldung, Hilfsprogramme pausiert, Umleitung sofort, Server-/Menü-DLL nach der Anmeldung |
+
+Wenn du eine Version getestet hast und sie läuft, kommt sie in `TESTED` und wird „Getestet“.
+
 ## Ports
 
 | Port | Wer | Wofür |
