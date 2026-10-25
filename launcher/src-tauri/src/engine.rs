@@ -276,15 +276,17 @@ impl Engine {
         let pid = child.id();
         self.stream_logs(&mut child, host);
 
-        // Umleitung sofort laden
-        if let Some(dll) = self.dll_path(DLL_REDIRECT) {
-            match proc::load_helper(pid, &dll) {
-                Ok(_) => self.log("launcher", "info", "Vanity", "Umleitung geladen", None),
-                Err(e) => self.log("launcher", "error", "Vanity", &format!("Umleitung konnte nicht geladen werden: {e}"), None),
-            }
-        } else {
-            return Err("Umleitungs-DLL fehlt im Launcher".into());
+        // Umleitung sofort laden. Ohne Umleitung würde der Build mit Epics echten Servern reden –
+        // das darf nie passieren, deshalb wird der Prozess dann sofort wieder beendet.
+        let Some(dll) = self.dll_path(DLL_REDIRECT) else {
+            let _ = proc::kill(pid);
+            return Err("Umleitungs-DLL fehlt im Launcher – Start abgebrochen, damit nichts an Epic geht".into());
+        };
+        if let Err(e) = proc::load_helper(pid, &dll) {
+            let _ = proc::kill(pid);
+            return Err(format!("Umleitung konnte nicht geladen werden ({e}) – Start abgebrochen, damit nichts an Epic geht"));
         }
+        self.log("launcher", "info", "Vanity", "Umleitung geladen", None);
 
         Ok(pid)
     }
@@ -474,7 +476,9 @@ impl Engine {
             );
             return;
         };
-        let _ = build; // Versions-Sonderfälle (Chapter 1) braucht 19.10 nicht
+        // Wartezeit nach der Anmeldung hängt von der Version ab (siehe VersionRules)
+        let rules = launchargs::VersionRules::for_version(&build.version);
+        let delay = if host { rules.server_inject_delay_secs } else { rules.client_inject_delay_secs };
         let app = self.app.clone();
         std::thread::spawn(move || {
             let engine = app.state::<Engine>();
@@ -492,8 +496,8 @@ impl Engine {
                     None,
                 );
             }
-            // kurze Schonfrist, damit die Lobby-Welt steht
-            std::thread::sleep(Duration::from_secs(if host { 3 } else { 6 }));
+            // kurze Schonfrist, damit die Engine-Objekte bzw. die Lobby-Welt stehen
+            std::thread::sleep(Duration::from_secs(delay));
             match proc::load_helper(pid, &dll) {
                 Ok(_) => engine.log(if host { "server" } else { "game" }, "info", "Vanity", &format!("{dll_name} geladen"), None),
                 Err(e) => engine.log("launcher", "error", "Vanity", &format!("{dll_name} konnte nicht geladen werden: {e}"), None),

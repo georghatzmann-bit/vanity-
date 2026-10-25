@@ -106,3 +106,10 @@ Anzeigename wie bei LawinServer: E-Mail beim Login → Name vor dem `@` (`georg@
   sie selbst nie auf; es sind nur Daten aus LawinServer.
 - Das Backend kennt nur ein Profil für alle (wie LawinServer). Mit `VANITY_BIND=0.0.0.0` teilen sich alle
   Spieler im Netzwerk denselben Spind.
+
+## Schutz vor Abstürzen (Oktober 2026)
+
+- `structure/storefront.js`: `req.headers["user-agent"]` kann fehlen (Werkzeuge, Tests) – jetzt `(… || "")`.
+- `structure/matchmaking.js`: `req.query.bucketId` kann fehlen – jetzt `String(… || "")`.
+
+Beide Stellen sind mit `// VANITY:` markiert. Grund: Ohne diese Prüfungen antwortete das Backend mit 500.

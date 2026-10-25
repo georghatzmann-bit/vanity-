@@ -9,6 +9,7 @@ import { forwardAsyncErrors } from "./async-errors";
 import { ConfigError, loadConfig, type BackendConfig } from "./config";
 import { findResourceDir, prepareDataDir } from "./data";
 import { createLawinApp, startXmppAndMatchmaker, vanity } from "./lawin";
+import { createStubRouter } from "./stubs";
 
 declare const __VANITY_VERSION__: string | undefined;
 const VERSION = typeof __VANITY_VERSION__ === "string" ? __VANITY_VERSION__ : "dev";
@@ -95,6 +96,7 @@ function main(): void {
       },
     }),
   );
+  app.use(createStubRouter()); // Endpunkte neuerer Builds, die LawinServer nicht kennt
   app.use(createLawinApp());
   app.use(errorHandler);
 

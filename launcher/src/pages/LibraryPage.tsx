@@ -45,7 +45,7 @@ export function LibraryPage() {
         </motion.button>
       </Reveal>
 
-      <Panel title="Welche Versionen gehen" description="Vanity startet jede Version ab 1.7 – von Chapter 1 bis zu den neuesten Kapiteln. Getestet ist bisher nur 19.10; alle anderen sind ungetestet, die Bauteile sind aber dafür gebaut.">
+      <Panel title="Welche Versionen gehen" description="Vanity startet jede Version von 1.7 bis 30.x – Chapter 1 bis Chapter 5 Season 3. Getestet ist bisher nur 19.10; alle anderen sind ungetestet, die Bauteile sind aber dafür gebaut. Neuere Versionen kennt der Game Server noch nicht.">
         <ul className="flex flex-col gap-2">
           {versionSupport.map((v) => (
             <li key={v.version} className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3">
@@ -74,7 +74,7 @@ function BuildCard({ build, active, onOpen, onRemove }: { build: BuildInfo; acti
         <span className="absolute right-4 bottom-1 text-5xl font-bold tracking-tighter text-white/15">{build.version}</span>
         <span className={cn("absolute top-4 left-4 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium", supported ? "bg-success/15 text-success" : tooOld ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}>
           {supported ? <ShieldCheck className="size-3.5" /> : <Clock className="size-3.5" />}
-          {supported ? "Getestet" : tooOld ? "Zu alt" : "Ungetestet"}
+          {supported ? "Getestet" : tooOld ? "Nicht startbar" : "Ungetestet"}
         </span>
         {active && <span className="absolute top-4 right-4 rounded-md bg-black/30 px-2 py-1 text-xs font-medium">Aktiv</span>}
       </div>
@@ -82,6 +82,7 @@ function BuildCard({ build, active, onOpen, onRemove }: { build: BuildInfo; acti
         <div>
           <h2 className="text-sm font-semibold">Fortnite {build.version}</h2>
           <p className="mt-1 text-xs text-muted-foreground">{build.season}{build.changelist ? ` · CL-${build.changelist}` : ""} · {build.engine}</p>
+          {build.supportNote && build.supportNote !== "getestet" && <p className="mt-1 text-xs text-muted-foreground">{build.supportNote}</p>}
         </div>
         <p title={build.path} className="selectable truncate rounded-md bg-black/20 px-3 py-2 font-mono text-xs text-muted-foreground">{build.path}</p>
         <div className="flex items-center gap-2">
@@ -102,7 +103,7 @@ function SupportBadge({ level }: { level: string }) {
   const map: Record<string, { icon: typeof Check; text: string; cls: string }> = {
     supported: { icon: Check, text: "Getestet", cls: "bg-success/15 text-success" },
     experimental: { icon: Clock, text: "Ungetestet", cls: "bg-warning/15 text-warning" },
-    unsupported: { icon: CircleDashed, text: "Zu alt", cls: "bg-white/[0.06] text-muted-foreground" },
+    unsupported: { icon: CircleDashed, text: "Noch nicht", cls: "bg-white/[0.06] text-muted-foreground" },
     later: { icon: CircleDashed, text: "Später", cls: "bg-white/[0.06] text-muted-foreground" },
   };
   const m = map[level] ?? map.later;

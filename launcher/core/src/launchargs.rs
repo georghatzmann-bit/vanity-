@@ -18,6 +18,12 @@ pub fn clean_player_name(name: &str, fallback: &str) -> String {
 /// `-d3d11` würde den Start verhindern und wird deshalb weggelassen.
 pub const DX11_REMOVED: (u32, u32) = (33, 0);
 
+/// Platzhalter-Token, wie sie OG-Launcher seit 2021 bei jeder Version mitgeben (öffentlich bekannt,
+/// kein Geheimnis). Der Build prüft sie nicht gegen Epic – er braucht nur das Format, weil Anti-Cheat
+/// nie läuft und alle Anfragen beim eigenen Backend landen. Über die Profil-Argumente überschreibbar.
+pub const FLTOKEN: &str = "3db3ba5dcbd2e16703f3978d";
+pub const CALDERA: &str = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2NvdW50X2lkIjoiYmU5ZGE1YzJmYmVhNDQwN2IyZjQwZWJhYWQ4NTlhZDQiLCJnZW5lcmF0ZWQiOjE2Mzg3MTcyNzgsImNhbGRlcmFHdWlkIjoiMzgxMGI4NjMtMmE2NS00NDU3LTliNTgtNGRhYjNiNDgyYTg2IiwiYWNQcm92aWRlciI6IkVhc3lBbnRpQ2hlYXQiLCJub3RlcyI6IiIsImZhbGxiYWNrIjpmYWxzZX0.VAWQB67RTxhiWOxx7DBjnzDnXyyEnX7OljJm-j2d88G_WgwQ9wrE6lwMEHZHjBd1ISJdUO1UVUqkfLdU5nofBQ";
+
 /// Regeln, die von der Fortnite-Version abhängen. Aus der Versionsnummer berechnet,
 /// damit jede Version startbar ist – auch solche, die noch niemand mit Vanity getestet hat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,12 +32,29 @@ pub struct VersionRules {
     pub minor: u32,
     /// `-d3d11` ist erlaubt (bis Chapter 5)
     pub allows_dx11: bool,
+    /// Speicherleck-Fix der Umleitung nur für Chapter 1 (Reboot macht es für < 10; wir bis 10.40).
+    /// Die Umleitungs-DLL liest dafür `-vanityversion=` aus der Kommandozeile.
+    pub memleak_fix: bool,
+    /// Sekunden nach der Anmeldung, bis die Server-DLL geladen wird. Builds auf Unreal 4.21
+    /// (Fortnite 5.x/6.x) stürzen ohne Fenster ab, wenn die DLL zu spät kommt – dort sofort.
+    pub server_inject_delay_secs: u64,
+    /// Sekunden nach der Anmeldung, bis das Ingame-Menü geladen wird. Unreal-5-Builds (ab 20.00)
+    /// brauchen etwas länger, bis die Engine-Objekte stehen.
+    pub client_inject_delay_secs: u64,
 }
 
 impl VersionRules {
     pub fn for_version(version: &str) -> VersionRules {
-        let (major, minor) = crate::version::parse_major_minor(version).unwrap_or((0, 0));
-        VersionRules { major, minor, allows_dx11: (major, minor) < DX11_REMOVED }
+        let v = crate::version::parse_major_minor(version).unwrap_or((0, 0));
+        let (major, minor) = v;
+        VersionRules {
+            major,
+            minor,
+            allows_dx11: v < DX11_REMOVED,
+            memleak_fix: (1, 0) <= v && v <= (10, 40),
+            server_inject_delay_secs: if (5, 0) <= v && v < (7, 0) { 0 } else { 3 },
+            client_inject_delay_secs: if major >= 20 { 8 } else { 6 },
+        }
     }
 }
 
@@ -52,11 +75,14 @@ pub fn build(player_name: &str, host: bool, headless: bool, extra: &str, version
         ("-skippatchcheck".into(), None),
         ("-nobe".into(), None),
         ("-fromfl".into(), Some("eac".into())),
-        ("-fltoken".into(), Some("vanitylocaltoken".into())),
+        ("-fltoken".into(), Some(FLTOKEN.into())),
+        ("-caldera".into(), Some(CALDERA.into())),
         ("-AUTH_LOGIN".into(), Some(login)),
         ("-AUTH_PASSWORD".into(), Some("vanity".into())),
         ("-AUTH_TYPE".into(), Some("epic".into())),
         ("-log".into(), None),
+        // eigener Hinweis für die Umleitungs-DLL (Unreal ignoriert unbekannte Argumente)
+        ("-vanityversion".into(), Some(if version.is_empty() { "0".to_string() } else { version.to_string() })),
     ];
 
     if host {
@@ -111,6 +137,31 @@ mod tests {
         assert!(a.contains(&"-nosound".to_string()));
         let b = build("georg", true, false, "", "19.10");
         assert!(!b.contains(&"-nullrhi".to_string()));
+    }
+
+    #[test]
+    fn tokens_and_version_hint_present() {
+        let a = build("georg", false, false, "", "19.10");
+        assert!(a.iter().any(|s| s == &format!("-fltoken={FLTOKEN}")));
+        assert!(a.iter().any(|s| s.starts_with("-caldera=eyJ")));
+        assert!(a.iter().any(|s| s == "-vanityversion=19.10"));
+        // Profil darf die Token überschreiben
+        let b = build("georg", false, false, "-fltoken=abc", "19.10");
+        assert!(b.iter().any(|s| s == "-fltoken=abc"));
+        assert_eq!(b.iter().filter(|s| s.starts_with("-fltoken")).count(), 1);
+    }
+
+    #[test]
+    fn version_rules() {
+        let r = VersionRules::for_version("5.41");
+        assert!(r.memleak_fix && r.server_inject_delay_secs == 0 && r.client_inject_delay_secs == 6);
+        let r = VersionRules::for_version("10.40");
+        assert!(r.memleak_fix && r.server_inject_delay_secs == 3);
+        let r = VersionRules::for_version("11.00");
+        assert!(!r.memleak_fix);
+        let r = VersionRules::for_version("28.01");
+        assert!(!r.memleak_fix && r.client_inject_delay_secs == 8 && r.allows_dx11);
+        assert!(!VersionRules::for_version("33.00").allows_dx11);
     }
 
     #[test]

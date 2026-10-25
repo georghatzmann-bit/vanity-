@@ -94,7 +94,7 @@ export function StartPage() {
             <p className="mt-2 text-sm text-muted-foreground">
               {build
                 ? `${build.changelist ? `CL-${build.changelist} · ` : ""}${build.engine} · Start mit ${profile?.launchArgs || "-d3d11"}`
-                : "Füge in der Bibliothek deinen Fortnite-19.10-Ordner hinzu."}
+                : "Füge in der Bibliothek deinen Fortnite-Ordner hinzu (z. B. 19.10)."}
             </p>
             {config.profiles.length > 0 && (
               <div className="mt-6 flex flex-wrap items-center gap-3">

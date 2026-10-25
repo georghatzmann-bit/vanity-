@@ -5,7 +5,7 @@ const functions = require("./functions.js");
 const keychain = vanity.json("responses/keychain.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
 
 express.get("/fortnite/api/storefront/v2/catalog", async (req, res) => {
-    if (req.headers["user-agent"].includes("2870186")) {
+    if ((req.headers["user-agent"] || "").includes("2870186")) { // VANITY: ohne User-Agent kein Absturz
         return res.status(404).end();
     }
 

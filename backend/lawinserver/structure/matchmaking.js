@@ -13,7 +13,7 @@ express.get("/fortnite/api/matchmaking/session/findPlayer/*", async (req, res) =
 })
 
 express.get("/fortnite/api/game/v2/matchmakingservice/ticket/player/*", async (req, res) => {
-    res.cookie("currentbuildUniqueId", req.query.bucketId.split(":")[0]);
+    res.cookie("currentbuildUniqueId", String(req.query.bucketId || "").split(":")[0]); // VANITY: fehlender bucketId -> kein 500
 
     res.json({
         "serviceUrl": vanity.settings.matchmakerPort == 80 ? "ws://127.0.0.1" : `ws://127.0.0.1:${vanity.settings.matchmakerPort}`, // VANITY: Port aus VANITY_MATCHMAKER_PORT

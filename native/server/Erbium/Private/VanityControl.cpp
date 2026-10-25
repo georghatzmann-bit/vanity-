@@ -180,30 +180,31 @@ namespace
         const char* Key;
         const wchar_t* Path;
         Playlist Value;
+        double MinVersion; // ab welcher Fortnite-Version es die Playlist gibt (wie die Knöpfe im Server-Fenster)
     };
 
     constexpr FPlaylistEntry kPlaylists[] = {
-        { "solo", L"/Game/Athena/Playlists/Playlist_DefaultSolo.Playlist_DefaultSolo", Playlist::Solos },
-        { "duo", L"/Game/Athena/Playlists/Playlist_DefaultDuo.Playlist_DefaultDuo", Playlist::Duos },
-        { "trio", L"/Game/Athena/Playlists/Trios/Playlist_Trios.Playlist_Trios", Playlist::Trios },
-        { "squad", L"/Game/Athena/Playlists/Playlist_DefaultSquad.Playlist_DefaultSquad", Playlist::Squads },
-        { "arena_solo", L"/Game/Athena/Playlists/Showdown/Playlist_ShowdownAlt_Solo.Playlist_ShowdownAlt_Solo", Playlist::ArenaSolos },
-        { "arena_duo", L"/Game/Athena/Playlists/Showdown/Playlist_ShowdownAlt_Duos.Playlist_ShowdownAlt_Duos", Playlist::ArenaDuos },
-        { "arena_trio", L"/Game/Athena/Playlists/Showdown/Playlist_ShowdownAlt_Trios.Playlist_ShowdownAlt_Trios", Playlist::ArenaTrios },
-        { "arena_squad", L"/Game/Athena/Playlists/Showdown/Playlist_ShowdownAlt_Squads.Playlist_ShowdownAlt_Squads", Playlist::ArenaSquads },
-        { "tournament_solo", L"/Game/Athena/Playlists/Showdown/Playlist_Showdown_Solo.Playlist_Showdown_Solo", Playlist::TournamentSolos },
-        { "tournament_duo", L"/Game/Athena/Playlists/Showdown/Playlist_Showdown_Duos.Playlist_Showdown_Duos", Playlist::TournamentDuos },
-        { "tournament_trio", L"/Game/Athena/Playlists/Showdown/Playlist_Showdown_Trios.Playlist_Showdown_Trios", Playlist::TournamentTrios },
-        { "tournament_squad", L"/Game/Athena/Playlists/Showdown/Playlist_Showdown_Squads.Playlist_Showdown_Squads", Playlist::TournamentSquads },
-        { "zb_solo", L"/Game/Athena/Playlists/NoBuildBR/Playlist_NoBuildBR_Solo.Playlist_NoBuildBR_Solo", Playlist::ZBSolos },
-        { "zb_duo", L"/Game/Athena/Playlists/NoBuildBR/Playlist_NoBuildBR_Duo.Playlist_NoBuildBR_Duo", Playlist::ZBDuos },
-        { "zb_trio", L"/Game/Athena/Playlists/NoBuildBR/Playlist_NoBuildBR_Trio.Playlist_NoBuildBR_Trio", Playlist::ZBTrios },
-        { "zb_squad", L"/Game/Athena/Playlists/NoBuildBR/Playlist_NoBuildBR_Squad.Playlist_NoBuildBR_Squad", Playlist::ZBSquads },
-        { "arena_zb_solo", L"/Game/Athena/Playlists/NoBuildBR/Competitive/Playlist_ShowdownAlt_NoBuildBR_Solo.Playlist_ShowdownAlt_NoBuildBR_Solo", Playlist::ArenaZBSolos },
-        { "arena_zb_duo", L"/Game/Athena/Playlists/NoBuildBR/Competitive/Playlist_ShowdownAlt_NoBuildBR_Duos.Playlist_ShowdownAlt_NoBuildBR_Duos", Playlist::ArenaZBDuos },
-        { "arena_zb_trio", L"/Game/Athena/Playlists/NoBuildBR/Competitive/Playlist_ShowdownAlt_NoBuildBR_Trios.Playlist_ShowdownAlt_NoBuildBR_Trios", Playlist::ArenaZBTrios },
-        { "arena_zb_squad", L"/Game/Athena/Playlists/NoBuildBR/Competitive/Playlist_ShowdownAlt_NoBuildBR_Squads.Playlist_ShowdownAlt_NoBuildBR_Squads", Playlist::ArenaZBSquads },
-        { "playground", L"/Game/Athena/Playlists/Playground/Playlist_Playground.Playlist_Playground", Playlist::Playground },
+        { "solo", L"/Game/Athena/Playlists/Playlist_DefaultSolo.Playlist_DefaultSolo", Playlist::Solos, 0.00 },
+        { "duo", L"/Game/Athena/Playlists/Playlist_DefaultDuo.Playlist_DefaultDuo", Playlist::Duos, 0.00 },
+        { "trio", L"/Game/Athena/Playlists/Trios/Playlist_Trios.Playlist_Trios", Playlist::Trios, 7.40 },
+        { "squad", L"/Game/Athena/Playlists/Playlist_DefaultSquad.Playlist_DefaultSquad", Playlist::Squads, 0.00 },
+        { "arena_solo", L"/Game/Athena/Playlists/Showdown/Playlist_ShowdownAlt_Solo.Playlist_ShowdownAlt_Solo", Playlist::ArenaSolos, 8.20 },
+        { "arena_duo", L"/Game/Athena/Playlists/Showdown/Playlist_ShowdownAlt_Duos.Playlist_ShowdownAlt_Duos", Playlist::ArenaDuos, 8.20 },
+        { "arena_trio", L"/Game/Athena/Playlists/Showdown/Playlist_ShowdownAlt_Trios.Playlist_ShowdownAlt_Trios", Playlist::ArenaTrios, 8.20 },
+        { "arena_squad", L"/Game/Athena/Playlists/Showdown/Playlist_ShowdownAlt_Squads.Playlist_ShowdownAlt_Squads", Playlist::ArenaSquads, 8.20 },
+        { "tournament_solo", L"/Game/Athena/Playlists/Showdown/Playlist_Showdown_Solo.Playlist_Showdown_Solo", Playlist::TournamentSolos, 6.10 },
+        { "tournament_duo", L"/Game/Athena/Playlists/Showdown/Playlist_Showdown_Duos.Playlist_Showdown_Duos", Playlist::TournamentDuos, 6.10 },
+        { "tournament_trio", L"/Game/Athena/Playlists/Showdown/Playlist_Showdown_Trios.Playlist_Showdown_Trios", Playlist::TournamentTrios, 6.10 },
+        { "tournament_squad", L"/Game/Athena/Playlists/Showdown/Playlist_Showdown_Squads.Playlist_Showdown_Squads", Playlist::TournamentSquads, 6.10 },
+        { "zb_solo", L"/Game/Athena/Playlists/NoBuildBR/Playlist_NoBuildBR_Solo.Playlist_NoBuildBR_Solo", Playlist::ZBSolos, 20.00 },
+        { "zb_duo", L"/Game/Athena/Playlists/NoBuildBR/Playlist_NoBuildBR_Duo.Playlist_NoBuildBR_Duo", Playlist::ZBDuos, 20.00 },
+        { "zb_trio", L"/Game/Athena/Playlists/NoBuildBR/Playlist_NoBuildBR_Trio.Playlist_NoBuildBR_Trio", Playlist::ZBTrios, 20.00 },
+        { "zb_squad", L"/Game/Athena/Playlists/NoBuildBR/Playlist_NoBuildBR_Squad.Playlist_NoBuildBR_Squad", Playlist::ZBSquads, 20.00 },
+        { "arena_zb_solo", L"/Game/Athena/Playlists/NoBuildBR/Competitive/Playlist_ShowdownAlt_NoBuildBR_Solo.Playlist_ShowdownAlt_NoBuildBR_Solo", Playlist::ArenaZBSolos, 20.00 },
+        { "arena_zb_duo", L"/Game/Athena/Playlists/NoBuildBR/Competitive/Playlist_ShowdownAlt_NoBuildBR_Duos.Playlist_ShowdownAlt_NoBuildBR_Duos", Playlist::ArenaZBDuos, 20.00 },
+        { "arena_zb_trio", L"/Game/Athena/Playlists/NoBuildBR/Competitive/Playlist_ShowdownAlt_NoBuildBR_Trios.Playlist_ShowdownAlt_NoBuildBR_Trios", Playlist::ArenaZBTrios, 20.00 },
+        { "arena_zb_squad", L"/Game/Athena/Playlists/NoBuildBR/Competitive/Playlist_ShowdownAlt_NoBuildBR_Squads.Playlist_ShowdownAlt_NoBuildBR_Squads", Playlist::ArenaZBSquads, 20.00 },
+        { "playground", L"/Game/Athena/Playlists/Playground/Playlist_Playground.Playlist_Playground", Playlist::Playground, 4.50 },
     };
 
     std::string ShortName(const wchar_t* Path)
@@ -243,6 +244,15 @@ namespace
                 Found = &Entry;
                 break;
             }
+        }
+
+        if (Found && VersionInfo.FortniteVersion + 0.001 < Found->MinVersion)
+        {
+            char Buffer[160];
+            snprintf(Buffer, sizeof(Buffer), "Playlist „%s“ gibt es erst ab Version %.2f (dieser Build: %.2f)", Found->Key,
+                Found->MinVersion, VersionInfo.FortniteVersion);
+            Error = Buffer;
+            return false;
         }
 
         if (Found)

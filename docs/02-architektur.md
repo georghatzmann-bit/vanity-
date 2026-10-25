@@ -36,23 +36,39 @@ Vanity ändert nichts im Build-Ordner und nichts in den Ordnern anderer Launcher
 
 ## Versionen
 
-Vanity startet **jede Version ab 1.7** (Chapter 1 bis zu den neuesten Kapiteln). Die Bauteile stammen aus
-Projekten, die genau dafür gebaut sind: Umleitung aus Tellurium, Game Server aus Erbium/Magnesium,
-Ingame-Menü aus ATLAS Console, Backend aus LawinServer – alle arbeiten mit Muster-Suche statt fester
-Adressen und haben Sonderfälle für viele Versionen.
+Vanity startet **jede Version von 1.7 bis 30.x** (Chapter 1 bis Chapter 5 Season 3). Die Grenzen kommen
+aus dem Quellcode der Bauteile, nicht aus Vermutungen – recherchiert in Reboot Launcher, Erbium/Magnesium,
+Tellurium, ATLAS Console und LawinServer (Oktober 2026):
 
 | Stufe (`Support`) | Bedeutung | Anzeige |
 |---|---|---|
-| `supported` | wirklich getestet (Liste `TESTED` in `launcher/core/src/version.rs`, derzeit 19.10) | „Getestet“ |
-| `experimental` | ab `MIN_VERSION` (1.7), ungetestet – wird gestartet, mit Hinweis im Log | „Ungetestet“ |
-| `unsupported` | älter als 1.7 oder Version unlesbar – wird nicht gestartet | „Zu alt“ |
+| `supported` | wirklich getestet (`TESTED` in `launcher/core/src/version.rs`, derzeit 19.10) | „Getestet“ |
+| `experimental` | 1.7 bis 30.x, ungetestet – wird gestartet, mit Hinweis im Log und auf der Build-Karte | „Ungetestet“ |
+| `unsupported` | älter als 1.7, unlesbar, oder **ab 31.00**: der Game Server (Erbium/Magnesium) lehnt solche Builds selbst ab (`SDK/Offsets.h`, Grenze 31.00) | „Nicht startbar“ |
 
-Regeln je Version stehen in `launcher/core/src/launchargs.rs` (`VersionRules`), berechnet aus der Versionsnummer:
+Was je Version anders läuft (`launcher/core/src/launchargs.rs`, `VersionRules`):
 
-| Versionen | Regel |
-|---|---|
-| ab 33.00 (Chapter 6) | kein DirectX 11 mehr – `-d3d11` wird aus den Profil-Argumenten entfernt |
-| alle | gleiche Platzhalter-Anmeldung, Hilfsprogramme pausiert, Umleitung sofort, Server-/Menü-DLL nach der Anmeldung |
+| Versionen | Regel | Quelle |
+|---|---|---|
+| alle | gleiche Startargumente wie bei Reboot: Platzhalter-Anmeldung, `-fltoken`/`-caldera` als feste öffentliche Platzhalter, Hilfsprogramme pausiert, `-nobe`, kein BattlEye | Reboot `game_metadata.dart` |
+| alle | Umleitung sofort nach dem Start laden; schlägt das fehl, wird der Prozess beendet (nie zu Epic) | Tellurium |
+| 1.x – 10.40 | Speicherleck-Fix der Umleitung an (`-vanityversion=` sagt der DLL die Version); ab 11 aus | Reboot (`< 10`), Tellurium |
+| 5.00 – 6.xx | Server-DLL **sofort** nach der Anmeldung laden (Unreal 4.21 stürzt ohne Fenster sonst ab) | Magnesium `dllmain.cpp` |
+| ab 20.00 | Ingame-Menü 8 s statt 6 s nach der Anmeldung laden (Engine-Objekte brauchen länger) | ATLAS `dllmain.cpp` |
+| ab 33.00 | kein DirectX 11 – `-d3d11` wird entfernt (derzeit ohnehin nicht startbar) | Epic |
+| 9.40 – 10.40 | Backend liefert keine Hotfix-Dateien (Absicht in LawinServer) → kein Party-System/XMPP, Spielen geht | LawinServer `cloudstorage.js` |
+| ab 23 | Backend schaltet Netz-Verschlüsselung aus; Server und Menü machen dasselbe | LawinServer, Erbium, ATLAS |
+| ab 24.00 | Menü schaltet Verschlüsselung aus; ab UE 5.3 (ca. 27) Iris-Netzwerk – Server und Menü sind sich einig | ATLAS, Magnesium |
+| ab 28.00 | Chapter-5-Bewegung (Tac-Sprint, Hürde, Rutschen) ist in Menü und Server aus | ATLAS, Magnesium |
+
+Playlists (Steuer-Pipe, wie die Knöpfe im Server-Fenster): Trios ab 7.40, Turnier ab 6.10, Arena ab 8.20,
+Zero Build und Arena Zero Build ab 20.00, Playground 4.5 bis 11.3. Zu frühe Versionen lehnt der Server mit Hinweis ab.
+
+Ingame-Menü je Version (aus dem ATLAS-Code): Edit on Release bis 10.40, Pre-Edits-Schalter bis 15.1x,
+Reset on Release bis 24.2x, Arena-Anzeige 8.20 bis 30.x; FOV, First Person, Konsole, Respawn in allen Versionen.
+
+Die Umleitung schreibt `%LOCALAPPDATA%\Vanity\logs\redirect.log`: welches Muster gepasst hat, ob die
+Umleitung steht, ob der Speicherleck-Fix lief. Passt eine Version nicht, steht dort „FEHLER“ und das Spiel wird beendet.
 
 Wenn du eine Version getestet hast und sie läuft, kommt sie in `TESTED` und wird „Getestet“.
 

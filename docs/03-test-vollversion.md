@@ -85,6 +85,18 @@ Ob die DLL dabei ist, siehst du im Live-Log: „vanity_client.dll geladen“ (Qu
 - [ ] Reiter **Info**: Unten steht „Vanity is based on ATLAS Console …“ (Lizenz-Nennung).
 - [ ] Einstellungen liegen danach in `%APPDATA%\Vanity\client.json`.
 
+## Andere Versionen testen (ungetestet, aber startbar)
+
+Vanity startet jede Version von 1.7 bis 30.x. Für alles außer 19.10 gilt: gleiche Schritte wie oben, nur
+dass die Build-Karte „Ungetestet“ zeigt und im Log ein Hinweis steht. Wenn es nicht klappt, sind diese
+drei Dateien wichtig:
+
+- `%LOCALAPPDATA%\Vanity\logs\redirect.log` – stand die Umleitung? („Bereit“ oder „FEHLER“)
+- `%LOCALAPPDATA%\Vanity\logs\client-diagnostics.log` – lief das Ingame-Menü an?
+- `<Build>\FortniteGame\Binaries\Win64\stdout.log` und der Ordner `MagnesiumCrashes` daneben – was der Game Server sagt.
+
+Bekannte Grenzen: 9.40–10.40 ohne Party/XMPP; Edit on Release nur bis 10.40; ab 31.00 noch nicht startbar.
+
 ## Schritt 6 – Beenden
 
 - [ ] Startseite → **Alles stoppen** → Spiel, Server-Fortnite, Server-Fenster und Backend sind weg

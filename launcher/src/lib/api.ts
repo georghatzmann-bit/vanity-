@@ -23,6 +23,8 @@ export interface BuildInfo {
   path: string;
   binaries: string;
   support: Support;
+  /** Erklärung zur Stufe in einfachen Worten (kommt aus Rust) */
+  supportNote?: string;
   launchArgs: string;
 }
 

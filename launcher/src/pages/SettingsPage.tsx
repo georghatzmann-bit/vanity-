@@ -58,7 +58,7 @@ export function SettingsPage() {
 
         <Panel title="Spiel" description="Wie Fortnite gestartet wird.">
           <div className="flex flex-col divide-y divide-white/[0.05]">
-            <SettingRow label="Startargumente" hint="Werden an jeden Start angehängt. -d3d11 ist für 19.10 empfohlen" htmlFor="set-args">
+            <SettingRow label="Startargumente" hint="Werden an jeden Start angehängt. -d3d11 ist bis Chapter 5 empfohlen; ab 33.00 lässt Vanity es automatisch weg" htmlFor="set-args">
               <Input id="set-args" defaultValue={settings.launchArgs} onBlur={(e) => update({ launchArgs: e.target.value })} className="h-8 w-40 font-mono text-xs" />
             </SettingRow>
             <SettingRow label="Server ohne Grafik" hint="Der Server-Fortnite läuft ohne Fenster und spart Leistung"><Switch checked={settings.headlessServer} onCheckedChange={(v) => update({ headlessServer: v })} /></SettingRow>
@@ -84,7 +84,7 @@ export function SettingsPage() {
 
         <Panel title="Sicherheit" description="Diese Grenzen sind fest eingebaut.">
           <ul className="flex flex-col gap-3">
-            {["Nur alte Builds, die Vanity sicher erkennt – am Anfang nur 19.10.", "Alle Anfragen gehen an dein eigenes Backend, nie an Epics echte Server.", "Nichts außerhalb von Vanity wird ohne Rückfrage verändert."].map((text) => (
+            {["Nur Builds, die du selbst hast: Vanity startet alle Versionen von 1.7 bis 30.x, getestet ist 19.10.", "Alle Anfragen gehen an dein eigenes Backend, nie an Epics echte Server.", "Nichts außerhalb von Vanity wird ohne Rückfrage verändert."].map((text) => (
               <li key={text} className="flex gap-3 text-sm"><Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" /><span className="text-foreground/90">{text}</span></li>
             ))}
           </ul>

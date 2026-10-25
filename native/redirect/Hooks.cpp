@@ -2,6 +2,7 @@
 #include "Hooks.h"
 #include "Patchfinder.h"
 #include "Options.h"
+#include "VanityLog.h" // VANITY
 
 bool InitializeForModule(uint64_t Module, void* Hook, void** OG, bool EOS)
 {
@@ -16,7 +17,10 @@ bool InitializeForModule(uint64_t Module, void* Hook, void** OG, bool EOS)
         processRequestStr = Tellurium::Patchfinder::FindStringRef("STAT_FCurlHttpRequest_ProcessRequest");
 
     if (!processRequestStr)
+    {
+        VanityLog("%s: keine der drei Kennzeichnungen von FCurlHttpRequest::ProcessRequest gefunden", EOS ? "EOS" : "Spiel");
         return false;
+    }
 
     uint64_t ProcessRequest = 0;
     for (int i = 0; i < 2048; i++)
@@ -58,7 +62,10 @@ bool InitializeForModule(uint64_t Module, void* Hook, void** OG, bool EOS)
     }
 
     if (!ProcessRequest)
+    {
+        VanityLog("%s: Funktionsanfang von ProcessRequest nicht gefunden", EOS ? "EOS" : "Spiel");
         return false;
+    }
 _found:
     auto rdataSection = Tellurium::PE::GetSection(".rdata");
     const auto rdataStart = (uint8_t*)(Tellurium::PE::ImageBase + rdataSection->VirtualAddress);
@@ -90,8 +97,13 @@ _found:
         }
     }
 
-    if (!ProcessRequest)
+    // VANITY: Original pruefte hier faelschlich ProcessRequest statt ProcessRequestVFT und schrieb dann
+    // an Adresse 0 (Absturz in der Umleitung). Jetzt sauber abbrechen.
+    if (!ProcessRequestVFT)
+    {
+        VanityLog("%s: ProcessRequest (0x%llX) steht in keiner VTable", EOS ? "EOS" : "Spiel", (unsigned long long)ProcessRequest);
         return false;
+    }
 
 _foundVFT:
     DWORD oldProt;
@@ -104,6 +116,8 @@ _foundVFT:
 
     VirtualProtect(LPVOID(ProcessRequestVFT), sizeof(void*), oldProt, &oldProt);
 
+    VanityLog("%s: Umleitung eingehaengt (ProcessRequest 0x%llX, VTable-Eintrag 0x%llX)", EOS ? "EOS" : "Spiel",
+        (unsigned long long)ProcessRequest, (unsigned long long)ProcessRequestVFT);
     return true;
 }
 
@@ -131,9 +145,25 @@ void Tellurium::Hooks::Init()
         SetConsoleTitleA("Tellurium (https://github.com/plooshi/Tellurium)");
     }
 
+    VanityLog("Start (Fortnite-Hauptversion laut Launcher: %d)", VanityFortniteMajor());
+
+    // VANITY: Die Suchen waren Endlosschleifen – auf unbekannten Builds lief ein Kern auf 100 %% und das
+    // Spiel redete unbemerkt mit Epic. Jetzt begrenzt: bei Misserfolg wird protokolliert und das Spiel
+    // beendet, weil es ohne Umleitung nie laufen darf.
+    constexpr int kMaxTries = 300; // 300 x 200 ms = 60 s
     constexpr static auto ReallocSig = Tellurium::Patchfinder::Pattern<"48 89 5C 24 08 48 89 74 24 10 57 48 83 EC ? 48 8B F1 41 8B D8 48 8B 0D ? ? ? ?">();
-    while (!Tellurium::Unreal::FMemory__Realloc)
+    for (int Try = 0; !Tellurium::Unreal::FMemory__Realloc && Try < kMaxTries; ++Try)
+    {
         Tellurium::Unreal::FMemory__Realloc = ReallocSig.Scan();
+        if (!Tellurium::Unreal::FMemory__Realloc)
+            Sleep(200);
+    }
+    if (!Tellurium::Unreal::FMemory__Realloc)
+    {
+        VanityLog("FEHLER: FMemory::Realloc nicht gefunden – diese Version kennt die Umleitung nicht. Spiel wird beendet.");
+        TerminateProcess(GetCurrentProcess(), 0xE0000001);
+        return;
+    }
 
     if (UseBackendParam)
     {
@@ -145,13 +175,29 @@ void Tellurium::Hooks::Init()
             Tellurium::Unreal::backend = Backend;
     }
 
-    while (!InitializeForModule(Tellurium::PE::ImageBase, ProcessRequestHook, (void**)&Tellurium::Unreal::FCurlHttpRequest::ProcessRequestOG, false));
+    const uint64_t GameBase = Tellurium::PE::ImageBase;
+    bool bHooked = false;
+    for (int Try = 0; !bHooked && Try < kMaxTries; ++Try)
+    {
+        bHooked = InitializeForModule(GameBase, ProcessRequestHook, (void**)&Tellurium::Unreal::FCurlHttpRequest::ProcessRequestOG, false);
+        if (!bHooked)
+            Sleep(200);
+    }
+    if (!bHooked)
+    {
+        VanityLog("FEHLER: Umleitung konnte nicht eingehaengt werden – diese Version kennt die Umleitung nicht. Spiel wird beendet.");
+        TerminateProcess(GetCurrentProcess(), 0xE0000002);
+        return;
+    }
 
     auto EOSBuf = LoadLibraryA("EOSSDK-Win64-Shipping");
 
     if (EOSBuf)
     {
-        InitializeForModule(uint64_t(EOSBuf), ProcessRequest__EOS, (void**)&Tellurium::Unreal::FCurlHttpRequest::ProcessRequestOG__EOS, true);
+        if (!InitializeForModule(uint64_t(EOSBuf), ProcessRequest__EOS, (void**)&Tellurium::Unreal::FCurlHttpRequest::ProcessRequestOG__EOS, true))
+            VanityLog("EOS-SDK vorhanden, aber nicht eingehaengt (unkritisch)");
+        // VANITY: Suchbasis wieder auf das Spiel setzen – sonst suchen spaetere Muster im EOS-Modul.
+        Tellurium::PE::ImageBase = GameBase;
 
         // pushwidget isnt on pre-EOS builds
         if (bHasPushWidget)
@@ -228,4 +274,5 @@ void Tellurium::Hooks::Init()
     }
 
     bInit = true;
+    VanityLog("Bereit – Anfragen an Epic-Hosts gehen jetzt an das eigene Backend");
 }

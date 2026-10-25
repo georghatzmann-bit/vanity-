@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "VanityLog.h" // VANITY
 #include "Unreal.h"
 #include "Redirection.h"
 #include "Options.h"
@@ -208,7 +209,7 @@ namespace Tellurium
         {
             if (!FCurlHttpRequest::SetURLIdx && !bEOS)
                 InitializeURLIndex();
-            else if (++setupMemLeak == 5 && FixMemLeak)
+            else if (++setupMemLeak == 5 && FixMemLeak && VanityMemLeakAllowed()) // VANITY: nur Chapter 1
             {
                 constexpr static auto pattern = Tellurium::Patchfinder::Pattern<"48 89 5C 24 ?? 57 48 83 EC ?? 48 8B 01 4C 8B C2 48 8D 54 24 ? 48 8B D9 FF 50 30">();
                 constexpr static auto pattern2 = Tellurium::Patchfinder::Pattern<"48 8B 01 4C 8D 41 08 48 FF 60 20">();
@@ -226,7 +227,10 @@ namespace Tellurium
                     *(uint8_t*)MemLeakPatch = 0xC3;
 
                     VirtualProtect(LPVOID(MemLeakPatch), 1, oldProt, &oldProt);
+                    VanityLog("Speicherleck-Fix angewendet (0x%llX)", (unsigned long long)MemLeakPatch);
                 }
+                else
+                    VanityLog("Speicherleck-Fix: Muster nicht gefunden (uebersprungen)");
             }
 
             auto URL = GetURL();

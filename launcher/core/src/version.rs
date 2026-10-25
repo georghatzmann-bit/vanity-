@@ -21,6 +21,9 @@ pub const TESTED: &[&str] = &["19.10"];
 /// Älteste Version, mit der die Bauteile (Umleitung aus Tellurium, Game Server aus Erbium/Magnesium)
 /// umgehen können. Alles ab hier wird gestartet – ungetestete Versionen mit Hinweis.
 pub const MIN_VERSION: (u32, u32) = (1, 7);
+/// Ab hier lehnt der Game Server (Erbium/Magnesium, `SDK/Offsets.h`: MaximumSupportedFortniteVersionExclusive)
+/// den Build selbst ab – Hosten geht dort nicht, also starten wir solche Builds nicht.
+pub const SERVER_MAX_EXCLUSIVE: (u32, u32) = (31, 0);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +47,9 @@ pub struct BuildInfo {
     /// Ordner mit der Spiel-exe (…\FortniteGame\Binaries\Win64)
     pub binaries: String,
     pub support: Support,
+    /// Erklärung zur Stufe in einfachen Worten (siehe `support_note`)
+    #[serde(default)]
+    pub support_note: String,
     #[serde(default)]
     pub launch_args: String,
 }
@@ -136,7 +142,7 @@ fn normalize_version(v: &str) -> String {
 /// Quelle der Zuordnung: öffentliche Build-Liste (github.com/polynite/fn-releases).
 fn version_for_changelist(cl: u32) -> Option<&'static str> {
     const TABLE: &[(u32, &str)] = &[
-        (3700114, "1.7.2"), (3724489, "1.8"), (3729133, "1.8.1"), (3741772, "1.8.2"),
+        (3668626, "1.6.4"), (3681159, "1.7"), (3700114, "1.7.2"), (3724489, "1.8"), (3729133, "1.8.1"), (3741772, "1.8.2"),
         (3757339, "1.9"), (3775276, "1.9.1"), (3790078, "1.10"), (3807424, "1.11"),
         (3825894, "2.1"), (3841827, "2.2"), (3847564, "2.3"), (3858292, "2.4"),
         (3870737, "2.4.2"), (3889387, "2.5"), (3901517, "3.0"), (3915963, "3.1"),
@@ -177,9 +183,45 @@ pub fn support_for(version: &str, _changelist: Option<u32>) -> Support {
         return Support::Supported;
     }
     match parse_major_minor(version) {
-        Some(v) if v >= MIN_VERSION => Support::Experimental,
+        Some(v) if v >= MIN_VERSION && v < SERVER_MAX_EXCLUSIVE => Support::Experimental,
         _ => Support::Unsupported,
     }
+}
+
+/// Kurze Erklärung zur Stufe in einfachen Worten – für Bibliothek und Prüf-Dialog.
+/// Die Grenzen stammen aus dem Quellcode der Bauteile (siehe docs/02-architektur.md, „Versionen“).
+pub fn support_note(version: &str) -> String {
+    let Some(v) = parse_major_minor(version) else {
+        return "Version unlesbar".into();
+    };
+    if v < MIN_VERSION {
+        return format!("zu alt – Vanity braucht mindestens {}.{}", MIN_VERSION.0, MIN_VERSION.1);
+    }
+    if v >= SERVER_MAX_EXCLUSIVE {
+        return format!(
+            "zu neu – der Game Server (Erbium/Magnesium) kennt Versionen nur bis {}.x; sobald die Quellprojekte nachziehen, kommt sie dazu",
+            SERVER_MAX_EXCLUSIVE.0 - 1
+        );
+    }
+    if TESTED.contains(&version) {
+        return "getestet".into();
+    }
+    let mut notes = vec!["ungetestet – Start wird versucht".to_string()];
+    if v < (3, 4) {
+        notes.push("sehr alter Build – Erbium nennt die Unterstützung „teilweise“".into());
+    }
+    if (9, 40) <= v && v <= (10, 40) {
+        notes.push("kein Party-System/XMPP (diese Builds vertragen keine Hotfix-Dateien vom Backend)".into());
+    }
+    if v >= (24, 30) {
+        notes.push("Edit/Reset on Release gibt es im Menü ab 24.30 nicht mehr".into());
+    } else if v >= (15, 20) {
+        notes.push("den Pre-Edits-Schalter gibt es ab 15.20 nicht mehr".into());
+    }
+    if v >= (20, 0) {
+        notes.push("Erbium nennt die Unterstützung ab 20.00 „teilweise“".into());
+    }
+    notes.join(" · ")
 }
 
 /// Sucht eine Datei mit genau diesem Namen unterhalb von `root` (höchstens `depth` Ebenen tief).
@@ -356,20 +398,8 @@ pub fn detect_build(folder: &Path) -> DetectReport {
     });
 
     let support = support_for(&v.version, v.changelist);
-    checks.push(Check {
-        ok: support != Support::Unsupported,
-        text: match support {
-            Support::Supported => format!("Version {} ist getestet", v.version),
-            Support::Experimental => format!(
-                "Version {} ist ungetestet – die Bauteile kennen sie, der Start wird versucht",
-                v.version
-            ),
-            Support::Unsupported => format!(
-                "Version {} ist zu alt – Vanity braucht mindestens {}.{}",
-                v.version, MIN_VERSION.0, MIN_VERSION.1
-            ),
-        },
-    });
+    let note = support_note(&v.version);
+    checks.push(Check { ok: support != Support::Unsupported, text: format!("Version {}: {}", v.version, note) });
 
     let engine = v
         .engine
@@ -391,6 +421,7 @@ pub fn detect_build(folder: &Path) -> DetectReport {
         path: root.to_string_lossy().into_owned(),
         binaries: binaries.to_string_lossy().into_owned(),
         support,
+        support_note: note,
         launch_args: "-d3d11".into(),
     };
     DetectReport { build: Some(build), checks, has_aftermath }
@@ -450,6 +481,13 @@ mod tests {
         assert_eq!(support_for("1.7.2", None), Support::Experimental);
         assert_eq!(support_for("1.6", None), Support::Unsupported);
         assert_eq!(support_for("Cert", None), Support::Unsupported);
+        assert_eq!(support_for("30.40", None), Support::Experimental);
+        assert_eq!(support_for("31.00", None), Support::Unsupported);
+        assert!(support_note("33.00").contains("zu neu"));
+        assert!(support_note("1.6").contains("zu alt"));
+        assert!(support_note("10.40").contains("XMPP"));
+        assert_eq!(support_note("19.10"), "getestet");
+        assert_eq!(parse_version_string("4.16.0-3681159+++Fortnite+Release-Cert").unwrap().version, "1.7");
         assert_eq!(parse_major_minor("33.20"), Some((33, 20)));
         assert_eq!(season_for("33.20"), "Chapter 6 · Season 1");
         assert_eq!(season_for("32.00"), "Chapter 5 · Season Remix");

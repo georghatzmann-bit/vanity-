@@ -24,8 +24,8 @@ export const versionSupport = [
   { version: "11.00 – 18.40", label: "Chapter 2", level: "experimental", note: "Ungetestet" },
   { version: "19.00 – 22.40", label: "Chapter 3", level: "experimental", note: "Ungetestet (außer 19.10)" },
   { version: "23.00 – 27.11", label: "Chapter 4 + OG", level: "experimental", note: "Ungetestet" },
-  { version: "28.00 – 32.11", label: "Chapter 5 + Remix", level: "experimental", note: "Ungetestet. Neues Netzwerk (Iris) ab UE 5.3 – der Server kennt es" },
-  { version: "33.00 und neuer", label: "Chapter 6 und neuer", level: "experimental", note: "Ungetestet. Nur DirectX 12 – „-d3d11“ wird hier weggelassen" },
+  { version: "28.00 – 30.xx", label: "Chapter 5 (Season 1–3)", level: "experimental", note: "Ungetestet; Erbium nennt die Unterstützung „teilweise“. Neues Netzwerk (Iris) kennt der Server" },
+  { version: "31.00 und neuer", label: "Chapter 5 Season 4, Remix, Chapter 6 …", level: "unsupported", note: "Noch nicht: der Game Server (Erbium/Magnesium) kennt Versionen nur bis 30.x. Kommt, sobald die Quellprojekte nachziehen" },
 ] as const;
 
 export const demoFriends: Friend[] = [

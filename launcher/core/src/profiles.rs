@@ -252,6 +252,7 @@ mod tests {
             engine: "Unreal Engine 5.0".into(),
             path: "C:/x".into(),
             binaries: "C:/x/bin".into(),
+            support_note: String::new(),
             support: Support::Supported,
             launch_args: "-d3d11".into(),
         }
