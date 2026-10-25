@@ -93,6 +93,12 @@
     <ClCompile Include="ATLAS\Private\GUI.cpp" />
     <ClCompile Include="ATLAS\Private\HotfixReload.cpp" />
     <ClCompile Include="ATLAS\Private\LoadoutTelemetry.cpp" />
+    <!-- [Vanity] Trickshot-Reiter + Banner: ohne pch.h (auch unter Linux fuer die Menue-Vorschau
+         kompilierbar), Quelltext mit deutschen Texten in UTF-8. -->
+    <ClCompile Include="ATLAS\Private\VanityTrickshotTab.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h" />
@@ -104,6 +110,8 @@
     <ClInclude Include="SDK\Includes.h" />
     <ClInclude Include="SDK\Memcury.h" />
     <ClInclude Include="SDK\Offsets.h" />
+    <ClInclude Include="ATLAS\Public\VanityTrickshotTab.h" />
+    <ClInclude Include="third_party\nlohmann\json.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\minhook\minhook.vcxproj">

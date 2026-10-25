@@ -19,10 +19,10 @@ für das aktuelle Fortnite.
 | 1 | Launcher-Oberfläche | fertig |
 | 2 | Fortnite 19.10 starten + Logs | im Installer – [`docs/03-test-vollversion.md`](docs/03-test-vollversion.md) |
 | 3 | Backend + Lobby | im Installer (Backend aus LawinServer) |
-| 4 | Game Server, Match auf 127.0.0.1 | im Installer (`vanity_server.dll` aus Magnesium) – Steuerung vorerst über das Server-Fenster |
-| 5 | Ingame-Menü (F9) | im Installer (`vanity_client.dll`, Basis ATLAS Console) – wartet auf Test |
-| 6 | Bots | im Server-Fenster (Magnesium) – Launcher-Steuerung folgt |
-| 7 | Trickshot-Modus + Match-Steuerung | Steuer-Pipe Launcher ↔ Server eingebaut (Playlist, Lategame, Start, Bots, Befehle); Trickshot-Presets über das Server-Fenster – wartet auf Test |
+| 4 | Game Server, Match auf 127.0.0.1 | im Installer (`vanity_server.dll` aus Magnesium) – Steuerung über das Server-Fenster oder die Launcher-Seite „Match-Steuerung“ |
+| 5 | Ingame-Menü (F9) | im Installer (`vanity_client.dll`, Basis ATLAS Console) – ganz auf Deutsch, mit Reiter „Trickshot“ – wartet auf Test |
+| 6 | Bots | im Server-Fenster (Magnesium) und auf der Launcher-Seite „Match-Steuerung“ (stehende Ziel-Bots) – wartet auf Test |
+| 7 | Trickshot-Modus + Match-Steuerung | Launcher-Seite „Match-Steuerung“ (Spiel, Trickshot, Bots) über die Steuer-Pipe. **Trickshot-Parkours:** 9 fertige Strecken aus Sprung-Objekten und stehenden Ziel-Bots (meist auf einer Plattform in der Luft), dazu eine Sniper – mit einem Klick im Launcher oder im F9-Reiter „Trickshot“ aufgebaut. Kill in der Luft → großes „TRICKSHOT!“-Banner. Trickshot-Presets weiter über das Server-Fenster – wartet auf Test |
 | 8 | Feinschliff, Absturz-Analyse, Installer | Absturz-Analyse + Installer fertig, Feinschliff läuft |
 
 ## Aufbau

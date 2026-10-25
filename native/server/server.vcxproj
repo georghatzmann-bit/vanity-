@@ -181,6 +181,7 @@
     <ClInclude Include="Erbium\Public\Finders.h" />
     <ClInclude Include="Erbium\Public\AutoHosting.h" />
     <ClInclude Include="Erbium\Public\VanityControl.h" />
+    <ClInclude Include="Erbium\Public\VanityParkour.h" />
     <ClInclude Include="Erbium\Public\ArenaTelemetry.h" />
     <ClInclude Include="Erbium\Private\ArenaTelemetryPolicy.h" />
     <ClInclude Include="Erbium\Private\ArenaTelemetryWire.h" />
@@ -258,6 +259,7 @@
     <ClCompile Include="Erbium\Plugins\CrashReporter\Private\CrashReporter.cpp" />
     <ClCompile Include="Erbium\Private\AutoHosting.cpp" />
     <ClCompile Include="Erbium\Private\VanityControl.cpp" />
+    <ClCompile Include="Erbium\Private\VanityParkour.cpp" />
     <ClCompile Include="Erbium\Private\ArenaTelemetry.cpp" />
     <ClCompile Include="Erbium\Private\dllmain.cpp" />
     <ClCompile Include="Erbium\Private\Events.cpp" />

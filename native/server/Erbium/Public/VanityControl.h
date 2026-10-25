@@ -23,4 +23,7 @@ namespace VanityControl
 
     // Vom Netz-Code gerufen, wenn das Match zu Ende ist.
     void EmitMatchEnd();
+
+    // Trickshot erkannt (VanityParkour): {"event":"trickshot","player":…,"victim":…,"meters":N}. Thread-sicher.
+    void EmitTrickshot(const std::string& Player, const std::string& Victim, int Meters);
 }

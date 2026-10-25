@@ -14,6 +14,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Parkour-Liste für Server-DLL und F9-Menü bereitlegen (Fehler sind nicht schlimm)
+            engine::write_parkour_file(None);
             let engine = Arc::new(engine::Engine::new(app.handle().clone()));
             app.manage(engine.clone());
             // Startzustand an die Oberfläche melden, sobald sie da ist

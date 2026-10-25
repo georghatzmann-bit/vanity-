@@ -128,8 +128,11 @@ export const useApp = create<AppState>()((set, get) => ({
       const fn = t.kind === "error" ? toast.error : t.kind === "success" ? toast.success : t.kind === "warning" ? toast.warning : toast;
       fn(t.title, { description: t.description });
     });
-    onEvent<{ player?: string; text?: string; distance?: number }>("trickshot", (t) => {
-      toast.success(`Trickshot: ${t.player ?? ""}`, { description: `${t.text ?? ""}${t.distance ? ` · ${t.distance} m` : ""}` });
+    // Vom Server: {"event":"trickshot","player":…,"victim":…,"meters":N} – Kill in der Luft
+    onEvent<{ player?: string; victim?: string; meters?: number }>("trickshot", (t) => {
+      const who = t.player || "Jemand";
+      const parts = [t.victim ? `gegen ${t.victim}` : "", typeof t.meters === "number" ? `${t.meters} m` : ""].filter(Boolean);
+      toast.success(`TRICKSHOT! ${who}`, { description: parts.join(" · ") || "Kill in der Luft" });
     });
 
     if (!inTauri) startDemoLog();

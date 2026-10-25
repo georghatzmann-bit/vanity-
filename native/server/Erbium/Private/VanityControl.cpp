@@ -15,6 +15,9 @@
 #include <mutex>
 #include <string>
 
+// In FortPlayerControllerAthena.cpp: ist das der Spieler am Host-PC (über 127.0.0.1 verbunden)?
+bool Vanity_IsHostController(AFortPlayerControllerAthena* PlayerController);
+
 namespace
 {
     using json = nlohmann::json;
@@ -99,17 +102,25 @@ namespace
         return World ? static_cast<UNetDriver*>(World->NetDriver) : nullptr;
     }
 
+    // Für wen Launcher-Befehle gelten: der Spieler am Host-PC, wenn er verbunden ist,
+    // sonst der erste verbundene Spieler.
     AFortPlayerControllerAthena* FirstConnectedController()
     {
         auto Driver = GetDriver();
         if (!Driver)
             return nullptr;
+        AFortPlayerControllerAthena* First = nullptr;
         for (auto Connection : Driver->ClientConnections)
         {
-            if (Connection && Connection->PlayerController)
-                return static_cast<AFortPlayerControllerAthena*>(Connection->PlayerController);
+            if (!Connection || !Connection->PlayerController)
+                continue;
+            auto Controller = static_cast<AFortPlayerControllerAthena*>(Connection->PlayerController);
+            if (Vanity_IsHostController(Controller))
+                return Controller;
+            if (!First)
+                First = Controller;
         }
-        return nullptr;
+        return First;
     }
 
     int ConnectedPlayers()
@@ -147,13 +158,14 @@ namespace
         auto Controller = FirstConnectedController();
         if (!Controller)
         {
-            Error = "Kein Spieler verbunden – Befehle laufen über den ersten verbundenen Spieler";
+            // Wird so im Launcher angezeigt: kurz und ohne Fachwörter.
+            Error = "Noch niemand im Spiel. Tritt zuerst dem Match bei, dann klappt es.";
             return false;
         }
         auto Function = Controller->GetFunction("ServerCheat");
         if (!Function)
         {
-            Error = "ServerCheat nicht gefunden";
+            Error = "Diese Spielversion nimmt keine Befehle an.";
             return false;
         }
 
@@ -341,14 +353,30 @@ namespace
             FConfiguration::SetLateGameEnabled(Value.get<bool>());
             return true;
         }
-        if (Key == "bTrickshotDetection" || Key == "bEnableTrickshotTab")
+        if (Key == "bEnableTrickshotTab")
         {
             if (!Value.is_boolean())
             {
                 Error = "erwartet true oder false";
                 return false;
             }
+            // Achtung: false setzt alle Trickshot-Schalter (Nachladen, Eis, Sprung-Müdigkeit, Auto-God …) zurück.
             FConfiguration::SetTrickshotTabEnabled(Value.get<bool>());
+            return true;
+        }
+        // Trickshot-Erkennung (Kill in der Luft → Meldung an alle), siehe VanityParkour.cpp.
+        if (Key == "bTrickshotDetection") return SetBool(FConfiguration::bVanityTrickshotDetection, Value, Error);
+        if (Key == "bAutoReloadOnWaypointTP") return SetBool(FConfiguration::bAutoReloadOnWaypointTP, Value, Error);
+        if (Key == "bRemoveIceOnWaypointTP") return SetBool(FConfiguration::bRemoveIceOnWaypointTP, Value, Error);
+        if (Key == "bDisableJumpFatigue") return SetBool(FConfiguration::bDisableJumpFatigue, Value, Error);
+        if (Key == "AutoGodModeType") return SetInt(FConfiguration::AutoGodModeType, Value, 0, 1, Error);
+        if (Key == "bPlayerMapIcons") return SetBool(FConfiguration::bPlayerMapIcons, Value, Error);
+        if (Key == "bAutoBusStart")
+        {
+            if (!SetBool(FConfiguration::bAutoBusStart, Value, Error))
+                return false;
+            // Wie der Schalter im Server-Fenster: die eigene Wahl gilt, nicht die Playlist-Vorgabe.
+            FConfiguration::bBusSettingsUserOverride.store(true, std::memory_order_release);
             return true;
         }
 
@@ -606,5 +634,25 @@ namespace VanityControl
     void EmitMatchEnd()
     {
         Emit("matchEnd");
+    }
+
+    void EmitTrickshot(const std::string& Player, const std::string& Victim, int Meters)
+    {
+        if (!GConnected.load(std::memory_order_acquire))
+            return;
+        try
+        {
+            json Out;
+            Out["event"] = "trickshot";
+            Out["player"] = Player;
+            Out["victim"] = Victim;
+            Out["meters"] = Meters;
+            // Namen kommen aus dem Spiel: kaputtes UTF-8 ersetzen statt eine Ausnahme zu werfen.
+            WriteLine(Out.dump(-1, ' ', false, json::error_handler_t::replace));
+        }
+        catch (...)
+        {
+            SDK::DbgLog("[Vanity] Trickshot-Ereignis konnte nicht gesendet werden\n");
+        }
     }
 }

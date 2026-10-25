@@ -431,6 +431,9 @@ public:
     static inline std::atomic_bool bVehicleBumpDamage{ true };
 
     static inline std::atomic_bool bEnableTrickshotTab{ false };
+    // [Vanity] Trickshot-Erkennung: Kill in der Luft -> Meldung an alle + Pipe-Ereignis "trickshot"
+    // (Erbium/Private/VanityParkour.cpp). Unabhaengig vom Trickshot-Tab, ResetTrickshotSettings fasst sie nicht an.
+    static inline std::atomic_bool bVanityTrickshotDetection{ true };
     static inline std::atomic_bool bSaveAndTrackSpawnedObjects{ true };
     static inline std::atomic_bool bSaveWaypoints{ true };
     static inline std::atomic_bool bUseWinLines{ false };

@@ -76,7 +76,7 @@
       "height": 25,
       "platform": [3, 3],
       "elements": [
-        { "kind": "launcher", "at": [3, 0, 0] }
+        { "kind": "launcher", "at": [5, 0, 0] }
       ],
       "bots": [
         { "at": [22, 0, 0], "hp": 50 }
@@ -137,7 +137,7 @@
       "height": 30,
       "platform": [5, 5],
       "elements": [
-        { "kind": "launcher", "at": [0, 0, 0] },
+        { "kind": "launcher", "at": [0, -8, 0] },
         { "kind": "trampoline", "at": [8, 8, 0] }
       ],
       "bots": [

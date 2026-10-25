@@ -190,7 +190,10 @@ let demoConfig: Config = {
   profiles: demoProfiles,
   activeProfileId: demoProfiles[0].id,
   friends: demoFriends,
-  trickshotPresets: [],
+  trickshotPresets: [
+    { name: "Trickshot-Training", commands: ["parkour sniper", "givetraps", "regen"] },
+    { name: "Hoch in die Luft", commands: ["l 4000"] },
+  ],
 };
 let demoClient: ClientSettings = { ...defaultClientSettings };
 
@@ -268,6 +271,14 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
       return demoClient;
     case "set_client_settings":
       demoClient = args.value as ClientSettings;
+      return null;
+    // Server-Befehle: In der Vorschau gibt es keinen Server – wir tun so, als wäre alles angekommen.
+    case "server_exec":
+    case "server_config":
+    case "server_start_match":
+    case "spawn_bots":
+    case "remove_bots":
+      console.info("[Vorschau]", cmd, args);
       return null;
     case "vanity_paths":
       return { config: "%APPDATA%\\Vanity", logs: "%LOCALAPPDATA%\\Vanity\\logs", crashes: "%LOCALAPPDATA%\\FortniteGame\\Saved\\Crashes", fortniteLogs: "%LOCALAPPDATA%\\FortniteGame\\Saved\\Logs" };

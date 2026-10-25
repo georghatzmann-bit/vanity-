@@ -28,6 +28,7 @@ betroffen sind, und der Original-Lizenztext liegt im jeweiligen Unterordner bei.
 | [MinHook](https://github.com/TsudaKageyu/minhook) | Tsuda Kageyu | BSD-2-Clause | Funktions-Hooks (`native/third_party/minhook/`, aus Quellcode gebaut) |
 | [Dear ImGui](https://github.com/ocornut/imgui) | Omar Cornut | MIT | Menüs im Spiel und im Server-Fenster |
 | [Memcury](https://github.com/kem0x/Memcury) | Kareem Olim | MIT | Muster-Suche im Speicher |
+| [JSON for Modern C++ (nlohmann/json)](https://github.com/nlohmann/json) | Niels Lohmann | MIT | JSON lesen und schreiben, Version 3.11.2, unverändert. Im Game Server: `native/server/json.hpp` (u. a. Steuer-Pipe, Auto-Host, Trickshot-Parkours). Im Ingame-Menü: `native/client/third_party/nlohmann/json.hpp` (Reiter „Trickshot“ liest `parkours.json`), Lizenztext in `native/client/third_party/nlohmann/LICENSE.MIT` |
 
 ## Launcher (Phase 1)
 

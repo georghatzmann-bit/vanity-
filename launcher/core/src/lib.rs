@@ -3,5 +3,6 @@
 pub mod crash;
 pub mod launchargs;
 pub mod logparse;
+pub mod parkours;
 pub mod profiles;
 pub mod version;

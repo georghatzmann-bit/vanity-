@@ -28,6 +28,7 @@
 #include "../Public/FortVehicleMods.h"
 #include "../Public/FortVehicleSeatWeaponComponent.h"
 #include "../Public/CustomSafeZoneRuntime.h"
+#include <Erbium/Public/VanityParkour.h> // VANITY: parkour/targetbot + Trickshot-Erkennung
 
 #include <d3d11.h>
 #include <sstream>
@@ -13170,6 +13171,11 @@ void AFortPlayerControllerAthena::ClientOnPawnDied(AFortPlayerControllerAthena* 
     auto KillerPlayerController = (KillerPlayerState && KillerPlayerState->HasOwner() &&
          IsUsableDeathObject(KillerPlayerState->Owner)) ? KillerPlayerState->Owner
                   ->Cast<AFortPlayerControllerAthena>() : nullptr;
+    // VANITY: trickshot detection runs for every final elimination (bots included, respawn modes too),
+    // before the native death path changes any pawn state. It only reads; see VanityParkour.cpp.
+    VanityParkour::OnElimination(PlayerController, PlayerState,
+        IsUsableDeathObject(PlayerController->Pawn) ? (AFortPlayerPawnAthena*)PlayerController->Pawn : nullptr,
+        KillerPlayerController, KillerPlayerState, KillerPawn);
     const int32 ScoreRoyaleKillerScoreBefore = KillerPlayerState &&
         KillerPlayerState != PlayerState && KillerPlayerState->HasTotalPlayerScore()
             ? KillerPlayerState->TotalPlayerScore : 0;
@@ -19232,6 +19238,73 @@ bool AFortPlayerControllerAthena::TryEliminatePlayer(AFortPlayerControllerAthena
     return false;
 }
 
+// VANITY: thin bridges for Erbium/Private/VanityParkour.cpp ("cheat parkour" / "cheat targetbot"),
+// so the parkour builder uses exactly the same resolvers as "summon" and "give" and removes bots like "delbot".
+static bool GVanityQuietBotSpawn = false;
+
+void Vanity_SetQuietBotSpawn(bool bQuiet)
+{
+    GVanityQuietBotSpawn = bQuiet;
+}
+
+const UClass* Vanity_FindActorClass(const std::string& Arg)
+{
+    return FindActorClassByCommandArg(Arg);
+}
+
+const UFortItemDefinition* Vanity_FindItemDefinition(const std::string& Arg)
+{
+    return FindItemDefinitionByCommandArg(Arg);
+}
+
+int Vanity_GiveItem(AFortPlayerControllerAthena* PlayerController, const UFortItemDefinition* Definition,
+    int Count)
+{
+    return GiveItemForCommand(PlayerController, Definition, Count);
+}
+
+// VANITY: for the launcher pipe - true for the player sitting at the host PC (local player or 127.0.0.1).
+bool Vanity_IsHostController(AFortPlayerControllerAthena* PlayerController)
+{
+    return IsCheatCommandHost(PlayerController);
+}
+
+bool Vanity_RemoveSpawnedBot(AFortPlayerControllerAthena* BotController)
+{
+    // Same steps as the "delbot" loop, for one still-alive tracked bot. Dead bots are left to the
+    // terminal spawnbot cleanup that already runs after their elimination.
+    if (!IsUsableDeathObject(BotController) || !IsTrackedSpawnedBotController(BotController))
+        return false;
+    auto World = UWorld::GetWorld();
+    auto GameMode = World ? (AFortGameMode*)World->AuthorityGameMode : nullptr;
+    if (!IsControllerInAlivePlayers(GameMode, BotController))
+        return false;
+
+    UnregisterTrackedSpawnedBotController(BotController);
+    G172SpawnedBotRemovalAttempts.erase(BotController);
+
+    if (BotController->MyFortPawn)
+        BotController->MyFortPawn->K2_DestroyActor();
+    else if (BotController->Pawn)
+        BotController->Pawn->K2_DestroyActor();
+
+    if (BotController->PlayerState)
+        BotController->PlayerState->K2_DestroyActor();
+
+    BotController->K2_DestroyActor();
+    return true;
+}
+
+// VANITY: short German answer for cheats that need your own pawn. There is none on the battle bus,
+// while dead/spectating or while still loading - exactly when the F9 "Trickshot" tab or the launcher
+// buttons are often clicked.
+static void Vanity_TellNoPawn(AFortPlayerControllerAthena* PlayerController)
+{
+    PlayerController->ClientMessage(FString(L"[Vanity] Geht gerade nicht \u2013 du hast gerade keine "
+        L"Spielfigur (im Bus oder tot?)."), FName(), 1.f);
+}
+// VANITY: end
+
 // A WithValidation function rejected inside this dispatch is charged to the commanding client's connection by FObjectReplicator.
 struct FScopedSyntheticRpcValidation
 {
@@ -19293,6 +19366,7 @@ void AFortPlayerControllerAthena::ServerCheat(UObject* Context, FFrame& Stack)
     if (args.size() == 0)
     {
     _help:
+        // VANITY: the last two help lines (parkour, targetbot) are Vanity commands, see VanityParkour.cpp.
         PlayerController->ClientMessage(FString(LR"(
 cheat startaircraft - Starts the battle bus
 cheat resumesafezone - Resumes the storm
@@ -19364,6 +19438,8 @@ cheat clearinventory - Clears your inventory of all items that are droppable
 cheat delitem - Removes the item you currently have equipped
 cheat spawn <class/path> <s[size] | s[X,Y,Z]> <h[meters]> - Spawns an actor at your location
 cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
+cheat parkour <name | retry | clear | sniper | list> - Vanity-Parkour: bauen, zurueck zum Start, alles weg, Sniper, Liste
+cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 50 Leben, 30 m)
 )"), FName(), 1);
     }
     else
@@ -19391,6 +19467,15 @@ cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
                 else if (UFortGameStateComponent_BattleRoyaleGamePhaseLogic::GetDefaultObj())
                 {
                     auto GamePhaseLogic = UFortGameStateComponent_BattleRoyaleGamePhaseLogic::Get(UWorld::GetWorld());
+
+                    // VANITY: the phase logic is missing while the match is still loading or in modes
+                    // without a bus; answer instead of calling through a null pointer.
+                    if (!GamePhaseLogic)
+                    {
+                        PlayerController->ClientMessage(FString(L"[Vanity] Der Bus kann gerade nicht "
+                            L"starten. Versuch es gleich nochmal."), FName(), 1.f);
+                        return;
+                    }
 
                     GamePhaseLogic->StartAircraftPhase();
                     PlayerController->ClientMessage(FString(L"Started the aircraft!"), FName(), 1.f);
@@ -19424,7 +19509,16 @@ cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
                 }
                 else
                 {
-                    auto GamePhaseLogic = UFortGameStateComponent_BattleRoyaleGamePhaseLogic::Get(UWorld::GetWorld());
+                    // VANITY: null-safe lookup - without phase logic (match still loading, mode without
+                    // storm) the old code dereferenced a null pointer.
+                    auto GamePhaseLogic = UFortGameStateComponent_BattleRoyaleGamePhaseLogic::GetDefaultObj()
+                        ? UFortGameStateComponent_BattleRoyaleGamePhaseLogic::Get(UWorld::GetWorld()) : nullptr;
+                    if (!GamePhaseLogic)
+                    {
+                        PlayerController->ClientMessage(FString(L"[Vanity] Geht gerade nicht \u2013 hier "
+                            L"gibt es gerade keinen Sturm."), FName(), 1.f);
+                        return;
+                    }
 
                     if (GamePhaseLogic->SafeZoneIndicator)
                     {
@@ -19566,6 +19660,17 @@ cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
                 if (args.size() != 2)
                 {
                     PlayerController->ClientMessage(FString(L"Wrong number of arguments!"), FName(), 1.f);
+                    return;
+                }
+
+                // VANITY: only plain numbers from 0.1 to 10. The engine reads "demospeed abc" as 0 (the
+                // whole server stands still) and negative values as backwards time.
+                float DemoSpeed = 0.f;
+                if (!TryParseCommandFloat(std::string(args[1].c_str()), DemoSpeed) || DemoSpeed < 0.1f ||
+                    DemoSpeed > 10.f)
+                {
+                    PlayerController->ClientMessage(FString(L"[Vanity] Schreib eine Zahl von 0.1 bis 10, "
+                        L"z. B. demospeed 0.5 (Zeitlupe) oder demospeed 1 (normal)."), FName(), 1.f);
                     return;
                 }
 
@@ -20069,7 +20174,10 @@ cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
                 auto Pawn = PlayerController->Pawn;
 
                 if (!Pawn)
+                {
+                    Vanity_TellNoPawn(PlayerController); // VANITY: say why nothing happens
                     return;
+                }
 
                 float Multiplier = 1.0f;
 
@@ -20084,6 +20192,13 @@ cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
                     return;
                 }
 
+                // VANITY: stof accepts "inf" and "nan", which would break the movement physics.
+                if (!std::isfinite(Multiplier))
+                {
+                    PlayerController->ClientMessage(FString(L"Invalid multiplier!"), FName(), 1.f);
+                    return;
+                }
+
                 Pawn->SetGravityMultiplier(Multiplier);
 
                 PlayerController->ClientMessage(FString(L"Gravity multiplier set!"), FName(), 1.f);
@@ -20091,31 +20206,30 @@ cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
             else if (command == "regen")
             {
                 auto Pawn = PlayerController->Pawn;
-                auto PlayerState = PlayerController->PlayerState;
+
+                // VANITY: check the pawn BEFORE using it. It used to call GetMaxHealth() on a null pawn
+                // (battle bus, dead/spectating, still loading) and crashed the server - exactly when
+                // "Leben auffuellen" in F9 or the launcher was clicked.
+                if (!Pawn)
+                {
+                    Vanity_TellNoPawn(PlayerController);
+                    return;
+                }
 
                 float MaxHealth = Pawn->GetMaxHealth();
                 float MaxShield = Pawn->GetMaxShield();
 
-                if (Pawn)
-                {
+                // VANITY: never set 0 health "to the maximum" when a build reports no max health.
+                if (FPlatformMath::IsFinite(MaxHealth) && MaxHealth > 0.f)
                     Pawn->SetHealth(MaxHealth);
-                    Pawn->SetShield(MaxShield);
+                Pawn->SetShield(MaxShield);
 
-                    auto Handle = PlayerState->AbilitySystemComponent->MakeEffectContext();
-                    FGameplayTag Tag;
-                    static auto Cue = FName(L"GameplayCue.Shield.PotionConsumed");
-                    Tag.TagName = Cue;
-                    auto PredictionKey = (FPredictionKey*)malloc(FPredictionKey::Size());
-                    memset((PBYTE)PredictionKey, 0, FPredictionKey::Size());
-                    PlayerState->AbilitySystemComponent->NetMulticast_InvokeGameplayCueAdded(Tag,
-                        *PredictionKey, Handle);
-                    PlayerState->AbilitySystemComponent->NetMulticast_InvokeGameplayCueExecuted(Tag,
-                        *PredictionKey, Handle);
-                    free(PredictionKey);
+                // VANITY: same potion cue as before; PlayGodModeCue also checks the PlayerState and its
+                // AbilitySystemComponent, which were used unchecked here.
+                PlayGodModeCue(PlayerController);
 
-                    PlayerController->ClientMessage(FString(L"Regenerated the player's health!"),
-                        FName(), 1.f);
-                }
+                PlayerController->ClientMessage(FString(L"Regenerated the player's health!"),
+                    FName(), 1.f);
             }
             else if (command == "regenall")
             {
@@ -21340,7 +21454,9 @@ cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
                         (HasLocation
                             ? L" @ " + FormatCommandFloatForMessage((float)SpawnLocation.X) + L" " + FormatCommandFloatForMessage((float)SpawnLocation.Y) + L" " + FormatCommandFloatForMessage((float)SpawnLocation.Z)
                             : std::wstring()) + L")";
-                    CallerController->ClientMessage(FString(Message.c_str()), FName(), 1.f);
+                    // VANITY: the parkour builder reports its target bots itself (German, one summary line).
+                    if (!GVanityQuietBotSpawn)
+                        CallerController->ClientMessage(FString(Message.c_str()), FName(), 1.f);
                     ++SpawnedCount;
                 }
 
@@ -21351,11 +21467,20 @@ cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
                         : L"Spawned " + std::to_wstring(SpawnedCount) +
                             L" of " + std::to_wstring(Count) +
                             L" bots; first failure: " + FirstFailure + L".";
-                    CallerController->ClientMessage(FString(FailureMessage.c_str()), FName(), 1.f);
+                    // VANITY: the parkour builder reports failed target bots itself (German, "[Vanity] ...").
+                    if (!GVanityQuietBotSpawn)
+                        CallerController->ClientMessage(FString(FailureMessage.c_str()), FName(), 1.f);
                 }
             }
             else if (command == "tpbot" || command == "tpbots")
             {
+                // VANITY: without your own pawn there is nowhere to bring the bots; say so instead of nothing.
+                if (!PlayerController->Pawn)
+                {
+                    Vanity_TellNoPawn(PlayerController);
+                    return;
+                }
+
                 for (auto& Player : GameMode->AlivePlayers)
                 {
                     auto Controller = (AFortPlayerControllerAthena*)Player;
@@ -21369,7 +21494,7 @@ cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
 
                         if (BotPawn && PlayerPawn)
                         {
-                            if (BotPS->bIsABot)
+                            if (BotPS && BotPS->bIsABot) // VANITY: BotPS was used unchecked
                             {
                                 auto ActorLocation = PlayerPawn->K2_GetActorLocation();
                                 ActorLocation.Z += 200.f;
@@ -22047,10 +22172,22 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                     return;
                 }
 
+                // VANITY: stof accepts "inf" and "nan", which would break the movement physics.
+                if (!std::isfinite(X) || !std::isfinite(Y) || !std::isfinite(Z))
+                {
+                    PlayerController->ClientMessage(
+                        FString(L"Invalid input. Please provide numeric values."), FName(), 1.f);
+                    return;
+                }
+
                 if (PlayerController->Pawn)
                 {
                     PlayerController->Pawn->LaunchCharacterJump(FVector(X, Y, Z), false, nullptr, true);
                     PlayerController->ClientMessage(FString(L"Launched player!"), FName(), 1.f);
+                }
+                else
+                {
+                    Vanity_TellNoPawn(PlayerController); // VANITY: say why nothing happens
                 }
             }
             else if (command == "velocity" || command == "v")
@@ -22062,14 +22199,26 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                     return;
                 }
 
-                FVector CurrentVelocity = PlayerController->Pawn->CharacterMovement->Velocity;
-                float VelocityMultiplier = std::stof(std::string(args[1]));
-
-                if (PlayerController->Pawn && PlayerController->Pawn->CharacterMovement)
+                // VANITY: check the pawn BEFORE reading its movement (it was read first and crashed on the
+                // bus / while dead), and catch bad numbers ("v abc" threw an uncaught exception).
+                auto VelocityPawn = PlayerController->Pawn;
+                if (!VelocityPawn || !VelocityPawn->CharacterMovement)
                 {
-                    PlayerController->Pawn->CharacterMovement->Velocity = FVector(CurrentVelocity * VelocityMultiplier);
-                    PlayerController->ClientMessage(FString(L"Set player velocity!"), FName(), 1.f);
+                    Vanity_TellNoPawn(PlayerController);
+                    return;
                 }
+
+                float VelocityMultiplier = 0.f;
+                if (!TryParseCommandFloat(std::string(args[1].c_str()), VelocityMultiplier))
+                {
+                    PlayerController->ClientMessage(
+                        FString(L"Invalid input. Please provide numeric values."), FName(), 1.f);
+                    return;
+                }
+
+                FVector CurrentVelocity = VelocityPawn->CharacterMovement->Velocity;
+                VelocityPawn->CharacterMovement->Velocity = FVector(CurrentVelocity * VelocityMultiplier);
+                PlayerController->ClientMessage(FString(L"Set player velocity!"), FName(), 1.f);
             }
             else if (command == "savewaypoint" || command == "s")
             {
@@ -22264,7 +22413,10 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
             {
                 auto Pawn = PlayerController->Pawn;
                 if (!Pawn)
+                {
+                    Vanity_TellNoPawn(PlayerController); // VANITY: say why nothing happens
                     return;
+                }
 
                 const char* AmmoNames[] = {
                     "AmmoDataRockets", "AthenaAmmoDataBulletsHeavy", "AthenaAmmoDataBulletsLight",
@@ -22311,7 +22463,10 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
             {
                 auto Pawn = PlayerController->Pawn;
                 if (!Pawn)
+                {
+                    Vanity_TellNoPawn(PlayerController); // VANITY: say why nothing happens
                     return;
+                }
 
                 const char* MatNames[] = { "WoodItemData", "StoneItemData", "MetalItemData" };
 
@@ -22341,7 +22496,10 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
             {
                 auto Pawn = PlayerController->Pawn;
                 if (!Pawn)
+                {
+                    Vanity_TellNoPawn(PlayerController); // VANITY: say why nothing happens
                     return;
+                }
 
                 const char* TrapNames[] = {
                     "TID_Context_BouncePad_Athena", "TID_Ceiling_BouncePad_Athena_R_T01",
@@ -23819,6 +23977,18 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                 if (!category.empty() && category != "items" && category != "objects")
                     PlayerController->ClientMessage(
                         FString(L"Usage: cheat shortcmds <items/objects>"), FName(), 1.f);
+            }
+            // VANITY: trickshot parkours and target bots (Erbium/Private/VanityParkour.cpp).
+            else if (command == "parkour" || command == "targetbot")
+            {
+                std::vector<std::string> VanityArgs;
+                for (size_t ArgIndex = 1; ArgIndex < args.size(); ++ArgIndex)
+                    VanityArgs.emplace_back(args[ArgIndex].c_str());
+
+                if (command == "parkour")
+                    VanityParkour::HandleParkourCommand(PlayerController, VanityArgs);
+                else
+                    VanityParkour::HandleTargetBotCommand(PlayerController, VanityArgs);
             }
             else
                 goto _help;

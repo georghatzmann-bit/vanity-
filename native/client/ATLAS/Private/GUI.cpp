@@ -1,6 +1,7 @@
 // [Vanity] Geaenderte Fassung. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
 // (c) ralz, cipherfps und Mitwirkende, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
-// Vanity-Aenderungen: Datenpfade, sichtbare Namen/Nennung, MinHook ueber Projektverweis.
+// Vanity-Aenderungen: Datenpfade, sichtbare Namen/Nennung, MinHook ueber Projektverweis,
+// alle sichtbaren Menue-Texte auf einfachem Deutsch (markiert mit [Vanity]).
 #include "pch.h"
 #include "../Public/GUI.h"
 #include "../Public/Hotkey.h"
@@ -8,6 +9,7 @@
 #include "../Public/Client.h"
 #include "../Public/Diagnostics.h"
 #include "../Public/Icon.h"
+#include "../Public/VanityTrickshotTab.h" // [Vanity] Trickshot-Reiter und Trickshot-Banner
 #include "../ImGui/imgui.h"
 #include "../ImGui/imgui_internal.h"
 #include "../ImGui/imgui_stdlib.h"
@@ -44,6 +46,24 @@ extern bool ATLAS_PrepareReplicationForOpen(
 
 static ImVec4 Accent(float a = 1.f) { return ImVec4(ACCENT_R, ACCENT_G, ACCENT_B, a); }
 static ImVec4 AccentDk(float a = 1.f) { return ImVec4(0.f, 0.38f, 0.50f, a); }
+
+// [Vanity] Deutsche Menue-Texte. GUI.cpp wird ohne /utf-8 gebaut und bleibt darum reines ASCII:
+// Umlaute & Co. stehen als UTF-8-Bytes (das erwartet ImGui) in eigenen Literalen, die der
+// Compiler zusammenklebt, z. B. "Men" DE_ue  ->  "Menue" mit echtem u-Umlaut. So haengt nichts
+// von der Codepage ab. Fuer L"..."-Texte (Konsole) stattdessen Unicode-Escapes benutzen
+// (Backslash, "u", vier Hex-Ziffern, z. B. 00FC fuer den u-Umlaut).
+// Alle Zeichen sind in der eingebetteten Schrift vorhanden (geprueft).
+#define DE_ae "\xC3\xA4"         // a-Umlaut (U+00E4)
+#define DE_oe "\xC3\xB6"         // o-Umlaut (U+00F6)
+#define DE_ue "\xC3\xBC"         // u-Umlaut (U+00FC)
+#define DE_Ae "\xC3\x84"         // A-Umlaut (U+00C4)
+#define DE_Ue "\xC3\x9C"         // U-Umlaut (U+00DC)
+#define DE_ss "\xC3\x9F"         // scharfes s (U+00DF)
+#define DE_DASH "\xE2\x80\x93"   // Gedankenstrich (U+2013)
+#define DE_LQ "\xE2\x80\x9E"     // Anfuehrungszeichen unten (U+201E)
+#define DE_RQ "\xE2\x80\x9C"     // Anfuehrungszeichen oben (U+201C)
+#define DE_DOTS "\xE2\x80\xA6"   // Auslassungspunkte (U+2026)
+#define DE_NBSP "\xC2\xA0"       // geschuetztes Leerzeichen (U+00A0): ImGui bricht dort nicht um
 
 enum class EConsoleLineKind : uint8_t
 {
@@ -327,9 +347,10 @@ static void DrainConsoleOutput()
     const unsigned int dropped = g_ConsoleDroppedMessages.exchange(0, std::memory_order_acq_rel);
     if (dropped > 0)
     {
+        // [Vanity] auf Deutsch
         char message[128]{};
-        snprintf(message, sizeof(message), "[Vanity] Dropped %u output message%s to protect frame time.",
-            dropped, dropped == 1 ? "" : "s");
+        snprintf(message, sizeof(message), "[Vanity] %u Meldung%s ausgelassen, damit das Spiel fl" DE_ue "ssig bleibt.",
+            dropped, dropped == 1 ? "" : "en");
         AppendConsoleLine(EConsoleLineKind::System, message);
     }
 
@@ -418,27 +439,28 @@ static const char* VKName(int vk)
 {
     static char buf[32];
 
+    // [Vanity] Tastennamen wie auf einer deutschen Tastatur (nur Anzeige, wird nirgends gespeichert).
     switch (vk)
     {
-    case VK_LBUTTON: return "MOUSE1";
-    case VK_RBUTTON: return "MOUSE2";
-    case VK_MBUTTON: return "MOUSE3";
-    case VK_XBUTTON1: return "MOUSE4";
-    case VK_XBUTTON2: return "MOUSE5";
+    case VK_LBUTTON: return "Maus 1";
+    case VK_RBUTTON: return "Maus 2";
+    case VK_MBUTTON: return "Maus 3";
+    case VK_XBUTTON1: return "Maus 4";
+    case VK_XBUTTON2: return "Maus 5";
     case VK_F1:  return "F1";  case VK_F2:  return "F2";
     case VK_F3:  return "F3";  case VK_F4:  return "F4";
     case VK_F5:  return "F5";  case VK_F6:  return "F6";
     case VK_F7:  return "F7";  case VK_F8:  return "F8";
     case VK_F9:  return "F9";  case VK_F10: return "F10";
     case VK_F11: return "F11"; case VK_F12: return "F12";
-    case VK_INSERT: return "INSERT"; case VK_DELETE: return "DELETE";
-    case VK_HOME:   return "HOME";   case VK_END:    return "END";
-    case VK_PRIOR:  return "PGUP";   case VK_NEXT:   return "PGDN";
-    case VK_SPACE:  return "SPACE";  case VK_RETURN: return "ENTER";
-    case VK_TAB:    return "TAB";    case VK_BACK:   return "BACKSPACE";
-    case VK_LEFT:   return "LEFT";   case VK_RIGHT:  return "RIGHT";
-    case VK_UP:     return "UP";     case VK_DOWN:   return "DOWN";
-    case VK_CAPITAL: return "CAPS";  case VK_OEM_3:  return "`";
+    case VK_INSERT: return "Einfg";  case VK_DELETE: return "Entf";
+    case VK_HOME:   return "Pos1";   case VK_END:    return "Ende";
+    case VK_PRIOR:  return "Bild auf"; case VK_NEXT: return "Bild ab";
+    case VK_SPACE:  return "Leertaste"; case VK_RETURN: return "Enter";
+    case VK_TAB:    return "Tab";    case VK_BACK:   return "R" DE_ue "cktaste";
+    case VK_LEFT:   return "Pfeil links"; case VK_RIGHT: return "Pfeil rechts";
+    case VK_UP:     return "Pfeil hoch";  case VK_DOWN:  return "Pfeil runter";
+    case VK_CAPITAL: return "Feststell"; case VK_OEM_3: return "`";
     }
 
     if (vk >= '0' && vk <= '9') { buf[0] = (char)vk; buf[1] = '\0'; return buf; }
@@ -446,7 +468,7 @@ static const char* VKName(int vk)
 
     if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9)
     {
-        snprintf(buf, sizeof(buf), "NUM%d", vk - VK_NUMPAD0);
+        snprintf(buf, sizeof(buf), "Num %d", vk - VK_NUMPAD0); // [Vanity] wie im Launcher
         return buf;
     }
 
@@ -463,7 +485,7 @@ static const char* VKName(int vk)
 
 static const char* BindName(int vk)
 {
-    return (vk > 0 && vk <= 254) ? VKName(vk) : "UNBOUND";
+    return (vk > 0 && vk <= 254) ? VKName(vk) : "keine"; // [Vanity] vorher "UNBOUND"
 }
 
 // Saved command hotkeys are actions owned by ATLAS. Keep an atomic lookup for
@@ -607,7 +629,8 @@ static bool TogglePreferencePersistenceCheckbox()
 {
     bool value = FConfiguration::bSaveTogglePreferences.load(
         std::memory_order_acquire);
-    if (!ImGui::Checkbox("Save Toggle Preferences", &value))
+    // [Vanity] Text auf Deutsch, ImGui-ID bleibt fest ("###save_toggles").
+    if (!ImGui::Checkbox("Schalter merken###save_toggles", &value))
         return false;
 
     FConfiguration::bSaveTogglePreferences.store(
@@ -1210,6 +1233,63 @@ static void EndSectionBody()
 {
     ImGui::PopStyleVar(3);
     ImGui::Unindent(SectionBodyIndent);
+}
+
+// [Vanity] Bausteine fuer die deutschen Erklaerungen (gleicher Stil wie im Trickshot-Reiter).
+static const ImVec4 kVanityMutedText(0.353f, 0.388f, 0.478f, 1.f);
+
+// Grauer Satz, der sagt, was ein Schalter oder Knopf macht. Wird auf "width" umgebrochen.
+// underCheckbox: direkt unter einem Haken-Schalter, eingerueckt auf Hoehe von dessen Text.
+static void ControlHint(const char* text, float width, bool underCheckbox = false)
+{
+    const float indent = underCheckbox
+        ? ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x
+        : 0.f;
+    if (underCheckbox)
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3.f);
+    if (indent > 0.f)
+        ImGui::Indent(indent);
+    ImGui::PushStyleColor(ImGuiCol_Text, kVanityMutedText);
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + (std::max)(40.f, width - indent));
+    ImGui::TextUnformatted(text);
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+    if (indent > 0.f)
+        ImGui::Unindent(indent);
+}
+
+// Rote Meldung, wenn eine Taste nicht belegt werden konnte (auf "width" umgebrochen).
+// Steht im Reiter "Befehle" und "Optionen", damit man sie dort sieht, wo man die Taste waehlt.
+static void DrawBindError(float width)
+{
+    if (g_BindError.empty() || GetTickCount64() >= g_BindErrorUntil)
+        return;
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.39f, 0.43f, 1.f));
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + (std::max)(40.f, width));
+    ImGui::TextUnformatted(g_BindError.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+}
+
+// Erklaerung, solange die Maus ueber dem letzten Element steht.
+static void HoverHint(const char* text)
+{
+    if (text && *text && ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 18.f);
+        ImGui::TextUnformatted(text);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
+// Langer Knopftext, wenn er in "width" passt, sonst der kurze (deutsche Woerter sind laenger).
+static const char* FitLabel(const char* longLabel, const char* shortLabel, float width)
+{
+    const float needed =
+        ImGui::CalcTextSize(longLabel, nullptr, true).x +
+        ImGui::GetStyle().FramePadding.x * 2.f;
+    return needed <= width ? longLabel : shortLabel;
 }
 
 static bool LabeledSliderInt(
@@ -2183,7 +2263,7 @@ static bool ExecuteConsoleCommandWithReturnedOutput(
             "console-return-path invoke-failed target=%p",
             reinterpret_cast<void*>(native));
         QueueCommandError(
-            L"Command error: Unreal console dispatch failed.");
+            L"[Vanity] Fehler: Der Befehl konnte nicht ausgef\u00FChrt werden."); // [Vanity]
         // The native call may already have performed part or all of the
         // command before faulting. Treat it as consumed so the Kismet fallback
         // cannot execute a state-changing command twice.
@@ -2216,7 +2296,7 @@ static bool ExecuteConsoleCommandWithReturnedOutput(
             output.NumElements,
             output.MaxElements);
         QueueCommandError(
-            L"Command ran, but Unreal returned invalid console output.");
+            L"[Vanity] Der Befehl lief, aber die Antwort vom Spiel war unlesbar."); // [Vanity]
         return true;
     }
 
@@ -2269,7 +2349,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     {
         AtlasDiagnostics::WriteLine("command-skip no-world command=%s", cmd);
         if (showConsoleErrors)
-            QueueCommandError(L"Command error: no active Unreal world.");
+            QueueCommandError(L"[Vanity] Geht gerade nicht \u2013 warte, bis du im Spiel bist."); // [Vanity]
         return false;
     }
 
@@ -2278,7 +2358,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     {
         AtlasDiagnostics::WriteLine("command-skip no-player command=%s", cmd);
         if (showConsoleErrors)
-            QueueCommandError(L"Command error: no local player controller.");
+            QueueCommandError(L"[Vanity] Geht gerade nicht \u2013 deine Spielfigur ist noch nicht da."); // [Vanity]
         return false;
     }
 
@@ -2286,7 +2366,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     if (len <= 1)
     {
         if (showConsoleErrors)
-            QueueCommandError(L"Command error: invalid UTF-8 input.");
+            QueueCommandError(L"[Vanity] Im Befehl steht ein Zeichen, das nicht geht."); // [Vanity]
         return false;
     }
 
@@ -2294,7 +2374,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     if (MultiByteToWideChar(CP_UTF8, 0, cmd, -1, wide.data(), len) != len)
     {
         if (showConsoleErrors)
-            QueueCommandError(L"Command error: input conversion failed.");
+            QueueCommandError(L"[Vanity] Der Befehl konnte nicht gelesen werden."); // [Vanity]
         return false;
     }
     wide.resize(static_cast<size_t>(len - 1));
@@ -3041,6 +3121,16 @@ static void JoinSelectedHost()
     }
 }
 
+// [Vanity] Helfer fuer den Trickshot-Reiter (VanityTrickshotTab.cpp). Ein gesendeter Befehl
+// landet wie bei den "Run"-Knoepfen als "> befehl" im Konsolen-Protokoll.
+static bool VanityTabExec(const char* command)
+{
+    if (!Exec(command))
+        return false;
+    AppendConsoleCommandEcho(command);
+    return true;
+}
+
 void GUI_Init()
 {
     AtlasDiagnostics::BeginSession(FConfiguration::ConsoleVersion);
@@ -3384,12 +3474,25 @@ static int PollBindKey(const InputPressCounts& presses)
     return 0;
 }
 
-static void SetBindError(const char* message)
+// [Vanity] message = deutscher Text fuer das Menue, reason = unveraenderter englischer Grund
+// fuer das Diagnose-Protokoll (bleibt wie in ATLAS, damit Logs vergleichbar bleiben).
+static void SetBindError(const char* message, const char* reason)
 {
-    g_BindError = message ? message : "That key is already in use.";
+    g_BindError = message ? message : "Diese Taste ist schon belegt.";
     g_BindErrorUntil = GetTickCount64() + 3500;
-    AtlasDiagnostics::WriteLine("bind-rejected reason=%s", g_BindError.c_str());
+    AtlasDiagnostics::WriteLine("bind-rejected reason=%s",
+        reason ? reason : "That key is already in use.");
 }
+
+// [Vanity] Meldungen beim Belegen einer Taste (Text fuers Menue + englischer Log-Grund).
+static constexpr const char* kBindTakenText =
+    "Diese Taste ist schon f" DE_ue "r etwas anderes belegt.";
+static constexpr const char* kBindTakenReason =
+    "That key is already assigned to another Vanity action.";
+static constexpr const char* kBindReservedText =
+    "Men" DE_ue "-, Beitreten- und Konsolen-Tasten gehen hier nicht.";
+static constexpr const char* kBindReservedReason =
+    "Menu, Join, and console keys are reserved.";
 
 static bool IsReservedOverlayKey(int vk, int except)
 {
@@ -3442,7 +3545,7 @@ void GUI_HandleInput(bool windowActive)
         if (int vk = PollBindKey(presses))
         {
             if (IsReservedOverlayKey(vk, 0) || IsSavedActionHotkey(vk))
-                SetBindError("That key is already assigned to another Vanity action.");
+                SetBindError(kBindTakenText, kBindTakenReason);
             else
             {
                 FGUI::HotkeyVK = vk;
@@ -3460,7 +3563,7 @@ void GUI_HandleInput(bool windowActive)
         if (int vk = PollBindKey(presses))
         {
             if (IsReservedOverlayKey(vk, 1) || IsSavedActionHotkey(vk))
-                SetBindError("That key is already assigned to another Vanity action.");
+                SetBindError(kBindTakenText, kBindTakenReason);
             else
             {
                 FGUI::JoinHotkeyVK = vk;
@@ -3479,7 +3582,7 @@ void GUI_HandleInput(bool windowActive)
         {
             if (IsReservedOverlayKey(vk, -1))
             {
-                SetBindError("Menu, Join, and console keys are reserved.");
+                SetBindError(kBindReservedText, kBindReservedReason);
             }
             else if (FGUI::RebindingCommandIndex == -1)
             {
@@ -3503,7 +3606,7 @@ void GUI_HandleInput(bool windowActive)
         {
             if (IsReservedOverlayKey(vk, -1))
             {
-                SetBindError("Menu, Join, and console keys are reserved.");
+                SetBindError(kBindReservedText, kBindReservedReason);
             }
             else if (FGUI::RebindingMacroIndex >= 0 && FGUI::RebindingMacroIndex < (int)FGUI::Macros.size())
             {
@@ -3745,13 +3848,14 @@ static bool FinishSavedCommandEdit(bool keepOpenOnInvalid)
 
     const std::string command =
         TrimCommand(g_SavedCommandEdit.Draft);
+    // [Vanity] Meldungen auf Deutsch (nur Anzeige unter dem Eingabefeld).
     const char* error = nullptr;
     if (command.empty())
-        error = "A saved command cannot be empty.";
+        error = "Der Befehl darf nicht leer sein.";
     else if (command.find_first_of("\r\n") != std::string::npos)
-        error = "A saved command must stay on one line.";
+        error = "Der Befehl muss in eine Zeile passen.";
     else if (command.size() > kMaximumConsoleCommandLength)
-        error = "A saved command cannot exceed 2048 bytes.";
+        error = "Der Befehl ist zu lang.";
 
     if (error)
     {
@@ -3867,7 +3971,7 @@ static void RenderSavedCommandEditor(float width)
             ESavedCommandEditTarget::MacroDelay;
     if (editingDelay)
     {
-        ImGui::TextUnformatted("    wait");
+        ImGui::TextUnformatted("    Pause"); // [Vanity] vorher "wait"
         ImGui::SameLine(0.f, 6.f);
         ImGui::SetNextItemWidth((std::min)(100.f, width));
     }
@@ -4143,7 +4247,7 @@ static bool SubmitConsoleCommand()
 
     if (raw.size() > kMaximumConsoleCommandLength)
     {
-        AppendConsoleLine(EConsoleLineKind::Error, "[Vanity] Command is too long (maximum 2048 bytes).");
+        AppendConsoleLine(EConsoleLineKind::Error, "[Vanity] Der Befehl ist zu lang " DE_DASH " bitte k" DE_ue "rzer."); // [Vanity]
         g_ConsoleUi.FocusInput = true;
         return false;
     }
@@ -4151,7 +4255,7 @@ static bool SubmitConsoleCommand()
     const std::string command = NormalizeConsoleCommand(raw);
     if (command.empty())
     {
-        AppendConsoleLine(EConsoleLineKind::Error, "[Vanity] Enter a command after '/'.");
+        AppendConsoleLine(EConsoleLineKind::Error, "[Vanity] Schreib nach dem / noch einen Befehl, z. B. /god"); // [Vanity]
         g_ConsoleUi.FocusInput = true;
         return false;
     }
@@ -4162,8 +4266,9 @@ static bool SubmitConsoleCommand()
             EConsoleLineKind::Error,
             g_GameThreadDispatcherReady.load(
                 std::memory_order_acquire)
-                ? "[Vanity] Command queue is full; command was not sent."
-                : "[Vanity] Unreal game-thread command dispatcher is unavailable.");
+                // [Vanity] auf Deutsch
+                ? "[Vanity] Zu viele Befehle auf einmal " DE_DASH " dieser wurde nicht geschickt. Kurz warten."
+                : "[Vanity] Befehle gehen noch nicht " DE_DASH " warte, bis das Spiel fertig geladen ist.");
         g_ConsoleUi.FocusInput = true;
         return false;
     }
@@ -4272,7 +4377,12 @@ static void DrawConsoleHistoryPopup(
 static bool RenderConsoleCommandInput(
     float rightPadding, float frameOpacity)
 {
-    const float clearButtonWidth = 62.f;
+    // [Vanity] "Leeren" statt "Clear"; Breite nach dem Text, damit nichts abgeschnitten wird.
+    const char* clearLabel = "Leeren##console_logs";
+    const float clearButtonWidth = (std::max)(
+        62.f,
+        ImGui::CalcTextSize(clearLabel, nullptr, true).x +
+            ImGui::GetStyle().FramePadding.x * 2.f);
     const float controlSpacing = 6.f;
     const bool slashPrefillWasActive =
         g_ConsoleUi.SlashPrefillActive;
@@ -4394,7 +4504,7 @@ static bool RenderConsoleCommandInput(
         ImGuiCol_ButtonActive,
         ImVec4(0.27f, 0.27f, 0.27f, frameAlpha));
     const bool clearLogs = ImGui::Button(
-        "Clear##console_logs",
+        clearLabel,
         ImVec2(clearButtonWidth, inputMax.y - inputMin.y));
     ImGui::PopStyleColor(4);
     ImGui::PopStyleVar();
@@ -4664,6 +4774,9 @@ void GUI_Render()
     const float consoleFade = s_ConsoleFade * s_ConsoleFade * (3.f - 2.f * s_ConsoleFade);
     const float surfaceFade = (std::max)(menuFade, consoleFade);
 
+    // [Vanity] Trickshot-Banner: jeden Frame, auch wenn Menue und Konsole zu sind.
+    VanityToast_Draw();
+
     if (surfaceFade <= 0.f)
         return;
 
@@ -4741,7 +4854,7 @@ void GUI_Render()
         ImGui::SameLine(0.f, 6.f);
         ImGui::SetCursorPosY(TitleY);
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-        ImGui::Text("| Console");
+        ImGui::TextUnformatted("| Men" DE_ue); // [Vanity] vorher "| Console"
         ImGui::PopStyleColor();
 
         ImGui::SameLine(0.f, 8.f);
@@ -4793,8 +4906,12 @@ void GUI_Render()
         fdl->AddLine(ImVec2(wp.x + SidebarW, wp.y + TopBarH), ImVec2(wp.x + SidebarW, wp.y + H), line, 1.f);
     }
 
+    // [Vanity] Neuer Reiter "Trickshot" (Index 3), "Credits" rutscht auf Index 4.
+    // Die Seitenleiste hat Platz fuer 6 Reiter (Mindesthoehe 320 px, je 40 px).
+    // Namen auf Deutsch; sie muessen in die 118 px breite Seitenleiste passen
+    // ("Einstellungen" waere zu breit, darum "Optionen"). Die Reiter-ID ist der Index.
     static const char* kTabs[] = {
-        "Main", "Commands", "Config", "Credits"
+        "Start", "Befehle", "Optionen", "Trickshot", "Credits"
     };
     const int kTabCount = (int)(sizeof(kTabs) / sizeof(kTabs[0]));
     const float TabH = 40.f;
@@ -4834,6 +4951,9 @@ void GUI_Render()
     const float ContentPadX = ContentHorizontalInset;
     const float ContentPadTop = 14.f;
     const bool bCommandsTab = FGUI::ActiveTab == 1;
+    // [Vanity] Der Trickshot-Reiter ist immer laenger als das Fenster: feste Bildlaufleiste,
+    // damit die Knopfbreiten nicht springen.
+    const bool bTrickshotTab = FGUI::ActiveTab == 3;
     const float ContentChildW =
         (W - SidebarW) - ContentPadX;
     ImGui::SetCursorPos(ImVec2(SidebarW + ContentPadX, TopBarH + ContentPadTop));
@@ -4841,7 +4961,7 @@ void GUI_Render()
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, fade);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.f, 6.f));
-    const ImGuiWindowFlags ContentFlags = bCommandsTab ? ImGuiWindowFlags_AlwaysVerticalScrollbar : ImGuiWindowFlags_None;
+    const ImGuiWindowFlags ContentFlags = (bCommandsTab || bTrickshotTab) ? ImGuiWindowFlags_AlwaysVerticalScrollbar : ImGuiWindowFlags_None; // [Vanity] + Trickshot
     ImGui::BeginChild("##content",
         ImVec2(ContentChildW, (H - TopBarH) - ContentPadTop - 12.f), false,
         ContentFlags);
@@ -4854,15 +4974,15 @@ void GUI_Render()
 
     switch (FGUI::ActiveTab)
     {
-    case 0: // main tab
+    case 0: // main tab ([Vanity] Reiter "Start": Texte auf Deutsch, graue Erklaerungen dazu)
     {
-        SectionLabel("Host");
+        SectionLabel("Server beitreten");
         BeginSectionBody();
 
-    const char* hostTypeItems[] = { "Local Host", "Remote Host" };
+    const char* hostTypeItems[] = { "Auf diesem PC", "Auf einem anderen PC" };
     const float hostControlWidth = CW;
     LabeledCombo(
-        "Host Type", "##hosttype", &FGUI::HostType,
+        "Wo l" DE_ae "uft der Server?", "##hosttype", &FGUI::HostType,
         hostTypeItems, IM_ARRAYSIZE(hostTypeItems),
         hostControlWidth);
 
@@ -4871,83 +4991,87 @@ void GUI_Render()
     if (FGUI::HostType == 0)
     {
         if (ImGui::Button(
-                "Join Local Host",
+                FitLabel("Server auf diesem PC beitreten###join_local",
+                    "Beitreten###join_local", hostControlWidth),
                 ImVec2(hostControlWidth, 0.f)))
             JoinSelectedHost();
     }
     else
     {
         ImGui::PushItemWidth(hostControlWidth);
-        ImGui::InputTextWithHint("##remoteip", "Enter IP to join", FGUI::RemoteIP, sizeof(FGUI::RemoteIP));
+        ImGui::InputTextWithHint("##remoteip", "IP-Adresse vom anderen PC", FGUI::RemoteIP, sizeof(FGUI::RemoteIP));
         ImGui::PopItemWidth();
 
         ImGui::Spacing();
 
         if (ImGui::Button(
-                "Join Remote Host",
+                FitLabel("Server mit dieser IP beitreten###join_remote",
+                    "Beitreten###join_remote", hostControlWidth),
                 ImVec2(hostControlWidth, 0.f)))
             JoinSelectedHost();
+        HoverHint("Geht nur, wenn oben eine IP-Adresse steht.");
     }
 
     ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-    ImGui::TextWrapped("Pressing this key joins the currently selected host type.");
-    ImGui::PopStyleColor();
+    {
+        char joinHint[160];
+        snprintf(joinHint, sizeof(joinHint),
+            "Tipp: Ist das Men" DE_ue " zu, trittst du mit der Taste %s sofort bei.",
+            VKName(FGUI::JoinHotkeyVK));
+        ControlHint(joinHint, hostControlWidth);
+    }
     EndSectionBody();
 
     if (VersionInfo.EngineVersion < 4.24 || VersionInfo.FortniteVersion < 24.30)
     {
-        SectionLabel("Editing");
+        SectionLabel("Editieren");
         BeginSectionBody();
 
         if (VersionInfo.EngineVersion < 4.24)
         {
             PersistentCheckbox(
-                "Edit On Release", FConfiguration::bEOREnabled);
-            ImGui::SameLine(0.f, 10.f);
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-            ImGui::TextUnformatted("EOR");
-            ImGui::PopStyleColor();
+                "Edit beim Loslassen###eor", FConfiguration::bEOREnabled);
+            ControlHint("Dein Edit ist fertig, sobald du die Taste losl" DE_ae "sst.", CW, true);
         }
 
         if (VersionInfo.FortniteVersion < 24.30)
         {
             PersistentCheckbox(
-                "Reset On Release", FConfiguration::bROREnabled);
-            ImGui::SameLine(0.f, 10.f);
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-            ImGui::TextUnformatted("ROR");
-            ImGui::PopStyleColor();
+                "Zur" DE_ue "cksetzen beim Loslassen###ror", FConfiguration::bROREnabled);
+            ControlHint("Zur" DE_ue "cksetzen ist fertig, sobald du die Taste losl" DE_ae "sst.", CW, true);
         }
 
         if (VersionInfo.FortniteVersion < 15.20)
         {
             PersistentCheckbox(
-                "Disable Pre-Edits",
+                "Keine Vorschau-Edits###disable_pre_edits",
                 FConfiguration::bDisablePreEdits);
+            ControlHint("Du editierst nie aus Versehen das durchsichtige Vorschau-Teil.", CW, true);
         }
         EndSectionBody();
     }
 
-    SectionLabel("Graphics");
+    SectionLabel("Grafik");
     BeginSectionBody();
 
     PersistentAbsoluteCommandCheckbox(
-        "Mobile Builds",
+        "Einfache Bauteile (wie am Handy)###mobile_builds",
         FConfiguration::bMobileBuilds,
         SettingCommandMobileBuilds);
+    ControlHint("Bauteile und Umgebung werden einfacher gezeichnet.", CW, true);
 
     PersistentAbsoluteCommandCheckbox(
-        "In-Game Fog",
+        "Nebel im Spiel###ingame_fog",
         FConfiguration::bGameplayFog,
         SettingCommandInGameFog);
+    ControlHint("Aus = klarere Sicht in die Ferne.", CW, true);
 
     {
         const float sliderWidth = CW;
         int mipMapLODBias = FConfiguration::MipMapLODBias.load(
             std::memory_order_acquire);
         if (LabeledSliderInt(
-                "Potato Graphics", "##potatographics",
+                "Texturen vereinfachen", "##potatographics",
                 &mipMapLODBias, 0, 15,
                 sliderWidth))
         {
@@ -4959,15 +5083,16 @@ void GUI_Render()
                 SettingCommandMipMapLODBias,
                 std::memory_order_acq_rel);
         }
+        ControlHint("0 = normal. H" DE_oe "her = unsch" DE_ae "rfer, l" DE_ae "uft aber oft fl" DE_ue "ssiger.", sliderWidth);
     }
     EndSectionBody();
 
     if (VersionInfo.FortniteVersion < 5.00)
     {
-        SectionLabel("Movement");
+        SectionLabel("Laufen");
         BeginSectionBody();
         if (PersistentCheckbox(
-                "Sprint by Default",
+                "Immer sprinten###sprint_by_default",
                 FConfiguration::bSprintByDefault))
         {
             AtlasDiagnostics::WriteLine(
@@ -4977,13 +5102,18 @@ void GUI_Render()
                     ? "enabled"
                     : "disabled");
         }
+        ControlHint("Du rennst, ohne die Sprint-Taste zu halten.", CW, true);
         EndSectionBody();
     }
 
-    SectionLabel("FOV");
+    SectionLabel("Sichtfeld");
     {
         BeginSectionBody();
-        const float ResetW = 110.f;
+        const char* resetLabel = "Zur" DE_ue "ck auf 80###reset_fov";
+        const float ResetW = (std::max)(
+            110.f,
+            ImGui::CalcTextSize(resetLabel, nullptr, true).x +
+                ImGui::GetStyle().FramePadding.x * 2.f + 12.f);
         const float SliderW = (std::max)(
             80.f,
             CW - ResetW - ImGui::GetStyle().ItemSpacing.x);
@@ -4991,7 +5121,7 @@ void GUI_Render()
         int fieldOfView = FConfiguration::FOV.load(
             std::memory_order_acquire);
         if (LabeledSliderInt(
-                "Field of View", "##fov",
+                "Blickwinkel (normal: 80)", "##fov",
                 &fieldOfView, 1, 175, SliderW))
         {
             std::lock_guard<std::mutex> lock(
@@ -5004,7 +5134,7 @@ void GUI_Render()
         }
 
         ImGui::SameLine();
-        if (ImGui::Button("Reset FOV", ImVec2(ResetW, 0.f)))
+        if (ImGui::Button(resetLabel, ImVec2(ResetW, 0.f)))
         {
             std::lock_guard<std::mutex> lock(
                 g_SettingCommandMutex);
@@ -5014,43 +5144,52 @@ void GUI_Render()
                 SettingCommandFOV,
                 std::memory_order_acq_rel);
         }
+        ControlHint("Gr" DE_oe DE_ss "er = du siehst mehr vom Rand.", CW);
         EndSectionBody();
     }
 
-    SectionLabel("Respawn");
+    SectionLabel("Nach dem Tod");
     BeginSectionBody();
     PersistentCheckbox(
-        "Respawns Enabled", FConfiguration::bForceRespawns);
+        "Wieder einsteigen###respawns_enabled", FConfiguration::bForceRespawns);
+    ControlHint("Du kommst nach dem Tod aus der Luft zur" DE_ue "ck. Gilt ab dem n" DE_ae "chsten Spielstart.", CW, true);
     EndSectionBody();
 
-    SectionLabel("Other");
+    SectionLabel("Sonstiges");
     BeginSectionBody();
     PersistentCheckbox(
-        "First Person Camera", FConfiguration::bFirstPerson);
+        "Ich-Perspektive###first_person", FConfiguration::bFirstPerson);
+    ControlHint("Du siehst aus den Augen deiner Figur.", CW, true);
 
     if (VersionInfo.FortniteVersion <= 10.40)
     {
         SessionToggleCommandCheckbox(
-            "Debug Camera",
+            "Freie Kamera###debug_camera",
             FConfiguration::bDebugCamera,
             SettingCommandDebugCamera);
+        ControlHint("Die Kamera fliegt frei herum, deine Figur bleibt stehen.", CW, true);
     }
 
     SessionToggleCommandCheckbox(
-        "Target Info",
+        "Ziel-Infos###target_info",
         FConfiguration::bTargetInfo,
         SettingCommandTargetInfo);
+    ControlHint("Zeigt Infos zu dem, was du gerade anvisierst.", CW, true);
     EndSectionBody();
 
+        ImGui::Dummy(ImVec2(0.f, 8.f)); // [Vanity] etwas Luft unter dem letzten Hinweis
         break;
     }
-    case 1: // Commands
+    case 1: // Commands ([Vanity] Reiter "Befehle": Texte auf Deutsch, Erklaerungen dazu)
     {
-        SectionLabel("Commands");
+        SectionLabel("Neuer Befehl");
         BeginSectionBody();
+        ControlHint(
+            "Befehl eintippen, Taste w" DE_ae "hlen, " DE_LQ "Speichern" DE_RQ " klicken. "
+            "Mehrere Befehle hintereinander: vorher " DE_LQ "+" DE_NBSP "Schritt" DE_RQ ".", CW);
 
         ImGui::PushItemWidth(CW);
-        ImGui::InputTextWithHint("##commandinput", "UE Console Command", FGUI::CommandInput, sizeof(FGUI::CommandInput));
+        ImGui::InputTextWithHint("##commandinput", "Befehl, z. B. cheat giveammo", FGUI::CommandInput, sizeof(FGUI::CommandInput));
         ImGui::PopItemWidth();
 
         ImGui::Spacing();
@@ -5058,11 +5197,12 @@ void GUI_Render()
         const float AddButtonW = 110.f;
         const float DelayInputW = CW - AddButtonW - ImGui::GetStyle().ItemSpacing.x;
         ImGui::PushItemWidth(DelayInputW > 140.f ? DelayInputW : 140.f);
-        ImGui::InputTextWithHint("##stepdelay", "Wait before next step (ms)", FGUI::MacroDelayInput, sizeof(FGUI::MacroDelayInput), ImGuiInputTextFlags_CharsDecimal);
+        ImGui::InputTextWithHint("##stepdelay", "Pause danach (ms)", FGUI::MacroDelayInput, sizeof(FGUI::MacroDelayInput), ImGuiInputTextFlags_CharsDecimal);
         ImGui::PopItemWidth();
+        HoverHint("So lange wird gewartet, bevor der n" DE_ae "chste Schritt kommt. 1000 ms = 1 Sekunde.");
         ImGui::SameLine();
 
-        if (ImGui::Button("Add Step", ImVec2(AddButtonW, 0.f)))
+        if (ImGui::Button("+ Schritt###add_step", ImVec2(AddButtonW, 0.f)))
         {
             const char* start = FGUI::CommandInput;
             while (*start == ' ' || *start == '\t')
@@ -5077,6 +5217,7 @@ void GUI_Render()
                 FGUI::CommandInput[0] = '\0';
             }
         }
+        HoverHint("Merkt sich den Befehl als Schritt. So baust du eine Kette aus mehreren Befehlen.");
 
         if (!FGUI::MacroDraftSteps.empty())
         {
@@ -5092,7 +5233,7 @@ void GUI_Render()
                 ImGui::PopStyleColor();
                 ImGui::SameLine();
 
-                if (ImGui::SmallButton("Remove"))
+                if (ImGui::SmallButton("Entfernen###remove_step"))
                 {
                     FGUI::MacroDraftSteps.erase(FGUI::MacroDraftSteps.begin() + i);
                     ImGui::PopID();
@@ -5102,7 +5243,7 @@ void GUI_Render()
                 if (i + 1 < (int)FGUI::MacroDraftSteps.size())
                 {
                     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-                    ImGui::Text("Wait: %d ms", step.DelayMs);
+                    ImGui::Text("Pause: %d ms", step.DelayMs);
                     ImGui::PopStyleColor();
                 }
 
@@ -5113,14 +5254,26 @@ void GUI_Render()
 
         ImGui::Spacing();
 
-        char pendingBindLabel[64];
-        if (FGUI::RebindingCommandIndex == -1)
-            snprintf(pendingBindLabel, sizeof(pendingBindLabel), "Press any key...  (Esc to cancel)");
-        else
-            snprintf(pendingBindLabel, sizeof(pendingBindLabel), "Bind Key    [%s]", BindName(FGUI::PendingCommandVK));
-
         const float BindButtonW = CW - AddButtonW - ImGui::GetStyle().ItemSpacing.x;
-        if (ImGui::Button(pendingBindLabel, ImVec2(BindButtonW > 140.f ? BindButtonW : 140.f, 0.f)))
+        const float BindButtonWidth = BindButtonW > 140.f ? BindButtonW : 140.f;
+        char pendingBindLabel[96];
+        if (FGUI::RebindingCommandIndex == -1)
+        {
+            snprintf(pendingBindLabel, sizeof(pendingBindLabel), "%s",
+                FitLabel("Taste dr" DE_ue "cken " DE_DOTS " (Esc = abbrechen)###new_bind",
+                    "Taste dr" DE_ue "cken " DE_DOTS "###new_bind", BindButtonWidth));
+        }
+        else
+        {
+            char longBindLabel[96];
+            char shortBindLabel[96];
+            snprintf(longBindLabel, sizeof(longBindLabel), "Taste w" DE_ae "hlen [%s]###new_bind", BindName(FGUI::PendingCommandVK));
+            snprintf(shortBindLabel, sizeof(shortBindLabel), "Taste [%s]###new_bind", BindName(FGUI::PendingCommandVK));
+            snprintf(pendingBindLabel, sizeof(pendingBindLabel), "%s",
+                FitLabel(longBindLabel, shortBindLabel, BindButtonWidth));
+        }
+
+        if (ImGui::Button(pendingBindLabel, ImVec2(BindButtonWidth, 0.f)))
         {
             FGUI::RebindingCommandIndex = -1;
             FGUI::RebindingMacroIndex = -2;
@@ -5128,10 +5281,13 @@ void GUI_Render()
             FGUI::bRebindingJoin = false;
             BeginBindCapture();
         }
+        HoverHint(FGUI::RebindingCommandIndex == -1
+            ? "Dr" DE_ue "ck jetzt die Taste, die du willst. Esc bricht ab."
+            : "Mit dieser Taste startest du den Befehl sp" DE_ae "ter, wenn das Men" DE_ue " zu ist. Ohne Taste geht es nur mit " DE_LQ "Ausf" DE_ue "hren" DE_RQ ".");
 
         ImGui::SameLine();
 
-        if (ImGui::Button("Save", ImVec2(AddButtonW, 0.f)))
+        if (ImGui::Button("Speichern###save_command", ImVec2(AddButtonW, 0.f)))
         {
             std::vector<HotkeyPersist::MacroStep> steps = FGUI::MacroDraftSteps;
 
@@ -5177,19 +5333,36 @@ void GUI_Render()
                 FGUI::SaveCommands();
             }
         }
+        HoverHint("Legt den Befehl (oder alle Schritte) unten bei " DE_LQ "Deine Befehle" DE_RQ " ab.");
+        DrawBindError(CW); // [Vanity] vorher nur im Reiter "Optionen" sichtbar
 
         EndSectionBody();
-        SectionLabel("Saved");
+        SectionLabel("Deine Befehle");
         BeginSectionBody();
 
         if (FGUI::Commands.empty() && FGUI::Macros.empty())
         {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-            ImGui::TextWrapped("No saved commands.");
+            ImGui::TextWrapped("Noch keine gespeicherten Befehle.");
             ImGui::PopStyleColor();
         }
         else
         {
+            ControlHint("Doppelklick auf einen Befehl: Text " DE_ae "ndern.", CW);
+
+            // Knopftexte der Zeilen: lang, wenn sie in ein Drittel passen, sonst kurz.
+            const float RowButtonW = (CW - ImGui::GetStyle().ItemSpacing.x * 2.f) / 3.f;
+            const char* runLabel = FitLabel("Ausf" DE_ue "hren###run", "Los###run", RowButtonW);
+            const char* waitKeyLabel = FitLabel("Taste dr" DE_ue "cken " DE_DOTS "###bind", "Dr" DE_ue "cken " DE_DOTS "###bind", RowButtonW);
+            const char* unbindLabel = FitLabel("Taste entfernen###bind", "Taste weg###bind", RowButtonW);
+            const char* bindLabelText = FitLabel("Taste w" DE_ae "hlen###bind", "Taste###bind", RowButtonW);
+            const char* deleteLabel = "L" DE_oe "schen###delete";
+            const char* runHint = "Schickt den Befehl jetzt sofort ab.";
+            const char* waitKeyHint = "Dr" DE_ue "ck jetzt die Taste, die du willst. Esc bricht ab.";
+            const char* unbindHint = "Die Taste wird wieder frei. Der Befehl bleibt gespeichert.";
+            const char* bindHint = "Leg eine Taste fest. Dann startet der Befehl per Tastendruck, wenn das Men" DE_ue " zu ist.";
+            const char* deleteHint = "L" DE_oe "scht den Befehl aus der Liste.";
+
             for (int i = 0; i < (int)FGUI::Commands.size(); i++)
             {
                 auto& command = FGUI::Commands[i];
@@ -5218,26 +5391,25 @@ void GUI_Render()
                 }
 
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-                ImGui::Text("Key: %s", BindName(command.VK));
+                ImGui::Text("Taste: %s", BindName(command.VK));
                 ImGui::PopStyleColor();
 
-                const float ButtonW = (CW - ImGui::GetStyle().ItemSpacing.x * 2.f) / 3.f;
-                if (ImGui::Button("Run", ImVec2(ButtonW, 0.f)))
+                const float ButtonW = RowButtonW;
+                if (ImGui::Button(runLabel, ImVec2(ButtonW, 0.f)))
                 {
                     FinishSavedCommandEdit(false);
                     if (Exec(command.Command.c_str()))
                         AppendConsoleCommandEcho(
                             command.Command);
                 }
+                HoverHint(runHint);
                 ImGui::SameLine();
 
-                char bindLabel[64];
-                if (FGUI::RebindingCommandIndex == i)
-                    snprintf(bindLabel, sizeof(bindLabel), "Press key...");
-                else if (command.VK > 0 && command.VK <= 254)
-                    snprintf(bindLabel, sizeof(bindLabel), "Unbind");
-                else
-                    snprintf(bindLabel, sizeof(bindLabel), "Bind");
+                const bool waitingForKey = FGUI::RebindingCommandIndex == i;
+                const bool hasKey = command.VK > 0 && command.VK <= 254;
+                const char* bindLabel = waitingForKey ? waitKeyLabel
+                    : hasKey ? unbindLabel
+                    : bindLabelText;
 
                 if (ImGui::Button(bindLabel, ImVec2(ButtonW, 0.f)))
                 {
@@ -5262,9 +5434,10 @@ void GUI_Render()
                         BeginBindCapture();
                     }
                 }
+                HoverHint(waitingForKey ? waitKeyHint : hasKey ? unbindHint : bindHint);
                 ImGui::SameLine();
 
-                if (ImGui::Button("Delete", ImVec2(ButtonW, 0.f)))
+                if (ImGui::Button(deleteLabel, ImVec2(ButtonW, 0.f)))
                 {
                     if (IsEditingSavedCommand(i))
                         CancelSavedCommandEdit();
@@ -5276,6 +5449,7 @@ void GUI_Render()
                     ImGui::PopID();
                     break;
                 }
+                HoverHint(deleteHint);
 
                 ImGui::Separator();
                 ImGui::PopID();
@@ -5334,7 +5508,7 @@ void GUI_Render()
                                     0.353f, 0.388f,
                                     0.478f, 1.f));
                             ImGui::Text(
-                                "    wait %d ms",
+                                "    Pause %d ms",
                                 macro.Steps[stepIndex].DelayMs);
                             ImGui::PopStyleColor();
 
@@ -5356,24 +5530,23 @@ void GUI_Render()
                 }
 
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-                ImGui::Text("Key: %s", BindName(macro.VK));
+                ImGui::Text("Taste: %s", BindName(macro.VK));
                 ImGui::PopStyleColor();
 
-                const float MacroButtonW = (CW - ImGui::GetStyle().ItemSpacing.x * 2.f) / 3.f;
-                if (ImGui::Button("Run", ImVec2(MacroButtonW, 0.f)))
+                const float MacroButtonW = RowButtonW;
+                if (ImGui::Button(runLabel, ImVec2(MacroButtonW, 0.f)))
                 {
                     FinishSavedCommandEdit(false);
                     QueueMacro(macro);
                 }
+                HoverHint("Schickt alle Schritte nacheinander ab.");
                 ImGui::SameLine();
 
-                char macroBindLabel[64];
-                if (FGUI::RebindingMacroIndex == i)
-                    snprintf(macroBindLabel, sizeof(macroBindLabel), "Press key...");
-                else if (macro.VK > 0 && macro.VK <= 254)
-                    snprintf(macroBindLabel, sizeof(macroBindLabel), "Unbind");
-                else
-                    snprintf(macroBindLabel, sizeof(macroBindLabel), "Bind");
+                const bool waitingForMacroKey = FGUI::RebindingMacroIndex == i;
+                const bool macroHasKey = macro.VK > 0 && macro.VK <= 254;
+                const char* macroBindLabel = waitingForMacroKey ? waitKeyLabel
+                    : macroHasKey ? unbindLabel
+                    : bindLabelText;
 
                 if (ImGui::Button(macroBindLabel, ImVec2(MacroButtonW, 0.f)))
                 {
@@ -5398,9 +5571,10 @@ void GUI_Render()
                         BeginBindCapture();
                     }
                 }
+                HoverHint(waitingForMacroKey ? waitKeyHint : macroHasKey ? unbindHint : bindHint);
                 ImGui::SameLine();
 
-                if (ImGui::Button("Delete", ImVec2(MacroButtonW, 0.f)))
+                if (ImGui::Button(deleteLabel, ImVec2(MacroButtonW, 0.f)))
                 {
                     if ((g_SavedCommandEdit.Target ==
                             ESavedCommandEditTarget::MacroStep ||
@@ -5420,6 +5594,7 @@ void GUI_Render()
                     ImGui::PopID();
                     break;
                 }
+                HoverHint(deleteHint);
 
                 ImGui::Separator();
                 ImGui::PopID();
@@ -5428,19 +5603,20 @@ void GUI_Render()
         }
         EndSectionBody();
 
+        ImGui::Dummy(ImVec2(0.f, 8.f)); // [Vanity] etwas Luft unten
         break;
     }
-    case 2: // Config
+    case 2: // Config ([Vanity] Reiter "Optionen": Texte auf Deutsch, Erklaerungen dazu)
     {
-    SectionLabel("Preferences");
+    SectionLabel("Allgemein");
     BeginSectionBody();
     int consoleMode =
         FConfiguration::ConsoleMode.load(std::memory_order_acquire);
     const char* consoleModeItems[] = {
-        "Vanity Console", "Original UE Console"
+        "Vanity-Konsole", "Original-Konsole (Unreal)"
     };
     if (LabeledCombo(
-            "Console Style", "##console_mode", &consoleMode,
+            "Welche Konsole?", "##console_mode", &consoleMode,
             consoleModeItems, IM_ARRAYSIZE(consoleModeItems),
             CW))
     {
@@ -5456,23 +5632,39 @@ void GUI_Render()
         if (consoleMode == static_cast<int>(EConsoleMode::Unreal))
             CloseConsoleSurface();
     }
-    PersistentCheckbox(
-        "Slash Key", FConfiguration::bSlashKeyEnabled);
+    ControlHint("Die Konsole " DE_oe "ffnest du mit F8. Die Vanity-Konsole kennt Kurzbefehle wie /god.", CW);
+
+    {
+        // Die Taste heisst je nach Tastatur anders (deutsch meist "#", US "/"): Name vom System holen.
+        char slashLabel[96];
+        snprintf(slashLabel, sizeof(slashLabel),
+            "Konsole mit Taste %s " DE_oe "ffnen###slash_key", VKName(VK_OEM_2));
+        PersistentCheckbox(
+            slashLabel, FConfiguration::bSlashKeyEnabled);
+        ControlHint("Sie geht mit / schon drin auf " DE_DASH " dann z." DE_NBSP "B. nur noch god tippen und Enter. Nur mit der Vanity-Konsole.", CW, true);
+    }
     TogglePreferencePersistenceCheckbox();
+    ControlHint("Aus = beim n" DE_ae "chsten Start sind alle Schalter wieder wie am Anfang.", CW, true);
     EndSectionBody();
-    SectionLabel("Hotkeys");
+    SectionLabel("Tasten");
     BeginSectionBody();
+    // Waehrend auf die neue Taste gewartet wird, behaelt der Knopf seine ID (###rebind_menu/_join).
+    const char* waitForKeyText = FitLabel(
+        "Neue Taste dr" DE_ue "cken " DE_DOTS " (Esc = abbrechen)",
+        "Neue Taste dr" DE_ue "cken " DE_DOTS, CW);
+    char waitForKeyLabel[96];
     if (FGUI::bRebinding)
     {
+        snprintf(waitForKeyLabel, sizeof(waitForKeyLabel), "%s###rebind_menu", waitForKeyText);
         ImGui::PushStyleColor(ImGuiCol_Text, Accent());
         ImGui::PushStyleColor(ImGuiCol_Button, Accent(0.18f));
-        ImGui::Button("Press any key...  (Esc to cancel)", ImVec2(CW, 0.f));
+        ImGui::Button(waitForKeyLabel, ImVec2(CW, 0.f));
         ImGui::PopStyleColor(2);
     }
     else
     {
-        char btnLabel[64];
-        snprintf(btnLabel, sizeof(btnLabel), "Rebind Menu Key [%s]", VKName(FGUI::HotkeyVK));
+        char btnLabel[96];
+        snprintf(btnLabel, sizeof(btnLabel), "Men" DE_ue "-Taste " DE_ae "ndern [%s]###rebind_menu", VKName(FGUI::HotkeyVK));
         if (ImGui::Button(btnLabel, ImVec2(CW, 0.f)))
         {
             FGUI::bRebinding = true;
@@ -5481,19 +5673,21 @@ void GUI_Render()
             FGUI::RebindingMacroIndex = -2;
             BeginBindCapture();
         }
+        HoverHint("Mit dieser Taste " DE_oe "ffnest und schlie" DE_ss "t du dieses Men" DE_ue ".");
     }
 
     if (FGUI::bRebindingJoin)
     {
+        snprintf(waitForKeyLabel, sizeof(waitForKeyLabel), "%s###rebind_join", waitForKeyText);
         ImGui::PushStyleColor(ImGuiCol_Text, Accent());
         ImGui::PushStyleColor(ImGuiCol_Button, Accent(0.18f));
-        ImGui::Button("Press any key...  (Esc to cancel)", ImVec2(CW, 0.f));
+        ImGui::Button(waitForKeyLabel, ImVec2(CW, 0.f));
         ImGui::PopStyleColor(2);
     }
     else
     {
-        char joinBtnLabel[64];
-        snprintf(joinBtnLabel, sizeof(joinBtnLabel), "Rebind Join Key [%s]", VKName(FGUI::JoinHotkeyVK));
+        char joinBtnLabel[96];
+        snprintf(joinBtnLabel, sizeof(joinBtnLabel), "Beitreten-Taste " DE_ae "ndern [%s]###rebind_join", VKName(FGUI::JoinHotkeyVK));
         if (ImGui::Button(joinBtnLabel, ImVec2(CW, 0.f)))
         {
             FGUI::bRebindingJoin = true;
@@ -5502,28 +5696,45 @@ void GUI_Render()
             FGUI::RebindingMacroIndex = -2;
             BeginBindCapture();
         }
+        HoverHint("Mit dieser Taste trittst du dem Server aus " DE_LQ "Start" DE_RQ " bei, wenn das Men" DE_ue " zu ist.");
     }
 
-    if (!g_BindError.empty() && GetTickCount64() < g_BindErrorUntil)
-    {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.39f, 0.43f, 1.f));
-        ImGui::TextWrapped("%s", g_BindError.c_str());
-        ImGui::PopStyleColor();
-    }
+    DrawBindError(CW); // [Vanity] gleiche Meldung, jetzt auf Knopfbreite umgebrochen
 
-    if (ImGui::Button("Reset All", ImVec2(CW, 0.f)))
+    if (ImGui::Button("Alles zur" DE_ue "cksetzen###reset_all", ImVec2(CW, 0.f)))
     {
         EndBindCapture();
         FGUI::ResetAll();
         CloseConsoleSurface();
     }
+    ControlHint("Achtung: Stellt alle Schalter und Tasten zur" DE_ue "ck und l" DE_oe "scht deine gespeicherten Befehle.", CW);
     EndSectionBody();
 
         ImGui::Dummy(ImVec2(0.f, 8.f));
         break;
     }
-    case 3: // Credits
+    case 3: // [Vanity] Trickshot
     {
+        // Inhalt in VanityTrickshotTab.cpp; die Helfer hier sind file-static und werden
+        // per Zeiger durchgereicht.
+        static const FVanityTabHost VanityHost = {
+            &VanityTabExec,
+            &SectionLabel,
+            &BeginSectionBody,
+            &EndSectionBody,
+            &Accent,
+            &Client::GetConsoleSessionGeneration
+        };
+        VanityTrickshotTab_Draw(VanityHost, CW);
+        ImGui::Dummy(ImVec2(0.f, 8.f));
+        break;
+    }
+    case 4: // Credits ([Vanity] vorher Index 3)
+    {
+        // [Vanity] Ueberschriften auf Deutsch; die Nennungen selbst bleiben unveraendert (Lizenz).
+        // Beschreibungen und Hinweis brechen um, damit sie auch im kleinsten Fenster ganz lesbar sind.
+        const float creditsWrapX =
+            ImGui::GetCursorPosX() + CW + SectionBodyIndent;
         const auto rule = []()
         {
             ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -5548,7 +5759,14 @@ void GUI_Render()
         ImGui::PopStyleColor();
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.54f, 0.56f, 0.62f, 1.f));
-        ImGui::Text("Console  -  %s", FConfiguration::ConsoleVersion);
+        {
+            // [Vanity] "Ingame-Menue - Version", umgebrochen statt am Rand abgeschnitten
+            char subtitle[160];
+            snprintf(subtitle, sizeof(subtitle), "Ingame-Men" DE_ue "  " DE_DASH "  %s", FConfiguration::ConsoleVersion);
+            ImGui::PushTextWrapPos(creditsWrapX);
+            ImGui::TextUnformatted(subtitle);
+            ImGui::PopTextWrapPos();
+        }
         ImGui::PopStyleColor();
         ImGui::EndGroup();
 
@@ -5557,6 +5775,11 @@ void GUI_Render()
         ImGui::TextUnformatted("CREDITS");
         ImGui::PopStyleColor();
         rule();
+
+        // [Vanity] kurze Erklaerung fuer die Seite
+        ControlHint("Vanity baut auf diesen Projekten auf. Danke! Klick auf einen Namen " DE_oe "ffnet seine Seite im Browser.",
+            creditsWrapX - ImGui::GetCursorPosX());
+        ImGui::Spacing();
 
         ImGui::PushStyleColor(ImGuiCol_Text, Accent(0.95f));
         ImGui::TextUnformatted("Erbium");
@@ -5573,7 +5796,9 @@ void GUI_Render()
         ImGui::SameLine(0.f, 8.f);
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.58f, 0.60f, 0.66f, 1.f));
+        ImGui::PushTextWrapPos(creditsWrapX); // [Vanity] umbrechen statt abschneiden
         ImGui::TextUnformatted("- Base of the project");
+        ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
 
         // [Vanity] Sichtbare Nennung laut ATLAS Console Attribution License.
@@ -5592,13 +5817,17 @@ void GUI_Render()
         ImGui::SameLine(0.f, 8.f);
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.58f, 0.60f, 0.66f, 1.f));
+        ImGui::PushTextWrapPos(creditsWrapX); // [Vanity] umbrechen statt abschneiden
         ImGui::TextUnformatted("- Base of this in-game menu (cipherfps, ralz and contributors)");
+        ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
 
         ImGui::Dummy(ImVec2(0.f, 18.f));
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.42f, 0.44f, 0.50f, 1.f));
+        ImGui::PushTextWrapPos(creditsWrapX); // [Vanity] umbrechen statt abschneiden
         ImGui::TextUnformatted("Vanity is based on ATLAS Console by cipherfps, ralz and contributors.");
+        ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
 
         break;

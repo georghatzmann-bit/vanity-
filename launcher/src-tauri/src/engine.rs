@@ -415,8 +415,9 @@ impl Engine {
         self.start_backend().inspect_err(|_| self.emit_step(-1))?;
         self.set_backend_status(&build.version, true, &profile.playlist);
 
-        // Server-Fortnite
+        // Server-Fortnite – vorher die Parkour-Liste frisch hinlegen (liest die Server-DLL)
         self.emit_step(1);
+        write_parkour_file(Some(self));
         let server_pid = self.launch_instance(&build, &profile, true, headless)?;
         self.running.lock().unwrap().server = Some(Instance { pid: server_pid, helper_pids: vec![], host: true });
         self.emit_step(2); // Umleitung ist in launch_instance geladen
@@ -433,8 +434,9 @@ impl Engine {
         self.inject_after_login(game_pid, false, &build);
         self.emit_services();
 
-        // Schritt 5/6 im Hintergrund: erst die Steuer-Pipe der Server-DLL verbinden (Playlist/Lategame
-        // übertragen, „Match starten“ freischalten), dann warten, bis der Game Server auf Port 7777 hört.
+        // Schritt 5/6 im Hintergrund: erst die Steuer-Pipe der Server-DLL verbinden (Befehle freischalten,
+        // Playlist/Lategame übertragen, „Match starten“ freischalten), dann warten, bis der Game Server auf
+        // Port 7777 hört.
         self.emit_step(5);
         let app = self.app.clone();
         let profile_bg = profile.clone();
@@ -461,7 +463,7 @@ impl Engine {
                     engine.running.lock().unwrap().link = Some(link.clone());
                     engine.spawn_server_event_loop(rx);
                     engine.apply_profile_to_server(&link, &profile_bg);
-                    engine.log("launcher", "info", "Vanity", "Steuer-Pipe zum Server verbunden – Playlist und Lategame übertragen", None);
+                    engine.log("launcher", "info", "Vanity", "Steuer-Pipe zum Server verbunden – Befehle freigeschaltet, Playlist und Lategame übertragen", None);
                     engine.toast(
                         "info",
                         "Server wartet auf den Start",
@@ -556,8 +558,24 @@ impl Engine {
     fn spawn_server_event_loop(&self, rx: std::sync::mpsc::Receiver<ServerEvent>) {
         let app = self.app.clone();
         std::thread::spawn(move || {
+            let mut was_ready = false;
             for ev in rx {
                 let _ = app.emit("server:event", serde_json::json!({ "event": ev.event, "data": ev.rest }));
+                // Match gerade gestartet (Launcher, START SERVER oder Auto-Host-Countdown im Server-Fenster):
+                // Befehle nochmal einschalten. „Toggle Auto Host“ im Server-Fenster schaltet sie sonst aus
+                // (GUI.cpp), und Freunde bekämen bei den F9-Trickshot-Knöpfen „Commands are currently disabled“.
+                if ev.event == "status" {
+                    let ready = ev.rest.get("ready").and_then(|v| v.as_bool()).unwrap_or(false);
+                    if ready && !was_ready {
+                        let engine = app.state::<Engine>();
+                        if let Ok(link) = engine.link() {
+                            if let Err(e) = link.set_config("bEnableCheats", serde_json::Value::Bool(true)) {
+                                engine.log("launcher", "warning", "Vanity", &format!("Befehle konnten nicht freigeschaltet werden: {e}"), None);
+                            }
+                        }
+                    }
+                    was_ready = ready;
+                }
                 if ev.event == "trickshot" {
                     let _ = app.emit("trickshot", serde_json::Value::Object(ev.rest.clone()));
                 }
@@ -574,7 +592,18 @@ impl Engine {
     }
 
     /// Überträgt die Profil-Einstellungen an den laufenden Server.
+    ///
+    /// Der Server arbeitet die Pipe der Reihe nach ab. Darum zuerst `bEnableCheats` = true: Ohne das
+    /// lehnt er jeden Befehl ab („Commands are currently disabled“) – und gespeicherte Server-Einstellungen
+    /// (Auto-Host) starten mit „aus“. Darauf bauen der F9-Reiter „Trickshot“ und die Seite „Match“.
+    /// Es ist dein eigener Server, also gelten die Befehle für alle Spieler darauf.
+    ///
+    /// `bEnableTrickshotTab` schickt der Launcher absichtlich nie: `false` setzt auf dem Server alle
+    /// Trickshot-Schalter (Sprung-Müdigkeit, Auto-Nachladen, …) zurück (VanityControl.cpp, ApplyConfig).
     fn apply_profile_to_server(&self, link: &ServerLink, profile: &Profile) {
+        if let Err(e) = link.set_config("bEnableCheats", serde_json::Value::Bool(true)) {
+            self.log("launcher", "warning", "Vanity", &format!("Befehle konnten nicht freigeschaltet werden: {e}"), None);
+        }
         if !profile.playlist.is_empty() {
             let _ = link.set_config("playlist", serde_json::Value::String(profile.playlist.clone()));
         }
@@ -596,20 +625,24 @@ impl Engine {
     }
 
     pub fn server_start_match(&self) -> Result<(), String> {
-        self.link()?.start_match().map(|_| ())
+        let link = self.link()?;
+        // Erst Befehle einschalten, dann starten (die Pipe läuft der Reihe nach): „Toggle Auto Host“ im
+        // Server-Fenster kann sie seit dem Verbinden wieder ausgeschaltet haben.
+        link.set_config("bEnableCheats", serde_json::Value::Bool(true))?;
+        link.start_match().map(|_| ())
     }
 
     // --- Beitreten -----------------------------------------------------------
 
     pub fn join_ip(&self, addr: &str) -> Result<(), String> {
         let (ip, port) = split_addr(addr, self.config.lock().unwrap().settings.game_server_port);
-        // Dem eigenen Backend sagen, wohin es den Spieler schicken soll, und im Spiel „open“.
+        // Dem eigenen Backend sagen, wohin es den Spieler schicken soll: „Spielen“ in der Lobby führt dann
+        // dorthin (Matchmaking, siehe backend/lawinserver/structure/matchmaking.js).
+        // Kein „open“ über die Server-Pipe: Die läuft als Cheat-Befehl auf dem EIGENEN Server, den Befehl
+        // kennt der Server nicht – er hätte nur die Befehlsliste in den Chat geschrieben.
         self.start_backend()?;
         self.set_backend_gameserver(&ip, port);
-        if let Ok(link) = self.link() {
-            let _ = link.exec(&format!("open {ip}"));
-        }
-        self.toast("info", "Beitreten", &format!("Verbinde mit {ip}:{port} …"));
+        self.toast("info", "Beitreten", &format!("Drück im Spiel auf „Spielen“ – dann landest du auf {ip}:{port}."));
         Ok(())
     }
 
@@ -630,6 +663,25 @@ impl Engine {
         self.stop_backend();
         let _ = self.app.emit("launch:step", -1);
         self.emit_services();
+    }
+}
+
+/// Schreibt die eingebaute Parkour-Liste nach `%LOCALAPPDATA%\Vanity\server\parkours.json`
+/// (Server-DLL: „cheat parkour …“, F9-Menü: Reiter „Trickshot“). Fehler landen nur im Log.
+pub fn write_parkour_file(engine: Option<&Engine>) {
+    match vanity_core::parkours::write_for_server() {
+        Ok(path) => {
+            if let Some(engine) = engine {
+                engine.log("launcher", "info", "Vanity", &format!("Parkour-Liste bereit: {}", path.display()), None);
+            }
+        }
+        Err(e) => {
+            let text = format!("Parkour-Liste konnte nicht geschrieben werden: {e}");
+            match engine {
+                Some(engine) => engine.log("launcher", "warning", "Vanity", &text, None),
+                None => eprintln!("[Vanity] {text}"),
+            }
+        }
     }
 }
 

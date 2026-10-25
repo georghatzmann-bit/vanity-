@@ -159,7 +159,7 @@ export function StartPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <QuickAction icon={FolderInput} title="Build importieren" hint="Ordner wählen, Version wird erkannt" to="library" onGo={setPage} />
           <QuickAction icon={UserPlus} title="Bei Freund beitreten" hint="Per IP über Tailscale oder Radmin" to="servers" onGo={setPage} />
-          <QuickAction icon={PanelsTopLeft} title="Ingame-Menü" hint="Edit on Release, FOV, Tasten" to="ingame" onGo={setPage} />
+          <QuickAction icon={PanelsTopLeft} title="Ingame-Menü" hint="Edit beim Loslassen, Sichtfeld, Tasten" to="ingame" onGo={setPage} />
           <QuickAction icon={ScrollText} title="Live-Log" hint="Sehen, was gerade passiert" to="logs" onGo={setPage} />
         </div>
       </Reveal>
