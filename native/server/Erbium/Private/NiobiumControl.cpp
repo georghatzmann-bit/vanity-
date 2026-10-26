@@ -367,10 +367,27 @@ namespace
         return SetClampedInt(FConfiguration::PlayerBotTargetELO, Value, 0, 5000, Error);
     }
 
+    // NIOBIUM: "Living world" (LivingWorld.cpp). Like the bot keys, only taken before the start.
+    bool ApplyLivingWorldConfig(const std::string& Key, const json& Value, std::string& Error)
+    {
+        if (FConfiguration::bReadyToStart.load(std::memory_order_acquire))
+        {
+            Error = "Bosses & NPCs settings take effect next match.";
+            return false;
+        }
+        if (Key == "bLivingWorld")
+            return SetBool(FConfiguration::bLivingWorld, Value, Error);
+        if (Key == "LivingWorldMaxAI")
+            return SetClampedInt(FConfiguration::LivingWorldMaxAI, Value, 1, 100, Error);
+        return SetBool(FConfiguration::bLivingWorldDump, Value, Error);
+    }
+
     bool ApplyConfig(const std::string& Key, const json& Value, std::string& Error)
     {
         if (Key == "bPlayerBots" || Key == "PlayerBotCount" || Key == "PlayerBotTargetELO")
             return ApplyBotConfig(Key, Value, Error);
+        if (Key == "bLivingWorld" || Key == "LivingWorldMaxAI" || Key == "bLivingWorldDump")
+            return ApplyLivingWorldConfig(Key, Value, Error);
 
         if (Key == "playlist")
         {
@@ -709,6 +726,25 @@ namespace NiobiumControl
         catch (...)
         {
             SDK::DbgLog("[Niobium] Could not send the playerBots event\n");
+        }
+    }
+
+    void EmitLivingWorld(const char* State, const std::string& Reason, int Spawned)
+    {
+        if (!GConnected.load(std::memory_order_acquire))
+            return;
+        try
+        {
+            json Out;
+            Out["event"] = "livingWorld";
+            Out["state"] = State ? State : "";
+            Out["reason"] = Reason;
+            Out["spawned"] = Spawned;
+            WriteLine(Out.dump(-1, ' ', false, json::error_handler_t::replace));
+        }
+        catch (...)
+        {
+            SDK::DbgLog("[Niobium] Could not send the livingWorld event\n");
         }
     }
 }

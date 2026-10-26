@@ -28,6 +28,7 @@
 #include "../Public/FortPhysicsPawn.h"
 #include "../Public/FortVehicleMods.h"
 #include "../Public/PlayerBots_19_10.h" // NIOBIUM: 19.10 AI player bots
+#include "../Public/AIBase.h" // NIOBIUM: shared AI helpers (AI controller check)
 
 #include <sstream>
 #include <fstream>
@@ -6295,7 +6296,9 @@ void AFortGameMode::SpawnDefaultPawnFor(UObject* Context, FFrame& Stack, AActor*
     // controller, e.g. when they jump from the bus. Everything after the spawn reads
     // player-controller fields (WorldInventory, XPComponent, ...), so they only get their pawn, and
     // a blocked spawn gives up instead of retrying forever. False whenever bots are off.
-    if (PlayerBots1910::IsAIBotController(NewPlayer))
+    // The same holds for any AI controller (no player controller) the game restarts through here
+    // on other versions: real players never take this branch.
+    if (PlayerBots1910::IsAIBotController(NewPlayer) || AIBase::IsAIController(NewPlayer))
     {
         auto BotPawnClass = GameMode->GetDefaultPawnClassForController(NewPlayer);
         auto BotPawn = UWorld::SpawnActor(BotPawnClass, StartSpot->GetTransform(), NewPlayer, 3);
@@ -7828,9 +7831,13 @@ uint8_t AFortGameMode::PickTeam(AFortGameMode* GameMode, uint8_t PreferredTeam,
     auto Playlist = VersionInfo.FortniteVersion >= 3.5 && GameMode->HasWarmupRequiredPlayerCount()
         ? GetPublishedPlaylist((AFortGameStateAthena*)GameMode->GameState) : nullptr;
 
-    if (ShouldRepairLateSeasonTeams() && Controller && Controller->PlayerState)
+    // NIOBIUM: native code also picks teams for AI controllers, whose player state can be
+    // another class; those take the normal path below.
+    auto RepairPlayerState = ShouldRepairLateSeasonTeams() && Controller && Controller->PlayerState
+        ? Controller->PlayerState->Cast<AFortPlayerStateAthena>() : nullptr;
+    if (RepairPlayerState)
     {
-        auto PlayerState = (AFortPlayerStateAthena*)Controller->PlayerState;
+        auto PlayerState = RepairPlayerState;
         const uint8 AssignedTeam = ReserveLateSeasonHumanTeam(
             GameMode, Controller, PlayerState, Playlist);
         printf("Picked repaired team %d %d\n", AssignedTeam, Playlist && Playlist->HasMaxSquadSize()

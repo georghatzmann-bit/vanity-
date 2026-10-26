@@ -518,6 +518,14 @@ public:
     static inline std::atomic_int PlayerBotCount{ 30 };      // 1-99, bots in the match
     static inline std::atomic_int PlayerBotTargetELO{ 500 }; // 0-5000, bot skill rating
 
+    // NIOBIUM: "Living world" - bosses, guards, NPCs and wildlife (FortniteGame/Private/
+    // LivingWorld.cpp). Experimental, set by the launcher or the host window before the map
+    // loads. Off = nothing changes. No version spawns them yet; the launcher hears "unavailable".
+    static inline std::atomic_bool bLivingWorld{ false };
+    static inline std::atomic_int LivingWorldMaxAI{ 40 };    // 1-100, AIs alive at once
+    // Writes the one-time "[LivingWorld] dump ..." report even with bots and Living world off.
+    static inline std::atomic_bool bLivingWorldDump{ false };
+
     static inline void SetLateGameEnabled(bool bEnabled)
     {
         bLateGame = bEnabled;

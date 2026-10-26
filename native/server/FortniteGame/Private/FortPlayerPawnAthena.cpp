@@ -3940,7 +3940,9 @@ void AFortPlayerPawnAthena::ActivateShieldAbsorb() const
     if (!ShieldGE)
         return;
 
-    auto PlayerStateAthena = (AFortPlayerStateAthena*)this->PlayerState;
+    // NIOBIUM: AI pawns can have another player state class, or none.
+    auto PlayerStateAthena = this->PlayerState ? this->PlayerState->Cast<AFortPlayerStateAthena>()
+        : nullptr;
     if (!PlayerStateAthena)
         return;
 
@@ -4417,7 +4419,11 @@ void AFortPlayerPawnAthena::Athena_MedConsumable_Triggered(UObject* Context, FFr
     if (!Consumable || (!Consumable->HealsShields && !Consumable->HealsHealth) || !Consumable->PlayerPawn)
         return Athena_MedConsumable_TriggeredOG(Context, Stack);
 
-    auto PlayerState = (AFortPlayerStateAthena*)Consumable->PlayerPawn->PlayerState;
+    // NIOBIUM: AI pawns heal too; their player state can be another class, or missing.
+    auto PlayerState = Consumable->PlayerPawn->PlayerState
+        ? Consumable->PlayerPawn->PlayerState->Cast<AFortPlayerStateAthena>() : nullptr;
+    if (!PlayerState || !PlayerState->AbilitySystemComponent)
+        return Athena_MedConsumable_TriggeredOG(Context, Stack);
     static auto ShieldCue = FName(L"GameplayCue.Shield.PotionConsumed");
     static auto HealthCue = FName(L"GameplayCue.Athena.Health.HealUsed");
 

@@ -2293,7 +2293,8 @@ UFortWorldItem* AFortInventory::GiveItem(const UFortItemDefinition* Def, int Cou
 
     if (VersionInfo.FortniteVersion <= 3.60)
     {
-        auto PlayerController = (AFortPlayerControllerAthena*)Owner;
+        // NIOBIUM: AI bot controllers own inventories too; they have no quick bars.
+        auto PlayerController = Owner ? Owner->Cast<AFortPlayerControllerAthena>() : nullptr;
         auto PlayerState = PlayerController ? (AFortPlayerStateAthena*)PlayerController->PlayerState : nullptr;
         bool bIsBotInventory = PlayerState && PlayerState->HasbIsABot() && PlayerState->bIsABot;
 
@@ -2902,7 +2903,8 @@ void AFortInventory::Remove(FGuid Guid)
     if (ItemInstanceIdx != -1)
         Inventory.ItemInstances.Remove(ItemInstanceIdx);
 
-    auto PlayerController = (AFortPlayerControllerAthena*)Owner;
+    // NIOBIUM: AI bot controllers own inventories too; only player controllers have quick bars.
+    auto PlayerController = Owner ? Owner->Cast<AFortPlayerControllerAthena>() : nullptr;
     // 7.40 removed FortPlayerController::QuickBars, and reading it there resolves to offset -1, i.e. PlayerController - 1.
     AFortQuickBars* QuickBars = nullptr;
     if (VersionInfo.FortniteVersion < 7.40 && PlayerController && PlayerController->HasQuickBars())

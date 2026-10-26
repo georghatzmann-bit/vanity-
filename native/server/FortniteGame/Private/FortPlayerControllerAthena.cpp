@@ -13193,8 +13193,12 @@ void AFortPlayerControllerAthena::ClientOnPawnDied(AFortPlayerControllerAthena* 
     if (!IsUsableDeathObject(KillerReportPawn))
         KillerReportPawn = nullptr;
     auto KillerPawn = KillerReportPawn ? KillerReportPawn->Cast<AFortPlayerPawnAthena>() : nullptr;
+    // NIOBIUM: the death report types the killer's player state as Athena, but an AI killer's
+    // player state can be another class; then the kill is reported without a killer state.
     if (!IsUsableDeathObject(KillerPlayerState))
         KillerPlayerState = nullptr;
+    else
+        KillerPlayerState = KillerPlayerState->Cast<AFortPlayerStateAthena>();
     auto KillerPlayerController = (KillerPlayerState && KillerPlayerState->HasOwner() &&
          IsUsableDeathObject(KillerPlayerState->Owner)) ? KillerPlayerState->Owner
                   ->Cast<AFortPlayerControllerAthena>() : nullptr;

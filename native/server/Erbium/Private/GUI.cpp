@@ -27,6 +27,7 @@
 #include <FortniteGame/Public/FortGameMode.h>
 #include <FortniteGame/Public/CustomSafeZoneRuntime.h>
 #include <FortniteGame/Public/PlayerBots_19_10.h> // NIOBIUM: 19.10 AI player bots
+#include <FortniteGame/Public/LivingWorld.h> // NIOBIUM: Living world plumbing
 #include <Engine/Public/Texture.h>
 #include <sstream>
 #include <fstream>
@@ -4797,6 +4798,7 @@ void GUI::SafeZoneMapGameTick()
     AFortPlayerPawnAthena::TickPendingPlayerMapIcons();
     NiobiumControl::GameThreadTick(); // NIOBIUM: commands from the launcher
     PlayerBots1910::GameThreadTick(); // NIOBIUM: 19.10 AI bots (no-op unless they are on)
+    LivingWorld::GameThreadTick(); // NIOBIUM: AI death drop + dump (no-op unless AI features are on)
 }
 
 bool GameTextureBridge::ExtractToRGBA(const UTexture2D* Texture, std::vector<unsigned char>& RGBA,
@@ -12527,6 +12529,19 @@ void GUI::Init()
                     FConfiguration::BotName = BotNameBuffer;
                 }
             }
+
+            EndSectionBody();
+
+            // NIOBIUM: "Living world" (LivingWorld.cpp). This tab only shows before "Start match",
+            // which is when the server reads these settings.
+            SectionHeader("Living World", SectionWidth);
+            BeginSectionBody();
+
+            AtomicCheckbox("Living world (experimental)", FConfiguration::bLivingWorld);
+            ImGui::BeginDisabled(!FConfiguration::bLivingWorld.load(std::memory_order_acquire));
+            AtomicLabeledSliderInt("Max AI", "##living-world-max-ai", FConfiguration::LivingWorldMaxAI,
+                1, 100, Width);
+            ImGui::EndDisabled();
 
             EndSectionBody();
 

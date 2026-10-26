@@ -139,6 +139,8 @@ void UFortLootPackage::SetupLDSForPackage(TArray<FFortItemEntry*>& LootDrops, SD
 
     auto LootPackage = PickWeighted(LPGroups, [](float Total)
         { return ((float)rand() / 32767.f) * Total; });
+    // NIOBIUM: only the picked row is used below; the list was never freed on the early returns.
+    LPGroups.Free();
     if (!LootPackage)
         return;
 
@@ -289,7 +291,9 @@ void UFortLootPackage::SetupLDSForPackage(TArray<FFortItemEntry*>& LootDrops, SD
                     ResolveLootLevel(AmmoEntry->ItemDefinition)));
             }
 
+            // NIOBIUM: merged into this stack. Later entries must neither read nor free it again.
             free(AmmoEntry);
+            AmmoEntry = nullptr;
             foundAmmo = true;
         }
     }
@@ -300,11 +304,12 @@ void UFortLootPackage::SetupLDSForPackage(TArray<FFortItemEntry*>& LootDrops, SD
 
     if (!foundAmmo && AmmoEntry && LootPackage->Count > 0)
         LootDrops.Add(AmmoEntry);
-    LPGroups.Free();
+    else if (AmmoEntry)
+        free(AmmoEntry); // NIOBIUM: not handed to LootDrops, so it is ours to free
 }
 
 void UFortLootPackage::ChooseLootForContainer(TArray<FFortItemEntry*>& LootDrops, FName TierGroup,
-    int LootTier, int WorldLevel, ABuildingContainer* Container)
+    int LootTier, int WorldLevel, ABuildingContainer* Container, const FGameplayTagContainer* LootTags)
 {
     TArray<FFortLootTierData*> TierDataGroups{};
 
@@ -312,8 +317,33 @@ void UFortLootPackage::ChooseLootForContainer(TArray<FFortItemEntry*>& LootDrops
         if (LootTier == -1 ? true : LootTier == Val->LootTier)
             TierDataGroups.Add(Val);
 
+    // NIOBIUM: PickLootDrops' OptionalLootTags, only when the caller passed some. A row with
+    // RequiredGameplayTags needs all of them; rows without requirements always qualify. If no row
+    // is left, the unfiltered rows are used as before.
+    if (LootTags && LootTags->GameplayTags.Num() > 0 && FFortLootTierData::HasRequiredGameplayTags())
+    {
+        TArray<FFortLootTierData*> TaggedGroups{};
+        for (auto Val : TierDataGroups)
+        {
+            auto& Required = Val->RequiredGameplayTags;
+            if (Required.GameplayTags.Num() <= 0 || LootTags->HasAll(Required))
+                TaggedGroups.Add(Val);
+        }
+        if (TaggedGroups.Num() > 0)
+        {
+            TierDataGroups.Free();
+            TierDataGroups = TaggedGroups;
+        }
+        else
+        {
+            TaggedGroups.Free();
+        }
+    }
+
     auto LootTierData = PickWeighted(TierDataGroups, [](float Total)
         { return ((float)rand() / 32767.f) * Total; });
+    // NIOBIUM: the candidate list was never freed on these early returns.
+    TierDataGroups.Free();
 
     if (!LootTierData)
         return;
@@ -415,7 +445,6 @@ void UFortLootPackage::ChooseLootForContainer(TArray<FFortItemEntry*>& LootDrops
         SpawnedItems += NumMap[CurrentCategory];
         CurrentCategory++;
     }
-    TierDataGroups.Free();
 }
 
 // NIOBIUM: containers in the current world that SpawnLootHook really rolled, i.e. with our loot
@@ -444,6 +473,65 @@ static const bool* FindContainerRoll(const ABuildingContainer* Container)
     return It != GRolledContainers.end() ? &It->second : nullptr;
 }
 
+// NIOBIUM: the tier group the game mode redirects TierGroup to (RedirectAthenaLootTierGroups:
+// FName keys before 20.00, name indices from 20.00), or the Save the World -> Athena fallback on
+// builds without that map. Containers (SpawnLootHook) and PickLootDrops (FortKismetLibrary.cpp)
+// share it.
+FName UFortLootPackage::RedirectTierGroup(FName TierGroup)
+{
+    auto RealTierGroup = TierGroup;
+    auto World = UWorld::GetWorld();
+    auto GameMode = World ? (AFortGameMode*)World->AuthorityGameMode : nullptr;
+    if (!GameMode)
+        return RealTierGroup;
+
+    if (GameMode->HasRedirectAthenaLootTierGroups())
+    {
+        static auto RedirectAthenaLootTierGroupsOff = GameMode->GetOffset("RedirectAthenaLootTierGroups");
+
+        if (VersionInfo.FortniteVersion >= 20)
+        {
+            auto& RedirectAthenaLootTierGroups = *(TMap<int32, int32>*)(__int64(GameMode) + RedirectAthenaLootTierGroupsOff);
+
+            for (const auto& [OldTierGroup, RedirectedTierGroup] : RedirectAthenaLootTierGroups)
+            {
+                if (OldTierGroup == TierGroup.ComparisonIndex)
+                {
+                    RealTierGroup.ComparisonIndex = RedirectedTierGroup;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            auto& RedirectAthenaLootTierGroups = *(TMap<FName, FName>*)(__int64(GameMode) + RedirectAthenaLootTierGroupsOff);
+
+            for (const auto& [OldTierGroup, RedirectedTierGroup] : RedirectAthenaLootTierGroups)
+            {
+                if (OldTierGroup == TierGroup)
+                {
+                    RealTierGroup = RedirectedTierGroup;
+                    break;
+                }
+            }
+        }
+    }
+    else
+    {
+        static auto Loot_Treasure = FName(L"Loot_Treasure");
+        static auto Loot_Ammo = FName(L"Loot_Ammo");
+        static auto Loot_AthenaTreasure = FName(L"Loot_AthenaTreasure");
+        static auto Loot_AthenaAmmoLarge = FName(L"Loot_AthenaAmmoLarge");
+
+        if (TierGroup == Loot_Treasure)
+            RealTierGroup = Loot_AthenaTreasure;
+        else if (TierGroup == Loot_Ammo)
+            RealTierGroup = Loot_AthenaAmmoLarge;
+    }
+
+    return RealTierGroup;
+}
+
 bool UFortLootPackage::SpawnLootHook(ABuildingContainer* Container)
 {
     if (!Container)
@@ -462,51 +550,8 @@ bool UFortLootPackage::SpawnLootHook(ABuildingContainer* Container)
     if (Container->bAlreadySearched)
         return false;
 
-    auto RealTierGroup = Container->SearchLootTierGroup;
     auto GameMode = ((AFortGameMode*)UWorld::GetWorld()->AuthorityGameMode);
-    if (GameMode->HasRedirectAthenaLootTierGroups())
-    {
-        static auto RedirectAthenaLootTierGroupsOff = GameMode->GetOffset("RedirectAthenaLootTierGroups");
-
-        if (VersionInfo.FortniteVersion >= 20)
-        {
-            auto& RedirectAthenaLootTierGroups = *(TMap<int32, int32>*)(__int64(GameMode) + RedirectAthenaLootTierGroupsOff);
-
-            for (const auto& [OldTierGroup, RedirectedTierGroup] : RedirectAthenaLootTierGroups)
-            {
-                if (OldTierGroup == Container->SearchLootTierGroup.ComparisonIndex)
-                {
-                    RealTierGroup.ComparisonIndex = RedirectedTierGroup;
-                    break;
-                }
-            }
-        }
-        else
-        {
-            auto& RedirectAthenaLootTierGroups = *(TMap<FName, FName>*)(__int64(GameMode) + RedirectAthenaLootTierGroupsOff);
-
-            for (const auto& [OldTierGroup, RedirectedTierGroup] : RedirectAthenaLootTierGroups)
-            {
-                if (OldTierGroup == Container->SearchLootTierGroup)
-                {
-                    RealTierGroup = RedirectedTierGroup;
-                    break;
-                }
-            }
-        }
-    }
-    else
-    {
-        static auto Loot_Treasure = FName(L"Loot_Treasure");
-        static auto Loot_Ammo = FName(L"Loot_Ammo");
-        static auto Loot_AthenaTreasure = FName(L"Loot_AthenaTreasure");
-        static auto Loot_AthenaAmmoLarge = FName(L"Loot_AthenaAmmoLarge");
-
-        if (Container->SearchLootTierGroup == Loot_Treasure)
-            RealTierGroup = Loot_AthenaTreasure;
-        else if (Container->SearchLootTierGroup == Loot_Ammo)
-            RealTierGroup = Loot_AthenaAmmoLarge;
-    }
+    auto RealTierGroup = RedirectTierGroup(Container->SearchLootTierGroup);
 
     TArray<FFortItemEntry*> LootDrops{};
 
@@ -536,46 +581,6 @@ bool UFortLootPackage::SpawnLootHook(ABuildingContainer* Container)
     Container->BounceContainer();
 
     return true;
-}
-
-void UFortLootPackage::SpawnLoot(FName& TierGroup, FVector Loc)
-{
-    auto& RealTierGroup = TierGroup;
-
-    auto GameMode = ((AFortGameMode*)UWorld::GetWorld()->AuthorityGameMode);
-    if (GameMode->HasRedirectAthenaLootTierGroups())
-    {
-        for (const auto& [OldTierGroup, RedirectedTierGroup] : GameMode->RedirectAthenaLootTierGroups)
-        {
-            if (OldTierGroup == TierGroup)
-            {
-                RealTierGroup = RedirectedTierGroup;
-                break;
-            }
-        }
-    }
-    else
-    {
-        static auto Loot_Treasure = FName(L"Loot_Treasure");
-        static auto Loot_Ammo = FName(L"Loot_Ammo");
-        static auto Loot_AthenaTreasure = FName(L"Loot_AthenaTreasure");
-        static auto Loot_AthenaAmmoLarge = FName(L"Loot_AthenaAmmoLarge");
-
-        if (TierGroup == Loot_Treasure)
-            RealTierGroup = Loot_AthenaTreasure;
-        else if (TierGroup == Loot_Ammo)
-            RealTierGroup = Loot_AthenaAmmoLarge;
-    }
-
-    TArray<FFortItemEntry*> LootDrops{};
-
-    UFortLootPackage::ChooseLootForContainer(LootDrops, RealTierGroup);
-
-    for (auto& LootDrop : LootDrops)
-    {
-        AFortInventory::SpawnPickup(Loc, *LootDrop);
-        free(LootDrop);
-    }
 }
 
 bool ServerOnAttemptInteract(ABuildingContainer* BuildingContainer,

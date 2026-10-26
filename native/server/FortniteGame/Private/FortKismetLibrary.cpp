@@ -4,6 +4,7 @@
 #include "../Public/FortLootPackage.h"
 #include "../Public/FortPlayerControllerAthena.h"
 #include "../Public/FortAthenaMutator.h"
+#include "../Public/AIBase.h"
 #include <cmath>
 #include <limits>
 #include <unordered_set>
@@ -2007,7 +2008,33 @@ void UFortKismetLibrary::PickLootDrops(UObject* Object, FFrame& Stack, bool* Ret
 
     TArray<FFortItemEntry*> LootDrops{};
 
-    UFortLootPackage::ChooseLootForContainer(LootDrops, TierGroupName, ForcedLootTier, WorldLevel);
+    // NIOBIUM: the game mode's tier-group redirect, as for containers (FortLootPackage.cpp), and
+    // one log line per unknown tier group instead of silently dropping nothing (boss loot such
+    // as Loot_AthenaDate only exists where a game feature added its loot tables).
+    const FName RealTierGroup = UFortLootPackage::RedirectTierGroup(TierGroupName);
+    const auto TierDataIt = TierDataMap.find(RealTierGroup.ComparisonIndex);
+    if (TierDataIt == TierDataMap.end() || TierDataIt->second.Num() <= 0)
+    {
+        static std::unordered_set<int32> LoggedUnknownTierGroups;
+        if (LoggedUnknownTierGroups.insert(RealTierGroup.ComparisonIndex).second)
+        {
+            std::string Text = "PickLootDrops: unknown tier group ";
+            Text += RealTierGroup.ToString().c_str();
+            if (RealTierGroup.ComparisonIndex != TierGroupName.ComparisonIndex)
+            {
+                Text += " (redirected from ";
+                Text += TierGroupName.ToString().c_str();
+                Text += ")";
+            }
+            AIBase::LogLine("NiobiumLoot", Text);
+        }
+    }
+    else
+    {
+        // OptionalLootTags only filter when the caller passed some.
+        UFortLootPackage::ChooseLootForContainer(LootDrops, RealTierGroup, ForcedLootTier, WorldLevel,
+            nullptr, bHasOptionalLootTags ? &OptionalLootTags : nullptr);
+    }
 
     for (auto& LootDrop : LootDrops)
     {
@@ -2016,6 +2043,10 @@ void UFortKismetLibrary::PickLootDrops(UObject* Object, FFrame& Stack, bool* Ret
     }
 
     *Ret = LootDrops.Num() > 0;
+    // NIOBIUM: our TArray never frees itself; the list and the copied tag arrays leaked per call.
+    LootDrops.Free();
+    OptionalLootTags.GameplayTags.Free();
+    OptionalLootTags.ParentTags.Free();
 }
 
 void UFortKismetLibrary::K2_SpawnPickupInWorldWithClassAndItemEntry(UObject* Context, FFrame& Stack,

@@ -19,7 +19,9 @@
 //   FortniteAI/.../AthenaNavSystem.cpp:5-14              -> CreateAndConfigureNavSystemDetour
 //   FortniteAI/.../FortAthenaAISpawnerDataComponent_AIBotCosmeticBase.cpp:5-15 -> GetLoadoutDetour
 //   Engine/.../Kismet/MemoryLibrary.h (AllocateNearbyPage, Rel32Swap_Lea) -> AllocateNearPage,
-//                                                           PatchLeaTarget
+//                                                           PatchLeaTarget (now in AIBase.cpp,
+//                                                           with the PE, unwind, LEA and layout
+//                                                           checks and the SEH guard this gate uses)
 //   SDK/SDK/FortniteGame_classes.hpp, _structs.hpp (EnterAircraft 0x5ce165c, the unreflected
 //   service fields 0xB28/0xB2C/0xB30, the MMR structs)   -> constants and structs below
 //   FortniteGame/.../FortGameModeAthena.cpp:72-76, 98-99 -> FortGameMode.cpp SpawnDefaultPawnFor:
@@ -46,6 +48,7 @@
 // launcher gets {"event":"playerBots","state":"unavailable","reason":"..."}.
 #include "pch.h"
 #include "../Public/PlayerBots_19_10.h"
+#include "../Public/AIBase.h"
 #include "../Public/FortGameMode.h"
 #include "../Public/FortPlaylistAthena.h"
 #include "../Public/BuildingFoundation.h"
@@ -62,6 +65,20 @@
 
 namespace
 {
+    // The gate tooling is shared with the other AI features (FortniteGame/Private/AIBase.cpp).
+    using AIBase::CheckFunctionStart;
+    using AIBase::CheckLayout;
+    using AIBase::CheckLeaToFunction;
+    using AIBase::FImage;
+    using AIBase::Hex;
+    using AIBase::IsChildOfClass;
+    using AIBase::IsLiveObject;
+    using AIBase::IsWritableData;
+    using AIBase::OffsetOf;
+    using AIBase::PatchLeaTarget;
+    using AIBase::PropertyOffset;
+    using AIBase::ReadGameImage;
+
     // ------------------------------------------------------------------ The one supported build
 
     constexpr double kFortniteVersion = 19.10;
@@ -274,25 +291,7 @@ namespace
         va_start(Args, Format);
         vsnprintf(Buffer, sizeof(Buffer), Format, Args);
         va_end(Args);
-
-        std::string Line = "[PlayerBots] ";
-        Line += Buffer;
-        Line += "\n";
-
-        bool bWritten = false;
-        const HANDLE Stdout = GetStdHandle(STD_OUTPUT_HANDLE);
-        if (Stdout && Stdout != INVALID_HANDLE_VALUE)
-        {
-            DWORD BytesWritten = 0;
-            bWritten = WriteFile(Stdout, Line.data(), static_cast<DWORD>(Line.size()),
-                &BytesWritten, nullptr) != FALSE && BytesWritten == Line.size();
-        }
-        if (!bWritten && stdout)
-        {
-            fwrite(Line.data(), 1, Line.size(), stdout);
-            fflush(stdout);
-        }
-        SDK::DbgLog("%s", Line.c_str());
+        AIBase::LogLine("PlayerBots", Buffer);
     }
 
     void Disable(const char* UserReason, const std::string& LogReason)
@@ -302,44 +301,7 @@ namespace
         NiobiumControl::EmitPlayerBots("unavailable", UserReason);
     }
 
-    std::string Hex(uint64_t Value)
-    {
-        char Buffer[32];
-        snprintf(Buffer, sizeof(Buffer), "0x%llX", (unsigned long long)Value);
-        return Buffer;
-    }
-
     // ------------------------------------------------------------------ Object helpers
-
-    bool IsLiveObject(const UObject* Object)
-    {
-        if (!Object || !SDK::MemReadable(Object, sizeof(UObject)))
-            return false;
-        if (Object->Index < 0 || Object->Index >= TUObjectArray::Num())
-            return false;
-        auto Item = TUObjectArray::GetItemByIndex(Object->Index);
-        constexpr int32 PendingKillFlag = 0x20;
-        if (!Item || Item->GetObject() != Object || (Item->GetFlags() & PendingKillFlag))
-            return false;
-        return Object->Class && SDK::MemReadable(Object->Class, sizeof(UObject));
-    }
-
-    bool IsChildOfClass(const UClass* Class, const UClass* Parent)
-    {
-        int Guard = 0;
-        for (auto Struct = (const UStruct*)Class; Struct && Guard++ < 256;
-             Struct = Struct->GetSuper())
-        {
-            if (Struct == (const UStruct*)Parent)
-                return true;
-        }
-        return false;
-    }
-
-    int32 PropertyOffset(const UField* Property)
-    {
-        return Property ? (int32)GetFromOffset<uint32>(Property, Offsets::Offset_Internal) : -1;
-    }
 
     int32 CountHumanPlayers()
     {
@@ -373,233 +335,8 @@ namespace
         return std::clamp(FConfiguration::PlayerBotTargetELO.load(std::memory_order_acquire), 0, 5000);
     }
 
-    // ------------------------------------------------------------------ PE image checks
-
-    struct FImage
-    {
-        uint8_t* Base = nullptr;
-        const IMAGE_NT_HEADERS64* Nt = nullptr;
-        const RUNTIME_FUNCTION* Functions = nullptr;
-        uint32_t FunctionCount = 0;
-    };
-
-    bool ReadGameImage(FImage& Out, std::string& Why)
-    {
-        Out.Base = reinterpret_cast<uint8_t*>(ImageBase);
-        if (!Out.Base || !SDK::MemReadable(Out.Base, sizeof(IMAGE_DOS_HEADER)))
-        {
-            Why = "the game module can't be read";
-            return false;
-        }
-        auto Dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(Out.Base);
-        if (Dos->e_magic != IMAGE_DOS_SIGNATURE || Dos->e_lfanew <= 0 || Dos->e_lfanew > 0x1000)
-        {
-            Why = "the game module has no PE header";
-            return false;
-        }
-        Out.Nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(Out.Base + Dos->e_lfanew);
-        if (!SDK::MemReadable(Out.Nt, sizeof(IMAGE_NT_HEADERS64)) ||
-            Out.Nt->Signature != IMAGE_NT_SIGNATURE ||
-            Out.Nt->FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64 ||
-            Out.Nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC)
-        {
-            Why = "the game module is not a 64-bit PE file";
-            return false;
-        }
-        const auto& Directory =
-            Out.Nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
-        if (!Directory.VirtualAddress || Directory.Size < sizeof(RUNTIME_FUNCTION) ||
-            (uint64_t)Directory.VirtualAddress + Directory.Size > Out.Nt->OptionalHeader.SizeOfImage)
-        {
-            Why = "the game module has no unwind table";
-            return false;
-        }
-        Out.Functions = reinterpret_cast<const RUNTIME_FUNCTION*>(Out.Base + Directory.VirtualAddress);
-        Out.FunctionCount = Directory.Size / sizeof(RUNTIME_FUNCTION);
-        if (!SDK::MemReadable(Out.Functions, (size_t)Out.FunctionCount * sizeof(RUNTIME_FUNCTION)))
-        {
-            Why = "the unwind table can't be read";
-            return false;
-        }
-        return true;
-    }
-
-    const IMAGE_SECTION_HEADER* FindSection(const FImage& Image, uint32_t Rva, uint32_t Size)
-    {
-        auto Section = IMAGE_FIRST_SECTION(Image.Nt);
-        for (WORD Index = 0; Index < Image.Nt->FileHeader.NumberOfSections; ++Index, ++Section)
-        {
-            const uint32_t Start = Section->VirtualAddress;
-            const uint32_t Length = (std::max)(Section->Misc.VirtualSize, Section->SizeOfRawData);
-            if (Rva >= Start && (uint64_t)Rva + Size <= (uint64_t)Start + Length)
-                return Section;
-        }
-        return nullptr;
-    }
-
-    bool IsCode(const FImage& Image, uint32_t Rva, uint32_t Size)
-    {
-        auto Section = FindSection(Image, Rva, Size);
-        return Section && (Section->Characteristics & IMAGE_SCN_MEM_EXECUTE) &&
-            SDK::MemReadable(Image.Base + Rva, Size);
-    }
-
-    bool IsWritableData(const FImage& Image, uint32_t Rva, uint32_t Size)
-    {
-        auto Section = FindSection(Image, Rva, Size);
-        return Section && (Section->Characteristics & IMAGE_SCN_MEM_WRITE) &&
-            !(Section->Characteristics & IMAGE_SCN_MEM_EXECUTE) &&
-            SDK::MemReadable(Image.Base + Rva, Size);
-    }
-
-    // The unwind entry that starts exactly at Rva, or the one whose range holds Rva.
-    const RUNTIME_FUNCTION* FindUnwindEntry(const FImage& Image, uint32_t Rva, bool bExactStart)
-    {
-        uint32_t Low = 0;
-        uint32_t High = Image.FunctionCount;
-        while (Low < High)
-        {
-            const uint32_t Mid = Low + (High - Low) / 2;
-            const auto& Entry = Image.Functions[Mid];
-            if (Rva < Entry.BeginAddress)
-                High = Mid;
-            else if (Rva >= Entry.EndAddress)
-                Low = Mid + 1;
-            else
-                return (!bExactStart || Entry.BeginAddress == Rva) ? &Entry : nullptr;
-        }
-        return nullptr;
-    }
-
-    // A function's own (primary) unwind entry, not a chained one for a split-off part.
-    bool IsPrimaryUnwindEntry(const FImage& Image, const RUNTIME_FUNCTION& Entry)
-    {
-        constexpr uint8_t ChainInfoFlag = 0x4; // UNW_FLAG_CHAININFO
-        if (Entry.UnwindData & 1)
-            return false;
-        if ((uint64_t)Entry.UnwindData + 4 > Image.Nt->OptionalHeader.SizeOfImage ||
-            !SDK::MemReadable(Image.Base + Entry.UnwindData, 4))
-        {
-            return false;
-        }
-        const uint8_t VersionAndFlags = *(Image.Base + Entry.UnwindData);
-        const uint8_t Version = VersionAndFlags & 0x7;
-        const uint8_t Flags = VersionAndFlags >> 3;
-        return (Version == 1 || Version == 2) && (Flags & ChainInfoFlag) == 0;
-    }
-
-    // bAllowStub: also accept a stripped stub without an unwind entry (MinHook copies it into the
-    // trampoline either way), if it sits right after a function end or padding.
-    bool CheckFunctionStart(const FImage& Image, uint32_t Rva, const char* Name, std::string& Why,
-        bool bAllowStub = false)
-    {
-        if (!IsCode(Image, Rva, 16) || Rva == 0)
-        {
-            Why = std::string(Name) + " (" + Hex(Rva) + ") is not in the game's code";
-            return false;
-        }
-        auto Entry = FindUnwindEntry(Image, Rva, true);
-        if (!Entry || !IsPrimaryUnwindEntry(Image, *Entry))
-        {
-            const uint8_t StubFirst = Image.Base[Rva];
-            const uint8_t StubPrevious = Image.Base[Rva - 1];
-            if (bAllowStub && !FindUnwindEntry(Image, Rva, false) &&
-                (StubPrevious == 0xCC || StubPrevious == 0xC3) && StubFirst != 0xCC && StubFirst != 0x00)
-            {
-                return true;
-            }
-            Why = std::string(Name) + " (" + Hex(Rva) + "): no function starts there";
-            return false;
-        }
-        const uint8_t First = Image.Base[Rva];
-        const uint8_t Previous = Image.Base[Rva - 1];
-        bool bAfterFunctionEnd = Previous == 0xCC || Previous == 0xC3 || Previous == 0x90;
-        if (!bAfterFunctionEnd)
-        {
-            auto PreviousEntry = FindUnwindEntry(Image, Rva - 1, false);
-            bAfterFunctionEnd = PreviousEntry && PreviousEntry->EndAddress == Rva;
-        }
-        if (!bAfterFunctionEnd || First == 0xCC || First == 0x00 || First == 0xC3)
-        {
-            Why = std::string(Name) + " (" + Hex(Rva) + "): the bytes don't look like a function start";
-            return false;
-        }
-        return true;
-    }
-
-    // "lea r64, [rip+disp32]" (REX.W 8D modrm with mod=00 rm=101) that loads a function address.
-    bool CheckLeaToFunction(const FImage& Image, uint32_t Rva, std::string& Why)
-    {
-        if (!IsCode(Image, Rva, 7) || !FindUnwindEntry(Image, Rva, false))
-        {
-            Why = "the LEA at " + Hex(Rva) + " is not inside a game function";
-            return false;
-        }
-        const uint8_t* Code = Image.Base + Rva;
-        if ((Code[0] != 0x48 && Code[0] != 0x4C) || Code[1] != 0x8D || (Code[2] & 0xC7) != 0x05)
-        {
-            Why = "the instruction at " + Hex(Rva) + " is not a RIP-relative LEA";
-            return false;
-        }
-        const int32_t Displacement = *reinterpret_cast<const int32_t*>(Code + 3);
-        const int64_t Target = (int64_t)Rva + 7 + Displacement;
-        if (Target <= 0 || Target >= (int64_t)Image.Nt->OptionalHeader.SizeOfImage)
-        {
-            Why = "the LEA at " + Hex(Rva) + " points outside the game";
-            return false;
-        }
-        // The game's own InitializeMMRInfos is stripped, so it may be a tiny stub without an
-        // unwind entry. It is never called or hooked here, only replaced.
-        return CheckFunctionStart(Image, (uint32_t)Target, "the LEA target", Why, true);
-    }
-
     // ------------------------------------------------------------------ Reflection checks
-
-    struct FExpectedField
-    {
-        const char* Name;
-        int32 Offset;
-        uint8 FieldMask; // 0 = not a bit field
-    };
-
-    bool CheckLayout(const UStruct* Struct, const char* StructName, int32 ExpectedSize,
-        std::initializer_list<FExpectedField> Fields, std::string& Why)
-    {
-        if (!Struct)
-        {
-            Why = std::string(StructName) + " is missing";
-            return false;
-        }
-        if (ExpectedSize > 0 && Struct->GetPropertiesSize() != ExpectedSize)
-        {
-            Why = std::string(StructName) + " has size " + Hex(Struct->GetPropertiesSize()) +
-                ", expected " + Hex(ExpectedSize);
-            return false;
-        }
-        for (const auto& Field : Fields)
-        {
-            auto Property = Struct->GetProperty(Field.Name);
-            const int32 Offset = PropertyOffset(Property);
-            if (Offset != Field.Offset)
-            {
-                Why = std::string(StructName) + "." + Field.Name + " is at " +
-                    (Offset < 0 ? std::string("<missing>") : Hex(Offset)) + ", expected " +
-                    Hex(Field.Offset);
-                return false;
-            }
-            if (Field.FieldMask && Property->GetFieldMask() != Field.FieldMask)
-            {
-                Why = std::string(StructName) + "." + Field.Name + " has an unexpected bit";
-                return false;
-            }
-        }
-        return true;
-    }
-
-    int32 OffsetOf(const UStruct* Struct, const char* Name)
-    {
-        return Struct ? PropertyOffset(Struct->GetProperty(Name)) : -1;
-    }
+    // (PE, unwind, LEA and layout checks live in AIBase.)
 
     bool CheckLayouts(std::string& Why)
     {
@@ -739,77 +476,6 @@ namespace
             Why = "an AI class or field the bots need is missing";
             return false;
         }
-        return true;
-    }
-
-    // ------------------------------------------------------------------ Code patching
-
-    // Artemis MemoryLibrary.h AllocateNearbyPage: a page within +-2 GB of Target, for a jump stub.
-    uint8_t* AllocateNearPage(const void* Target)
-    {
-        SYSTEM_INFO SystemInfo;
-        GetSystemInfo(&SystemInfo);
-        const uint64_t PageSize = SystemInfo.dwAllocationGranularity;
-        const uint64_t Start = reinterpret_cast<uint64_t>(Target) & ~(PageSize - 1);
-        const uint64_t MinAddress = (std::max)(Start > 0x7FFF0000ull ? Start - 0x7FFF0000ull : 0ull,
-            (uint64_t)SystemInfo.lpMinimumApplicationAddress);
-        const uint64_t MaxAddress = (std::min)(Start + 0x7FFF0000ull,
-            (uint64_t)SystemInfo.lpMaximumApplicationAddress);
-
-        for (uint64_t Step = 1; Step < 0x10000; ++Step)
-        {
-            const uint64_t Delta = Step * PageSize;
-            if (Start + Delta < MaxAddress)
-            {
-                if (auto Page = VirtualAlloc(reinterpret_cast<void*>(Start + Delta), PageSize,
-                        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE))
-                {
-                    return static_cast<uint8_t*>(Page);
-                }
-            }
-            if (Start > Delta && Start - Delta > MinAddress)
-            {
-                if (auto Page = VirtualAlloc(reinterpret_cast<void*>(Start - Delta), PageSize,
-                        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE))
-                {
-                    return static_cast<uint8_t*>(Page);
-                }
-            }
-            if (Start + Delta >= MaxAddress && (Start <= Delta || Start - Delta <= MinAddress))
-                break;
-        }
-        return nullptr;
-    }
-
-    // Artemis MemoryLibrary.h Rel32Swap_Lea: point the LEA at a near "jmp [rip+0]; dq Detour" stub.
-    bool PatchLeaTarget(uint8_t* Lea, void* Detour)
-    {
-        auto Page = AllocateNearPage(Lea);
-        if (!Page)
-            return false;
-
-        uint8_t Stub[14] = { 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00 };
-        memcpy(Stub + 6, &Detour, sizeof(Detour));
-        memcpy(Page, Stub, sizeof(Stub));
-        FlushInstructionCache(GetCurrentProcess(), Page, sizeof(Stub));
-
-        const int64_t Distance = (int64_t)(Page - (Lea + 7));
-        if (Distance < INT32_MIN || Distance > INT32_MAX)
-        {
-            VirtualFree(Page, 0, MEM_RELEASE);
-            return false;
-        }
-        const int32_t Displacement = (int32_t)Distance;
-
-        DWORD OldProtect = 0;
-        if (!VirtualProtect(Lea + 3, sizeof(Displacement), PAGE_EXECUTE_READWRITE, &OldProtect))
-        {
-            VirtualFree(Page, 0, MEM_RELEASE);
-            return false;
-        }
-        memcpy(Lea + 3, &Displacement, sizeof(Displacement));
-        VirtualProtect(Lea + 3, sizeof(Displacement), OldProtect, &OldProtect);
-        FlushInstructionCache(GetCurrentProcess(), Lea, 7);
         return true;
     }
 
@@ -1010,15 +676,8 @@ namespace
 
     bool InitializeMMRInfosGuarded(UObject* Service) noexcept
     {
-        __try
-        {
-            InitializeMMRInfosUnsafe(Service);
-            return true;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER)
-        {
-            return false;
-        }
+        return AIBase::Guarded([](void* Context) { InitializeMMRInfosUnsafe(static_cast<UObject*>(Context)); },
+            Service);
     }
 
     void InitializeMMRInfosReplacement(UObject* Service)
@@ -1040,15 +699,8 @@ namespace
 
     bool PrepareMatchAssignmentGuarded(UObject* Service) noexcept
     {
-        __try
-        {
-            PrepareMatchAssignmentUnsafe(Service);
-            return true;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER)
-        {
-            return false;
-        }
+        return AIBase::Guarded([](void* Context) { PrepareMatchAssignmentUnsafe(static_cast<UObject*>(Context)); },
+            Service);
     }
 
     void WaitForMatchAssignmentReadyDetour(UObject* Service, void* FlowHandle)
@@ -1113,15 +765,16 @@ namespace
 
     bool RegisterSpawnedBotGuarded(UObject* Service, AActor* Actor) noexcept
     {
-        __try
+        struct FArgs
         {
-            RegisterSpawnedBotUnsafe(Service, Actor);
-            return true;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER)
-        {
-            return false;
-        }
+            UObject* Service;
+            AActor* Actor;
+        } Args{ Service, Actor };
+        return AIBase::Guarded([](void* Context)
+            {
+                auto& A = *static_cast<FArgs*>(Context);
+                RegisterSpawnedBotUnsafe(A.Service, A.Actor);
+            }, &Args);
     }
 
     void OnPlayerBotSpawnedDetour(UObject* Service, AActor* Actor, int32 SpawnRequestID, double PawnMMR)
@@ -1347,6 +1000,9 @@ namespace
         GGate.store((int)EGate::Active, std::memory_order_release);
         BotsLog("checks passed for 19.10 CL %llu, hooks installed; %d bots, ELO %d",
             (unsigned long long)kChangelist, ClampedBotCount(), ClampedTargetELO());
+        // Still in the hook phase, before the map loads: no bot can possess a pawn yet. Needs the
+        // gate to be Active (AIBase::IsAnyAIFeatureActive), so it comes after the store above.
+        AIBase::EnsureStandaloneCheckOff();
     }
 
     // ------------------------------------------------------------------ Game mode work
@@ -1405,15 +1061,16 @@ namespace
 
     bool ApplyAISettingsGuarded(AFortGameMode* GameMode, const UFortPlaylistAthena* Playlist) noexcept
     {
-        __try
+        struct FArgs
         {
-            ApplyAISettings(GameMode, Playlist);
-            return true;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER)
-        {
-            return false;
-        }
+            AFortGameMode* GameMode;
+            const UFortPlaylistAthena* Playlist;
+        } Args{ GameMode, Playlist };
+        return AIBase::Guarded([](void* Context)
+            {
+                auto& A = *static_cast<FArgs*>(Context);
+                ApplyAISettings(A.GameMode, A.Playlist);
+            }, &Args);
     }
 
     bool ContainsLocationTag(UObject* Volume, const uint8* Tag)
@@ -1521,14 +1178,20 @@ namespace
 
     int CachePOIsGuarded(UObject* Service) noexcept
     {
-        __try
+        struct FArgs
         {
-            return CachePOIsUnsafe(Service) ? 1 : 0;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER)
+            UObject* Service;
+            int Result;
+        } Args{ Service, 0 };
+        if (!AIBase::Guarded([](void* Context)
+                {
+                    auto& A = *static_cast<FArgs*>(Context);
+                    A.Result = CachePOIsUnsafe(A.Service) ? 1 : 0;
+                }, &Args))
         {
             return -1;
         }
+        return Args.Result;
     }
 
     // Artemis AthenaAIServicePlayerBots.cpp:282-293 (48dba08, "ais jumping from bus").
@@ -1569,15 +1232,8 @@ namespace
 
     bool PutBotsInAircraftGuarded(AFortGameStateAthena* GameState) noexcept
     {
-        __try
-        {
-            PutBotsInAircraftUnsafe(GameState);
-            return true;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER)
-        {
-            return false;
-        }
+        return AIBase::Guarded([](void* Context)
+            { PutBotsInAircraftUnsafe(static_cast<AFortGameStateAthena*>(Context)); }, GameState);
     }
 
     // AController::Pawn, read through reflection (AI bot controllers are no player controllers).
@@ -1628,15 +1284,16 @@ namespace
 
     bool PruneAliveBotsGuarded(AFortGameMode* GameMode, bool bRemoveDying) noexcept
     {
-        __try
+        struct FArgs
         {
-            PruneAliveBotsUnsafe(GameMode, bRemoveDying);
-            return true;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER)
-        {
-            return false;
-        }
+            AFortGameMode* GameMode;
+            bool bRemoveDying;
+        } Args{ GameMode, bRemoveDying };
+        return AIBase::Guarded([](void* Context)
+            {
+                auto& A = *static_cast<FArgs*>(Context);
+                PruneAliveBotsUnsafe(A.GameMode, A.bRemoveDying);
+            }, &Args);
     }
 }
 

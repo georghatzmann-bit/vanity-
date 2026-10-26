@@ -62,6 +62,7 @@ public:
     DEFINE_STRUCT_PROP(LootPackageCategoryWeightArray, TArray<int32>);
     DEFINE_STRUCT_PROP(LootPackageCategoryMinArray, TArray<int32>);
     DEFINE_STRUCT_PROP(LootPackageCategoryMaxArray, TArray<int32>);
+    DEFINE_STRUCT_PROP(RequiredGameplayTags, FGameplayTagContainer);
 };
 
 inline std::map<int32, TArray<FFortLootTierData*>> TierDataMap;
@@ -151,12 +152,14 @@ public:
     static void SetupLDSForPackage(TArray<FFortItemEntry*>&, SDK::FName, int, FName,
         int WorldLevel = ((AFortGameStateAthena*)UWorld::GetWorld()->GameState)->WorldLevel,
         ABuildingContainer* = nullptr);
+    // LootTags: PickLootDrops' OptionalLootTags (rows with RequiredGameplayTags need them all);
+    // nullptr or empty = no filter.
     static void ChooseLootForContainer(TArray<FFortItemEntry*>&, FName, int = -1,
         int = ((AFortGameStateAthena*)UWorld::GetWorld()->GameState)->WorldLevel,
-        ABuildingContainer* = nullptr);
+        ABuildingContainer* = nullptr, const FGameplayTagContainer* LootTags = nullptr);
+    static FName RedirectTierGroup(FName TierGroup);
     static void SpawnFloorLootForContainer(const UClass*);
     static bool SpawnLootHook(ABuildingContainer*);
-    static void SpawnLoot(FName&, FVector);
     static bool SpawnConsumableActor(ABGAConsumableSpawner*);
 
     InitHooks;

@@ -30,4 +30,9 @@ namespace NiobiumControl
     // AI bot decision (PlayerBots_19_10.cpp), sent once per match:
     // {"event":"playerBots","state":"active"|"unavailable","reason":"<plain English>"}. Thread-safe.
     void EmitPlayerBots(const char* State, const std::string& Reason);
+
+    // "Living world" decision (LivingWorld.cpp), sent once per match at "Start match":
+    // {"event":"livingWorld","state":"active"|"unavailable"|"off","reason":"<plain English>",
+    //  "spawned":N}. Thread-safe.
+    void EmitLivingWorld(const char* State, const std::string& Reason, int Spawned);
 }
