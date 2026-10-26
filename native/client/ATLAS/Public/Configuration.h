@@ -36,7 +36,15 @@ struct FConfiguration
 	static inline std::atomic_bool bFirstPerson = false;
 	static inline std::atomic_bool bDebugCamera = false;
 	static inline std::atomic_bool bTargetInfo = false;
+	// [Niobium] EOR/ROR/pre-edits: these three only drive our hooks (old versions). Where the
+	// F9 row uses Fortnite's own setting (EditFeatureRoutes.h) they are never written to the game.
 	static inline std::atomic_bool bDisablePreEdits = true;
+	// [Niobium] "Reset builds" (F9 > Options, QuickReset.h): on/off and its own key (0 = none).
+	// bResetBuildsProbe is a debug-only switch ("resetBuildsProbe": true in client.json) that logs
+	// what the targeting sees twice a second; it never sends anything.
+	static inline std::atomic_bool bResetBuilds = false;
+	static inline std::atomic_int ResetBuildsVK = 0;
+	static inline std::atomic_bool bResetBuildsProbe = false;
 	static inline int RespawnTime = 3;
 	static inline int RespawnHeight = 20000;
 	static inline std::atomic_int FOV = 80;

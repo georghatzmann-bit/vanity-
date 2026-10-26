@@ -2,7 +2,8 @@
 // (c) ralz, cipherfps and contributors, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
 // Niobium changes: data paths, visible names/credit, MinHook via project reference,
 // all visible menu texts in plain English with short hints, brand colours, Bubble Builds
-// status row, Bubble look switch (all marked with [Niobium]).
+// status row, Bubble look switch, Editing rows by route (hook or Fortnite's own setting),
+// Reset builds switch and key (all marked with [Niobium]).
 #include "pch.h"
 #include "../Public/GUI.h"
 #include "../Public/Hotkey.h"
@@ -12,6 +13,8 @@
 #include "../Public/Icon.h"
 #include "../Public/NiobiumTrickshotTab.h" // [Niobium] Trickshot tab and trickshot banner
 #include "../Public/BubbleLook.h" // [Niobium] Bubble look state (written by the game thread)
+#include "../Public/EditFeatureRoutes.h" // [Niobium] EOR/ROR/pre-edits: hook or Fortnite's own setting
+#include "../Public/QuickReset.h" // [Niobium] "Reset builds" key and status
 #include "../ImGui/imgui.h"
 #include "../ImGui/imgui_internal.h"
 #include "../ImGui/imgui_stdlib.h"
@@ -152,6 +155,9 @@ static bool g_FocusMenuWindow = false;
 static bool g_MenuWindowFocused = false;
 static ULONGLONG g_BindErrorUntil = 0;
 static std::string g_BindError;
+// [Niobium] Which key button the bind error belongs to (0 = the menu/join/command keys,
+// 1 = the Reset builds key), so the Options tab shows it only once, next to the right button.
+static int g_BindErrorOwner = 0;
 static constexpr unsigned int SettingCommandMobileBuilds = 1u << 0;
 static constexpr unsigned int SettingCommandInGameFog = 1u << 1;
 static constexpr unsigned int SettingCommandDebugCamera = 1u << 2;
@@ -164,6 +170,14 @@ static std::atomic_uint g_PendingSettingCommandMask = 0;
 // UE exposes them as toggle-only commands.
 static std::mutex g_SettingCommandMutex;
 static unsigned int g_AppliedToggleSettingMask = 0;
+// [Niobium] Mobile Builds and fog are only sent when they change something. These remember that
+// Niobium itself set a non-neutral console value in this game process (console values outlive a
+// map change), so switching back sends the neutral value only to undo our own change. Guarded by
+// g_SettingCommandMutex.
+static bool g_MobileBuildsValueSet = false;
+static bool g_FogValueSet = false;
+// [Niobium] World (Client::GetWorldGeneration) the toggle-only commands were applied in.
+static uint64_t g_ToggleSettingWorld = 0;
 
 static constexpr size_t kMaximumConsoleLines = 2048;
 static constexpr size_t kMaximumConsoleBytes = 1024 * 1024;
@@ -569,6 +583,16 @@ static HotkeyPersist::UserPreferences CaptureUserPreferences()
     preferences.RespawnsEnabled =
         FConfiguration::bForceRespawns.load(
             std::memory_order_acquire);
+    // [Niobium] Reset builds (Options). The probe is a debug switch like bubbleProbe.
+    preferences.ResetBuilds =
+        FConfiguration::bResetBuilds.load(
+            std::memory_order_acquire);
+    preferences.ResetBuildsKey = HotkeyPersist::SanitizeResetBuildsKey(
+        FConfiguration::ResetBuildsVK.load(
+            std::memory_order_acquire));
+    preferences.ResetBuildsProbe =
+        FConfiguration::bResetBuildsProbe.load(
+            std::memory_order_acquire);
     return preferences;
 }
 
@@ -599,6 +623,11 @@ static void ApplyUserPreferences(
         preferences.FirstPerson, std::memory_order_release);
     FConfiguration::bForceRespawns.store(
         preferences.RespawnsEnabled, std::memory_order_release);
+    FConfiguration::bResetBuilds.store(
+        preferences.ResetBuilds, std::memory_order_release);
+    FConfiguration::ResetBuildsVK.store(
+        HotkeyPersist::SanitizeResetBuildsKey(preferences.ResetBuildsKey),
+        std::memory_order_release);
 }
 
 void GUI_LoadUserPreferences()
@@ -619,10 +648,18 @@ void GUI_LoadUserPreferences()
     // even when "Remember my settings" is off.
     FConfiguration::bBubbleProbe.store(
         savedPreferences.BubbleProbe, std::memory_order_release);
+    FConfiguration::bResetBuildsProbe.store(
+        savedPreferences.ResetBuildsProbe, std::memory_order_release);
 
-    unsigned int commandMask =
-        SettingCommandMobileBuilds |
-        SettingCommandInGameFog;
+    // [Niobium] Only send what changes something: Mobile Builds when it is on, fog when it is
+    // off. A console value outranks Fortnite's own graphics presets for the whole session, so
+    // the neutral values ("r.StaticMeshLODDistanceScale 1", "r.Fog 1") are never sent at
+    // startup any more; they are only sent to undo a value Niobium set itself.
+    unsigned int commandMask = 0;
+    if (preferences.MobileBuilds)
+        commandMask |= SettingCommandMobileBuilds;
+    if (!preferences.InGameFog)
+        commandMask |= SettingCommandInGameFog;
     {
         std::lock_guard<std::mutex> lock(
             g_SettingCommandMutex);
@@ -814,6 +851,7 @@ void FGUI::ResetAll()
     FGUI::RemoteIP[0] = '\0';
     FGUI::bRebinding = false;
     FGUI::bRebindingJoin = false;
+    FGUI::bRebindingResetBuilds = false;
     FGUI::RebindingCommandIndex = -2;
     FGUI::RebindingMacroIndex = -2;
     FGUI::PendingCommandVK = 0;
@@ -827,6 +865,8 @@ void FGUI::ResetAll()
     // [Niobium] Keep the hidden Bubble look probe switch; everything else goes back to default.
     HotkeyPersist::UserPreferences savedDefaults = defaults;
     savedDefaults.BubbleProbe = FConfiguration::bBubbleProbe.load(
+        std::memory_order_acquire);
+    savedDefaults.ResetBuildsProbe = FConfiguration::bResetBuildsProbe.load(
         std::memory_order_acquire);
     HotkeyPersist::SaveAll(FGUI::HotkeyVK, FGUI::JoinHotkeyVK,
         static_cast<int>(EConsoleMode::Atlas), {}, {}, &savedDefaults);
@@ -1282,9 +1322,10 @@ static void ControlHint(const char* text, float width, bool underCheckbox = fals
 
 // Red message when a key could not be assigned (wraps at "width").
 // Shown in the "Commands" and "Options" tabs, right where you pick the key.
-static void DrawBindError(float width)
+static void DrawBindError(float width, int owner = 0)
 {
-    if (g_BindError.empty() || GetTickCount64() >= g_BindErrorUntil)
+    if (g_BindError.empty() || GetTickCount64() >= g_BindErrorUntil ||
+        g_BindErrorOwner != owner)
         return;
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.39f, 0.43f, 1.f));
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + (std::max)(40.f, width));
@@ -1328,52 +1369,18 @@ static const char* FitLabel(const char* longLabel, const char* shortLabel, float
 // every state; the game always uses GetCommandLineW.
 static LPWSTR(WINAPI* g_BubbleBuildsCommandLine)() = &GetCommandLineW;
 
-enum class EBubbleBuildsLevel : uint8_t
-{
-    Supported,
-    Experimental,
-    LowMeshes, // [Niobium] 19.x: Performance Mode + Meshes Low (launcher level "lowMeshes")
-    Unavailable
-};
+// The version rules and the command line check live in BubbleLook.h, so the game thread (Bubble
+// look pause, Client.cpp) uses exactly the same ones.
+using EBubbleBuildsLevel = NiobiumBubbleLook::ELevel;
 
-// Compares whole hundredths, so "15.4" (how the game stores 15.40) can't be mixed up.
 static EBubbleBuildsLevel BubbleBuildsLevelFor(double fortniteVersion)
 {
-    if (!(fortniteVersion > 0.0) || fortniteVersion > 1000.0)
-        return EBubbleBuildsLevel::Unavailable;
-
-    const long long hundredths = std::llround(fortniteVersion * 100.0);
-    if (hundredths >= 1540 && hundredths < 1610)
-        return EBubbleBuildsLevel::Supported;
-    if (hundredths == 1530 || (hundredths >= 1610 && hundredths < 1650))
-        return EBubbleBuildsLevel::Experimental;
-    if (NiobiumBubbleLook::IsLowMeshesVersion(fortniteVersion))
-        return EBubbleBuildsLevel::LowMeshes;
-    return EBubbleBuildsLevel::Unavailable;
+    return NiobiumBubbleLook::LevelFor(fortniteVersion);
 }
 
-// Case-insensitive search for a whole command line switch ("-name", "-name=value" or "-name"
-// in quotes). Never matches inside a longer switch such as "-namex".
 static const wchar_t* FindCommandLineSwitch(const wchar_t* commandLine, const wchar_t* name)
 {
-    if (!commandLine || !name || !*name)
-        return nullptr;
-
-    const size_t nameLength = wcslen(name);
-    for (const wchar_t* at = commandLine; *at; ++at)
-    {
-        if (_wcsnicmp(at, name, nameLength) != 0)
-            continue;
-
-        const wchar_t before = at == commandLine ? L' ' : at[-1];
-        const wchar_t after = at[nameLength];
-        const bool startsToken = before == L' ' || before == L'\t' || before == L'"';
-        const bool endsToken = after == L'\0' || after == L' ' || after == L'\t' ||
-            after == L'"' || after == L'=';
-        if (startsToken && endsToken)
-            return at;
-    }
-    return nullptr;
+    return NiobiumBubbleLook::FindCommandLineSwitch(commandLine, name);
 }
 
 // The version text the launcher passed (-niobiumversion=15.40), digits and dots only.
@@ -1478,9 +1485,7 @@ static void DrawBubbleBuildsStatus(float width)
 
     const EBubbleBuildsLevel level = BubbleBuildsLevelFor(version);
     // Both spellings count, like in the launcher (is_feature_level_es31 in launchargs.rs).
-    const bool featureLevelES31 =
-        FindCommandLineSwitch(commandLine, L"-FeatureLevelES31") != nullptr ||
-        FindCommandLineSwitch(commandLine, L"-FeatureLevelES3_1") != nullptr;
+    const bool featureLevelES31 = NiobiumBubbleLook::HasFeatureLevelES31(commandLine);
 
     std::string status;
     ImVec4 dotColour = kNiobiumMutedText;
@@ -1489,11 +1494,13 @@ static void DrawBubbleBuildsStatus(float width)
     {
         status = "Bubble Builds: Not available on " + versionText;
     }
-    else if (featureLevelES31 && level == EBubbleBuildsLevel::LowMeshes)
+    else if (featureLevelES31 &&
+        (level == EBubbleBuildsLevel::LowMeshes || level == EBubbleBuildsLevel::Supported))
     {
-        // [Niobium] 19.x: the game's own Meshes setting decides. It only applies after a
-        // restart, so the row follows the value this session started with and only mentions a
-        // later change (both read by the game thread, Client.cpp; -1 = not read yet / unknown).
+        // [Niobium] 15.40-16.00 and 19.x: the bubbles also need the game's own Meshes setting on
+        // Low. It only applies after a restart, so the row follows the value this session
+        // started with and only mentions a later change (both read by the game thread,
+        // Client.cpp; -1 = not read yet / unknown).
         const int startMeshes =
             NiobiumBubbleLook::StartMeshQuality.load(std::memory_order_acquire);
         const int liveMeshes =
@@ -1593,6 +1600,89 @@ static bool LabeledSliderInt(
 
 static bool IsGameThreadDispatcherReady(); // [Niobium] defined with the game-thread mailbox below
 
+// [Niobium] One row of the Main > Editing section, drawn by its route (EditFeatureRoutes.h).
+// Hook: the checkbox is our client.json switch, as before. Native: the checkbox shows Fortnite's
+// own value (read by the game thread about once a second) and a click asks the game thread to
+// change it there; nothing is written at startup. Unavailable: greyed out with the reason.
+static void DrawEditFeatureRow(
+    NiobiumEditRoutes::EFeature feature,
+    const char* label,
+    std::atomic_bool& hookSetting,
+    const char* hookHint,
+    const char* nativeHint,
+    long long versionHundredths,
+    float width)
+{
+    using NiobiumEditRoutes::EStatus;
+    using NiobiumEditRoutes::ERoute;
+
+    const float indent =
+        ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x;
+    const float statusWidth = (std::max)(40.f, width - indent);
+    const EStatus status = NiobiumEditRoutes::GetStatus(feature);
+
+    if (NiobiumEditRoutes::PlannedRoute(feature, versionHundredths) == ERoute::Hook)
+    {
+        if (status == EStatus::HookFailed)
+        {
+            // Shown off: nothing does this on this version (the saved choice stays as it is).
+            bool value = false;
+            ImGui::BeginDisabled();
+            ImGui::Checkbox(label, &value);
+            ImGui::EndDisabled();
+            ImGui::Indent(indent);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3.f);
+            StatusDotRow("Couldn't be set up on this version.", kNiobiumWarning, false, statusWidth);
+            ImGui::Unindent(indent);
+            return;
+        }
+        // Unknown (startup still running) or installed: the switch works as before.
+        PersistentCheckbox(label, hookSetting);
+        ControlHint(hookHint, width, true);
+        return;
+    }
+
+    if (status == EStatus::NativeReady)
+    {
+        bool value = NiobiumEditRoutes::DisplayedNativeValue(feature) == 1;
+        if (ImGui::Checkbox(label, &value))
+            NiobiumEditRoutes::RequestNativeWrite(feature, value);
+        ControlHint(nativeHint, width, true);
+        return;
+    }
+
+    // Native route, but not usable (yet): show Fortnite's value if it was ever read, greyed out.
+    bool value = NiobiumEditRoutes::NativeValue[NiobiumEditRoutes::Index(feature)].load(
+        std::memory_order_acquire) == 1;
+    ImGui::BeginDisabled();
+    ImGui::Checkbox(label, &value);
+    ImGui::EndDisabled();
+    ImGui::Indent(indent);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3.f);
+    if (status == EStatus::NativeMissing)
+    {
+        const wchar_t* commandLine =
+            g_BubbleBuildsCommandLine ? g_BubbleBuildsCommandLine() : nullptr;
+        const std::string text = "Not available on " +
+            MenuFortniteVersionText(commandLine, nullptr) + ".";
+        StatusDotRow(text.c_str(), kNiobiumWarning, false, statusWidth);
+    }
+    else if (status == EStatus::NativeFailed)
+    {
+        StatusDotRow("Couldn't change it here. Use Fortnite's settings (Game, Building).",
+            kNiobiumWarning, false, statusWidth);
+    }
+    else
+    {
+        // Waiting / Unknown: the game hasn't loaded your settings yet (or no game thread pump).
+        StatusDotRow("Waiting for Fortnite's settings...", kNiobiumMutedText, false, statusWidth);
+        ImGui::Unindent(indent);
+        ControlHint(nativeHint, width, true);
+        return;
+    }
+    ImGui::Unindent(indent);
+}
+
 // [Niobium] Status and "Bubble strength" slider under the "Bubble look" checkbox (Main tab),
 // indented to line up with the checkbox label. The game thread reports the state
 // (NiobiumBubbleLook::State); this only reads it.
@@ -1616,6 +1706,15 @@ static void DrawBubbleLookControls(float width)
             MenuFortniteVersionText(commandLine, nullptr) + ".";
         StatusDotRow(status.c_str(), kNiobiumWarning, false, innerWidth);
         // No strength slider: there is nothing it could change on this version.
+        ImGui::Unindent(indent);
+        return;
+    }
+    else if (state == NiobiumBubbleLook::EState::Paused)
+    {
+        // [Niobium] Epic's own Bubble Builds are on (Performance Mode, Meshes Low): the game
+        // thread put the original values back. No slider: nothing is changed while paused.
+        StatusDotRow("Paused: Bubble Builds are already on. Bubble look would only blur them more.",
+            kNiobiumMutedText, false, innerWidth);
         ImGui::Unindent(indent);
         return;
     }
@@ -1651,6 +1750,19 @@ static void DrawBubbleLookControls(float width)
     if (ImGui::IsItemDeactivatedAfterEdit())
         SaveUserPreferences();
     ControlHint("Higher = softer bubbles.", innerWidth);
+    {
+        // [Niobium] Experimental Bubble Builds versions in Performance Mode: Epic's look may be
+        // partly there, so Bubble look adds to it.
+        const wchar_t* commandLine =
+            g_BubbleBuildsCommandLine ? g_BubbleBuildsCommandLine() : nullptr;
+        double version = 0.0;
+        MenuFortniteVersionText(commandLine, &version);
+        if (BubbleBuildsLevelFor(version) == EBubbleBuildsLevel::Experimental &&
+            NiobiumBubbleLook::HasFeatureLevelES31(commandLine))
+        {
+            ControlHint("Lower Bubble strength if builds look too blurry.", innerWidth);
+        }
+    }
 
     ImGui::Unindent(indent);
 }
@@ -2979,6 +3091,36 @@ static bool TryApplyPendingSettingCommand()
 
     std::unique_lock<std::mutex> commandLock(
         g_SettingCommandMutex);
+
+    // [Niobium] Free camera and Target info only exist as toggle commands, so the menu keeps an
+    // "applied" bit for them. A new world (match start, map change, back to the lobby) starts
+    // without either, so forget the old bits and show both as off again. Otherwise the next
+    // click could flip the wrong way. (Free camera swaps the local controller inside the same
+    // world, so this follows the world, not the controller.)
+    {
+        const uint64_t world = Client::GetWorldGeneration();
+        if (world != g_ToggleSettingWorld)
+        {
+            const bool hadToggles = g_ToggleSettingWorld != 0 &&
+                (g_AppliedToggleSettingMask &
+                    (SettingCommandDebugCamera | SettingCommandTargetInfo)) != 0;
+            g_ToggleSettingWorld = world;
+            g_AppliedToggleSettingMask &=
+                ~(SettingCommandDebugCamera | SettingCommandTargetInfo);
+            FConfiguration::bDebugCamera.store(false, std::memory_order_release);
+            FConfiguration::bTargetInfo.store(false, std::memory_order_release);
+            g_PendingSettingCommandMask.fetch_and(
+                ~(SettingCommandDebugCamera | SettingCommandTargetInfo),
+                std::memory_order_acq_rel);
+            if (hadToggles)
+            {
+                AtlasDiagnostics::WriteLine(
+                    "setting-command world-changed toggles-cleared world-generation=%llu",
+                    static_cast<unsigned long long>(world));
+            }
+        }
+    }
+
     unsigned int mask = g_PendingSettingCommandMask.load(
         std::memory_order_acquire);
     if (mask == 0)
@@ -2989,26 +3131,60 @@ static bool TryApplyPendingSettingCommand()
     char commandBuffer[64]{};
     bool toggleCommand = false;
     bool toggleDesired = false;
+    // [Niobium] Which "value set" flag a successful command changes (Mobile Builds / fog).
+    bool* valueSetFlag = nullptr;
+    bool valueSetAfter = false;
     while (mask != 0 && !command)
     {
         if ((mask & SettingCommandMobileBuilds) != 0)
         {
             bit = SettingCommandMobileBuilds;
-            command = FConfiguration::bMobileBuilds.load(
-                    std::memory_order_acquire)
-                ? "r.StaticMeshLODDistanceScale 1000"
+            if (FConfiguration::bMobileBuilds.load(
+                    std::memory_order_acquire))
+            {
+                command = "r.StaticMeshLODDistanceScale 1000";
+                valueSetFlag = &g_MobileBuildsValueSet;
+                valueSetAfter = true;
+            }
+            else if (g_MobileBuildsValueSet)
+            {
                 // Unreal's neutral/default scale is 1. A zero scale is not
                 // an off switch and can disrupt mesh LOD streaming while a
-                // map is loading.
-                : "r.StaticMeshLODDistanceScale 1";
+                // map is loading. Only sent to undo our own 1000.
+                command = "r.StaticMeshLODDistanceScale 1";
+                valueSetFlag = &g_MobileBuildsValueSet;
+                valueSetAfter = false;
+            }
+            else
+            {
+                // Never set by Niobium: leave the game's own value alone.
+                g_PendingSettingCommandMask.fetch_and(
+                    ~bit, std::memory_order_acq_rel);
+                mask &= ~bit;
+            }
         }
         else if ((mask & SettingCommandInGameFog) != 0)
         {
             bit = SettingCommandInGameFog;
-            command = FConfiguration::bGameplayFog.load(
-                    std::memory_order_acquire)
-                ? "r.Fog 1"
-                : "r.Fog 0";
+            if (!FConfiguration::bGameplayFog.load(
+                    std::memory_order_acquire))
+            {
+                command = "r.Fog 0";
+                valueSetFlag = &g_FogValueSet;
+                valueSetAfter = true;
+            }
+            else if (g_FogValueSet)
+            {
+                command = "r.Fog 1"; // only to undo our own "r.Fog 0"
+                valueSetFlag = &g_FogValueSet;
+                valueSetAfter = false;
+            }
+            else
+            {
+                g_PendingSettingCommandMask.fetch_and(
+                    ~bit, std::memory_order_acq_rel);
+                mask &= ~bit;
+            }
         }
         else if ((mask & SettingCommandMipMapLODBias) != 0)
         {
@@ -3108,6 +3284,8 @@ static bool TryApplyPendingSettingCommand()
     }
     else if (applied)
     {
+        if (valueSetFlag)
+            *valueSetFlag = valueSetAfter;
         g_PendingSettingCommandMask.fetch_and(
             ~bit, std::memory_order_acq_rel);
     }
@@ -3700,6 +3878,39 @@ static bool IsAtlasOwnedHotkey(int vk)
             IsExclusiveCommandHotkey(vk));
 }
 
+// [Niobium] Reset builds: what a key-down does to Fortnite's own (Unreal) console, which keeps
+// its state to itself (QuickReset.h, NextGameConsoleState). WndProc thread; key-downs that reach
+// the game only. With "Which console?" = Fortnite's, F8 (sent on as `) and ` open and cycle it.
+static NiobiumQuickReset::EGameConsoleKey ClassifyGameConsoleKey(int vk)
+{
+    using NiobiumQuickReset::EGameConsoleKey;
+    if (vk == VK_F8 || vk == VK_OEM_3)
+        return IsAtlasConsoleSelected() ? EGameConsoleKey::Other : EGameConsoleKey::ConsoleKey;
+    if (IsAtlasOwnedHotkey(vk))
+        return EGameConsoleKey::Other; // Niobium keeps it; the game never sees it
+    switch (vk)
+    {
+    case VK_ESCAPE:
+        return EGameConsoleKey::Escape;
+    case VK_RETURN:
+        return EGameConsoleKey::Enter;
+    case VK_UP:
+    case VK_DOWN:
+    case VK_TAB:
+        return EGameConsoleKey::Text; // history or completion fills the line
+    default:
+        break;
+    }
+    const bool control = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    const bool alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
+    if (control && !alt && vk == 'V')
+        return EGameConsoleKey::Text; // paste
+    if (control || alt)
+        return EGameConsoleKey::Other;
+    const UINT character = MapVirtualKeyW(static_cast<UINT>(vk), MAPVK_VK_TO_CHAR) & 0x7FFFFFFFu;
+    return character >= 0x20 ? EGameConsoleKey::Text : EGameConsoleKey::Other;
+}
+
 bool GUI_IsOwnedHotkey(int vk)
 {
     return IsAtlasOwnedHotkey(vk);
@@ -3746,6 +3957,29 @@ void GUI_QueueInputMessage(UINT message, WPARAM wParam, LPARAM lParam)
         return;
     }
 
+    // [Niobium] Reset builds: only stamps the press time; the game thread decides what to do.
+    // The key is never swallowed (the game still gets it) and doesn't count while the menu or
+    // a console (ours or Fortnite's) is open, while a key is being picked, or when the key is a
+    // menu/join/console key or one Niobium already owns.
+    if (vk > 0)
+    {
+        const bool overlayVisible = GUI_IsOverlayVisible();
+        const bool bindCaptureActive = FGUI::bRebinding || FGUI::bRebindingJoin ||
+            FGUI::bRebindingResetBuilds ||
+            FGUI::RebindingCommandIndex != -2 || FGUI::RebindingMacroIndex != -2;
+        // State before this key: the key that closes Fortnite's console was typed into it.
+        const bool gameConsoleOpen = NiobiumQuickReset::IsGameConsoleOpen();
+        NiobiumQuickReset::OnKeyDown(vk,
+            FConfiguration::ResetBuildsVK.load(std::memory_order_acquire),
+            FConfiguration::bResetBuilds.load(std::memory_order_acquire),
+            overlayVisible || bindCaptureActive || gameConsoleOpen ||
+                IsAtlasOwnedHotkey(vk) || IsReservedConsoleHotkey(vk),
+            GetTickCount64());
+        // Only keys that reach the game move Fortnite's console (the overlay keeps them).
+        if (!overlayVisible && (message == WM_KEYDOWN || message == WM_SYSKEYDOWN))
+            NiobiumQuickReset::OnGameConsoleKey(ClassifyGameConsoleKey(vk));
+    }
+
     QueueKeyPress(vk);
 }
 
@@ -3783,6 +4017,7 @@ static void CancelBindCapture()
 {
     FGUI::bRebinding = false;
     FGUI::bRebindingJoin = false;
+    FGUI::bRebindingResetBuilds = false;
     FGUI::RebindingCommandIndex = -2;
     FGUI::RebindingMacroIndex = -2;
     FGUI::PendingCommandVK = 0;
@@ -3831,8 +4066,9 @@ static int PollBindKey(const InputPressCounts& presses)
 
 // [Niobium] message = plain text for the menu, reason = the unchanged reason for the
 // diagnostics log (stays as in ATLAS so logs remain comparable).
-static void SetBindError(const char* message, const char* reason)
+static void SetBindError(const char* message, const char* reason, int owner = 0)
 {
+    g_BindErrorOwner = owner;
     g_BindError = message ? message : "That key is already in use.";
     g_BindErrorUntil = GetTickCount64() + 3500;
     AtlasDiagnostics::WriteLine("bind-rejected reason=%s",
@@ -3848,6 +4084,27 @@ static constexpr const char* kBindReservedText =
     "The menu, join and console keys can't be used here.";
 static constexpr const char* kBindReservedReason =
     "Menu, Join, and console keys are reserved.";
+// [Niobium] Reset builds key: never the left or right mouse button.
+static constexpr const char* kBindMouseText =
+    "The left and right mouse buttons can't be used here: they shoot and aim.";
+static constexpr const char* kBindMouseReason =
+    "reset-builds key rejected: left/right mouse button";
+
+// [Niobium] The Reset builds key while that feature is on (0 = none). Other key buttons can't
+// take it, so one press never means two things.
+static int ActiveResetBuildsKey()
+{
+    if (!FConfiguration::bResetBuilds.load(std::memory_order_acquire))
+        return 0;
+    return HotkeyPersist::SanitizeResetBuildsKey(
+        FConfiguration::ResetBuildsVK.load(std::memory_order_acquire));
+}
+
+static bool IsResetBuildsKey(int vk)
+{
+    const int key = ActiveResetBuildsKey();
+    return key != 0 && vk == key;
+}
 
 static bool IsReservedOverlayKey(int vk, int except)
 {
@@ -3883,12 +4140,13 @@ void GUI_HandleInput(bool windowActive)
 
     const bool wasOverlayVisible = GUI_IsOverlayVisible();
 
-    if ((FGUI::bRebinding || FGUI::bRebindingJoin ||
+    if ((FGUI::bRebinding || FGUI::bRebindingJoin || FGUI::bRebindingResetBuilds ||
         FGUI::RebindingCommandIndex != -2 || FGUI::RebindingMacroIndex != -2) &&
         TakePressCount(presses, VK_ESCAPE) > 0)
     {
         FGUI::bRebinding = false;
         FGUI::bRebindingJoin = false;
+        FGUI::bRebindingResetBuilds = false;
         FGUI::RebindingCommandIndex = -2;
         FGUI::RebindingMacroIndex = -2;
         EndBindCapture();
@@ -3899,7 +4157,7 @@ void GUI_HandleInput(bool windowActive)
     {
         if (int vk = PollBindKey(presses))
         {
-            if (IsReservedOverlayKey(vk, 0) || IsSavedActionHotkey(vk))
+            if (IsReservedOverlayKey(vk, 0) || IsSavedActionHotkey(vk) || IsResetBuildsKey(vk))
                 SetBindError(kBindTakenText, kBindTakenReason);
             else
             {
@@ -3917,7 +4175,7 @@ void GUI_HandleInput(bool windowActive)
     {
         if (int vk = PollBindKey(presses))
         {
-            if (IsReservedOverlayKey(vk, 1) || IsSavedActionHotkey(vk))
+            if (IsReservedOverlayKey(vk, 1) || IsSavedActionHotkey(vk) || IsResetBuildsKey(vk))
                 SetBindError(kBindTakenText, kBindTakenReason);
             else
             {
@@ -3931,6 +4189,30 @@ void GUI_HandleInput(bool windowActive)
         return;
     }
 
+    // [Niobium] Reset builds key: never the left/right mouse button, never a key that already
+    // does something in Niobium (menu, join, console, saved commands). Saved in client.json like
+    // the other switches (while "Remember my settings" is on).
+    if (FGUI::bRebindingResetBuilds)
+    {
+        if (int vk = PollBindKey(presses))
+        {
+            if (NiobiumQuickReset::IsMouseShootOrAimButton(vk))
+                SetBindError(kBindMouseText, kBindMouseReason, 1);
+            else if (IsReservedOverlayKey(vk, -1) || IsSavedActionHotkey(vk))
+                SetBindError(kBindTakenText, kBindTakenReason, 1);
+            else
+            {
+                FConfiguration::ResetBuildsVK.store(
+                    HotkeyPersist::SanitizeResetBuildsKey(vk), std::memory_order_release);
+                SaveUserPreferences();
+                AtlasDiagnostics::WriteLine("reset-builds key-bound vk=%d", vk);
+            }
+            FGUI::bRebindingResetBuilds = false;
+            EndBindCapture();
+        }
+        return;
+    }
+
     if (FGUI::RebindingCommandIndex != -2)
     {
         if (int vk = PollBindKey(presses))
@@ -3938,6 +4220,10 @@ void GUI_HandleInput(bool windowActive)
             if (IsReservedOverlayKey(vk, -1))
             {
                 SetBindError(kBindReservedText, kBindReservedReason);
+            }
+            else if (IsResetBuildsKey(vk))
+            {
+                SetBindError(kBindTakenText, kBindTakenReason);
             }
             else if (FGUI::RebindingCommandIndex == -1)
             {
@@ -3962,6 +4248,10 @@ void GUI_HandleInput(bool windowActive)
             if (IsReservedOverlayKey(vk, -1))
             {
                 SetBindError(kBindReservedText, kBindReservedReason);
+            }
+            else if (IsResetBuildsKey(vk))
+            {
+                SetBindError(kBindTakenText, kBindTakenReason);
             }
             else if (FGUI::RebindingMacroIndex >= 0 && FGUI::RebindingMacroIndex < (int)FGUI::Macros.size())
             {
@@ -5393,32 +5683,39 @@ void GUI_Render()
     }
     EndSectionBody();
 
-    if (VersionInfo.EngineVersion < 4.24 || VersionInfo.FortniteVersion < 24.30)
+    // [Niobium] Always shown now. Each row uses exactly one route on this version
+    // (EditFeatureRoutes.h): our hook on old versions, Fortnite's own setting where Epic has one,
+    // or greyed out with the reason. Menu and hooks use the same version rule.
     {
+        using NiobiumEditRoutes::EFeature;
         SectionLabel("Editing");
         BeginSectionBody();
+        const long long editVersion =
+            NiobiumEditRoutes::VersionHundredths(VersionInfo.FortniteVersion);
+        const bool autoConfirmEdits =
+            editVersion >= NiobiumEditRoutes::EpicSettingSince(EFeature::ResetOnRelease);
 
-        if (VersionInfo.EngineVersion < 4.24)
-        {
-            PersistentCheckbox(
-                "Edit on release###eor", FConfiguration::bEOREnabled);
-            ControlHint("Your edit is confirmed as soon as you let go of the key.", CW, true);
-        }
+        DrawEditFeatureRow(EFeature::EditOnRelease,
+            "Edit on release###eor", FConfiguration::bEOREnabled,
+            "Your edit is confirmed as soon as you let go of the key.",
+            autoConfirmEdits
+                ? "Uses Fortnite's own \"Auto Confirm Edits\" setting (Edit)."
+                : "Uses Fortnite's own \"Confirm Edit on Release\" setting on this version. "
+                  "Changing it here changes it there too.",
+            editVersion, CW);
 
-        if (VersionInfo.FortniteVersion < 24.30)
-        {
-            PersistentCheckbox(
-                "Reset on release###ror", FConfiguration::bROREnabled);
-            ControlHint("Your reset is confirmed as soon as you let go of the key.", CW, true);
-        }
+        DrawEditFeatureRow(EFeature::ResetOnRelease,
+            "Reset on release###ror", FConfiguration::bROREnabled,
+            "Your reset is confirmed as soon as you let go of the key.",
+            "Uses Fortnite's own \"Auto Confirm Edits\" setting (Reset). "
+            "Edit and Reset both on = \"Both\".",
+            editVersion, CW);
 
-        if (VersionInfo.FortniteVersion < 15.20)
-        {
-            PersistentCheckbox(
-                "Disable pre-edits###disable_pre_edits",
-                FConfiguration::bDisablePreEdits);
-            ControlHint("You never edit the see-through preview piece by accident.", CW, true);
-        }
+        DrawEditFeatureRow(EFeature::PreEdits,
+            "Disable pre-edits###disable_pre_edits", FConfiguration::bDisablePreEdits,
+            "You never edit the see-through preview piece by accident.",
+            "Uses Fortnite's own \"Disable Pre-Edits\" setting.",
+            editVersion, CW);
         EndSectionBody();
     }
 
@@ -5642,6 +5939,7 @@ void GUI_Render()
             FGUI::RebindingMacroIndex = -2;
             FGUI::bRebinding = false;
             FGUI::bRebindingJoin = false;
+            FGUI::bRebindingResetBuilds = false;
             BeginBindCapture();
         }
         HoverHint(FGUI::RebindingCommandIndex == -1
@@ -5794,6 +6092,7 @@ void GUI_Render()
                         FGUI::RebindingMacroIndex = -2;
                         FGUI::bRebinding = false;
                         FGUI::bRebindingJoin = false;
+                        FGUI::bRebindingResetBuilds = false;
                         BeginBindCapture();
                     }
                 }
@@ -5929,6 +6228,7 @@ void GUI_Render()
                         FGUI::RebindingCommandIndex = -2;
                         FGUI::bRebinding = false;
                         FGUI::bRebindingJoin = false;
+                        FGUI::bRebindingResetBuilds = false;
                         BeginBindCapture();
                     }
                 }
@@ -6014,6 +6314,109 @@ void GUI_Render()
     TogglePreferencePersistenceCheckbox();
     ControlHint("Off = every toggle is back to normal the next time you start the game.", CW, true);
     EndSectionBody();
+
+    // [Niobium] Reset builds (QuickReset.h): aim at an edited build, press your own key, it goes
+    // back to normal without edit mode. The game thread does the work; this only shows state.
+    SectionLabel("Reset builds");
+    BeginSectionBody();
+    if (NiobiumQuickReset::EpicOwnsResetBuilding(VersionInfo.FortniteVersion))
+    {
+        StatusDotRow("This Fortnite version has its own Reset Building key. "
+            "Set it in Fortnite: Settings > Keyboard Controls.",
+            kNiobiumMutedText, false, CW);
+    }
+    else
+    {
+        PersistentCheckbox("Reset builds###reset_builds", FConfiguration::bResetBuilds);
+        ControlHint("Aim at one of your edited builds and press your Reset builds key. It goes "
+            "back to normal without opening edit mode. Editing and resetting the normal way "
+            "still works.", CW, true);
+
+        const int resetKey = HotkeyPersist::SanitizeResetBuildsKey(
+            FConfiguration::ResetBuildsVK.load(std::memory_order_acquire));
+        if (FGUI::bRebindingResetBuilds)
+        {
+            char waitLabel[96];
+            snprintf(waitLabel, sizeof(waitLabel), "%s###rebind_reset_builds",
+                FitLabel("Press the new key... (Esc = cancel)", "Press the new key...", CW));
+            ImGui::PushStyleColor(ImGuiCol_Text, AccentText());
+            ImGui::PushStyleColor(ImGuiCol_Button, Accent(0.18f));
+            ImGui::Button(waitLabel, ImVec2(CW, 0.f));
+            ImGui::PopStyleColor(2);
+        }
+        else
+        {
+            char resetKeyLabel[96];
+            snprintf(resetKeyLabel, sizeof(resetKeyLabel),
+                "Reset builds key [%s]###rebind_reset_builds", BindName(resetKey));
+            if (ImGui::Button(resetKeyLabel, ImVec2(CW, 0.f)))
+            {
+                FGUI::bRebindingResetBuilds = true;
+                FGUI::bRebinding = false;
+                FGUI::bRebindingJoin = false;
+                FGUI::RebindingCommandIndex = -2;
+                FGUI::RebindingMacroIndex = -2;
+                BeginBindCapture();
+            }
+            HoverHint("Not the left or right mouse button: they shoot and aim.");
+        }
+        DrawBindError(CW, 1);
+        ControlHint("Tip: use the same key you use for Reset in Fortnite. Fortnite still gets the "
+            "key, so pick one that does nothing else outside edit mode.", CW);
+
+        if (FConfiguration::bResetBuilds.load(std::memory_order_acquire))
+        {
+            using NiobiumQuickReset::EStatus;
+            const auto gameStatus = static_cast<EStatus>(
+                NiobiumQuickReset::Status.load(std::memory_order_acquire));
+            const char* statusText = "Join a match to use it.";
+            ImVec4 statusColour = kNiobiumMutedText;
+            bool statusFilled = false;
+            if (resetKey == 0)
+            {
+                statusText = "Pick a key first.";
+                statusColour = kNiobiumWarning;
+            }
+            else if (IsSavedActionHotkey(resetKey))
+            {
+                statusText = "That key is also used by one of your commands. Pick another key.";
+                statusColour = kNiobiumWarning;
+            }
+            else if (IsReservedOverlayKey(resetKey, -1))
+            {
+                statusText = "That key is also your menu, join or console key. Pick another key.";
+                statusColour = kNiobiumWarning;
+            }
+            else if (gameStatus == EStatus::Checking)
+            {
+                statusText = "Checking the server...";
+            }
+            else if (gameStatus == EStatus::Unsupported)
+            {
+                statusText = "This server can't do it. It needs a Niobium server.";
+                statusColour = kNiobiumWarning;
+            }
+            else if (gameStatus == EStatus::NotOnVersion)
+            {
+                statusText = "Not available on this version.";
+                statusColour = kNiobiumWarning;
+            }
+            else if (gameStatus == EStatus::Ready && NiobiumQuickReset::IsGameConsoleOpen())
+            {
+                // Keys typed into Fortnite's own ("original") console don't count (QuickReset.h).
+                statusText = "Close the original console first (Esc).";
+            }
+            else if (gameStatus == EStatus::Ready)
+            {
+                statusText = "Ready.";
+                statusColour = kNiobiumSuccess;
+                statusFilled = true;
+            }
+            StatusDotRow(statusText, statusColour, statusFilled, CW);
+        }
+    }
+    EndSectionBody();
+
     SectionLabel("Keys");
     BeginSectionBody();
     // While waiting for the new key, the button keeps its id (###rebind_menu/_join).
@@ -6037,6 +6440,7 @@ void GUI_Render()
         {
             FGUI::bRebinding = true;
             FGUI::bRebindingJoin = false;
+            FGUI::bRebindingResetBuilds = false;
             FGUI::RebindingCommandIndex = -2;
             FGUI::RebindingMacroIndex = -2;
             BeginBindCapture();
@@ -6060,6 +6464,7 @@ void GUI_Render()
         {
             FGUI::bRebindingJoin = true;
             FGUI::bRebinding = false;
+            FGUI::bRebindingResetBuilds = false;
             FGUI::RebindingCommandIndex = -2;
             FGUI::RebindingMacroIndex = -2;
             BeginBindCapture();

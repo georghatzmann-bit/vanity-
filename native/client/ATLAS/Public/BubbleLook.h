@@ -8,6 +8,8 @@
 
 #include <atomic>
 #include <cmath>
+#include <cwchar>
+#include <cwctype>
 
 namespace NiobiumBubbleLook
 {
@@ -38,14 +40,100 @@ namespace NiobiumBubbleLook
         return hundredths >= 1900 && hundredths < 2000;
     }
 
+    // Launcher Bubble Builds level for a version. Same rules as VersionRules in
+    // launcher/core/src/launchargs.rs (and launcher/src/lib/bubble.ts): supported
+    // 15.40 <= v < 16.10, experimental 15.30 and 16.10 <= v < 16.50, "lowMeshes" 19.x,
+    // everything else unavailable. Whole hundredths, so "15.4" can't be mixed up.
+    enum class ELevel : int
+    {
+        Supported,
+        Experimental,
+        LowMeshes, // 19.x: Performance Mode + Meshes Low (launcher level "lowMeshes")
+        Unavailable
+    };
+
+    inline ELevel LevelFor(double fortniteVersion)
+    {
+        if (!(fortniteVersion > 0.0) || fortniteVersion > 1000.0)
+            return ELevel::Unavailable;
+
+        const long long hundredths = std::llround(fortniteVersion * 100.0);
+        if (hundredths >= 1540 && hundredths < 1610)
+            return ELevel::Supported;
+        if (hundredths == 1530 || (hundredths >= 1610 && hundredths < 1650))
+            return ELevel::Experimental;
+        if (IsLowMeshesVersion(fortniteVersion))
+            return ELevel::LowMeshes;
+        return ELevel::Unavailable;
+    }
+
+    // Case-insensitive search for a whole command line switch ("-name", "-name=value" or "-name"
+    // in quotes). Never matches inside a longer switch such as "-namex".
+    inline const wchar_t* FindCommandLineSwitch(const wchar_t* commandLine, const wchar_t* name)
+    {
+        if (!commandLine || !name || !*name)
+            return nullptr;
+
+        const size_t nameLength = std::wcslen(name);
+        for (const wchar_t* at = commandLine; *at; ++at)
+        {
+            size_t matched = 0;
+            while (matched < nameLength && at[matched] &&
+                std::towlower(static_cast<std::wint_t>(at[matched])) ==
+                    std::towlower(static_cast<std::wint_t>(name[matched])))
+            {
+                ++matched;
+            }
+            if (matched != nameLength)
+                continue;
+
+            const wchar_t before = at == commandLine ? L' ' : at[-1];
+            const wchar_t after = at[nameLength];
+            const bool startsToken = before == L' ' || before == L'\t' || before == L'"';
+            const bool endsToken = after == L'\0' || after == L' ' || after == L'\t' ||
+                after == L'"' || after == L'=';
+            if (startsToken && endsToken)
+                return at;
+        }
+        return nullptr;
+    }
+
+    // The launcher starts Performance Mode with -FeatureLevelES31 (both spellings count, like
+    // is_feature_level_es31 in launchargs.rs).
+    inline bool HasFeatureLevelES31(const wchar_t* commandLine)
+    {
+        return FindCommandLineSwitch(commandLine, L"-FeatureLevelES31") != nullptr ||
+            FindCommandLineSwitch(commandLine, L"-FeatureLevelES3_1") != nullptr;
+    }
+
+    // Epic's own bubbles are really on: started in Performance Mode, on a Supported or LowMeshes
+    // version, and Meshes was Low when this session started. Then Bubble look pauses (it would only
+    // blur them more). startMeshQuality: -1 unknown, 0 Low, 1+ High.
+    inline bool EpicBubblesOn(ELevel level, bool featureLevelES31, int startMeshQuality)
+    {
+        return featureLevelES31 &&
+            (level == ELevel::Supported || level == ELevel::LowMeshes) &&
+            startMeshQuality == 0;
+    }
+
+    // The Meshes setting exists from 15.40 on.
+    inline bool HasMeshesSetting(double fortniteVersion)
+    {
+        if (!(fortniteVersion > 0.0) || fortniteVersion > 1000.0)
+            return false;
+        return std::llround(fortniteVersion * 100.0) >= 1540;
+    }
+
     enum class EState : int
     {
         Off = 0,         // Bubble look is off and nothing is changed
         Waiting = 1,     // on, but none of the textures is loaded yet (or the game isn't ready)
         Active = 2,      // on, AppliedCount textures are changed
-        Unavailable = 3  // no usable CachedCombinedLODBias property, every texture found can't
+        Unavailable = 3, // no usable CachedCombinedLODBias property, every texture found can't
                          // be changed (NeverStream, value out of range), or the textures never
                          // showed up in a match
+        Paused = 4       // on, but Epic's own Bubble Builds are on (EpicBubblesOn): the original
+                         // values are back and nothing is changed while that lasts
     };
 
     inline std::atomic_int State{ static_cast<int>(EState::Off) };

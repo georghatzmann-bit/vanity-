@@ -7,10 +7,11 @@
 class Utils {
     static inline void* _NpFH = nullptr;
 public:
+    // [Niobium] Returns MinHook's result, so callers can check it (it was ignored before).
     template <class _Ot = void*>
-    static void Hook(uint64_t _Ptr, void* _Detour, _Ot& _Orig = _NpFH)
+    static MH_STATUS Hook(uint64_t _Ptr, void* _Detour, _Ot& _Orig = _NpFH)
     {
-        MH_CreateHook((LPVOID)_Ptr, _Detour, (LPVOID*)(std::is_same_v<_Ot, void*> ? nullptr : &_Orig));
+        return MH_CreateHook((LPVOID)_Ptr, _Detour, (LPVOID*)(std::is_same_v<_Ot, void*> ? nullptr : &_Orig));
     }
 
     __forceinline static void _HookVT(void** _Vt, uint32_t _Ind, void* _Detour)

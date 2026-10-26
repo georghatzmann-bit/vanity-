@@ -57,6 +57,43 @@ void Preview_SetBubbleLook(bool On, int Strength, int State, int AppliedCount)
     NiobiumBubbleLook::AppliedCount.store(AppliedCount);
 }
 
+// Main > Editing: the state the startup code / game thread would publish for each feature
+// (NiobiumEditRoutes::EStatus: 0 unknown, 1 hook, 2 hook failed, 3 waiting for Fortnite's
+// settings, 4 Fortnite's own setting, 5 not on this version, 6 a write didn't stick) and
+// Fortnite's own value for the native rows (-1 unknown, 0 off, 1 on). The version comes from
+// Preview_SetBubbleBuilds.
+void Preview_SetEditRoutes(int EorStatus, int RorStatus, int PreStatus, int EorValue, int RorValue, int PreValue)
+{
+    const int Statuses[3] = { EorStatus, RorStatus, PreStatus };
+    const int Values[3] = { EorValue, RorValue, PreValue };
+    for (int Index = 0; Index < NiobiumEditRoutes::FeatureCount; ++Index)
+    {
+        NiobiumEditRoutes::Status[Index].store(Statuses[Index]);
+        NiobiumEditRoutes::NativeValue[Index].store(Values[Index]);
+        NiobiumEditRoutes::PendingWrite[Index].store(-1);
+    }
+}
+
+// Options > Reset builds: on/off, the key (0 = none), what the game thread reports
+// (NiobiumQuickReset::EStatus: 0 idle, 1 not in a match, 2 checking, 3 unsupported, 4 ready),
+// waiting for a new key, the "mouse buttons can't be used" message, and Fortnite's own console
+// being open (one-line console).
+void Preview_SetResetBuilds(bool On, int VK, int GameStatus, bool Rebinding, bool MouseError, bool GameConsoleOpen)
+{
+    FConfiguration::bResetBuilds.store(On);
+    FConfiguration::ResetBuildsVK.store(VK);
+    NiobiumQuickReset::Status.store(GameStatus);
+    NiobiumQuickReset::GameConsoleState.store(GameConsoleOpen ? 1 : 0);
+    // Fortnite's console only opens with "Which console?" = Fortnite's (every other shot: ours).
+    FConfiguration::ConsoleMode.store(static_cast<int>(
+        GameConsoleOpen ? EConsoleMode::Unreal : EConsoleMode::Atlas));
+    FGUI::bRebindingResetBuilds = Rebinding;
+    g_BindError.clear();
+    g_BindErrorUntil = 0;
+    if (MouseError)
+        SetBindError(kBindMouseText, kBindMouseReason, 1);
+}
+
 // A few saved commands and one chain, to check that the row buttons fit (never saved to disk).
 void Preview_SetSavedCommands(bool Filled)
 {
@@ -100,3 +137,4 @@ bool ATLAS_PrepareReplicationForOpen(const char*, wchar_t*, unsigned __int64) { 
 bool Client::HasReceivedServerCommandList() { return true; }
 bool Client::IsConsoleCaptureReady() { return true; }
 uint64_t Client::GetConsoleSessionGeneration() { return 1; }
+uint64_t Client::GetWorldGeneration() { return 1; }

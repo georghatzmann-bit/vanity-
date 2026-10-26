@@ -25,6 +25,8 @@ void Preview_SetMeshQuality(int StartMeshQuality, int LiveMeshQuality);
 void Preview_SetBubbleLook(bool On, int Strength, int State, int AppliedCount);
 void Preview_SetSavedCommands(bool Filled);
 void Preview_SetRebinding(bool Rebinding);
+void Preview_SetEditRoutes(int EorStatus, int RorStatus, int PreStatus, int EorValue, int RorValue, int PreValue);
+void Preview_SetResetBuilds(bool On, int VK, int GameStatus, bool Rebinding, bool MouseError, bool GameConsoleOpen);
 
 #if NIOBIUM_PREVIEW_TRICKSHOT
 static bool g_PreviewInLobby = false;
@@ -80,14 +82,19 @@ int main(int Argc, char** Argv)
     // on and active / not available). MeshQuality: what the game's Meshes setting reports to
     // the Options status row when the session started (-1 = unknown, 0 = Low, 1 = High);
     // MeshLive: its value now (-2 = unchanged).
+    // Edit: what the Main > Editing rows report (EditDefault = nothing decided yet, which draws
+    // the hook switches as before). Reset: the Options > Reset builds rows.
     enum : unsigned { ExtraNone = 0, ExtraSaved = 1, ExtraRebind = 2, ExtraLobby = 4 };
-    enum : int { BubbleOff = 0, BubbleWaiting = 1, BubbleActive = 2, BubbleUnavailable = 3 };
+    enum : int { BubbleOff = 0, BubbleWaiting = 1, BubbleActive = 2, BubbleUnavailable = 3, BubblePaused = 4 };
+    enum : int { EditDefault = 0, EditHook, EditHookFailed, EditNative1910, EditNative2530, EditNativeStates };
+    enum : int { ResetOff = 0, ResetReady, ResetRebind, ResetUnsupported, ResetNoKey, ResetMouseError, ResetChecking, ResetGameConsole };
     struct Shot
     {
         const char* Name; int Tab; bool Menu; bool Console; bool Toast; float Scroll = -1.f;
         double Version = 0.0; const wchar_t* LauncherVersion = L""; bool Es31 = false;
         float SizeW = 0.f; float SizeH = 0.f; unsigned Extra = ExtraNone;
         int Bubble = BubbleOff; int MeshQuality = -1; int MeshLive = -2;
+        int Edit = EditDefault; int Reset = ResetOff;
     };
 #if NIOBIUM_PREVIEW_TRICKSHOT
     const Shot Shots[] = {
@@ -98,6 +105,18 @@ int main(int Argc, char** Argv)
         { "f9-1c-main-bubble-look", 0, true, false, false, 0.42f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleActive },
         { "f9-1d-main-bubble-waiting-small", 0, true, false, false, 0.5f, 19.10, L"19.10", true, 500.f, 320.f, ExtraNone, BubbleWaiting },
         { "f9-1e-main-bubble-unavailable", 0, true, false, false, 0.42f, 3.5, L"3.5", false, 0.f, 0.f, ExtraNone, BubbleUnavailable },
+        // Bubble look paused: 15.50 in Performance Mode with Meshes Low = Epic's own bubbles on.
+        { "f9-1j-main-bubble-paused", 0, true, false, false, 0.42f, 15.50, L"15.50", true, 0.f, 0.f, ExtraNone, BubblePaused, 0 },
+        // Main > Editing by route: 8.51 (all three use our hooks), 3.5 with one hook that couldn't
+        // be set up, 19.10 (Edit on release and pre-edits use Fortnite's own settings, Reset on
+        // release our hook), 25.30 (all three Fortnite's own), and 24.30 with the other native
+        // states (waiting, not on this version, a write that didn't stick).
+        { "f9-1f-main-editing-851-hook", 0, true, false, false, 0.f, 8.51, L"8.51", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditHook },
+        { "f9-1g-main-editing-35-hook-failed", 0, true, false, false, 0.f, 3.5, L"3.5", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditHookFailed },
+        { "f9-1h-main-editing-1910-native", 0, true, false, false, 0.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditNative1910 },
+        { "f9-1i-main-editing-2530-native", 0, true, false, false, 0.f, 25.30, L"25.30", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditNative2530 },
+        { "f9-1k-main-editing-2430-unavailable", 0, true, false, false, 0.f, 24.30, L"24.30", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditNativeStates },
+        { "f9-1l-main-editing-1910-small", 0, true, false, false, 0.2f, 19.10, L"19.10", false, 500.f, 320.f, ExtraNone, BubbleOff, -1, -2, EditNative1910 },
         { "f9-2-commands", 1, true, false, false },
         { "f9-2b-commands-saved", 1, true, false, false, -1.f, 0.0, L"", false, 0.f, 0.f, ExtraSaved },
         { "f9-3-options", 2, true, false, false, -1.f, 15.40, L"15.40", true },
@@ -113,6 +132,19 @@ int main(int Argc, char** Argv)
         { "f9-3i-options-bubble-19-meshes-now-low", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 1, 0 },
         { "f9-3j-options-bubble-19-meshes-now-high", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 0, 1 },
         { "f9-3k-options-bubble-19-meshes-unknown", 2, true, false, false, -1.f, 19.10, L"19.10", true },
+        // 15.40-16.00 also need Meshes Low (same rows as 19.x).
+        { "f9-3p-options-bubble-1550-meshes-high", 2, true, false, false, -1.f, 15.50, L"15.50", true, 0.f, 0.f, ExtraNone, BubbleOff, 1 },
+        // Options > Reset builds: ready with a key, waiting for a new key, the mouse-button message,
+        // no key yet, a server without it, checking, a version with Epic's own key, and Fortnite's
+        // own console open (keys typed there don't count).
+        { "f9-3l-options-reset-builds-ready", 2, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetReady },
+        { "f9-3m-options-reset-builds-rebind", 2, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetRebind },
+        { "f9-3n-options-reset-builds-mouse", 2, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetMouseError },
+        { "f9-3o-options-reset-builds-nokey", 2, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetNoKey },
+        { "f9-3q-options-reset-builds-unsupported", 2, true, false, false, 1.f, 8.51, L"8.51", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetUnsupported },
+        { "f9-3r-options-reset-builds-checking-small", 2, true, false, false, 0.75f, 19.10, L"19.10", false, 500.f, 320.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetChecking },
+        { "f9-3s-options-reset-builds-epic-37", 2, true, false, false, 1.f, 37.00, L"37.00", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetReady },
+        { "f9-3t-options-reset-builds-game-console", 2, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetGameConsole },
         { "f9-4-trickshot", 3, true, false, false },
         { "f9-4b-trickshot-middle", 3, true, false, false, 0.5f },
         { "f9-4c-trickshot-bottom", 3, true, false, false, 1.f },
@@ -151,10 +183,32 @@ int main(int Argc, char** Argv)
         Preview_SetMeshQuality(S.MeshQuality, S.MeshLive == -2 ? S.MeshQuality : S.MeshLive);
         // Strength 5 (the default); "active" shows 3 of the 4 textures loaded, to check the text.
         Preview_SetBubbleLook(S.Bubble != BubbleOff, 5,
-            S.Bubble == BubbleActive ? 2 : S.Bubble == BubbleWaiting ? 1 : S.Bubble == BubbleUnavailable ? 3 : 0,
+            S.Bubble == BubbleActive ? 2 : S.Bubble == BubbleWaiting ? 1 : S.Bubble == BubbleUnavailable ? 3 :
+                S.Bubble == BubblePaused ? 4 : 0,
             S.Bubble == BubbleActive ? 3 : 0);
         Preview_SetSavedCommands((S.Extra & ExtraSaved) != 0);
         Preview_SetRebinding((S.Extra & ExtraRebind) != 0);
+        switch (S.Edit)
+        {
+        case EditHook:         Preview_SetEditRoutes(1, 1, 1, -1, -1, -1); break;
+        case EditHookFailed:   Preview_SetEditRoutes(1, 2, 1, -1, -1, -1); break;
+        case EditNative1910:   Preview_SetEditRoutes(4, 1, 4, 1, -1, 0); break;
+        case EditNative2530:   Preview_SetEditRoutes(4, 4, 4, 1, 1, 0); break;
+        case EditNativeStates: Preview_SetEditRoutes(3, 5, 6, -1, -1, 1); break;
+        default:               Preview_SetEditRoutes(0, 0, 0, -1, -1, -1); break;
+        }
+        // Key "G" (0x47) for the shots that have a key.
+        switch (S.Reset)
+        {
+        case ResetReady:       Preview_SetResetBuilds(true, 0x47, 4, false, false, false); break;
+        case ResetRebind:      Preview_SetResetBuilds(true, 0, 0, true, false, false); break;
+        case ResetUnsupported: Preview_SetResetBuilds(true, 0x47, 3, false, false, false); break;
+        case ResetNoKey:       Preview_SetResetBuilds(true, 0, 0, false, false, false); break;
+        case ResetMouseError:  Preview_SetResetBuilds(true, 0, 0, false, true, false); break;
+        case ResetChecking:    Preview_SetResetBuilds(true, 0x47, 2, false, false, false); break;
+        case ResetGameConsole: Preview_SetResetBuilds(true, 0x47, 4, false, false, true); break;
+        default:               Preview_SetResetBuilds(false, 0, 0, false, false, false); break;
+        }
 #if NIOBIUM_PREVIEW_TRICKSHOT
         g_PreviewInLobby = (S.Extra & ExtraLobby) != 0;
 #endif

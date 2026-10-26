@@ -48,6 +48,8 @@ struct FGUI
 
     static inline std::atomic_int JoinHotkeyVK = VK_F5;
     static inline bool bRebindingJoin = false;
+    // [Niobium] Waiting for the new "Reset builds" key (F9 > Options).
+    static inline bool bRebindingResetBuilds = false;
 
     static inline std::vector<HotkeyPersist::CommandBind> Commands;
     static inline char CommandInput[256] = "";

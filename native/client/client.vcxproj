@@ -93,6 +93,8 @@
     <ClCompile Include="ATLAS\Private\GUI.cpp" />
     <ClCompile Include="ATLAS\Private\HotfixReload.cpp" />
     <ClCompile Include="ATLAS\Private\LoadoutTelemetry.cpp" />
+    <!-- [Niobium] "Reset builds" client half (game-thread pump, handshake, RPCs). -->
+    <ClCompile Include="ATLAS\Private\QuickReset.cpp" />
     <!-- [Niobium] Trickshot tab + banner: without pch.h (so the menu preview can also compile it
          on Linux), source with UTF-8 menu texts. -->
     <ClCompile Include="ATLAS\Private\NiobiumTrickshotTab.cpp">
@@ -112,6 +114,8 @@
     <ClInclude Include="SDK\Offsets.h" />
     <ClInclude Include="ATLAS\Public\NiobiumTrickshotTab.h" />
     <ClInclude Include="ATLAS\Public\BubbleLook.h" />
+    <ClInclude Include="ATLAS\Public\EditFeatureRoutes.h" />
+    <ClInclude Include="ATLAS\Public\QuickReset.h" />
     <ClInclude Include="third_party\nlohmann\json.hpp" />
   </ItemGroup>
   <ItemGroup>

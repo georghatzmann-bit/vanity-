@@ -63,7 +63,22 @@ namespace HotkeyPersist
         // "sprintByDefault" key (always written as false), and an old
         // "true" in it is ignored.
         bool RespawnsEnabled = true;
+        // [Niobium] "Reset builds" (F9 > Options): off and without a key by default. The key is
+        // never the left or right mouse button (those load as "none"). ResetBuildsProbe is a
+        // debug switch: only written when it is on.
+        bool ResetBuilds = false;
+        int ResetBuildsKey = 0;
+        bool ResetBuildsProbe = false;
     };
+
+    // [Niobium] Reset builds key from client.json: 1-254, never the left (1) or right (2) mouse
+    // button (they shoot and aim). Anything else is "none" (0).
+    inline int SanitizeResetBuildsKey(int vk)
+    {
+        if (vk <= 0 || vk > 254 || vk == 1 || vk == 2)
+            return 0;
+        return vk;
+    }
 
     inline std::recursive_mutex& GetSettingsMutex()
     {
@@ -497,6 +512,13 @@ namespace HotkeyPersist
         // stays off, even when an old file still says true.
         preferences.RespawnsEnabled = ParseBoolField(
             object, "respawnsEnabled", preferences.RespawnsEnabled);
+        // [Niobium] Reset builds. "resetBuilds" never matches "resetBuildsKey" (closing quote).
+        preferences.ResetBuilds = ParseBoolField(
+            object, "resetBuilds", preferences.ResetBuilds);
+        preferences.ResetBuildsKey = SanitizeResetBuildsKey(ParseIntField(
+            object, "resetBuildsKey", preferences.ResetBuildsKey));
+        preferences.ResetBuildsProbe = ParseBoolField(
+            object, "resetBuildsProbe", preferences.ResetBuildsProbe);
         return preferences;
     }
 
@@ -724,6 +746,10 @@ namespace HotkeyPersist
                 f << "    \"inGameFog\": " << boolean(preferences->InGameFog) << ",\n";
                 f << "    \"firstPerson\": " << boolean(preferences->FirstPerson) << ",\n";
                 f << "    \"sprintByDefault\": false,\n"; // removed option, always off
+                f << "    \"resetBuilds\": " << boolean(preferences->ResetBuilds) << ",\n";
+                f << "    \"resetBuildsKey\": " << SanitizeResetBuildsKey(preferences->ResetBuildsKey) << ",\n";
+                if (preferences->ResetBuildsProbe)
+                    f << "    \"resetBuildsProbe\": true,\n"; // debug only, see FConfiguration::bResetBuildsProbe
                 f << "    \"respawnsEnabled\": " << boolean(preferences->RespawnsEnabled) << "\n";
                 f << "  }";
             }

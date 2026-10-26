@@ -18,6 +18,8 @@
 #include "../Public/TournamentRefreshPolicy.h"
 #include "../Public/NiobiumTrickshotTab.h" // [Niobium] trickshot banner (NiobiumToast_Push)
 #include "../Public/BubbleLook.h" // [Niobium] Bubble look state shared with the menu
+#include "../Public/EditFeatureRoutes.h" // [Niobium] EOR/ROR/pre-edits: hook or Fortnite's own setting
+#include "../Public/QuickReset.h" // [Niobium] "Reset builds" (client half)
 
 #include <array>
 #include <atomic>
@@ -34,6 +36,8 @@ static std::atomic_bool g_ClientMessageCaptureInstalled = false;
 static std::atomic_bool g_ClientMessageCaptureEnabled = true;
 static std::atomic_bool g_ServerCommandListReceived = false;
 static std::atomic_uint64_t g_ConsoleSessionGeneration = 0;
+// [Niobium] World changes seen by the client tick (the menu resets toggle-only commands on it).
+static std::atomic_uint64_t g_WorldGeneration = 0;
 static std::atomic_uint32_t g_ClientMessageTextOffset = UINT32_MAX;
 static std::atomic_bool g_FrontendActive = false;
 
@@ -91,6 +95,11 @@ static ULONGLONG g_NextFrontendSelectionHookResolveAt = 0;
 static thread_local bool g_FrontendTournamentRefreshDispatchActive = false;
 static thread_local unsigned g_FrontendSelectionRebindDepth = 0;
 static std::atomic<DWORD> g_ClientGameThreadId = 0;
+// [Niobium] Last world / local controller the client tick saw, for the per-frame Reset builds
+// pump. Game thread only (written by ClientGameThreadTick, read by HookedGetMaxTickRate).
+static UWorld* g_QuickResetWorld = nullptr;
+static AFortPlayerControllerAthena* g_QuickResetController = nullptr;
+static bool g_QuickResetFrontend = true;
 static std::atomic<ArenaVisualTraceNative>
 	g_ArenaPlacementRpcOriginal = nullptr;
 static std::atomic<ArenaVisualTraceNative>
@@ -457,6 +466,21 @@ static void CaptureClientMessage(UObject* context, FFrame& stack, void* result)
 			{
 				return;
 			}
+			// [Niobium] Reset builds handshake ack ("nbedit:v1:a:<session16>", exact width).
+			if (copied && NiobiumQuickReset::HandleClientMessage(
+				messageCopy, length))
+			{
+				return;
+			}
+			// [Niobium] An old Niobium server answers the Reset builds hello (an unknown cheat
+			// command there) with its command list: stop the remaining hellos. The text itself
+			// still reaches the console as before.
+			if (copied && length > 0 &&
+				NiobiumQuickReset::IsWaitingForAck() &&
+				LooksLikeServerCommandList(messageCopy, length))
+			{
+				NiobiumQuickReset::NoteCommandListReply();
+			}
 			// Bridge messages are private transport. Suppress only exact,
 			// fixed-width markers; malformed and ordinary ClientMessage calls
 			// still flow to the console and the game's original handler.
@@ -553,6 +577,40 @@ static bool TryInstallClientMessageCapture(UObject* playerController)
 	return true;
 }
 
+// [Niobium] /Script/FortniteGame.FortPlayerController, found once (native class, never unloaded).
+// Looked up again at most every 2 s while it can't be found.
+static const UClass* ResolveFortPlayerControllerClass()
+{
+	static std::atomic<const UClass*> cached = nullptr;
+	static std::atomic<ULONGLONG> nextAttemptAt = 0;
+	static std::atomic_bool loggedMissing = false;
+
+	if (const UClass* found = cached.load(std::memory_order_acquire))
+		return found;
+	const ULONGLONG now = GetTickCount64();
+	if (now < nextAttemptAt.load(std::memory_order_acquire))
+		return nullptr;
+	nextAttemptAt.store(now + 2000, std::memory_order_release);
+
+	const UClass* found = nullptr;
+	__try
+	{
+		found = SDK::FindClass("FortPlayerController");
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		found = nullptr;
+	}
+	if (found)
+	{
+		cached.store(found, std::memory_order_release);
+		return found;
+	}
+	if (!loggedMissing.exchange(true, std::memory_order_acq_rel))
+		AtlasDiagnostics::WriteLine("local-controller class-check unavailable (FortPlayerController not found yet)");
+	return nullptr;
+}
+
 static AFortPlayerControllerAthena* GetLocalFortPlayerController()
 {
 	auto World = UWorld::GetWorld();
@@ -563,7 +621,18 @@ static AFortPlayerControllerAthena* GetLocalFortPlayerController()
 	if (LocalPlayers.Num() <= 0 || !LocalPlayers[0])
 		return nullptr;
 
-	return (AFortPlayerControllerAthena*)LocalPlayers[0]->PlayerController;
+	// [Niobium] Free camera (toggledebugcamera) replaces the local player's controller with a
+	// DebugCameraController, which is not a FortPlayerController. Never hand that out as one.
+	// If the class can't be resolved at all, keep the old behaviour (no check).
+	UObject* controller = LocalPlayers[0]->PlayerController;
+	if (!controller)
+		return nullptr;
+	if (const UClass* fortControllerClass = ResolveFortPlayerControllerClass())
+	{
+		if (!controller->IsA(fortControllerClass))
+			return nullptr;
+	}
+	return (AFortPlayerControllerAthena*)controller;
 }
 
 static bool IsLiveUObject(const UObject* object)
@@ -5906,6 +5975,23 @@ static void HookedDurianPhaseActivate(
 		phaseIndex, phaseActor, sequenceTimeOffset);
 }
 
+// [Niobium] CompleteBuildingEditInteraction crashed once and was switched off: every feature
+// that relied on it through our hook now shows "Couldn't be set up on this version." in F9
+// instead of a switch that silently does nothing.
+static void MarkEditCompletionHooksFailed()
+{
+	using namespace NiobiumEditRoutes;
+	const bool eor = GetStatus(EFeature::EditOnRelease) == EStatus::HookActive;
+	const bool ror = GetStatus(EFeature::ResetOnRelease) == EStatus::HookActive;
+	if (eor)
+		SetStatus(EFeature::EditOnRelease, EStatus::HookFailed);
+	if (ror)
+		SetStatus(EFeature::ResetOnRelease, EStatus::HookFailed);
+	AtlasDiagnostics::WriteLine(
+		"edit-routes complete-edit-crashed; hook off eor=%d ror=%d",
+		eor ? 1 : 0, ror ? 1 : 0);
+}
+
 static void SafeCompleteBuildingEditInteraction()
 {
 	if (!CompleteBuildingEditInteraction)
@@ -5915,6 +6001,7 @@ static void SafeCompleteBuildingEditInteraction()
 	if (!PlayerController)
 		return;
 
+	bool crashed = false;
 	__try
 	{
 		CompleteBuildingEditInteraction(PlayerController);
@@ -5922,7 +6009,10 @@ static void SafeCompleteBuildingEditInteraction()
 	__except (EXCEPTION_EXECUTE_HANDLER)
 	{
 		CompleteBuildingEditInteraction = nullptr;
+		crashed = true;
 	}
+	if (crashed)
+		MarkEditCompletionHooksFailed();
 }
 
 static uintptr_t FindTextLeaTargetNear(uintptr_t Center, int Before, int After)
@@ -5978,11 +6068,15 @@ static uintptr_t FindCompleteBuildingEditInteraction()
 	return 0;
 }
 
+// [Niobium] Second guard: the detours only add anything while their feature really uses the
+// hook route (EditFeatureRoutes.h). Where Fortnite's own setting is used they just call the
+// original, so our hook and Epic's setting never act together.
 void* SelectEdit(void* a1)
 {
 	void* result = SelectEditOG(a1);
 
-	if (FConfiguration::bEOREnabled)
+	if (FConfiguration::bEOREnabled &&
+		NiobiumEditRoutes::IsHookRouteActive(NiobiumEditRoutes::EFeature::EditOnRelease))
 		SafeCompleteBuildingEditInteraction();
 
 	return result;
@@ -5992,7 +6086,8 @@ void* SelectReset(void* a1)
 {
 	void* result = SelectResetOG(a1);
 
-	if (FConfiguration::bROREnabled)
+	if (FConfiguration::bROREnabled &&
+		NiobiumEditRoutes::IsHookRouteActive(NiobiumEditRoutes::EFeature::ResetOnRelease))
 		SafeCompleteBuildingEditInteraction();
 
 	return result;
@@ -6031,8 +6126,22 @@ static AActor* FindHighlightedPlacedBuilding(
 	return nullptr;
 }
 
+// [Niobium] Shared with Reset builds (QuickReset.cpp): the real placed piece behind a preview.
+AActor* Niobium_FindHighlightedPlacedBuilding(AFortPlayerControllerAthena* playerController)
+{
+	if (!IsLiveUObject(playerController))
+		return nullptr;
+	return FindHighlightedPlacedBuilding(playerController);
+}
+
 void PerformBuildingEditInteraction(AFortPlayerControllerAthena* _this)
 {
+	if (!NiobiumEditRoutes::IsHookRouteActive(NiobiumEditRoutes::EFeature::PreEdits))
+	{
+		PerformBuildingEditInteractionOG(_this);
+		return;
+	}
+
 	if (FConfiguration::bDisablePreEdits.load(
 			std::memory_order_acquire) &&
 		_this && _this->HasTargetedBuilding())
@@ -8617,7 +8726,10 @@ static void ApplyClientPlaylistConfiguration(
 			Playlist->RespawnTime.Value =
 				(float)FConfiguration::RespawnTime;
 		}
-		Playlist->RespawnType = 1;
+		// [Niobium] Only where the property exists (it may be missing on the oldest builds; a
+		// missing offset would write one byte in front of the object).
+		if (Playlist->HasRespawnType())
+			Playlist->RespawnType = 1;
 		if (Playlist->HasbAllowJoinInProgress())
 			Playlist->bAllowJoinInProgress = true;
 		if (Playlist->HasbForceRespawnLocationInsideOfVolume())
@@ -11747,6 +11859,9 @@ struct FBubbleLookRuntime
 	int ProbePerformanceMode = -1000;
 	bool ProbeLoggedProperties = false;
 	const UObject* FortKismetLibraryDefault = nullptr;
+	// [Niobium] -FeatureLevelES31 on the command line (read once, for the pause rule).
+	bool CommandLineChecked = false;
+	bool FeatureLevelES31 = false;
 };
 
 static FBubbleLookRuntime g_BubbleLook;
@@ -11845,8 +11960,9 @@ static bool WriteBubbleTextureLodBias(UObject* texture, uint32 offset, int32 val
 }
 
 // Calls a reflected getter that takes nothing and returns one plain value of returnSize bytes
-// (checked against the function's parameters first). Game thread only.
-static bool CallBubbleGetterUnsafe(
+// (checked against the function's parameters first). Game thread only. [Niobium] Shared by
+// Bubble look and the native edit settings (MaintainNativeEditSettings).
+static bool CallReflectedGetterUnsafe(
 	const UObject* target, const char* functionName, uint32 returnSize, void* output)
 {
 	if (!IsLiveUObject(target) || !functionName || !output || returnSize == 0 || returnSize > 8)
@@ -11872,12 +11988,70 @@ static bool CallBubbleGetterUnsafe(
 	return true;
 }
 
-static bool CallBubbleGetter(
+static bool CallReflectedGetter(
 	const UObject* target, const char* functionName, uint32 returnSize, void* output)
 {
 	__try
 	{
-		return CallBubbleGetterUnsafe(target, functionName, returnSize, output);
+		return CallReflectedGetterUnsafe(target, functionName, returnSize, output);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return false;
+	}
+}
+
+// [Niobium] A reflected function with exactly one 1-byte input parameter (a bool setter such as
+// SetEditConfirmOnReleaseEnabled) and nothing else: no return value, no out parameter.
+// offset receives where the parameter sits in the call buffer. Game thread only.
+static bool CheckReflectedBoolSetterUnsafe(UFunction* function, uint32* offset)
+{
+	if (offset)
+		*offset = 0;
+	if (!IsLiveUObject(function) || !offset)
+		return false;
+
+	constexpr uint64 kParm = 0x80;
+	constexpr uint64 kOutParm = 0x100;
+	constexpr uint64 kReturnParm = 0x400;
+	const auto params = function->GetParams();
+	if (params.NameOffsetMap.size() != 1 || params.Size == 0 || params.Size > 16)
+		return false;
+	const auto& parameter = params.NameOffsetMap[0];
+	if ((parameter.PropertyFlags & kParm) == 0 ||
+		(parameter.PropertyFlags & (kOutParm | kReturnParm)) != 0 ||
+		parameter.ElementSize != 1 || parameter.Offset >= params.Size)
+	{
+		return false;
+	}
+	*offset = parameter.Offset;
+	return true;
+}
+
+static bool CheckReflectedBoolSetter(UFunction* function, uint32* offset)
+{
+	__try
+	{
+		return CheckReflectedBoolSetterUnsafe(function, offset);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return false;
+	}
+}
+
+// Calls a setter checked with CheckReflectedBoolSetter. false only when the call crashed.
+static bool CallReflectedBoolSetter(
+	const UObject* target, UFunction* function, uint32 offset, bool value)
+{
+	if (!IsLiveUObject(target) || !IsLiveUObject(function) || offset >= 16)
+		return false;
+	__try
+	{
+		alignas(16) uint8 buffer[16]{};
+		buffer[offset] = value ? 1 : 0;
+		target->ProcessEvent(function, buffer);
+		return true;
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER)
 	{
@@ -11925,18 +12099,18 @@ static void ReadBubbleGameUserSettings(int* performanceMode, int* meshQuality)
 		return;
 
 	UObject* settings = nullptr;
-	if (!CallBubbleGetter(library, "GetFortGameUserSettings", sizeof(UObject*), &settings) ||
+	if (!CallReflectedGetter(library, "GetFortGameUserSettings", sizeof(UObject*), &settings) ||
 		!IsLiveUObject(settings))
 	{
 		return;
 	}
 
 	uint8 inPerformanceMode = 0;
-	if (CallBubbleGetter(settings, "IsInPerformanceMode", sizeof(uint8), &inPerformanceMode))
+	if (CallReflectedGetter(settings, "IsInPerformanceMode", sizeof(uint8), &inPerformanceMode))
 		*performanceMode = inPerformanceMode != 0 ? 1 : 0;
 
 	int32 quality = -1;
-	if (CallBubbleGetter(settings, "GetMeshQuality", sizeof(int32), &quality) &&
+	if (CallReflectedGetter(settings, "GetMeshQuality", sizeof(int32), &quality) &&
 		quality >= 0 && quality <= 16)
 	{
 		*meshQuality = quality;
@@ -12101,10 +12275,10 @@ static void PublishBubbleLookState(NiobiumBubbleLook::EState state, int appliedC
 	{
 		g_BubbleLook.LastState = static_cast<int>(state);
 		g_BubbleLook.LastAppliedCount = appliedCount;
-		static const char* const kNames[] = { "off", "waiting", "active", "unavailable" };
+		static const char* const kNames[] = { "off", "waiting", "active", "unavailable", "paused" };
 		const int index = static_cast<int>(state);
 		AtlasDiagnostics::WriteLine("bubble-look state=%s textures=%d",
-			index >= 0 && index < 4 ? kNames[index] : "?", appliedCount);
+			index >= 0 && index < 5 ? kNames[index] : "?", appliedCount);
 	}
 }
 
@@ -12122,15 +12296,27 @@ static void MaintainBubbleLook(ULONGLONG now, bool inMatch)
 		return;
 	g_BubbleLook.NextTickAt = now + kBubbleTickMs;
 
-	const bool desired = FConfiguration::bBubbleLook.load(std::memory_order_acquire);
+	const bool wanted = FConfiguration::bBubbleLook.load(std::memory_order_acquire);
 	const bool probe = FConfiguration::bBubbleProbe.load(std::memory_order_acquire);
 	const int32 strength = NiobiumBubbleLook::SanitizeStrength(
 		FConfiguration::BubbleStrength.load(std::memory_order_acquire));
 
-	// FortGameUserSettings: only on 19.x (for the Options status row) or with the probe.
+	// [Niobium] Started in Performance Mode by the launcher (-FeatureLevelES31)? Read once.
+	if (!g_BubbleLook.CommandLineChecked)
+	{
+		g_BubbleLook.CommandLineChecked = true;
+		g_BubbleLook.FeatureLevelES31 = NiobiumBubbleLook::HasFeatureLevelES31(GetCommandLineW());
+	}
+	const double bubbleVersion = VersionInfo.FortniteVersion;
+
+	// FortGameUserSettings: on 19.x (for the Options status row), whenever Performance Mode is on
+	// from 15.40 on (Meshes exists from 15.40; the bubbles need it on Low), or with the probe.
 	int performanceMode = NiobiumBubbleLook::PerformanceMode.load(std::memory_order_acquire);
 	int meshQuality = NiobiumBubbleLook::MeshQuality.load(std::memory_order_acquire);
-	if ((probe || NiobiumBubbleLook::IsLowMeshesVersion(VersionInfo.FortniteVersion)) &&
+	const bool readGameUserSettings = probe ||
+		NiobiumBubbleLook::IsLowMeshesVersion(bubbleVersion) ||
+		(g_BubbleLook.FeatureLevelES31 && NiobiumBubbleLook::HasMeshesSetting(bubbleVersion));
+	if (readGameUserSettings &&
 		now >= g_BubbleLook.NextSettingsReadAt)
 	{
 		g_BubbleLook.NextSettingsReadAt = now + kBubbleSettingsReadMs;
@@ -12149,12 +12335,21 @@ static void MaintainBubbleLook(ULONGLONG now, bool inMatch)
 		}
 	}
 
+	// [Niobium] Pause rule: while Epic's own Bubble Builds are really on (Performance Mode, a
+	// Supported or LowMeshes version, Meshes Low at session start), Bubble look puts the original
+	// values back and changes nothing: it would only blur them more.
+	const bool paused = wanted && NiobiumBubbleLook::EpicBubblesOn(
+		NiobiumBubbleLook::LevelFor(bubbleVersion), g_BubbleLook.FeatureLevelES31,
+		NiobiumBubbleLook::StartMeshQuality.load(std::memory_order_acquire));
+	const bool desired = wanted && !paused;
+	const EState idleState = paused ? EState::Paused : EState::Off;
+
 	bool anyApplied = false;
 	for (const FBubbleTextureSlot& slot : g_BubbleTextures)
 		anyApplied = anyApplied || slot.Applied;
 	if (!desired && !anyApplied && !probe)
 	{
-		PublishBubbleLookState(EState::Off, 0);
+		PublishBubbleLookState(idleState, 0);
 		return;
 	}
 
@@ -12190,12 +12385,12 @@ static void MaintainBubbleLook(ULONGLONG now, bool inMatch)
 	if (g_BubbleLook.OffsetState < 0)
 	{
 		// Nothing was ever written on this version (the offset never resolved).
-		PublishBubbleLookState(desired ? EState::Unavailable : EState::Off, 0);
+		PublishBubbleLookState(desired ? EState::Unavailable : idleState, 0);
 		return;
 	}
 	if (!g_BubbleLook.TextureClass || g_BubbleLook.OffsetState == 0)
 	{
-		PublishBubbleLookState(desired ? EState::Waiting : EState::Off, 0);
+		PublishBubbleLookState(desired ? EState::Waiting : idleState, 0);
 		return;
 	}
 
@@ -12325,7 +12520,7 @@ static void MaintainBubbleLook(ULONGLONG now, bool inMatch)
 	{
 		// A changed texture that isn't loaded right now is restored when the same object shows
 		// up again; a new object starts from the game's own value anyway.
-		PublishBubbleLookState(EState::Off, 0);
+		PublishBubbleLookState(idleState, 0);
 		return;
 	}
 	if (appliedCount > 0)
@@ -12334,6 +12529,299 @@ static void MaintainBubbleLook(ULONGLONG now, bool inMatch)
 		PublishBubbleLookState(EState::Unavailable, 0);
 	else
 		PublishBubbleLookState(EState::Waiting, 0);
+}
+
+// ---------------------------------------------------------------------------------------------
+// [Niobium] Fortnite's own edit settings (EditFeatureRoutes.h, "Native" route).
+//
+// From 11.00 (Edit on release), 15.20 (Disable pre-edits) and 24.30 (Reset on release) the F9 row
+// drives Epic's own setting on UFortClientSettingsRecord instead of our hook. Epic's value is the
+// source of truth: the game thread reads it about once a second and the menu shows it. We only
+// write when the player clicks the F9 switch (never at startup), call the setter, and read the
+// value back. If it didn't stick, the row is disabled for the rest of the session. Nothing goes
+// into client.json; the game itself may later save the record to our backend
+// (ClientSettings-<CL>.Sav, one file per build). On 10.x Epic's (mobile-only) EOR value is read
+// once for the log and never written.
+//
+// Rules: game thread only, one pass per second (or right after a click), names looked up by
+// reflection with the parameter layout checked first, every call guarded with SEH.
+
+static constexpr ULONGLONG kNativeEditReadMs = 1000;
+
+struct FNativeEditFunctions
+{
+	const UClass* SettingsClass = nullptr;
+	UFunction* Setter[NiobiumEditRoutes::FeatureCount]{};
+	uint32 SetterOffset[NiobiumEditRoutes::FeatureCount]{};
+	bool Present[NiobiumEditRoutes::FeatureCount]{};
+};
+
+struct FNativeEditRuntime
+{
+	ULONGLONG NextReadAt = 0;
+	FNativeEditFunctions Functions{};
+	const UObject* LastSettings = nullptr;
+	int LastValue[NiobiumEditRoutes::FeatureCount] = { -2, -2, -2 };
+	bool LoggedWaiting = false;
+	bool CheckedMobileEor = false;
+};
+
+static FNativeEditRuntime g_NativeEdit;
+
+// UFortLocalPlayer::ClientSettingsRecord (or GetClientSettings()) of the first local player.
+static UObject* ResolveClientSettingsRecordUnsafe(UWorld* world)
+{
+	if (!IsLiveUObject(world) || !world->OwningGameInstance ||
+		!IsLiveUObject(world->OwningGameInstance))
+	{
+		return nullptr;
+	}
+	auto& localPlayers = world->OwningGameInstance->LocalPlayers;
+	if (localPlayers.Num() <= 0 || !IsLiveUObject(localPlayers[0]))
+		return nullptr;
+	UObject* localPlayer = localPlayers[0];
+
+	UObject* settings = ReadStrongObjectProperty(localPlayer, "ClientSettingsRecord");
+	if (!settings)
+	{
+		UObject* fromGetter = nullptr;
+		if (CallReflectedGetter(localPlayer, "GetClientSettings", sizeof(UObject*), &fromGetter) &&
+			IsLiveUObject(fromGetter))
+		{
+			settings = fromGetter;
+		}
+	}
+	return settings;
+}
+
+// Getter (no parameters, 1-byte return) and setter (one 1-byte input) per feature, checked once
+// per settings class.
+static void ResolveNativeEditFunctionsUnsafe(UObject* settings)
+{
+	using namespace NiobiumEditRoutes;
+	if (g_NativeEdit.Functions.SettingsClass == settings->Class)
+		return;
+
+	FNativeEditFunctions functions{};
+	functions.SettingsClass = settings->Class;
+	for (int index = 0; index < FeatureCount; ++index)
+	{
+		const EFeature feature = static_cast<EFeature>(index);
+		UFunction* setter = settings->GetFunction(NativeSetterName(feature));
+		uint32 offset = 0;
+		uint8 probe = 0;
+		const bool setterOk = IsLiveUObject(setter) && CheckReflectedBoolSetter(setter, &offset);
+		const bool getterOk = CallReflectedGetter(settings, NativeGetterName(feature), 1, &probe);
+		functions.Setter[index] = setterOk ? setter : nullptr;
+		functions.SetterOffset[index] = offset;
+		functions.Present[index] = setterOk && getterOk;
+	}
+	g_NativeEdit.Functions = functions;
+	AtlasDiagnostics::WriteLine(
+		"edit-routes native-functions class=%p eor=%d ror=%d pre=%d",
+		settings->Class,
+		functions.Present[0] ? 1 : 0, functions.Present[1] ? 1 : 0, functions.Present[2] ? 1 : 0);
+}
+
+static void LogEditRoutes(const char* when)
+{
+	using namespace NiobiumEditRoutes;
+	static const char* const kStatusNames[] = {
+		"unknown", "hook", "hook-failed", "native-waiting", "native", "native-missing", "native-failed"
+	};
+	const auto name = [](EFeature feature) -> const char*
+	{
+		const int status = Status[Index(feature)].load(std::memory_order_acquire);
+		return status >= 0 && status < 7 ? kStatusNames[status] : "?";
+	};
+	AtlasDiagnostics::WriteLine(
+		"edit-routes %s version=%.2f eor=%s ror=%s pre=%s complete=%p",
+		when, VersionInfo.FortniteVersion,
+		name(EFeature::EditOnRelease), name(EFeature::ResetOnRelease), name(EFeature::PreEdits),
+		reinterpret_cast<void*>(CompleteBuildingEditInteraction));
+}
+
+static void MaintainNativeEditSettingsUnsafe(ULONGLONG now, UWorld* world)
+{
+	using namespace NiobiumEditRoutes;
+	const long long version = VersionHundredths(VersionInfo.FortniteVersion);
+
+	bool anyNative = false;
+	bool writePending = false;
+	for (int index = 0; index < FeatureCount; ++index)
+	{
+		if (PlannedRoute(static_cast<EFeature>(index), version) != ERoute::Native)
+			continue;
+		anyNative = true;
+		writePending = writePending ||
+			PendingWrite[index].load(std::memory_order_acquire) >= 0;
+	}
+	// 10.00-10.40: read Epic's mobile-only EOR value once, only for the log.
+	const bool checkMobileEor = !g_NativeEdit.CheckedMobileEor && version >= 1000 &&
+		PlannedRoute(EFeature::EditOnRelease, version) == ERoute::Hook;
+	if (!anyNative && !checkMobileEor)
+		return;
+	if (now < g_NativeEdit.NextReadAt && !writePending)
+		return;
+	g_NativeEdit.NextReadAt = now + kNativeEditReadMs;
+
+	UObject* settings = ResolveClientSettingsRecordUnsafe(world);
+	if (!settings)
+	{
+		// Not loaded yet (or no local player): keep waiting, drop clicks that can't be applied.
+		for (int index = 0; index < FeatureCount; ++index)
+		{
+			const EFeature feature = static_cast<EFeature>(index);
+			if (PlannedRoute(feature, version) != ERoute::Native)
+				continue;
+			if (GetStatus(feature) == EStatus::Unknown)
+				SetStatus(feature, EStatus::NativeWaiting);
+			if (GetStatus(feature) != EStatus::NativeReady)
+				PendingWrite[index].store(-1, std::memory_order_release);
+		}
+		if (!g_NativeEdit.LoggedWaiting)
+		{
+			g_NativeEdit.LoggedWaiting = true;
+			AtlasDiagnostics::WriteLine("edit-routes native waiting-for-client-settings");
+		}
+		return;
+	}
+	if (settings != g_NativeEdit.LastSettings)
+	{
+		g_NativeEdit.LastSettings = settings;
+		AtlasDiagnostics::WriteLine(
+			"edit-routes client-settings record=%p class=%p", settings, settings->Class);
+	}
+	ResolveNativeEditFunctionsUnsafe(settings);
+
+	if (checkMobileEor)
+	{
+		g_NativeEdit.CheckedMobileEor = true;
+		uint8 mobileValue = 0;
+		if (CallReflectedGetter(settings, NativeGetterName(EFeature::EditOnRelease), 1, &mobileValue))
+		{
+			AtlasDiagnostics::WriteLine(
+				"edit-routes eor-epic-mobile-setting value=%d our-hook=%s (mobile-only on 10.x, never written)",
+				mobileValue ? 1 : 0,
+				IsHookRouteActive(EFeature::EditOnRelease) ? "active" : "inactive");
+		}
+	}
+
+	bool changedRoutes = false;
+	for (int index = 0; index < FeatureCount; ++index)
+	{
+		const EFeature feature = static_cast<EFeature>(index);
+		if (PlannedRoute(feature, version) != ERoute::Native)
+			continue;
+
+		const EStatus status = GetStatus(feature);
+		if (status == EStatus::NativeMissing || status == EStatus::NativeFailed)
+		{
+			PendingWrite[index].store(-1, std::memory_order_release);
+			continue;
+		}
+		if (!g_NativeEdit.Functions.Present[index])
+		{
+			SetStatus(feature, EStatus::NativeMissing);
+			PendingWrite[index].store(-1, std::memory_order_release);
+			changedRoutes = true;
+			continue;
+		}
+
+		const int pending = PendingWrite[index].exchange(-1, std::memory_order_acq_rel);
+		if ((pending == 0 || pending == 1) && status == EStatus::NativeReady)
+		{
+			const bool wanted = pending == 1;
+			if (!CallReflectedBoolSetter(settings, g_NativeEdit.Functions.Setter[index],
+					g_NativeEdit.Functions.SetterOffset[index], wanted))
+			{
+				SetStatus(feature, EStatus::NativeFailed);
+				changedRoutes = true;
+				AtlasDiagnostics::WriteLine(
+					"edit-routes native-write-crashed feature=%s", FeatureLogName(feature));
+				continue;
+			}
+			uint8 readBack = 0;
+			const bool readOk = CallReflectedGetter(settings, NativeGetterName(feature), 1, &readBack);
+			if (readOk)
+				NativeValue[index].store(readBack ? 1 : 0, std::memory_order_release);
+			if (!readOk || (readBack != 0) != wanted)
+			{
+				SetStatus(feature, EStatus::NativeFailed);
+				changedRoutes = true;
+				AtlasDiagnostics::WriteLine(
+					"edit-routes native-write-failed feature=%s wanted=%d read-back=%d",
+					FeatureLogName(feature), wanted ? 1 : 0, readOk ? (readBack ? 1 : 0) : -1);
+				continue;
+			}
+			g_NativeEdit.LastValue[index] = readBack ? 1 : 0;
+			AtlasDiagnostics::WriteLine(
+				"edit-routes native-write feature=%s value=%d", FeatureLogName(feature), wanted ? 1 : 0);
+			// 24.30+: the "Auto Confirm Edits" choice is built from the two bools. Probe only.
+			if (feature != EFeature::PreEdits)
+			{
+				uint8 combined = 0xFF;
+				if (CallReflectedGetter(settings, "GetCombinedConfirmEditResetEnabled", 1, &combined))
+				{
+					AtlasDiagnostics::WriteLine(
+						"edit-routes auto-confirm-edits combined=%u (0 off, 1 edit, 2 reset, 3 both)",
+						static_cast<unsigned>(combined));
+				}
+			}
+			continue;
+		}
+
+		uint8 current = 0;
+		if (!CallReflectedGetter(settings, NativeGetterName(feature), 1, &current))
+		{
+			// The getter stopped answering: treat it as missing (fail closed).
+			SetStatus(feature, EStatus::NativeMissing);
+			changedRoutes = true;
+			continue;
+		}
+		const int value = current ? 1 : 0;
+		NativeValue[index].store(value, std::memory_order_release);
+		if (status != EStatus::NativeReady)
+		{
+			SetStatus(feature, EStatus::NativeReady);
+			changedRoutes = true;
+		}
+		if (g_NativeEdit.LastValue[index] != value)
+		{
+			AtlasDiagnostics::WriteLine(
+				"edit-routes native-value feature=%s value=%d",
+				FeatureLogName(feature), value);
+			g_NativeEdit.LastValue[index] = value;
+		}
+	}
+	if (changedRoutes)
+		LogEditRoutes("native");
+}
+
+static void MaintainNativeEditSettings(ULONGLONG now, UWorld* world)
+{
+	// Game thread only. The worker-thread fallback (headless hosts) never sets the id.
+	const DWORD gameThreadId = g_ClientGameThreadId.load(std::memory_order_acquire);
+	if (gameThreadId == 0 || gameThreadId != GetCurrentThreadId())
+		return;
+	__try
+	{
+		MaintainNativeEditSettingsUnsafe(now, world);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		// Something in Epic's settings object crashed: stop using every native route.
+		for (int index = 0; index < NiobiumEditRoutes::FeatureCount; ++index)
+		{
+			const auto feature = static_cast<NiobiumEditRoutes::EFeature>(index);
+			if (NiobiumEditRoutes::GetStatus(feature) == NiobiumEditRoutes::EStatus::NativeReady ||
+				NiobiumEditRoutes::GetStatus(feature) == NiobiumEditRoutes::EStatus::NativeWaiting)
+			{
+				NiobiumEditRoutes::SetStatus(feature, NiobiumEditRoutes::EStatus::NativeFailed);
+			}
+		}
+		AtlasDiagnostics::WriteLine("edit-routes native crashed; native routes off for this session");
+	}
 }
 
 static UWorld* ClientGameThreadTick()
@@ -12391,6 +12879,7 @@ static UWorld* ClientGameThreadTick()
 		observedSessionController = nullptr;
 		g_ServerCommandListReceived.store(
 			false, std::memory_order_release);
+		g_WorldGeneration.fetch_add(1, std::memory_order_acq_rel);
 	}
 
 	if (!playerController)
@@ -12419,6 +12908,13 @@ static UWorld* ClientGameThreadTick()
 	MaintainBubbleLook(now,
 		!frontendActive && IsLiveUObject(world) && IsLiveUObject(playerController) &&
 			!IsFrontendWorld(world));
+	// [Niobium] Fortnite's own edit settings (native routes): game thread only, once per second
+	// or right after an F9 click.
+	MaintainNativeEditSettings(now, world);
+	// [Niobium] What the per-frame Reset builds pump works with (checked again every frame).
+	g_QuickResetWorld = world;
+	g_QuickResetController = playerController;
+	g_QuickResetFrontend = frontendActive || IsFrontendWorld(world);
 	MaintainFirstPersonRuntimeState(
 		world, playerController, frontendActive, now);
 	if (supportsArenaRuntime)
@@ -12576,6 +13072,13 @@ static float HookedGetMaxTickRate(
 		UWorld* world = ClientGameThreadTick();
 		AtlasHotfixReload::GameThreadTick(world);
 	}
+
+	// [Niobium] Reset builds: every frame, so a key press is handled right away and edit mode is
+	// sampled each frame. Uses the world/controller the client tick last saw (checked inside).
+	NiobiumQuickReset::GameThreadPump(
+		g_QuickResetWorld, g_QuickResetController, g_QuickResetFrontend,
+		g_ClientMessageCaptureInstalled.load(std::memory_order_acquire),
+		currentThreadId);
 
 	GUI_PumpGameThreadCommands();
 	return result;
@@ -12795,6 +13298,72 @@ static bool InstallGameThreadPump()
 	return true;
 }
 
+// [Niobium] Reads the first byte of a hook target and the byte before it (SEH only; no C++
+// objects in this function, see IsPlausibleEditHookTarget).
+static bool LooksLikeFunctionStartUnsafeRead(uintptr_t addr)
+{
+	__try
+	{
+		const uint8 first = *reinterpret_cast<const uint8*>(addr);
+		const uint8 before = *reinterpret_cast<const uint8*>(addr - 1);
+		if (first == 0xCC || first == 0x00)
+			return false;
+		if ((addr & 0xF) == 0)
+			return true;
+		return before == 0xCC || before == 0xC3 || before == 0x90;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return false;
+	}
+}
+
+// [Niobium] A target from the 3-byte edit search that looks like a real function start: inside
+// .text, executable, not padding itself, and either 16-byte aligned (MSVC's usual function
+// alignment) or right after int3/ret/nop padding. Never an exact proof, but it turns a match in
+// the middle of an instruction into "not installed" instead of a hook on random code.
+static bool IsPlausibleEditHookTarget(uintptr_t addr)
+{
+	if (!addr)
+		return false;
+	auto textSection = Memcury::PE::Section::GetSection(".text");
+	if (!textSection.isInSection(addr) || !textSection.isInSection(addr - 1) ||
+		!IsExecutableHookTarget(addr))
+	{
+		return false;
+	}
+	return LooksLikeFunctionStartUnsafeRead(addr);
+}
+
+// [Niobium] Creates and enables one edit hook on its own (no MH_ALL_HOOKS), checking both
+// results. On failure the hook is removed again and the original pointer cleared.
+template <typename TOriginal>
+static bool InstallEditHook(const char* name, uintptr_t target, void* detour, TOriginal& original)
+{
+	const MH_STATUS createStatus = Utils::Hook(target, detour, original);
+	if (createStatus != MH_OK || !original)
+	{
+		original = nullptr;
+		AtlasDiagnostics::WriteLine(
+			"edit-hooks %s create-failed status=%d target=%p",
+			name, static_cast<int>(createStatus), reinterpret_cast<void*>(target));
+		return false;
+	}
+	const MH_STATUS enableStatus = MH_EnableHook(reinterpret_cast<LPVOID>(target));
+	if (enableStatus != MH_OK && enableStatus != MH_ERROR_ENABLED)
+	{
+		MH_RemoveHook(reinterpret_cast<LPVOID>(target));
+		original = nullptr;
+		AtlasDiagnostics::WriteLine(
+			"edit-hooks %s enable-failed status=%d target=%p",
+			name, static_cast<int>(enableStatus), reinterpret_cast<void*>(target));
+		return false;
+	}
+	AtlasDiagnostics::WriteLine(
+		"edit-hooks %s installed target=%p", name, reinterpret_cast<void*>(target));
+	return true;
+}
+
 void Client::Init()
 {
 	g_FrontendActive.store(false, std::memory_order_release);
@@ -12856,23 +13425,88 @@ void Client::Init()
 			}
 		}
 
-		if (auto CompleteBuildingEditInteractionAddr = FindCompleteBuildingEditInteraction())
-			CompleteBuildingEditInteraction = (void (*)(void*))CompleteBuildingEditInteractionAddr;
+		uintptr_t CompleteAddr = FindCompleteBuildingEditInteraction();
 
-		if (MH_Initialize() == MH_ERROR_ALREADY_INITIALIZED) 
-		{ 
-			/* already set up, skip */ 
+		// [Niobium] The byte search only matches 3 bytes, so check every target before hooking:
+		// inside .text, a plausible function start, and all four different. A failed check
+		// means no hook and the F9 row says "Couldn't be set up on this version".
+		const auto plausible = [&](uintptr_t addr, uintptr_t a, uintptr_t b, uintptr_t c) -> bool
+		{
+			if (!IsPlausibleEditHookTarget(addr))
+				return false;
+			return addr != a && addr != b && addr != c;
+		};
+		const bool selectEditOk = plausible(SelectEditAddr, SelectResetAddr, PerformBuildingEditInteractionAddr, CompleteAddr);
+		const bool selectResetOk = plausible(SelectResetAddr, SelectEditAddr, PerformBuildingEditInteractionAddr, CompleteAddr);
+		const bool performOk = plausible(PerformBuildingEditInteractionAddr, SelectEditAddr, SelectResetAddr, CompleteAddr);
+		const bool completeOk = plausible(CompleteAddr, SelectEditAddr, SelectResetAddr, PerformBuildingEditInteractionAddr);
+		if (completeOk)
+			CompleteBuildingEditInteraction = (void (*)(void*))CompleteAddr;
+		AtlasDiagnostics::WriteLine(
+			"edit-hooks targets select-edit=%p(%d) select-reset=%p(%d) perform=%p(%d) complete=%p(%d)",
+			reinterpret_cast<void*>(SelectEditAddr), selectEditOk ? 1 : 0,
+			reinterpret_cast<void*>(SelectResetAddr), selectResetOk ? 1 : 0,
+			reinterpret_cast<void*>(PerformBuildingEditInteractionAddr), performOk ? 1 : 0,
+			reinterpret_cast<void*>(CompleteAddr), completeOk ? 1 : 0);
+
+		const MH_STATUS initializeStatus = MH_Initialize();
+		const bool minHookReady =
+			initializeStatus == MH_OK || initializeStatus == MH_ERROR_ALREADY_INITIALIZED;
+		if (!minHookReady)
+		{
+			AtlasDiagnostics::WriteLine(
+				"edit-hooks install-failed initialize-status=%d", static_cast<int>(initializeStatus));
 		}
 
-		if (VersionInfo.FortniteVersion < 11 && SelectEditAddr && CompleteBuildingEditInteraction)
-			Utils::Hook(SelectEditAddr, SelectEdit, SelectEditOG);
-		if (VersionInfo.FortniteVersion < 15.20 && PerformBuildingEditInteractionAddr)
-			Utils::Hook(PerformBuildingEditInteractionAddr, PerformBuildingEditInteraction, PerformBuildingEditInteractionOG);
-		if (VersionInfo.FortniteVersion < 24.30 && SelectResetAddr && CompleteBuildingEditInteraction)
-			Utils::Hook(SelectResetAddr, SelectReset, SelectResetOG);
-
-		MH_EnableHook(MH_ALL_HOOKS);
+		using NiobiumEditRoutes::EFeature;
+		const long long editVersion = NiobiumEditRoutes::VersionHundredths(VersionInfo.FortniteVersion);
+		// Same version rule as the menu (EditFeatureRoutes.h); only below each boundary.
+		if (NiobiumEditRoutes::PlannedRoute(EFeature::EditOnRelease, editVersion) == NiobiumEditRoutes::ERoute::Hook)
+		{
+			const bool installed = minHookReady && selectEditOk && CompleteBuildingEditInteraction &&
+				InstallEditHook("select-edit", SelectEditAddr, reinterpret_cast<void*>(SelectEdit),
+					SelectEditOG);
+			NiobiumEditRoutes::SetStatus(EFeature::EditOnRelease,
+				installed ? NiobiumEditRoutes::EStatus::HookActive : NiobiumEditRoutes::EStatus::HookFailed);
+		}
+		if (NiobiumEditRoutes::PlannedRoute(EFeature::PreEdits, editVersion) == NiobiumEditRoutes::ERoute::Hook)
+		{
+			const bool installed = minHookReady && performOk &&
+				InstallEditHook("perform-building-edit-interaction", PerformBuildingEditInteractionAddr,
+					reinterpret_cast<void*>(PerformBuildingEditInteraction),
+					PerformBuildingEditInteractionOG);
+			NiobiumEditRoutes::SetStatus(EFeature::PreEdits,
+				installed ? NiobiumEditRoutes::EStatus::HookActive : NiobiumEditRoutes::EStatus::HookFailed);
+		}
+		if (NiobiumEditRoutes::PlannedRoute(EFeature::ResetOnRelease, editVersion) == NiobiumEditRoutes::ERoute::Hook)
+		{
+			const bool installed = minHookReady && selectResetOk && CompleteBuildingEditInteraction &&
+				InstallEditHook("select-reset", SelectResetAddr, reinterpret_cast<void*>(SelectReset),
+					SelectResetOG);
+			NiobiumEditRoutes::SetStatus(EFeature::ResetOnRelease,
+				installed ? NiobiumEditRoutes::EStatus::HookActive : NiobiumEditRoutes::EStatus::HookFailed);
+		}
 	}
+
+	// [Niobium] Every feature whose version uses Fortnite's own setting waits for the game
+	// thread to find it (MaintainNativeEditSettings). Hooks are never installed for those.
+	for (int index = 0; index < NiobiumEditRoutes::FeatureCount; ++index)
+	{
+		const auto feature = static_cast<NiobiumEditRoutes::EFeature>(index);
+		if (NiobiumEditRoutes::PlannedRoute(feature,
+				NiobiumEditRoutes::VersionHundredths(VersionInfo.FortniteVersion)) ==
+				NiobiumEditRoutes::ERoute::Native &&
+			NiobiumEditRoutes::GetStatus(feature) == NiobiumEditRoutes::EStatus::Unknown)
+		{
+			NiobiumEditRoutes::SetStatus(feature, NiobiumEditRoutes::EStatus::NativeWaiting);
+		}
+		else if (NiobiumEditRoutes::GetStatus(feature) == NiobiumEditRoutes::EStatus::Unknown)
+		{
+			// Hook route planned but the edit search block didn't run: nothing was installed.
+			NiobiumEditRoutes::SetStatus(feature, NiobiumEditRoutes::EStatus::HookFailed);
+		}
+	}
+	LogEditRoutes("startup");
 
 	const bool interactiveClient =
 		g_ClientMessageCaptureEnabled.load(
@@ -12913,6 +13547,11 @@ bool Client::HasReceivedServerCommandList()
 uint64_t Client::GetConsoleSessionGeneration()
 {
 	return g_ConsoleSessionGeneration.load(std::memory_order_acquire);
+}
+
+uint64_t Client::GetWorldGeneration()
+{
+	return g_WorldGeneration.load(std::memory_order_acquire);
 }
 
 bool Client::IsFrontendActive()
