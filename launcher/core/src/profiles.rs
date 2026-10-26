@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::bots::BotSkill;
 use crate::version::BuildInfo;
 
 pub const PORT_BACKEND_DEFAULT: u16 = 3551;
@@ -48,6 +49,24 @@ pub struct Profile {
     pub lategame: bool,
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Infinite ammo on the server. Off = "like back then" (Classic match).
+    #[serde(default)]
+    pub infinite_ammo: bool,
+    /// Infinite building materials on the server. Off = Classic match.
+    #[serde(default)]
+    pub infinite_mats: bool,
+    /// Play with AI bots (only 19.10-CL-18675304 for now, see `bots::bots_support`).
+    #[serde(default)]
+    pub bots: bool,
+    /// Number of AI bots, 1–99 (clamped when sent to the server).
+    #[serde(default = "default_bot_count")]
+    pub bot_count: u32,
+    #[serde(default)]
+    pub bot_skill: BotSkill,
+}
+
+fn default_bot_count() -> u32 {
+    crate::bots::BOT_COUNT_DEFAULT
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -229,6 +248,11 @@ impl Config {
                 playlist: "Playlist_DefaultSolo".into(),
                 lategame: false,
                 tags: vec!["Solo".into()],
+                infinite_ammo: false,
+                infinite_mats: false,
+                bots: false,
+                bot_count: crate::bots::BOT_COUNT_DEFAULT,
+                bot_skill: BotSkill::Easy,
             };
             self.active_profile_id = p.id.clone();
             self.profiles.push(p);
@@ -526,6 +550,64 @@ mod tests {
         assert_eq!(NOTE_BACKEND_PORT_FIXED, "Backend port is fixed at 3551 (the game connects there).");
         let mut only_backend = Settings { backend_port: 3552, ..Settings::default() };
         assert_eq!(only_backend.pin_fixed_ports(), vec![NOTE_BACKEND_PORT_FIXED]);
+    }
+
+    #[test]
+    fn old_profile_gets_classic_defaults() {
+        // A profile saved before the bot and ammo/mats fields existed
+        let p: Profile = serde_json::from_str(
+            r#"{"id":"p-1","name":"Mine","buildId":"19.10-18675304","playlist":"Playlist_DefaultDuo","lategame":true,"tags":["Duos"]}"#,
+        )
+        .unwrap();
+        assert!(p.lategame, "an existing Lategame choice stays");
+        assert!(!p.infinite_ammo && !p.infinite_mats);
+        assert!(!p.bots);
+        assert_eq!(p.bot_count, 30);
+        assert_eq!(p.bot_skill, BotSkill::Easy);
+        // the whole config of an old launcher still loads
+        let c: Config = serde_json::from_str(
+            r#"{"profiles":[{"id":"p-default","name":"Default","buildId":"x"}],"activeProfileId":"p-default"}"#,
+        )
+        .unwrap();
+        assert_eq!(c.profiles[0].bot_count, 30);
+        assert!(!c.profiles[0].lategame);
+    }
+
+    #[test]
+    fn new_profile_fields_use_camel_case() {
+        let mut c = Config::default();
+        c.upsert_build(build("19.10-18675304"));
+        let mut p = c.profiles[0].clone();
+        assert!(!p.lategame && !p.infinite_ammo && !p.infinite_mats && !p.bots, "Classic match");
+        assert_eq!((p.bot_count, p.bot_skill), (30, BotSkill::Easy));
+        p.bots = true;
+        p.bot_count = 12;
+        p.bot_skill = BotSkill::Hard;
+        p.infinite_ammo = true;
+        let json = serde_json::to_value(&p).unwrap();
+        assert_eq!(json["bots"], true);
+        assert_eq!(json["botCount"], 12);
+        assert_eq!(json["botSkill"], "hard");
+        assert_eq!(json["infiniteAmmo"], true);
+        assert_eq!(json["infiniteMats"], false);
+        let back: Profile = serde_json::from_value(json).unwrap();
+        assert_eq!(back.bot_skill, BotSkill::Hard);
+        assert_eq!(back.bot_count, 12);
+    }
+
+    #[test]
+    fn profile_with_bots_survives_save_and_load() {
+        let dir = std::env::temp_dir().join(format!("niobium-bots-cfg-{}", std::process::id()));
+        let path = dir.join("config.json");
+        let mut c = Config::default();
+        c.upsert_build(build("19.10-18675304"));
+        c.profiles[0].bots = true;
+        c.profiles[0].bot_skill = BotSkill::Normal;
+        save_to(&path, &c).unwrap();
+        let loaded = load_from(&path);
+        assert!(loaded.profiles[0].bots);
+        assert_eq!(loaded.profiles[0].bot_skill, BotSkill::Normal);
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

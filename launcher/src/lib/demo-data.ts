@@ -2,7 +2,7 @@
  * Sample data – only for the browser preview (without Tauri) and for texts that are the same everywhere.
  * In the real launcher builds, profiles, friends, logs and crashes come from Rust.
  */
-import type { BuildInfo, CrashReport, Friend, LogLine, Profile } from "./api";
+import type { BuildInfo, Catalog, CatalogBuild, CatalogSeason, CrashReport, Friend, LogLine, Profile, SeasonStatus } from "./api";
 
 export const demoBuilds: BuildInfo[] = [
   {
@@ -46,6 +46,16 @@ export const demoFriends: Friend[] = [
   { id: "f2", name: "Lena", via: "Radmin VPN", address: "26.31.4.120" },
 ];
 
+/** Match rules of a new profile: "Classic match" (like back then) and no AI bots. */
+export const classicMatch = {
+  lategame: false,
+  infiniteAmmo: false,
+  infiniteMats: false,
+  bots: false,
+  botCount: 30,
+  botSkill: "easy",
+} as const satisfies Partial<Profile>;
+
 export const demoProfiles: Profile[] = [
   {
     id: "p-standard",
@@ -56,8 +66,8 @@ export const demoProfiles: Profile[] = [
     launchArgs: "-d3d11",
     headlessServer: true,
     playlist: "Playlist_DefaultSolo",
-    lategame: false,
     tags: ["Solo"],
+    ...classicMatch,
   },
   {
     id: "p-trickshot",
@@ -68,8 +78,10 @@ export const demoProfiles: Profile[] = [
     launchArgs: "-d3d11",
     headlessServer: true,
     playlist: "Playlist_ShowdownAlt_Duos",
-    lategame: false,
     tags: ["Team Rumble", "Trickshot"],
+    ...classicMatch,
+    infiniteAmmo: true,
+    infiniteMats: true,
   },
   {
     id: "p-arena",
@@ -80,8 +92,12 @@ export const demoProfiles: Profile[] = [
     launchArgs: "-d3d11",
     headlessServer: true,
     playlist: "Playlist_ShowdownAlt_Solo",
-    lategame: true,
     tags: ["Arena", "Lategame"],
+    ...classicMatch,
+    lategame: true,
+    bots: true,
+    botCount: 24,
+    botSkill: "normal",
   },
 ];
 
@@ -205,3 +221,85 @@ export const credits: { group: string; items: Credit[] }[] = [
     ],
   },
 ];
+
+// ---- Build downloader: the catalog the browser preview shows (same shape and texts as Rust) ----
+
+/** Card texts – the same as NOTE_NOT_FROM_EPIC / NOTE_NOT_OFFERED_YET in core/src/epic/catalog.rs. */
+export const seasonNotes = {
+  notFromEpic:
+    "Epic has deleted part of the files for this season, so no download can get it complete. If you already have this version on your PC, it keeps working. Add it with 'Add a build'.",
+  notOfferedYet: "Niobium's game server isn't ready for this season yet, so it isn't offered.",
+} as const;
+
+const GB = 1e9;
+const big = "Very big: about 100 GB on disk (Epic made builds smaller from 14.40 on).";
+function demoBuild(version: string, cl: number, downloadGb: number, installedGb: number, note = ""): CatalogBuild {
+  return {
+    key: `${version}-CL-${cl}`,
+    version,
+    cl,
+    downloadBytes: Math.round(downloadGb * GB),
+    installedBytes: Math.round(installedGb * GB),
+    badge: "experimental",
+    note,
+  };
+}
+
+/** [chapter, season, label, major, status when no build is offered, builds] */
+const demoSeasons: [number, number, string, number, SeasonStatus, CatalogBuild[]][] = [
+  ...Array.from({ length: 10 }, (_, i) => [1, i + 1, i === 9 ? "Season X" : `Season ${i + 1}`, i + 1, "notFromEpic", []] as [number, number, string, number, SeasonStatus, CatalogBuild[]]),
+  [2, 1, "Season 1", 11, "notFromEpic", []],
+  [2, 2, "Season 2", 12, "notFromEpic", []],
+  [2, 3, "Season 3", 13, "available", [
+    demoBuild("13.30", 13884634, 45.09, 97.16, "Very big: about 97 GB on disk (Epic made builds smaller from 14.40 on)."),
+    demoBuild("13.40", 14008768, 46.09, 99.52, big),
+    demoBuild("13.40", 14036559, 46.09, 99.52, big),
+    demoBuild("13.40", 14113327, 46.09, 99.52, big),
+  ]],
+  [2, 4, "Season 4", 14, "notFromEpic", []],
+  [2, 5, "Season 5", 15, "available", [demoBuild("15.00", 14826719, 32.72, 36.2), demoBuild("15.00", 14835335, 32.72, 36.2)]],
+  [2, 6, "Season 6", 16, "available", [demoBuild("16.00", 15685441, 35.14, 38.85, "Has the Chapter 2 'bubble wrap' build look (Bubble Builds).")]],
+  [2, 7, "Season 7", 17, "available", [demoBuild("17.21", 16949556, 38.38, 42.55), demoBuild("17.21", 16967001, 38.38, 42.55), demoBuild("17.50", 17388565, 40.3, 44.46)]],
+  [2, 8, "Season 8", 18, "available", [
+    demoBuild("18.00", 17468642, 40.06, 44.24),
+    demoBuild("18.10", 17619277, 40.1, 44.28),
+    demoBuild("18.10", 17661844, 40.1, 44.29),
+    demoBuild("18.20", 17745267, 40.57, 44.81),
+    demoBuild("18.20", 17792290, 40.57, 44.81),
+    demoBuild("18.21", 17811397, 40.71, 44.96),
+    demoBuild("18.30", 17882303, 41.1, 45.38),
+  ]],
+  [3, 1, "Season 1", 19, "notFromEpic", []],
+  [3, 2, "Season 2", 20, "notFromEpic", []],
+  [3, 3, "Season 3", 21, "notOfferedYet", []],
+  [3, 4, "Season 4", 22, "notOfferedYet", []],
+  [4, 1, "Season 1", 23, "notOfferedYet", []],
+  [4, 2, "Season 2", 24, "notOfferedYet", []],
+  [4, 3, "Season 3", 25, "notOfferedYet", []],
+  [4, 4, "Season 4", 26, "notOfferedYet", []],
+  [4, 5, "Season OG", 27, "notOfferedYet", []],
+  [5, 1, "Season 1", 28, "notOfferedYet", []],
+  [5, 2, "Season 2", 29, "notOfferedYet", []],
+  [5, 3, "Season 3", 30, "notOfferedYet", []],
+];
+
+export const demoCatalog: Catalog = {
+  checkedOn: "2026-10-26",
+  chapters: [1, 2, 3, 4, 5].map((chapter) => ({
+    chapter,
+    label: `Chapter ${chapter}`,
+    seasons: demoSeasons
+      .filter(([c]) => c === chapter)
+      .map(([, season, label, major, status, builds]): CatalogSeason => {
+        const st: SeasonStatus = builds.length > 0 ? "available" : status === "available" ? "notOfferedYet" : status;
+        return {
+          season,
+          label,
+          versions: `${major}.x`,
+          status: st,
+          note: st === "available" ? "" : seasonNotes[st],
+          builds,
+        };
+      }),
+  })),
+};

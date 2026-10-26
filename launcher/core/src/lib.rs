@@ -1,7 +1,9 @@
 //! Platform-independent logic of the launcher – no windows, so it can be tested on any system.
 
+pub mod bots;
 pub mod crash;
 pub mod earlylog;
+pub mod epic;
 pub mod helperprocs;
 pub mod launchargs;
 pub mod logparse;

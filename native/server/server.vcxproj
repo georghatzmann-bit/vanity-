@@ -226,6 +226,7 @@
     <ClInclude Include="FortniteGame\Public\FortPlayerPawnAthena.h" />
     <ClInclude Include="FortniteGame\Public\FortPlayerStateAthena.h" />
     <ClInclude Include="FortniteGame\Public\FortPlaylistAthena.h" />
+    <ClInclude Include="FortniteGame\Public\PlayerBots_19_10.h" />
     <ClInclude Include="FortniteGame\Public\FortQuestManager.h" />
     <ClInclude Include="FortniteGame\Public\FortSafeZoneIndicator.h" />
     <ClInclude Include="FortniteGame\Public\FortVolume.h" />
@@ -294,6 +295,7 @@
     <ClCompile Include="FortniteGame\Private\FortVehicleSeatWeaponComponent.cpp" />
     <ClCompile Include="FortniteGame\Private\FortWeaponMods.cpp" />
     <ClCompile Include="FortniteGame\Private\FortWeaponRanged.cpp" />
+    <ClCompile Include="FortniteGame\Private\PlayerBots_19_10.cpp" />
     <ClCompile Include="ImGui\imgui.cpp" />
     <ClCompile Include="ImGui\imgui_draw.cpp" />
     <ClCompile Include="ImGui\imgui_impl_dx11.cpp" />

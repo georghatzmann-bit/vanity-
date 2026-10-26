@@ -29,6 +29,7 @@
 #include "../Public/FortVehicleSeatWeaponComponent.h"
 #include "../Public/CustomSafeZoneRuntime.h"
 #include <Erbium/Public/NiobiumParkour.h> // NIOBIUM: parkour/targetbot + trickshot detection
+#include "../Public/PlayerBots_19_10.h" // NIOBIUM: 19.10 AI player bots (bus jump)
 
 #include <d3d11.h>
 #include <sstream>
@@ -1034,14 +1035,16 @@ static AFortPlayerControllerAthena* ResolveAircraftPlayerController(UObject* Con
     if (!Context)
         return nullptr;
 
+    auto PlayerControllerClass = AFortPlayerControllerAthena::StaticClass();
     auto AircraftComponentClass = FindClass("FortControllerComponent_Aircraft");
     if (AircraftComponentClass && Context->IsA(AircraftComponentClass))
     {
-        return (AFortPlayerControllerAthena*)
-            ((UActorComponent*)Context)->GetOwner();
+        // NIOBIUM: AI bot controllers carry this component too; they are no player controllers.
+        auto Owner = ((UActorComponent*)Context)->GetOwner();
+        return Owner && PlayerControllerClass && Owner->IsA(PlayerControllerClass)
+            ? (AFortPlayerControllerAthena*)Owner : nullptr;
     }
 
-    auto PlayerControllerClass = AFortPlayerControllerAthena::StaticClass();
     return PlayerControllerClass && Context->IsA(PlayerControllerClass)
         ? (AFortPlayerControllerAthena*)Context : nullptr;
 }
@@ -6446,6 +6449,18 @@ static void ApplyAutoGodModeOnAircraftJump(AFortPlayerControllerAthena* PlayerCo
 uint32 ServerAttemptAircraftJumpVft;
 void AFortPlayerControllerAthena::ServerAttemptAircraftJump_(UObject* Context, FFrame& Stack)
 {
+    // NIOBIUM: a 19.10 AI player bot (PlayerBots_19_10.cpp) jumping from the bus. Its controller
+    // is no player controller and the code below only knows players (it would leave the bot on the
+    // bus), so the game's own jump code handles it. Never true while bots are off.
+    if (ServerAttemptAircraftJump_OG && PlayerBots1910::IsActive() && Context)
+    {
+        static auto AircraftComponentClass = FindClass("FortControllerComponent_Aircraft");
+        auto BotOwner = AircraftComponentClass && Context->IsA(AircraftComponentClass)
+            ? ((UActorComponent*)Context)->GetOwner() : nullptr;
+        if (PlayerBots1910::IsAIBotController(BotOwner))
+            return ServerAttemptAircraftJump_OG(Context, Stack);
+    }
+
     FRotator Rotation;
     Stack.StepCompiledIn(&Rotation);
     Stack.IncrementCode();
@@ -13162,12 +13177,16 @@ void AFortPlayerControllerAthena::ClientOnPawnDied(AFortPlayerControllerAthena* 
     }
     auto KillerPlayerState = DeathReport.HasKillerPlayerState() ? (AFortPlayerStateAthena*)
                   DeathReport.KillerPlayerState : nullptr;
-    auto KillerPawn = DeathReport.HasKillerPawn() ? (AFortPlayerPawnAthena*)
-                  DeathReport.KillerPawn : nullptr;
+    // NIOBIUM: the killer can be an NPC (wildlife, guards, bosses) whose pawn is no player pawn.
+    // The raw pawn is only used for the native elimination call and for distances; everything
+    // that reads player-pawn fields uses KillerPawn, which is null for such killers.
+    AActor* KillerReportPawn = DeathReport.HasKillerPawn() ? (AActor*)DeathReport.KillerPawn
+        : nullptr;
+    if (!IsUsableDeathObject(KillerReportPawn))
+        KillerReportPawn = nullptr;
+    auto KillerPawn = KillerReportPawn ? KillerReportPawn->Cast<AFortPlayerPawnAthena>() : nullptr;
     if (!IsUsableDeathObject(KillerPlayerState))
         KillerPlayerState = nullptr;
-    if (!IsUsableDeathObject(KillerPawn))
-        KillerPawn = nullptr;
     auto KillerPlayerController = (KillerPlayerState && KillerPlayerState->HasOwner() &&
          IsUsableDeathObject(KillerPlayerState->Owner)) ? KillerPlayerState->Owner
                   ->Cast<AFortPlayerControllerAthena>() : nullptr;
@@ -13413,7 +13432,7 @@ void AFortPlayerControllerAthena::ClientOnPawnDied(AFortPlayerControllerAthena* 
                     DeadPawn && DeadPawn->HasGameplayTags() ? &DeadPawn->GameplayTags : nullptr);
             }
             if (FDeathInfo::HasDistance())
-                PlayerState->DeathInfo.Distance = PlayerController->Pawn ? (PlayerState->DeathInfo.DeathCause != /*EDeathCause::FallDamage*/ 1 ? (KillerPawn ? KillerPawn->GetDistanceTo(PlayerController->Pawn) : 0) : (PlayerController->MyFortPawn->HasLastFallDistance() ? PlayerController->MyFortPawn->LastFallDistance : 0)) : 0;
+                PlayerState->DeathInfo.Distance = PlayerController->Pawn ? (PlayerState->DeathInfo.DeathCause != /*EDeathCause::FallDamage*/ 1 ? (KillerReportPawn ? KillerReportPawn->GetDistanceTo(PlayerController->Pawn) : 0) : (PlayerController->MyFortPawn->HasLastFallDistance() ? PlayerController->MyFortPawn->LastFallDistance : 0)) : 0;
             if (FDeathInfo::HasbInitialized())
                 PlayerState->DeathInfo.bInitialized = true;
             VersionFeatureAdapter::MarkReplicatedPropertyDirty(PlayerState, L"DeathInfo");
@@ -13533,7 +13552,7 @@ void AFortPlayerControllerAthena::ClientOnPawnDied(AFortPlayerControllerAthena* 
                     return nullptr;
                 };
 
-            float KillDistanceCm = KillerPawn && DeadPawn ? KillerPawn->GetDistanceTo(DeadPawn) : 0.f;
+            float KillDistanceCm = KillerReportPawn && DeadPawn ? KillerReportPawn->GetDistanceTo(DeadPawn) : 0.f;
             int KillDistanceMeters = static_cast<int>(KillDistanceCm / 100.f);
 
             auto KillerConn = FindConnectionByPlayerState(KillerPlayerState);
@@ -13592,7 +13611,8 @@ void AFortPlayerControllerAthena::ClientOnPawnDied(AFortPlayerControllerAthena* 
                 const ULONGLONG RemoveFromAlivePlayersStartMs = GetTickCount64();
                 ((void (*)(AFortGameMode*, AFortPlayerControllerAthena*, AFortPlayerStateAthena*, AFortPlayerPawnAthena*, UFortItemDefinition*, uint8, char))RemoveFromAlivePlayers_)(
                     GameMode, PlayerController,
-                    KillerPlayerState == PlayerState ? nullptr : KillerPlayerState, KillerPawn,
+                    KillerPlayerState == PlayerState ? nullptr : KillerPlayerState,
+                    (AFortPlayerPawnAthena*)KillerReportPawn, // native takes any AFortPawn
                     DamageCauserWeaponData,
                     PlayerState->HasDeathInfo() ? PlayerState->DeathInfo.DeathCause : 0, 0);
                 const ULONGLONG RemoveFromAlivePlayersElapsedMs =
@@ -14536,7 +14556,7 @@ void AFortPlayerControllerAthena::InternalPickup(FFortItemEntry* PickupEntry)
         {
             auto& Item = WorldInventory->Inventory.ReplicatedEntries.Get(i, FFortItemEntry::Size());
 
-            if (AFortInventory::IsPrimaryQuickbar(Item.ItemDefinition) && (!Item.ItemDefinition->HasbForceIntoOverflow() || !Item.ItemDefinition->bForceIntoOverflow))
+            if (Item.ItemDefinition && AFortInventory::IsPrimaryQuickbar(Item.ItemDefinition) && (!Item.ItemDefinition->HasbForceIntoOverflow() || !Item.ItemDefinition->bForceIntoOverflow))
             {
                 ItemCount++;
             }
@@ -14556,6 +14576,24 @@ void AFortPlayerControllerAthena::InternalPickup(FFortItemEntry* PickupEntry)
 
     FinalLoc.X += cos(FinalAngle) * 100.f;
     FinalLoc.Y += sin(FinalAngle) * 100.f;
+
+    // NIOBIUM: the world pickup is already used up when this runs, so an item (or part of a stack)
+    // that can't be added must go back on the ground instead of vanishing.
+    auto DropPawn = Pawn ? Pawn : MyFortPawn;
+    const FVector DropOrigin = DropPawn ? DropPawn->K2_GetActorLocation() +
+        DropPawn->GetActorForwardVector() * 70.f + FVector(0, 0, 50) : FVector();
+    auto DropBack = [&](int32 Count)
+        {
+            if (Count <= 0)
+                return;
+            if (!DropPawn || !AFortInventory::SpawnPickup(DropOrigin, *PickupEntry,
+                    EFortPickupSourceTypeFlag::GetPlayer(), EFortPickupSpawnSource::GetUnset(),
+                    MyFortPawn, Count, true, true, true, nullptr, FinalLoc))
+            {
+                SDK::DbgLog("[Pickup] could not put an item back on the ground controller=%p "
+                    "item=%p count=%d\n", (void*)this, (void*)PickupEntry->ItemDefinition, Count);
+            }
+        };
 
     auto _SendStat = [&](int Count)
         {
@@ -14580,27 +14618,40 @@ void AFortPlayerControllerAthena::InternalPickup(FFortItemEntry* PickupEntry)
         {
             if (ItemCount >= 5 && AFortInventory::IsPrimaryQuickbar(PickupEntry->ItemDefinition))
             {
-                if (!MyFortPawn || !MyFortPawn->CurrentWeapon)
-                    return;
-
-                if (AFortInventory::IsPrimaryQuickbar(((AFortWeapon*)MyFortPawn->CurrentWeapon)->WeaponData))
+                // NIOBIUM: slots full and nothing in hand used to return here and lose the item.
+                auto HeldWeapon = MyFortPawn && MyFortPawn->CurrentWeapon
+                    ? MyFortPawn->CurrentWeapon->Cast<AFortWeapon>() : nullptr;
+                if (!HeldWeapon || !HeldWeapon->WeaponData)
                 {
-                    auto itemEntry = WorldInventory->Inventory.ReplicatedEntries.Search([&](FFortItemEntry& entry)
-                        { return entry.ItemGuid == ((AFortWeapon*)MyFortPawn->CurrentWeapon)->ItemEntryGuid; }, FFortItemEntry::Size());
+                    DropBack(PickupEntry->Count);
+                    return;
+                }
 
-                    if (!itemEntry)
+                if (AFortInventory::IsPrimaryQuickbar(HeldWeapon->WeaponData))
+                {
+                    FGuid HeldGuid = HeldWeapon->ItemEntryGuid; // FGuid::operator== takes a non-const reference
+                    auto itemEntry = WorldInventory->Inventory.ReplicatedEntries.Search([&](FFortItemEntry& entry)
+                        { return entry.ItemGuid == HeldGuid; }, FFortItemEntry::Size());
+
+                    // Only take the held weapon out once it is safely on the ground; otherwise keep
+                    // it and put the new item back instead.
+                    if (!itemEntry || !DropPawn || !AFortInventory::SpawnPickup(DropOrigin,
+                            *itemEntry, EFortPickupSourceTypeFlag::GetPlayer(),
+                            EFortPickupSpawnSource::GetUnset(), MyFortPawn, -1, true, true, true,
+                            nullptr, FinalLoc))
+                    {
+                        DropBack(PickupEntry->Count);
                         return;
-                    AFortInventory::SpawnPickup(
-                        Pawn->K2_GetActorLocation() + Pawn->GetActorForwardVector() * 70.f + FVector(0, 0, 50),
-                        *itemEntry, EFortPickupSourceTypeFlag::GetPlayer(),
-                        EFortPickupSpawnSource::GetUnset(), MyFortPawn, -1, true, true, true,
-                        nullptr, FinalLoc);
-                    WorldInventory->Remove(((AFortWeapon*)MyFortPawn->CurrentWeapon)->ItemEntryGuid);
+                    }
+                    WorldInventory->Remove(HeldGuid);
                     bool bForceFocusHandled = false;
                     auto Item = WorldInventory->GiveItem(*PickupEntry, PickupEntry->Count, true,
                         true, &bForceFocusHandled);
                     if (!Item)
+                    {
+                        DropBack(PickupEntry->Count);
                         return;
+                    }
                     if (!bForceFocusHandled)
                     {
                         ServerExecuteInventoryItem(Item->ItemEntry.ItemGuid);
@@ -14628,16 +14679,16 @@ void AFortPlayerControllerAthena::InternalPickup(FFortItemEntry* PickupEntry)
                 }
                 else
                 {
-                    AFortInventory::SpawnPickup(
-                        Pawn->K2_GetActorLocation() + Pawn->GetActorForwardVector() * 70.f + FVector(0, 0, 50),
-                        *PickupEntry, EFortPickupSourceTypeFlag::GetPlayer(),
-                        EFortPickupSpawnSource::GetUnset(), MyFortPawn, -1, true, true, true,
-                        nullptr, FinalLoc);
+                    // Pickaxe (or another non-slot item) in hand: no swap, the item goes back down.
+                    DropBack(PickupEntry->Count);
                     return;
                 }
             }
-            else
-                WorldInventory->GiveItem(*PickupEntry, PickupEntry->Count, true);
+            else if (!WorldInventory->GiveItem(*PickupEntry, PickupEntry->Count, true))
+            {
+                DropBack(PickupEntry->Count);
+                return;
+            }
 
             _SendStat(PickupEntry->Count);
         };
@@ -14656,13 +14707,11 @@ void AFortPlayerControllerAthena::InternalPickup(FFortItemEntry* PickupEntry)
                 {
                     _SendStat(OverflowCount);
                 }
+                else
+                    DropBack(OverflowCount);
             }
             else
-                AFortInventory::SpawnPickup(
-                    Pawn->K2_GetActorLocation() + Pawn->GetActorForwardVector() * 70.f + FVector(0, 0, 50),
-                    *PickupEntry, EFortPickupSourceTypeFlag::GetPlayer(),
-                    EFortPickupSpawnSource::GetUnset(), MyFortPawn, OverflowCount, true, true, true,
-                    nullptr, FinalLoc);
+                DropBack(OverflowCount);
         };
 
     if (MaxStack > 1)
@@ -14741,11 +14790,7 @@ void AFortPlayerControllerAthena::InternalPickup(FFortItemEntry* PickupEntry)
 
             if (!itemEntry && itemEntry2 && !bAllowsMultipleStacks)
             {
-                AFortInventory::SpawnPickup(
-                    Pawn->K2_GetActorLocation() + Pawn->GetActorForwardVector() * 70.f + FVector(0, 0, 50),
-                    *PickupEntry, EFortPickupSourceTypeFlag::GetPlayer(),
-                    EFortPickupSpawnSource::GetUnset(), MyFortPawn, PickupEntry->Count, true, true,
-                    true, nullptr, FinalLoc);
+                DropBack(PickupEntry->Count);
                 return;
             }
 
@@ -25942,12 +25987,24 @@ public:
     DEFINE_FUNC(OnRep_OwningPawn, void);
 };
 
+// NIOBIUM: pawn controllers are cast with Cast<>() below. AI bots and NPCs have no player
+// controller; the old C-style casts read player-controller fields from their memory.
+static AFortPlayerControllerAthena* GetPawnPlayerController(AFortPlayerPawnAthena* Pawn)
+{
+    return Pawn && Pawn->Controller ? Pawn->Controller->Cast<AFortPlayerControllerAthena>()
+        : nullptr;
+}
+
 void SetHeldObject(AFortPlayerPawnAthena* Pawn, AActor* HeldObject)
 {
-    auto PlayerController = (AFortPlayerControllerAthena*)Pawn->Controller;
+    if (!Pawn)
+        return;
+
+    auto PlayerController = GetPawnPlayerController(Pawn);
 
     Pawn->HeldObject = HeldObject;
-    PlayerController->bHoldingObject = HeldObject != nullptr;
+    if (PlayerController)
+        PlayerController->bHoldingObject = HeldObject != nullptr;
 }
 
 void SetupOwningPawn(UFortHeldObjectComponent* HeldObjectComponent, AFortPlayerPawnAthena* Pawn)
@@ -25988,7 +26045,9 @@ void SetupOwningPawn(UFortHeldObjectComponent* HeldObjectComponent, AFortPlayerP
     HeldObject->ForceNetUpdate();
     if (HeldObjectComponent->HasOnHeldObjectOwningPawnChanged())
         HeldObjectComponent->OnHeldObjectOwningPawnChanged.Process();
-    if (Pawn->HasOnHeldObjectPickedUp())
+    // NIOBIUM: on a drop Pawn is null and the previous pawn may be gone too.
+    auto DelegatePawn = Pawn ? Pawn : PreviousPawn;
+    if (DelegatePawn && DelegatePawn->HasOnHeldObjectPickedUp())
     {
         if (Pawn)
             Pawn->OnHeldObjectPickedUp.Process(HeldObject);
@@ -26004,12 +26063,16 @@ void PickupHeldObject(UObject* Context, FFrame& Stack)
     Stack.StepCompiledIn(&Pawn);
     Stack.IncrementCode();
     auto HeldObjectComponent = (UFortHeldObjectComponent*)Context;
+    if (!HeldObjectComponent || !Pawn)
+        return;
 
-    auto PlayerController = (AFortPlayerControllerAthena*)Pawn->Controller;
+    auto PlayerController = GetPawnPlayerController(Pawn);
 
     SetupOwningPawn(HeldObjectComponent, Pawn);
 
-    if (!HeldObjectComponent->GrantedWeaponItem.Get())
+    // Only a player controller has the inventory the held-object weapon goes into.
+    if (PlayerController && PlayerController->WorldInventory &&
+        !HeldObjectComponent->GrantedWeaponItem.Get())
     {
         auto ItemDefinition = HeldObjectComponent->EquippedWeaponItemDefinition.Get();
 
@@ -26069,18 +26132,21 @@ void DropHeldObject(UObject* Context, FFrame& Stack)
     if (!OwningPawn)
         return;
 
-    auto PlayerController = (AFortPlayerControllerAthena*)OwningPawn->Controller;
+    auto PlayerController = GetPawnPlayerController(OwningPawn);
 
     HeldObjectComponent->HeldObjectState = 4;
 
-    if (HeldObjectComponent->HasOwningPawn())
+    // NIOBIUM: re-equipping the previous weapon needs a player inventory and a previous weapon.
+    const bool bCanReequip = PlayerController && PlayerController->WorldInventory;
+    if (bCanReequip && HeldObjectComponent->HasOwningPawn())
     {
         auto OldPawn = HeldObjectComponent->OwningPawn;
-        printf("%p\n", OldPawn->PreviousWeapon);
-        auto PreviousIns = PlayerController->WorldInventory->Inventory.ReplicatedEntries.Search([&](FFortItemEntry& entry)
+        auto PreviousWeapon = OldPawn && OldPawn->PreviousWeapon
+            ? OldPawn->PreviousWeapon->Cast<AFortWeapon>() : nullptr;
+        auto PreviousIns = PreviousWeapon ? PlayerController->WorldInventory->Inventory.ReplicatedEntries.Search([&](FFortItemEntry& entry)
             {
-                return entry.ItemGuid == ((AFortWeapon*)OldPawn->PreviousWeapon)->ItemEntryGuid;
-            }, FFortItemEntry::Size());
+                return entry.ItemGuid == PreviousWeapon->ItemEntryGuid;
+            }, FFortItemEntry::Size()) : nullptr;
 
         if (PreviousIns)
         {
@@ -26095,20 +26161,23 @@ void DropHeldObject(UObject* Context, FFrame& Stack)
             }
         }
     }
-    else
+    else if (bCanReequip)
     {
         // its a weakobjectptr on older builds
         static auto OwningPawnOff = HeldObjectComponent->GetOffset("OwningPawn", 0x8000000);
         auto& OwningPawn = *(TWeakObjectPtr<AFortPlayerPawnAthena>*)(__int64(Context) + OwningPawnOff);
 
-        auto PreviousIns = PlayerController->WorldInventory->Inventory.ReplicatedEntries.Search([&](FFortItemEntry& entry)
+        auto WeakOwningPawn = OwningPawn.Get();
+        auto PreviousWeapon = WeakOwningPawn && WeakOwningPawn->PreviousWeapon
+            ? WeakOwningPawn->PreviousWeapon->Cast<AFortWeapon>() : nullptr;
+        auto PreviousIns = PreviousWeapon ? PlayerController->WorldInventory->Inventory.ReplicatedEntries.Search([&](FFortItemEntry& entry)
             {
-                return entry.ItemGuid == ((AFortWeapon*)OwningPawn->PreviousWeapon)->ItemEntryGuid;
-            }, FFortItemEntry::Size());
+                return entry.ItemGuid == PreviousWeapon->ItemEntryGuid;
+            }, FFortItemEntry::Size()) : nullptr;
 
         if (PreviousIns)
         {
-            auto Weapon = (AFortWeapon*)OwningPawn->EquipWeaponDefinition(
+            auto Weapon = (AFortWeapon*)WeakOwningPawn->EquipWeaponDefinition(
                 PreviousIns->ItemDefinition, PreviousIns->ItemGuid,
                 FFortItemEntry::HasTrackerGuid() ? PreviousIns->TrackerGuid : FGuid(), false);
 

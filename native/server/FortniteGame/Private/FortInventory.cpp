@@ -2783,12 +2783,23 @@ _out: return;
 
 void AFortInventory::RemoveWeaponAbilities(AActor* Weapon__Uncasted)
 {
-    auto Weapon = (AFortWeapon*)Weapon__Uncasted;
+    auto Weapon = Weapon__Uncasted ? Weapon__Uncasted->Cast<AFortWeapon>() : nullptr;
     auto ClearAbility = (void(*)(UAbilitySystemComponent*, FGameplayAbilitySpecHandle&)) ClearAbility_;
-    auto PlayerController = (AFortPlayerControllerAthena*)((AFortPlayerPawnAthena*)Weapon->Instigator)->Controller;
-    if (!PlayerController)
+    // NIOBIUM: any pawn can unequip a weapon (players, AI bots, NPCs) and the instigator can already
+    // be gone. Player controllers keep their path; other pawns use their own player state.
+    if (!Weapon || !ClearAbility || !Weapon->Instigator)
         return;
-    auto AbilitySystemComponent = PlayerController->PlayerState->AbilitySystemComponent;
+    auto InstigatorPawn = (AFortPlayerPawnAthena*)Weapon->Instigator; // only APawn fields are read
+    auto Controller = InstigatorPawn->Controller;
+    if (!Controller)
+        return;
+    auto PlayerController = Controller->Cast<AFortPlayerControllerAthena>();
+    auto PlayerState = PlayerController ? PlayerController->PlayerState
+        : (InstigatorPawn->PlayerState ? InstigatorPawn->PlayerState->Cast<AFortPlayerStateAthena>()
+            : nullptr);
+    auto AbilitySystemComponent = PlayerState ? PlayerState->AbilitySystemComponent : nullptr;
+    if (!AbilitySystemComponent)
+        return;
 
     if (Weapon->PrimaryAbilitySpecHandle.Handle != -1)
     {
@@ -2836,7 +2847,9 @@ void AFortInventory::RemoveWeaponAbilities(AActor* Weapon__Uncasted)
             UFortKismetLibrary::UnequipFortAbilitySet(Handle);
         }
 
-        PlayerController->AppliedInGameModifierAbilitySetHandles.Reset();
+        // Only player controllers have this map; AI bots and NPCs get here with no player controller.
+        if (PlayerController && PlayerController->HasAppliedInGameModifierAbilitySetHandles())
+            PlayerController->AppliedInGameModifierAbilitySetHandles.Reset();
         Weapon->EquippedAbilitySetHandles.ResetNum();
     }
 }
@@ -3814,7 +3827,12 @@ bool RemoveInventoryItemInternal(IInterface* Interface, FGuid& ItemGuid, int32 C
 
     auto PlayerController = reinterpret_cast<AFortPlayerControllerAthena*>(
             InterfaceAddress - InterfaceOffset);
-    if (!SDK::MemReadable(PlayerController, sizeof(void*)))
+    // NIOBIUM: the offset above is only right for player controllers. AI bot controllers implement
+    // the same inventory interface at another offset, so check that this really is a live player
+    // controller before reading its WorldInventory.
+    if (!SDK::MemReadable(PlayerController, sizeof(void*)) ||
+        !VersionFeatureAdapter::IsLiveObject(PlayerController) ||
+        !PlayerController->IsA(PlayerControllerClass))
     {
         return CallRemoveInventoryItemOriginal(Interface, ItemGuid, Count,
             bForceRemoveFromQuickBars, bForceRemoval);
@@ -4055,7 +4073,10 @@ void SetLoadedAmmo(UFortWorldItem* Item, int LoadedAmmo)
     Item->ItemEntry.LoadedAmmo = LoadedAmmo;
     Item->ItemEntry.bIsDirty = true;
 
-    auto PlayerController = (AFortPlayerControllerAthena*)Item->GetOwningController();
+    // NIOBIUM: AI bot items are owned by AI controllers, which have no WorldInventory.
+    auto OwningController = Item->GetOwningController();
+    auto PlayerController = OwningController ? OwningController->Cast<AFortPlayerControllerAthena>()
+        : nullptr;
     if (!PlayerController || !PlayerController->WorldInventory)
         return;
 
@@ -4086,7 +4107,10 @@ void SetPhantomReserveAmmo(UFortWorldItem* Item, unsigned int PhantomReserveAmmo
     if (!Item)
         return;
 
-    auto PlayerController = (AFortPlayerControllerAthena*)Item->GetOwningController();
+    // NIOBIUM: AI bot items are owned by AI controllers, which have no WorldInventory.
+    auto OwningController = Item->GetOwningController();
+    auto PlayerController = OwningController ? OwningController->Cast<AFortPlayerControllerAthena>()
+        : nullptr;
     if (!PlayerController || !PlayerController->WorldInventory)
         return;
 

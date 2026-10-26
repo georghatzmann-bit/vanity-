@@ -27,6 +27,7 @@
 #include "../Public/FortAthenaMutator.h"
 #include "../Public/FortPhysicsPawn.h"
 #include "../Public/FortVehicleMods.h"
+#include "../Public/PlayerBots_19_10.h" // NIOBIUM: 19.10 AI player bots
 
 #include <sstream>
 #include <fstream>
@@ -1525,6 +1526,10 @@ void SetupPlaylist(AFortGameMode* GameMode, AFortGameStateAthena* GameState)
         RefreshPlaylistReflectionCache(GameState);
 
         AFortPlayerControllerAthena::ApplyConfiguredRespawnPolicy();
+
+        // NIOBIUM: with 19.10 AI bots on, give the game mode the playlist's AI settings with the
+        // player bot service (no-op when bots are off or unavailable).
+        PlayerBots1910::OnSetupPlaylist(GameMode, Playlist);
 
         const bool bIsCarminePlaylist = IsCarminePlaylist(Playlist);
         const bool bIsNative1040LTM = FFortAthenaNativeLTMCompatibility::IsTargetPlaylist(Playlist);
@@ -6286,6 +6291,23 @@ void AFortGameMode::SpawnDefaultPawnFor(UObject* Context, FFrame& Stack, AActor*
     if (!NewPlayer || !StartSpot)
         return;
 
+    // NIOBIUM: 19.10 AI player bots (PlayerBots_19_10.cpp) are restarted through here with an AI
+    // controller, e.g. when they jump from the bus. Everything after the spawn reads
+    // player-controller fields (WorldInventory, XPComponent, ...), so they only get their pawn, and
+    // a blocked spawn gives up instead of retrying forever. False whenever bots are off.
+    if (PlayerBots1910::IsAIBotController(NewPlayer))
+    {
+        auto BotPawnClass = GameMode->GetDefaultPawnClassForController(NewPlayer);
+        auto BotPawn = UWorld::SpawnActor(BotPawnClass, StartSpot->GetTransform(), NewPlayer, 3);
+        for (int Attempt = 0; !BotPawn && BotPawnClass && Attempt < 8; ++Attempt)
+        {
+            if (auto PlayerStart = GameMode->ChoosePlayerStart(NewPlayer))
+                BotPawn = UWorld::SpawnActor(BotPawnClass, PlayerStart->GetTransform(), NewPlayer, 3);
+        }
+        *Ret = BotPawn;
+        return;
+    }
+
     auto GameState = GameMode->GameState;
     AFortPlayerPawnAthena* Pawn = nullptr;
 
@@ -7923,6 +7945,9 @@ bool AFortGameMode::StartAircraftPhase(AFortGameMode* GameMode, char a2)
             AFortPlayerControllerAthena::ClearDroppableInventoryForAircraft(PlayerController,
                     "legacy-phase");
         }
+
+        // NIOBIUM: 19.10 AI bots board the bus too (no-op when bots are off or unavailable).
+        PlayerBots1910::OnAircraftPhaseStarted(GameMode, GameState);
     }
 
     TickSupplyDropSuppression(true);
@@ -8474,6 +8499,101 @@ void OnWorldInitDone(UNavigationSystem* NavSys, char Mode)
     printf("OnWorldInitDone\n");
 }
 
+// NIOBIUM: one loot report per match for the launcher, as "[NiobiumLoot] ..." lines on the process
+// stdout. Like ArenaTelemetry, it writes to the inherited stdout handle (the launcher's pipe),
+// because this DLL's CRT stdout is redirected to stdout.log (dllmain.cpp).
+static void WriteNiobiumLootLine(const std::string& Text)
+{
+    const std::string Line = "[NiobiumLoot] " + Text + "\n";
+    bool bWritten = false;
+    const HANDLE Stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (Stdout && Stdout != INVALID_HANDLE_VALUE)
+    {
+        DWORD BytesWritten = 0;
+        bWritten = WriteFile(Stdout, Line.data(), static_cast<DWORD>(Line.size()), &BytesWritten,
+            nullptr) != FALSE && BytesWritten == Line.size();
+    }
+    if (!bWritten && stdout)
+    {
+        fwrite(Line.data(), 1, Line.size(), stdout);
+        fflush(stdout);
+    }
+}
+
+// The asset name of a soft item reference ("WID_Assault_AutoHigh_Athena_SR_Ore_T03"), read from
+// its path so the report doesn't load every item of the pool.
+static std::string GetSoftObjectAssetName(FSoftObjectPtr& Pointer)
+{
+    if (auto Object = Pointer.WeakPtr.Get())
+        return Object->Name.ToString().c_str();
+
+    std::string Path;
+    if (VersionInfo.EngineVersion <= 4.16)
+    {
+        auto& LongPath = *(FString*)(__int64(&Pointer) + offsetof(FSoftObjectPtr, ObjectID));
+        if (LongPath.Num() > 0)
+            Path = LongPath.ToString().c_str();
+    }
+    else if (VersionInfo.FortniteVersion >= 23)
+    {
+        auto& AssetName = *(FName*)(__int64(&Pointer) + (VersionInfo.EngineVersion < 5.3 ? 0x14 : 0xC));
+        if (AssetName.IsValid())
+            return AssetName.ToString().c_str();
+        auto& PackageName = *(FName*)(__int64(&Pointer) + (VersionInfo.EngineVersion < 5.3 ? 0x10 : 0x8));
+        if (PackageName.IsValid())
+            Path = PackageName.ToString().c_str();
+    }
+    else if (Pointer.ObjectID.AssetPathName.IsValid())
+    {
+        Path = Pointer.ObjectID.AssetPathName.ToString().c_str();
+    }
+
+    const auto Separator = Path.find_last_of("./");
+    return Separator == std::string::npos ? Path : Path.substr(Separator + 1);
+}
+
+static void ReportLootPool(const std::vector<std::string>& ContributingFeatures)
+{
+    static const UWorld* ReportedWorld = nullptr;
+    const UWorld* World = UWorld::GetWorld();
+    if (!World || ReportedWorld == World)
+        return;
+    ReportedWorld = World;
+
+    std::vector<std::string> Features = ContributingFeatures;
+    std::sort(Features.begin(), Features.end());
+    Features.erase(std::unique(Features.begin(), Features.end()), Features.end());
+
+    std::vector<std::string> Items;
+    for (auto& [PackageId, Rows] : LootPackageMap)
+    {
+        for (auto Row : Rows)
+        {
+            if (!Row || !(Row->Weight > 0.f))
+                continue;
+            auto Name = GetSoftObjectAssetName(Row->ItemDefinition);
+            if (!Name.empty() && Name != "None")
+                Items.push_back(std::move(Name));
+        }
+    }
+    std::sort(Items.begin(), Items.end());
+    Items.erase(std::unique(Items.begin(), Items.end()), Items.end());
+
+    std::string FeatureList;
+    for (const auto& Feature : Features)
+    {
+        if (!FeatureList.empty())
+            FeatureList += ", ";
+        FeatureList += Feature;
+    }
+
+    WriteNiobiumLootLine("features: " + (FeatureList.empty() ? std::string("none") : FeatureList));
+    WriteNiobiumLootLine("items: " + std::to_string(Items.size()));
+    constexpr size_t MaxItemLines = 400;
+    for (size_t Index = 0; Index < Items.size() && Index < MaxItemLines; ++Index)
+        WriteNiobiumLootLine("item " + Items[Index]);
+}
+
 void AFortGameMode::FinishWorldInitialization(AFortGameMode* _this, AActor* WorldManager)
 {
     auto GameMode = (AFortGameModeAthena*)_this;
@@ -8481,6 +8601,7 @@ void AFortGameMode::FinishWorldInitialization(AFortGameMode* _this, AActor* Worl
 
     SDK::DbgLog("[GameMode] FinishWorldInitialization entered (this=%p GameState=%p) pre-OG\n",
         (void*)_this, (void*)GameState);
+    PlayerBots1910::OnFinishWorldInitialization(_this); // NIOBIUM: no-op unless 19.10 AI bots are on
     FinishWorldInitializationOG(_this, WorldManager);
     SDK::DbgLog("[GameMode] FinishWorldInitialization post-OG\n");
 
@@ -8613,6 +8734,7 @@ void AFortGameMode::FinishWorldInitialization(AFortGameMode* _this, AActor* Worl
     for (auto& [_, Val] : LootPackageTempArr)
         LootPackageMap[Val->LootPackageID.ComparisonIndex].Add(Val);
 
+    std::vector<std::string> LootFeatureNames; // NIOBIUM: for the loot report below
     auto GameFeatureDataClass = FindClass("FortGameFeatureData");
     if (GameFeatureDataClass)
         for (int i = 0; i < TUObjectArray::Num(); i++)
@@ -8634,6 +8756,8 @@ void AFortGameMode::FinishWorldInitialization(AFortGameMode* _this, AActor* Worl
                 auto& PlaylistOverrideLootTableDataUE53 = GetFromOffset<TMap<int32, FFortGameFeatureLootTableData_UE53>>(Object, PlaylistOverrideLootTableDataOffset);
                 auto LTDFeatureData = VersionInfo.EngineVersion >= 5.3 ? LootTableDataUE53.LootTierData.Get() : LootTableData.LootTierData.Get();
                 auto LootPackageData = VersionInfo.EngineVersion >= 5.3 ? LootTableDataUE53.LootPackageData.Get() : LootTableData.LootPackageData.Get();
+                if (LTDFeatureData || LootPackageData)
+                    LootFeatureNames.push_back(Object->Name.ToString().c_str());
 
                 if (LTDFeatureData)
                 {
@@ -8700,6 +8824,9 @@ void AFortGameMode::FinishWorldInitialization(AFortGameMode* _this, AActor* Worl
         *(bool*)(__int64(&_this->OnPlaylistLootTablesAppliedDelegate) + 0x10) = true;
         _this->OnPlaylistLootTablesAppliedDelegate.Process();
     }
+
+    // NIOBIUM: tell the launcher which game features fed the loot pool and which items are in it.
+    ReportLootPool(LootFeatureNames);
 
     UFortLootPackage::SpawnFloorLootForContainer(FindObject<UClass>(L"/Game/Athena/Environments/Blueprints/Tiered_Athena_FloorLoot_Warmup.Tiered_Athena_FloorLoot_Warmup_C"));
     UFortLootPackage::SpawnFloorLootForContainer(FindObject<UClass>(L"/Game/Athena/Environments/Blueprints/Tiered_Athena_FloorLoot_01.Tiered_Athena_FloorLoot_01_C"));

@@ -1,6 +1,7 @@
 //! Niobium – launcher logic.
 
 mod commands;
+mod download;
 mod engine;
 mod pipe;
 mod proc;
@@ -31,7 +32,11 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
     let app = window.app_handle();
     let Some(engine) = app.try_state::<Arc<engine::Engine>>() else { return };
     // None = `quit_app` already stopped everything
-    let Some(running) = engine.close_check() else { return };
+    let Some(mut running) = engine.close_check() else { return };
+    // a running build download is paused when Niobium closes (Resume continues next time)
+    if let Some(downloads) = app.try_state::<Arc<download::Downloads>>() {
+        running.extend(downloads.running_names());
+    }
     if running.is_empty() {
         return;
     }
@@ -73,6 +78,8 @@ pub fn run() {
             // Backend and game server ports are fixed; set back other saved values (noted in the log)
             engine.pin_fixed_ports();
             app.manage(engine.clone());
+            // Build downloads (unfinished ones from the last run come back as "paused")
+            app.manage(Arc::new(download::Downloads::load()));
             // Report the start state to the UI as soon as it is there
             engine.emit_services();
 
@@ -118,6 +125,14 @@ pub fn run() {
             commands::reset_performance_mode_ini,
             commands::quit_app,
             commands::close_prompt_shown,
+            commands::bots_support,
+            download::catalog_list,
+            download::download_start,
+            download::download_pause,
+            download::download_resume,
+            download::download_cancel,
+            download::download_status,
+            download::default_download_folder,
         ])
         .build(tauri::generate_context!())
         .expect("Niobium couldn't start");
@@ -127,6 +142,10 @@ pub fn run() {
         if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
             if let Some(engine) = handle.try_state::<Arc<engine::Engine>>() {
                 engine.shutdown();
+            }
+            // Downloads stop between chunks; the journal lets them continue next time
+            if let Some(downloads) = handle.try_state::<Arc<download::Downloads>>() {
+                downloads.pause_all();
             }
         }
     });

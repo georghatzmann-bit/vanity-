@@ -4,6 +4,7 @@
 #include "../Public/FortAthenaMutator.h"
 #include "../Public/FortGameMode.h"
 #include <Erbium/Public/Configuration.h>
+#include <unordered_map>
 
 struct FFortLootLevelData
 {
@@ -417,6 +418,32 @@ void UFortLootPackage::ChooseLootForContainer(TArray<FFortItemEntry*>& LootDrops
     TierDataGroups.Free();
 }
 
+// NIOBIUM: containers in the current world that SpawnLootHook really rolled, i.e. with our loot
+// tables for their tier group in place (an empty roll is a real result, e.g. a floor spot that
+// came up "nothing here"). The value says whether a pickup spawned. A container can be marked
+// searched without a real roll (the game asks for its loot before our loot tables exist), so
+// bAlreadySearched alone can't tell SpawnFloorLootForContainer whether it was rolled.
+static std::unordered_map<const ABuildingContainer*, bool> GRolledContainers;
+static const UWorld* GRolledContainersWorld = nullptr;
+
+static void SyncRolledContainersWorld()
+{
+    const UWorld* World = UWorld::GetWorld();
+    if (GRolledContainersWorld != World)
+    {
+        GRolledContainers.clear();
+        GRolledContainersWorld = World;
+    }
+}
+
+// nullptr: not rolled yet. Otherwise: whether that roll spawned a pickup.
+static const bool* FindContainerRoll(const ABuildingContainer* Container)
+{
+    SyncRolledContainersWorld();
+    auto It = GRolledContainers.find(Container);
+    return It != GRolledContainers.end() ? &It->second : nullptr;
+}
+
 bool UFortLootPackage::SpawnLootHook(ABuildingContainer* Container)
 {
     if (!Container)
@@ -483,13 +510,24 @@ bool UFortLootPackage::SpawnLootHook(ABuildingContainer* Container)
 
     TArray<FFortItemEntry*> LootDrops{};
 
+    // Checked before ChooseLootForContainer, whose TierDataMap[] adds an empty entry.
+    const auto TierDataIt = TierDataMap.find(RealTierGroup.ComparisonIndex);
+    const bool bHadLootTable = TierDataIt != TierDataMap.end() && TierDataIt->second.Num() > 0;
+
     UFortLootPackage::ChooseLootForContainer(LootDrops, RealTierGroup, -1,
         GameMode->GameState->WorldLevel, Container);
 
+    bool bSpawnedAnyPickup = false;
     for (auto& LootDrop : LootDrops)
     {
-        AFortInventory::SpawnPickup(Container, *LootDrop);
+        if (AFortInventory::SpawnPickup(Container, *LootDrop))
+            bSpawnedAnyPickup = true;
         free(LootDrop);
+    }
+    if (bHadLootTable || bSpawnedAnyPickup)
+    {
+        SyncRolledContainersWorld();
+        GRolledContainers[Container] = bSpawnedAnyPickup;
     }
 
     Container->bAlreadySearched = true;
@@ -860,6 +898,17 @@ void UFortLootPackage::SpawnFloorLootForContainer(const UClass* ContainerType)
     if (bSuppressArsenalWorldLoot)
         DestroyLoadedArsenalChests();
 
+    // NIOBIUM: builds that still have the playlist "loot tables applied" broadcast (fired in
+    // FinishWorldInitialization right before this) let the game spawn floor loot itself, so they
+    // keep the old destroy-only path. Only builds without it (19.x) get floor loot filled here.
+    auto World = UWorld::GetWorld();
+    auto GameMode = World ? (AFortGameMode*)World->AuthorityGameMode : nullptr;
+    const bool bFillFloorLoot = VersionInfo.FortniteVersion >= 11.00 && GameMode &&
+        !GameMode->HasOnPlaylistLootTablesAppliedDelegate();
+
+    int32 FilledNow = 0;
+    int32 EmptyNow = 0;
+    int32 RolledBefore = 0;
     for (auto& BuildingContainer : Containers)
     {
         if (!BuildingContainer)
@@ -873,6 +922,32 @@ void UFortLootPackage::SpawnFloorLootForContainer(const UClass* ContainerType)
 
         if (VersionInfo.FortniteVersion >= 11.00)
         {
+            // NIOBIUM: this used to destroy the container without spawning anything (inherited
+            // from Erbium). On builds without the broadcast (bFillFloorLoot) nothing else spawns
+            // floor loot: the native SpawnLoot is hooked and only runs when the game itself asks
+            // for it. Other servers spawn it themselves too (Velora calls SpawnLoot for
+            // bStartAlreadySearched containers; Crystal 19.10 calls BP_SpawnLoot on these
+            // classes). So roll it here, now that our loot tables are built, unless it was
+            // already rolled with them (an empty roll stays empty).
+            if (bFillFloorLoot)
+            {
+                if (FindContainerRoll(BuildingContainer))
+                {
+                    ++RolledBefore;
+                }
+                else
+                {
+                    // Marked searched without a real roll, e.g. asked before the tables existed.
+                    if (BuildingContainer->bAlreadySearched)
+                        BuildingContainer->bAlreadySearched = false;
+                    SpawnLootHook(BuildingContainer);
+                    const bool* bSpawned = FindContainerRoll(BuildingContainer);
+                    if (bSpawned && *bSpawned)
+                        ++FilledNow;
+                    else
+                        ++EmptyNow;
+                }
+            }
             BuildingContainer->K2_DestroyActor();
         }
         else
@@ -887,6 +962,13 @@ void UFortLootPackage::SpawnFloorLootForContainer(const UClass* ContainerType)
                 BuildingContainer->OnRep_bAlreadySearched();
             }
         }
+    }
+
+    if (!bSuppressArsenalWorldLoot && bFillFloorLoot && Containers.Num() > 0)
+    {
+        printf("[FloorLoot] %s: %d spots, %d filled now, %d empty now, %d already rolled\n",
+            ContainerType ? ContainerType->Name.ToString().c_str() : "?", Containers.Num(),
+            FilledNow, EmptyNow, RolledBefore);
     }
 
     Containers.Free();

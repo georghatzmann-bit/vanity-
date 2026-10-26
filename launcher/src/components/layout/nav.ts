@@ -54,14 +54,25 @@ export const navFooter: NavItem[] = [
   { id: "about", label: "About & Credits", icon: Info },
 ];
 
+/** Pages that aren't in the sidebar themselves: their parent stays lit there. */
+const subPages: Partial<Record<PageId, { label: string; parent: PageId }>> = {
+  download: { label: "Download a version", parent: "library" },
+};
+
 const all = [...navGroups.flatMap((g) => g.items), ...navFooter];
 
 /** Label of a page, e.g. "Match Control". */
 export function pageLabel(id: PageId): string {
-  return all.find((n) => n.id === id)?.label ?? "";
+  return subPages[id]?.label ?? all.find((n) => n.id === id)?.label ?? "";
+}
+
+/** The sidebar entry a page belongs to ("download" → "library"). */
+export function navParent(id: PageId): PageId {
+  return subPages[id]?.parent ?? id;
 }
 
 /** Sidebar group of a page ("Play", "Host" …) – handy as an eyebrow above the page title. */
 export function pageGroup(id: PageId): string {
-  return navGroups.find((g) => g.items.some((i) => i.id === id))?.title ?? "";
+  const owner = navParent(id);
+  return navGroups.find((g) => g.items.some((i) => i.id === owner))?.title ?? "";
 }

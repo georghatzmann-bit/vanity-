@@ -8,7 +8,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { bubbleInfoFor, type BubbleBuildsInfo } from "./bubble";
-import { demoBuilds, demoCrashes, demoFriends, demoProfiles } from "./demo-data";
+import { botsSupportFor } from "./bots";
+import { demoBuilds, demoCatalog, demoCrashes, demoFriends, demoProfiles } from "./demo-data";
 
 export type { BubbleBuildsInfo, BubbleLevel } from "./bubble";
 
@@ -47,6 +48,30 @@ export interface Profile {
   playlist: string;
   lategame: boolean;
   tags: string[];
+  /** Infinite ammo on the server. Off = Classic match. */
+  infiniteAmmo: boolean;
+  /** Infinite building materials on the server. Off = Classic match. */
+  infiniteMats: boolean;
+  /** Play with AI bots (only 19.10-CL-18675304 for now, see `botsSupport`). */
+  bots: boolean;
+  /** Number of AI bots, 1–99. */
+  botCount: number;
+  botSkill: BotSkill;
+}
+
+/** How good the AI bots are (Rust maps it to a skill rating: easy 500, normal 1000, hard 2000). */
+export type BotSkill = "easy" | "normal" | "hard";
+
+/** Can AI bots be switched on for a version? `note` is one plain English sentence. */
+export interface BotsSupport {
+  level: "experimental" | "unavailable";
+  note: string;
+}
+
+/** Payload of the event "server:playerBots": the server's answer once it knows if bots can run. */
+export interface PlayerBotsEvent {
+  state: "active" | "unavailable";
+  reason: string;
 }
 
 export interface Friend {
@@ -169,6 +194,85 @@ export interface ClientSettings {
 export interface TrickshotPreset {
   name: string;
   commands: string[];
+}
+
+// ---- Build downloader (match launcher/core/src/epic/catalog.rs and src-tauri/src/download) ----
+
+export type SeasonStatus = "available" | "notFromEpic" | "notOfferedYet";
+
+export interface CatalogBuild {
+  /** "18.30-CL-17882303" */
+  key: string;
+  version: string;
+  cl: number;
+  downloadBytes: number;
+  installedBytes: number;
+  badge: "tested" | "experimental";
+  /** Extra line, e.g. "Very big: about 97 GB on disk" ("" = none). */
+  note: string;
+}
+
+export interface CatalogSeason {
+  season: number;
+  /** "Season 3", "Season X", "Season OG" */
+  label: string;
+  /** "13.x" */
+  versions: string;
+  status: SeasonStatus;
+  /** Card text for "notFromEpic" / "notOfferedYet" ("" when available). */
+  note: string;
+  builds: CatalogBuild[];
+}
+
+export interface CatalogChapter {
+  chapter: number;
+  /** "Chapter 2" */
+  label: string;
+  seasons: CatalogSeason[];
+}
+
+export interface Catalog {
+  /** Day the list was checked against Epic's servers, e.g. "2026-10-26". */
+  checkedOn: string;
+  chapters: CatalogChapter[];
+}
+
+export type DownloadPhase = "checking" | "downloading" | "verifying" | "importing";
+export type DownloadState = "running" | "paused" | "error" | "done" | "cancelled";
+
+/** Payload of "download:progress" (every 500 ms while a download runs). */
+export interface DownloadProgress {
+  key: string;
+  phase: DownloadPhase;
+  bytesDone: number;
+  bytesTotal: number;
+  filesDone: number;
+  filesTotal: number;
+  /** Bytes per second (5 s average); 0 outside "downloading". */
+  speedBps: number;
+  /** Seconds left in this phase (null while unknown). */
+  etaSecs: number | null;
+  currentFile: string;
+}
+
+/** `{ code, message }` – "download:error", or a refused download_start / download_resume. */
+export interface DownloadError {
+  code: string;
+  message: string;
+}
+
+/** One entry of download_status. */
+export interface DownloadJob {
+  key: string;
+  version: string;
+  cl: number;
+  folder: string;
+  state: DownloadState;
+  progress: DownloadProgress;
+  error: DownloadError | null;
+  buildId: string | null;
+  /** Files of this build are in the folder already ("Remove" then offers to delete them). */
+  filesKept: boolean;
 }
 
 /** Folders the launcher uses (Settings / Logs pages). */
@@ -325,6 +429,12 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
       return null;
     case "bubble_builds_support":
       return bubbleInfoFor(String(args.version ?? ""));
+    case "bots_support":
+      return botsSupportFor(String(args.version ?? ""), typeof args.cl === "number" ? args.cl : null);
+    case "catalog_list":
+      return demoCatalog;
+    case "default_download_folder":
+      return `D:\\Niobium\\Builds\\${String(args.key)}`;
     case "reset_performance_mode_ini":
       console.info("[Preview] reset_performance_mode_ini");
       return null;
@@ -383,6 +493,8 @@ export const api = {
 
   /** Can this Fortnite version show Bubble Builds? `{ level, note }` with an English note. */
   bubbleBuildsSupport: (version: string) => call<BubbleBuildsInfo>("bubble_builds_support", { version }),
+  /** Can AI bots be switched on for this version? `{ level, note }` with an English note. */
+  botsSupport: (version: string, cl: number | null) => call<BotsSupport>("bots_support", { version, cl }),
   /** Puts Fortnite's Performance Mode lines back (only after the user clicked "Reset"). */
   resetPerformanceModeIni: () => call<void>("reset_performance_mode_ini"),
   /** The UI has drawn its first frame: show the main window and close the splash. */
@@ -403,6 +515,20 @@ export const api = {
   serverStartMatch: () => call<void>("server_start_match"),
   spawnBots: (count: number) => call<void>("spawn_bots", { count }),
   removeBots: () => call<void>("remove_bots"),
+
+  // Build downloader. In the browser preview src/lib/downloads.ts plays a download instead.
+  /** Chapters → seasons → builds that can be downloaded. */
+  catalogList: () => call<Catalog>("catalog_list"),
+  /** Starts a download. Rejects with `{ code, message }` when the folder can't be used. */
+  downloadStart: (key: string, folder: string) => call<void>("download_start", { key, folder }),
+  downloadPause: (key: string) => call<void>("download_pause", { key }),
+  /** Continues a paused or stopped download. Rejects with `{ code, message }`. */
+  downloadResume: (key: string) => call<void>("download_resume", { key }),
+  /** Stops it (a running one stops within seconds) and forgets it; `deleteFiles` removes only the build's files. */
+  downloadCancel: (key: string, deleteFiles: boolean) => call<void>("download_cancel", { key, deleteFiles }),
+  downloadStatus: () => call<DownloadJob[]>("download_status"),
+  /** `<drive with the most free space>:\Niobium\Builds\<key>` */
+  defaultDownloadFolder: (key: string) => call<string>("default_download_folder", { key }),
 };
 
 /** Version of the launcher app (from tauri.conf.json). Browser preview: "0.1.0". */
@@ -413,11 +539,22 @@ export async function appVersion(): Promise<string> {
 }
 
 /** Folder picker via the Windows dialog. In the preview: typed in by hand. */
-export async function pickFolder(): Promise<string | null> {
-  if (!inTauri) return window.prompt("Build folder (preview):", "C:\\Users\\georg\\Downloads\\windows-19.10");
+export async function pickFolder(
+  options: { title?: string; defaultPath?: string } = {},
+): Promise<string | null> {
+  const title = options.title ?? "Choose your build folder";
+  if (!inTauri) return window.prompt(`${title} (preview):`, options.defaultPath ?? "C:\\Users\\georg\\Downloads\\windows-19.10");
   const { open } = await import("@tauri-apps/plugin-dialog");
-  const result = await open({ directory: true, multiple: false, title: "Choose your build folder" });
+  const result = await open({ directory: true, multiple: false, title, defaultPath: options.defaultPath || undefined });
   return typeof result === "string" ? result : null;
+}
+
+/** Text of a rejected call: `{ code, message }` objects give their message, everything else its text. */
+export function errorText(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string") {
+    return (e as { message: string }).message;
+  }
+  return String(e);
 }
 
 /** Opens a folder in Explorer. Shows a short message if Windows can't open it (e.g. it was deleted). */
@@ -441,7 +578,12 @@ export type EventName =
   | "trickshot"
   | "detect"
   | "bubble:ini-changed"
-  | "app:close-requested";
+  | "app:close-requested"
+  | "server:playerBots"
+  | "download:progress"
+  | "download:done"
+  | "download:error"
+  | "download:state";
 
 /** Like `onEvent`, but resolves only once the listener is really registered (preview: at once). */
 export async function onEventReady<T>(name: EventName, handler: (payload: T) => void): Promise<() => void> {

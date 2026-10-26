@@ -332,8 +332,46 @@ namespace
         return true;
     }
 
+    // Like SetInt, but out-of-range numbers are clamped instead of refused.
+    bool SetClampedInt(std::atomic_int& Target, const json& Value, int Min, int Max, std::string& Error)
+    {
+        if (!Value.is_number())
+        {
+            Error = "Expected a number.";
+            return false;
+        }
+        const double Number = Value.get<double>();
+        if (!(Number == Number))
+        {
+            Error = "Expected a number.";
+            return false;
+        }
+        const double Clamped = Number < Min ? Min : (Number > Max ? Max : Number);
+        Target.store((int)Clamped, std::memory_order_release);
+        return true;
+    }
+
+    // NIOBIUM: AI player bots (PlayerBots_19_10.cpp). The server decides at "Start match" whether
+    // bots run, so these keys are only taken before that.
+    bool ApplyBotConfig(const std::string& Key, const json& Value, std::string& Error)
+    {
+        if (FConfiguration::bReadyToStart.load(std::memory_order_acquire))
+        {
+            Error = "Bot settings take effect next match.";
+            return false;
+        }
+        if (Key == "bPlayerBots")
+            return SetBool(FConfiguration::bPlayerBots, Value, Error);
+        if (Key == "PlayerBotCount")
+            return SetClampedInt(FConfiguration::PlayerBotCount, Value, 1, 99, Error);
+        return SetClampedInt(FConfiguration::PlayerBotTargetELO, Value, 0, 5000, Error);
+    }
+
     bool ApplyConfig(const std::string& Key, const json& Value, std::string& Error)
     {
+        if (Key == "bPlayerBots" || Key == "PlayerBotCount" || Key == "PlayerBotTargetELO")
+            return ApplyBotConfig(Key, Value, Error);
+
         if (Key == "playlist")
         {
             if (!Value.is_string())
@@ -653,6 +691,24 @@ namespace NiobiumControl
         catch (...)
         {
             SDK::DbgLog("[Niobium] Could not send the trickshot event\n");
+        }
+    }
+
+    void EmitPlayerBots(const char* State, const std::string& Reason)
+    {
+        if (!GConnected.load(std::memory_order_acquire))
+            return;
+        try
+        {
+            json Out;
+            Out["event"] = "playerBots";
+            Out["state"] = State ? State : "";
+            Out["reason"] = Reason;
+            WriteLine(Out.dump(-1, ' ', false, json::error_handler_t::replace));
+        }
+        catch (...)
+        {
+            SDK::DbgLog("[Niobium] Could not send the playerBots event\n");
         }
     }
 }

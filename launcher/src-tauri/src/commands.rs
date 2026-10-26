@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 
+use niobium_core::bots::{self, BotsSupport};
 use niobium_core::crash::{self, CrashReport};
 use niobium_core::launchargs::{self, BubbleBuildsInfo};
 use niobium_core::profiles::{self, Config, Friend, Profile, Settings, TrickshotPreset};
@@ -373,4 +374,13 @@ pub fn bubble_builds_support(version: String) -> BubbleBuildsInfo {
 #[tauri::command]
 pub fn reset_performance_mode_ini(engine: E) -> R<()> {
     engine.reset_performance_mode_ini()
+}
+
+// --- AI bots ---------------------------------------------------------------------------
+
+/// `{ level: "experimental" | "unavailable", note }` for a Fortnite version and changelist.
+/// Only 19.10-CL-18675304 is "experimental".
+#[tauri::command]
+pub fn bots_support(version: String, cl: Option<u32>) -> BotsSupport {
+    bots::bots_support(&version, cl)
 }

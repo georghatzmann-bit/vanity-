@@ -1,6 +1,25 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, FolderInput, Gamepad2, ListMusic, MonitorOff, MoreHorizontal, Monitor, Pencil, Plus, Save, Trash2, UserRound, type LucideIcon } from "lucide-react";
+import {
+  Bot,
+  Check,
+  FlaskConical,
+  FolderInput,
+  Gamepad2,
+  Info,
+  ListMusic,
+  MonitorOff,
+  MoreHorizontal,
+  Monitor,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Save,
+  Swords,
+  Trash2,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,13 +27,17 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EmptyState, PageHeader, PageShell, Reveal } from "@/components/common";
+import { EmptyState, PageHeader, PageShell, Reveal, ValueChip } from "@/components/common";
 import { GlowCard } from "@/components/fx";
 import { pageGroup } from "@/components/layout/nav";
-import { playlistLabel, playlists } from "@/lib/demo-data";
-import { api, type BuildInfo, type Profile } from "@/lib/api";
+import { useBotsSupport } from "@/hooks/use-bots-support";
+import { BOT_COUNT_MAX, BOT_COUNT_MIN, botSkillLabel, botSkills, botsSupportFor, botsText, clampBotCount } from "@/lib/bots";
+import { classicMatch, playlistLabel, playlists } from "@/lib/demo-data";
+import { api, type BotSkill, type BuildInfo, type Profile } from "@/lib/api";
 import { buildFolderName, coverGradient } from "@/lib/builds";
 import { EASE_OUT, SPRING_UI } from "@/lib/motion";
 import { activeProfile, useApp } from "@/lib/store";
@@ -86,7 +109,8 @@ export function ProfilesPage() {
           <AnimatePresence>
             {config.profiles.map((p, i) => {
               const active = p.id === config.activeProfileId;
-              const version = config.builds.find((b) => b.id === p.buildId)?.version;
+              const build = config.builds.find((b) => b.id === p.buildId);
+              const version = build?.version;
               return (
                 <motion.div key={p.id} {...cardMotion(i)} className="flex">
                   <GlowCard
@@ -124,8 +148,10 @@ export function ProfilesPage() {
                     <dl className="grid grid-cols-2 gap-2">
                       <Fact icon={Gamepad2} label="Build" value={version ? `Fortnite ${version}` : "Missing – edit to pick one"} />
                       <Fact icon={UserRound} label="Player" value={p.playerName} />
-                      <Fact icon={ListMusic} label="Playlist" value={`${playlistLabel(p.playlist)}${p.lategame ? " · Lategame" : ""}`} />
+                      <Fact icon={ListMusic} label="Playlist" value={playlistLabel(p.playlist)} />
                       <Fact icon={p.headlessServer ? MonitorOff : Monitor} label="Server" value={p.headlessServer ? "No graphics" : "With a window"} />
+                      <Fact icon={Swords} label="Rules" value={rulesText(p)} />
+                      <Fact icon={Bot} label="AI bots" value={botsFact(p, build)} />
                     </dl>
 
                     {p.tags.length > 0 && (
@@ -211,14 +237,27 @@ function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
   );
 }
 
-/** Tags that come from the playlist and Lategame switch – they are made again when those change. */
-const autoTags = new Set([...playlists.map((pl) => pl.label), "Lategame"]);
+/** "Classic match", or what's switched on: "Lategame · Infinite ammo". */
+function rulesText(p: Pick<Profile, "lategame" | "infiniteAmmo" | "infiniteMats">): string {
+  const on = [p.lategame && "Lategame", p.infiniteAmmo && "Infinite ammo", p.infiniteMats && "Infinite mats"].filter(Boolean);
+  return on.length === 0 ? "Classic match" : on.join(" · ");
+}
+
+/** "Off", "24 · Normal", or "Not for 15.40" when bots are on but this build has none. */
+function botsFact(p: Profile, build: BuildInfo | undefined): string {
+  if (!p.bots) return "Off";
+  if (build && botsSupportFor(build.version, build.changelist).level !== "experimental") return `Not for ${build.version}`;
+  return `${clampBotCount(p.botCount)} · ${botSkillLabel(p.botSkill)}`;
+}
+
+/** Tags that come from the playlist, Lategame and AI bots switches – they are made again when those change. */
+const autoTags = new Set([...playlists.map((pl) => pl.label), "Lategame", "AI bots"]);
 
 /** New profile (profile = null) or edit an existing one. Same form for both. */
 function ProfileDialog({ open, onOpenChange, profile }: { open: boolean; onOpenChange: (o: boolean) => void; profile: Profile | null }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-3xl">
         {/* Inside the content, so every opening starts with fresh fields */}
         <ProfileForm key={profile?.id ?? "new"} profile={profile} onDone={() => onOpenChange(false)} />
       </DialogContent>
@@ -241,8 +280,20 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
   });
   const [playerName, setPlayerName] = useState(profile?.playerName ?? config.settings.playerName);
   const [playlist, setPlaylist] = useState(profile?.playlist ?? playlists[0].id);
-  const [lategame, setLategame] = useState(profile?.lategame ?? false);
   const [headless, setHeadless] = useState(profile?.headlessServer ?? true);
+  // Match rules: a new profile starts as a "Classic match" (like back then)
+  const [lategame, setLategame] = useState(profile?.lategame ?? classicMatch.lategame);
+  const [infiniteAmmo, setInfiniteAmmo] = useState(profile?.infiniteAmmo ?? classicMatch.infiniteAmmo);
+  const [infiniteMats, setInfiniteMats] = useState(profile?.infiniteMats ?? classicMatch.infiniteMats);
+  const [bots, setBots] = useState(profile?.bots ?? classicMatch.bots);
+  const [botCount, setBotCount] = useState(clampBotCount(profile?.botCount ?? classicMatch.botCount));
+  const [botSkill, setBotSkill] = useState<BotSkill>(profile?.botSkill ?? classicMatch.botSkill);
+
+  const build = builds.find((b) => b.id === buildId);
+  const botsInfo = useBotsSupport(build?.version, build?.changelist);
+  const botsOk = botsInfo?.level === "experimental";
+  const botsOn = botsOk && bots;
+  const classic = !lategame && !infiniteAmmo && !infiniteMats;
 
   const nameOk = name.trim().length > 0;
   const playerOk = /^[A-Za-z0-9]{3,16}$/.test(playerName);
@@ -251,7 +302,12 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
   const canSave = nameOk && playerOk && buildOk;
 
   const save = async () => {
-    const tags = [playlistLabel(playlist), ...(lategame ? ["Lategame"] : []), ...(profile?.tags.filter((t) => !autoTags.has(t)) ?? [])];
+    const tags = [
+      playlistLabel(playlist),
+      ...(lategame ? ["Lategame"] : []),
+      ...(botsOn ? ["AI bots"] : []),
+      ...(profile?.tags.filter((t) => !autoTags.has(t)) ?? []),
+    ];
     const next: Profile = {
       id: profile?.id ?? `p-${Date.now()}`,
       description: profile?.description ?? "Custom profile",
@@ -263,6 +319,12 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
       playlist,
       lategame,
       tags,
+      infiniteAmmo,
+      infiniteMats,
+      // A build without AI bots never sends "bots on" (the server would only say no every match)
+      bots: botsOn,
+      botCount: clampBotCount(botCount),
+      botSkill,
     };
     try {
       useApp.getState().setConfig(await (editing ? api.updateProfile(next) : api.addProfile(next)));
@@ -281,69 +343,116 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
         <DialogDescription>{editing ? "Changes apply the next time you start." : "You can change everything later."}</DialogDescription>
       </DialogHeader>
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-5"
         onSubmit={(e) => {
           e.preventDefault();
           if (canSave) void save();
         }}
       >
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="p-name">Profile name</Label>
-          <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Trickshot with Max" autoFocus={!editing} />
-          {!editing && <p className="text-xs text-muted-foreground">For example "Trickshot with Max"</p>}
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="p-build">Build</Label>
-          <Select value={buildId} onValueChange={setBuildId} disabled={builds.length === 0}>
-            <SelectTrigger id="p-build" className="w-full py-2 data-[size=default]:h-auto" aria-invalid={!buildOk}>
-              <SelectValue placeholder="Add a build in the Library first" />
-            </SelectTrigger>
-            <SelectContent>
-              {builds.map((b) => (
-                <SelectItem key={b.id} value={b.id} className="py-2">
-                  <BuildOption build={b} />
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="p-player">Player name</Label>
-          <Input id="p-player" value={playerName} onChange={(e) => setPlayerName(e.target.value)} aria-invalid={!playerOk} />
-          <p className={cn("text-xs transition-colors", playerOk ? "text-muted-foreground" : "text-destructive")}>
-            3–16 letters or numbers, no spaces
-          </p>
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="p-playlist">Playlist</Label>
-          <Select value={playlist} onValueChange={setPlaylist}>
-            <SelectTrigger id="p-playlist" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {playlists.map((pl) => (
-                <SelectItem key={pl.id} value={pl.id}>
-                  {pl.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center justify-between gap-4 rounded-lg surface-subtle px-3 py-2.5">
-          <div>
-            <Label htmlFor="p-late">Lategame</Label>
-            <p className="mt-0.5 text-xs text-muted-foreground">Starts in a late zone with full gear</p>
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Left: who and what */}
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="p-name">Profile name</Label>
+              <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Trickshot with Max" autoFocus={!editing} />
+              {!editing && <p className="text-xs text-muted-foreground">For example "Trickshot with Max"</p>}
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="p-build">Build</Label>
+              <Select value={buildId} onValueChange={setBuildId} disabled={builds.length === 0}>
+                <SelectTrigger id="p-build" className="w-full py-2 data-[size=default]:h-auto" aria-invalid={!buildOk}>
+                  <SelectValue placeholder="Add a build in the Library first" />
+                </SelectTrigger>
+                <SelectContent>
+                  {builds.map((b) => (
+                    <SelectItem key={b.id} value={b.id} className="py-2">
+                      <BuildOption build={b} />
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="p-player">Player name</Label>
+              <Input id="p-player" value={playerName} onChange={(e) => setPlayerName(e.target.value)} aria-invalid={!playerOk} />
+              <p className={cn("text-xs transition-colors", playerOk ? "text-muted-foreground" : "text-destructive")}>
+                3–16 letters or numbers, no spaces
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="p-playlist">Playlist</Label>
+              <Select value={playlist} onValueChange={setPlaylist}>
+                <SelectTrigger id="p-playlist" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {playlists.map((pl) => (
+                    <SelectItem key={pl.id} value={pl.id}>
+                      {pl.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <SwitchRow id="p-headless" label="Server with no graphics" hint="Saves performance" checked={headless} onChange={setHeadless} />
           </div>
-          <Switch id="p-late" checked={lategame} onCheckedChange={setLategame} />
-        </div>
-        <div className="flex items-center justify-between gap-4 rounded-lg surface-subtle px-3 py-2.5">
-          <div>
-            <Label htmlFor="p-headless">Server with no graphics</Label>
-            <p className="mt-0.5 text-xs text-muted-foreground">Saves performance</p>
+
+          {/* Right: how the match plays */}
+          <div className="flex flex-col gap-5">
+            <section className="flex flex-col gap-2.5" aria-labelledby="p-rules">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <h3 id="p-rules" className="text-sm font-semibold">
+                    Match rules
+                  </h3>
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.span key={classic ? "classic" : "custom"} initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.85 }} transition={SPRING_UI}>
+                      {classic ? (
+                        <Badge variant="gold">Classic match</Badge>
+                      ) : (
+                        <Badge variant="secondary">Custom</Badge>
+                      )}
+                    </motion.span>
+                  </AnimatePresence>
+                </div>
+                {!classic && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => {
+                      setLategame(false);
+                      setInfiniteAmmo(false);
+                      setInfiniteMats(false);
+                    }}
+                  >
+                    <RotateCcw />
+                    Classic
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-col divide-y divide-white/[0.05] rounded-lg surface-subtle">
+                <SwitchRow id="p-late" label="Lategame" hint="Starts in a late zone with full gear" checked={lategame} onChange={setLategame} flat />
+                <SwitchRow id="p-ammo" label="Infinite ammo" hint="Ammo never runs out" checked={infiniteAmmo} onChange={setInfiniteAmmo} flat />
+                <SwitchRow id="p-mats" label="Infinite materials" hint="Wood, stone and metal never run out" checked={infiniteMats} onChange={setInfiniteMats} flat />
+              </div>
+              <p className="text-xs text-faint">Classic match = like back then: full map, normal ammo and materials.</p>
+            </section>
+
+            <BotsSection
+              info={botsInfo}
+              version={build?.version}
+              bots={botsOn}
+              setBots={setBots}
+              count={botCount}
+              setCount={setBotCount}
+              skill={botSkill}
+              setSkill={setBotSkill}
+            />
           </div>
-          <Switch id="p-headless" checked={headless} onCheckedChange={setHeadless} />
         </div>
-        <DialogFooter className="pt-2">
+
+        <DialogFooter className="pt-1">
           <Button type="button" variant="ghost" onClick={onDone}>
             Cancel
           </Button>
@@ -354,6 +463,127 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
         </DialogFooter>
       </form>
     </>
+  );
+}
+
+/** Label + grey hint on the left, a switch on the right. `flat` = inside a shared box. */
+function SwitchRow({
+  id,
+  label,
+  hint,
+  checked,
+  onChange,
+  disabled,
+  flat = false,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  flat?: boolean;
+}) {
+  return (
+    <div className={cn("flex items-center justify-between gap-4 px-3 py-2.5", !flat && "rounded-lg surface-subtle")}>
+      <div className="min-w-0">
+        <Label htmlFor={id}>{label}</Label>
+        <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+      </div>
+      <Switch id={id} checked={checked} onCheckedChange={onChange} disabled={disabled} />
+    </div>
+  );
+}
+
+/**
+ * "AI bots": on/off, how many, how good. Only usable when the build has them (19.10-CL-18675304
+ * for now); otherwise greyed out with the reason.
+ */
+function BotsSection({
+  info,
+  version,
+  bots,
+  setBots,
+  count,
+  setCount,
+  skill,
+  setSkill,
+}: {
+  info: ReturnType<typeof useBotsSupport>;
+  version: string | undefined;
+  bots: boolean;
+  setBots: (v: boolean) => void;
+  count: number;
+  setCount: (v: number) => void;
+  skill: BotSkill;
+  setSkill: (v: BotSkill) => void;
+}) {
+  const ok = info?.level === "experimental";
+  const note = info?.note ?? botsText.noteNotYet;
+  return (
+    <section className="flex flex-col gap-2.5" aria-labelledby="p-bots">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 id="p-bots" className="text-sm font-semibold">
+          {botsText.section}
+        </h3>
+        <Badge variant="warning">
+          <FlaskConical />
+          {botsText.badge}
+        </Badge>
+      </div>
+
+      <div className={cn("relative flex flex-col divide-y divide-white/[0.05] rounded-lg surface-subtle transition-opacity duration-200", !ok && "opacity-45")} aria-disabled={!ok}>
+        <SwitchRow id="p-bots-on" label={botsText.switchLabel} hint={botsText.switchHint} checked={ok && bots} onChange={setBots} disabled={!ok} flat />
+        <div className={cn("flex flex-col gap-2 px-3 py-2.5 transition-opacity duration-200", ok && !bots && "opacity-50")}>
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="p-bots-count">{botsText.countLabel}</Label>
+            <ValueChip className="min-w-10">{count}</ValueChip>
+          </div>
+          <Slider
+            id="p-bots-count"
+            aria-label={botsText.countLabel}
+            min={BOT_COUNT_MIN}
+            max={BOT_COUNT_MAX}
+            step={1}
+            value={[count]}
+            disabled={!ok || !bots}
+            onValueChange={([v]) => setCount(clampBotCount(v))}
+          />
+          <p className="flex justify-between text-[11px] text-faint tabular-nums">
+            <span>{BOT_COUNT_MIN}</span>
+            <span>Fewer bots = smoother on one PC</span>
+            <span>{BOT_COUNT_MAX}</span>
+          </p>
+        </div>
+        <div className={cn("flex items-center justify-between gap-4 px-3 py-2.5 transition-opacity duration-200", ok && !bots && "opacity-50")}>
+          <div className="min-w-0">
+            <Label>{botsText.skillLabel}</Label>
+            <p className="mt-0.5 text-xs text-muted-foreground">{botSkills.find((s) => s.id === skill)?.hint}</p>
+          </div>
+          <ToggleGroup
+            type="single"
+            size="sm"
+            value={skill}
+            onValueChange={(v) => v && setSkill(v as BotSkill)}
+            disabled={!ok || !bots}
+            aria-label={botsText.skillLabel}
+          >
+            {botSkills.map((s) => (
+              <ToggleGroupItem key={s.id} value={s.id} className="px-3 text-xs">
+                {s.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+      </div>
+
+      <p className={cn("flex items-start gap-2 text-xs leading-relaxed", ok ? "text-faint" : "text-muted-foreground")}>
+        <Info className="mt-0.5 size-3.5 shrink-0" />
+        <span>
+          {ok ? note : version ? `Fortnite ${version}: ${note}` : note}
+        </span>
+      </p>
+    </section>
   );
 }
 

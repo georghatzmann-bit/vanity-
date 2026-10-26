@@ -1,13 +1,14 @@
 import { LayoutGroup, motion } from "motion/react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusPill, statusLabel } from "@/components/common";
+import { DownloadPill } from "@/components/download/DownloadPill";
 import { Sheen } from "@/components/fx";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { SPRING_PLAYFUL, SPRING_UI } from "@/lib/motion";
 import { useApp, type ServiceStatus } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { LogoMark, Wordmark } from "./Logo";
-import { navFooter, navGroups, type NavItem } from "./nav";
+import { navFooter, navGroups, navParent, type NavItem } from "./nav";
 
 export function Sidebar() {
   const wide = useMediaQuery("(min-width: 1200px)");
@@ -17,7 +18,7 @@ export function Sidebar() {
   const version = useApp((s) => s.appVersion);
 
   const renderItem = (item: NavItem) => (
-    <NavButton key={item.id} item={item} active={page === item.id} wide={wide} onSelect={() => setPage(item.id)} />
+    <NavButton key={item.id} item={item} active={navParent(page) === item.id} wide={wide} onSelect={() => setPage(item.id)} />
   );
 
   return (
@@ -74,6 +75,7 @@ export function Sidebar() {
         </nav>
 
         <div className="relative flex flex-col gap-0.5 pt-4">
+          <DownloadPill wide={wide} />
           <ServiceSummary services={services} wide={wide} />
           {navFooter.map(renderItem)}
           {wide && <p className="px-3 pt-2 text-[10.5px] text-faint tabular-nums">Version {version}</p>}

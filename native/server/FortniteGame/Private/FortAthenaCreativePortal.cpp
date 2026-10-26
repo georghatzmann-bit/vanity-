@@ -854,8 +854,10 @@ void AFortAthenaCreativePortal::TeleportPlayerToLinkedVolume(UObject* Context, F
         return;
     }
 
-    auto PlayerController = (AFortPlayerControllerAthena*)
-        PlayerPawn->Controller;
+    // NIOBIUM: only a player can own a creative island; AI controllers are left alone.
+    auto PlayerController = PlayerPawn->Controller->Cast<AFortPlayerControllerAthena>();
+    if (!PlayerController)
+        return;
     LinkPortalAndVolume(Portal, PlayerController,
         (AFortPlayerStateAthena*)PlayerController->PlayerState);
     PrepareLinkedVolumeForEditing(PlayerController);

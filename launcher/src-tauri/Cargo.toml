@@ -24,9 +24,12 @@ serde_json = "1"
 niobium-core = { path = "../core" }
 dirs = "7"
 if-addrs = "0.15"
-ureq = { version = "3", default-features = false, features = ["json"] }
+ureq = { version = "3.5", default-features = false, features = ["json"] }
 
 [target.'cfg(windows)'.dependencies]
+# HTTPS on Windows through Windows' own TLS (schannel) and certificate store: nothing to compile
+# in C, and it works behind antivirus/company proxies that add their own certificates.
+ureq = { version = "3.5", default-features = false, features = ["json", "native-tls-no-default"] }
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_System_Threading",
@@ -36,6 +39,10 @@ windows = { version = "0.62", features = [
   "Win32_Security",
   "Win32_Storage_FileSystem",
 ] }
+
+# Other systems (development only): rustls
+[target.'cfg(not(windows))'.dependencies]
+ureq = { version = "3.5", default-features = false, features = ["json", "rustls"] }
 
 [profile.release]
 codegen-units = 1

@@ -62,8 +62,9 @@ import { pageGroup, pageLabel } from "@/components/layout/nav";
 import { useCalmMotion } from "@/hooks/use-calm-motion";
 import { playlistLabel, playlists } from "@/lib/demo-data";
 import { api, inTauri, onEvent, type TrickshotPreset } from "@/lib/api";
+import { botSkillLabel, botsSupportFor, clampBotCount } from "@/lib/bots";
 import { EASE_OUT, SPRING_PLAYFUL, SPRING_UI } from "@/lib/motion";
-import { activeProfile, useApp, type ServiceStatus } from "@/lib/store";
+import { activeProfile, buildOf, useApp, type ServiceStatus } from "@/lib/store";
 import { parkourFile, parkours, kindLabel, levelWord, TILE_METERS, type Parkour } from "@/lib/parkours";
 import { cn } from "@/lib/utils";
 
@@ -119,8 +120,9 @@ interface MatchState {
   stormPaused: boolean;
   respawn: boolean;
   respawnTime: number;
-  infiniteAmmo: boolean;
-  infiniteMats: boolean;
+  /** null = value from the active profile (the launcher sends it when the server starts) */
+  infiniteAmmo: boolean | null;
+  infiniteMats: boolean | null;
   item: string;
   activeParkour: string | null;
   targetHp: number;
@@ -135,8 +137,10 @@ interface MatchState {
 }
 
 /**
- * Start values = the server's defaults (Configuration.h), so switches and server agree.
- * Exception: bot health/shield (server: 21/21) – "Place bots" always sends the values shown here.
+ * Start values = what the server uses, so switches and server agree: the server's defaults
+ * (Configuration.h), and for lategame/infinite ammo/materials the active profile (the launcher
+ * sends those right when the server starts).
+ * Exception: dummy health/shield (server: 21/21) – "Place dummies" always sends the values shown here.
  */
 const matchDefaults: Omit<MatchState, "tab"> = {
   started: false,
@@ -145,8 +149,8 @@ const matchDefaults: Omit<MatchState, "tab"> = {
   stormPaused: false,
   respawn: false,
   respawnTime: 3,
-  infiniteAmmo: true,
-  infiniteMats: true,
+  infiniteAmmo: null,
+  infiniteMats: null,
   item: "heavy_sr",
   activeParkour: null,
   targetHp: 50,
@@ -250,7 +254,7 @@ export function MatchPage() {
             <TabsList>
               <TabsTrigger value="game" className="px-5"><Flag />Game</TabsTrigger>
               <TabsTrigger value="trickshot" className="px-5"><Crosshair />Trickshot</TabsTrigger>
-              <TabsTrigger value="bots" className="px-5"><Bot />Bots</TabsTrigger>
+              <TabsTrigger value="bots" className="px-5"><Bot />Target dummies</TabsTrigger>
             </TabsList>
             <LiveStatus server={server} started={started} />
           </div>
@@ -450,6 +454,19 @@ function SmallAction({ icon: Icon, label, hint, onRun }: { icon: LucideIcon; lab
   );
 }
 
+/** "AI bots 24 · Normal" when the active profile plays with AI bots ("Off" if the server said no). */
+function AiBotsChip() {
+  const config = useApp((s) => s.config);
+  const answer = useApp((s) => s.playerBots);
+  const profile = activeProfile(config);
+  if (!profile?.bots) return null;
+  const build = buildOf(config, profile.buildId);
+  const possible = build ? botsSupportFor(build.version, build.changelist).level === "experimental" : false;
+  const value =
+    answer?.state === "unavailable" || !possible ? "Off" : `${clampBotCount(profile.botCount)} · ${botSkillLabel(profile.botSkill)}`;
+  return <InfoChip label="AI bots" value={value} />;
+}
+
 /** "Mode  Solo" chip whose value fades when it changes. */
 function InfoChip({ label, value }: { label: string; value: string }) {
   return (
@@ -480,6 +497,8 @@ function GameTab() {
   const profile = useApp((s) => activeProfile(s.config));
   const playlist = m.playlist ?? profile?.playlist ?? playlists[0].id;
   const lateGame = m.lateGame ?? profile?.lategame ?? false;
+  const infiniteAmmo = m.infiniteAmmo ?? profile?.infiniteAmmo ?? false;
+  const infiniteMats = m.infiniteMats ?? profile?.infiniteMats ?? false;
   const allItems = itemGroups.flatMap((g) => g.items);
   const itemName = allItems.find((i) => i.id === m.item)?.label ?? m.item;
 
@@ -568,10 +587,10 @@ function GameTab() {
         <Panel title="Infinite" icon={Package} description="For everyone in the match.">
           <Rows>
             <SettingRow label="Infinite ammo" hint="Ammo never runs out">
-              <Switch checked={m.infiniteAmmo} onCheckedChange={(v) => flip("infiniteAmmo", v, () => config("bInfiniteAmmo", v, "Infinite ammo"))} />
+              <Switch checked={infiniteAmmo} onCheckedChange={(v) => flip("infiniteAmmo", v, () => config("bInfiniteAmmo", v, "Infinite ammo"))} />
             </SettingRow>
             <SettingRow label="Infinite materials" hint="Wood, stone and metal never run out">
-              <Switch checked={m.infiniteMats} onCheckedChange={(v) => flip("infiniteMats", v, () => config("bInfiniteMats", v, "Infinite materials"))} />
+              <Switch checked={infiniteMats} onCheckedChange={(v) => flip("infiniteMats", v, () => config("bInfiniteMats", v, "Infinite materials"))} />
             </SettingRow>
           </Rows>
         </Panel>
@@ -644,6 +663,7 @@ function StartMatchCard({ started, playlist, lateGame }: { started: boolean; pla
           <div className="flex flex-wrap gap-2">
             <InfoChip label="Mode" value={playlistLabel(playlist)} />
             <InfoChip label="Lategame" value={lateGame ? "On" : "Off"} />
+            <AiBotsChip />
           </div>
           <ShimmerButton
             size="lg"
@@ -1245,40 +1265,54 @@ function MapLegend() {
   );
 }
 
-// ---- Tab "Bots" --------------------------------------------------------------------------------
+// ---- Tab "Target dummies" (stand-still bots; real AI bots are a profile setting) ----------------
 
 function BotsTab() {
   const m = useMatch();
+  const setPage = useApp((s) => s.setPage);
 
   const place = async () => {
-    // Send the values first, so the new bots surely get them
-    if (!(await config("BotHealth", m.botHealth, "Bot health"))) return false;
-    if (!(await config("BotShield", m.botShield, "Bot shield"))) return false;
-    return exec(`bot ${m.botCount}`, "Place bots", sent("Place bots"));
+    // Send the values first, so the new dummies surely get them
+    if (!(await config("BotHealth", m.botHealth, "Dummy health"))) return false;
+    if (!(await config("BotShield", m.botShield, "Dummy shield"))) return false;
+    return exec(`bot ${m.botCount}`, "Place dummies", sent("Place dummies"));
   };
 
   return (
     <TabBody>
       <GlowCard className="flex items-start gap-4 p-5">
         <IconTile icon={Info} tone="muted" />
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          To be honest: these bots <span className="font-medium text-foreground">stand still</span> – they don't walk, build or shoot. They're target bots
-          for practice. To place a single bot at a set distance, use the{" "}
-          <button
-            type="button"
-            onClick={() => setMatch({ tab: "trickshot" })}
-            className="rounded-sm font-medium text-violet-text underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            Trickshot
-          </button>{" "}
-          tab.
-        </p>
+        <div className="flex flex-col gap-2 text-sm leading-relaxed text-muted-foreground">
+          <p>
+            To be honest: these bots <span className="font-medium text-foreground">stand still</span> – they don't walk, build or shoot. They're target
+            dummies for practice. To place a single one at a set distance, use the{" "}
+            <button
+              type="button"
+              onClick={() => setMatch({ tab: "trickshot" })}
+              className="rounded-sm font-medium text-violet-text underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              Trickshot
+            </button>{" "}
+            tab.
+          </p>
+          <p className="text-xs">
+            Want bots that really play? Turn on “Play with AI bots” in your{" "}
+            <button
+              type="button"
+              onClick={() => setPage("profiles")}
+              className="rounded-sm font-medium text-violet-text underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              profile
+            </button>{" "}
+            (experimental, 19.10 only).
+          </p>
+        </div>
       </GlowCard>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Panel title="Place bots" icon={Bot} description="The bots appear where you're standing.">
+        <Panel title="Place dummies" icon={Bot} description="The dummies appear where you're standing.">
           <Rows>
-            <SettingRow label="Count" hint="How many bots at once">
+            <SettingRow label="Count" hint="How many dummies at once">
               <Slider className="w-36" min={1} max={20} step={1} value={[m.botCount]} onValueChange={([v]) => setMatch({ botCount: v })} />
               <ValueChip>{m.botCount}</ValueChip>
             </SettingRow>
@@ -1286,7 +1320,7 @@ function BotsTab() {
           <BotLineup count={m.botCount} />
           <div className="flex flex-wrap gap-2 pt-4">
             <SendButton icon={<Bot />} run={place}>
-              Place bots
+              Place dummies
             </SendButton>
             <SendButton variant="secondary" icon={<Users />} run={() => exec("tpbot", "Bring to me", sent("Bring to me"))}>
               Bring to me
@@ -1297,7 +1331,7 @@ function BotsTab() {
           </div>
         </Panel>
 
-        <Panel title="Bot stats" icon={Heart} description="For bots you place here from now on. Target bots from “Trickshot” have their own health.">
+        <Panel title="Dummy stats" icon={Heart} description="For dummies you place here from now on. Target bots from “Trickshot” have their own health.">
           <Rows>
             <SettingRow label="Health" hint="100 is normal">
               <Slider
@@ -1307,7 +1341,7 @@ function BotsTab() {
                 step={1}
                 value={[m.botHealth]}
                 onValueChange={([v]) => setMatch({ botHealth: v })}
-                onValueCommit={([v]) => config("BotHealth", v, "Bot health")}
+                onValueCommit={([v]) => config("BotHealth", v, "Dummy health")}
               />
               <ValueChip>{m.botHealth}</ValueChip>
             </SettingRow>
@@ -1319,7 +1353,7 @@ function BotsTab() {
                 step={5}
                 value={[m.botShield]}
                 onValueChange={([v]) => setMatch({ botShield: v })}
-                onValueCommit={([v]) => config("BotShield", v, "Bot shield")}
+                onValueCommit={([v]) => config("BotShield", v, "Dummy shield")}
               />
               <ValueChip>{m.botShield}</ValueChip>
             </SettingRow>
@@ -1353,7 +1387,7 @@ function BotLineup({ count }: { count: number }) {
         </AnimatePresence>
       </div>
       <p className="mt-2 text-[11px] text-faint">
-        {count} {count === 1 ? "bot" : "bots"} will appear where you stand
+        {count} {count === 1 ? "dummy" : "dummies"} will appear where you stand
       </p>
     </div>
   );
@@ -1365,7 +1399,7 @@ function BotVitals({ health, shield }: { health: number; shield: number }) {
     <div className="surface-subtle mt-4 flex flex-col gap-2.5 rounded-lg px-4 py-3.5">
       <VitalBar icon={Shield} label="Shield" value={shield} barClass="from-brand-blue to-blue-text" />
       <VitalBar icon={Heart} label="Health" value={health} barClass="from-success to-[#86efac]" />
-      <p className="text-[11px] text-faint">Preview of a new bot</p>
+      <p className="text-[11px] text-faint">Preview of a new dummy</p>
     </div>
   );
 }

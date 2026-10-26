@@ -7,8 +7,10 @@
 **NiobiumFN — old seasons, new shine.**
 
 A modern launcher for **OG Fortnite private servers**. For your own use only, and only with old
-builds you own yourself. Niobium never talks to Epic's real servers, has no features for today's
-Fortnite and does not get around any anti-cheat.
+builds. Your game never talks to Epic's real game servers (everything goes to your own backend).
+Niobium has no features for today's Fortnite and does not get around any anti-cheat. The only time it
+contacts Epic is the optional "Download a version": it gets the game files of an old build straight
+from Epic's own download servers – never from re-uploads.
 
 > Niobium is not affiliated with Epic Games. "Fortnite" is a trademark of Epic Games, Inc.
 
@@ -17,7 +19,8 @@ Fortnite and does not get around any anti-cheat.
 > [`docs/02-architecture.md`](docs/02-architecture.md#moving-over-from-vanity)).
 >
 > **Sources:** Niobium is built on free projects: the backend comes from LawinServer, the game server
-> from Magnesium/Erbium, the redirect from Tellurium and the in-game menu from ATLAS Console.
+> from Magnesium/Erbium, the redirect from Tellurium and the in-game menu from ATLAS Console. The AI bots
+> on 19.10 are ported from Artemis, the downloader's file formats from Legendary.
 >
 > **Versions:** Niobium starts every version from 1.7 to 30.x (Chapter 1 to Chapter 5 Season 3).
 > Only 19.10 is tested so far; all others run as "Untested". From 31.00 on the game server
@@ -42,7 +45,17 @@ removes an old Vanity install if it finds one. Your settings stay.
 
 - **Host & Play:** one click starts the backend, your own game server and your game.
 - **Library:** add the folder of a build; Niobium reads the version and says how well it is supported.
-- **Match Control:** start the match, game mode, Lategame, storm, respawn, items, bots and trickshot
+- **Download a version (new):** gets an old build straight from Epic's own download servers and adds it
+  to the Library: Chapter 2 Seasons 3 and 5–8 (13.30 to 18.30). Epic has deleted parts of many older
+  seasons, so they can't be downloaded – Chapter 3 Season 1 (19.10) is one of them. A 19.10 you already
+  have keeps working. Details: [`docs/02-architecture.md`](docs/02-architecture.md#build-downloader-download-a-version).
+- **Classic match (new):** profiles play like back then – no Lategame, normal ammo and materials. Switch
+  each one on in the profile if you want it.
+- **AI bots (new, experimental, 19.10 only):** Fortnite's own AI players drop in with you. Number of bots
+  and skill (Easy, Normal, Hard) in the profile.
+- **Pickups and loot (fixed):** picking up and swapping weapons works with full and free slots, and
+  nothing gets lost; floor loot on 19.10; a list of the match's loot in the Live Log.
+- **Match Control:** start the match, game mode, Lategame, storm, respawn, items, target dummies and trickshot
   parkours, all from the launcher.
 - **F9 in-game menu:** Edit on release, Reset on release, field of view, keys, joining by IP, a
   console, your own commands and a "Trickshot" tab.
@@ -66,6 +79,7 @@ removes an old Vanity install if it finds one. Your settings stay.
 | 7 | Trickshot mode + match control | launcher page "Match Control" (Game, Trickshot, Bots) through the control pipe. **Trickshot parkours:** 9 courses made of jump objects and standing target bots (mostly on a platform in the air), plus a sniper – built with one click in the launcher or in the F9 tab "Trickshot". An elimination in the air → big "TRICKSHOT!" banner. Your own command presets on "Match Control" → "Trickshot"; the server window's trickshot tab still works too – waiting for a test |
 | 8 | Polish, crash analysis, installer | crash analysis + installer done, polish ongoing |
 | 9 | Niobium: new name and logo, everything in English, Bubble Builds, new animated look, splash screen, welcome screen, branded installer | in the installer – waiting for a test |
+| 10 | "Download a version" (from Epic's own servers), "Classic match" profiles, AI bots on 19.10 (experimental), pickup and floor-loot fixes, loot list | new – waiting for a test ([`docs/03-test-checklist.md`](docs/03-test-checklist.md), Steps 10–14) |
 
 ## Folders
 

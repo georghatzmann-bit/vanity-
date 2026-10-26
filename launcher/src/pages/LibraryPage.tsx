@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Bubbles,
@@ -6,6 +6,7 @@ import {
   CircleDashed,
   CircleSlash,
   Clock,
+  CloudDownload,
   FlaskConical,
   FolderOpen,
   FolderPlus,
@@ -22,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ImportBuildDialog } from "@/components/build/ImportBuild";
+import { ProgressRing } from "@/components/download/parts";
 import { IconTile, PageHeader, PageShell, Panel, type IconTone } from "@/components/common";
 import { GlowCard, NumberTicker, Reveal, Sheen, Stagger } from "@/components/fx";
 import { pageGroup } from "@/components/layout/nav";
@@ -30,12 +32,14 @@ import { bubbleLevelFor } from "@/lib/bubble";
 import { coverGradient } from "@/lib/builds";
 import { versionSupport } from "@/lib/demo-data";
 import { api, openFolder, type BuildInfo } from "@/lib/api";
+import { formatDuration, formatSpeed, mainJob, phaseFraction, useDownloads, type DownloadJobView } from "@/lib/downloads";
 import { EASE_OUT, SPRING_UI } from "@/lib/motion";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export function LibraryPage() {
   const builds = useApp((s) => s.config.builds);
+  const setPage = useApp((s) => s.setPage);
   const activeBuildId = useApp((s) => s.config.profiles.find((p) => p.id === s.config.activeProfileId)?.buildId);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -55,10 +59,16 @@ export function LibraryPage() {
         title="Library"
         description="Your Fortnite builds. When you add one, Niobium finds the version and checks if it's supported."
         actions={
-          <Button onClick={() => setImportOpen(true)}>
-            <Plus />
-            Add a build
-          </Button>
+          <>
+            <Button variant="secondary" onClick={() => setPage("download")}>
+              <CloudDownload />
+              Download a version
+            </Button>
+            <Button onClick={() => setImportOpen(true)}>
+              <Plus />
+              Add a build
+            </Button>
+          </>
         }
       />
 
@@ -83,7 +93,7 @@ export function LibraryPage() {
             </motion.div>
           ))}
         </AnimatePresence>
-        <AddTile first={builds.length === 0} onClick={() => setImportOpen(true)} />
+        <AddTiles first={builds.length === 0} onAdd={() => setImportOpen(true)} onDownload={() => setPage("download")} />
       </Stagger>
 
       <Panel
@@ -268,33 +278,137 @@ function BubbleRow({ version }: { version: string }) {
   );
 }
 
-/** Dashed "add" card. With no builds yet it spans the whole row and says so. */
-function AddTile({ first, onClick }: { first: boolean; onClick: () => void }) {
+/**
+ * "Add a build folder" and "Download a version": stacked in one grid cell next to the builds,
+ * or side by side across the row while there is no build yet.
+ */
+function AddTiles({ first, onAdd, onDownload }: { first: boolean; onAdd: () => void; onDownload: () => void }) {
+  return (
+    <div className={cn(first ? "grid gap-4 sm:grid-cols-2 md:col-span-2 xl:col-span-3" : "flex min-h-52 flex-col gap-4")}>
+      <AddTile big={first} onClick={onAdd} />
+      <DownloadTile big={first} onClick={onDownload} />
+    </div>
+  );
+}
+
+const dashedTile = "border border-dashed bg-white/[0.01] text-muted-foreground backdrop-blur-none before:hidden";
+const tileLayout = (big: boolean) =>
+  big ? "flex min-h-64 flex-col items-center justify-center gap-4 p-6 text-center" : "flex flex-1 items-center gap-4 px-5 py-4 text-left";
+
+/** Dashed "add" card. With no builds yet it is big and says so. */
+function AddTile({ big, onClick }: { big: boolean; onClick: () => void }) {
   return (
     <GlowCard
       interactive
       kind="scale"
       onClick={onClick}
       aria-label="Add a build folder"
-      className={cn(
-        "flex min-h-52 flex-col items-center justify-center gap-4 border border-dashed",
-        "border-white/[0.1] bg-white/[0.01] p-6 text-center text-muted-foreground backdrop-blur-none before:hidden hover:border-brand-violet/40",
-        first && "min-h-64 md:col-span-2 xl:col-span-3",
-      )}
+      className={cn(tileLayout(big), dashedTile, "border-white/[0.1] hover:border-brand-violet/40")}
     >
-      <div className="relative">
-        <div aria-hidden className="absolute -inset-5 rounded-full bg-[radial-gradient(closest-side,rgb(122_60_255/0.22),transparent)] opacity-60 transition-opacity duration-300 group-hover:opacity-100" />
-        <div className="relative flex size-12 items-center justify-center rounded-xl bg-gradient-to-b from-white/[0.09] to-white/[0.03] text-violet-text shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_0_0_1px_rgb(255_255_255/0.06)] transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
-          <FolderPlus className="size-6" />
-        </div>
-      </div>
-      <div>
-        <p className="text-sm font-semibold text-foreground">{first ? "Add your first build" : "Add a build folder"}</p>
+      <TileIcon tone="violet">
+        <FolderPlus className="size-6" />
+      </TileIcon>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-foreground">{big ? "Add your first build" : "Add a build folder"}</p>
         <p className="mt-1 text-xs">
-          Choose the folder that contains "FortniteGame".{first ? " Niobium only reads it – nothing in it is changed." : ""}
+          Choose the folder that contains "FortniteGame".{big ? " Niobium only reads it – nothing in it is changed." : ""}
         </p>
       </div>
     </GlowCard>
+  );
+}
+
+/**
+ * "Download a version": a dashed tile under "Add a build". While a download runs it shows it
+ * (ring, percent, speed) and opens the download page.
+ */
+function DownloadTile({ big, onClick }: { big: boolean; onClick: () => void }) {
+  const job = useDownloads((s) => mainJob(s.jobs));
+  return (
+    <GlowCard
+      interactive
+      kind="scale"
+      onClick={onClick}
+      aria-label={job ? "Open your downloads" : "Download a version"}
+      className={cn(
+        tileLayout(big),
+        dashedTile,
+        job ? "border-brand-violet/30 bg-brand-violet/[0.04] hover:border-brand-violet/50" : "border-white/[0.1] hover:border-brand-blue/50",
+      )}
+    >
+      {job ? (
+        <DownloadTileJob job={job} big={big} />
+      ) : (
+        <>
+          <TileIcon tone="blue">
+            <CloudDownload className="size-6 transition-transform duration-300 group-hover:translate-y-0.5" />
+          </TileIcon>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">Download a version</p>
+            <p className="mt-1 text-xs">Get an older Fortnite straight from Epic's servers.</p>
+          </div>
+        </>
+      )}
+    </GlowCard>
+  );
+}
+
+function TileIcon({ tone, children }: { tone: "violet" | "blue"; children: ReactNode }) {
+  return (
+    <div className="relative shrink-0">
+      <div
+        aria-hidden
+        className={cn(
+          "absolute -inset-5 rounded-full opacity-60 transition-opacity duration-300 group-hover:opacity-100",
+          tone === "violet" ? "bg-[radial-gradient(closest-side,rgb(122_60_255/0.22),transparent)]" : "bg-[radial-gradient(closest-side,rgb(43_91_255/0.26),transparent)]",
+        )}
+      />
+      <div
+        className={cn(
+          "relative flex size-12 items-center justify-center rounded-xl bg-gradient-to-b from-white/[0.09] to-white/[0.03] shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_0_0_1px_rgb(255_255_255/0.06)] transition-transform duration-300 group-hover:scale-110",
+          tone === "violet" ? "text-violet-text group-hover:-rotate-3" : "text-blue-text",
+        )}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DownloadTileJob({ job, big }: { job: DownloadJobView; big: boolean }) {
+  const p = job.progress;
+  const pct = Math.floor(phaseFraction(p) * 100);
+  const line =
+    job.state === "done"
+      ? "Ready – open to play"
+      : job.state === "error"
+        ? "Stopped – open to fix"
+        : job.state === "paused"
+          ? `Paused at ${pct}%`
+          : p.phase === "downloading"
+            ? [formatSpeed(p.speedBps), p.etaSecs !== null ? `${formatDuration(p.etaSecs)} left` : ""].filter(Boolean).join(" · ")
+            : p.phase === "checking"
+              ? "Checking that Epic has every file"
+              : p.phase === "verifying"
+                ? "Checking files"
+                : "Adding to Library";
+  const tone = job.state === "done" ? "success" : job.state === "error" ? "danger" : job.state === "paused" ? "warning" : "brand";
+  return (
+    <>
+      <ProgressRing value={job.state === "done" ? 1 : pct / 100} size={big ? 64 : 52} stroke={4} tone={tone}>
+        {job.state === "done" ? (
+          <Check className="size-5 text-success" strokeWidth={2.6} />
+        ) : (
+          <span className="text-xs font-semibold text-foreground tabular-nums">{pct}%</span>
+        )}
+      </ProgressRing>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-foreground">
+          {job.state === "done" ? "Ready: " : job.state === "running" ? "Downloading " : ""}Fortnite <span className="tabular-nums">{job.version}</span>
+        </p>
+        <p className="mt-1 truncate text-xs tabular-nums">{line}</p>
+      </div>
+    </>
   );
 }
 

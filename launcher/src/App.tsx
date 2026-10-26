@@ -13,10 +13,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useWindowActivity } from "@/hooks/use-window-active";
 import { api, inTauri } from "@/lib/api";
+import { initDownloads } from "@/lib/downloads";
 import { useApp, type PageId } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { AboutPage } from "@/pages/AboutPage";
 import { CrashesPage } from "@/pages/CrashesPage";
+import { DownloadPage } from "@/pages/DownloadPage";
 import { IngameMenuPage } from "@/pages/IngameMenuPage";
 import { LibraryPage } from "@/pages/LibraryPage";
 import { LogsPage } from "@/pages/LogsPage";
@@ -29,6 +31,7 @@ import { StartPage } from "@/pages/StartPage";
 const pages: Record<PageId, ComponentType> = {
   start: StartPage,
   library: LibraryPage,
+  download: DownloadPage,
   servers: ServersPage,
   match: MatchPage,
   ingame: IngameMenuPage,
@@ -58,6 +61,11 @@ export function App() {
   useEffect(() => {
     init();
   }, [init]);
+
+  // Downloads: the list (unfinished ones from last time come back paused) and their events
+  useEffect(() => {
+    if (ready) initDownloads();
+  }, [ready]);
 
   // The config is there: show the main window two frames later (after the first real paint)
   // and close the splash. The main window starts hidden, and a hidden page may get no animation

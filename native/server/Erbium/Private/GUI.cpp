@@ -26,6 +26,7 @@
 #include <FortniteGame/Public/FortGameStateAthena.h>
 #include <FortniteGame/Public/FortGameMode.h>
 #include <FortniteGame/Public/CustomSafeZoneRuntime.h>
+#include <FortniteGame/Public/PlayerBots_19_10.h> // NIOBIUM: 19.10 AI player bots
 #include <Engine/Public/Texture.h>
 #include <sstream>
 #include <fstream>
@@ -4795,6 +4796,7 @@ void GUI::SafeZoneMapGameTick()
     ABuildingSMActor::TickSavedTrapAttachments();
     AFortPlayerPawnAthena::TickPendingPlayerMapIcons();
     NiobiumControl::GameThreadTick(); // NIOBIUM: commands from the launcher
+    PlayerBots1910::GameThreadTick(); // NIOBIUM: 19.10 AI bots (no-op unless they are on)
 }
 
 bool GameTextureBridge::ExtractToRGBA(const UTexture2D* Texture, std::vector<unsigned char>& RGBA,

@@ -26,4 +26,8 @@ namespace NiobiumControl
 
     // Trickshot detected (NiobiumParkour): {"event":"trickshot","player":...,"victim":...,"meters":N}. Thread-safe.
     void EmitTrickshot(const std::string& Player, const std::string& Victim, int Meters);
+
+    // AI bot decision (PlayerBots_19_10.cpp), sent once per match:
+    // {"event":"playerBots","state":"active"|"unavailable","reason":"<plain English>"}. Thread-safe.
+    void EmitPlayerBots(const char* State, const std::string& Reason);
 }

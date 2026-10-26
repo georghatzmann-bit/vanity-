@@ -2187,7 +2187,9 @@ void AFortDecoTool::ServerCreateBuildingAndSpawnDeco(UObject* Context, FFrame& S
     if (!Pawn)
         return;
 
-    auto PlayerController = (AFortPlayerControllerAthena*)Pawn->Controller;
+    // NIOBIUM: only player controllers have the build resources and inventory used below.
+    auto PlayerController = Pawn->Controller ? Pawn->Controller->Cast<AFortPlayerControllerAthena>()
+        : nullptr;
     if (!PlayerController)
         return;
 

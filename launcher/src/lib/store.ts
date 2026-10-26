@@ -18,8 +18,10 @@ import {
   type Services,
   type ServiceStatus,
   type Settings,
+  type PlayerBotsEvent,
   type Toast,
 } from "./api";
+import { botsText } from "./bots";
 import { demoLogScript } from "./demo-data";
 
 export type { ServiceStatus };
@@ -27,6 +29,8 @@ export type { ServiceStatus };
 export type PageId =
   | "start"
   | "library"
+  /** "Download a version" – a sub-page of the Library (not in the sidebar itself). */
+  | "download"
   | "servers"
   | "match"
   | "ingame"
@@ -36,7 +40,7 @@ export type PageId =
   | "settings"
   | "about";
 
-const PAGE_IDS: readonly PageId[] = ["start", "library", "servers", "match", "ingame", "profiles", "logs", "crashes", "settings", "about"];
+const PAGE_IDS: readonly PageId[] = ["start", "library", "download", "servers", "match", "ingame", "profiles", "logs", "crashes", "settings", "about"];
 
 /** Steps of a "Host & Play" launch – same order as in engine.rs. */
 export const launchSteps = [
@@ -111,6 +115,9 @@ interface AppState {
   closeRequest: CloseRequested | null;
   dismissCloseRequest: () => void;
 
+  /** The server's answer about AI bots for this match (event "server:playerBots"); null = none yet. */
+  playerBots: PlayerBotsEvent | null;
+
   init: () => Promise<void>;
 }
 
@@ -121,8 +128,11 @@ function withoutSprint(settings: ClientSettings): ClientSettings {
   return { ...settings, preferences: { ...settings.preferences, sprintByDefault: false } };
 }
 
-/** Browser preview only: ?page=library, ?welcome=1, ?whatsnew=1, ?bubbleini=1, ?closeconfirm=1 (for screenshots). */
-function previewParam(name: string): string | null {
+/**
+ * Browser preview only: ?page=library, ?welcome=1, ?whatsnew=1, ?bubbleini=1, ?closeconfirm=1,
+ * ?botsoff=1, ?dl=running (see downloads.ts) – for screenshots. Always null in the real launcher.
+ */
+export function previewParam(name: string): string | null {
   if (inTauri) return null;
   try {
     return new URLSearchParams(window.location.search).get(name);
@@ -192,6 +202,8 @@ export const useApp = create<AppState>()((set, get) => ({
   closeRequest: null,
   dismissCloseRequest: () => set({ closeRequest: null }),
 
+  playerBots: null,
+
   init: async () => {
     if (get().ready) return;
     let config = emptyConfig;
@@ -238,6 +250,13 @@ export const useApp = create<AppState>()((set, get) => ({
       const parts = [t.victim ? `on ${t.victim}` : "", typeof t.meters === "number" ? `${t.meters} m` : ""].filter(Boolean);
       toast.success(`TRICKSHOT! ${who}`, { description: parts.join(" · ") || "A kill in the air" });
     });
+    // The server decided whether AI bots can run in this match. Only "unavailable" needs a message.
+    onEvent<PlayerBotsEvent>("server:playerBots", (payload) => {
+      const state = payload?.state === "active" ? "active" : "unavailable";
+      const reason = typeof payload?.reason === "string" ? payload.reason : "";
+      set({ playerBots: { state, reason } });
+      if (state === "unavailable") toast.warning(botsText.unavailableTitle, { description: reason || botsText.noteNotYet });
+    });
     // After a game with Bubble Builds: Fortnite saved Performance Mode as its default
     onEvent<BubbleIniChanged>("bubble:ini-changed", (payload) => set({ bubbleIni: payload }));
     // The window was asked to close (X, Alt+F4, taskbar) while something runs: Rust waits for the answer
@@ -257,10 +276,21 @@ export const useApp = create<AppState>()((set, get) => ({
       if (previewParam("closeconfirm")) {
         set({ closeRequest: { running: ["Your game", "Game server", "Backend"] } });
       }
+      if (previewParam("botsoff")) {
+        // What the server sends when its safety checks don't match this copy of 19.10
+        const reason = "Bots aren't available for this copy of 19.10.";
+        set({ playerBots: { state: "unavailable", reason } });
+        window.setTimeout(() => toast.warning(botsText.unavailableTitle, { description: reason }), 600);
+      }
       startDemoLog();
     }
   },
 }));
+
+// The bot answer belongs to one match: forget it when the game server stops
+useApp.subscribe((s, prev) => {
+  if (s.playerBots && prev.services.server !== "stopped" && s.services.server === "stopped") useApp.setState({ playerBots: null });
+});
 
 /** Sample lines in the browser preview, so the log page isn't empty. */
 function startDemoLog() {

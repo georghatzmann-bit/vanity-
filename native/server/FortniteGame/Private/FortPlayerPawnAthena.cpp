@@ -3500,6 +3500,116 @@ static bool CompletePickupWithoutSpline(AFortPlayerPawnAthena* Pawn, AFortPickup
     return true;
 }
 
+// NIOBIUM: pickup swap helpers. A swap only makes sense when all five weapon slots are taken, the
+// pawn holds a slot item (not the pickaxe) and the pickup is a slot item too. The slot count is the
+// same one AFortPlayerControllerAthena::InternalPickup uses, so both paths agree on "full".
+static int32 CountPrimaryQuickbarItems(AFortInventory* Inventory)
+{
+    if (!Inventory)
+        return 0;
+
+    int32 Count = 0;
+    for (int32 Index = 0; Index < Inventory->Inventory.ReplicatedEntries.Num(); ++Index)
+    {
+        auto& Entry = Inventory->Inventory.ReplicatedEntries.Get(Index, FFortItemEntry::Size());
+        if (Entry.ItemDefinition && AFortInventory::IsPrimaryQuickbar(Entry.ItemDefinition))
+            ++Count;
+    }
+    return Count;
+}
+
+static AFortWeapon* GetHeldSlotWeapon(AFortPlayerPawnAthena* Pawn)
+{
+    auto Weapon = Pawn && Pawn->CurrentWeapon ? Pawn->CurrentWeapon->Cast<AFortWeapon>() : nullptr;
+    return Weapon && Weapon->WeaponData && AFortInventory::IsPrimaryQuickbar(Weapon->WeaponData)
+        ? Weapon : nullptr;
+}
+
+static bool IsPickupSwapCandidate(AFortPlayerControllerAthena* PlayerController,
+    AFortPlayerPawnAthena* Pawn, AFortPickupAthena* Pickup)
+{
+    if (!PlayerController || !PlayerController->WorldInventory || !Pickup)
+        return false;
+
+    auto PickupDefinition = Pickup->PrimaryPickupItemEntry.ItemDefinition;
+    if (!PickupDefinition || !AFortInventory::IsPrimaryQuickbar(PickupDefinition) ||
+        !GetHeldSlotWeapon(Pawn))
+    {
+        return false;
+    }
+
+    auto Inventory = PlayerController->WorldInventory;
+    if (CountPrimaryQuickbarItems(Inventory) < 5)
+        return false;
+
+    // A stack with room left takes the pickup without a swap (InternalPickup tops it up).
+    const int32 MaxStack = (int32)PickupDefinition->GetMaxStackSize();
+    if (MaxStack > 1 && Inventory->Inventory.ReplicatedEntries.Search([&](FFortItemEntry& Entry)
+            {
+                return Entry.ItemDefinition == PickupDefinition && Entry.Count < MaxStack;
+            }, FFortItemEntry::Size()))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+// Swaps the held weapon for the pickup. Returns false without changing anything when no swap is
+// possible, so the caller can fall back to InternalPickup. Never loses an item: the held weapon is
+// only removed once it is on the ground, and a pickup that can't be added goes back on the ground.
+static bool TrySwapHeldWeaponForPickup(AFortPlayerControllerAthena* PlayerController,
+    AFortPlayerPawnAthena* Pawn, AFortPickupAthena* Pickup)
+{
+    if (!IsPickupSwapCandidate(PlayerController, Pawn, Pickup))
+        return false;
+
+    auto Inventory = PlayerController->WorldInventory;
+    auto HeldWeapon = GetHeldSlotWeapon(Pawn);
+    FGuid HeldGuid = HeldWeapon->ItemEntryGuid; // FGuid::operator== takes a non-const reference
+    auto HeldEntry = Inventory->Inventory.ReplicatedEntries.Search([&](FFortItemEntry& Entry)
+        { return Entry.ItemGuid == HeldGuid; }, FFortItemEntry::Size());
+    if (!HeldEntry)
+        return false;
+
+    const FVector DropOrigin = Pawn->K2_GetActorLocation();
+    FVector FinalLoc = DropOrigin;
+
+    FVector ForwardVector = Pawn->GetActorForwardVector();
+    ForwardVector.Z = 0.0f;
+    ForwardVector.Normalize();
+
+    FinalLoc = FinalLoc + ForwardVector * 450.f;
+    FinalLoc.Z += 50.f;
+
+    const float RandomAngleVariation = ((float)rand() * 0.00109866634f) - 18.f;
+    const float FinalAngle = RandomAngleVariation * 0.017453292519943295f;
+
+    FinalLoc.X += cos(FinalAngle) * 100.f;
+    FinalLoc.Y += sin(FinalAngle) * 100.f;
+
+    if (!AFortInventory::SpawnPickup(DropOrigin, *HeldEntry, EFortPickupSourceTypeFlag::GetPlayer(),
+            EFortPickupSpawnSource::GetUnset(), Pawn, -1, true, true, true, nullptr, FinalLoc))
+    {
+        return false;
+    }
+    Inventory->Remove(HeldGuid);
+
+    auto Item = Inventory->GiveItem(Pickup->PrimaryPickupItemEntry);
+    if (!Item)
+    {
+        SDK::DbgLog("[Pickup] swap could not add the pickup, dropping it again item=%p\n",
+            (void*)Pickup->PrimaryPickupItemEntry.ItemDefinition);
+        AFortInventory::SpawnPickup(DropOrigin, Pickup->PrimaryPickupItemEntry,
+            EFortPickupSourceTypeFlag::GetPlayer(), EFortPickupSpawnSource::GetUnset(), Pawn, -1,
+            true, true, true, nullptr, FinalLoc);
+        return true;
+    }
+
+    PlayerController->ServerExecuteInventoryItem(Item->ItemEntry.ItemGuid);
+    return true;
+}
+
 bool AFortPlayerPawnAthena::PlayCommandGrantPickupAnimation(AFortPlayerPawnAthena* Pawn,
     const UFortItemDefinition* ItemDefinition, int32 Count, int32 LoadedAmmo, int32 Level)
 {
@@ -4012,9 +4122,10 @@ void AFortPlayerPawnAthena::ServerHandlePickupInfo(UObject* Context, FFrame& Sta
 
     auto PlayerController = Pawn->Controller ? Pawn->Controller->Cast<AFortPlayerControllerAthena>()
         : nullptr;
-    if (FinishedTargetSplineOG && PlayerController && bUseRequestedSwap && Pawn->CurrentWeapon &&
-        AFortInventory::IsPrimaryQuickbar(((AFortWeapon*)Pawn->CurrentWeapon)->WeaponData) &&
-        AFortInventory::IsPrimaryQuickbar(Pickup->PrimaryPickupItemEntry.ItemDefinition))
+    // NIOBIUM: only remember a swap when one is possible (slots full, weapon in hand, weapon pickup).
+    if (FinishedTargetSplineOG && PlayerController && bUseRequestedSwap &&
+        PlayerController->HasbTryPickupSwap() &&
+        IsPickupSwapCandidate(PlayerController, Pawn, Pickup))
     {
         PlayerController->bTryPickupSwap = true;
     }
@@ -4060,10 +4171,16 @@ void AFortPlayerPawnAthena::ServerHandlePickupWithRequestedSwap(UObject* Context
     if (!Pawn || !Pickup || Pickup->bPickedUp)
         return;
 
-    auto PlayerController = (AFortPlayerControllerAthena*)Pawn->Controller;
+    // NIOBIUM: AI controllers are not player controllers; and only remember a swap when one is
+    // possible, otherwise a stuck flag later drops ammo and mats or swaps with free slots.
+    auto PlayerController = Pawn->Controller ? Pawn->Controller->Cast<AFortPlayerControllerAthena>()
+        : nullptr;
 
-    if (FinishedTargetSplineOG && PlayerController)
+    if (FinishedTargetSplineOG && PlayerController && PlayerController->HasbTryPickupSwap() &&
+        IsPickupSwapCandidate(PlayerController, Pawn, Pickup))
+    {
         PlayerController->bTryPickupSwap = true;
+    }
 
     const float PickupSpeed = Pawn->HasPickupSpeedMultiplier() ? Pawn->PickupSpeedMultiplier : 1.f;
     if (!SetPickupTarget_ || !TrySetPickupTargetByReference(Pickup, Pawn, InFlyTime / PickupSpeed,
@@ -4113,47 +4230,23 @@ bool AFortPlayerPawnAthena::FinishedTargetSpline(void* _Pickup)
     if (!Pawn)
         return FinishedTargetSplineOG(Pickup);
 
-    auto PlayerController = (AFortPlayerControllerAthena*)Pawn->Controller;
+    // NIOBIUM: AI bots have no player controller; they keep the game's own pickup path.
+    auto PlayerController = Pawn->Controller ? Pawn->Controller->Cast<AFortPlayerControllerAthena>()
+        : nullptr;
     if (!PlayerController)
         return FinishedTargetSplineOG(Pickup);
-    if (PlayerController->HasbTryPickupSwap() ? PlayerController->bTryPickupSwap : false)
-    {
-        FVector FinalLoc = Pawn->K2_GetActorLocation();
 
-        FVector ForwardVector = Pawn->GetActorForwardVector();
-        ForwardVector.Z = 0.0f;
-        ForwardVector.Normalize();
+    // The swap request is used up by this pickup, whatever happens next. Before, the flag was only
+    // cleared after a real swap, so a stuck flag dropped later ammo, mats and weapons (pickaxe in
+    // hand) back on the ground, or swapped the held weapon even with free slots.
+    const bool bSwapRequested = PlayerController->HasbTryPickupSwap() &&
+        PlayerController->bTryPickupSwap;
+    if (PlayerController->HasbTryPickupSwap())
+        PlayerController->bTryPickupSwap = false;
 
-        FinalLoc = FinalLoc + ForwardVector * 450.f;
-        FinalLoc.Z += 50.f;
-
-        const float RandomAngleVariation = ((float)rand() * 0.00109866634f) - 18.f;
-        const float FinalAngle = RandomAngleVariation * 0.017453292519943295f;
-
-        FinalLoc.X += cos(FinalAngle) * 100.f;
-        FinalLoc.Y += sin(FinalAngle) * 100.f;
-
-        if (AFortInventory::IsPrimaryQuickbar(((AFortWeapon*)Pawn->CurrentWeapon)->WeaponData) && AFortInventory::IsPrimaryQuickbar(Pickup->PrimaryPickupItemEntry.ItemDefinition))
-        {
-            PlayerController->bTryPickupSwap = false;
-
-            auto entry = PlayerController->WorldInventory->Inventory.ReplicatedEntries.Search([&](FFortItemEntry& entry)
-                { return entry.ItemGuid == ((AFortWeapon*)PlayerController->Pawn->CurrentWeapon)->ItemEntryGuid; }, FFortItemEntry::Size());
-
-            AFortInventory::SpawnPickup(PlayerController->GetViewTarget()->K2_GetActorLocation(),
-                *entry, EFortPickupSourceTypeFlag::GetPlayer(), EFortPickupSpawnSource::GetUnset(),
-                PlayerController->MyFortPawn, -1, true, true, true, nullptr, FinalLoc);
-            PlayerController->WorldInventory->Remove(entry->ItemGuid);
-            auto Item = PlayerController->WorldInventory->GiveItem(Pickup->PrimaryPickupItemEntry);
-            PlayerController->ServerExecuteInventoryItem(Item->ItemEntry.ItemGuid);
-        }
-        else
-            AFortInventory::SpawnPickup(PlayerController->GetViewTarget()->K2_GetActorLocation(),
-                Pickup->PrimaryPickupItemEntry, EFortPickupSourceTypeFlag::GetPlayer(),
-                EFortPickupSpawnSource::GetUnset(), PlayerController->MyFortPawn, -1, true, true,
-                true, nullptr, FinalLoc);
-    }
-    else
+    // Everything that isn't a valid swap goes through InternalPickup: it stacks, adds, swaps when
+    // full, or puts the item back on the ground. It never just drops the pickup like before.
+    if (!bSwapRequested || !TrySwapHeldWeaponForPickup(PlayerController, Pawn, Pickup))
         PlayerController->InternalPickup(&Pickup->PrimaryPickupItemEntry);
 
     return FinishedTargetSplineOG(Pickup);
@@ -4403,7 +4496,9 @@ void AFortPlayerPawnAthena::ServerOnExitVehicle_(UObject* Context, FFrame& Stack
         return;
     }
 
-    auto PlayerController = (AFortPlayerControllerAthena*)Pawn->Controller;
+    // NIOBIUM: an AI driver has no player loadout to restore.
+    auto PlayerController = Pawn->Controller ? Pawn->Controller->Cast<AFortPlayerControllerAthena>()
+        : nullptr;
     AActor* ExitedVehicle = nullptr;
 
     if (VersionInfo.FortniteVersion >= 29)

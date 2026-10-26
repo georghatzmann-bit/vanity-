@@ -8,6 +8,10 @@ itself – this checklist tells you what to look for.
 
 A German copy of this list is in [`03-test-checklist.de.md`](03-test-checklist.de.md).
 
+**New in this version** (Steps 10–14): "Classic match" profiles, picking up and swapping weapons, floor
+loot and the loot list on 19.10, AI bots on 19.10 (experimental) and "Download a version". None of it has
+been tested in a real game yet – that's what these steps are for.
+
 ## Download
 
 Direct link (always the latest build):
@@ -108,7 +112,9 @@ Analysis**. It says in plain words what happened.
 - [ ] The game mode doesn't matter (Solo is enough) → press **Play**.
 - [ ] The matchmaker sends you to 127.0.0.1:7777 → loading screen → you stand on the spawn island or
       in the bus (depends on the server settings).
-- [ ] You can walk, build, edit and pick up weapons.
+- [ ] You can walk, build, edit and pick up weapons. Profiles now play a "Classic match" unless you
+      switch something on: ammo and materials run out like back then, so farm some wood with the
+      pickaxe before you build (more in Step 10).
 
 If the game can't connect to the server: was "Server ready" already there? If not, wait and press
 Play again.
@@ -116,7 +122,7 @@ Play again.
 ## Step 5 – Get to know the server window (Magnesium)
 
 A lot also works in the launcher: page **Match Control** (mode, Lategame, bus, storm, items, trickshot,
-bots). The server window can do more (its texts come from Magnesium):
+target dummies). The server window can do more (its texts come from Magnesium):
 
 - [ ] **Playlist**: buttons such as "Solos", "Duos", "Tournament Solos" (Arena), "Zero Build …". Pick one
       before the start, then start the match.
@@ -269,6 +275,172 @@ If you don't have such a build: only do the part "On 19.10" at the end.
       they are still there (paused), please tell me.
 - [ ] **Host & Play** again → it works a second time without restarting Niobium.
 
+## Step 10 – Match rules ("Classic match")
+
+"Classic match" means like back then: no Lategame, normal ammo, normal materials. Before, ammo and
+materials were always infinite. Now each profile decides.
+
+- [ ] **Profiles** → on your 19.10 profile **…** → **Edit**. On the right, under "Match rules", there are
+      three switches: "Lategame", "Infinite ammo", "Infinite materials". On a profile from before this
+      version, "Infinite ammo" and "Infinite materials" are now **off**; "Lategame" is as you left it.
+- [ ] With all three off, a gold badge says **Classic match**, and below the switches: "Classic match =
+      like back then: full map, normal ammo and materials."
+- [ ] Switch "Infinite ammo" on → the badge says **Custom** and a button **Classic** appears. Press
+      **Classic** → all three are off again. **Save**.
+- [ ] The profile card shows "Rules: Classic match" (if something is on, it lists that instead, e.g.
+      "Lategame · Infinite ammo").
+- [ ] **New profile** → the three switches start off.
+- [ ] **Host & Play** with "Classic match" → **Start match** → in the match:
+      - when you shoot, the ammo goes down and can run out;
+      - building uses up your materials (farm some with the pickaxe first);
+      - **Match Control** → **Game** → "Infinite": "Infinite ammo" and "Infinite materials" are off.
+- [ ] On **Match Control** switch "Infinite ammo" on → from now on your ammo stays full. Switch it off again.
+- [ ] Edit the profile: "Infinite ammo" and "Infinite materials" on → **Save** → **Stop all** →
+      **Host & Play** → ammo and materials never run out, and both switches on Match Control are on.
+
+## Step 11 – Picking up and swapping weapons
+
+Before, picking up could get stuck: after one swap, ammo and materials fell back to the ground, a weapon
+couldn't be picked up while you held the pickaxe, or your weapon was swapped out although you had a free
+slot. Test it in a Solo match on 19.10 (the spawn island before the bus is fine). Pick things up the way
+you always do.
+
+- [ ] **Free slot, pickaxe in hand:** pick up a weapon from the ground → it goes into a free slot.
+- [ ] **Free slot, weapon in hand:** pick up another weapon → it goes into a free slot. Your weapon is not
+      dropped.
+- [ ] **All 5 slots full, weapon in hand:** fill your slots (pick up weapons, or in the launcher
+      **Match Control** → **Game** → "Give items" → pick a weapon → **Give to me**, with different weapons).
+      Hold a weapon (not the pickaxe) and pick up a weapon from the ground → your weapon lands in front of
+      you, the new one is in your hand.
+- [ ] **Right after that swap:** walk over ammo and wood, stone or metal → they go into your inventory and
+      do **not** fall back to the ground.
+- [ ] **All 5 slots full, pickaxe in hand:** try to pick up a weapon → it stays on the ground (or lands there
+      again). Then take a weapon in your hand and pick it up → now it swaps.
+- [ ] **A stack with room:** if you carry a stack that isn't full (e.g. "Small Shield Potion" from "Give
+      items") and pick up more of the same → the stack grows, nothing is swapped.
+- [ ] In all of this, **nothing disappears**: every item is either in your inventory or on the ground.
+
+## Step 12 – Floor loot and the loot list (19.10)
+
+Before, the server removed the floor loot spots on 19.10 without filling them. Now it fills each spot once
+per match. A few empty spots are normal (back then, some spots were empty too).
+
+- [ ] Solo match with "Classic match" → **Start match**. On the spawn island and after you land (for example
+      in a named place), weapons, ammo and items lie on the floor in houses.
+- [ ] Chests still open and drop loot.
+- [ ] **Loot list:** right after **Start match** (while the map loads), go to **Live Log** → **Server** →
+      type `loot` in "Search the log…". You see lines with the category "loot":
+      - "features: …" (the season's game features that add loot),
+      - "items: …" (how many different items can drop),
+      - many lines "item …" (one item each, at most 400).
+      Press **Copy** and send it to me. Then I can see which Chapter 3 Season 1 items are in the pool.
+- [ ] Do season items show up in the match (for example Spider-Man's Web-Shooters)? Write down what you
+      found and whether it works.
+- [ ] After the match: open `<your 19.10 folder>\FortniteGame\Binaries\Win64\stdout.log` with Notepad, search
+      for `[FloorLoot]` and send me those lines (one per kind of spot, `Tiered_Athena_FloorLoot_Warmup_C` and
+      `Tiered_Athena_FloorLoot_01_C`). They look like this:
+      `[FloorLoot] Tiered_Athena_FloorLoot_01_C: … spots, … filled now, … empty now, … already rolled`.
+      No such line on 19.10 → please tell me. (Do this before the next **Host & Play** – the file starts
+      fresh with every server start.)
+
+## Step 13 – AI bots (19.10, experimental)
+
+Fortnite's own AI players, meant to drop from the bus, loot and fight like real players. Only on 19.10 with
+CL-18675304, and only experimental: nobody has tested them in a game yet. They are not the target dummies
+on **Match Control** → **Target dummies**, which stand still.
+
+**Before you start:** the server only switches bots on if your game file is exactly Epic's 19.10 file.
+Explorer → `<your 19.10 folder>\FortniteGame\Binaries\Win64\FortniteClient-Win64-Shipping.exe` → right-click →
+**Properties** → "Size" should say **198,580,704 bytes**. If it doesn't, bots will be off – please still do the
+test and send me the size.
+
+- [ ] **Profiles** → your 19.10 profile **…** → **Edit**. Section "AI bots" with the badge "Experimental ·
+      19.10 only". Switch "Play with AI bots" on, "Number of bots" e.g. 30, "Bot skill" **Easy** → **Save**.
+      The card shows "AI bots: 30 · Easy" and the tag "AI bots".
+- [ ] (If you have another build, e.g. one you downloaded in Step 14:) a profile for it shows the "AI bots"
+      section greyed out with e.g. "Fortnite 18.30: AI bots aren't available for this version yet."
+- [ ] **Host & Play**. **Match Control** → **Game**: the start card shows "Mode Solo", "Lategame Off" and
+      "AI bots 30 · Easy". Press **Start match**.
+- [ ] **Live Log**, type `bots` in the search. Expected while the map loads:
+      - "checks passed for 19.10 CL 18675304, hooks installed; 30 bots, ELO 500",
+      - "service set up, 30 bots, ELO 500 (playlist …)",
+      - source **Niobium**: "AI bots are on for this match."
+      Later, for example: "bot service started", "spawn amount: 30 bots (…)", "1 bots spawned",
+      "10 bots spawned", "cached … POI volumes and … foundations".
+- [ ] **If bots are off:** a pop-up "AI bots are off for this match" with the reason (e.g. "Bots aren't
+      available for this copy of 19.10."), and in the Live Log a line "disabled: …". The match runs without
+      bots. Please send me that "disabled: …" line.
+- [ ] In the game, please watch and write down:
+      - Do bots appear (before the bus or when it starts)? They may wear default outfits.
+      - The bus: the Live Log says "… bots got on the bus". Do the bots jump and glide down?
+      - Do they land, pick up weapons, shoot at you, build?
+      - How good are they on **Easy**?
+      - The storm: do bots outside the storm lose health and get eliminated?
+      - Eliminate bots: does the "players left" number go down? When you are the last one: **Victory Royale**?
+        (The Live Log then says "all bots are out".)
+      - Frame rate and stability: please play 3 matches with 30 bots. Any freezes or crashes? Roughly how many
+        FPS?
+- [ ] Try **Normal** and **Hard**: **Stop all** → edit the profile → "Bot skill" → **Save** → **Host & Play**
+      (the bot settings count from the next start). How do they feel compared to Easy? The Live Log says ELO
+      1000 (Normal) or 2000 (Hard).
+- [ ] Switch "Play with AI bots" off → **Host & Play** → no "bots" lines, no pop-up, the match is as before.
+
+## Step 14 – Download a version (optional – needs about 50 GB and 2 hours)
+
+Niobium can download some old builds. The file list comes from a public GitHub archive, and every game file
+comes straight from Epic's own download servers – never from re-uploads. Epic has deleted parts of many old
+seasons, so those can't be downloaded. **Chapter 3 Season 1 (19.10) is one of them** – your 19.10 keeps
+working.
+
+**Look around (nothing is downloaded):**
+
+- [ ] **Library** → **Download a version** (button at the top, or the tile under "Add a build"). The page
+      "Download a version" opens; in the sidebar "Library" stays lit.
+- [ ] At the top: tabs "Chapter 1" to "Chapter 5". Only "Chapter 2" has a green number (5).
+- [ ] **Chapter 1:** a note "All of Chapter 1 · Not available from Epic." with the explanation, and every
+      card says "Not available from Epic".
+- [ ] **Chapter 3:** notes "Seasons 1 and 2 · Not available from Epic." and "Seasons 3 and 4 · Not offered
+      yet." The "Season 1" card says "Epic deleted some of its files." and, in green, "Your 19.10 keeps
+      working."
+- [ ] **Chapter 2:** "Season 3", "Season 5", "Season 6", "Season 7" and "Season 8" are "Available"; "Season 8"
+      says "7 builds · from 40.1 GB".
+- [ ] Click **Season 8** → a window "Chapter 2 · Season 8". The newest build is at the top: "18.30", with
+      "41.1 GB download · 45.4 GB on disk · about 1 h 50 min at 50 Mbit/s" and "Experimental". "Download to" is
+      already filled in (e.g. `D:\Niobium\Builds\18.30-CL-17882303`), below it "Needs about 47.5 GB free on
+      that drive."
+- [ ] **Folder checks** (each time: type the folder into "Download to" and press **Download 18.30** – the red
+      text appears under the field, nothing starts):
+      - a folder with files in it, e.g. `C:\Users\georg\Downloads` → "This folder already has other files in
+        it. Pick an empty folder."
+      - if you use OneDrive: a folder in it → "This folder is synced by OneDrive. Pick a folder outside
+        OneDrive, or it will try to upload about 40 GB."
+      - if you have a USB stick with FAT32: a folder on it → "Drive E: can't hold files bigger than 4 GB
+        (FAT32). Pick a folder on another drive." (with your drive letter)
+      - a drive with too little space → "There isn't enough free space on drive D:. This version needs
+        47.5 GB and … GB is free. Free up space or pick another folder." (with your drive letter)
+      Then **Cancel**.
+
+**A real download** (only if you have the time and the space; 18.30 is a good choice):
+
+- [ ] Pick 18.30, keep the folder → **Download 18.30**. A card appears at the top with four steps: "Check at
+      Epic", "Download", "Check files", "Add to Library". First "Checking that Epic still has every file…
+      (about 1 min)", then the percent, the current file, "Downloaded", "Speed", "Time left" and "Files … of
+      785". A small progress pill shows in the sidebar, also on other pages.
+- [ ] **Pause** → "Pausing…" → "Paused – everything downloaded so far is kept." → **Resume** → it continues
+      (first a short "Check at Epic" again, then the percent goes on from where it was).
+- [ ] Close Niobium while it downloads → "Close Niobium?" lists "Download (18.30)" → **Stop & close**. Open
+      Niobium → **Library** → **Download a version** → the card says "Paused" → **Resume** → it continues.
+- [ ] **Cancel** → "Cancel the download of 18.30?" – "Delete the downloaded files? If you keep them,
+      downloading 18.30 into the same folder again continues where it stopped." → **Keep files**. Start 18.30
+      again into the same folder → it continues instead of starting over.
+- [ ] Let it finish: "Check files" → "Add to Library" → "Fortnite 18.30 is ready" – "It's in your Library now.
+      Press Play to use it.", the pop-up "18.30 is ready", and in the Live Log "Download of 18.30 finished and
+      added to your Library".
+- [ ] **Play** → you are on Home, pop-up "Fortnite 18.30 is set" (a profile "Fortnite 18.30" with "Classic
+      match" was made, if you had none for this build). **Library** shows an 18.30 card with "Untested".
+- [ ] **Host & Play** → does 18.30 start, and can you play a match?
+- [ ] If an error card appears: a screenshot of it, plus the Live Log line that starts with "Download of".
+
 ## Testing other versions (untested, but they start)
 
 Niobium starts every version from 1.7 to 30.x. For everything except 19.10: the same steps as above,
@@ -280,8 +452,9 @@ only the build card shows "Untested" and the log has a note. If it doesn't work,
   game server says.
 
 Known limits: 9.40–10.40 without party/XMPP; "Edit on release" only up to 10.40; 31.00 and newer don't
-start yet. For trickshot parkours there may be other objects depending on the version – if one is
-missing, the server says so in the console (see Step 7).
+start yet; AI bots only on 19.10 (CL-18675304). For trickshot parkours there may be other objects
+depending on the version – if one is missing, the server says so in the console (see Step 7). A build you
+downloaded in Step 14 is tested the same way.
 
 ## What I need when something doesn't work
 
@@ -292,7 +465,13 @@ missing, the server says so in the console (see Step 7).
 4. If Fortnite crashed: page **Crash Analysis** → the newest entry → **Copy report**.
 5. For trickshot things: the lines from the console (**F8**) that start with "[Niobium]".
 6. For Bubble Builds: a screenshot of your builds in the game and the "Starting your game: …" line.
+7. For AI bots: Live Log → search `bots` → **Copy**, plus what you saw in the game (Step 13).
+8. For loot: Live Log → search `loot` → **Copy**, plus the `[FloorLoot]` lines from `stdout.log` (Step 12).
+9. For a download: a screenshot of the download card and the Live Log lines that start with "Download of".
 
 Short and honest: I can't start Fortnite here. Everything up to the loading screen is rebuilt 1:1 from
 the source projects (Reboot launch flow, LawinServer, Tellurium, Magnesium) and checked against how they
-behave – whether it runs on your PC, only this test shows.
+behave – whether it runs on your PC, only this test shows. The same goes for the new parts: the AI bots,
+the pickup and floor loot fixes only passed a test compile here, and the downloader only fetched three
+small files from Epic's servers in a test – a full download, the bots and the loot have never run in a
+real game.

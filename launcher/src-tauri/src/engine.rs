@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, TryLockError};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
+use niobium_core::bots::{self, PlayerBotsEvent};
 use niobium_core::earlylog::EarlyLines;
 use niobium_core::helperprocs::HelperPids;
 use niobium_core::launchargs;
@@ -35,6 +36,10 @@ pub const EVENT_BUBBLE_INI_CHANGED: &str = "bubble:ini-changed";
 /// Tauri event when the user wants to close the main window while something still runs
 /// (payload [`CloseRequest`]). The UI asks "Close Niobium?" and calls `quit_app` on "Stop & close".
 pub const EVENT_CLOSE_REQUESTED: &str = "app:close-requested";
+
+/// Tauri event when the server says whether AI bots run this match (payload
+/// `niobium_core::bots::PlayerBotsEvent`: `{ state: "active" | "unavailable", reason }`).
+pub const EVENT_PLAYER_BOTS: &str = "server:playerBots";
 
 /// Category of the launcher's own log lines in the live log.
 const CAT: &str = "Niobium";
@@ -230,6 +235,27 @@ impl Engine {
             return Err(StartError::Cancelled);
         }
         spawn(&mut r).map_err(StartError::Failed)
+    }
+
+    /// A toast from other parts of the launcher (e.g. the build downloader).
+    pub fn toast_msg(&self, kind: &str, title: &str, description: &str) {
+        self.toast(kind, title, description);
+    }
+
+    /// A launcher line in the live log (category "Niobium").
+    pub fn log_line(&self, level: &str, message: &str) {
+        self.log("launcher", level, CAT, message, None);
+    }
+
+    /// Adds a build to the Library (same as the `add_build` command) and saves. Returns its id.
+    pub fn import_build(&self, build: BuildInfo) -> String {
+        let id = build.id.clone();
+        let mut cfg = self.config.lock().unwrap();
+        cfg.upsert_build(build);
+        if let Err(e) = profiles::save(&cfg) {
+            eprintln!("[Niobium] Couldn't save the settings: {e}");
+        }
+        id
     }
 
     fn toast(&self, kind: &str, title: &str, description: &str) {
@@ -759,7 +785,7 @@ impl Engine {
                 }
                 self.spawn_server_event_loop(rx);
                 self.apply_profile_to_server(&link, profile);
-                self.log("launcher", "info", CAT, "Connected to the server's control pipe – commands on, playlist and Lategame sent", None);
+                self.log("launcher", "info", CAT, "Connected to the server's control pipe – commands on, match settings sent", None);
                 self.toast(
                     "info",
                     "The server is waiting for you",
@@ -882,6 +908,14 @@ impl Engine {
                 if ev.event == "trickshot" {
                     let _ = app.emit("trickshot", serde_json::Value::Object(ev.rest.clone()));
                 }
+                // AI bots on or off for this match (the server decides once, after its checks)
+                if ev.event == "playerBots" {
+                    let bots = PlayerBotsEvent::from_pipe(&ev.rest);
+                    let engine = app.state::<Arc<Engine>>();
+                    let level = if bots.state == "active" { "info" } else { "warning" };
+                    engine.log("launcher", level, CAT, &bots.log_line(), None);
+                    let _ = app.emit(EVENT_PLAYER_BOTS, bots);
+                }
                 // Show refused commands as a hint (the server explains why)
                 if ev.event == "reply" && ev.rest.get("ok").and_then(|v| v.as_bool()) == Some(false) {
                     let msg = ev.rest.get("message").and_then(|v| v.as_str()).unwrap_or("Command refused").to_string();
@@ -903,14 +937,18 @@ impl Engine {
     ///
     /// The launcher never sends `bEnableTrickshotTab` on purpose: `false` resets all trickshot switches
     /// on the server (jump fatigue, auto reload, …) (NiobiumControl.cpp, ApplyConfig).
+    ///
+    /// Order (see `niobium_core::bots::server_config_for`): bEnableCheats, playlist, bLateGame,
+    /// bInfiniteAmmo, bInfiniteMats, bPlayerBots, PlayerBotCount, PlayerBotTargetELO. The bot keys go
+    /// out before the map loads (the server waits for "Start match"), which is when it accepts them.
     fn apply_profile_to_server(&self, link: &ServerLink, profile: &Profile) {
-        if let Err(e) = link.set_config("bEnableCheats", serde_json::Value::Bool(true)) {
-            self.log("launcher", "warning", CAT, &format!("Couldn't turn on commands: {e}"), None);
+        for (key, value) in bots::server_config_for(profile) {
+            if let Err(e) = link.set_config(key, value) {
+                if key == "bEnableCheats" {
+                    self.log("launcher", "warning", CAT, &format!("Couldn't turn on commands: {e}"), None);
+                }
+            }
         }
-        if !profile.playlist.is_empty() {
-            let _ = link.set_config("playlist", serde_json::Value::String(profile.playlist.clone()));
-        }
-        let _ = link.set_config("bLateGame", serde_json::Value::Bool(profile.lategame));
     }
 
     // --- Bubble Builds: read-only check of GameUserSettings.ini ------------------

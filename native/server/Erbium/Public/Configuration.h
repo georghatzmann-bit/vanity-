@@ -508,6 +508,12 @@ public:
     static inline std::atomic_bool bInfiniteMats{ true };
     static inline std::atomic_bool bInfiniteAmmo{ true };
 
+    // NIOBIUM: Fortnite's own AI player bots, only on 19.10 CL 18675304 (FortniteGame/Private/
+    // PlayerBots_19_10.cpp). Set by the launcher before the map loads. Off = no bots, as before.
+    static inline std::atomic_bool bPlayerBots{ false };
+    static inline std::atomic_int PlayerBotCount{ 30 };      // 1-99, bots in the match
+    static inline std::atomic_int PlayerBotTargetELO{ 500 }; // 0-5000, bot skill rating
+
     static inline void SetLateGameEnabled(bool bEnabled)
     {
         bLateGame = bEnabled;

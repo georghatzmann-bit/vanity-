@@ -10,6 +10,10 @@ der nicht klappt: Screenshot + Log an mich (siehe „Was ich brauche“ ganz unt
 Niobium hieß früher Vanity. Wenn du Vanity installiert hattest, übernimmt Niobium deine Einstellungen
 von selbst – diese Liste sagt dir, worauf du achten sollst.
 
+**Neu in dieser Version** (Schritte 10–14): Profile mit „Classic match“, Waffen aufheben und tauschen,
+Bodenloot und die Loot-Liste bei 19.10, KI-Bots bei 19.10 (experimentell) und „Download a version“.
+Nichts davon wurde schon in einem echten Spiel getestet – genau dafür sind diese Schritte da.
+
 ## Herunterladen
 
 Direkter Link (immer der neueste Stand):
@@ -113,14 +117,17 @@ anschauen. Dort steht in einfachen Worten, was passiert ist.
 - [ ] Der Spielmodus ist egal (Solo reicht) → **Play** drücken.
 - [ ] Der Matchmaker schickt dich auf 127.0.0.1:7777 → Ladebildschirm → du stehst auf der Spawn-Insel oder
       im Bus (je nach Server-Einstellung).
-- [ ] Du kannst laufen, bauen, bearbeiten und Waffen aufheben.
+- [ ] Du kannst laufen, bauen, bearbeiten und Waffen aufheben. Profile spielen jetzt ein „Classic match“,
+      solange du nichts anderes einschaltest: Munition und Material gehen aus wie früher. Sammle also
+      zuerst mit der Spitzhacke etwas Holz, bevor du baust (mehr in Schritt 10).
 
 Falls das Spiel keine Verbindung zum Server bekommt: War „Server ready“ schon da? Wenn nicht, warten und
 nochmal Play drücken.
 
 ## Schritt 5 – Server-Fenster (Magnesium) kennenlernen
 
-Vieles geht auch im Launcher: Seite **Match Control** (Modus, Lategame, Bus, Sturm, Items, Trickshot, Bots).
+Vieles geht auch im Launcher: Seite **Match Control** (Modus, Lategame, Bus, Sturm, Items, Trickshot,
+Target dummies).
 Das Server-Fenster kann mehr (seine Texte kommen von Magnesium):
 
 - [ ] **Playlist**: Knöpfe wie „Solos“, „Duos“, „Tournament Solos“ (Arena), „Zero Build …“. Vor dem Start
@@ -276,6 +283,178 @@ Wenn du keinen solchen Build hast: nur den Teil „Bei 19.10“ ganz unten mache
       Wenn die noch da sind (angehalten), sag mir bitte Bescheid.
 - [ ] Nochmal **Host & Play** → klappt ein zweites Mal ohne Neustart von Niobium.
 
+## Schritt 10 – Spielregeln („Classic match“)
+
+„Classic match“ heißt: wie früher – kein Lategame, normale Munition, normales Material. Bisher waren
+Munition und Material immer unendlich. Jetzt entscheidet jedes Profil selbst.
+
+- [ ] **Profiles** → auf deinem 19.10-Profil **…** → **Edit**. Rechts unter „Match rules“ gibt es drei
+      Schalter: „Lategame“, „Infinite ammo“, „Infinite materials“. Bei einem Profil von vor dieser Version
+      sind „Infinite ammo“ und „Infinite materials“ jetzt **aus**; „Lategame“ ist so, wie du es eingestellt
+      hattest.
+- [ ] Sind alle drei aus, steht dort ein goldenes Abzeichen **Classic match**, und unter den Schaltern:
+      „Classic match = like back then: full map, normal ammo and materials.“
+- [ ] „Infinite ammo“ einschalten → das Abzeichen zeigt **Custom**, und ein Knopf **Classic** erscheint.
+      **Classic** drücken → alle drei sind wieder aus. **Save**.
+- [ ] Auf der Profil-Karte steht „Rules: Classic match“ (ist etwas an, steht dort stattdessen das, z. B.
+      „Lategame · Infinite ammo“).
+- [ ] **New profile** → die drei Schalter sind am Anfang aus.
+- [ ] **Host & Play** mit „Classic match“ → **Start match** → im Match:
+      - beim Schießen geht die Munition runter und kann ausgehen;
+      - Bauen verbraucht dein Material (vorher mit der Spitzhacke sammeln);
+      - **Match Control** → **Game** → „Infinite“: „Infinite ammo“ und „Infinite materials“ sind aus.
+- [ ] Auf **Match Control** „Infinite ammo“ einschalten → ab jetzt bleibt deine Munition voll. Wieder
+      ausschalten.
+- [ ] Profil bearbeiten: „Infinite ammo“ und „Infinite materials“ an → **Save** → **Stop all** →
+      **Host & Play** → Munition und Material gehen nie aus, und beide Schalter auf Match Control sind an.
+
+## Schritt 11 – Waffen aufheben und tauschen
+
+Bisher konnte das Aufheben hängen bleiben: Nach einem Tausch fielen Munition und Material wieder auf den
+Boden, mit der Spitzhacke in der Hand ließ sich keine Waffe aufheben, oder deine Waffe wurde getauscht,
+obwohl ein Platz frei war. Teste das in einem Solo-Match auf 19.10 (die Spawn-Insel vor dem Bus reicht).
+Heb die Sachen auf wie immer.
+
+- [ ] **Platz frei, Spitzhacke in der Hand:** eine Waffe vom Boden aufheben → sie kommt in einen freien Platz.
+- [ ] **Platz frei, Waffe in der Hand:** eine zweite Waffe aufheben → sie kommt in einen freien Platz. Deine
+      Waffe wird nicht fallen gelassen.
+- [ ] **Alle 5 Plätze voll, Waffe in der Hand:** Plätze füllen (Waffen aufheben, oder im Launcher
+      **Match Control** → **Game** → „Give items“ → eine Waffe wählen → **Give to me**, mit verschiedenen
+      Waffen). Eine Waffe in die Hand nehmen (nicht die Spitzhacke) und eine Waffe vom Boden aufheben →
+      deine Waffe landet vor dir, die neue hast du in der Hand.
+- [ ] **Direkt nach dem Tausch:** über Munition und Holz, Stein oder Metall laufen → alles kommt ins Inventar
+      und fällt **nicht** wieder auf den Boden.
+- [ ] **Alle 5 Plätze voll, Spitzhacke in der Hand:** eine Waffe aufheben wollen → sie bleibt auf dem Boden
+      (oder landet wieder dort). Dann eine Waffe in die Hand nehmen und sie aufheben → jetzt wird getauscht.
+- [ ] **Ein Stapel mit Platz:** Hast du einen Stapel, der nicht voll ist (z. B. „Small Shield Potion“ aus
+      „Give items“), und hebst mehr davon auf → der Stapel wird größer, nichts wird getauscht.
+- [ ] Bei allem gilt: **Nichts verschwindet.** Jeder Gegenstand ist entweder in deinem Inventar oder auf dem
+      Boden.
+
+## Schritt 12 – Bodenloot und die Loot-Liste (19.10)
+
+Bisher hat der Server auf 19.10 die Loot-Plätze auf dem Boden entfernt, ohne sie zu füllen. Jetzt füllt er
+jeden Platz einmal pro Match. Ein paar leere Plätze sind normal (früher waren auch manche Plätze leer).
+
+- [ ] Solo-Match mit „Classic match“ → **Start match**. Auf der Spawn-Insel und nach der Landung (z. B. in
+      einem benannten Ort) liegen Waffen, Munition und Items auf dem Boden in den Häusern.
+- [ ] Truhen gehen weiterhin auf und lassen Loot fallen.
+- [ ] **Loot-Liste:** direkt nach **Start match** (während die Karte lädt) auf **Live Log** → **Server** →
+      ins Feld „Search the log…“ `loot` tippen. Du siehst Zeilen mit der Kategorie „loot“:
+      - „features: …“ (die Spiel-Teile der Season, die Loot dazugeben),
+      - „items: …“ (wie viele verschiedene Items vorkommen können),
+      - viele Zeilen „item …“ (je ein Item, höchstens 400).
+      **Copy** drücken und mir schicken. Dann sehe ich, welche Items aus Chapter 3 Season 1 dabei sind.
+- [ ] Tauchen Season-Items im Match auf (z. B. die Web-Shooter von Spider-Man)? Schreib auf, was du gefunden
+      hast und ob es funktioniert.
+- [ ] Nach dem Match: `<dein 19.10-Ordner>\FortniteGame\Binaries\Win64\stdout.log` mit dem Editor öffnen, nach
+      `[FloorLoot]` suchen und mir diese Zeilen schicken (eine pro Platz-Art, `Tiered_Athena_FloorLoot_Warmup_C`
+      und `Tiered_Athena_FloorLoot_01_C`). Sie sehen so aus:
+      `[FloorLoot] Tiered_Athena_FloorLoot_01_C: … spots, … filled now, … empty now, … already rolled`.
+      Gibt es auf 19.10 keine solche Zeile → bitte Bescheid sagen. (Mach das vor dem nächsten
+      **Host & Play** – die Datei fängt bei jedem Server-Start neu an.)
+
+## Schritt 13 – KI-Bots (19.10, experimentell)
+
+Die eigenen KI-Spieler von Fortnite. Sie sollen wie echte Spieler aus dem Bus springen, Loot sammeln und
+kämpfen. Nur auf 19.10 mit CL-18675304, und nur experimentell: Niemand hat sie bisher im Spiel getestet. Sie
+sind nicht die Übungspuppen unter **Match Control** → **Target dummies**, die still stehen.
+
+**Bevor du anfängst:** Der Server schaltet Bots nur ein, wenn deine Spieldatei genau Epics 19.10-Datei ist.
+Explorer → `<dein 19.10-Ordner>\FortniteGame\Binaries\Win64\FortniteClient-Win64-Shipping.exe` → Rechtsklick →
+**Eigenschaften** → bei „Größe“ sollte **198.580.704 Bytes** stehen. Wenn nicht, bleiben die Bots aus – mach
+den Test trotzdem und schick mir die Größe.
+
+- [ ] **Profiles** → dein 19.10-Profil **…** → **Edit**. Bereich „AI bots“ mit dem Abzeichen „Experimental ·
+      19.10 only“. „Play with AI bots“ einschalten, „Number of bots“ z. B. 30, „Bot skill“ **Easy** →
+      **Save**. Die Karte zeigt „AI bots: 30 · Easy“ und den Tag „AI bots“.
+- [ ] (Wenn du einen anderen Build hast, z. B. einen aus Schritt 14:) In einem Profil dafür ist der Bereich
+      „AI bots“ ausgegraut, mit z. B. „Fortnite 18.30: AI bots aren't available for this version yet.“
+- [ ] **Host & Play**. **Match Control** → **Game**: Auf der Start-Karte stehen „Mode Solo“, „Lategame Off“ und
+      „AI bots 30 · Easy“. **Start match** drücken.
+- [ ] **Live Log**, ins Suchfeld `bots` tippen. Während die Karte lädt, solltest du das sehen:
+      - „checks passed for 19.10 CL 18675304, hooks installed; 30 bots, ELO 500“,
+      - „service set up, 30 bots, ELO 500 (playlist …)“,
+      - Quelle **Niobium**: „AI bots are on for this match.“
+      Später z. B.: „bot service started“, „spawn amount: 30 bots (…)“, „1 bots spawned“, „10 bots spawned“,
+      „cached … POI volumes and … foundations“.
+- [ ] **Wenn die Bots aus sind:** eine Meldung „AI bots are off for this match“ mit dem Grund (z. B. „Bots
+      aren't available for this copy of 19.10.“), und im Live Log eine Zeile „disabled: …“. Das Match läuft
+      ohne Bots. Schick mir bitte diese „disabled: …“-Zeile.
+- [ ] Im Spiel bitte beobachten und aufschreiben:
+      - Erscheinen Bots (vor dem Bus oder wenn er losfliegt)? Sie haben evtl. Standard-Skins.
+      - Der Bus: Im Live Log steht „… bots got on the bus“. Springen die Bots ab und gleiten runter?
+      - Landen sie, heben Waffen auf, schießen auf dich, bauen sie?
+      - Wie gut sind sie auf **Easy**?
+      - Der Sturm: Verlieren Bots außerhalb des Sturmkreises Leben und scheiden aus?
+      - Bots erledigen: Geht die Zahl der übrigen Spieler runter? Bist du der Letzte: **Victory Royale**?
+        (Im Live Log steht dann „all bots are out“.)
+      - Bildrate und Stabilität: bitte 3 Matches mit 30 Bots spielen. Hänger oder Abstürze? Ungefähr wie viele
+        FPS?
+- [ ] **Normal** und **Hard** ausprobieren: **Stop all** → Profil bearbeiten → „Bot skill“ → **Save** →
+      **Host & Play** (die Bot-Einstellungen gelten ab dem nächsten Start). Wie fühlen sie sich im Vergleich
+      zu Easy an? Im Live Log steht dann ELO 1000 (Normal) oder 2000 (Hard).
+- [ ] „Play with AI bots“ ausschalten → **Host & Play** → keine „bots“-Zeilen, keine Meldung, das Match ist wie
+      vorher.
+
+## Schritt 14 – Eine Version herunterladen (freiwillig – braucht etwa 50 GB und 2 Stunden)
+
+Niobium kann einige alte Builds herunterladen. Die Dateiliste kommt aus einem öffentlichen GitHub-Archiv, und
+jede Spieldatei kommt direkt von Epics eigenen Download-Servern – nie von Re-Uploads. Epic hat bei vielen alten
+Seasons Teile gelöscht, die kann man nicht herunterladen. **Chapter 3 Season 1 (19.10) gehört dazu** – deine
+19.10 funktioniert aber weiter.
+
+**Umschauen (es wird nichts heruntergeladen):**
+
+- [ ] **Library** → **Download a version** (Knopf oben, oder die Kachel unter „Add a build“). Die Seite
+      „Download a version“ geht auf; in der Seitenleiste bleibt „Library“ hervorgehoben.
+- [ ] Oben: Reiter „Chapter 1“ bis „Chapter 5“. Nur „Chapter 2“ hat eine grüne Zahl (5).
+- [ ] **Chapter 1:** ein Hinweis „All of Chapter 1 · Not available from Epic.“ mit der Erklärung, und auf jeder
+      Karte steht „Not available from Epic“.
+- [ ] **Chapter 3:** die Hinweise „Seasons 1 and 2 · Not available from Epic.“ und „Seasons 3 and 4 · Not
+      offered yet.“ Auf der Karte „Season 1“ steht „Epic deleted some of its files.“ und in Grün „Your 19.10
+      keeps working.“
+- [ ] **Chapter 2:** „Season 3“, „Season 5“, „Season 6“, „Season 7“ und „Season 8“ sind „Available“; auf
+      „Season 8“ steht „7 builds · from 40.1 GB“.
+- [ ] Auf **Season 8** klicken → ein Fenster „Chapter 2 · Season 8“. Oben steht der neueste Build: „18.30“, mit
+      „41.1 GB download · 45.4 GB on disk · about 1 h 50 min at 50 Mbit/s“ und „Experimental“. „Download to“ ist
+      schon ausgefüllt (z. B. `D:\Niobium\Builds\18.30-CL-17882303`), darunter „Needs about 47.5 GB free on
+      that drive.“
+- [ ] **Ordner-Prüfungen** (jedes Mal: den Ordner bei „Download to“ eintippen und **Download 18.30** drücken –
+      der rote Text erscheint unter dem Feld, nichts startet):
+      - ein Ordner mit Dateien drin, z. B. `C:\Users\georg\Downloads` → „This folder already has other files in
+        it. Pick an empty folder.“
+      - falls du OneDrive nutzt: ein Ordner darin → „This folder is synced by OneDrive. Pick a folder outside
+        OneDrive, or it will try to upload about 40 GB.“
+      - falls du einen USB-Stick mit FAT32 hast: ein Ordner darauf → „Drive E: can't hold files bigger than 4 GB
+        (FAT32). Pick a folder on another drive.“ (mit deinem Laufwerksbuchstaben)
+      - ein Laufwerk mit zu wenig Platz → „There isn't enough free space on drive D:. This version needs
+        47.5 GB and … GB is free. Free up space or pick another folder.“ (mit deinem Laufwerksbuchstaben)
+      Danach **Cancel**.
+
+**Ein echter Download** (nur wenn du Zeit und Platz hast; 18.30 ist eine gute Wahl):
+
+- [ ] 18.30 wählen, den Ordner lassen → **Download 18.30**. Oben erscheint eine Karte mit vier Schritten:
+      „Check at Epic“, „Download“, „Check files“, „Add to Library“. Zuerst „Checking that Epic still has every
+      file… (about 1 min)“, dann die Prozent, die aktuelle Datei, „Downloaded“, „Speed“, „Time left“ und
+      „Files … of 785“. In der Seitenleiste zeigt eine kleine Fortschritts-Pille den Stand, auch auf anderen
+      Seiten.
+- [ ] **Pause** → „Pausing…“ → „Paused – everything downloaded so far is kept.“ → **Resume** → es geht weiter
+      (zuerst kurz wieder „Check at Epic“, dann laufen die Prozent dort weiter, wo sie waren).
+- [ ] Niobium schließen, während es lädt → „Close Niobium?“ zeigt „Download (18.30)“ → **Stop & close**. Niobium
+      öffnen → **Library** → **Download a version** → die Karte zeigt „Paused“ → **Resume** → es geht weiter.
+- [ ] **Cancel** → „Cancel the download of 18.30?“ – „Delete the downloaded files? If you keep them, downloading
+      18.30 into the same folder again continues where it stopped.“ → **Keep files**. 18.30 nochmal in denselben
+      Ordner starten → es geht weiter, statt von vorne anzufangen.
+- [ ] Fertig laden lassen: „Check files“ → „Add to Library“ → „Fortnite 18.30 is ready“ – „It's in your Library
+      now. Press Play to use it.“, die Meldung „18.30 is ready“, und im Live Log „Download of 18.30 finished and
+      added to your Library“.
+- [ ] **Play** → du bist auf Home, Meldung „Fortnite 18.30 is set“ (ein Profil „Fortnite 18.30“ mit „Classic
+      match“ wurde angelegt, falls du für diesen Build noch keins hattest). In der **Library** gibt es eine
+      18.30-Karte mit „Untested“.
+- [ ] **Host & Play** → startet 18.30, und kannst du ein Match spielen?
+- [ ] Erscheint eine Fehler-Karte: ein Screenshot davon und die Live-Log-Zeile, die mit „Download of“ anfängt.
+
 ## Andere Versionen testen (ungetestet, aber startbar)
 
 Niobium startet jede Version von 1.7 bis 30.x. Für alles außer 19.10 gilt: gleiche Schritte wie oben, nur
@@ -287,9 +466,10 @@ Dateien wichtig:
 - `<Build>\FortniteGame\Binaries\Win64\stdout.log` und der Ordner `MagnesiumCrashes` daneben – was der Game
   Server sagt.
 
-Bekannte Grenzen: 9.40–10.40 ohne Party/XMPP; „Edit on release“ nur bis 10.40; ab 31.00 noch nicht startbar.
-Bei Trickshot-Parkours kann es je nach Version andere Objekte geben – fehlt eins, sagt der Server das in der
-Konsole (siehe Schritt 7).
+Bekannte Grenzen: 9.40–10.40 ohne Party/XMPP; „Edit on release“ nur bis 10.40; ab 31.00 noch nicht startbar;
+KI-Bots nur auf 19.10 (CL-18675304). Bei Trickshot-Parkours kann es je nach Version andere Objekte geben – fehlt
+eins, sagt der Server das in der Konsole (siehe Schritt 7). Einen Build, den du in Schritt 14 heruntergeladen
+hast, testest du genauso.
 
 ## Was ich brauche, wenn etwas nicht klappt
 
@@ -300,7 +480,13 @@ Konsole (siehe Schritt 7).
 4. Bei einem Fortnite-Absturz: Seite **Crash Analysis** → den neuesten Eintrag → **Copy report**.
 5. Bei Trickshot-Sachen: die Zeilen aus der Konsole (**F8**), die mit „[Niobium]“ beginnen.
 6. Bei Bubble Builds: ein Screenshot deiner Bauten im Spiel und die Zeile „Starting your game: …“.
+7. Bei KI-Bots: Live Log → `bots` suchen → **Copy**, dazu was du im Spiel gesehen hast (Schritt 13).
+8. Bei Loot: Live Log → `loot` suchen → **Copy**, dazu die `[FloorLoot]`-Zeilen aus `stdout.log` (Schritt 12).
+9. Bei einem Download: ein Screenshot der Download-Karte und die Live-Log-Zeilen, die mit „Download of“ anfangen.
 
 Kurz und ehrlich: Ich kann hier kein Fortnite starten. Alles bis zum Ladebildschirm ist aus den
 Quell-Projekten (Reboot-Ablauf, LawinServer, Tellurium, Magnesium) 1:1 nachgebaut und gegen deren Verhalten
-geprüft – ob es bei dir durchläuft, zeigt erst dieser Test.
+geprüft – ob es bei dir durchläuft, zeigt erst dieser Test. Das gilt auch für die neuen Teile: Die KI-Bots und
+die Korrekturen beim Aufheben und beim Bodenloot wurden hier nur testweise kompiliert, und der Downloader hat in
+einem Test nur drei kleine Dateien von Epics Servern geholt – ein ganzer Download, die Bots und der Loot liefen
+noch nie in einem echten Spiel.

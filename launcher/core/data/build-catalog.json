@@ -1,0 +1,473 @@
+{
+  "_about": "Builds Niobium can download. Manifests: polynite/fn-releases (fallback VastBlast/FortniteManifestArchive), pinned by SHA-1. Game files: Epic's own CDN only. Only builds that were complete on Epic's CDN when checked (HEAD sample, 2026-10-26) and that the game server is meant to run. Seasons: status used when no build is offered. Never anything from 31.00 on.",
+  "checkedOn": "2026-10-26",
+  "seasons": [
+    {
+      "chapter": 1,
+      "season": 1,
+      "label": "Season 1",
+      "major": 1,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 1,
+      "season": 2,
+      "label": "Season 2",
+      "major": 2,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 1,
+      "season": 3,
+      "label": "Season 3",
+      "major": 3,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 1,
+      "season": 4,
+      "label": "Season 4",
+      "major": 4,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 1,
+      "season": 5,
+      "label": "Season 5",
+      "major": 5,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 1,
+      "season": 6,
+      "label": "Season 6",
+      "major": 6,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 1,
+      "season": 7,
+      "label": "Season 7",
+      "major": 7,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 1,
+      "season": 8,
+      "label": "Season 8",
+      "major": 8,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 1,
+      "season": 9,
+      "label": "Season 9",
+      "major": 9,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 1,
+      "season": 10,
+      "label": "Season X",
+      "major": 10,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 2,
+      "season": 1,
+      "label": "Season 1",
+      "major": 11,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 2,
+      "season": 2,
+      "label": "Season 2",
+      "major": 12,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 2,
+      "season": 3,
+      "label": "Season 3",
+      "major": 13,
+      "status": "available"
+    },
+    {
+      "chapter": 2,
+      "season": 4,
+      "label": "Season 4",
+      "major": 14,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 2,
+      "season": 5,
+      "label": "Season 5",
+      "major": 15,
+      "status": "available"
+    },
+    {
+      "chapter": 2,
+      "season": 6,
+      "label": "Season 6",
+      "major": 16,
+      "status": "available"
+    },
+    {
+      "chapter": 2,
+      "season": 7,
+      "label": "Season 7",
+      "major": 17,
+      "status": "available"
+    },
+    {
+      "chapter": 2,
+      "season": 8,
+      "label": "Season 8",
+      "major": 18,
+      "status": "available"
+    },
+    {
+      "chapter": 3,
+      "season": 1,
+      "label": "Season 1",
+      "major": 19,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 3,
+      "season": 2,
+      "label": "Season 2",
+      "major": 20,
+      "status": "notFromEpic"
+    },
+    {
+      "chapter": 3,
+      "season": 3,
+      "label": "Season 3",
+      "major": 21,
+      "status": "notOfferedYet"
+    },
+    {
+      "chapter": 3,
+      "season": 4,
+      "label": "Season 4",
+      "major": 22,
+      "status": "notOfferedYet"
+    },
+    {
+      "chapter": 4,
+      "season": 1,
+      "label": "Season 1",
+      "major": 23,
+      "status": "notOfferedYet"
+    },
+    {
+      "chapter": 4,
+      "season": 2,
+      "label": "Season 2",
+      "major": 24,
+      "status": "notOfferedYet"
+    },
+    {
+      "chapter": 4,
+      "season": 3,
+      "label": "Season 3",
+      "major": 25,
+      "status": "notOfferedYet"
+    },
+    {
+      "chapter": 4,
+      "season": 4,
+      "label": "Season 4",
+      "major": 26,
+      "status": "notOfferedYet"
+    },
+    {
+      "chapter": 4,
+      "season": 5,
+      "label": "Season OG",
+      "major": 27,
+      "status": "notOfferedYet"
+    },
+    {
+      "chapter": 5,
+      "season": 1,
+      "label": "Season 1",
+      "major": 28,
+      "status": "notOfferedYet"
+    },
+    {
+      "chapter": 5,
+      "season": 2,
+      "label": "Season 2",
+      "major": 29,
+      "status": "notOfferedYet"
+    },
+    {
+      "chapter": 5,
+      "season": 3,
+      "label": "Season 3",
+      "major": 30,
+      "status": "notOfferedYet"
+    }
+  ],
+  "builds": [
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 91756,
+      "cl": 13884634,
+      "downloadBytes": 45089586658,
+      "files": 427,
+      "format": "json",
+      "installedBytes": 97161161829,
+      "manifestBytes": 33084273,
+      "manifestId": "__d-73Y9siJhxSaCRE6egZe3gbpjNw",
+      "manifestSha1": "42b989c250fb296cbe20a3f2ffae0caec9ea00f7",
+      "note": "Very big: about 97 GB on disk (Epic made builds smaller from 14.40 on).",
+      "vastblast": true,
+      "version": "13.30"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 93981,
+      "cl": 14008768,
+      "downloadBytes": 46087785670,
+      "files": 433,
+      "format": "json",
+      "installedBytes": 99521180358,
+      "manifestBytes": 33795194,
+      "manifestId": "r70n58nGmOBda57S_EST7qGOsLgPTw",
+      "manifestSha1": "fbaf1078ffb314ae15af8443e720f72f9a023ed5",
+      "note": "Very big: about 100 GB on disk (Epic made builds smaller from 14.40 on).",
+      "vastblast": true,
+      "version": "13.40"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 93981,
+      "cl": 14036559,
+      "downloadBytes": 46087770707,
+      "files": 433,
+      "format": "json",
+      "installedBytes": 99521104065,
+      "manifestBytes": 33793664,
+      "manifestId": "lxP7nVJQuqONDOBmy0eOuS3UycHqKA",
+      "manifestSha1": "9c18fb98615ba0e251fd533380bccfd0f57db643",
+      "note": "Very big: about 100 GB on disk (Epic made builds smaller from 14.40 on).",
+      "vastblast": true,
+      "version": "13.40"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 93983,
+      "cl": 14113327,
+      "downloadBytes": 46087892486,
+      "files": 433,
+      "format": "json",
+      "installedBytes": 99521161875,
+      "manifestBytes": 33794240,
+      "manifestId": "k39Q5tXfdlFV3Vi8tEWwdzJstOCncw",
+      "manifestSha1": "7a935e6c45571656a2cb17992d12b1c56581734f",
+      "note": "Very big: about 100 GB on disk (Epic made builds smaller from 14.40 on).",
+      "vastblast": true,
+      "version": "13.40"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 34411,
+      "cl": 14826719,
+      "downloadBytes": 32717878375,
+      "files": 509,
+      "format": "json",
+      "installedBytes": 36200489766,
+      "manifestBytes": 12308698,
+      "manifestId": "hEC9dL7-jjhVjaT9Ek6g5kPNmfx_oA",
+      "manifestSha1": "0e2171e17f47eed48e911fca6204b7b9d9184057",
+      "note": "",
+      "vastblast": true,
+      "version": "15.00"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 34412,
+      "cl": 14835335,
+      "downloadBytes": 32717835652,
+      "files": 509,
+      "format": "json",
+      "installedBytes": 36200217820,
+      "manifestBytes": 12308401,
+      "manifestId": "pxgus3IjKexjBYe8O0qy6lPWTTBxOg",
+      "manifestSha1": "20a784124e1d30dbfcacfddc0fae161edc1d4a48",
+      "note": "",
+      "vastblast": true,
+      "version": "15.00"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 37028,
+      "cl": 15685441,
+      "downloadBytes": 35138177488,
+      "files": 648,
+      "format": "json",
+      "installedBytes": 38851171382,
+      "manifestBytes": 13087255,
+      "manifestId": "0TUjehLQVK8zW6tqWkquGEm4QAE0xg",
+      "manifestSha1": "e35be48ba74e38a805267dec85ac77bf28340892",
+      "note": "Has the Chapter 2 'bubble wrap' build look (Bubble Builds).",
+      "vastblast": true,
+      "version": "16.00"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 40554,
+      "cl": 16949556,
+      "downloadBytes": 38379694828,
+      "files": 712,
+      "format": "json",
+      "installedBytes": 42554640098,
+      "manifestBytes": 14305095,
+      "manifestId": "hyS6T7m1z-V4PCkngEe4SvuqSEzrHQ",
+      "manifestSha1": "09d72da860d3ee406e48258ade1dd7d3ca9c628e",
+      "note": "",
+      "vastblast": true,
+      "version": "17.21"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 40555,
+      "cl": 16967001,
+      "downloadBytes": 38380643906,
+      "files": 712,
+      "format": "json",
+      "installedBytes": 42554636048,
+      "manifestBytes": 14305248,
+      "manifestId": "FTvF_Dz-EmynfOkGiE-OMdvqTWKa2Q",
+      "manifestSha1": "347c9cf3e969b496e2dfbacad0132490ecf8e155",
+      "note": "",
+      "vastblast": true,
+      "version": "17.21"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 42356,
+      "cl": 17388565,
+      "downloadBytes": 40299358644,
+      "files": 749,
+      "format": "binary",
+      "installedBytes": 44461886746,
+      "manifestBytes": 2884684,
+      "manifestId": "hbkx_qhpofyAGF3VQUaU-0ke3WwKBg",
+      "manifestSha1": "765869063860dd555735bb7b66d8762eca825a45",
+      "note": "",
+      "vastblast": true,
+      "version": "17.50"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 42144,
+      "cl": 17468642,
+      "downloadBytes": 40064785036,
+      "files": 757,
+      "format": "binary",
+      "installedBytes": 44239566667,
+      "manifestBytes": 2859033,
+      "manifestId": "mh3_CA8IVhnXD5PIZkKw-9yyY0jaQw",
+      "manifestSha1": "41340562ad42fbaed40217ee4056c97a0f7fd04b",
+      "note": "",
+      "vastblast": false,
+      "version": "18.00"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 42193,
+      "cl": 17619277,
+      "downloadBytes": 40104568972,
+      "files": 733,
+      "format": "binary",
+      "installedBytes": 44284892343,
+      "manifestBytes": 2865513,
+      "manifestId": "5aOpBhE4Ru3-v2YFzUSGGuWGdEzyXQ",
+      "manifestSha1": "685edc3dbffb53c518e84b629ef7d0c8d79770b4",
+      "note": "",
+      "vastblast": true,
+      "version": "18.10"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 42193,
+      "cl": 17661844,
+      "downloadBytes": 40104675563,
+      "files": 733,
+      "format": "binary",
+      "installedBytes": 44285022218,
+      "manifestBytes": 2865621,
+      "manifestId": "hu7N3s__H28na2Oro06-draLSCt5UQ",
+      "manifestSha1": "d6b1fa5dcf6022ab52c7849613c893ca382b65a9",
+      "note": "",
+      "vastblast": true,
+      "version": "18.10"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 42684,
+      "cl": 17745267,
+      "downloadBytes": 40568402504,
+      "files": 729,
+      "format": "binary",
+      "installedBytes": 44812013744,
+      "manifestBytes": 2897578,
+      "manifestId": "NVDpDsRkObzIXej9LkeokHUwMj2B_A",
+      "manifestSha1": "0af768f100958d65f01b016468ebcb69a7b8fc2a",
+      "note": "",
+      "vastblast": true,
+      "version": "18.20"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 42684,
+      "cl": 17792290,
+      "downloadBytes": 40568328978,
+      "files": 729,
+      "format": "binary",
+      "installedBytes": 44811803061,
+      "manifestBytes": 2897621,
+      "manifestId": "BfWO8e9010Z7Rt1wVUWCYBt5X-EhOQ",
+      "manifestSha1": "d247defc1164f3843c3b70b2af3562cdc382372d",
+      "note": "",
+      "vastblast": false,
+      "version": "18.20"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 42828,
+      "cl": 17811397,
+      "downloadBytes": 40709213732,
+      "files": 725,
+      "format": "binary",
+      "installedBytes": 44963300473,
+      "manifestBytes": 2912714,
+      "manifestId": "OW-ufOH2A5Ofv8BdZkqkK7BdOh5_lg",
+      "manifestSha1": "65208e1f0c418a2a24856bf0e224da94d896ed4d",
+      "note": "",
+      "vastblast": true,
+      "version": "18.21"
+    },
+    {
+      "checkedOn": "2026-10-26",
+      "chunks": 43226,
+      "cl": 17882303,
+      "downloadBytes": 41101485900,
+      "files": 785,
+      "format": "binary",
+      "installedBytes": 45381291093,
+      "manifestBytes": 2945113,
+      "manifestId": "qtQkupWgkRT0VojLbEyVUX_v2CJsPA",
+      "manifestSha1": "4177769d1bd3be77ab9d1f26171789868df3b557",
+      "note": "",
+      "vastblast": true,
+      "version": "18.30"
+    }
+  ]
+}

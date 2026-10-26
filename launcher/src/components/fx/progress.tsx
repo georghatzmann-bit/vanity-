@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { Check, X } from "lucide-react";
+import { Check, Pause, X } from "lucide-react";
 import { EASE_OUT, SPRING_PLAYFUL } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -54,6 +54,8 @@ export interface StepTimelineProps {
   current: number;
   /** The running step failed (shows a red cross). */
   failed?: boolean;
+  /** The running step waits (e.g. a paused download): no moving light, amber instead of brand. */
+  paused?: boolean;
   className?: string;
 }
 
@@ -61,7 +63,7 @@ export interface StepTimelineProps {
  * Horizontal step list with a progress beam behind it (e.g. the "Host & Play" launch:
  * <StepTimeline steps={launchSteps} current={launchStep} />).
  */
-export function StepTimeline({ steps, current, failed = false, className }: StepTimelineProps) {
+export function StepTimeline({ steps, current, failed = false, paused = false, className }: StepTimelineProps) {
   const n = steps.length;
   const progress = current < 0 ? 0 : Math.min(current / Math.max(n - 1, 1), 1);
   const running = current >= 0 && current < n;
@@ -69,11 +71,11 @@ export function StepTimeline({ steps, current, failed = false, className }: Step
   return (
     <div className={cn("relative", className)}>
       <div className="absolute top-[15px]" style={{ left: inset, right: inset }}>
-        <ProgressBeam value={progress} active={running && !failed} tip={running} className="h-[3px]" />
+        <ProgressBeam value={progress} active={running && !failed && !paused} tip={running} className="h-[3px]" />
       </div>
       <ol className="relative grid gap-2" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
         {steps.map((s, i) => {
-          const state = current > i ? "done" : current === i ? (failed ? "failed" : "active") : "pending";
+          const state = current > i ? "done" : current === i ? (failed ? "failed" : paused ? "paused" : "active") : "pending";
           return (
             <li key={s.label} className="flex min-w-0 flex-col items-center text-center">
               <div className="relative flex size-8 items-center justify-center">
@@ -91,7 +93,8 @@ export function StepTimeline({ steps, current, failed = false, className }: Step
                     "relative flex size-8 items-center justify-center rounded-full text-xs font-semibold tabular-nums transition-colors duration-300",
                     state === "done" && "bg-success/15 text-success ring-1 ring-success/35",
                     state === "active" && "bg-brand text-white glow-primary",
-                    state === "failed" && "bg-destructive/20 text-destructive ring-1 ring-destructive/50",
+                    state === "failed" && "bg-[color-mix(in_oklab,var(--destructive)_20%,var(--nb-surface))] text-destructive ring-1 ring-destructive/50",
+                    state === "paused" && "bg-[color-mix(in_oklab,var(--warning)_15%,var(--nb-surface))] text-warning ring-1 ring-warning/45",
                     state === "pending" && "bg-surface text-muted-foreground ring-1 ring-white/[0.08]",
                   )}
                 >
@@ -101,6 +104,8 @@ export function StepTimeline({ steps, current, failed = false, className }: Step
                     </motion.span>
                   ) : state === "failed" ? (
                     <X className="size-4" strokeWidth={2.5} />
+                  ) : state === "paused" ? (
+                    <Pause className="size-3.5" strokeWidth={2.5} />
                   ) : (
                     i + 1
                   )}
@@ -109,7 +114,7 @@ export function StepTimeline({ steps, current, failed = false, className }: Step
               <p
                 className={cn(
                   "mt-3 w-full truncate text-xs font-medium transition-colors duration-300",
-                  state === "pending" ? "text-muted-foreground" : state === "active" ? "text-violet-text" : "text-foreground",
+                  state === "pending" ? "text-muted-foreground" : state === "active" ? "text-violet-text" : state === "paused" ? "text-warning" : "text-foreground",
                 )}
               >
                 {s.label}
