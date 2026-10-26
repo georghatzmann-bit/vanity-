@@ -31,7 +31,7 @@ Near-black with two accents that always travel together: **violet** (the portal,
 | `text` | `#F4F4F8` | Main text | 18.3 / 17.4 / 16.3 |
 | `text-muted` | `#A6A6BC` | Secondary text and hints | 8.4 / 8.0 / 7.5 |
 | `text-faint` | `#80809A` | Captions, disabled labels, key hints | 5.2 / 5.0 / 4.7 |
-| `violet` | `#8B5CF6` | Brand colour 1: the ring, fills, glows, the main accent | 4.7 / 4.5 / 4.2 |
+| `violet` | `#8B5CF6` | Brand colour 1: the rift edge and vortex, fills, glows, the main accent | 4.7 / 4.5 / 4.2 |
 | `violet-fill` | `#7C3AED` | Button fills with white text (white on it: 5.7:1) | |
 | `cyan` | `#22D3EE` | Brand colour 2: the rift light, thin lines, indicators, glows, focus rings | 11.1 / 10.5 / 9.9 |
 | `violet-text` | `#C4B5FD` | Violet used as text, links and active labels | 10.9 / 10.3 / 9.7 |
@@ -67,7 +67,7 @@ Status colours stay as they are and are not brand colours: success `#22C55E`, wa
 
   /* button fill: violet into a deep cyan; white text stays >= 5.3:1 over the whole gradient */
   --nb-gradient: linear-gradient(135deg, #7c3aed 0%, #6d28d9 55%, #0e7490 100%);
-  /* decoration only (lines, bars, rims, hover tips): the violet -> neon cyan of the logo ring */
+  /* decoration only (lines, bars, rims, hover tips): the violet -> neon cyan of the logo edge */
   --nb-gradient-shine: linear-gradient(135deg, #8b5cf6 0%, #7c6cf6 55%, #22d3ee 100%);
   /* headline text */
   --nb-gradient-text: linear-gradient(100deg, #f4f4f8 0%, #c4b5fd 55%, #67e8f9 100%);
@@ -87,15 +87,15 @@ In-game F9 menu (ImGui, `native/client/ATLAS/Private/GUI.cpp`): accent `#8B5CF6`
 
 ## Logo
 
-The logo is a **portal ring torn open by a rift**: a thick ring (light violet at the top left, through violet `#8B5CF6`, into neon cyan `#22D3EE` at the bottom right) around a dark portal, and a jagged, lightning-shaped tear that runs from the top right to the bottom left. The tear glows: cyan edges, a white-hot core and a soft violet light inside the portal. It cuts through the ring at the top and the bottom, so the ring is broken where the rift passes.
+The logo is a **rift**: a torn, jagged-edged hole in space (an irregular outline with a few long spikes and deep notches, not a clean ring) with glowing edges that run from light violet through violet `#8B5CF6` and magenta `#E879F9` into cyan `#67E8F9`. Inside, a vortex of four curved spiral arms (violet at the rim → magenta → cyan) turns inwards and converges on a white-hot core. Large versions add faint extra arms and a few small shards and sparkles floating around the tear. It is an original drawing in the spirit of the in-game rifts, not Epic artwork.
 
 ### Variants
 
 | Variant | When | Looks like |
 | --- | --- | --- |
-| **Rich** | 64 px and larger, app icon master | Ring with a light rim at the top, portal with two faint depth orbits, wide violet + cyan glow, hair-line side cracks, white core |
-| **Simple** | Smaller than 64 px in the UI, F9 menu | The same without the depth orbits and side cracks; the rift is 12 % wider |
-| **Pixel-tuned** | Exactly 16, 24, 32, 48 and 64 px (the `.ico`) | Redrawn per size: ring radius and width on the pixel grid, the rift 1.3 to 1.7 times wider with a minimum stroke, no blur at 16 to 32 px |
+| **Rich** | 64 px and larger in the UI, app icon master | Tear (24-point outline) with outer violet glow, glowing rim and a thin white edge line, 4 arms + 4 faint arms with glow, white core, 7 shards and 3 sparkles around it |
+| **Simple** | Smaller than 64 px in the UI, F9 menu, lockup | The tear fills the box, 4 arms, core and glowing rim; no shards |
+| **Pixel-tuned** | Exactly 16, 24, 32, 48 and 64 px (the `.ico`) | 16 to 32 px: a simpler 12-point jagged silhouette, 3 bold arms, a big bright core and a 1.2 to 1.8 px rim, no blur. 48/64 px: the simple variant with sizes tuned per pixel. |
 | **Lock-up** | Splash, welcome, about, installer | Mark + "RIFT" wordmark |
 
 ### Files
@@ -117,17 +117,17 @@ The logo is a **portal ring torn open by a rift**: a thick ring (light violet at
 
 ### Construction
 
-- 1024 box, centre (512, 512). Ring: outer radius 448, 62 wide (centre line r = 417). Portal: radius 386, radial gradient `#2A1766` → `#140D33` → `#0B0A1A`, with a violet bloom.
-- Ring gradient (diagonal, top left to bottom right): `#B69CFF` 0 %, `#8B5CF6` 30 %, `#7C6CF6` 62 %, `#22D3EE` 86 %. A 5 px white rim (22 %) runs along the upper left of the ring.
-- The rift is a poly-line of 9 points from (598, 30) to (420, 994) with a half-width per point (0 at the tips, 60 at the widest), outlined with mitred joins, so both edges are sharp and jagged. Body: `#22D3EE` → `#67E8F9` → `#A78BFA` from top to bottom; core: the same line at half width in white. The ring is masked 22 px around the rift.
-- Glow: the rift blurred in cyan (σ 26) on top of the ring, and in violet (σ 70) clipped to the portal.
+- 1024 box, centre (512, 512). The outline is generated (seeded, so it is stable): 24 points on a slightly tall ellipse tilted by -16°, alternating in/out with random depth, plus fixed spikes and notches; it is scaled so its furthest point is R = 372 (rich, leaves room for the shards) or 470 (simple).
+- Inside the tear: space gradient `#3B1680` → `#1C0B45` → `#0A0617`. Arms: tapered spirals (each turns 243°) from just outside the rim into the core, filled with one radial gradient: white 0 %, `#CFFAFE` 12 %, `#22D3EE` 30 %, `#E879F9` 55 %, `#A855F7` 80 %, `#7C3AED` 100 %. Core: white dot plus a white → cyan halo.
+- Edge: the outline stroked with the edge gradient (`#C4B5FD`, `#8B5CF6`, `#E879F9`, `#67E8F9`, diagonal) over a blurred copy, and a wide blurred violet glow outside.
+- Shards are small irregular triangles in cyan, violet, magenta and white with a soft glow; sparkles are thin four-point stars.
 - The wordmark is "RIFT" in Inter Display Bold (by Rasmus Andersson, SIL Open Font License 1.1) with +6 % tracking, converted to outlines. No font file ships, so it looks the same everywhere. Always use the `Wordmark` component or `logo-wordmark.svg`; never type it in a font.
 
 ### Rules
 
 - Leave clear space around the mark of at least 25 % of its size. The minimum size is 16 px.
-- Put it on dark backgrounds (`bg`, `surface`, or dark glass). The portal is dark, so the mark also works as an app icon on light taskbars, but never put the wordmark on light backgrounds; the wordmark is light.
-- Do not recolour, stretch, mirror or rotate the mark. The rift always runs from the top right to the bottom left, the ring always goes violet (top left) to cyan (bottom right).
+- Put it on dark backgrounds (`bg`, `surface`, or dark glass). The inside of the tear is dark, so the mark also works as an app icon on light taskbars, but never put the wordmark on light backgrounds; the wordmark is light.
+- Do not recolour, stretch, mirror or rotate the mark. The vortex always turns the same way and the edge always goes violet (top left) to cyan (bottom right).
 - Glow is allowed: the soft violet/cyan glow behind the mark (`LogoMark glow`) on the splash, the welcome screen and the about page.
 
 ### React API (`@/components/layout/Logo`)
@@ -135,7 +135,7 @@ The logo is a **portal ring torn open by a rift**: a thick ring (light violet at
 ```tsx
 <LogoMark className="size-9" />            // simple mark, sized by class (default 32 px)
 <LogoMark size={96} glow />                // rich mark (auto: rich from 64 px) + breathing glow
-<LogoMark size={48} variant="rich" />      // force the depth orbits and side cracks
+<LogoMark size={48} variant="rich" />      // force the shards and faint arms
 <Wordmark className="h-6 text-foreground" />  // "RIFT", uses the current text colour
 <Logo size={56} glow tagline />            // mark + wordmark + tagline
 ```
@@ -149,7 +149,7 @@ The assets come from one small Python + Playwright pipeline (geometry in `brand.
 1. `python3 build_all.py` writes the SVG masters, the per-size SVGs, `public/logo*.svg`, renders `assets/app-icon.png` (1024 px, transparent) and the three installer BMPs.
 2. Run `cd launcher && pnpm tauri icon assets/app-icon.png`. Then delete the `android/` and `ios/` folders it creates; this app is desktop-only.
 3. `python3 build_all.py post-cli` replaces the blurry small sizes from the CLI with pixel-tuned renders (`32x32`, `64x64`, `Square30/44/71/89`, `StoreLogo`), rebuilds `icon.ico` from the pixel-tuned 16/24/32/48/64 plus a 256 px render of the master, and regenerates `native/client/ATLAS/Public/Icon.h`.
-4. `Logo.tsx` and `splash.html` carry the same paths inline; update them when the geometry changes.
+4. `Logo.tsx` and `splash.html` carry the same shapes inline: `gen_logo_tsx.py` rewrites the `LogoMark` part of `Logo.tsx`; the splash mark is `logo_svg(1024, "rich", uid="sp")`.
 
 ## Installer (NSIS)
 
@@ -162,7 +162,7 @@ The assets come from one small Python + Playwright pipeline (geometry in `brand.
 
 | File | Size | Notes |
 | --- | --- | --- |
-| `windows/assets/sidebar.bmp` | 164 x 314 | Welcome and Finish pages. Glowing mark in front of a faint vertical rift of light, "RIFT", "Step back into any season.", a violet → cyan line and "RIFTFN". The right edge is exactly `#07070C`, so it melts into the page. |
+| `windows/assets/sidebar.bmp` | 164 x 314 | Welcome and Finish pages. Glowing rift mark in front of a faint vertical streak of light, "RIFT", "Step back into any season.", a violet → cyan line and "RIFTFN". The right edge is exactly `#07070C`, so it melts into the page. |
 | `windows/assets/header.bmp` | 150 x 57 | Small mark + wordmark on the right. **Every edge pixel is exactly `#07070C`**, so with `MUI_HEADERIMAGE_RIGHT` it blends into the header band. |
 | `windows/assets/splash.bmp` | 420 x 240 | AdvSplash card: mark, wordmark, tagline and a violet → cyan line on a dark card with 22 px rounded corners. Everything outside the card is pure `#FF00FF` (the colour key), with hard edges and no pink fringe. Call it with `advsplash::show 900 350 300 0xFF00FF "$PLUGINSDIR\<name>"` (no `.bmp`). |
 
@@ -170,14 +170,14 @@ All three files are 24-bit, uncompressed (`BI_RGB`), use the 40-byte BITMAPINFOH
 
 ## UI direction
 
-**Mood: "a portal in the dark."** A near-black background and glass panels. Colour comes from light (glows, gradients, thin rims), not from big flat coloured areas. Violet is the body, cyan is the light that leaks through.
+**Mood: "a rift in the dark."** A near-black background and glass panels. Colour comes from light (glows, gradients, thin rims), not from big flat coloured areas. Violet is the body, cyan is the light that leaks through.
 
 - **Glass.** Panels use `--nb-glass` with `backdrop-filter: blur(20px) saturate(140%)`, a 1 px `--nb-border` and an inner top highlight `inset 0 1px 0 rgb(255 255 255 / 0.06)`. The hairline (`--nb-edge`) goes from white at the top left to violet and a hint of cyan at the bottom right. Radius: 12 px for cards, 8 px for controls, full for pills.
 - **Glow.** Save the brand glow for the one thing that matters on a screen: the Play/Launch button, the active nav item and the logo. Everything else stays calm.
 - **Cyan.** Use cyan as light, not as paint: indicators, the tip of a progress bar, "New" dots and badges, focus rings, a short sparkle when something finishes. Never a large fill.
 - **Background.** Slow "aurora": big soft blobs (violet, a smaller cyan one, a deep violet one) drifting over 40 to 60 s at 35 % opacity or less, plus the faint dot grid. It is static when motion is reduced.
 - **Motion.** Entrances ease out with `cubic-bezier(0.16, 1, 0.3, 1)`. Exits use `cubic-bezier(0.7, 0, 0.84, 0)` and are shorter. Durations: 120 ms for hover and press, 200 to 260 ms for toggles and panels, 400 to 600 ms for page changes and hero moments. Springs: stiffness 380 / damping 32 for UI, and stiffness 200 / damping 22 for playful moments such as the logo pop. Stagger lists by 40 ms. On press, scale buttons to 0.97. On hover, lift cards by 2 px and add a faint glow.
-- **Signature move: the sheen sweep.** A diagonal white band (about 25 % opacity, tilted 30°) sweeps across the logo (clipped to the portal circle) or the Play button once on load and again on hover, over 700 ms.
+- **Signature move: the sheen sweep.** A diagonal white band (about 25 % opacity, tilted 30°) sweeps across the logo (clipped to a circle inside the tear) or the Play button once on load and again on hover, over 700 ms.
 - **Splash (440 x 300).** At 0 ms the mark scales from 0.86 to 1 and goes from blur 12 px to 0 and from opacity 0 to 1 (spring). At 250 ms the glow fades in. At 450 ms the sheen sweeps. At 500 ms the wordmark rises 8 px and fades in, and at 650 ms the tagline follows. A thin violet → cyan line loops until `app_ready`. The splash should feel finished within 1.2 s.
 - **First-run welcome.** Start with the large `Logo` lock-up with glow, then cards that slide in with a 40 ms stagger. "What's new" is a single glass card with a cyan "New" dot.
 - **Type.** Keep Segoe UI Variable for the UI. Headings are semibold with -0.01em tracking. Use tabular numbers for versions and stats. The name is always the `Wordmark` SVG.
