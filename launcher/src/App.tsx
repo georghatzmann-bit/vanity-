@@ -3,6 +3,7 @@ import { AnimatePresence, MotionConfig } from "motion/react";
 import { BubbleIniDialog } from "@/components/bubble/BubbleIniDialog";
 import { PageTransition, Skeleton } from "@/components/fx";
 import { Background } from "@/components/layout/Background";
+import { CloseConfirmDialog } from "@/components/layout/CloseConfirmDialog";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TitleBar } from "@/components/layout/TitleBar";
 import { Welcome } from "@/components/onboarding/Welcome";
@@ -130,6 +131,7 @@ export function App() {
           </AnimatePresence>
 
           <BubbleIniDialog />
+          <CloseConfirmDialog />
           <Toaster position="bottom-right" />
         </div>
       </TooltipProvider>

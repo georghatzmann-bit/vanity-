@@ -7,15 +7,58 @@ mod proc;
 
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::Manager;
+use tauri::{Emitter, Manager, RunEvent, Window, WindowEvent};
 
 /// The main window waits hidden behind the splash until the UI calls `app_ready`.
 /// If that never happens (UI error), it is shown after this time anyway.
 const SPLASH_SAFETY_NET: Duration = Duration::from_secs(8);
 
+/// "Close Niobium?" must show within this time (the UI answers `close_prompt_shown`). If it
+/// doesn't (page error, WebView crashed or hangs), Niobium stops everything and quits by itself –
+/// the window has no frame of its own, so it could never be closed otherwise.
+const CLOSE_PROMPT_TIMEOUT: Duration = Duration::from_secs(4);
+
+/// Closing the main window (title bar X, Alt+F4, taskbar): if something still runs or starts,
+/// the window stays open and the UI asks "Close Niobium?" (event `app:close-requested`); its
+/// "Stop & close" calls `quit_app`. With nothing running it closes at once – the exit handler in
+/// `run` still makes sure the backend is stopped. If the UI never shows the question, Niobium
+/// stops everything and quits after `CLOSE_PROMPT_TIMEOUT`.
+fn on_window_event(window: &Window, event: &WindowEvent) {
+    let WindowEvent::CloseRequested { api, .. } = event else { return };
+    if window.label() != "main" {
+        return;
+    }
+    let app = window.app_handle();
+    let Some(engine) = app.try_state::<Arc<engine::Engine>>() else { return };
+    // None = `quit_app` already stopped everything
+    let Some(running) = engine.close_check() else { return };
+    if running.is_empty() {
+        return;
+    }
+    api.prevent_close();
+    // The question must be seen, also when closed from the taskbar while minimized
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+    let id = engine.ask_close();
+    let _ = app.emit(engine::EVENT_CLOSE_REQUESTED, engine::CloseRequest { running, id });
+
+    // Fallback: no answer from the UI → stop everything and quit anyway
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(CLOSE_PROMPT_TIMEOUT);
+        let engine = handle.state::<Arc<engine::Engine>>();
+        if engine.close_prompt_unanswered(id) && engine.close_check().is_some() {
+            eprintln!("[Niobium] The close question didn't show – stopping everything and closing.");
+            engine.shutdown();
+            handle.exit(0);
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -41,6 +84,7 @@ pub fn run() {
             });
             Ok(())
         })
+        .on_window_event(on_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::platform,
@@ -72,7 +116,18 @@ pub fn run() {
             commands::pending_log_lines,
             commands::bubble_builds_support,
             commands::reset_performance_mode_ini,
+            commands::quit_app,
+            commands::close_prompt_shown,
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("Niobium couldn't start");
+    app.run(|handle, event| {
+        // Safety net: however Niobium ends, nothing it started keeps running
+        // (Fortnite, the game server, their helpers, the backend).
+        if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
+            if let Some(engine) = handle.try_state::<Arc<engine::Engine>>() {
+                engine.shutdown();
+            }
+        }
+    });
 }

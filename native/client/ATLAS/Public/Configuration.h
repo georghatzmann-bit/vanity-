@@ -20,7 +20,6 @@ struct FConfiguration
 		static_cast<int>(EConsoleMode::Atlas);
 	static inline std::atomic_bool bSaveTogglePreferences = true;
 	static inline std::atomic_bool bSlashKeyEnabled = true;
-	static inline std::atomic_bool bSprintByDefault = true;
 	static inline std::atomic_bool bForceRespawns = true;
 	static inline bool bEnableIris = true;
 	static inline std::atomic_bool bEOREnabled = true;

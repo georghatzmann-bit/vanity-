@@ -8,7 +8,7 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, TryLockError};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -18,6 +18,7 @@ use niobium_core::launchargs;
 use niobium_core::logparse::{self, Detection};
 use niobium_core::perfmode;
 use niobium_core::profiles::{self, Config, Profile, BACKEND_PORT, GAME_SERVER_PORT};
+use niobium_core::startgate::{wait_for, Busy, ClosePrompt, StartGate, StartToken, Wait};
 use niobium_core::version::{self, BuildInfo, Support};
 
 use crate::pipe::{ServerEvent, ServerLink};
@@ -31,8 +32,45 @@ const DLL_CLIENT: &str = "niobium_client.dll";
 /// Tauri event when Fortnite saved Performance Mode as the default (payload `{ path }`).
 pub const EVENT_BUBBLE_INI_CHANGED: &str = "bubble:ini-changed";
 
+/// Tauri event when the user wants to close the main window while something still runs
+/// (payload [`CloseRequest`]). The UI asks "Close Niobium?" and calls `quit_app` on "Stop & close".
+pub const EVENT_CLOSE_REQUESTED: &str = "app:close-requested";
+
 /// Category of the launcher's own log lines in the live log.
 const CAT: &str = "Niobium";
+
+/// The one log line when "Stop all" (or closing) ends a start that was still running.
+const START_CANCELLED: &str = "Start cancelled.";
+
+/// Payload of [`EVENT_CLOSE_REQUESTED`]: what still runs, in plain words
+/// (e.g. `["Your game", "Game server", "Backend"]`), and the question's number. The UI answers
+/// `close_prompt_shown(id)` once the dialog is on screen; without that answer Niobium closes anyway.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloseRequest {
+    pub running: Vec<String>,
+    pub id: u64,
+}
+
+/// Why a start step stopped: "Stop all" cancelled it (quiet – `stop_all` already wrote
+/// "Start cancelled."), or a real problem (shown as a toast).
+#[derive(Debug)]
+pub enum StartError {
+    Cancelled,
+    Failed(String),
+}
+
+impl From<String> for StartError {
+    fn from(e: String) -> Self {
+        StartError::Failed(e)
+    }
+}
+
+impl From<&str> for StartError {
+    fn from(e: &str) -> Self {
+        StartError::Failed(e.to_string())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -85,7 +123,9 @@ pub struct Running {
     game: Option<Instance>,
     link: Option<Arc<ServerLink>>,
     step: i32,
-    stopping: bool,
+    /// The start in progress and "Stop all" (see `niobium_core::startgate`). Every process start
+    /// checks it under this lock, so nothing starts after "Stop all".
+    gate: StartGate,
 }
 
 /// Signals from the game logs that the start sequence waits for (set in `stream_logs`).
@@ -109,6 +149,8 @@ pub struct Engine {
     early_log: EarlyLines<LogLinePayload>,
     /// Fixed-port notes already written to the live log (each only once per run).
     port_notes_logged: Mutex<Vec<&'static str>>,
+    /// The last "Close Niobium?" question and whether the UI showed it (see `on_window_event`).
+    close_prompt: Mutex<ClosePrompt>,
 }
 
 impl Engine {
@@ -120,6 +162,7 @@ impl Engine {
             perf_mode_ini: Mutex::new(None),
             early_log: EarlyLines::new(),
             port_notes_logged: Mutex::new(Vec::new()),
+            close_prompt: Mutex::new(ClosePrompt::new()),
             app,
         }
     }
@@ -156,9 +199,37 @@ impl Engine {
         let _ = self.app.emit("services", Services { backend, server, game });
     }
 
-    fn emit_step(&self, step: i32) {
-        self.running.lock().unwrap().step = step;
+    /// Moves the timeline to `step` – unless "Stop all" cancelled this start (then the timeline
+    /// stays idle and the start ends quietly).
+    fn step(&self, token: StartToken, step: i32) -> Result<(), StartError> {
+        let mut r = self.running.lock().unwrap();
+        if r.gate.is_cancelled(token) {
+            return Err(StartError::Cancelled);
+        }
+        r.step = step;
+        // sent under the lock, so a "Stop all" right after it always has the last word (-1)
         let _ = self.app.emit("launch:step", step);
+        Ok(())
+    }
+
+    /// True once "Stop all" ran after `token` was made (or Niobium is closing).
+    fn is_cancelled(&self, token: StartToken) -> bool {
+        self.running.lock().unwrap().gate.is_cancelled(token)
+    }
+
+    /// Starts processes only if the start still counts. The lock is held from the check until
+    /// `spawn` has stored the new PIDs in `running`, so "Stop all" either comes first (then
+    /// nothing starts) or comes after and finds – and closes – the new processes.
+    fn spawn_guarded<T>(
+        &self,
+        token: StartToken,
+        spawn: impl FnOnce(&mut Running) -> Result<T, String>,
+    ) -> Result<T, StartError> {
+        let mut r = self.running.lock().unwrap();
+        if r.gate.is_cancelled(token) {
+            return Err(StartError::Cancelled);
+        }
+        spawn(&mut r).map_err(StartError::Failed)
     }
 
     fn toast(&self, kind: &str, title: &str, description: &str) {
@@ -246,9 +317,14 @@ impl Engine {
 
     // --- Backend -------------------------------------------------------------
 
-    pub fn start_backend(&self) -> Result<(), String> {
+    /// Starts the backend (if it doesn't run yet) and waits until it is ready.
+    /// "Stop all" during the wait ends it with `StartError::Cancelled`.
+    pub fn start_backend(&self, token: StartToken) -> Result<(), StartError> {
         {
             let r = self.running.lock().unwrap();
+            if r.gate.is_cancelled(token) {
+                return Err(StartError::Cancelled);
+            }
             if r.backend_pid.map(proc::is_running).unwrap_or(false) {
                 return Ok(());
             }
@@ -273,25 +349,27 @@ impl Engine {
         ];
         drop(cfg);
 
-        self.log("backend", "info", CAT, "Starting the backend …", None);
-        let pid = proc::start(&main_as_node_arg(&node), &node_args(&main), &env, false, false)
-            .or_else(|_| proc::start(&node, &node_args(&main), &env, false, false))?;
-        self.running.lock().unwrap().backend_pid = Some(pid);
+        self.spawn_guarded(token, |r| {
+            // Checked again under the lock: a Join and a start at the same time start only one backend
+            if r.backend_pid.is_some_and(proc::is_running) {
+                return Ok(());
+            }
+            self.log("backend", "info", CAT, "Starting the backend …", None);
+            let pid = proc::start(&main_as_node_arg(&node), &node_args(&main), &env, false, false)
+                .or_else(|_| proc::start(&node, &node_args(&main), &env, false, false))?;
+            r.backend_pid = Some(pid);
+            Ok(())
+        })?;
 
         // Wait until it reports "healthy" (up to 20 s)
-        if !wait_backend_health(port, Duration::from_secs(20)) {
-            return Err("The backend didn't start (is the port already in use?)".into());
+        match wait_for(Duration::from_secs(20), Duration::from_millis(400), || self.is_cancelled(token), || backend_healthy(port)) {
+            Wait::Ready => {}
+            Wait::Cancelled => return Err(StartError::Cancelled),
+            Wait::TimedOut => return Err("The backend didn't start (is the port already in use?)".into()),
         }
         self.log("backend", "info", "Backend", &format!("Backend is listening on 127.0.0.1:{port}"), None);
         self.emit_services();
         Ok(())
-    }
-
-    pub fn stop_backend(&self) {
-        let pid = self.running.lock().unwrap().backend_pid.take();
-        if let Some(pid) = pid {
-            let _ = proc::kill(pid);
-        }
     }
 
     /// Sets the matchmaker target in the backend (for joining by IP).
@@ -322,11 +400,20 @@ impl Engine {
     }
 
     /// Starts a Fortnite instance, loads the redirect and reads the log. The instance (with its
-    /// helper processes) is stored in `running` right away, so "Stop all" can close it.
+    /// helper processes) is stored in `running` in the same locked step that starts it, so
+    /// "Stop all" can always close it – and nothing starts once "Stop all" ran.
     /// `bubble_builds` = the Bubble Builds setting (only used for the player's game, see `launchargs`).
-    fn launch_instance(&self, build: &BuildInfo, profile: &Profile, host: bool, headless: bool, bubble_builds: bool) -> Result<u32, String> {
+    fn launch_instance(
+        &self,
+        token: StartToken,
+        build: &BuildInfo,
+        profile: &Profile,
+        host: bool,
+        headless: bool,
+        bubble_builds: bool,
+    ) -> Result<u32, StartError> {
         if build.support == Support::Unsupported {
-            return Err(format!("Niobium can't start version {} ({})", build.version, version::support_note(&build.version)));
+            return Err(format!("Niobium can't start version {} ({})", build.version, version::support_note(&build.version)).into());
         }
         if build.support == Support::Experimental {
             self.log("launcher", "warning", CAT, &format!("Version {} is untested – trying anyway", build.version), None);
@@ -334,7 +421,7 @@ impl Engine {
         let bin = Path::new(&build.binaries);
         let exe = bin.join(version::SHIPPING_EXE);
         if !exe.is_file() {
-            return Err(format!("{} not found", version::SHIPPING_EXE));
+            return Err(format!("{} not found", version::SHIPPING_EXE).into());
         }
 
         // Reset the log signals of this role – `stream_logs` sets them again
@@ -344,18 +431,6 @@ impl Engine {
         } else {
             self.signals.game_login.store(false, Ordering::SeqCst);
         }
-
-        // Start the helper processes paused (they never run – the old build only checks that they exist).
-        let mut helper_pids = Vec::new();
-        for name in [version::LAUNCHER_EXE, version::EAC_EXE] {
-            let p = bin.join(name);
-            if p.is_file() {
-                if let Ok(pid) = proc::start(&p, &[], &[], true, false) {
-                    helper_pids.push(pid);
-                }
-            }
-        }
-        let helpers = HelperPids::new(helper_pids);
 
         let env = vec![("OPENSSL_ia32cap".to_string(), "~0x20000000".to_string())];
         let host_name = self.config.lock().unwrap().settings.player_name.clone();
@@ -369,24 +444,41 @@ impl Engine {
                 self.log("launcher", "info", CAT, &format!("Bubble Builds are on, but Fortnite {} can't show them – starting normally", build.version), None);
             }
         }
-        self.log("launcher", "info", CAT, &format!("Starting {who}: {}", args.join(" ")), None);
 
-        let mut child = match proc::start_captured(&exe, &args, &env) {
-            Ok(child) => child,
-            Err(e) => {
-                close_helpers(&helpers);
-                return Err(e);
+        // Start the helper processes paused (they never run – the old build only checks that they
+        // exist), then Fortnite itself. Keep them, so "Stop all" closes them. When Fortnite closes
+        // by itself (crash, the player quits, or it is closed below), `watch_exit` closes the
+        // helpers and drops it.
+        let (mut child, helpers) = self.spawn_guarded(token, |r| {
+            // Never start a second one over a running one ("Stop all" would lose track of it)
+            if (if host { &r.server } else { &r.game }).is_some() {
+                return Err(if host { "The server Fortnite is already running." } else { "Your game is already running." }.to_string());
             }
-        };
+            let mut helper_pids = Vec::new();
+            for name in [version::LAUNCHER_EXE, version::EAC_EXE] {
+                let p = bin.join(name);
+                if p.is_file() {
+                    if let Ok(pid) = proc::start(&p, &[], &[], true, false) {
+                        helper_pids.push(pid);
+                    }
+                }
+            }
+            let helpers = HelperPids::new(helper_pids);
+            self.log("launcher", "info", CAT, &format!("Starting {who}: {}", args.join(" ")), None);
+            match proc::start_captured(&exe, &args, &env) {
+                Ok(child) => {
+                    let slot = if host { &mut r.server } else { &mut r.game };
+                    *slot = Some(Instance { pid: child.id(), helpers: helpers.clone() });
+                    Ok((child, helpers))
+                }
+                Err(e) => {
+                    close_helpers(&helpers);
+                    Err(e)
+                }
+            }
+        })?;
         let pid = child.id();
         self.stream_logs(&mut child, host);
-        // Keep it, so "Stop all" closes it and its helpers. When it closes by itself (crash, the
-        // player quits, or it is closed below), `watch_exit` closes the helpers and drops it.
-        {
-            let mut r = self.running.lock().unwrap();
-            let slot = if host { &mut r.server } else { &mut r.game };
-            *slot = Some(Instance { pid, helpers: helpers.clone() });
-        }
         self.watch_exit(child, host, helpers);
 
         // Load the redirect right away. Without it the build would talk to Epic's real servers –
@@ -395,12 +487,16 @@ impl Engine {
             let _ = proc::kill(pid);
             return Err("The redirect DLL is missing from the launcher – start stopped so nothing goes to Epic".into());
         };
+        if self.is_cancelled(token) {
+            // "Stop all" already closed it
+            return Err(StartError::Cancelled);
+        }
         if let Err(e) = proc::load_helper(pid, &dll) {
             let _ = proc::kill(pid);
-            return Err(format!("Couldn't load the redirect ({e}) – start stopped so nothing goes to Epic"));
+            return Err(format!("Couldn't load the redirect ({e}) – start stopped so nothing goes to Epic").into());
         }
         self.log("launcher", "info", CAT, "Redirect loaded", None);
-        self.watch_early_exit(pid, host);
+        self.watch_early_exit(token, pid, host);
 
         Ok(pid)
     }
@@ -432,7 +528,8 @@ impl Engine {
 
     /// If Fortnite closes by itself in the first minutes, we explain why: the redirect closes the
     /// game on purpose when it doesn't know the version (that is then written to redirect.log).
-    fn watch_early_exit(&self, pid: u32, host: bool) {
+    /// Quiet after "Stop all" (then closing is expected).
+    fn watch_early_exit(&self, token: StartToken, pid: u32, host: bool) {
         let app = self.app.clone();
         let log_path = self.data_local().join("logs").join("redirect.log");
         std::thread::spawn(move || {
@@ -440,7 +537,7 @@ impl Engine {
             while started.elapsed() < Duration::from_secs(240) {
                 std::thread::sleep(Duration::from_secs(2));
                 let engine = app.state::<Arc<Engine>>();
-                if engine.running.lock().unwrap().stopping {
+                if engine.is_cancelled(token) {
                     return;
                 }
                 if proc::is_running(pid) {
@@ -530,8 +627,52 @@ impl Engine {
         }
     }
 
-    /// The big sequence: backend + server + game.
-    pub fn host_and_play(&self, profile_id: &str) -> Result<(), String> {
+    /// Marks a start as in progress (before its thread runs, so an early "Stop all" catches it).
+    /// Refused while a start runs or Fortnite still runs (e.g. a double click on "Host & Play"):
+    /// a second set of processes would replace the first in `running`, and "Stop all" and closing
+    /// would never reach the first one.
+    pub fn begin_start(&self) -> Result<StartToken, String> {
+        let mut r = self.running.lock().unwrap();
+        if r.gate.is_closed() {
+            return Err("Niobium is closing.".into());
+        }
+        if r.gate.in_progress() {
+            return Err("A start is already running.".into());
+        }
+        if r.server.is_some() || r.game.is_some() {
+            return Err("Fortnite is still running. Press Stop all first.".into());
+        }
+        Ok(r.gate.begin())
+    }
+
+    /// "Host & Play" (runs in its own thread, see the command): backend + server + game.
+    /// `token` comes from `begin_start`. A problem ends as a toast and "Stop all". "Stop all"
+    /// during the start ends it quietly: `stop_all` already wrote "Start cancelled." and put the
+    /// timeline back to idle.
+    pub fn host_and_play(&self, token: StartToken, profile_id: &str) {
+        let Err(StartError::Failed(err)) = self.host_and_play_steps(profile_id, token) else {
+            return;
+        };
+        // An error right after "Stop all" (e.g. the redirect can't load into the closed game) is
+        // only a result of the stop – nothing to report.
+        let cancelled = {
+            let mut r = self.running.lock().unwrap();
+            let cancelled = r.gate.is_cancelled(token);
+            if !cancelled {
+                r.gate.finish(token);
+            }
+            cancelled
+        };
+        if cancelled {
+            return;
+        }
+        self.toast("error", "Couldn't start", &err);
+        self.stop_all();
+    }
+
+    /// The steps of "Host & Play". Every step checks `token` first, every wait ends at once on
+    /// "Stop all", and processes only start through `spawn_guarded`.
+    fn host_and_play_steps(&self, profile_id: &str, token: StartToken) -> Result<(), StartError> {
         if cfg!(not(windows)) {
             return Err("Fortnite can only be started on Windows".into());
         }
@@ -547,117 +688,131 @@ impl Engine {
             (cfg.settings.headless_server, cfg.settings.bubble_builds)
         };
 
-        self.running.lock().unwrap().stopping = false;
-        self.emit_step(0);
-        self.start_backend().inspect_err(|_| self.emit_step(-1))?;
+        self.step(token, 0)?;
+        self.start_backend(token)?;
         self.set_backend_status(&build.version, true, &profile.playlist);
 
         // Server Fortnite – put a fresh parkour list in place first (the server DLL reads it)
-        self.emit_step(1);
+        self.step(token, 1)?;
         write_parkour_file(Some(self));
         // The server never gets Bubble Builds (launchargs::build ignores the setting for the host)
-        let server_pid = self.launch_instance(&build, &profile, true, headless, bubble_builds)?;
-        self.emit_step(2); // the redirect is loaded in launch_instance
+        let server_pid = self.launch_instance(token, &build, &profile, true, headless, bubble_builds)?;
+        self.step(token, 2)?; // the redirect is loaded in launch_instance
         self.emit_services();
 
         // Step 3: the server logs in (spotted in the log) → then load the server DLL.
-        self.emit_step(3);
-        self.inject_after_login(server_pid, true, &build);
+        self.step(token, 3)?;
+        self.inject_after_login(token, server_pid, true, &build);
 
         // Step 4: your game starts at the same time – the server loads the map in the background.
-        self.emit_step(4);
+        self.step(token, 4)?;
         let bubble = launchargs::bubble_builds_active(false, bubble_builds, &build.version);
         if bubble {
             self.remember_perf_mode_ini();
         }
-        let game_pid = self.launch_instance(&build, &profile, false, false, bubble_builds)?;
+        let game_pid = self.launch_instance(token, &build, &profile, false, false, bubble_builds)?;
         if bubble {
             self.watch_perf_mode_ini(game_pid);
         }
-        self.inject_after_login(game_pid, false, &build);
+        self.inject_after_login(token, game_pid, false, &build);
         self.emit_services();
 
         // Steps 5/6 in the background: first connect to the control pipe of the server DLL (turn on
         // commands, send playlist/Lategame, unlock "Start match"), then wait until the game server
         // listens on port 7777.
-        self.emit_step(5);
+        self.step(token, 5)?;
         let app = self.app.clone();
-        let profile_bg = profile.clone();
         std::thread::spawn(move || {
             let engine = app.state::<Arc<Engine>>();
-
-            // 1) Control pipe – shows up once the server DLL runs (wait up to 4 minutes)
-            let (tx, rx) = channel::<ServerEvent>();
-            let started = std::time::Instant::now();
-            let mut link = None;
-            while started.elapsed() < Duration::from_secs(240) {
-                if engine.running.lock().unwrap().stopping {
-                    return;
-                }
-                if let Some(l) = ServerLink::connect(tx.clone()) {
-                    link = Some(l);
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(500));
-            }
-            match link {
-                Some(link) => {
-                    let link = Arc::new(link);
-                    engine.running.lock().unwrap().link = Some(link.clone());
-                    engine.spawn_server_event_loop(rx);
-                    engine.apply_profile_to_server(&link, &profile_bg);
-                    engine.log("launcher", "info", CAT, "Connected to the server's control pipe – commands on, playlist and Lategame sent", None);
-                    engine.toast(
-                        "info",
-                        "The server is waiting for you",
-                        "Go to Match and press \"Start match\" (or START SERVER in the server window). Then the server loads the map.",
-                    );
-                }
-                None => {
-                    engine.log("launcher", "info", CAT, "No control pipe – use the server's own window", None);
-                    engine.toast("info", "Server window", "In the server window, pick a playlist and press START SERVER.");
-                }
-            }
-
-            // 2) Wait for "listening on port 7777" – starting is done by hand, so wait generously (30 minutes)
-            let listening = engine.wait_signal(|s| &s.server_listening, Duration::from_secs(1800));
-            if engine.running.lock().unwrap().stopping {
-                return;
-            }
-            if !listening {
-                engine.toast(
-                    "error",
-                    "The game server isn't answering",
-                    "\"IpNetDriver listening\" is missing from the server log. Check the live log (source: server) and Crashes.",
-                );
-                return;
-            }
-            engine.log("launcher", "info", CAT, "The game server is listening on port 7777", None);
-            engine.emit_step(6);
-            engine.emit_services();
-            engine.toast("success", "Server ready", "Press Play in the game – the match runs on 127.0.0.1.");
+            engine.connect_and_wait_for_server(token, &profile);
         });
         Ok(())
     }
 
-    /// Waits (at most `timeout`) for a log signal; gives up when stopping.
-    fn wait_signal(&self, pick: impl Fn(&Signals) -> &AtomicBool, timeout: Duration) -> bool {
-        let start = std::time::Instant::now();
-        while start.elapsed() < timeout {
-            if pick(&self.signals).load(Ordering::SeqCst) {
-                return true;
-            }
-            if self.running.lock().unwrap().stopping {
-                return false;
-            }
-            std::thread::sleep(Duration::from_millis(250));
+    /// Steps 5/6 of "Host & Play" (in the background). Every wait ends at once on "Stop all".
+    fn connect_and_wait_for_server(&self, token: StartToken, profile: &Profile) {
+        // 1) Control pipe – shows up once the server DLL runs (wait up to 4 minutes)
+        let (tx, rx) = channel::<ServerEvent>();
+        let mut link = None;
+        let waited = wait_for(
+            Duration::from_secs(240),
+            Duration::from_millis(500),
+            || self.is_cancelled(token),
+            || {
+                link = ServerLink::connect(tx.clone());
+                link.is_some()
+            },
+        );
+        if waited == Wait::Cancelled {
+            return;
         }
-        false
+        match link {
+            Some(link) => {
+                let link = Arc::new(link);
+                {
+                    // Only keep it while the start still counts ("Stop all" drops the link)
+                    let mut r = self.running.lock().unwrap();
+                    if r.gate.is_cancelled(token) {
+                        return;
+                    }
+                    r.link = Some(link.clone());
+                }
+                self.spawn_server_event_loop(rx);
+                self.apply_profile_to_server(&link, profile);
+                self.log("launcher", "info", CAT, "Connected to the server's control pipe – commands on, playlist and Lategame sent", None);
+                self.toast(
+                    "info",
+                    "The server is waiting for you",
+                    "Go to Match and press \"Start match\" (or START SERVER in the server window). Then the server loads the map.",
+                );
+            }
+            None => {
+                self.log("launcher", "info", CAT, "No control pipe – use the server's own window", None);
+                self.toast("info", "Server window", "In the server window, pick a playlist and press START SERVER.");
+            }
+        }
+
+        // 2) Wait for "listening on port 7777" – starting is done by hand, so wait generously (30 minutes)
+        match self.wait_signal(token, |s| &s.server_listening, Duration::from_secs(1800)) {
+            Wait::Cancelled => {}
+            Wait::TimedOut => {
+                if !self.is_cancelled(token) {
+                    self.toast(
+                        "error",
+                        "The game server isn't answering",
+                        "\"IpNetDriver listening\" is missing from the server log. Check the live log (source: server) and Crashes.",
+                    );
+                }
+            }
+            Wait::Ready => {
+                {
+                    // Step 6 and "start done" in one locked step, so a "Stop all" right now wins
+                    let mut r = self.running.lock().unwrap();
+                    if r.gate.is_cancelled(token) {
+                        return;
+                    }
+                    r.gate.finish(token);
+                    r.step = 6;
+                    let _ = self.app.emit("launch:step", 6);
+                }
+                self.log("launcher", "info", CAT, "The game server is listening on port 7777", None);
+                self.emit_services();
+                self.toast("success", "Server ready", "Press Play in the game – the match runs on 127.0.0.1.");
+            }
+        }
+    }
+
+    /// Waits (at most `timeout`) for a log signal; ends at once on "Stop all".
+    fn wait_signal(&self, token: StartToken, pick: impl Fn(&Signals) -> &AtomicBool, timeout: Duration) -> Wait {
+        wait_for(timeout, Duration::from_millis(250), || self.is_cancelled(token), || {
+            pick(&self.signals).load(Ordering::SeqCst)
+        })
     }
 
     /// Loads the matching DLL into the instance once the log shows the login
     /// (waits at most 3 minutes, then loads it anyway). Runs in its own thread.
-    fn inject_after_login(&self, pid: u32, host: bool, build: &BuildInfo) {
+    /// "Stop all" ends the wait; the DLL is then not loaded.
+    fn inject_after_login(&self, token: StartToken, pid: u32, host: bool, build: &BuildInfo) {
         let dll_name = if host { DLL_SERVER } else { DLL_CLIENT };
         let Some(dll) = self.dll_path(dll_name) else {
             self.log(
@@ -676,11 +831,11 @@ impl Engine {
         std::thread::spawn(move || {
             let engine = app.state::<Arc<Engine>>();
             let who = if host { "Server" } else { "Game" };
-            let seen = engine.wait_signal(|s| if host { &s.server_login } else { &s.game_login }, Duration::from_secs(180));
-            if engine.running.lock().unwrap().stopping {
+            let seen = engine.wait_signal(token, |s| if host { &s.server_login } else { &s.game_login }, Duration::from_secs(180));
+            if seen == Wait::Cancelled {
                 return;
             }
-            if !seen {
+            if seen == Wait::TimedOut {
                 engine.log(
                     "launcher",
                     "warning",
@@ -690,9 +845,14 @@ impl Engine {
                 );
             }
             // short grace period so the engine objects / the lobby world are ready
-            std::thread::sleep(Duration::from_secs(delay));
+            let grace = wait_for(Duration::from_secs(delay), Duration::from_millis(250), || engine.is_cancelled(token), || false);
+            if grace == Wait::Cancelled {
+                return;
+            }
             match proc::load_helper(pid, &dll) {
                 Ok(_) => engine.log(if host { "server" } else { "game" }, "info", CAT, &format!("{dll_name} loaded"), None),
+                // After "Stop all" the game is gone – that error means nothing
+                Err(_) if engine.is_cancelled(token) => {}
                 Err(e) => engine.log("launcher", "error", CAT, &format!("Couldn't load {dll_name}: {e}"), None),
             }
         });
@@ -831,7 +991,11 @@ impl Engine {
         // (matchmaking, see backend/lawinserver/structure/matchmaking.js).
         // No "open" through the server pipe: that runs as a cheat command on your OWN server, which
         // doesn't know the command – it would only have written the command list into the chat.
-        self.start_backend()?;
+        let token = self.running.lock().unwrap().gate.token();
+        self.start_backend(token).map_err(|e| match e {
+            StartError::Cancelled => "Stopped before the backend was ready.".to_string(),
+            StartError::Failed(e) => e,
+        })?;
         self.set_backend_gameserver(&ip, port);
         self.toast("info", "Join", &format!("Press Play in the game – you'll land on {ip}:{port}."));
         Ok(())
@@ -839,18 +1003,86 @@ impl Engine {
 
     // --- Stopping ------------------------------------------------------------
 
+    /// "Stop all": closes your game, the server Fortnite (each with its helper processes) and the
+    /// backend. A start that is still running is cancelled: nothing more starts, every wait ends,
+    /// the timeline goes back to idle and the log says "Start cancelled." once.
     pub fn stop_all(&self) {
-        let mut r = self.running.lock().unwrap();
-        r.stopping = true;
-        r.link = None;
-        for inst in [r.game.take(), r.server.take()].into_iter().flatten() {
+        self.stop_everything(false);
+    }
+
+    /// Closing Niobium: like "Stop all", and nothing may start any more afterwards. Sends nothing
+    /// to the UI (it is closing). Safe to call more than once (`quit_app`, then again on exit).
+    pub fn shutdown(&self) {
+        self.stop_everything(true);
+    }
+
+    /// For closing the window (runs on the main thread, so it never waits for the lock):
+    /// `None` once `shutdown` ran (the window may close), else what still runs or starts in plain
+    /// words for "Close Niobium?" (empty = nothing, close at once).
+    pub fn close_check(&self) -> Option<Vec<String>> {
+        let r = match self.running.try_lock() {
+            Ok(r) => r,
+            Err(TryLockError::Poisoned(p)) => p.into_inner(),
+            // A start step holds the lock right now (e.g. Fortnite is being started)
+            Err(TryLockError::WouldBlock) => return Some(Busy { starting: true, ..Busy::default() }.names()),
+        };
+        if r.gate.is_closed() {
+            return None;
+        }
+        Some(
+            Busy {
+                game: r.game.is_some(),
+                server: r.server.is_some(),
+                backend: r.backend_pid.is_some_and(proc::is_running),
+                starting: r.gate.in_progress(),
+            }
+            .names(),
+        )
+    }
+
+    /// A close was blocked and "Close Niobium?" is sent to the UI: returns the question's number.
+    pub fn ask_close(&self) -> u64 {
+        self.close_prompt.lock().unwrap().ask()
+    }
+
+    /// The UI shows question `id` (command `close_prompt_shown`): the user decides there.
+    pub fn close_prompt_shown(&self, id: u64) {
+        self.close_prompt.lock().unwrap().shown(id);
+    }
+
+    /// True if the UI never showed question `id` (and no newer one was asked).
+    pub fn close_prompt_unanswered(&self, id: u64) -> bool {
+        self.close_prompt.lock().unwrap().unanswered(id)
+    }
+
+    fn stop_everything(&self, closing: bool) {
+        let (instances, backend, was_starting) = {
+            let mut r = self.running.lock().unwrap();
+            // From here on no start step runs and no process starts (see `spawn_guarded`)
+            let was_starting = if closing { r.gate.close() } else { r.gate.cancel() };
+            r.link = None;
+            r.step = -1;
+            let instances = [r.game.take(), r.server.take()];
+            let backend = r.backend_pid.take();
+            if !closing {
+                // under the lock, so no start step can come after the -1
+                let _ = self.app.emit("launch:step", -1);
+            }
+            (instances, backend, was_starting)
+        };
+        for inst in instances.into_iter().flatten() {
             let _ = proc::kill(inst.pid);
             close_helpers(&inst.helpers);
         }
-        r.step = -1;
-        drop(r);
-        self.stop_backend();
-        let _ = self.app.emit("launch:step", -1);
+        if let Some(pid) = backend {
+            let _ = proc::kill(pid);
+        }
+        if closing {
+            return;
+        }
+        if was_starting {
+            self.log("launcher", "info", CAT, START_CANCELLED, None);
+        }
         self.emit_services();
     }
 }
@@ -947,20 +1179,15 @@ fn main_as_node_arg(node: &Path) -> PathBuf {
     node.to_path_buf()
 }
 
-fn wait_backend_health(port: u16, timeout: Duration) -> bool {
-    let start = std::time::Instant::now();
+/// One check whether the backend says "healthy". Short time limit, so "Stop all" isn't kept waiting.
+fn backend_healthy(port: u16) -> bool {
     let url = format!("http://127.0.0.1:{port}/niobium/health");
-    while start.elapsed() < timeout {
-        if let Ok(mut resp) = ureq::get(&url).call() {
-            if let Ok(v) = resp.body_mut().read_json::<serde_json::Value>() {
-                if v.get("ok").and_then(|b| b.as_bool()) == Some(true) {
-                    return true;
-                }
-            }
-        }
-        std::thread::sleep(Duration::from_millis(400));
-    }
-    false
+    let Ok(mut resp) = ureq::get(&url).config().timeout_global(Some(Duration::from_secs(1))).build().call() else {
+        return false;
+    };
+    resp.body_mut()
+        .read_json::<serde_json::Value>()
+        .is_ok_and(|v| v.get("ok").and_then(|b| b.as_bool()) == Some(true))
 }
 
 /// Detection from the log for the UI (kept for later reactions).

@@ -153,27 +153,46 @@ pub fn share_addresses() -> Vec<(String, String)> {
 
 // --- Actions that start something ---------------------------------------------
 
-#[tauri::command]
+// The commands that start or stop things run off the main thread (`async`): they wait for the
+// `running` lock (held while a process starts) or for the backend, and the window must not freeze
+// meanwhile. Their events then also reach the UI in the order they were sent (the "-1" of
+// "Stop all" always comes after the last start step).
+
+/// Starts backend + server + game in the background. Progress comes as "launch:step" (0–5 = a
+/// start is in progress, 6 = server ready, -1 = idle); problems come as a toast.
+/// Refused while a start or Fortnite still runs (e.g. a double click).
+#[tauri::command(async)]
 pub fn host_and_play(engine: E, profile_id: String) -> R<()> {
+    let token = engine.begin_start()?;
     let e = Arc::clone(&engine);
-    std::thread::spawn(move || {
-        if let Err(err) = e.host_and_play(&profile_id) {
-            let _ = tauri::Emitter::emit(&e.app, "toast", crate::engine::Toast {
-                kind: "error".into(), title: "Couldn't start".into(), description: err,
-            });
-            e.stop_all();
-        }
-    });
+    std::thread::spawn(move || e.host_and_play(token, &profile_id));
     Ok(())
 }
 
-#[tauri::command]
+/// Stops everything (game, server, helpers, backend). During a start this also cancels the start:
+/// nothing more is launched, the timeline goes back to idle (-1), the log says "Start cancelled.".
+#[tauri::command(async)]
 pub fn stop_all(engine: E) -> R<()> {
     engine.stop_all();
     Ok(())
 }
 
+/// "Stop & close" in the "Close Niobium?" dialog: stops everything like "Stop all" (incl. helpers
+/// and the backend), then quits Niobium.
+#[tauri::command(async)]
+pub fn quit_app(app: AppHandle, engine: E) {
+    engine.shutdown();
+    app.exit(0);
+}
+
+/// The UI shows "Close Niobium?" (question `id` from `app:close-requested`). Without this answer
+/// Niobium stops everything and closes by itself after a few seconds.
 #[tauri::command]
+pub fn close_prompt_shown(engine: E, id: u64) {
+    engine.close_prompt_shown(id);
+}
+
+#[tauri::command(async)]
 pub fn join_ip(engine: E, address: String) -> R<()> {
     engine.join_ip(&address)
 }
@@ -227,10 +246,18 @@ fn default_client_settings() -> serde_json::Value {
             "saveTogglePreferences": true, "slashKey": true,
             "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": true,
             "mobileBuilds": false, "inGameFog": true, "firstPerson": false,
-            "sprintByDefault": true, "respawnsEnabled": true
+            "sprintByDefault": false, "respawnsEnabled": true
         },
         "commands": [], "macros": []
     })
+}
+
+/// "Always sprint" was removed: it is off for everyone. The key stays in client.json (older
+/// files keep loading, and the menu DLL finds it), but it is always read and written as `false`.
+fn force_sprint_off(value: &mut serde_json::Value) {
+    if let Some(serde_json::Value::Object(prefs)) = value.get_mut("preferences") {
+        prefs.insert("sprintByDefault".into(), serde_json::Value::Bool(false));
+    }
 }
 
 #[tauri::command]
@@ -256,11 +283,14 @@ pub fn get_client_settings() -> serde_json::Value {
             }
         }
     }
+    force_sprint_off(&mut value);
     value
 }
 
 #[tauri::command]
 pub fn set_client_settings(value: serde_json::Value) -> R<()> {
+    let mut value = value;
+    force_sprint_off(&mut value);
     let path = client_settings_path();
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;

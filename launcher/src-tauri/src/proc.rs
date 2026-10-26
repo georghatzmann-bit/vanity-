@@ -72,7 +72,9 @@ mod imp {
             .spawn()
             .map_err(|e| format!("Couldn't start {}: {e}", name_of(exe)))?;
         let pid = child.id();
-        // We manage the process by its PID ourselves; the child handle is released.
+        // We manage the process by its PID ourselves. The child is leaked on purpose: its process
+        // handle stays open while Niobium runs, so Windows can't give this PID to another process
+        // even after it exited – a later `kill(pid)` or `is_running(pid)` never hits a stranger.
         std::mem::forget(child);
         Ok(pid)
     }

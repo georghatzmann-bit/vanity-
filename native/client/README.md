@@ -35,8 +35,9 @@ Tabs in the F9 menu (names as shown in the game):
 
 - **Main:** "Join a server" (on this PC or by IP), "Editing" (Edit on release, Reset on release,
   Disable pre-edits, depending on the version), "Graphics" (Mobile Builds, In-game fog, Simpler
-  textures), "Movement" (Always sprint, old versions only), "Field of view", "Respawn" (Respawn after
-  you die), "Other" (First person, Free camera, Target info)
+  textures), "Field of view", "Respawn" (Respawn after you die), "Other" (First person, Free camera,
+  Target info). "Always sprint" was removed: it is always off, and an old `"sprintByDefault": true`
+  in `client.json` is ignored.
 - **Commands:** your own commands and command chains, each with its own key
 - **Options:**
   - "Build look": the Bubble Builds status row (see below)

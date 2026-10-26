@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronRight, Copy, Minus, Square, X } from "lucide-react";
+import { demoBusy } from "@/components/LaunchDemoDriver";
 import { inTauri } from "@/lib/api";
 import { EASE_OUT } from "@/lib/motion";
-import { launchSteps, useApp } from "@/lib/store";
+import { isStarting, launchSteps, useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { closeWindow, minimizeWindow, toggleMaximizeWindow, watchMaximized } from "@/lib/window";
 import { pageLabel } from "./nav";
@@ -19,7 +20,8 @@ export function TitleBar() {
   const services = useApp((s) => s.services);
   const launchStep = useApp((s) => s.launchStep);
 
-  const launching = launchStep >= 0 && launchStep < launchSteps.length;
+  // Step 6 ("Lobby") = the start is done: then the badge says "Live"
+  const launching = isStarting(launchStep);
   const live = services.game === "running" || services.server === "running";
 
   return (
@@ -81,12 +83,32 @@ export function TitleBar() {
         <WindowButton label={maximized ? "Restore" : "Maximize"} onClick={toggleMaximizeWindow}>
           {maximized ? <Copy className="size-3.5 -scale-x-100" /> : <Square className="size-3.5" />}
         </WindowButton>
-        <WindowButton label="Close" onClick={closeWindow} danger>
+        <WindowButton label="Close" onClick={inTauri ? closeWindow : previewClose} danger>
           <X className="size-4" />
         </WindowButton>
       </div>
     </header>
   );
+}
+
+/**
+ * Browser preview stand-in for the close button. In the real launcher, Rust catches every close
+ * (X, Alt+F4, taskbar) and asks first via "app:close-requested" when something still runs.
+ */
+function previewClose() {
+  if (demoBusy()) {
+    useApp.setState({ closeRequest: { running: previewRunning() } });
+  }
+}
+
+/** Names of what runs in the preview, in the same words Rust uses. */
+function previewRunning(): string[] {
+  const { services, launchStep } = useApp.getState();
+  const names: string[] = [];
+  if (services.game !== "stopped") names.push("Your game");
+  if (services.server !== "stopped") names.push("Game server");
+  if (services.backend !== "stopped" || (launchStep >= 0 && names.length === 0)) names.push("Backend");
+  return names;
 }
 
 function WindowButton({

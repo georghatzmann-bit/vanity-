@@ -54,7 +54,9 @@ namespace HotkeyPersist
         bool MobileBuilds = false;
         bool InGameFog = true;
         bool FirstPerson = false;
-        bool SprintByDefault = true;
+        // [Niobium] "Always sprint" was removed. client.json keeps its
+        // "sprintByDefault" key (always written as false), and an old
+        // "true" in it is ignored.
         bool RespawnsEnabled = true;
     };
 
@@ -472,8 +474,8 @@ namespace HotkeyPersist
             object, "inGameFog", preferences.InGameFog);
         preferences.FirstPerson = ParseBoolField(
             object, "firstPerson", preferences.FirstPerson);
-        preferences.SprintByDefault = ParseBoolField(
-            object, "sprintByDefault", preferences.SprintByDefault);
+        // "sprintByDefault" is not read on purpose: the option is gone and
+        // stays off, even when an old file still says true.
         preferences.RespawnsEnabled = ParseBoolField(
             object, "respawnsEnabled", preferences.RespawnsEnabled);
         return preferences;
@@ -691,7 +693,7 @@ namespace HotkeyPersist
                 f << "    \"mobileBuilds\": " << boolean(preferences->MobileBuilds) << ",\n";
                 f << "    \"inGameFog\": " << boolean(preferences->InGameFog) << ",\n";
                 f << "    \"firstPerson\": " << boolean(preferences->FirstPerson) << ",\n";
-                f << "    \"sprintByDefault\": " << boolean(preferences->SprintByDefault) << ",\n";
+                f << "    \"sprintByDefault\": false,\n"; // removed option, always off
                 f << "    \"respawnsEnabled\": " << boolean(preferences->RespawnsEnabled) << "\n";
                 f << "  }";
             }

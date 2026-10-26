@@ -9,4 +9,5 @@ pub mod migrate;
 pub mod parkours;
 pub mod perfmode;
 pub mod profiles;
+pub mod startgate;
 pub mod version;

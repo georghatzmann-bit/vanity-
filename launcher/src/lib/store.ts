@@ -11,6 +11,7 @@ import {
   DEMO_APP_VERSION,
   type BubbleIniChanged,
   type ClientSettings,
+  type CloseRequested,
   type TrickshotPreset,
   type Config,
   type LogLine,
@@ -47,6 +48,17 @@ export const launchSteps = [
   { label: "Game server", hint: "loads the map, port 7777" },
   { label: "Lobby", hint: "press Play in the game" },
 ] as const;
+
+/**
+ * The last step ("Lobby"): Rust sends it when the game server is ready, and then the start is done.
+ * Steps 0 up to this one minus 1 mean a start is in progress ("Cancel start"); -1 = idle.
+ */
+export const LAUNCH_DONE_STEP = launchSteps.length - 1;
+
+/** True while a start is in progress (not yet done, not idle). */
+export function isStarting(step: number): boolean {
+  return step >= 0 && step < LAUNCH_DONE_STEP;
+}
 
 /** What to show on top of the app after start: nothing, the full welcome, or the "What's new" card. */
 export type WelcomeMode = "none" | "full" | "whatsnew";
@@ -95,12 +107,21 @@ interface AppState {
   bubbleIni: BubbleIniChanged | null;
   dismissBubbleIni: () => void;
 
+  /** Set when the window was asked to close while something still runs (event "app:close-requested"). */
+  closeRequest: CloseRequested | null;
+  dismissCloseRequest: () => void;
+
   init: () => Promise<void>;
 }
 
 const MAX_LOG_LINES = 3000;
 
-/** Browser preview only: ?page=library, ?welcome=1, ?whatsnew=1, ?bubbleini=1 (for screenshots). */
+/** "Always sprint" was removed: an old client.json may still have it on, but it always stays off. */
+function withoutSprint(settings: ClientSettings): ClientSettings {
+  return { ...settings, preferences: { ...settings.preferences, sprintByDefault: false } };
+}
+
+/** Browser preview only: ?page=library, ?welcome=1, ?whatsnew=1, ?bubbleini=1, ?closeconfirm=1 (for screenshots). */
 function previewParam(name: string): string | null {
   if (inTauri) return null;
   try {
@@ -141,7 +162,7 @@ export const useApp = create<AppState>()((set, get) => ({
   clientSettings: defaultClientSettings,
   saveClientSettings: async (patch) => {
     const cur = get().clientSettings;
-    const next = { ...cur, ...patch, preferences: { ...cur.preferences, ...(patch.preferences ?? {}) } };
+    const next = withoutSprint({ ...cur, ...patch, preferences: { ...cur.preferences, ...(patch.preferences ?? {}) } });
     set({ clientSettings: next });
     try {
       await api.setClientSettings(next);
@@ -168,6 +189,9 @@ export const useApp = create<AppState>()((set, get) => ({
   bubbleIni: null,
   dismissBubbleIni: () => set({ bubbleIni: null }),
 
+  closeRequest: null,
+  dismissCloseRequest: () => set({ closeRequest: null }),
+
   init: async () => {
     if (get().ready) return;
     let config = emptyConfig;
@@ -192,7 +216,7 @@ export const useApp = create<AppState>()((set, get) => ({
     const startPage = previewParam("page");
     const page = PAGE_IDS.includes(startPage as PageId) ? (startPage as PageId) : get().page;
 
-    set({ config, clientSettings, appVersion: version, welcome, page, ready: true });
+    set({ config, clientSettings: withoutSprint(clientSettings), appVersion: version, welcome, page, ready: true });
 
     onEvent<Services>("services", (services) => set({ services }));
     onEvent<number>("launch:step", (launchStep) => set({ launchStep }));
@@ -216,10 +240,22 @@ export const useApp = create<AppState>()((set, get) => ({
     });
     // After a game with Bubble Builds: Fortnite saved Performance Mode as its default
     onEvent<BubbleIniChanged>("bubble:ini-changed", (payload) => set({ bubbleIni: payload }));
+    // The window was asked to close (X, Alt+F4, taskbar) while something runs: Rust waits for the answer
+    onEvent<CloseRequested>("app:close-requested", (payload) =>
+      set({
+        closeRequest: {
+          running: Array.isArray(payload?.running) ? payload.running.filter((n) => typeof n === "string") : [],
+          id: typeof payload?.id === "number" ? payload.id : undefined,
+        },
+      }),
+    );
 
     if (!inTauri) {
       if (previewParam("bubbleini")) {
         set({ bubbleIni: { path: "C:\\Users\\georg\\AppData\\Local\\FortniteGame\\Saved\\Config\\WindowsClient\\GameUserSettings.ini" } });
+      }
+      if (previewParam("closeconfirm")) {
+        set({ closeRequest: { running: ["Your game", "Game server", "Backend"] } });
       }
       startDemoLog();
     }

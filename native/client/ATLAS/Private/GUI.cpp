@@ -555,9 +555,6 @@ static HotkeyPersist::UserPreferences CaptureUserPreferences()
     preferences.FirstPerson =
         FConfiguration::bFirstPerson.load(
             std::memory_order_acquire);
-    preferences.SprintByDefault =
-        FConfiguration::bSprintByDefault.load(
-            std::memory_order_acquire);
     preferences.RespawnsEnabled =
         FConfiguration::bForceRespawns.load(
             std::memory_order_acquire);
@@ -584,8 +581,6 @@ static void ApplyUserPreferences(
         preferences.InGameFog, std::memory_order_release);
     FConfiguration::bFirstPerson.store(
         preferences.FirstPerson, std::memory_order_release);
-    FConfiguration::bSprintByDefault.store(
-        preferences.SprintByDefault, std::memory_order_release);
     FConfiguration::bForceRespawns.store(
         preferences.RespawnsEnabled, std::memory_order_release);
 }
@@ -5307,25 +5302,6 @@ void GUI_Render()
         ControlHint("0 = normal. Higher = blurrier, but often runs smoother.", sliderWidth);
     }
     EndSectionBody();
-
-    if (VersionInfo.FortniteVersion < 5.00)
-    {
-        SectionLabel("Movement");
-        BeginSectionBody();
-        if (PersistentCheckbox(
-                "Always sprint###sprint_by_default",
-                FConfiguration::bSprintByDefault))
-        {
-            AtlasDiagnostics::WriteLine(
-                "sprint-by-default changed=%s",
-                FConfiguration::bSprintByDefault.load(
-                    std::memory_order_acquire)
-                    ? "enabled"
-                    : "disabled");
-        }
-        ControlHint("You run without holding the sprint key.", CW, true);
-        EndSectionBody();
-    }
 
     SectionLabel("Field of view");
     {

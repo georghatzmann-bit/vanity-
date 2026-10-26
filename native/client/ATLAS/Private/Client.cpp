@@ -6306,33 +6306,6 @@ static void RejectArenaScoringAlert(UObject* alert)
 	++state.RejectedAlertCursor;
 }
 
-static void ApplyLegacySprintByDefault(
-	AFortPlayerControllerAthena* playerController)
-{
-	if (VersionInfo.FortniteVersion >= 5.00 ||
-		!playerController ||
-		!playerController->HasbWantsToSprint())
-	{
-		return;
-	}
-
-	const bool enabled =
-		FConfiguration::bSprintByDefault.load(
-			std::memory_order_acquire);
-	static bool wasEnabled = false;
-
-	// bWantsToSprint is the pre-5.00 controller's local sprint intent.
-	// Reassert it while enabled because the normal input/reload/build paths
-	// are allowed to clear it. The game's own movement code still decides
-	// whether the pawn can sprint in its current state.
-	if (enabled)
-		playerController->bWantsToSprint = true;
-	else if (wasEnabled)
-		playerController->bWantsToSprint = false;
-
-	wasEnabled = enabled;
-}
-
 namespace
 {
 	constexpr uint64 kFirstPersonParameterFlag = 0x80;
@@ -11798,8 +11771,6 @@ static UWorld* ClientGameThreadTick()
 
 	if (playerController)
 	{
-		ApplyLegacySprintByDefault(playerController);
-
 		auto cheatManager = playerController->CheatManager;
 		if (playerController != observedController || cheatManager != observedManager)
 		{

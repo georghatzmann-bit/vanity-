@@ -35,13 +35,13 @@ const JOIN_IP_KEY = "niobium.joinIp";
 
 /** Which tab of the F9 preview shows a setting, and the id of its row there. */
 type Spot = { tab: F9Tab; id: string };
-const prefSpot: Record<keyof ClientPreferences, Spot> = {
+/** "Always sprint" (sprintByDefault) was removed, so it has no row anywhere. */
+const prefSpot: Record<Exclude<keyof ClientPreferences, "sprintByDefault">, Spot> = {
   editOnRelease: { tab: 0, id: "eor" },
   resetOnRelease: { tab: 0, id: "ror" },
   disablePreEdits: { tab: 0, id: "pre" },
   mobileBuilds: { tab: 0, id: "mobile" },
   inGameFog: { tab: 0, id: "fog" },
-  sprintByDefault: { tab: 0, id: "sprint" },
   respawnsEnabled: { tab: 0, id: "respawn" },
   firstPerson: { tab: 0, id: "fp" },
   slashKey: { tab: 2, id: "slash" },
@@ -79,8 +79,9 @@ export function IngameMenuPage() {
 
   const pref = (patch: Partial<ClientPreferences>) => {
     save({ preferences: { ...s.preferences, ...patch } });
-    const key = Object.keys(patch)[0] as keyof ClientPreferences | undefined;
-    if (key) point(prefSpot[key]);
+    const key = Object.keys(patch)[0] as keyof typeof prefSpot | undefined;
+    const spot = key ? prefSpot[key] : undefined;
+    if (spot) point(spot);
   };
 
   const rememberIp = (ip: string) => {
@@ -191,9 +192,6 @@ export function IngameMenuPage() {
             <div className="flex flex-col divide-y divide-white/[0.05]">
               <SettingRow label="Respawn after you die" hint="You drop back in from the sky – great for practice.">
                 <Switch checked={s.preferences.respawnsEnabled} onCheckedChange={(v) => pref({ respawnsEnabled: v })} />
-              </SettingRow>
-              <SettingRow label="Always sprint" hint="You run without holding the sprint key (only Fortnite versions before 5.0).">
-                <Switch checked={s.preferences.sprintByDefault} onCheckedChange={(v) => pref({ sprintByDefault: v })} />
               </SettingRow>
               <SettingRow label="First person" hint="You see through your character's eyes.">
                 <Switch checked={s.preferences.firstPerson} onCheckedChange={(v) => pref({ firstPerson: v })} />
@@ -647,10 +645,6 @@ function MainTab({ s }: { s: ClientSettings }) {
         <F9Check id="fog" label="In-game fog" on={p.inGameFog} hint="Off = clearer view into the distance." />
         <F9Slider label="Simpler textures" value="0" fill={0} />
         <F9Hint text="0 = normal. Higher = blurrier, but often runs smoother." />
-      </F9Body>
-      <F9Section label="Movement" />
-      <F9Body>
-        <F9Check id="sprint" label="Always sprint" on={p.sprintByDefault} hint="You run without holding the sprint key." />
       </F9Body>
       <F9Section label="Field of view" />
       <F9Body>

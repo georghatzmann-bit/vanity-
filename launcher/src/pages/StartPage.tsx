@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowUpRight,
@@ -12,6 +13,7 @@ import {
   Square,
   UserPlus,
   Waypoints,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -30,7 +32,7 @@ import { GlowCard, GradientText, HeroBackdrop, NumberTicker, ProgressBeam, Shimm
 import { runDemoLaunch, stopDemoLaunch } from "@/components/LaunchDemoDriver";
 import { api, BACKEND_PORT, GAME_SERVER_PORT, inTauri, type ServiceStatus } from "@/lib/api";
 import { EASE_IN, EASE_OUT } from "@/lib/motion";
-import { activeProfile, buildOf, launchSteps, useApp, type PageId } from "@/lib/store";
+import { activeProfile, buildOf, isStarting, LAUNCH_DONE_STEP, launchSteps, useApp, type PageId } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 const swap = {
@@ -48,13 +50,20 @@ export function StartPage() {
   const profile = activeProfile(config);
   const build = buildOf(config, profile?.buildId);
   const total = launchSteps.length;
-  const running = launchStep >= 0 && launchStep < total;
-  const done = launchStep >= total;
+  // Rust sends 0–5 while starting and 6 ("Lobby") when the server is ready – then the start is done
+  const running = isStarting(launchStep);
+  const done = launchStep >= LAUNCH_DONE_STEP;
   const busy = running || done;
+  /** "Stop all" / "Cancel start" was clicked and Rust is still stopping things. */
+  const [stopping, setStopping] = useState(false);
   // Untested builds start too (Rust only warns); only versions Niobium can't start are blocked
   const canStart = Boolean(build) && build?.support !== "unsupported";
 
+  /** A click on "Host & Play" is being handled (a double click must not start twice). */
+  const startClicked = useRef(false);
+
   const start = async () => {
+    if (startClicked.current || useApp.getState().launchStep >= 0) return;
     if (!profile) {
       toast.error("No profile yet", { description: "Add a build in the Library first." });
       return;
@@ -63,20 +72,32 @@ export function StartPage() {
       runDemoLaunch();
       return;
     }
+    startClicked.current = true;
     try {
       await api.hostAndPlay(profile.id);
     } catch (e) {
       toast.error("Couldn't start", { description: String(e) });
+    } finally {
+      startClicked.current = false;
     }
   };
 
+  // During a start this cancels it: Rust launches nothing more, kills what already runs
+  // and logs "Start cancelled.". Afterwards the steps go back to -1.
   const stop = async () => {
+    if (stopping) return;
     if (!inTauri) {
-      stopDemoLaunch();
-      toast("Everything stopped");
+      toast(stopDemoLaunch() ? "Start cancelled." : "Everything stopped");
       return;
     }
-    await api.stopAll();
+    setStopping(true);
+    try {
+      await api.stopAll();
+    } catch (e) {
+      toast.error("Couldn't stop everything", { description: String(e) });
+    } finally {
+      setStopping(false);
+    }
   };
 
   const setActive = (id: string) => {
@@ -176,13 +197,14 @@ export function StartPage() {
                   <ShimmerButton
                     size="xl"
                     tone="neutral"
-                    loading={running}
+                    loading={stopping}
+                    aria-busy={stopping}
                     sheenOnMount={false}
-                    icon={<Square className="size-4 fill-current" />}
+                    icon={running ? <X className="size-5" /> : <Square className="size-4 fill-current" />}
                     onClick={stop}
                     className="min-w-60"
                   >
-                    {running ? "Starting… · Cancel" : "Stop all"}
+                    {stopping ? "Stopping…" : running ? "Cancel start" : "Stop all"}
                   </ShimmerButton>
                 </motion.div>
               ) : (
@@ -251,7 +273,7 @@ export function StartPage() {
         actions={<LaunchStateBadge step={launchStep} total={total} />}
         bodyClassName="pt-6 pb-6"
       >
-        <StepTimeline steps={launchSteps} current={launchStep} />
+        <StepTimeline steps={launchSteps} current={done ? total : launchStep} />
       </Panel>
 
       {/* Services */}
@@ -280,7 +302,7 @@ function Dot() {
 }
 
 function LaunchStateBadge({ step, total }: { step: number; total: number }) {
-  const state = step < 0 ? "idle" : step >= total ? "done" : "running";
+  const state = step < 0 ? "idle" : step >= LAUNCH_DONE_STEP ? "done" : "running";
   return (
     <AnimatePresence mode="wait" initial={false}>
       <motion.span

@@ -128,9 +128,10 @@ Arena from 8.20, Zero Build and Arena Zero Build from 20.00, Playground from 4.5
 its button only up to 11.30). The server refuses a playlist that is too new for the build, with a note.
 
 In-game menu per version (from the ATLAS code, names as in the "Main" tab): "Edit on release" only
-below Unreal 4.24 (up to 10.40), "Disable pre-edits" below 15.20, "Reset on release" below 24.30, "Always
-sprint" below 5.00, "Free camera" up to 10.40; field of view, first person, target info, "Respawn after you
-die", the console and the "Trickshot" tab on every version. Toggles a version doesn't have are simply hidden.
+below Unreal 4.24 (up to 10.40), "Disable pre-edits" below 15.20, "Reset on release" below 24.30, "Free
+camera" up to 10.40; field of view, first person, target info, "Respawn after you die", the console and the
+"Trickshot" tab on every version. Toggles a version doesn't have are simply hidden. "Always sprint" was
+removed: it is off for everyone, and an old `"sprintByDefault": true` in client.json is ignored.
 
 The redirect writes `%LOCALAPPDATA%\Niobium\logs\redirect.log`: which pattern matched, whether the
 redirect is in place ("Ready - requests to Epic hosts now go to your own backend"), whether the
@@ -472,9 +473,10 @@ On/off: pipe key `bTrickshotDetection` (default: on; in the launcher "Match Cont
 - On load it reads `%APPDATA%\Niobium\client.json` and writes changes back. Format (taken over from ATLAS
   Console; the launcher writes the same): `{ "hotkey": 120, "joinHotkey": 116, "consoleMode": 0,
   "preferences": { "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": true, "respawnsEnabled": true,
-  "firstPerson": false, "sprintByDefault": true, "inGameFog": true, "mobileBuilds": false, "slashKey": true,
+  "firstPerson": false, "sprintByDefault": false, "inGameFog": true, "mobileBuilds": false, "slashKey": true,
   "saveTogglePreferences": true }, "commands": [], "macros": [] }` (keys = Windows VK codes; `consoleMode` 0 =
-  Niobium console, 1 = original Unreal console).
+  Niobium console, 1 = original Unreal console). `sprintByDefault` stays in the file only so old files still
+  load: "Always sprint" was removed, the launcher always writes `false` and the menu ignores the key.
   Trickshot presets are **not** in here but in the launcher's `config.json` (`trickshotPresets`). You make them
   on the "In-game Menu" page → "Trickshot presets" and run them on "Match Control" → "Trickshot" → "Your
   presets" (command by command through the pipe).

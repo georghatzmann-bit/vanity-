@@ -144,7 +144,11 @@ export interface ClientPreferences {
   mobileBuilds: boolean;
   inGameFog: boolean;
   firstPerson: boolean;
-  sprintByDefault: boolean;
+  /**
+   * Removed ("Always sprint" is gone). Older client.json files may still have it, so it stays
+   * readable, but it is always off: the launcher writes false and nothing sends its command.
+   */
+  sprintByDefault?: boolean;
   respawnsEnabled: boolean;
 }
 
@@ -180,6 +184,17 @@ export interface BubbleIniChanged {
   path: string;
 }
 
+/**
+ * Payload of the event "app:close-requested": the window was asked to close while something
+ * still runs or starts. `running` holds plain names like "Your game", "Game server", "Backend".
+ * `id` = the question's number: the dialog answers `close_prompt_shown(id)` once it is on screen,
+ * otherwise Rust stops everything and closes after a few seconds (missing in the browser preview).
+ */
+export interface CloseRequested {
+  running: string[];
+  id?: number;
+}
+
 export const defaultSettings: Settings = {
   playerName: "Player",
   launchArgs: "-d3d11",
@@ -209,7 +224,7 @@ export const defaultClientSettings: ClientSettings = {
     mobileBuilds: false,
     inGameFog: true,
     firstPerson: false,
-    sprintByDefault: true,
+    sprintByDefault: false,
     respawnsEnabled: true,
   },
   commands: [],
@@ -315,6 +330,12 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
       return null;
     case "app_ready":
       return null;
+    case "quit_app":
+      // Nothing to close in the browser – the dialog shows a toast instead
+      console.info("[Preview] quit_app");
+      return null;
+    case "close_prompt_shown":
+      return null;
     case "pending_log_lines":
       return [] satisfies LogLine[];
     // Server commands: there is no server in the preview – we pretend everything arrived.
@@ -370,7 +391,12 @@ export const api = {
   pendingLogLines: () => call<LogLine[]>("pending_log_lines"),
 
   hostAndPlay: (profileId: string) => call<void>("host_and_play", { profileId }),
+  /** Stops everything. During a start it also cancels the start (Rust resets the steps to -1). */
   stopAll: () => call<void>("stop_all"),
+  /** Stops everything (game, game server, backend, helpers) and then closes the launcher. */
+  quitApp: () => call<void>("quit_app"),
+  /** Tells Rust the "Close Niobium?" dialog is on screen (else it closes by itself after a few seconds). */
+  closePromptShown: (id: number) => call<void>("close_prompt_shown", { id }),
   joinIp: (address: string) => call<void>("join_ip", { address }),
   serverExec: (text: string) => call<void>("server_exec", { text }),
   serverConfig: (key: string, value: unknown) => call<void>("server_config", { key, value }),
@@ -414,7 +440,8 @@ export type EventName =
   | "server:event"
   | "trickshot"
   | "detect"
-  | "bubble:ini-changed";
+  | "bubble:ini-changed"
+  | "app:close-requested";
 
 /** Like `onEvent`, but resolves only once the listener is really registered (preview: at once). */
 export async function onEventReady<T>(name: EventName, handler: (payload: T) => void): Promise<() => void> {
