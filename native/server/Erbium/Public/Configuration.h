@@ -508,6 +508,10 @@ public:
     static inline std::atomic_bool bInfiniteMats{ true };
     static inline std::atomic_bool bInfiniteAmmo{ true };
 
+    // NIOBIUM: "Reset builds" (Erbium/Private/QuickReset.cpp). Players with the F9 key set can reset
+    // their edited builds without opening edit mode. Off = the server doesn't answer the F9 hello.
+    static inline std::atomic_bool bAllowResetBuilds{ true };
+
     // NIOBIUM: Fortnite's own AI player bots, only on 19.10 CL 18675304 (FortniteGame/Private/
     // PlayerBots_19_10.cpp). Set by the launcher before the map loads. Off = no bots, as before.
     static inline std::atomic_bool bPlayerBots{ false };

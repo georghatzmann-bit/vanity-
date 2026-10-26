@@ -1,6 +1,5 @@
 import { useEffect, useRef, type ComponentType } from "react";
 import { AnimatePresence, MotionConfig } from "motion/react";
-import { BubbleIniDialog } from "@/components/bubble/BubbleIniDialog";
 import { PageTransition, Skeleton } from "@/components/fx";
 import { Background } from "@/components/layout/Background";
 import { CloseConfirmDialog } from "@/components/layout/CloseConfirmDialog";
@@ -138,7 +137,6 @@ export function App() {
             {ready && welcome === "whatsnew" && <WhatsNew key="whatsnew" />}
           </AnimatePresence>
 
-          <BubbleIniDialog />
           <CloseConfirmDialog />
           <Toaster position="bottom-right" />
         </div>

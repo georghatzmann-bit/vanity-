@@ -23,7 +23,7 @@ import { GlowCard, NewDot, Stagger } from "@/components/fx";
 import { useBubbleSupport } from "@/hooks/use-bubble-support";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { api, BACKEND_PORT, GAME_SERVER_PORT, openFolder, type Settings } from "@/lib/api";
-import { bubbleText, type BubbleLevel } from "@/lib/bubble";
+import { bubbleText, isExperimentalLevel, needsLowMeshes, type BubbleLevel } from "@/lib/bubble";
 import { EASE_OUT, SPRING_PLAYFUL } from "@/lib/motion";
 import { activeProfile, buildOf, useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -239,7 +239,7 @@ function BubbleBuildsCard({ on, onChange }: { on: boolean; onChange: (v: boolean
             <label htmlFor="set-bubble" className="text-[15px] font-semibold">
               {bubbleText.label}
             </label>
-            {level === "experimental" ? (
+            {isExperimentalLevel(level) ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Badge variant="warning" tabIndex={0} className="cursor-help">
@@ -247,7 +247,7 @@ function BubbleBuildsCard({ on, onChange }: { on: boolean; onChange: (v: boolean
                     {bubbleText.experimentalBadge}
                   </Badge>
                 </TooltipTrigger>
-                <TooltipContent className="max-w-64">{bubbleText.experimentalHint}</TooltipContent>
+                <TooltipContent className="max-w-64">{level === "lowMeshes" ? bubbleText.lowMeshesHint : bubbleText.experimentalHint}</TooltipContent>
               </Tooltip>
             ) : (
               <Badge variant="gold" className="gap-1.5">
@@ -256,7 +256,9 @@ function BubbleBuildsCard({ on, onChange }: { on: boolean; onChange: (v: boolean
               </Badge>
             )}
           </div>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">{bubbleText.hint}</p>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+            {level === "lowMeshes" ? bubbleText.lowMeshesHint : bubbleText.hint}
+          </p>
 
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
@@ -270,6 +272,11 @@ function BubbleBuildsCard({ on, onChange }: { on: boolean; onChange: (v: boolean
             </motion.div>
           </AnimatePresence>
 
+          {level && level !== "unavailable" && (
+            <p className="mt-2 max-w-2xl text-[11px] leading-relaxed text-faint">
+              {needsLowMeshes(level) ? bubbleText.settingsNoteMeshes : bubbleText.settingsNotePerformance}
+            </p>
+          )}
           {gameRunning && <p className="mt-2 text-[11px] text-faint">{bubbleText.restartHint} A change applies on the next launch.</p>}
         </div>
 
@@ -312,11 +319,19 @@ function BuildStatus({ version, level }: { version: string | null; level: Bubble
       </p>
     );
   }
+  if (level === "lowMeshes") {
+    return (
+      <p className="inline-flex items-start gap-2 rounded-lg bg-warning/[0.08] px-3 py-2 text-xs text-warning ring-1 ring-warning/20">
+        <FlaskConical className="mt-px size-3.5 shrink-0" />
+        <span>Works as an experiment on your active build, {name}. It's not the exact Chapter 2 look.</span>
+      </p>
+    );
+  }
   return (
     <p className="inline-flex items-start gap-2 rounded-lg bg-white/[0.04] px-3 py-2 text-xs text-muted-foreground ring-1 ring-white/[0.06]">
       <CircleSlash className="mt-px size-3.5 shrink-0" />
       <span>
-        Your active build is {name}. {bubbleText.unavailableHint}
+        Not available on your active build, {name}. {bubbleText.unavailableWhere}
       </span>
     </p>
   );

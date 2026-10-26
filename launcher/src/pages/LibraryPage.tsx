@@ -252,7 +252,7 @@ function BubbleRow({ version }: { version: string }) {
         <Bubbles />
         Supported
       </Badge>
-    ) : info.level === "experimental" ? (
+    ) : info.level === "experimental" || info.level === "lowMeshes" ? (
       <Badge variant="warning">
         <FlaskConical />
         Experimental

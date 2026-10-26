@@ -2,7 +2,7 @@ import { Bubbles, CircleSlash, FlaskConical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBubbleSupport } from "@/hooks/use-bubble-support";
-import { bubbleText } from "@/lib/bubble";
+import { bubbleText, isExperimentalLevel } from "@/lib/bubble";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,8 +20,9 @@ export function BubbleStatus({
 }) {
   const info = useBubbleSupport(version);
   if (!info || (hideUnavailable && info.level === "unavailable")) return null;
-  const Icon = info.level === "supported" ? Bubbles : info.level === "experimental" ? FlaskConical : CircleSlash;
-  const variant = info.level === "supported" ? "default" : info.level === "experimental" ? "warning" : "muted";
+  const experimental = isExperimentalLevel(info.level);
+  const Icon = info.level === "supported" ? Bubbles : experimental ? FlaskConical : CircleSlash;
+  const variant = info.level === "supported" ? "default" : experimental ? "warning" : "muted";
   return (
     <Tooltip>
       <TooltipTrigger asChild>

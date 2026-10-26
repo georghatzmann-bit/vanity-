@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState, Kbd, PageHeader, PageShell, Panel, Reveal, SettingRow, ValueChip } from "@/components/common";
 import { LogoMark } from "@/components/layout/Logo";
@@ -25,7 +26,22 @@ import { pageGroup, pageLabel } from "@/components/layout/nav";
 import { useBubbleSupport } from "@/hooks/use-bubble-support";
 import { useCalmMotion } from "@/hooks/use-calm-motion";
 import { api, inTauri, type ClientPreferences, type ClientSettings } from "@/lib/api";
-import { bubbleText, type BubbleBuildsInfo } from "@/lib/bubble";
+import { bubbleText, isExperimentalLevel, needsLowMeshes, unavailableHint, type BubbleBuildsInfo } from "@/lib/bubble";
+import {
+  BUBBLE_STRENGTH,
+  bubbleLookText,
+  bubbleStrengthOf,
+  editRoute,
+  editText,
+  epicOwnsResetBuilding,
+  epicSettingName,
+  freeCameraAvailable,
+  nativeEditHint,
+  resetBuildsKeyProblem,
+  resetBuildsStatus,
+  resetBuildsText,
+  type EditFeature,
+} from "@/lib/f9";
 import { EASE_OUT, SPRING_UI } from "@/lib/motion";
 import { levelWord, parkours } from "@/lib/parkours";
 import { activeProfile, buildOf, keyName, useApp, vkFromEvent } from "@/lib/store";
@@ -46,7 +62,23 @@ const prefSpot: Record<Exclude<keyof ClientPreferences, "sprintByDefault">, Spot
   firstPerson: { tab: 0, id: "fp" },
   slashKey: { tab: 2, id: "slash" },
   saveTogglePreferences: { tab: 2, id: "remember" },
+  bubbleLook: { tab: 0, id: "bubblelook" },
+  bubbleStrength: { tab: 0, id: "bubblelook" },
+  resetBuilds: { tab: 2, id: "resetbuilds" },
+  resetBuildsKey: { tab: 2, id: "resetkey" },
 };
+
+/** The three Editing switches, in menu order, and their row ids in the F9 preview. */
+const EDIT_FEATURES: { feature: EditFeature; spot: string }[] = [
+  { feature: "editOnRelease", spot: "eor" },
+  { feature: "resetOnRelease", spot: "ror" },
+  { feature: "disablePreEdits", spot: "pre" },
+];
+
+/** Keys Niobium already uses (menu, join, saved commands) – the Reset builds key must differ. */
+function takenKeys(s: ClientSettings) {
+  return { menuKey: s.hotkey, joinKey: s.joinHotkey, commandKeys: savedCommands(s).map((e) => e.vk).filter((vk) => vk > 0) };
+}
 
 /** Fortnite version of the active profile's build (for the Bubble Builds status). */
 function useActiveVersion(): string {
@@ -126,6 +158,23 @@ export function IngameMenuPage() {
 
   const menuKey = keyName(s.hotkey);
   const bubbleChip = bubbleChipFor(bubble, bubbleOn, version);
+  const p = s.preferences;
+  const taken = takenKeys(s);
+  const resetKey = p.resetBuildsKey ?? 0;
+  const epicResets = epicOwnsResetBuilding(version);
+  // Bubble look pauses in the game while Epic's own bubbles are on (Performance Mode, Meshes Low)
+  const bubbleLookPaused = bubbleOn && needsLowMeshes(bubble?.level);
+  const [strengthDraft, setStrengthDraft] = useState<number | null>(null);
+  const strength = strengthDraft ?? bubbleStrengthOf(p.bubbleStrength);
+
+  /** Menu and join key: never the Reset builds key while that is on (like the F9 menu). */
+  const keyFree = (vk: number) => {
+    if (p.resetBuilds && resetKey && vk === resetKey) {
+      toast.error(resetBuildsText.keyTaken);
+      return false;
+    }
+    return true;
+  };
 
   return (
     <PageShell>
@@ -146,15 +195,56 @@ export function IngameMenuPage() {
           {/* Same names as in the F9 menu ("Main" tab), so you find the same words there */}
           <Panel title="Editing" icon={PencilRuler} description="Faster edits, like in Arena.">
             <div className="flex flex-col divide-y divide-white/[0.05]">
-              <SettingRow label="Edit on release" hint="Your edit is confirmed as soon as you let go of the key.">
-                <Switch checked={s.preferences.editOnRelease} onCheckedChange={(v) => pref({ editOnRelease: v })} />
-              </SettingRow>
-              <SettingRow label="Reset on release" hint="Your reset is confirmed as soon as you let go of the key.">
-                <Switch checked={s.preferences.resetOnRelease} onCheckedChange={(v) => pref({ resetOnRelease: v })} />
-              </SettingRow>
-              <SettingRow label="Disable pre-edits" hint="You never edit the see-through preview piece by accident.">
-                <Switch checked={s.preferences.disablePreEdits} onCheckedChange={(v) => pref({ disablePreEdits: v })} />
-              </SettingRow>
+              {EDIT_FEATURES.map(({ feature }) =>
+                editRoute(feature, version) === "hook" ? (
+                  <SettingRow key={feature} label={editText[feature].label} hint={editText[feature].hookHint}>
+                    <Switch checked={p[feature]} onCheckedChange={(v) => pref({ [feature]: v })} />
+                  </SettingRow>
+                ) : (
+                  <SettingRow
+                    key={feature}
+                    label={editText[feature].label}
+                    hint={
+                      <>
+                        On {version}, this is Fortnite's own setting {epicSettingName(feature, version)}. Change it in the game ({menuKey} → Main) or in
+                        Fortnite's settings.
+                      </>
+                    }
+                  >
+                    <ValueChip className="font-sans">In game</ValueChip>
+                  </SettingRow>
+                ),
+              )}
+              {epicResets ? (
+                <SettingRow label={resetBuildsText.label} hint={resetBuildsText.epicOwns}>
+                  <ValueChip className="font-sans">In Fortnite</ValueChip>
+                </SettingRow>
+              ) : (
+                <>
+                  <SettingRow
+                    label={resetBuildsText.label}
+                    badge={<Badge variant="gold">New</Badge>}
+                    hint={
+                      <>
+                        {resetBuildsText.hint} <span className="text-faint">{resetBuildsText.serverNote}</span>
+                      </>
+                    }
+                  >
+                    <Switch checked={p.resetBuilds ?? false} onCheckedChange={(v) => pref({ resetBuilds: v })} />
+                  </SettingRow>
+                  <SettingRow label={resetBuildsText.keyLabel} hint={resetBuildsText.keyTip}>
+                    <VkCapture
+                      value={resetKey}
+                      emptyLabel="None"
+                      onChange={(vk) => {
+                        const problem = resetBuildsKeyProblem(vk, taken);
+                        if (problem) return void toast.error(problem);
+                        pref({ resetBuildsKey: vk });
+                      }}
+                    />
+                  </SettingRow>
+                </>
+              )}
             </div>
           </Panel>
 
@@ -163,15 +253,45 @@ export function IngameMenuPage() {
               <SettingRow label="Mobile Builds" hint="Draws builds and the world with less detail, like on phones. Works on every version, right away.">
                 <Switch checked={s.preferences.mobileBuilds} onCheckedChange={(v) => pref({ mobileBuilds: v })} />
               </SettingRow>
+              <SettingRow
+                label={bubbleLookText.label}
+                badge={<Badge variant="gold">New</Badge>}
+                hint={
+                  <>
+                    {bubbleLookText.hint}
+                    {bubbleLookPaused && <span className="text-faint"> It pauses while Bubble Builds are on.</span>}
+                  </>
+                }
+              >
+                <Switch checked={p.bubbleLook ?? false} onCheckedChange={(v) => pref({ bubbleLook: v })} />
+              </SettingRow>
+              {p.bubbleLook && (
+                <SettingRow label={bubbleLookText.strength} hint={bubbleLookText.strengthHint}>
+                  <Slider
+                    className="w-36"
+                    min={BUBBLE_STRENGTH.min}
+                    max={BUBBLE_STRENGTH.max}
+                    step={1}
+                    value={[strength]}
+                    aria-label={bubbleLookText.strength}
+                    onValueChange={([v]) => setStrengthDraft(v)}
+                    onValueCommit={([v]) => {
+                      setStrengthDraft(null);
+                      pref({ bubbleStrength: v });
+                    }}
+                  />
+                  <ValueChip className="min-w-9">{strength}</ValueChip>
+                </SettingRow>
+              )}
               <SettingRow label="In-game fog" hint="Off = clearer view into the distance.">
                 <Switch checked={s.preferences.inGameFog} onCheckedChange={(v) => pref({ inGameFog: v })} />
               </SettingRow>
               <SettingRow
                 label={bubbleText.label}
-                badge={bubble?.level === "experimental" ? <Badge variant="warning">{bubbleText.experimentalBadge}</Badge> : undefined}
+                badge={isExperimentalLevel(bubble?.level) ? <Badge variant="warning">{bubbleText.experimentalBadge}</Badge> : undefined}
                 hint={
                   <>
-                    {bubble?.note ?? bubbleText.unavailableHint}{" "}
+                    {bubble?.note ?? unavailableHint(version)}{" "}
                     {bubble && bubble.level !== "unavailable" && <span className="text-faint">You switch it in Settings.</span>}
                   </>
                 }
@@ -215,6 +335,7 @@ export function IngameMenuPage() {
                 <VkCapture
                   value={s.hotkey}
                   onChange={(vk) => {
+                    if (!keyFree(vk)) return;
                     save({ hotkey: vk });
                     point({ tab: 2, id: "menukey" });
                   }}
@@ -224,6 +345,7 @@ export function IngameMenuPage() {
                 <VkCapture
                   value={s.joinHotkey}
                   onChange={(vk) => {
+                    if (!keyFree(vk)) return;
                     save({ joinHotkey: vk });
                     point({ tab: 2, id: "joinkey" });
                   }}
@@ -419,7 +541,8 @@ function Segmented({ id, options, value, onChange }: { id: string; options: stri
 }
 
 /** Button that waits for the next key and saves it as a Windows key code. */
-function VkCapture({ value, onChange }: { value: number; onChange: (vk: number) => void }) {
+function VkCapture({ value, onChange, emptyLabel }: { value: number; onChange: (vk: number) => void; emptyLabel?: string }) {
+  const label = value ? keyName(value) : (emptyLabel ?? keyName(value));
   const [listening, setListening] = useState(false);
   useEffect(() => {
     if (!listening) return;
@@ -440,7 +563,7 @@ function VkCapture({ value, onChange }: { value: number; onChange: (vk: number) 
     <button
       type="button"
       onClick={() => setListening(true)}
-      aria-label={listening ? "Waiting for a key – press it now, Esc cancels" : `Change key, now ${keyName(value)}`}
+      aria-label={listening ? "Waiting for a key – press it now, Esc cancels" : `Change key, now ${label}`}
       className={cn(
         "relative h-9 min-w-24 overflow-hidden rounded-lg px-3 font-mono text-xs font-semibold transition-[background-color,box-shadow,color] duration-150 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
         listening
@@ -449,7 +572,7 @@ function VkCapture({ value, onChange }: { value: number; onChange: (vk: number) 
       )}
     >
       {listening && <span aria-hidden className="nb-loop absolute inset-0 animate-pulse bg-brand-violet/10" />}
-      <span className="relative">{listening ? "Press a key…" : keyName(value)}</span>
+      <span className="relative">{listening ? "Press a key…" : label}</span>
     </button>
   );
 }
@@ -596,7 +719,7 @@ function OverlayPreview({
                     transition={{ duration: 0.22, ease: EASE_OUT }}
                     className="flex min-w-0 flex-col gap-2 p-3 pr-3.5"
                   >
-                    {tab === 0 && <MainTab s={s} />}
+                    {tab === 0 && <MainTab s={s} version={version} bubble={bubble} bubbleOn={bubbleOn} />}
                     {tab === 1 && <CommandsTab saved={saved} />}
                     {tab === 2 && <OptionsTab s={s} bubble={bubble} bubbleOn={bubbleOn} version={version} />}
                     {tab === 3 && <TrickshotTab />}
@@ -611,15 +734,30 @@ function OverlayPreview({
         </motion.div>
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-faint">
-        A copy of the {keyName(s.hotkey)} menu, not a picture from the game. It shows your current settings. Some switches only appear on older Fortnite
-        versions.
+        A copy of the {keyName(s.hotkey)} menu for {version ? `Fortnite ${version}` : "your build"}, not a picture from the game. It shows your current
+        settings.
+        {EDIT_FEATURES.some(({ feature }) => editRoute(feature, version) === "native") && " A dash means Fortnite's own setting decides on this version."}
       </p>
     </div>
   );
 }
 
-function MainTab({ s }: { s: ClientSettings }) {
+function MainTab({
+  s,
+  version,
+  bubble,
+  bubbleOn,
+}: {
+  s: ClientSettings;
+  version: string;
+  bubble: BubbleBuildsInfo | null;
+  bubbleOn: boolean;
+}) {
   const p = s.preferences;
+  const strength = bubbleStrengthOf(p.bubbleStrength);
+  // Same states as DrawBubbleLookControls in GUI.cpp. The launcher can't see the game, so it shows
+  // what you see first: paused when Epic's own bubbles are on, otherwise waiting for the textures.
+  const paused = bubbleOn && needsLowMeshes(bubble?.level);
   return (
     <>
       <F9Section label="Join a server" />
@@ -630,9 +768,14 @@ function MainTab({ s }: { s: ClientSettings }) {
       </F9Body>
       <F9Section label="Editing" />
       <F9Body>
-        <F9Check id="eor" label="Edit on release" on={p.editOnRelease} hint="Your edit is confirmed as soon as you let go of the key." />
-        <F9Check id="ror" label="Reset on release" on={p.resetOnRelease} hint="Your reset is confirmed as soon as you let go of the key." />
-        <F9Check id="pre" label="Disable pre-edits" on={p.disablePreEdits} hint="You never edit the see-through preview piece by accident." />
+        {/* One route per version (EditFeatureRoutes.h): Niobium's switch, or Fortnite's own setting */}
+        {EDIT_FEATURES.map(({ feature, spot }) =>
+          editRoute(feature, version) === "hook" ? (
+            <F9Check key={feature} id={spot} label={editText[feature].label} on={p[feature]} hint={editText[feature].hookHint} />
+          ) : (
+            <F9Check key={feature} id={spot} label={editText[feature].label} on={false} fromGame hint={nativeEditHint(feature, version)} />
+          ),
+        )}
       </F9Body>
       <F9Section label="Graphics" />
       <F9Body>
@@ -642,6 +785,21 @@ function MainTab({ s }: { s: ClientSettings }) {
           on={p.mobileBuilds}
           hint="Draws builds and the world with less detail, like on phones. Works on every version, right away."
         />
+        <F9Check id="bubblelook" label={bubbleLookText.label} on={p.bubbleLook ?? false} hint={bubbleLookText.hint} />
+        {p.bubbleLook && (
+          <div className="flex flex-col gap-1.5 pl-[22px]">
+            {paused ? (
+              <F9Status text={bubbleLookText.paused} />
+            ) : (
+              <>
+                <F9Status text={bubbleLookText.waiting} />
+                <F9Slider label={bubbleLookText.strength} value={String(strength)} fill={(strength - BUBBLE_STRENGTH.min) / (BUBBLE_STRENGTH.max - BUBBLE_STRENGTH.min)} />
+                <F9Hint text={bubbleLookText.strengthHint} />
+                {bubbleOn && bubble?.level === "experimental" && <F9Hint text={bubbleLookText.tooBlurry} />}
+              </>
+            )}
+          </div>
+        )}
         <F9Check id="fog" label="In-game fog" on={p.inGameFog} hint="Off = clearer view into the distance." />
         <F9Slider label="Simpler textures" value="0" fill={0} />
         <F9Hint text="0 = normal. Higher = blurrier, but often runs smoother." />
@@ -666,7 +824,9 @@ function MainTab({ s }: { s: ClientSettings }) {
       <F9Section label="Other" />
       <F9Body>
         <F9Check id="fp" label="First person" on={p.firstPerson} hint="You see through your character's eyes." />
-        <F9Check id="freecam" label="Free camera" on={false} hint="The camera flies around freely while your character stays put." />
+        {freeCameraAvailable(version) && (
+          <F9Check id="freecam" label="Free camera" on={false} hint="The camera flies around freely while your character stays put." />
+        )}
         <F9Check id="targetinfo" label="Target info" on={false} hint="Shows info about whatever you are aiming at." />
       </F9Body>
     </>
@@ -723,42 +883,37 @@ function OptionsTab({
   version: string;
 }) {
   const p = s.preferences;
-  // Same three states as DrawBubbleBuildsStatus in GUI.cpp (the launcher adds -FeatureLevelES31 when it is on)
+  // Same states as DrawBubbleBuildsStatus in GUI.cpp (the launcher adds -FeatureLevelES31 when it is
+  // on, and sets Meshes to Low on 15.40 – 16.00 and 19.x)
   const level = bubble?.level ?? "unavailable";
   const unavailable = level === "unavailable";
   const status = unavailable
     ? `Bubble Builds: Not available on ${version || "this version"}`
-    : bubbleOn
-      ? "Bubble Builds: On (set in the launcher)"
-      : "Bubble Builds: Off – turn it on in the launcher, then restart the game.";
+    : !bubbleOn
+      ? "Bubble Builds: Off – turn it on in the launcher, then restart the game."
+      : needsLowMeshes(level)
+        ? "Bubble Builds: On (Performance Mode, Meshes Low)"
+        : "Bubble Builds: On (set in the launcher)";
+  const hint = unavailable
+    ? "Only on Fortnite 15.40 – 16.00 (Chapter 2, Seasons 5–6), and as an experiment on 19.x (Chapter 3, Season 1). Try Bubble look or Mobile Builds in the Main tab."
+    : level === "lowMeshes"
+      ? "Chapter 3 version: Performance Mode with Meshes set to Low. Builds look whiter and more see-through while they go up. The whole game has lower graphics. Turn it on or off in the launcher. Applies on next launch."
+      : `The see-through "bubble wrap" build look from Chapter 2 Seasons 5–6. ${bubbleText.restartHint}`;
+  const taken = takenKeys(s);
+  const resetKey = p.resetBuildsKey ?? 0;
+  const resetStatus = resetBuildsStatus(resetKey, taken);
   return (
     <>
       <F9Section label="Build look" />
       <F9Body>
         <F9Spot id="bubble">
-          <div className="flex items-start gap-2 text-[11px] leading-snug">
-            <span
-              className={cn(
-                "mt-[3px] size-2 shrink-0 rounded-full",
-                !unavailable && bubbleOn ? "bg-success shadow-[0_0_0_3px_rgb(34_197_94/0.18)]" : "ring-[1.4px] ring-muted-foreground ring-inset",
-              )}
-            />
-            <span>{status}</span>
-          </div>
+          <F9Status text={status} tone={!unavailable && bubbleOn ? "success" : "muted"} filled={!unavailable && bubbleOn} />
         </F9Spot>
-        {level === "experimental" && (
-          <>
-            <span className="w-fit rounded-full bg-warning/15 px-2 py-px text-[10px] text-warning ring-1 ring-warning/55">{bubbleText.experimentalBadge}</span>
-            <F9Hint text={bubbleText.experimentalHint} />
-          </>
+        {isExperimentalLevel(level) && (
+          <span className="w-fit rounded-full bg-warning/15 px-2 py-px text-[10px] text-warning ring-1 ring-warning/55">{bubbleText.experimentalBadge}</span>
         )}
-        <F9Hint
-          text={
-            unavailable
-              ? "Only on Fortnite 15.40 – 16.00 (Chapter 2, Seasons 5–6). Try Mobile Builds in the Main tab."
-              : `The see-through "bubble wrap" build look from Chapter 2 Seasons 5–6. ${bubbleText.restartHint}`
-          }
-        />
+        {level === "experimental" && <F9Hint text={bubbleText.experimentalHint} />}
+        <F9Hint text={hint} />
       </F9Body>
       <F9Section label="General" />
       <F9Body>
@@ -773,6 +928,21 @@ function OptionsTab({
           hint="It opens with / already typed – then just type god and press Enter. Only with the Niobium console."
         />
         <F9Check id="remember" label="Remember my settings" on={p.saveTogglePreferences} hint="Off = every toggle is back to normal the next time you start the game." />
+      </F9Body>
+      <F9Section label="Reset builds" />
+      <F9Body>
+        {epicOwnsResetBuilding(version) ? (
+          <F9Status text={resetBuildsText.epicOwns} />
+        ) : (
+          <>
+            <F9Check id="resetbuilds" label={resetBuildsText.label} on={p.resetBuilds ?? false} hint={resetBuildsText.hint} />
+            <F9Spot id="resetkey">
+              <F9Buttons labels={[`${resetBuildsText.keyLabel} [${resetKey ? keyName(resetKey) : "none"}]`]} />
+            </F9Spot>
+            <F9Hint text={resetBuildsText.keyTip} />
+            {p.resetBuilds && <F9Status text={resetStatus.text} tone={resetStatus.warn ? "warning" : "muted"} />}
+          </>
+        )}
       </F9Body>
       <F9Section label="Keys" />
       <F9Body>
@@ -907,6 +1077,23 @@ function F9Spot({ id, children, className }: { id: string; children: ReactNode; 
   );
 }
 
+/** Status row like StatusDotRow in GUI.cpp: a small dot, then the text. */
+function F9Status({ text, tone = "muted", filled = false }: { text: string; tone?: "success" | "warning" | "muted"; filled?: boolean }) {
+  return (
+    <div className={cn("flex items-start gap-2 text-[11px] leading-snug", tone === "warning" && "text-warning")}>
+      <span
+        className={cn(
+          "mt-[3px] size-2 shrink-0 rounded-full",
+          filled && tone === "success" && "bg-success shadow-[0_0_0_3px_rgb(34_197_94/0.18)]",
+          !filled && tone === "warning" && "ring-[1.4px] ring-warning ring-inset",
+          !filled && tone !== "warning" && "ring-[1.4px] ring-muted-foreground ring-inset",
+        )}
+      />
+      <span>{text}</span>
+    </div>
+  );
+}
+
 function F9Section({ label }: { label: string }) {
   return (
     <p className="mt-1 rounded-[3px] bg-white/[0.045] px-2 py-1 text-[11px] font-medium shadow-[inset_2px_0_0_var(--nb-violet)] first:mt-0">{label}</p>
@@ -968,29 +1155,34 @@ function F9Slider({ label, value, fill }: { label: string; value: string; fill: 
 }
 
 /** Checkbox like in the F9 menu (violet tick), the grey explanation below. */
-function F9Check({ id, label, on, hint }: { id: string; label: string; on: boolean; hint?: string }) {
+function F9Check({ id, label, on, hint, fromGame = false }: { id: string; label: string; on: boolean; hint?: string; fromGame?: boolean }) {
   return (
     <F9Spot id={id}>
       <div className="flex items-start gap-2">
         <span className="mt-px flex size-3.5 shrink-0 items-center justify-center rounded-[3px] bg-white/[0.07]">
           <svg viewBox="0 0 12 12" className="size-3" aria-hidden>
-            <motion.path
-              d="M2.4 6.3 4.9 8.7 9.7 3.4"
-              fill="none"
-              stroke="#9b7bff"
-              strokeWidth={1.8}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              initial={false}
-              animate={{ pathLength: on ? 1 : 0, opacity: on ? 1 : 0 }}
-              transition={{ duration: 0.25, ease: EASE_OUT }}
-            />
+            {fromGame ? (
+              // Fortnite's own value: only the game knows it
+              <path d="M3.2 6h5.6" fill="none" stroke="#9b7bff" strokeOpacity={0.7} strokeWidth={1.8} strokeLinecap="round" />
+            ) : (
+              <motion.path
+                d="M2.4 6.3 4.9 8.7 9.7 3.4"
+                fill="none"
+                stroke="#9b7bff"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                initial={false}
+                animate={{ pathLength: on ? 1 : 0, opacity: on ? 1 : 0 }}
+                transition={{ duration: 0.25, ease: EASE_OUT }}
+              />
+            )}
           </svg>
         </span>
         <div className="min-w-0">
           <p className="text-[11px] leading-tight">
             {label}
-            <span className="sr-only">{on ? " (on)" : " (off)"}</span>
+            <span className="sr-only">{fromGame ? " (Fortnite's own setting)" : on ? " (on)" : " (off)"}</span>
           </p>
           {hint && <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground/90">{hint}</p>}
         </div>

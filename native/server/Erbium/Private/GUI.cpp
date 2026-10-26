@@ -10060,6 +10060,10 @@ void GUI::Init()
 
                 AtomicCheckbox("Infinite Materials", FConfiguration::bInfiniteMats);
                 AtomicCheckbox("Infinite Ammo", FConfiguration::bInfiniteAmmo);
+                // NIOBIUM: "Reset builds" (QuickReset.cpp). Only affects players who set the F9 key.
+                AtomicCheckbox("Allow Reset Builds Key", FConfiguration::bAllowResetBuilds);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Players can reset their edited builds with their F9 key, without edit mode.");
                 AtomicCheckbox("Toggle Cheat Commands", FConfiguration::bEnableCheats);
                 TrickshotTabCheckbox("Show Trickshot Tab");
                 AtomicCheckbox("Siphon", FConfiguration::bSiphon);

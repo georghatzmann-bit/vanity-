@@ -19,6 +19,7 @@
 #include "../Public/FortAthenaMutator.h"
 #include <Erbium/Public/GUI.h>
 #include <Erbium/Public/PlayerLoadout.h>
+#include <Erbium/Public/QuickReset.h> // NIOBIUM: "Reset builds" (F9 key, server half)
 #include "../Public/FortAthenaCreativePortal.h"
 #include "../Public/FortInventory.h"
 #include <Engine/Public/NetDriver.h>
@@ -7840,16 +7841,28 @@ uint64_t InitializeBuildingActor_ = 0;
 uint64_t PostInitializeSpawnedBuildingActor_ = 0;
 void AFortPlayerControllerAthena::ServerEditBuildingActor(UObject* Context, FFrame& Stack)
 {
-    ABuildingSMActor* Building;
-    TSubclassOf<AActor> NewClass;
-    uint8 RotationIterations;
-    bool bMirrored;
+    ABuildingSMActor* Building = nullptr;
+    TSubclassOf<AActor> NewClass = nullptr;
+    // NIOBIUM: RotationIterations is int32 on 4.1-7.40 and uint8 from 8.51 on. StepCompiledIn copies
+    // the property's full size, so a uint8 local was overrun by 3 bytes on the old builds. A
+    // zero-initialised int32 holds both (the uint8 lands in the low byte).
+    int32 RotationIterations = 0;
+    bool bMirrored = false;
     Stack.StepCompiledIn(&Building);
     Stack.StepCompiledIn(&NewClass);
     Stack.StepCompiledIn(&RotationIterations);
     Stack.StepCompiledIn(&bMirrored);
     Stack.IncrementCode();
     auto PlayerController = (AFortPlayerControllerAthena*)Context;
+
+    // NIOBIUM: "Reset builds". Only the Edit right after this player's own arm message is handled
+    // there (also when they are editing that piece and it has the request's shape); everything
+    // else carries on below unchanged.
+    if (QuickReset::TryHandleArmedEdit(PlayerController, Building, NewClass, RotationIterations,
+            bMirrored))
+    {
+        return;
+    }
 
     if (!PlayerController || !Building || !NewClass || !Building->IsA<ABuildingSMActor>() ||
         !CanBePlacedByPlayer(NewClass) ||
@@ -7860,26 +7873,21 @@ void AFortPlayerControllerAthena::ServerEditBuildingActor(UObject* Context, FFra
 
     SetEditingPlayer(Building, nullptr);
 
-    auto ReplaceBuildingActor = (ABuildingSMActor * (*&)(ABuildingSMActor*, unsigned int,
-        TSubclassOf<AActor>, unsigned int, int, bool,
-        AFortPlayerControllerAthena*)) ReplaceBuildingActor_;
-    auto ReplaceBuildingActor__New = (ABuildingSMActor * (*&)(ABuildingSMActor*, unsigned int,
-        TSubclassOf<AActor>&, unsigned int, int, bool,
-        AFortPlayerControllerAthena*)) ReplaceBuildingActor_;
+    // NIOBIUM: P1 probe (log only) - what Fortnite's own edits and resets send.
+    const QuickReset::FEditProbe EditProbe = QuickReset::CaptureEditProbe(Building, NewClass,
+        RotationIterations, bMirrored);
 
-    ABuildingSMActor* NewBuild;
-
-    if (VersionInfo.FortniteVersion < 27)
-        NewBuild = ReplaceBuildingActor(Building, 1, NewClass, Building->CurrentBuildingLevel,
-            RotationIterations, bMirrored, PlayerController);
-    else
-        NewBuild = ReplaceBuildingActor__New(Building, 1, NewClass, Building->CurrentBuildingLevel,
-            RotationIterations, bMirrored, PlayerController);
+    // NIOBIUM: the < 27 / >= 27 ReplaceBuildingActor split now lives in QuickReset::CallReplaceBuildingActor,
+    // shared with the reset path.
+    ABuildingSMActor* NewBuild = QuickReset::CallReplaceBuildingActor(Building, NewClass,
+        RotationIterations, bMirrored, PlayerController);
 
     if (NewBuild)
     {
         NewBuild->bPlayerPlaced = true;
     }
+
+    QuickReset::LogEditProbe(EditProbe, NewBuild);
 }
 
 void AFortPlayerControllerAthena::ServerEndEditingBuildingActor(UObject* Context, FFrame& Stack)
@@ -19377,6 +19385,11 @@ void AFortPlayerControllerAthena::ServerCheat(UObject* Context, FFrame& Stack)
     {
         return;
     }
+    // NIOBIUM: "Reset builds" hello/arm ("nbedit:..."), never parsed as a cheat command.
+    if (QuickReset::HandleBridgeMessage(PlayerController, std::string(originalCommand.c_str())))
+    {
+        return;
+    }
     auto World = UWorld::GetWorld();
     if (!World || !SDK::MemReadable(World, sizeof(UWorld)) || !World->AuthorityGameMode)
     {
@@ -19430,7 +19443,7 @@ cheat spawnactor/summon <class/path> [s<size> | s<X>,<Y>,<Z>] [h<meters>] - Spaw
 cheat destroyall <class/path> - Destroys all actors of a class
 cheat copytarget - Copies the spawnable class path of the actor under your crosshair
 cheat deltarget - Destroys the actor your crosshair is aiming at
-cheat resetbuilds <radius> - Resets player builds, all of them without a radius
+cheat resetbuilds <radius> - Removes player builds, all of them without a radius
 cheat sethealth <amount> - Sets your pawn's health (0-100)
 cheat setshield <amount> - Sets your pawn's shield (0-100)
 cheat setmaxhealth <amount> - Sets your pawn's maximum health

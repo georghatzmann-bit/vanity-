@@ -12,7 +12,7 @@ use niobium_core::launchargs::{self, BubbleBuildsInfo};
 use niobium_core::profiles::{self, Config, Friend, Profile, Settings, TrickshotPreset};
 use niobium_core::version::{self, BuildInfo, DetectReport};
 
-use crate::engine::{Engine, LogLinePayload};
+use crate::engine::{Engine, LogLinePayload, Toast};
 
 type E<'a> = State<'a, Arc<Engine>>;
 type R<T> = Result<T, String>;
@@ -247,7 +247,9 @@ fn default_client_settings() -> serde_json::Value {
             "saveTogglePreferences": true, "slashKey": true,
             "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": true,
             "mobileBuilds": false, "inGameFog": true, "firstPerson": false,
-            "sprintByDefault": false, "respawnsEnabled": true
+            "sprintByDefault": false, "respawnsEnabled": true,
+            "bubbleLook": false, "bubbleStrength": 5,
+            "resetBuilds": false, "resetBuildsKey": 0
         },
         "commands": [], "macros": []
     })
@@ -355,6 +357,14 @@ pub fn pending_log_lines(engine: E) -> Vec<LogLinePayload> {
     engine.pending_log_lines()
 }
 
+/// Toasts sent before the UI listened to "toast" (e.g. "Fortnite's graphics settings were put
+/// back." right at start), oldest first. The UI calls this once, right after its "toast" listener
+/// is registered; later calls return an empty list.
+#[tauri::command]
+pub fn pending_toasts(engine: E) -> Vec<Toast> {
+    engine.pending_toasts()
+}
+
 /// The UI has loaded its config and drawn the first frame.
 #[tauri::command]
 pub fn app_ready(app: AppHandle) {
@@ -363,17 +373,12 @@ pub fn app_ready(app: AppHandle) {
 
 // --- Bubble Builds -------------------------------------------------------------------
 
-/// `{ level: "supported" | "experimental" | "unavailable", note }` for a Fortnite version.
+/// `{ level: "supported" | "experimental" | "lowMeshes" | "unavailable", note }` for a Fortnite
+/// version. Fortnite's own settings file is backed up and put back by the engine on its own
+/// (`Engine::gus_prepare`), so there is no command for it.
 #[tauri::command]
 pub fn bubble_builds_support(version: String) -> BubbleBuildsInfo {
     launchargs::bubble_builds_support(&version)
-}
-
-/// Puts the two remembered `[D3DRHIPreference]` lines back into Fortnite's GameUserSettings.ini
-/// (only after the user clicked "Reset" on the "bubble:ini-changed" question).
-#[tauri::command]
-pub fn reset_performance_mode_ini(engine: E) -> R<()> {
-    engine.reset_performance_mode_ini()
 }
 
 // --- AI bots ---------------------------------------------------------------------------

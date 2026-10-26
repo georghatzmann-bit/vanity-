@@ -72,6 +72,9 @@ pub fn run() {
             // Put the parkour list in place for the server DLL and the F9 menu (errors don't matter)
             engine::write_parkour_file(None);
             let engine = Arc::new(engine::Engine::new(app.handle().clone()));
+            // Bubble Builds: a GameUserSettings.ini backup left over from a crash or a close during
+            // a game is put back first, before anything else can touch that file.
+            engine.recover_gus_backup();
             if let Some(report) = &migration {
                 engine.after_migration(report);
             }
@@ -121,8 +124,8 @@ pub fn run() {
             commands::niobium_paths,
             commands::app_ready,
             commands::pending_log_lines,
+            commands::pending_toasts,
             commands::bubble_builds_support,
-            commands::reset_performance_mode_ini,
             commands::quit_app,
             commands::close_prompt_shown,
             commands::bots_support,

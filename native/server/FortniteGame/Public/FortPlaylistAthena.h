@@ -118,4 +118,5 @@ public:
     DEFINE_PROP(JoinInProgressMatchType, FText);
     DEFINE_PROP(ScoringData, FWinConditionScoreData);
     DEFINE_PROP(bDisplayScoreInHUD, bool);
+    DEFINE_PROP(bAllowEditingEnemyWalls, bool); // NIOBIUM: "Reset builds" team rule; missing on 4.1, check Has first
 };

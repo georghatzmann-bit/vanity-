@@ -17,7 +17,7 @@ use niobium_core::earlylog::EarlyLines;
 use niobium_core::helperprocs::HelperPids;
 use niobium_core::launchargs;
 use niobium_core::logparse::{self, Detection};
-use niobium_core::perfmode;
+use niobium_core::perfmode::{self, MeshChange, Prepared, Restored};
 use niobium_core::profiles::{self, Config, Profile, BACKEND_PORT, GAME_SERVER_PORT};
 use niobium_core::startgate::{wait_for, Busy, ClosePrompt, StartGate, StartToken, Wait};
 use niobium_core::version::{self, BuildInfo, Support};
@@ -29,9 +29,6 @@ use crate::proc;
 const DLL_REDIRECT: &str = "niobium_redirect.dll";
 const DLL_SERVER: &str = "niobium_server.dll";
 const DLL_CLIENT: &str = "niobium_client.dll";
-
-/// Tauri event when Fortnite saved Performance Mode as the default (payload `{ path }`).
-pub const EVENT_BUBBLE_INI_CHANGED: &str = "bubble:ini-changed";
 
 /// Tauri event when the user wants to close the main window while something still runs
 /// (payload [`CloseRequest`]). The UI asks "Close Niobium?" and calls `quit_app` on "Stop & close".
@@ -46,6 +43,9 @@ const CAT: &str = "Niobium";
 
 /// The one log line when "Stop all" (or closing) ends a start that was still running.
 const START_CANCELLED: &str = "Start cancelled.";
+
+/// Log line and toast once Fortnite's settings file has its original lines back (Bubble Builds).
+const GUS_PUT_BACK: &str = "Fortnite's graphics settings were put back.";
 
 /// Payload of [`EVENT_CLOSE_REQUESTED`]: what still runs, in plain words
 /// (e.g. `["Your game", "Game server", "Backend"]`), and the question's number. The UI answers
@@ -146,12 +146,17 @@ pub struct Engine {
     pub config: Mutex<Config>,
     pub running: Mutex<Running>,
     pub signals: Arc<Signals>,
-    /// Bubble Builds: the `[D3DRHIPreference]` lines of GameUserSettings.ini from before the last
-    /// launch (None = file didn't exist or Bubble Builds weren't used).
-    perf_mode_ini: Mutex<Option<perfmode::Snapshot>>,
+    /// Bubble Builds: the GameUserSettings.ini backup of the current start (see `perfmode`). Every
+    /// change to that file and its backup happens while holding this lock.
+    gus: Mutex<Option<GusSession>>,
+    /// A thread is waiting for every Fortnite to close to put a leftover backup back (at most one).
+    gus_waiter: AtomicBool,
     /// Launcher log lines from before the UI listens; the UI fetches them once with the
     /// `pending_log_lines` command (see `niobium_core::earlylog`).
     early_log: EarlyLines<LogLinePayload>,
+    /// Toasts from before the UI listens (e.g. settings put back at start); fetched once with
+    /// `pending_toasts`.
+    early_toasts: EarlyLines<Toast>,
     /// Fixed-port notes already written to the live log (each only once per run).
     port_notes_logged: Mutex<Vec<&'static str>>,
     /// The last "Close Niobium?" question and whether the UI showed it (see `on_window_event`).
@@ -164,8 +169,10 @@ impl Engine {
             config: Mutex::new(profiles::load()),
             running: Mutex::new(Running::default()),
             signals: Arc::new(Signals::default()),
-            perf_mode_ini: Mutex::new(None),
+            gus: Mutex::new(None),
+            gus_waiter: AtomicBool::new(false),
             early_log: EarlyLines::new(),
+            early_toasts: EarlyLines::new(),
             port_notes_logged: Mutex::new(Vec::new()),
             close_prompt: Mutex::new(ClosePrompt::new()),
             app,
@@ -259,10 +266,11 @@ impl Engine {
     }
 
     fn toast(&self, kind: &str, title: &str, description: &str) {
-        let _ = self.app.emit(
-            "toast",
-            Toast { kind: kind.into(), title: title.into(), description: description.into() },
-        );
+        let toast = Toast { kind: kind.into(), title: title.into(), description: description.into() };
+        // Before the UI listens, the toast waits (an event now would be lost)
+        if let Some(toast) = self.early_toasts.hold(toast) {
+            let _ = self.app.emit("toast", toast);
+        }
     }
 
     /// After the Vanity → Niobium copy: writes the one log line for the live log (it waits until
@@ -319,10 +327,19 @@ impl Engine {
         self.early_log.take()
     }
 
-    /// Fallback if the UI never calls `pending_log_lines`: send the waiting lines as events.
+    /// Toasts the UI hasn't seen yet (from before it listened to "toast"). Only the first call
+    /// returns them; after it every toast comes as a "toast" event.
+    pub fn pending_toasts(&self) -> Vec<Toast> {
+        self.early_toasts.take()
+    }
+
+    /// Fallback if the UI never calls `pending_log_lines` / `pending_toasts`: send what waits as events.
     pub fn release_early_log(&self) {
         for line in self.early_log.take() {
             let _ = self.app.emit("log:line", line);
+        }
+        for toast in self.early_toasts.take() {
+            let _ = self.app.emit("toast", toast);
         }
     }
 
@@ -721,6 +738,12 @@ impl Engine {
         // Server Fortnite – put a fresh parkour list in place first (the server DLL reads it)
         self.step(token, 1)?;
         write_parkour_file(Some(self));
+        // Bubble Builds: back up Fortnite's settings file (and set Meshes to Low where the look needs
+        // it) before any Fortnite starts – the server Fortnite reads the same file.
+        let bubble = launchargs::bubble_builds_active(false, bubble_builds, &build.version);
+        if bubble {
+            self.gus_prepare(token, &build.version);
+        }
         // The server never gets Bubble Builds (launchargs::build ignores the setting for the host)
         let server_pid = self.launch_instance(token, &build, &profile, true, headless, bubble_builds)?;
         self.step(token, 2)?; // the redirect is loaded in launch_instance
@@ -732,13 +755,9 @@ impl Engine {
 
         // Step 4: your game starts at the same time – the server loads the map in the background.
         self.step(token, 4)?;
-        let bubble = launchargs::bubble_builds_active(false, bubble_builds, &build.version);
-        if bubble {
-            self.remember_perf_mode_ini();
-        }
         let game_pid = self.launch_instance(token, &build, &profile, false, false, bubble_builds)?;
         if bubble {
-            self.watch_perf_mode_ini(game_pid);
+            self.gus_game_started(game_pid);
         }
         self.inject_after_login(token, game_pid, false, &build);
         self.emit_services();
@@ -951,51 +970,240 @@ impl Engine {
         }
     }
 
-    // --- Bubble Builds: read-only check of GameUserSettings.ini ------------------
+    // --- Bubble Builds: Fortnite's settings file (GameUserSettings.ini) --------------------
+    //
+    // The user allowed Niobium to change this shared file for Bubble Builds, as long as the original
+    // values come back by themselves. Before the start the exact lines are backed up to
+    // %LOCALAPPDATA%\Niobium\gus-backup.json (see `niobium_core::perfmode`); after the game they are
+    // put back and the backup is deleted. A backup left over from a crash is put back at the next start.
 
-    /// Before the player's game starts with Bubble Builds: remember the `[D3DRHIPreference]` lines of
-    /// Fortnite's GameUserSettings.ini. Only reads. If the file doesn't exist, nothing is remembered.
-    fn remember_perf_mode_ini(&self) {
-        let snap = perfmode::game_user_settings_path().and_then(|p| perfmode::snapshot(&p));
-        *self.perf_mode_ini.lock().unwrap() = snap;
+    /// At launcher start, before anything else touches the file: put back a backup that is still
+    /// there (the launcher closed or crashed during a game). If a Fortnite is still running, that
+    /// waits until it is closed.
+    pub fn recover_gus_backup(&self) {
+        if !perfmode::backup_path().exists() {
+            return;
+        }
+        if !fortnite_running() {
+            self.gus_restore(gus_backup_id().as_deref(), false, true);
+            return;
+        }
+        self.log("launcher", "info", CAT, "Fortnite is still running. Its graphics settings are put back once it closes.", None);
+        self.restore_gus_once_fortnite_closed();
     }
 
-    /// After the player's game closed: if Fortnite saved Performance Mode (ES3.1) as the default,
-    /// ask the UI (event `bubble:ini-changed`). The UI asks the user and only calls
-    /// `reset_performance_mode_ini` on "Reset".
-    fn watch_perf_mode_ini(&self, game_pid: u32) {
-        let Some(snap) = self.perf_mode_ini.lock().unwrap().clone() else { return };
+    /// In the background: waits until no Fortnite runs any more, then puts back the backup that is
+    /// there now. Only that one: a later start may have put it back and made its own meanwhile.
+    /// At most one such wait runs at a time.
+    fn restore_gus_once_fortnite_closed(&self) {
+        if self.gus_waiter.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let id = gus_backup_id();
         let app = self.app.clone();
         std::thread::spawn(move || {
-            // Wait as long as the game runs (also after "Stop": Fortnite may have saved the file earlier)
-            while proc::is_running(game_pid) {
+            loop {
                 std::thread::sleep(Duration::from_secs(2));
+                if !fortnite_running() {
+                    break;
+                }
             }
-            // give Fortnite a moment to finish writing its settings
             std::thread::sleep(Duration::from_secs(1));
-            if perfmode::switched_to_es31(&snap) {
-                let engine = app.state::<Arc<Engine>>();
-                engine.log("launcher", "warning", CAT, "Fortnite saved Performance Mode as your default (GameUserSettings.ini)", None);
-                let _ = app.emit(EVENT_BUBBLE_INI_CHANGED, serde_json::json!({ "path": snap.path.to_string_lossy() }));
-            }
+            let Some(engine) = app.try_state::<Arc<Engine>>() else { return };
+            engine.gus_restore(id.as_deref(), false, true);
+            engine.gus_waiter.store(false, Ordering::SeqCst);
         });
     }
 
-    /// Puts back exactly the two remembered lines (nothing else in the file changes).
-    pub fn reset_performance_mode_ini(&self) -> Result<(), String> {
-        let snap = self
-            .perf_mode_ini
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or("There is nothing to reset – Niobium only remembers the setting from the last game with Bubble Builds.")?;
-        match perfmode::restore(&snap) {
-            Ok(true) => {
-                self.log("launcher", "info", CAT, "Performance Mode reset: GameUserSettings.ini has its old lines back", None);
-                Ok(())
+    /// Before the first Fortnite of a start with Bubble Builds: back up the lines, set Meshes to Low
+    /// on 15.40 – 16.00 and 19.x, and watch the start so they come back afterwards.
+    fn gus_prepare(&self, token: StartToken, version: &str) {
+        let Some(ini) = perfmode::game_user_settings_path() else { return };
+        // A backup from an earlier game that couldn't be put back yet goes first, but only once no
+        // Fortnite runs any more (this start's own haven't started yet). A Fortnite from before, e.g.
+        // after a launcher crash, still has the changed settings and saves them when it closes, which
+        // would undo a restore made now. Then the old backup stays and this game changes nothing.
+        if perfmode::backup_path().exists() {
+            let closed = wait_for(
+                Duration::from_secs(5),
+                Duration::from_millis(250),
+                || self.is_cancelled(token),
+                || !fortnite_running(),
+            );
+            match closed {
+                Wait::Ready => {
+                    self.gus_restore(None, false, true);
+                }
+                Wait::Cancelled => return,
+                Wait::TimedOut => {
+                    self.log(
+                        "launcher",
+                        "warning",
+                        CAT,
+                        "Another Fortnite is still running, so Fortnite's graphics settings were not changed for this game. They are put back once every Fortnite has closed.",
+                        None,
+                    );
+                    self.restore_gus_once_fortnite_closed();
+                    return;
+                }
             }
-            Ok(false) => Ok(()),
-            Err(e) => Err(format!("Couldn't reset Performance Mode: {e}")),
+        }
+        let low_meshes = launchargs::VersionRules::for_version(version).bubble_builds.needs_low_meshes();
+        let id = new_gus_id();
+        let mut gus = self.gus.lock().unwrap();
+        match perfmode::prepare(&ini, &perfmode::backup_path(), low_meshes, &id) {
+            Ok(Prepared::NoFile) => {
+                self.log("launcher", "info", CAT, "Fortnite has no settings file yet, so there is nothing to back up.", None);
+            }
+            Ok(Prepared::Skipped(why)) => {
+                self.log("launcher", "warning", CAT, &format!("Fortnite's graphics settings were not changed: {why}"), None);
+            }
+            Ok(Prepared::BackedUp { id, meshes }) => {
+                *gus = Some(GusSession { id: id.clone(), game_pid: None });
+                drop(gus);
+                self.log("launcher", "info", CAT, "Backed up Fortnite's graphics settings. They are put back when the game closes.", None);
+                match meshes {
+                    MeshChange::SetToLow { from } => self.log(
+                        "launcher",
+                        "info",
+                        CAT,
+                        &format!("Meshes set to Low for this game (it was {from})."),
+                        None,
+                    ),
+                    MeshChange::AlreadyLow => self.log("launcher", "info", CAT, "Meshes is already Low.", None),
+                    MeshChange::Added => self.log(
+                        "launcher",
+                        "info",
+                        CAT,
+                        "Meshes set to Low for this game (Fortnite's settings had no Meshes line yet).",
+                        None,
+                    ),
+                    MeshChange::WriteFailed(e) => self.log(
+                        "launcher",
+                        "warning",
+                        CAT,
+                        &format!("Couldn't set Meshes to Low ({e}). Builds may look normal."),
+                        None,
+                    ),
+                    MeshChange::NotNeeded => {}
+                }
+                self.watch_gus(token, id);
+            }
+            Err(e) => {
+                self.log(
+                    "launcher",
+                    "warning",
+                    CAT,
+                    &format!("Couldn't back up Fortnite's graphics settings ({e}), so nothing in them was changed."),
+                    None,
+                );
+            }
+        }
+    }
+
+    /// The player's game of this start is running (its settings come back once it closes).
+    fn gus_game_started(&self, pid: u32) {
+        if let Some(session) = self.gus.lock().unwrap().as_mut() {
+            session.game_pid = Some(pid);
+        }
+    }
+
+    /// Waits until the player's game of this start has closed (or the start ended without it),
+    /// then puts the lines back. If the server Fortnite still runs, the backup is kept until it is
+    /// gone too and the lines are checked once more (it reads and may save the same file).
+    fn watch_gus(&self, token: StartToken, id: String) {
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            let engine = app.state::<Arc<Engine>>();
+            let mut server_pid = None;
+            let game_pid = loop {
+                std::thread::sleep(Duration::from_secs(1));
+                let session = engine.gus.lock().unwrap().clone();
+                let Some(session) = session.filter(|s| s.id == id) else { return };
+                let (starting, server) = {
+                    let r = engine.running.lock().unwrap();
+                    (!r.gate.is_cancelled(token) && r.gate.in_progress(), r.server.as_ref().map(|i| i.pid))
+                };
+                if server.is_some() {
+                    server_pid = server;
+                }
+                match session.game_pid {
+                    Some(pid) if !proc::is_running(pid) => break Some(pid),
+                    Some(_) => {}
+                    // The start ended (failed or "Stop all") before the game started
+                    None if !starting => break None,
+                    None => {}
+                }
+            };
+            // give Fortnite a moment to finish writing its settings
+            std::thread::sleep(Duration::from_secs(1));
+            let server_alive = server_pid.filter(|p| proc::is_running(*p));
+            if !engine.gus_restore(Some(&id), server_alive.is_some(), game_pid.is_some()) {
+                return;
+            }
+            let Some(server) = server_alive else { return };
+            while proc::is_running(server) {
+                std::thread::sleep(Duration::from_secs(2));
+                if engine.gus.lock().unwrap().as_ref().is_none_or(|s| s.id != id) {
+                    return;
+                }
+            }
+            std::thread::sleep(Duration::from_secs(1));
+            engine.gus_restore(Some(&id), false, false);
+        });
+    }
+
+    /// Puts the backed-up lines back (see `perfmode::restore`) and says so in the live log, plus a
+    /// toast when the file really changed and `announce` is set. `keep` = keep the backup for one
+    /// more check later. Returns false if it failed (the backup stays for the next try).
+    fn gus_restore(&self, only_id: Option<&str>, keep: bool, announce: bool) -> bool {
+        let mut gus = self.gus.lock().unwrap();
+        let result = perfmode::restore(&perfmode::backup_path(), only_id, keep);
+        if !keep && matches!(result, Ok(_)) && gus.as_ref().is_some_and(|s| only_id.is_none_or(|id| id == s.id)) {
+            *gus = None;
+        }
+        drop(gus);
+        match result {
+            Ok(Restored::Restored) => {
+                self.log("launcher", "info", CAT, &format!("{GUS_PUT_BACK} (GameUserSettings.ini)"), None);
+                if announce {
+                    self.toast("success", GUS_PUT_BACK, "");
+                }
+                true
+            }
+            Ok(Restored::Unchanged) => {
+                if announce {
+                    self.log("launcher", "info", CAT, "Fortnite's graphics settings are unchanged.", None);
+                }
+                true
+            }
+            Ok(Restored::FileGone) => {
+                if announce {
+                    self.log("launcher", "info", CAT, "Fortnite's settings file is gone, so there was nothing to put back.", None);
+                }
+                true
+            }
+            Ok(Restored::Corrupt) => {
+                self.log(
+                    "launcher",
+                    "warning",
+                    CAT,
+                    "Niobium's backup of Fortnite's graphics settings couldn't be read. Nothing was changed.",
+                    None,
+                );
+                true
+            }
+            Ok(Restored::NoBackup | Restored::OtherBackup) => true,
+            Err(e) => {
+                self.log(
+                    "launcher",
+                    "warning",
+                    CAT,
+                    &format!("Couldn't put Fortnite's graphics settings back ({e}). Niobium tries again when it starts next time."),
+                    None,
+                );
+                false
+            }
         }
     }
 
@@ -1108,14 +1316,26 @@ impl Engine {
             }
             (instances, backend, was_starting)
         };
+        let mut killed = Vec::new();
         for inst in instances.into_iter().flatten() {
             let _ = proc::kill(inst.pid);
             close_helpers(&inst.helpers);
+            killed.push(inst.pid);
         }
         if let Some(pid) = backend {
             let _ = proc::kill(pid);
         }
         if closing {
+            // Bubble Builds: the watcher thread ends with Niobium, so put Fortnite's settings back
+            // now – once the games are really gone. Otherwise the next start does it.
+            if perfmode::backup_path().exists() {
+                let gone = wait_for(Duration::from_secs(5), Duration::from_millis(100), || false, || {
+                    !killed.iter().any(|pid| proc::is_running(*pid))
+                });
+                if gone == Wait::Ready && !fortnite_running() {
+                    self.gus_restore(None, false, false);
+                }
+            }
             return;
         }
         if was_starting {
@@ -1190,6 +1410,37 @@ fn level_str(l: logparse::Level) -> &'static str {
         logparse::Level::Warning => "warning",
         logparse::Level::Error => "error",
     }
+}
+
+/// The GameUserSettings.ini backup of one start (Bubble Builds).
+#[derive(Debug, Clone)]
+struct GusSession {
+    /// Id written into the backup file, so a watcher only ever restores its own backup.
+    id: String,
+    /// The player's game of that start, once it runs.
+    game_pid: Option<u32>,
+}
+
+/// Unique id for a new GameUserSettings.ini backup.
+fn new_gus_id() -> String {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    format!("{millis}-{}", std::process::id())
+}
+
+/// Id of the backup that is on disk now (None if there is none or it can't be read).
+fn gus_backup_id() -> Option<String> {
+    match perfmode::read_backup(&perfmode::backup_path()) {
+        Ok(Some(b)) => Some(b.id),
+        _ => None,
+    }
+}
+
+/// Any Fortnite (ours, an old one, or live Fortnite) is running – they all share the settings file.
+fn fortnite_running() -> bool {
+    proc::find_pid_by_name(version::SHIPPING_EXE).is_some()
 }
 
 fn now_hms() -> String {

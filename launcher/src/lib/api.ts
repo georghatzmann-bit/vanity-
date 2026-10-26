@@ -175,6 +175,14 @@ export interface ClientPreferences {
    */
   sprintByDefault?: boolean;
   respawnsEnabled: boolean;
+  /** "Bubble look" (F9 > Main > Graphics): softer build blueprint textures. Older files don't have it. */
+  bubbleLook?: boolean;
+  /** "Bubble strength", 1–8 (default 5). */
+  bubbleStrength?: number;
+  /** "Reset builds" (F9 > Options): aim at an edited build and press the key. */
+  resetBuilds?: boolean;
+  /** Its key (Windows key code), 0 = none. Never the left or right mouse button. */
+  resetBuildsKey?: number;
 }
 
 /** Contents of %APPDATA%\Niobium\client.json – the launcher and the F9 menu share this file. */
@@ -283,11 +291,6 @@ export interface NiobiumPaths {
   fortniteLogs: string;
 }
 
-/** Payload of the event "bubble:ini-changed". */
-export interface BubbleIniChanged {
-  path: string;
-}
-
 /**
  * Payload of the event "app:close-requested": the window was asked to close while something
  * still runs or starts. `running` holds plain names like "Your game", "Game server", "Backend".
@@ -330,6 +333,10 @@ export const defaultClientSettings: ClientSettings = {
     firstPerson: false,
     sprintByDefault: false,
     respawnsEnabled: true,
+    bubbleLook: false,
+    bubbleStrength: 5,
+    resetBuilds: false,
+    resetBuildsKey: 0,
   },
   commands: [],
   macros: [],
@@ -435,9 +442,8 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
       return demoCatalog;
     case "default_download_folder":
       return `D:\\Niobium\\Builds\\${String(args.key)}`;
-    case "reset_performance_mode_ini":
-      console.info("[Preview] reset_performance_mode_ini");
-      return null;
+    case "pending_toasts":
+      return [];
     case "app_ready":
       return null;
     case "quit_app":
@@ -495,12 +501,12 @@ export const api = {
   bubbleBuildsSupport: (version: string) => call<BubbleBuildsInfo>("bubble_builds_support", { version }),
   /** Can AI bots be switched on for this version? `{ level, note }` with an English note. */
   botsSupport: (version: string, cl: number | null) => call<BotsSupport>("bots_support", { version, cl }),
-  /** Puts Fortnite's Performance Mode lines back (only after the user clicked "Reset"). */
-  resetPerformanceModeIni: () => call<void>("reset_performance_mode_ini"),
   /** The UI has drawn its first frame: show the main window and close the splash. */
   appReady: () => call<void>("app_ready"),
   /** Launcher log lines from before the UI listened (oldest first). Only the first call returns lines. */
   pendingLogLines: () => call<LogLine[]>("pending_log_lines"),
+  /** Toasts from before the UI listened (e.g. Fortnite's settings put back at start). Only the first call returns them. */
+  pendingToasts: () => call<Toast[]>("pending_toasts"),
 
   hostAndPlay: (profileId: string) => call<void>("host_and_play", { profileId }),
   /** Stops everything. During a start it also cancels the start (Rust resets the steps to -1). */
@@ -577,7 +583,6 @@ export type EventName =
   | "server:event"
   | "trickshot"
   | "detect"
-  | "bubble:ini-changed"
   | "app:close-requested"
   | "server:playerBots"
   | "download:progress"

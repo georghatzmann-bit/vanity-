@@ -191,6 +191,7 @@
     <ClInclude Include="Erbium\Public\GUI.h" />
     <ClInclude Include="Erbium\Public\HotfixReload.h" />
     <ClInclude Include="Erbium\Public\PlayerLoadout.h" />
+    <ClInclude Include="Erbium\Public\QuickReset.h" />
     <ClInclude Include="Erbium\Public\LateGame.h" />
     <ClInclude Include="Erbium\Public\MinHook.h" />
     <ClInclude Include="Erbium\Public\Misc.h" />
@@ -271,6 +272,7 @@
     <ClCompile Include="Erbium\Private\GUI.cpp" />
     <ClCompile Include="Erbium\Private\HotfixReload.cpp" />
     <ClCompile Include="Erbium\Private\PlayerLoadout.cpp" />
+    <ClCompile Include="Erbium\Private\QuickReset.cpp" />
     <ClCompile Include="Erbium\Private\LateGame.cpp" />
     <ClCompile Include="Erbium\Private\Misc.cpp" />
     <ClCompile Include="Erbium\Support\Private\VersionFeatureAdapter.cpp" />

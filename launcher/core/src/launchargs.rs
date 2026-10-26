@@ -35,26 +35,38 @@ pub const VERSION_ARG: &str = "-niobiumversion";
 /// Launch argument that starts the game with the low-end ES3.1 renderer ("Performance Mode").
 pub const FEATURE_LEVEL_ES31: &str = "-FeatureLevelES31";
 
-/// Can a version show Bubble Builds (the see-through "bubble wrap" build look of Chapter 2 Seasons 5–6)?
+/// Can a version show Bubble Builds (the see-through "bubble wrap" build look)?
 ///
-/// The look only exists in Performance Mode (ES3.1 renderer) on Fortnite 15.40 – 16.00. Epic called it
-/// a bug and removed it in 16.10; it came back briefly in 16.20 – 16.40 and was fixed again in 16.50.
-/// Builds of 15.30 may be from before Epic's February 2021 patch, when builds were partly invisible.
+/// Chapter 2: the look only exists in Performance Mode (ES3.1 renderer) on Fortnite 15.40 – 16.00.
+/// Epic called it a bug and removed it in 16.10; it came back briefly in 16.20 – 16.40 and was fixed
+/// again in 16.50. Builds of 15.30 may be from before Epic's February 2021 patch, when builds were
+/// partly invisible.
+///
+/// Chapter 3 Season 1 (19.x): Performance Mode with Fortnite's own "Meshes" setting on Low gives a
+/// similar whiter, more see-through look while builds go up ("low meshes"). Experimental.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "camelCase")]
 pub enum BubbleSupport {
     /// 15.40 up to (not including) 16.10
     Supported,
     /// 15.30, and 16.10 up to (not including) 16.50: the look may or may not show up
     Experimental,
+    /// 19.00 up to (not including) 20.00: Performance Mode with Meshes set to Low (also experimental)
+    LowMeshes,
     /// every other version
     Unavailable,
 }
 
 impl BubbleSupport {
-    /// Bubble Builds are applied at launch (supported or experimental).
+    /// Bubble Builds are applied at launch (supported, experimental or low meshes).
     pub fn applies(self) -> bool {
         self != BubbleSupport::Unavailable
+    }
+
+    /// The look also needs Fortnite's own `[PerformanceMode] MeshQuality` on Low (0): 15.40 – 16.00
+    /// and 19.x. The launcher sets it for the game and puts it back afterwards (see `perfmode`).
+    pub fn needs_low_meshes(self) -> bool {
+        matches!(self, BubbleSupport::Supported | BubbleSupport::LowMeshes)
     }
 }
 
@@ -69,18 +81,27 @@ pub struct BubbleBuildsInfo {
 pub const BUBBLE_NOTE_SUPPORTED: &str = "The see-through 'bubble wrap' build look from Chapter 2 Seasons 5–6. Starts the game in Performance Mode (lower graphics). Applies on next launch.";
 pub const BUBBLE_NOTE_EXPERIMENTAL: &str =
     "Epic changed how builds look around this version. Your builds may look normal even with this on.";
-pub const BUBBLE_NOTE_UNAVAILABLE: &str =
-    "Only on Fortnite 15.40 – 16.00 (Chapter 2, Seasons 5–6). Try Mobile Builds in the F9 menu.";
+pub const BUBBLE_NOTE_LOW_MESHES: &str = "Chapter 3 version: starts the game in Performance Mode with Meshes set to Low. Builds look whiter and more see-through while they go up, like 'bubble wrap' builds. The whole game has lower graphics. Applies on next launch.";
+
+/// "Not available for 19.10. Bubble Builds work on …" (`version` empty = "this version").
+pub fn bubble_note_unavailable(version: &str) -> String {
+    let version = version.trim();
+    let which = if version.is_empty() { "this version" } else { version };
+    format!(
+        "Not available for {which}. Bubble Builds work on 15.40 – 16.00, and as an experiment on Chapter 3 Season 1 (19.x). On other versions, try Bubble look in the F9 menu."
+    )
+}
 
 /// Bubble Builds status and an English note for one Fortnite version (e.g. "15.40" or "15.4").
 pub fn bubble_builds_support(version: &str) -> BubbleBuildsInfo {
     let level = VersionRules::for_version(version).bubble_builds;
     let note = match level {
-        BubbleSupport::Supported => BUBBLE_NOTE_SUPPORTED,
-        BubbleSupport::Experimental => BUBBLE_NOTE_EXPERIMENTAL,
-        BubbleSupport::Unavailable => BUBBLE_NOTE_UNAVAILABLE,
+        BubbleSupport::Supported => BUBBLE_NOTE_SUPPORTED.to_string(),
+        BubbleSupport::Experimental => BUBBLE_NOTE_EXPERIMENTAL.to_string(),
+        BubbleSupport::LowMeshes => BUBBLE_NOTE_LOW_MESHES.to_string(),
+        BubbleSupport::Unavailable => bubble_note_unavailable(version),
     };
-    BubbleBuildsInfo { level, note: note.to_string() }
+    BubbleBuildsInfo { level, note }
 }
 
 /// Rules that depend on the Fortnite version. Worked out from the version number, so every
@@ -113,6 +134,8 @@ impl VersionRules {
             BubbleSupport::Supported
         } else if v == (15, 30) || ((16, 10) <= v && v < (16, 50)) {
             BubbleSupport::Experimental
+        } else if (19, 0) <= v && v < (20, 0) {
+            BubbleSupport::LowMeshes
         } else {
             BubbleSupport::Unavailable
         };
@@ -306,10 +329,18 @@ mod tests {
         for v in ["15.30", "15.3", "16.10", "16.1", "16.20", "16.30", "16.40", "16.4"] {
             assert_eq!(level(v), Experimental, "{v}");
         }
+        // Chapter 3 Season 1: 19.00 <= v < 20.00 (Performance Mode with Meshes set to Low)
+        for v in ["19.00", "19", "19.0", "19.01", "19.10", "19.1", "19.20", "19.30", "19.40", "19.4", "19.99"] {
+            assert_eq!(level(v), LowMeshes, "{v}");
+        }
         // everything else
-        for v in ["15.10", "15.20", "15.21", "15.31", "16.50", "16.5", "17.00", "19.10", "12.41", "1.7.2", "", "Cert"] {
+        for v in ["15.10", "15.20", "15.21", "15.31", "16.50", "16.5", "17.00", "18.40", "20.00", "20.0", "20.10", "12.41", "1.7.2", "", "Cert"] {
             assert_eq!(level(v), Unavailable, "{v}");
         }
+        // only 15.40 – 16.00 and 19.x also need Meshes on Low
+        assert!(Supported.needs_low_meshes() && LowMeshes.needs_low_meshes());
+        assert!(!Experimental.needs_low_meshes() && !Unavailable.needs_low_meshes());
+        assert!(LowMeshes.applies());
     }
 
     #[test]
@@ -340,9 +371,16 @@ mod tests {
         // never for the host (headless or not)
         assert!(!has_es31(&build("georg", true, true, "", "15.40", true)));
         assert!(!has_es31(&build("georg", true, false, "", "15.40", true)));
-        // not outside the window
-        assert!(!has_es31(&build("georg", false, false, "", "19.10", true)));
+        // 19.x (low meshes) gets it too, exactly once, and never for the host
+        let low = build("georg", false, false, "-d3d11", "19.10", true);
+        assert!(has_es31(&low));
+        assert_eq!(low.iter().filter(|s| s.eq_ignore_ascii_case(FEATURE_LEVEL_ES31)).count(), 1);
+        assert!(!has_es31(&build("georg", true, true, "", "19.10", true)));
+        assert!(!has_es31(&build("georg", true, false, "-d3d12", "19.10", true)));
+        // not outside the windows
         assert!(!has_es31(&build("georg", false, false, "", "16.50", true)));
+        assert!(!has_es31(&build("georg", false, false, "", "18.40", true)));
+        assert!(!has_es31(&build("georg", false, false, "", "20.00", true)));
         assert!(!has_es31(&build("georg", false, false, "", "15.20", true)));
         // never -sm5
         for v in ["15.40", "16.20", "19.10"] {
@@ -368,9 +406,18 @@ mod tests {
         // the host keeps its arguments
         let host = build("georg", true, true, "-d3d12", "15.40", true);
         assert!(host.contains(&"-d3d12".to_string()));
-        // outside the window nothing is swapped
-        let late = build("georg", false, false, "-d3d12", "19.10", true);
+        // 19.10 (low meshes): DirectX 12 becomes 11 as well, the host keeps its arguments
+        let low = build("georg", false, false, "-d3d12 -nosplash", "19.10", true);
+        assert!(low.contains(&"-d3d11".to_string()));
+        assert!(!low.iter().any(|s| s.eq_ignore_ascii_case("-d3d12")));
+        let low_dx = build("georg", false, false, "-dx12", "19.10", true);
+        assert!(low_dx.contains(&"-d3d11".to_string()) && !low_dx.iter().any(|s| s.eq_ignore_ascii_case("-dx12")));
+        assert!(build("georg", true, false, "-d3d12", "19.10", true).contains(&"-d3d12".to_string()));
+        // outside the windows nothing is swapped
+        let late = build("georg", false, false, "-d3d12", "20.00", true);
         assert!(late.contains(&"-d3d12".to_string()));
+        let mid = build("georg", false, false, "-d3d12", "17.50", true);
+        assert!(mid.contains(&"-d3d12".to_string()));
     }
 
     #[test]
@@ -389,11 +436,21 @@ mod tests {
         assert!(s.note.contains("bubble wrap"));
         assert_eq!(bubble_builds_support("16.20").level, BubbleSupport::Experimental);
         assert!(bubble_builds_support("16.20").note.starts_with("Epic changed"));
-        assert_eq!(bubble_builds_support("19.10").level, BubbleSupport::Unavailable);
-        assert!(bubble_builds_support("19.10").note.contains("Mobile Builds"));
+        // 19.10 is the experimental Chapter 3 level now
+        let low = bubble_builds_support("19.10");
+        assert_eq!(low.level, BubbleSupport::LowMeshes);
+        assert!(low.note.starts_with("Chapter 3 version") && low.note.contains("Meshes set to Low"));
+        // other versions name the version and point to Bubble look
+        let none = bubble_builds_support("12.41");
+        assert_eq!(none.level, BubbleSupport::Unavailable);
+        assert!(none.note.starts_with("Not available for 12.41."), "{}", none.note);
+        assert!(none.note.contains("Bubble look in the F9 menu") && none.note.contains("(19.x)"));
+        assert!(bubble_builds_support("").note.starts_with("Not available for this version."));
         let json = serde_json::to_value(bubble_builds_support("15.4")).unwrap();
         assert_eq!(json["level"], "supported");
         assert_eq!(serde_json::to_value(BubbleSupport::Unavailable).unwrap(), "unavailable");
         assert_eq!(serde_json::to_value(BubbleSupport::Experimental).unwrap(), "experimental");
+        assert_eq!(serde_json::to_value(BubbleSupport::LowMeshes).unwrap(), "lowMeshes");
+        assert_eq!(serde_json::to_value(bubble_builds_support("19.10")).unwrap()["level"], "lowMeshes");
     }
 }

@@ -9,7 +9,6 @@ import {
   onEvent,
   onEventReady,
   DEMO_APP_VERSION,
-  type BubbleIniChanged,
   type ClientSettings,
   type CloseRequested,
   type TrickshotPreset,
@@ -107,10 +106,6 @@ interface AppState {
   /** Closes the welcome / "What's new" and remembers this version (plus optional setting changes). */
   finishWelcome: (patch?: Partial<Settings>) => Promise<void>;
 
-  /** Set when Fortnite saved Performance Mode as its default (event "bubble:ini-changed"). */
-  bubbleIni: BubbleIniChanged | null;
-  dismissBubbleIni: () => void;
-
   /** Set when the window was asked to close while something still runs (event "app:close-requested"). */
   closeRequest: CloseRequested | null;
   dismissCloseRequest: () => void;
@@ -123,13 +118,19 @@ interface AppState {
 
 const MAX_LOG_LINES = 3000;
 
+/** A toast from Rust (event "toast" or `pending_toasts`). An empty description is left out. */
+function showToast(t: Toast) {
+  const fn = t.kind === "error" ? toast.error : t.kind === "success" ? toast.success : t.kind === "warning" ? toast.warning : toast;
+  fn(t.title, t.description ? { description: t.description } : undefined);
+}
+
 /** "Always sprint" was removed: an old client.json may still have it on, but it always stays off. */
 function withoutSprint(settings: ClientSettings): ClientSettings {
   return { ...settings, preferences: { ...settings.preferences, sprintByDefault: false } };
 }
 
 /**
- * Browser preview only: ?page=library, ?welcome=1, ?whatsnew=1, ?bubbleini=1, ?closeconfirm=1,
+ * Browser preview only: ?page=library, ?welcome=1, ?whatsnew=1, ?gusrestored=1, ?closeconfirm=1,
  * ?botsoff=1, ?dl=running (see downloads.ts) – for screenshots. Always null in the real launcher.
  */
 export function previewParam(name: string): string | null {
@@ -196,8 +197,6 @@ export const useApp = create<AppState>()((set, get) => ({
     await get().saveSettings({ ...patch, lastSeenVersion: get().appVersion });
   },
 
-  bubbleIni: null,
-  dismissBubbleIni: () => set({ bubbleIni: null }),
 
   closeRequest: null,
   dismissCloseRequest: () => set({ closeRequest: null }),
@@ -240,10 +239,12 @@ export const useApp = create<AppState>()((set, get) => ({
         if (early.length > 0) set((s) => ({ logs: [...early, ...s.logs].slice(-MAX_LOG_LINES) }));
       })
       .catch(() => {});
-    onEvent<Toast>("toast", (t) => {
-      const fn = t.kind === "error" ? toast.error : t.kind === "success" ? toast.success : t.kind === "warning" ? toast.warning : toast;
-      fn(t.title, { description: t.description });
-    });
+    // Toasts sent before this listener existed (e.g. "Fortnite's graphics settings were put back."
+    // right at start) wait in Rust, like the early log lines.
+    void onEventReady<Toast>("toast", showToast)
+      .then(() => api.pendingToasts())
+      .then((early) => early.forEach(showToast))
+      .catch(() => {});
     // From the server: {"event":"trickshot","player":…,"victim":…,"meters":N} – a kill in the air
     onEvent<{ player?: string; victim?: string; meters?: number }>("trickshot", (t) => {
       const who = t.player || "Someone";
@@ -257,8 +258,6 @@ export const useApp = create<AppState>()((set, get) => ({
       set({ playerBots: { state, reason } });
       if (state === "unavailable") toast.warning(botsText.unavailableTitle, { description: reason || botsText.noteNotYet });
     });
-    // After a game with Bubble Builds: Fortnite saved Performance Mode as its default
-    onEvent<BubbleIniChanged>("bubble:ini-changed", (payload) => set({ bubbleIni: payload }));
     // The window was asked to close (X, Alt+F4, taskbar) while something runs: Rust waits for the answer
     onEvent<CloseRequested>("app:close-requested", (payload) =>
       set({
@@ -270,8 +269,9 @@ export const useApp = create<AppState>()((set, get) => ({
     );
 
     if (!inTauri) {
-      if (previewParam("bubbleini")) {
-        set({ bubbleIni: { path: "C:\\Users\\georg\\AppData\\Local\\FortniteGame\\Saved\\Config\\WindowsClient\\GameUserSettings.ini" } });
+      if (previewParam("gusrestored")) {
+        // What Rust sends after a game with Bubble Builds
+        window.setTimeout(() => showToast({ kind: "success", title: "Fortnite's graphics settings were put back.", description: "" }), 600);
       }
       if (previewParam("closeconfirm")) {
         set({ closeRequest: { running: ["Your game", "Game server", "Backend"] } });
