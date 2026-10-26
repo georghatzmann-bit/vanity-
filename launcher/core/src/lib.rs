@@ -6,6 +6,7 @@ pub mod earlylog;
 pub mod epic;
 pub mod helperprocs;
 pub mod launchargs;
+pub mod livingworld;
 pub mod logparse;
 pub mod migrate;
 pub mod parkours;

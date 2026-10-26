@@ -63,10 +63,21 @@ pub struct Profile {
     pub bot_count: u32,
     #[serde(default)]
     pub bot_skill: BotSkill,
+    /// "Bosses & NPCs" (experimental): the season's bosses, guards and creatures walk around.
+    /// Off by default, also in a Classic match (see `livingworld`).
+    #[serde(default)]
+    pub living_world: bool,
+    /// Most bosses and NPCs at once, 1–100 (clamped when sent to the server).
+    #[serde(default = "default_living_world_max_ai", rename = "livingWorldMaxAI")]
+    pub living_world_max_ai: u32,
 }
 
 fn default_bot_count() -> u32 {
     crate::bots::BOT_COUNT_DEFAULT
+}
+
+fn default_living_world_max_ai() -> u32 {
+    crate::livingworld::LIVING_WORLD_MAX_AI_DEFAULT
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -253,6 +264,8 @@ impl Config {
                 bots: false,
                 bot_count: crate::bots::BOT_COUNT_DEFAULT,
                 bot_skill: BotSkill::Easy,
+                living_world: false,
+                living_world_max_ai: default_living_world_max_ai(),
             };
             self.active_profile_id = p.id.clone();
             self.profiles.push(p);
@@ -564,6 +577,8 @@ mod tests {
         assert!(!p.bots);
         assert_eq!(p.bot_count, 30);
         assert_eq!(p.bot_skill, BotSkill::Easy);
+        assert!(!p.living_world, "Bosses & NPCs stay off in an old profile");
+        assert_eq!(p.living_world_max_ai, 40);
         // the whole config of an old launcher still loads
         let c: Config = serde_json::from_str(
             r#"{"profiles":[{"id":"p-default","name":"Default","buildId":"x"}],"activeProfileId":"p-default"}"#,
@@ -571,6 +586,35 @@ mod tests {
         .unwrap();
         assert_eq!(c.profiles[0].bot_count, 30);
         assert!(!c.profiles[0].lategame);
+        assert!(!c.profiles[0].living_world);
+        assert_eq!(c.profiles[0].living_world_max_ai, 40);
+    }
+
+    #[test]
+    fn living_world_fields_load_and_save() {
+        // The default profile (Classic match) has Bosses & NPCs off, 40 at most
+        let mut c = Config::default();
+        c.upsert_build(build("19.10-18675304"));
+        let mut p = c.profiles[0].clone();
+        assert!(!p.living_world);
+        assert_eq!(p.living_world_max_ai, 40);
+        // camelCase with "AI" in capitals, like the server key
+        p.living_world = true;
+        p.living_world_max_ai = 75;
+        let json = serde_json::to_value(&p).unwrap();
+        assert_eq!(json["livingWorld"], true);
+        assert_eq!(json["livingWorldMaxAI"], 75);
+        assert!(json.get("livingWorldMaxAi").is_none());
+        let back: Profile = serde_json::from_value(json).unwrap();
+        assert!(back.living_world);
+        assert_eq!(back.living_world_max_ai, 75);
+        // what the UI sends
+        let ui: Profile = serde_json::from_str(r#"{"id":"p","name":"P","buildId":"b","livingWorld":true,"livingWorldMaxAI":12}"#).unwrap();
+        assert!(ui.living_world);
+        assert_eq!(ui.living_world_max_ai, 12);
+        // an out-of-range number still loads (it is clamped when sent to the server)
+        let big: Profile = serde_json::from_str(r#"{"id":"p","name":"P","buildId":"b","livingWorldMaxAI":500}"#).unwrap();
+        assert_eq!(big.living_world_max_ai, 500);
     }
 
     #[test]

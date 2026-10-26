@@ -33,7 +33,7 @@ import { previewParam, useApp } from "./store";
 
 /** The four steps of a download, in order (same as the `phase` values). */
 export const downloadSteps: { phase: DownloadPhase; label: string; hint: string; doing: string; badge: string }[] = [
-  { phase: "checking", label: "Check at Epic", hint: "about 1 min", doing: "Checking that Epic still has every file… (about 1 min)", badge: "Checking" },
+  { phase: "checking", label: "Check at Epic", hint: "a few minutes", doing: "Checking that Epic still has every file… (a few minutes)", badge: "Checking" },
   { phase: "downloading", label: "Download", hint: "from Epic's servers", doing: "Downloading from Epic's servers", badge: "Downloading" },
   { phase: "verifying", label: "Check files", hint: "nothing is missing", doing: "Checking files", badge: "Checking files" },
   { phase: "importing", label: "Add to Library", hint: "ready to play", doing: "Adding to Library", badge: "Adding" },
@@ -539,7 +539,7 @@ const demo = {
       };
     }
     if (/\\onedrive/i.test(f)) {
-      throw { code: "ONEDRIVE", message: "This folder is synced by OneDrive. Pick a folder outside OneDrive, or it will try to upload about 40 GB." };
+      throw { code: "ONEDRIVE", message: "This folder is synced by OneDrive. Pick a folder outside OneDrive, or it will try to upload the whole game (up to about 120 GB)." };
     }
     // Let the start finish first (the job is in the list once download_start returned)
     window.setTimeout(() => demo.run({ build, folder, phase: "checking", done: 0, files: 0 }), 0);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Bot,
@@ -37,6 +37,7 @@ import { pageGroup } from "@/components/layout/nav";
 import { useBotsSupport } from "@/hooks/use-bots-support";
 import { BOT_COUNT_MAX, BOT_COUNT_MIN, botSkillLabel, botSkills, botsSupportFor, botsText, clampBotCount } from "@/lib/bots";
 import { classicMatch, playlistLabel, playlists } from "@/lib/demo-data";
+import { LIVING_WORLD_MAX_MAX, LIVING_WORLD_MAX_MIN, clampLivingWorldMax, livingWorldText } from "@/lib/livingworld";
 import { api, type BotSkill, type BuildInfo, type Profile } from "@/lib/api";
 import { buildFolderName, coverGradient } from "@/lib/builds";
 import { EASE_OUT, SPRING_UI } from "@/lib/motion";
@@ -250,8 +251,8 @@ function botsFact(p: Profile, build: BuildInfo | undefined): string {
   return `${clampBotCount(p.botCount)} · ${botSkillLabel(p.botSkill)}`;
 }
 
-/** Tags that come from the playlist, Lategame and AI bots switches – they are made again when those change. */
-const autoTags = new Set([...playlists.map((pl) => pl.label), "Lategame", "AI bots"]);
+/** Tags that come from the playlist, Lategame, AI bots and Bosses & NPCs switches – they are made again when those change. */
+const autoTags = new Set([...playlists.map((pl) => pl.label), "Lategame", "AI bots", livingWorldText.tag]);
 
 /** New profile (profile = null) or edit an existing one. Same form for both. */
 function ProfileDialog({ open, onOpenChange, profile }: { open: boolean; onOpenChange: (o: boolean) => void; profile: Profile | null }) {
@@ -288,6 +289,9 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
   const [bots, setBots] = useState(profile?.bots ?? classicMatch.bots);
   const [botCount, setBotCount] = useState(clampBotCount(profile?.botCount ?? classicMatch.botCount));
   const [botSkill, setBotSkill] = useState<BotSkill>(profile?.botSkill ?? classicMatch.botSkill);
+  // Bosses & NPCs: off in a new profile, one click to turn on (it fits a Classic match)
+  const [livingWorld, setLivingWorld] = useState(profile?.livingWorld ?? classicMatch.livingWorld);
+  const [livingWorldMax, setLivingWorldMax] = useState(clampLivingWorldMax(profile?.livingWorldMaxAI ?? classicMatch.livingWorldMaxAI));
 
   const build = builds.find((b) => b.id === buildId);
   const botsInfo = useBotsSupport(build?.version, build?.changelist);
@@ -306,6 +310,7 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
       playlistLabel(playlist),
       ...(lategame ? ["Lategame"] : []),
       ...(botsOn ? ["AI bots"] : []),
+      ...(livingWorld ? [livingWorldText.tag] : []),
       ...(profile?.tags.filter((t) => !autoTags.has(t)) ?? []),
     ];
     const next: Profile = {
@@ -325,6 +330,8 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
       bots: botsOn,
       botCount: clampBotCount(botCount),
       botSkill,
+      livingWorld,
+      livingWorldMaxAI: clampLivingWorldMax(livingWorldMax),
     };
     try {
       useApp.getState().setConfig(await (editing ? api.updateProfile(next) : api.addProfile(next)));
@@ -435,8 +442,43 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
                 <SwitchRow id="p-late" label="Lategame" hint="Starts in a late zone with full gear" checked={lategame} onChange={setLategame} flat />
                 <SwitchRow id="p-ammo" label="Infinite ammo" hint="Ammo never runs out" checked={infiniteAmmo} onChange={setInfiniteAmmo} flat />
                 <SwitchRow id="p-mats" label="Infinite materials" hint="Wood, stone and metal never run out" checked={infiniteMats} onChange={setInfiniteMats} flat />
+                <SwitchRow
+                  id="p-living"
+                  label={livingWorldText.switchLabel}
+                  badge={
+                    <Badge variant="warning">
+                      <FlaskConical />
+                      {livingWorldText.badge}
+                    </Badge>
+                  }
+                  hint={livingWorldText.hint}
+                  checked={livingWorld}
+                  onChange={setLivingWorld}
+                  flat
+                />
+                <div className={cn("flex flex-col gap-2 px-3 py-2.5 transition-opacity duration-200", !livingWorld && "opacity-50")}>
+                  <div className="flex items-center justify-between gap-4">
+                    <Label htmlFor="p-living-max">{livingWorldText.maxLabel}</Label>
+                    <ValueChip className="min-w-10">{livingWorldMax}</ValueChip>
+                  </div>
+                  <Slider
+                    id="p-living-max"
+                    aria-label={livingWorldText.maxLabel}
+                    min={LIVING_WORLD_MAX_MIN}
+                    max={LIVING_WORLD_MAX_MAX}
+                    step={1}
+                    value={[livingWorldMax]}
+                    disabled={!livingWorld}
+                    onValueChange={([v]) => setLivingWorldMax(clampLivingWorldMax(v))}
+                  />
+                  <p className="flex justify-between text-[11px] text-faint tabular-nums">
+                    <span>{LIVING_WORLD_MAX_MIN}</span>
+                    <span>Fewer = smoother on one PC</span>
+                    <span>{LIVING_WORLD_MAX_MAX}</span>
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-faint">Classic match = like back then: full map, normal ammo and materials.</p>
+              <p className="text-xs text-faint">Classic match = like back then: full map, normal ammo and materials. Bosses &amp; NPCs can be on too.</p>
             </section>
 
             <BotsSection
@@ -475,6 +517,7 @@ function SwitchRow({
   onChange,
   disabled,
   flat = false,
+  badge,
 }: {
   id: string;
   label: string;
@@ -483,11 +526,16 @@ function SwitchRow({
   onChange: (v: boolean) => void;
   disabled?: boolean;
   flat?: boolean;
+  /** Small chip after the label, e.g. "Experimental". */
+  badge?: ReactNode;
 }) {
   return (
     <div className={cn("flex items-center justify-between gap-4 px-3 py-2.5", !flat && "rounded-lg surface-subtle")}>
       <div className="min-w-0">
-        <Label htmlFor={id}>{label}</Label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Label htmlFor={id}>{label}</Label>
+          {badge}
+        </div>
         <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
       </div>
       <Switch id={id} checked={checked} onCheckedChange={onChange} disabled={disabled} />

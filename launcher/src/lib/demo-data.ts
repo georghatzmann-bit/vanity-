@@ -46,7 +46,7 @@ export const demoFriends: Friend[] = [
   { id: "f2", name: "Lena", via: "Radmin VPN", address: "26.31.4.120" },
 ];
 
-/** Match rules of a new profile: "Classic match" (like back then) and no AI bots. */
+/** Match rules of a new profile: "Classic match" (like back then), no AI bots, Bosses & NPCs off. */
 export const classicMatch = {
   lategame: false,
   infiniteAmmo: false,
@@ -54,6 +54,8 @@ export const classicMatch = {
   bots: false,
   botCount: 30,
   botSkill: "easy",
+  livingWorld: false,
+  livingWorldMaxAI: 40,
 } as const satisfies Partial<Profile>;
 
 export const demoProfiles: Profile[] = [
@@ -148,6 +150,10 @@ export const demoLogScript: DemoLogLine[] = [
   { source: "game", level: "error", category: "LogParty", message: "Failed to connect to XMPP – party features limited" },
   { source: "backend", level: "info", category: "Backend", message: "Matchmaker: player queued → 127.0.0.1:7777" },
   { source: "server", level: "info", category: "LogNet", message: "Join succeeded: georg" },
+  { source: "server", level: "info", category: "loot", message: "items: 312" },
+  // What the server says today with Bosses & NPCs on (spawning is still being built)
+  { source: "server", level: "warning", category: "livingWorld", message: "unavailable: not built yet for this version (Fortnite 19.10, max AI 40)" },
+  { source: "launcher", level: "warning", category: "livingWorld", message: "Bosses & NPCs aren't available: not built yet for this version" },
 ];
 
 export const demoCrashes: CrashReport[] = [
@@ -245,9 +251,12 @@ function demoBuild(version: string, cl: number, downloadGb: number, installedGb:
   };
 }
 
-/** [chapter, season, label, major, status when no build is offered, builds] */
-const demoSeasons: [number, number, string, number, SeasonStatus, CatalogBuild[]][] = [
-  ...Array.from({ length: 10 }, (_, i) => [1, i + 1, i === 9 ? "Season X" : `Season ${i + 1}`, i + 1, "notFromEpic", []] as [number, number, string, number, SeasonStatus, CatalogBuild[]]),
+/** [chapter, season, label, major, status when no build is offered, builds, one line about the season] */
+type DemoSeason = [number, number, string, number, SeasonStatus, CatalogBuild[], string?];
+
+/** Same builds, sizes and texts as launcher/core/data/build-catalog.json. */
+const demoSeasons: DemoSeason[] = [
+  ...Array.from({ length: 10 }, (_, i): DemoSeason => [1, i + 1, i === 9 ? "Season X" : `Season ${i + 1}`, i + 1, "notFromEpic", []]),
   [2, 1, "Season 1", 11, "notFromEpic", []],
   [2, 2, "Season 2", 12, "notFromEpic", []],
   [2, 3, "Season 3", 13, "available", [
@@ -271,16 +280,53 @@ const demoSeasons: [number, number, string, number, SeasonStatus, CatalogBuild[]
   ]],
   [3, 1, "Season 1", 19, "notFromEpic", []],
   [3, 2, "Season 2", 20, "notFromEpic", []],
-  [3, 3, "Season 3", 21, "notOfferedYet", []],
-  [3, 4, "Season 4", 22, "notOfferedYet", []],
-  [4, 1, "Season 1", 23, "notOfferedYet", []],
-  [4, 2, "Season 2", 24, "notOfferedYet", []],
-  [4, 3, "Season 3", 25, "notOfferedYet", []],
-  [4, 4, "Season 4", 26, "notOfferedYet", []],
-  [4, 5, "Season OG", 27, "notOfferedYet", []],
-  [5, 1, "Season 1", 28, "notOfferedYet", []],
-  [5, 2, "Season 2", 29, "notOfferedYet", []],
-  [5, 3, "Season 3", 30, "notOfferedYet", []],
+  [3, 3, "Season 3", 21, "available", [
+    demoBuild("21.10", 20696680, 35.02, 38.54, "Darth Vader arrives as a boss with his Lightsaber."),
+    demoBuild("21.20", 21035704, 35.56, 39.03, "Indiana Jones and Darth Vader in the Battle Pass; Charge SMG; Shuffled Shrines."),
+    demoBuild("21.50", 21657658, 36.56, 40.12, "Last Chapter 3 Season 3 update: Dragon Ball Kamehameha and Nimbus Cloud still in the loot pool."),
+  ], "Vibin': Reality Tree, Ballers, Darth Vader and Indiana Jones. Dragon Ball from 21.40."],
+  [3, 4, "Season 4", 22, "available", [
+    demoBuild("22.20", 22600409, 35.93, 39.51, "Fortnitemares 2022: Howler Claws (werewolf), Cube Monsters."),
+    demoBuild("22.40", 23070899, 36.93, 40.64, "Last Chapter 3 update: Chrome, Spider-Gwen, Rocket League Octane, Grapple Glider."),
+  ], "Paradise: Chrome, The Herald, Spider-Gwen. Fortnitemares 2022 in 22.20."],
+  [4, 1, "Season 1", 23, "available", [
+    demoBuild("23.40", 24087481, 46.32, 50.56, "Most Wanted: vault heists with exotic weapons; Doom Slayer and Geralt in the Battle Pass."),
+    demoBuild("23.50", 24441668, 46.9, 51.16, "Last Chapter 4 Season 1 update: Cipher Quests, Six Shooter and Infantry Rifle."),
+  ], "New Chapter 4 island, Reality Augments, Doom Slayer and Geralt. Most Wanted in 23.40."],
+  [4, 2, "Season 2", 24, "available", [
+    demoBuild("24.20", 25156858, 47.31, 51.79, "Attack on Titan: ODM Gear and Thunder Spears, Eren Jaeger in the Battle Pass."),
+    demoBuild("24.30", 25347382, 38.45, 42.62, "Star Wars 'Find the Force': lightsabers and Force abilities."),
+    demoBuild("24.40", 25595478, 62.54, 67.69, "Ranked arrives; last MEGA update."),
+  ], "MEGA: Mega City, Kinetic Blade. Attack on Titan (24.20), Star Wars (24.30), Ranked (24.40)."],
+  [4, 3, "Season 3", 25, "available", [
+    demoBuild("25.11", 26171015, 64.13, 69.28, "WILDS jungle, raptors and Optimus Prime; Explosive Repeater Rifle."),
+    demoBuild("25.20", 26629111, 64.4, 69.65, "Futurama: Bender's Shiny Metal Raygun."),
+    demoBuild("25.30", 26867995, 64.36, 69.6, "Jujutsu Kaisen 'Break the Curse!': Hollow Purple and cursed techniques."),
+  ], "WILDS: jungle, raptors, Optimus Prime. Futurama (25.20), Jujutsu Kaisen (25.30)."],
+  [4, 4, "Season 4", 26, "available", [
+    demoBuild("26.20", 28096793, 67.12, 72.53, "Fortnite's 6th birthday; Ahsoka Tano and the Jedi Training Lightsaber."),
+    demoBuild("26.30", 28688692, 73.86, 79.26, "Fortnitemares 2023: Wood Stake Shotgun, Thorne's Vampiric Blade."),
+  ], "Last Resort: heists, Kado Thorne, Ahsoka Tano. 6th birthday (26.20), Fortnitemares 2023 (26.30)."],
+  [4, 5, "Season OG", 27, "available", [
+    demoBuild("27.00", 29072304, 74.23, 79.61, "Fortnite OG: the Chapter 1 map as in Season 5."),
+    demoBuild("27.10", 29552510, 77.87, 83.56, "Fortnite OG: Chapter 1 Seasons 7 and 8 (X-4 Stormwing, Pirate Cannon)."),
+    demoBuild("27.11", 29739262, 81.54, 87.34, "Fortnite OG, last update: Chapter 1 Seasons 9 and X."),
+  ], "The Chapter 1 map comes back: Season 5 (27.00), Seasons 7–8 (27.10), Seasons 9–X (27.11)."],
+  [5, 1, "Season 1", 28, "available", [
+    demoBuild("28.01", 30313795, 95.8, 102.92, "Very big: about 103 GB on disk. Winterfest 2023 on the Chapter 5 island; Peter Griffin in the Battle Pass."),
+    demoBuild("28.20", 31286935, 96.79, 104.02, "Very big: about 104 GB on disk. Mid-season update from February 2024."),
+    demoBuild("28.30", 31511038, 98.63, 106.09, "Very big: about 106 GB on disk. Last Chapter 5 Season 1 update: Society bosses, weapon mods, Solid Snake."),
+  ], "Underground: new island, Society bosses, weapon mods, Peter Griffin. Winterfest 2023 in 28.01."],
+  [5, 2, "Season 2", 29, "available", [
+    demoBuild("29.00", 32116959, 101.33, 108.93, "Very big: about 109 GB on disk. Myths & Mortals: Zeus and Hades bosses, Thunderbolt of Zeus, Wings of Icarus."),
+    demoBuild("29.20", 32716692, 105, 112.94, "Very big: about 113 GB on disk. Mid-season update from April 2024."),
+    demoBuild("29.40", 33629566, 107.75, 116.2, "Very big: about 116 GB on disk. Last Chapter 5 Season 2 update: Star Wars crossover (Wookiee Bowcaster)."),
+  ], "Myths & Mortals: Mount Olympus, Zeus and Hades bosses, Korra. Star Wars in 29.40."],
+  [5, 3, "Season 3", 30, "available", [
+    demoBuild("30.00", 33962396, 110.51, 118.78, "Very big: about 119 GB on disk. Wrecked: wasteland, Nitro, War Bus, Megalo Don; Fallout (Nuka-Cola, Power Armor)."),
+    demoBuild("30.10", 34399867, 111.62, 119.77, "Very big: about 120 GB on disk. Metallica: M72 stage POI and Ride the Lightning."),
+    demoBuild("30.40", 35235494, 107.81, 115.96, "Very big: about 116 GB on disk. Last Chapter 5 Season 3 update: Fall Guys event (Where We Fallin')."),
+  ], "Wrecked: wasteland, Nitro cars, Megalo Don, Fallout and Magneto. Metallica (30.10), Fall Guys (30.40)."],
 ];
 
 export const demoCatalog: Catalog = {
@@ -290,7 +336,7 @@ export const demoCatalog: Catalog = {
     label: `Chapter ${chapter}`,
     seasons: demoSeasons
       .filter(([c]) => c === chapter)
-      .map(([, season, label, major, status, builds]): CatalogSeason => {
+      .map(([, season, label, major, status, builds, about]): CatalogSeason => {
         const st: SeasonStatus = builds.length > 0 ? "available" : status === "available" ? "notOfferedYet" : status;
         return {
           season,
@@ -298,6 +344,7 @@ export const demoCatalog: Catalog = {
           versions: `${major}.x`,
           status: st,
           note: st === "available" ? "" : seasonNotes[st],
+          about: about ?? "",
           builds,
         };
       }),

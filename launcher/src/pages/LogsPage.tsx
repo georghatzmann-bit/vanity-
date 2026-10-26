@@ -18,6 +18,17 @@ type Source = LogLine["source"];
 type Level = LogLine["level"];
 
 const sourceLabel: Record<Source, string> = { game: "Game", server: "Server", backend: "Backend", launcher: "Niobium" };
+
+/**
+ * Topics: lines of our own server DLL get their own category (Rust `logparse.rs`, `tagged_line`):
+ * `[NiobiumLoot]` → "loot", `[PlayerBots]` → "bots", `[LivingWorld]` → "livingWorld".
+ */
+const topics = [
+  { category: "loot", label: "Loot" },
+  { category: "bots", label: "AI bots" },
+  { category: "livingWorld", label: "Bosses & NPCs" },
+] as const;
+type Topic = (typeof topics)[number]["category"];
 const levelStyle: Record<Level, { label: string; text: string; dot: string }> = {
   info: { label: "Info", text: "text-muted-foreground", dot: "bg-muted-foreground/70" },
   warning: { label: "Warning", text: "text-warning", dot: "bg-warning shadow-[0_0_6px_rgb(245_158_11/0.7)]" },
@@ -42,6 +53,8 @@ export function LogsPage() {
   const calm = useCalmMotion();
   const [source, setSource] = useState<"all" | Source>("all");
   const [levels, setLevels] = useState<Level[]>(["info", "warning", "error"]);
+  /** "" = every topic */
+  const [topic, setTopic] = useState<Topic | "">("");
   const [query, setQuery] = useState("");
   const [follow, setFollow] = useState(true);
   const scroller = useRef<HTMLDivElement>(null);
@@ -54,8 +67,14 @@ export function LogsPage() {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return logs.filter((l) => (source === "all" || l.source === source) && levels.includes(l.level) && (!q || `${l.category} ${l.message}`.toLowerCase().includes(q)));
-  }, [logs, source, levels, query]);
+    return logs.filter(
+      (l) =>
+        (source === "all" || l.source === source) &&
+        levels.includes(l.level) &&
+        (!topic || l.category === topic) &&
+        (!q || `${l.category} ${l.message}`.toLowerCase().includes(q)),
+    );
+  }, [logs, source, levels, topic, query]);
 
   const counts = useMemo(
     () => ({
@@ -128,6 +147,14 @@ export function LogsPage() {
                 <span className={cn("size-1.5 rounded-full", levelStyle[lv].dot)} />
                 <span>{levelStyle[lv].label}</span>
                 <NumberTicker value={counts[lv]} fromZero={false} className="font-mono text-[11px] text-faint" />
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          {/* One topic at a time; click it again to see everything */}
+          <ToggleGroup type="single" value={topic} onValueChange={(v) => setTopic(v as Topic | "")} aria-label="Show only one topic" className="gap-1">
+            {topics.map((t) => (
+              <ToggleGroupItem key={t.category} value={t.category} className="px-3">
+                {t.label}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>

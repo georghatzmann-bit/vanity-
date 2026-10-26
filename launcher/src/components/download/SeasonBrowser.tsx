@@ -210,6 +210,7 @@ function SeasonCard({
           <p className="text-xs text-muted-foreground tabular-nums">
             {season.builds.length} {season.builds.length === 1 ? "build" : "builds"} · from {formatGB(smallest)}
           </p>
+          {season.about && <p className="mt-1 text-xs leading-snug text-faint">{season.about}</p>}
           {ownedText && (
             <p className="flex items-center gap-1.5 text-xs text-success">
               <Check className="size-3.5" strokeWidth={2.5} />

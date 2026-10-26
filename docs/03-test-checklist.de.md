@@ -10,9 +10,10 @@ der nicht klappt: Screenshot + Log an mich (siehe „Was ich brauche“ ganz unt
 Niobium hieß früher Vanity. Wenn du Vanity installiert hattest, übernimmt Niobium deine Einstellungen
 von selbst – diese Liste sagt dir, worauf du achten sollst.
 
-**Neu in dieser Version** (Schritte 10–14): Profile mit „Classic match“, Waffen aufheben und tauschen,
-Bodenloot und die Loot-Liste bei 19.10, KI-Bots bei 19.10 (experimentell) und „Download a version“.
-Nichts davon wurde schon in einem echten Spiel getestet – genau dafür sind diese Schritte da.
+**Neu in dieser Version** (Schritte 10–15): Profile mit „Classic match“, Waffen aufheben und tauschen,
+Bodenloot und die Loot-Liste bei 19.10, KI-Bots bei 19.10 (experimentell), „Download a version“ (jetzt auch
+21.x bis 30.x) und „Bosses & NPCs“ (experimentell, noch im Bau). Nichts davon wurde schon in einem echten Spiel
+getestet – genau dafür sind diese Schritte da.
 
 ## Herunterladen
 
@@ -426,23 +427,33 @@ den Test trotzdem und schick mir die Größe.
 - [ ] „Play with AI bots“ ausschalten → **Host & Play** → keine „bots“-Zeilen, keine Meldung, das Match ist wie
       vorher.
 
-## Schritt 14 – Eine Version herunterladen (freiwillig – braucht etwa 50 GB und 2 Stunden)
+## Schritt 14 – Eine Version herunterladen (freiwillig – 18.30 braucht etwa 50 GB und 2 Stunden, Chapter 5 bis zu 120 GB)
 
 Niobium kann einige alte Builds herunterladen. Die Dateiliste kommt aus einem öffentlichen GitHub-Archiv, und
 jede Spieldatei kommt direkt von Epics eigenen Download-Servern – nie von Re-Uploads. Epic hat bei vielen alten
 Seasons Teile gelöscht, die kann man nicht herunterladen. **Chapter 3 Season 1 (19.10) gehört dazu** – deine
-19.10 funktioniert aber weiter.
+19.10 funktioniert aber weiter. **Neu:** Chapter 3 Season 3 und 4, ganz Chapter 4 (mit Season OG) und Chapter 5
+Season 1–3 (21.x bis 30.x) kann man jetzt herunterladen. Die sind groß: etwa 40 GB (21.x, 22.x) bis etwa 120 GB
+(30.x) auf der Festplatte.
 
 **Umschauen (es wird nichts heruntergeladen):**
 
 - [ ] **Library** → **Download a version** (Knopf oben, oder die Kachel unter „Add a build“). Die Seite
       „Download a version“ geht auf; in der Seitenleiste bleibt „Library“ hervorgehoben.
-- [ ] Oben: Reiter „Chapter 1“ bis „Chapter 5“. Nur „Chapter 2“ hat eine grüne Zahl (5).
+- [ ] Oben: Reiter „Chapter 1“ bis „Chapter 5“. Grüne Zahlen: „Chapter 2“ 5, „Chapter 3“ 2, „Chapter 4“ 5,
+      „Chapter 5“ 3. „Chapter 1“ hat keine.
 - [ ] **Chapter 1:** ein Hinweis „All of Chapter 1 · Not available from Epic.“ mit der Erklärung, und auf jeder
       Karte steht „Not available from Epic“.
-- [ ] **Chapter 3:** die Hinweise „Seasons 1 and 2 · Not available from Epic.“ und „Seasons 3 and 4 · Not
-      offered yet.“ Auf der Karte „Season 1“ steht „Epic deleted some of its files.“ und in Grün „Your 19.10
-      keeps working.“
+- [ ] **Chapter 3:** nur der Hinweis „Seasons 1 and 2 · Not available from Epic.“ Auf der Karte „Season 1“ steht
+      „Epic deleted some of its files.“ und in Grün „Your 19.10 keeps working.“ „Season 3“ und „Season 4“ sind
+      „Available“; auf „Season 3“ steht „3 builds · from 35.0 GB“ und eine kurze Zeile „Vibin': Reality Tree,
+      Ballers, Darth Vader and Indiana Jones. Dragon Ball from 21.40.“
+- [ ] **Chapter 4:** alle fünf Seasons sind „Available“, oben kein Hinweis. Auf „Season OG“ steht „3 builds · from
+      74.2 GB“ und „The Chapter 1 map comes back: Season 5 (27.00), Seasons 7–8 (27.10), Seasons 9–X (27.11).“
+- [ ] **Chapter 5:** Season 1, 2 und 3 sind „Available“. Auf **Season 3** klicken → oben steht der neueste Build:
+      „30.40“ mit „107.8 GB download · 116.0 GB on disk · about 4 h 50 min at 50 Mbit/s“ und in Orange „Very big:
+      about 116 GB on disk. Last Chapter 5 Season 3 update: Fall Guys event (Where We Fallin').“ 30.10 wählen →
+      unter dem Ordner steht „Needs about 121.9 GB free on that drive.“ Danach **Cancel**.
 - [ ] **Chapter 2:** „Season 3“, „Season 5“, „Season 6“, „Season 7“ und „Season 8“ sind „Available“; auf
       „Season 8“ steht „7 builds · from 40.1 GB“.
 - [ ] Auf **Season 8** klicken → ein Fenster „Chapter 2 · Season 8“. Oben steht der neueste Build: „18.30“, mit
@@ -454,7 +465,7 @@ Seasons Teile gelöscht, die kann man nicht herunterladen. **Chapter 3 Season 1 
       - ein Ordner mit Dateien drin, z. B. `C:\Users\georg\Downloads` → „This folder already has other files in
         it. Pick an empty folder.“
       - falls du OneDrive nutzt: ein Ordner darin → „This folder is synced by OneDrive. Pick a folder outside
-        OneDrive, or it will try to upload about 40 GB.“
+        OneDrive, or it will try to upload the whole game (up to about 120 GB).“
       - falls du einen USB-Stick mit FAT32 hast: ein Ordner darauf → „Drive E: can't hold files bigger than 4 GB
         (FAT32). Pick a folder on another drive.“ (mit deinem Laufwerksbuchstaben)
       - ein Laufwerk mit zu wenig Platz → „There isn't enough free space on drive D:. This version needs
@@ -465,9 +476,9 @@ Seasons Teile gelöscht, die kann man nicht herunterladen. **Chapter 3 Season 1 
 
 - [ ] 18.30 wählen, den Ordner lassen → **Download 18.30**. Oben erscheint eine Karte mit vier Schritten:
       „Check at Epic“, „Download“, „Check files“, „Add to Library“. Zuerst „Checking that Epic still has every
-      file… (about 1 min)“, dann die Prozent, die aktuelle Datei, „Downloaded“, „Speed“, „Time left“ und
+      file… (a few minutes)“, dann die Prozent, die aktuelle Datei, „Downloaded“, „Speed“, „Time left“ und
       „Files … of 785“. In der Seitenleiste zeigt eine kleine Fortschritts-Pille den Stand, auch auf anderen
-      Seiten.
+      Seiten („Checking at Epic, a few minutes“).
 - [ ] **Pause** → „Pausing…“ → „Paused – everything downloaded so far is kept.“ → **Resume** → es geht weiter
       (zuerst kurz wieder „Check at Epic“, dann laufen die Prozent dort weiter, wo sie waren).
 - [ ] Niobium schließen, während es lädt → „Close Niobium?“ zeigt „Download (18.30)“ → **Stop & close**. Niobium
@@ -483,6 +494,39 @@ Seasons Teile gelöscht, die kann man nicht herunterladen. **Chapter 3 Season 1 
       18.30-Karte mit „Untested“.
 - [ ] **Host & Play** → startet 18.30, und kannst du ein Match spielen?
 - [ ] Erscheint eine Fehler-Karte: ein Screenshot davon und die Live-Log-Zeile, die mit „Download of“ anfängt.
+- [ ] (Freiwillig, wenn du Platz hast) eine neuere Season, z. B. **Chapter 4 → Season OG → 27.11** (87.3 GB auf
+      der Festplatte) oder **Chapter 3 → Season 3 → 21.50** (40.1 GB). Die Schritte sind gleich; „Check at Epic“
+      kann bei den großen ein paar Minuten dauern. Danach **Host & Play** damit und sag mir: Startet es, kannst
+      du ein Match spielen?
+
+## Schritt 15 – Bosses & NPCs (experimentell, noch im Bau)
+
+Das Ziel: Die Bosse, Wachen und Tiere der Season laufen herum, wie damals. Das ist noch im Bau: Der Game Server
+bekommt es Season für Season (zuerst 19.10). Solange deine Season noch nicht fertig ist, antwortet der Server
+mit „Not available“ – das ist in Ordnung und so erwartet. Beide Antworten helfen mir, also schick mir bitte
+deine. Probier es zuerst mit 19.10, dann mit einem anderen Build, den du hast (z. B. einem aus Schritt 14).
+
+- [ ] **Profiles** → dein Profil **…** → **Edit**. Im Kasten „Match rules“ gibt es einen Schalter „Bosses & NPCs“
+      mit dem Abzeichen „Experimental“ und dem Text „Bosses, guards and creatures of this season walk around,
+      like back then. Still being built: not every season has them yet.“ Einschalten. Bei „Max. bosses & NPCs“
+      steht 40 – so lassen → **Save**. Die Karte bekommt den Tag „Bosses & NPCs“; bei „Rules“ steht weiter
+      „Classic match“.
+- [ ] **Host & Play**. **Match Control** → **Game** → Kasten „Game mode“: „Bosses & NPCs“ ist an, „Max. bosses &
+      NPCs“ 40. **Start match** drücken.
+- [ ] Während die Karte lädt, erscheint im selben Kasten eine Zeile „This match“ mit einem Chip. Beides ist in
+      Ordnung – schreib auf, was du bekommst:
+      - orange „Not available: …“ mit dem Grund (heute wohl „Not available: not built yet for this version“)
+        und einmal die Meldung „Bosses & NPCs aren't available this match“, oder
+      - grün „Active“ oder „Active · N spawned“.
+- [ ] **Live Log** → den Filter **Bosses & NPCs** anklicken (neben Info/Warning/Error). Du siehst die
+      `[LivingWorld]`-Zeilen des Servers (ohne das Kürzel, Kategorie „livingWorld“) und von der Quelle **Niobium**
+      eine Zeile wie „Bosses & NPCs aren't available: …“ oder „Bosses & NPCs are on: N spawned.“ → **Copy** und
+      schick mir diese Zeilen. Nochmal auf **Bosses & NPCs** klicken, dann siehst du wieder alles.
+- [ ] Nur wenn der Chip „Active“ zeigte: Schreib auf, was du im Spiel siehst. Tauchen Bosse, Wachen oder Tiere
+      auf? Wo? Hänger oder Abstürze?
+- [ ] Wenn das Match vorbei ist, verschwindet die Zeile „This match“.
+- [ ] „Bosses & NPCs“ im Profil ausschalten → **Host & Play** → **Start match**: keine Zeile „This match“, keine
+      Meldung, keine „Bosses & NPCs“-Zeile von **Niobium** im Live Log – das Match ist wie vorher.
 
 ## Andere Versionen testen (ungetestet, aber startbar)
 
@@ -515,10 +559,13 @@ hast, testest du genauso.
 8. Bei KI-Bots: Live Log → `bots` suchen → **Copy**, dazu was du im Spiel gesehen hast (Schritt 13).
 9. Bei Loot: Live Log → `loot` suchen → **Copy**, dazu die `[FloorLoot]`-Zeilen aus `stdout.log` (Schritt 12).
 10. Bei einem Download: ein Screenshot der Download-Karte und die Live-Log-Zeilen, die mit „Download of“ anfangen.
+11. Bei Bosses & NPCs: der Text auf dem Chip, die Build-Version und die Live-Log-Zeilen mit dem Filter **Bosses &
+    NPCs** (**Copy**) (Schritt 15).
 
 Kurz und ehrlich: Ich kann hier kein Fortnite starten. Alles bis zum Ladebildschirm ist aus den
 Quell-Projekten (Reboot-Ablauf, LawinServer, Tellurium, Magnesium) 1:1 nachgebaut und gegen deren Verhalten
 geprüft – ob es bei dir durchläuft, zeigt erst dieser Test. Das gilt auch für die neuen Teile: Die KI-Bots und
 die Korrekturen beim Aufheben und beim Bodenloot wurden hier nur testweise kompiliert, und der Downloader hat in
 einem Test nur drei kleine Dateien von Epics Servern geholt – ein ganzer Download, die Bots und der Loot liefen
-noch nie in einem echten Spiel.
+noch nie in einem echten Spiel. Auch die neuen Seasons 21.x–30.x liefen noch nie in einem echten Spiel, und
+Bosses & NPCs sind noch im Bau (heute antwortet der Server mit „Not available“).

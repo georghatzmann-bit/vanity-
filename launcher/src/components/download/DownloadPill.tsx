@@ -40,7 +40,7 @@ function texts(job: DownloadJobView) {
     const eta = p.etaSecs !== null ? `${formatDuration(p.etaSecs)} left` : "";
     return { title: `Downloading ${job.version}`, line: [formatSpeed(p.speedBps), eta].filter(Boolean).join(" · "), tone: "brand" as const, pct };
   }
-  return { title: `${step.badge} · ${job.version}`, line: p.phase === "checking" ? "Checking at Epic, about 1 min" : step.doing, tone: "brand" as const, pct };
+  return { title: `${step.badge} · ${job.version}`, line: p.phase === "checking" ? "Checking at Epic, a few minutes" : step.doing, tone: "brand" as const, pct };
 }
 
 function Pill({ job, wide, onOpen }: { job: DownloadJobView; wide: boolean; onOpen: () => void }) {

@@ -1,9 +1,10 @@
 //! The list of builds Niobium can download (`launcher/core/data/build-catalog.json`).
 //!
 //! Only builds that were complete on Epic's CDN when checked AND that Niobium's game server is
-//! meant to run are listed. Seasons Epic has deleted parts of are marked "notFromEpic"; seasons
-//! the server isn't ready for are "notOfferedYet". Nothing from 31.00 on is ever offered (the
-//! game server refuses those builds, and the live game must never show up here).
+//! meant to run are listed (13.x–18.x and 21.x–30.x). Seasons Epic has deleted parts of are marked
+//! "notFromEpic"; a season the server isn't ready for would be "notOfferedYet" (none right now).
+//! Nothing from 31.00 on is ever offered (the game server refuses those builds, and the live game
+//! must never show up here).
 
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
@@ -56,6 +57,9 @@ pub struct SeasonEntry {
     pub major: u32,
     /// Status when the season has no offered build.
     pub status: SeasonStatus,
+    /// One short line about what the season had, shown on its card ("" = none).
+    #[serde(default)]
+    pub about: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -136,6 +140,8 @@ pub struct SeasonOut {
     pub status: SeasonStatus,
     /// Card text for "notFromEpic" / "notOfferedYet" (empty for "available").
     pub note: String,
+    /// One short line about what the season had ("" = none).
+    pub about: String,
     pub builds: Vec<BuildOut>,
 }
 
@@ -207,7 +213,15 @@ pub fn group(file: &CatalogFile) -> Catalog {
             SeasonStatus::NotFromEpic => NOTE_NOT_FROM_EPIC.into(),
             SeasonStatus::NotOfferedYet => NOTE_NOT_OFFERED_YET.into(),
         };
-        let season = SeasonOut { season: s.season, label: s.label.clone(), versions: format!("{}.x", s.major), status, note, builds };
+        let season = SeasonOut {
+            season: s.season,
+            label: s.label.clone(),
+            versions: format!("{}.x", s.major),
+            status,
+            note,
+            about: s.about.clone(),
+            builds,
+        };
         match chapters.iter_mut().find(|c| c.chapter == s.chapter) {
             Some(c) => c.seasons.push(season),
             None => chapters.push(ChapterOut { chapter: s.chapter, label: format!("Chapter {}", s.chapter), seasons: vec![season] }),
@@ -237,15 +251,53 @@ mod tests {
             assert!(b.download_bytes > 0 && b.installed_bytes >= b.download_bytes / 2);
             assert!(b.format == "json" || b.format == "binary");
             assert_eq!(b.manifest_urls()[0], format!("https://raw.githubusercontent.com/polynite/fn-releases/master/manifests/{}.manifest", b.manifest_id));
-            // the builds the plan offers: 13.30/13.40, 15.00, 16.00, 17.21, 17.50, 18.00–18.30
+            // the builds the plan offers: 13.30/13.40, 15.00, 16.00, 17.21, 17.50, 18.00–18.30, and
+            // 21.x–30.x (only builds whose game exe Epic still has completely)
             let major = version::parse_version_number(&b.version).unwrap().0;
-            assert!([13, 15, 16, 17, 18].contains(&major), "{} is not on the offer list", b.key());
+            assert!([13, 15, 16, 17, 18].contains(&major) || (21..=30).contains(&major), "{} is not on the offer list", b.key());
+            // 21.x–30.x: none of them is in the VastBlast archive, so polynite is the only source
+            if major >= 21 {
+                assert!(!b.vastblast && b.format == "binary", "{}", b.key());
+                assert_eq!(b.manifest_urls().len(), 1);
+            }
             // every build belongs to a season
             assert!(file.seasons.iter().any(|s| s.major == major));
         }
         // the user's main version can't be downloaded: Epic deleted a quarter of its pieces
         assert!(find_build("19.10-CL-18675304").is_none());
         assert!(find_build("18.30-CL-17882303").is_some());
+        // 20 main builds plus 7 extra ones for 21.x–30.x, next to the 17 older ones
+        assert_eq!(file.builds.len(), 44);
+        assert!(find_build("27.11-CL-29739262").is_some());
+        assert!(find_build("30.40-CL-35235494").is_some());
+        // builds whose game exe Epic deleted are never offered (e.g. 21.00, 22.00, 23.10)
+        assert!(file.builds.iter().all(|b| !["21.00", "22.00", "23.10"].contains(&b.version.as_str())));
+        // inside a season the builds go from old to new (the picker shows the newest first)
+        for pair in file.builds.windows(2) {
+            let (a, b) = (&pair[0], &pair[1]);
+            let (va, vb) = (version::parse_version_number(&a.version).unwrap(), version::parse_version_number(&b.version).unwrap());
+            assert!(va < vb || (va == vb && a.cl < b.cl), "{} comes before {}", a.key(), b.key());
+        }
+        // a very big build says so (the picker shows that note in the warning colour)
+        for b in &file.builds {
+            if b.installed_bytes >= 95_000_000_000 {
+                assert!(b.note.starts_with("Very big: about "), "{}", b.key());
+            }
+        }
+    }
+
+    #[test]
+    fn manifest_pins_of_new_builds() {
+        // Spot checks against the research (SHA-1 of the polynite file, its size, chunk count)
+        let b = find_build("22.40-CL-23070899").unwrap();
+        assert_eq!(b.manifest_id, "yTUVvOU-BiOQgUeuLkavho8cCAt9_g");
+        assert_eq!(b.manifest_sha1, "5836b23451f6c8a991121a44407f85bf4bdede3c");
+        assert_eq!((b.manifest_bytes, b.chunks), (2_667_116, 38_720));
+        let b = find_build("30.10-CL-34399867").unwrap();
+        assert_eq!(b.manifest_sha1, "cdd0710c4b41904c9cbe55109a1f668af1d9b419");
+        assert_eq!((b.download_bytes, b.installed_bytes), (111_620_737_997, 119_773_345_537));
+        assert!(b.note.starts_with("Very big: about 120 GB on disk."));
+        assert_eq!(b.manifest_urls(), vec![POLYNITE_URL.replace("{id}", "8mTO_w4sy5ubMXTizEKFD2W6Q5glQw")]);
     }
 
     #[test]
@@ -265,8 +317,21 @@ mod tests {
         assert!(ch2s8.builds.iter().all(|b| b.badge == Badge::Experimental));
         assert_eq!(season(1, 10).label, "Season X");
         assert_eq!(season(4, 5).label, "Season OG");
-        assert_eq!(season(3, 4).status, SeasonStatus::NotOfferedYet);
-        assert_eq!(season(5, 3).status, SeasonStatus::NotOfferedYet);
+        // 21.x–30.x can be downloaded now: Chapter 3 Seasons 3–4, all of Chapter 4, Chapter 5 Seasons 1–3
+        for (ch, s, n) in [(3, 3, 3), (3, 4, 2), (4, 1, 2), (4, 2, 3), (4, 3, 3), (4, 4, 2), (4, 5, 3), (5, 1, 3), (5, 2, 3), (5, 3, 3)] {
+            let x = season(ch, s);
+            assert_eq!(x.status, SeasonStatus::Available, "Chapter {ch} Season {s}");
+            assert_eq!(x.builds.len(), n, "Chapter {ch} Season {s}");
+            assert!(x.note.is_empty());
+            assert!(!x.about.is_empty(), "Chapter {ch} Season {s} has its line");
+            assert!(x.builds.iter().all(|b| b.badge == Badge::Experimental));
+        }
+        assert_eq!(season(4, 5).versions, "27.x");
+        assert!(season(4, 5).builds.iter().any(|b| b.key == "27.11-CL-29739262"));
+        // the older seasons have no line (yet)
+        assert!(season(2, 8).about.is_empty());
+        // nothing in the built-in list is "not offered yet" any more
+        assert!(c.chapters.iter().flat_map(|ch| &ch.seasons).all(|s| s.status != SeasonStatus::NotOfferedYet));
         // nothing from 31.00 on, anywhere
         for ch in &c.chapters {
             for s in &ch.seasons {
@@ -278,9 +343,12 @@ mod tests {
         }
         let json = serde_json::to_value(&c).unwrap();
         assert_eq!(json["chapters"][2]["seasons"][0]["status"], "notFromEpic");
+        assert_eq!(json["chapters"][2]["seasons"][0]["about"], "");
         let b = &json["chapters"][1]["seasons"][7]["builds"][0];
         assert!(b["downloadBytes"].as_u64().unwrap() > 0);
         assert_eq!(b["badge"], "experimental");
+        assert_eq!(json["chapters"][3]["seasons"][4]["label"], "Season OG");
+        assert!(json["chapters"][3]["seasons"][4]["about"].as_str().unwrap().starts_with("The Chapter 1 map comes back"));
     }
 
     #[test]
@@ -301,5 +369,19 @@ mod tests {
         assert_eq!(c.chapters[0].seasons.len(), 1, "the 31.x season is never listed");
         assert_eq!(c.chapters[0].seasons[0].status, SeasonStatus::Available);
         assert_eq!(c.chapters[0].seasons[0].builds[0].key, "30.40-CL-2");
+        assert_eq!(c.chapters[0].seasons[0].about, "", "a season without the line still loads");
+    }
+
+    #[test]
+    fn season_without_builds_is_not_offered_yet() {
+        // "available" in the file but no build → "notOfferedYet" with its card text
+        let file = parse(
+            r#"{"checkedOn":"x","seasons":[{"chapter":4,"season":1,"label":"Season 1","major":23,"status":"available","about":"New island."}],"builds":[]}"#,
+        )
+        .unwrap();
+        let s = &group(&file).chapters[0].seasons[0];
+        assert_eq!(s.status, SeasonStatus::NotOfferedYet);
+        assert_eq!(s.note, NOTE_NOT_OFFERED_YET);
+        assert_eq!(s.about, "New island.");
     }
 }

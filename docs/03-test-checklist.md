@@ -8,9 +8,10 @@ itself – this checklist tells you what to look for.
 
 A German copy of this list is in [`03-test-checklist.de.md`](03-test-checklist.de.md).
 
-**New in this version** (Steps 10–14): "Classic match" profiles, picking up and swapping weapons, floor
-loot and the loot list on 19.10, AI bots on 19.10 (experimental) and "Download a version". None of it has
-been tested in a real game yet – that's what these steps are for.
+**New in this version** (Steps 10–15): "Classic match" profiles, picking up and swapping weapons, floor
+loot and the loot list on 19.10, AI bots on 19.10 (experimental), "Download a version" (now also 21.x to 30.x)
+and "Bosses & NPCs" (experimental, still being built). None of it has been tested in a real game yet – that's
+what these steps are for.
 
 ## Download
 
@@ -415,23 +416,32 @@ test and send me the size.
       1000 (Normal) or 2000 (Hard).
 - [ ] Switch "Play with AI bots" off → **Host & Play** → no "bots" lines, no pop-up, the match is as before.
 
-## Step 14 – Download a version (optional – needs about 50 GB and 2 hours)
+## Step 14 – Download a version (optional – 18.30 needs about 50 GB and 2 hours, Chapter 5 up to 120 GB)
 
 Niobium can download some old builds. The file list comes from a public GitHub archive, and every game file
 comes straight from Epic's own download servers – never from re-uploads. Epic has deleted parts of many old
 seasons, so those can't be downloaded. **Chapter 3 Season 1 (19.10) is one of them** – your 19.10 keeps
-working.
+working. **New:** Chapter 3 Seasons 3 and 4, all of Chapter 4 (with Season OG) and Chapter 5 Seasons 1–3
+(21.x to 30.x) can be downloaded now. They are big: about 40 GB (21.x, 22.x) up to about 120 GB (30.x) on disk.
 
 **Look around (nothing is downloaded):**
 
 - [ ] **Library** → **Download a version** (button at the top, or the tile under "Add a build"). The page
       "Download a version" opens; in the sidebar "Library" stays lit.
-- [ ] At the top: tabs "Chapter 1" to "Chapter 5". Only "Chapter 2" has a green number (5).
+- [ ] At the top: tabs "Chapter 1" to "Chapter 5". Green numbers: "Chapter 2" 5, "Chapter 3" 2, "Chapter 4" 5,
+      "Chapter 5" 3. "Chapter 1" has none.
 - [ ] **Chapter 1:** a note "All of Chapter 1 · Not available from Epic." with the explanation, and every
       card says "Not available from Epic".
-- [ ] **Chapter 3:** notes "Seasons 1 and 2 · Not available from Epic." and "Seasons 3 and 4 · Not offered
-      yet." The "Season 1" card says "Epic deleted some of its files." and, in green, "Your 19.10 keeps
-      working."
+- [ ] **Chapter 3:** only the note "Seasons 1 and 2 · Not available from Epic." The "Season 1" card says "Epic
+      deleted some of its files." and, in green, "Your 19.10 keeps working." "Season 3" and "Season 4" are
+      "Available"; "Season 3" says "3 builds · from 35.0 GB" and a short line "Vibin': Reality Tree, Ballers, Darth
+      Vader and Indiana Jones. Dragon Ball from 21.40."
+- [ ] **Chapter 4:** all five seasons are "Available", no note at the top. "Season OG" says "3 builds · from
+      74.2 GB" and "The Chapter 1 map comes back: Season 5 (27.00), Seasons 7–8 (27.10), Seasons 9–X (27.11)."
+- [ ] **Chapter 5:** Seasons 1, 2 and 3 are "Available". Click **Season 3** → the newest build is at the top:
+      "30.40" with "107.8 GB download · 116.0 GB on disk · about 4 h 50 min at 50 Mbit/s" and, in orange, "Very
+      big: about 116 GB on disk. Last Chapter 5 Season 3 update: Fall Guys event (Where We Fallin')." Pick 30.10 →
+      below the folder: "Needs about 121.9 GB free on that drive." Then **Cancel**.
 - [ ] **Chapter 2:** "Season 3", "Season 5", "Season 6", "Season 7" and "Season 8" are "Available"; "Season 8"
       says "7 builds · from 40.1 GB".
 - [ ] Click **Season 8** → a window "Chapter 2 · Season 8". The newest build is at the top: "18.30", with
@@ -443,7 +453,7 @@ working.
       - a folder with files in it, e.g. `C:\Users\georg\Downloads` → "This folder already has other files in
         it. Pick an empty folder."
       - if you use OneDrive: a folder in it → "This folder is synced by OneDrive. Pick a folder outside
-        OneDrive, or it will try to upload about 40 GB."
+        OneDrive, or it will try to upload the whole game (up to about 120 GB)."
       - if you have a USB stick with FAT32: a folder on it → "Drive E: can't hold files bigger than 4 GB
         (FAT32). Pick a folder on another drive." (with your drive letter)
       - a drive with too little space → "There isn't enough free space on drive D:. This version needs
@@ -454,8 +464,8 @@ working.
 
 - [ ] Pick 18.30, keep the folder → **Download 18.30**. A card appears at the top with four steps: "Check at
       Epic", "Download", "Check files", "Add to Library". First "Checking that Epic still has every file…
-      (about 1 min)", then the percent, the current file, "Downloaded", "Speed", "Time left" and "Files … of
-      785". A small progress pill shows in the sidebar, also on other pages.
+      (a few minutes)", then the percent, the current file, "Downloaded", "Speed", "Time left" and "Files … of
+      785". A small progress pill shows in the sidebar, also on other pages ("Checking at Epic, a few minutes").
 - [ ] **Pause** → "Pausing…" → "Paused – everything downloaded so far is kept." → **Resume** → it continues
       (first a short "Check at Epic" again, then the percent goes on from where it was).
 - [ ] Close Niobium while it downloads → "Close Niobium?" lists "Download (18.30)" → **Stop & close**. Open
@@ -470,6 +480,37 @@ working.
       match" was made, if you had none for this build). **Library** shows an 18.30 card with "Untested".
 - [ ] **Host & Play** → does 18.30 start, and can you play a match?
 - [ ] If an error card appears: a screenshot of it, plus the Live Log line that starts with "Download of".
+- [ ] (Optional, if you have the space) a newer season, e.g. **Chapter 4 → Season OG → 27.11** (87.3 GB on disk)
+      or **Chapter 3 → Season 3 → 21.50** (40.1 GB). The steps are the same; "Check at Epic" can take a few
+      minutes on the big ones. Then **Host & Play** with it and tell me: does it start, can you play a match?
+
+## Step 15 – Bosses & NPCs (experimental, still being built)
+
+The goal: the season's bosses, guards and creatures walk around, like back then. This is still being built:
+the game server gets it season by season (19.10 first). Until your season is built, the server answers "Not
+available" – that is fine and expected. Both answers help me, so please send yours. Try 19.10 first, then any
+other build you have (e.g. one from Step 14).
+
+- [ ] **Profiles** → your profile **…** → **Edit**. In the box "Match rules" there is a switch "Bosses & NPCs"
+      with the badge "Experimental" and the text "Bosses, guards and creatures of this season walk around, like
+      back then. Still being built: not every season has them yet." Switch it on. "Max. bosses & NPCs" shows 40
+      – leave it → **Save**. The card gets the tag "Bosses & NPCs"; "Rules" still says "Classic match".
+- [ ] **Host & Play**. **Match Control** → **Game** → box "Game mode": "Bosses & NPCs" is on, "Max. bosses &
+      NPCs" 40. Press **Start match**.
+- [ ] While the map loads, a row "This match" appears in the same box with a chip. Both of these are fine –
+      write down which one you got:
+      - orange "Not available: …" with the reason (today most likely "Not available: not built yet for this
+        version"), and one pop-up "Bosses & NPCs aren't available this match", or
+      - green "Active" or "Active · N spawned".
+- [ ] **Live Log** → click the filter **Bosses & NPCs** (next to Info/Warning/Error). You see the server's
+      `[LivingWorld]` lines (shown without the tag, category "livingWorld"), and from source **Niobium** one line
+      like "Bosses & NPCs aren't available: …" or "Bosses & NPCs are on: N spawned." → **Copy** and send me these
+      lines. Click **Bosses & NPCs** again to see everything.
+- [ ] Only if the chip said "Active": in the game, write down what you see. Do bosses, guards or animals show
+      up? Where? Any freezes or crashes?
+- [ ] When the match is over, the row "This match" goes away.
+- [ ] Switch "Bosses & NPCs" off in the profile → **Host & Play** → **Start match**: no row "This match", no
+      pop-up, no "Bosses & NPCs" line from **Niobium** in the Live Log – the match is as before.
 
 ## Testing other versions (untested, but they start)
 
@@ -501,10 +542,13 @@ downloaded in Step 14 is tested the same way.
 8. For AI bots: Live Log → search `bots` → **Copy**, plus what you saw in the game (Step 13).
 9. For loot: Live Log → search `loot` → **Copy**, plus the `[FloorLoot]` lines from `stdout.log` (Step 12).
 10. For a download: a screenshot of the download card and the Live Log lines that start with "Download of".
+11. For Bosses & NPCs: the text on the chip, the build version, and the Live Log lines of the filter **Bosses &
+    NPCs** (**Copy**) (Step 15).
 
 Short and honest: I can't start Fortnite here. Everything up to the loading screen is rebuilt 1:1 from
 the source projects (Reboot launch flow, LawinServer, Tellurium, Magnesium) and checked against how they
 behave – whether it runs on your PC, only this test shows. The same goes for the new parts: the AI bots,
 the pickup and floor loot fixes only passed a test compile here, and the downloader only fetched three
 small files from Epic's servers in a test – a full download, the bots and the loot have never run in a
-real game.
+real game. The new seasons 21.x–30.x haven't run in a real game either, and Bosses & NPCs are still being built
+(today the server answers "Not available").

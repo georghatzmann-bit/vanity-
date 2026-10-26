@@ -116,6 +116,13 @@ Tellurium, ATLAS Console and LawinServer (October 2026):
 Version numbers are compared with `version::parse_version_number`, which reads a one-digit minor
 version the way Fortnite means it: "15.4" counts as 15.40, "19.1" as 19.10 (from 5.0 on; "4.5" stays 4.5).
 
+Unreal Engine per season (the server and the menu switch on the **engine** version, not the Fortnite
+version): 19.x 5.0, 23.x 5.1, 25.x 5.2, 26.x 5.3, 27.x–30.x 5.4. Checked on 26 Oct 2026 in the version
+resource of `FortniteClient-Win64-Shipping.exe` (ProductName "Unreal Engine", ProductVersion) of 23.40-CL-24087481
+(5.1.0), 25.30-CL-26867995 (5.2.0), 26.00-CL-27424790 (5.3.0) and 27.00-CL-29072304 (5.4.0); each exe was put
+together from Epic's CDN chunks and matched the SHA-1 in its manifest. 28.x–30.x: Fortnite wiki (5.5 came with
+31.00).
+
 What changes per version (`launcher/core/src/launchargs.rs`, `VersionRules`):
 
 | Versions | Rule | Source |
@@ -127,9 +134,10 @@ What changes per version (`launcher/core/src/launchargs.rs`, `VersionRules`):
 | 20.00 and newer | in-game menu 8 s instead of 6 s after the login (engine objects need longer) | ATLAS `dllmain.cpp` |
 | 33.00 and newer | no DirectX 11 – `-d3d11` is left out (not startable right now anyway) | Epic |
 | 9.40 – 10.40 | the backend sends no hotfix files (on purpose in LawinServer) → no party system/XMPP, playing works | LawinServer `cloudstorage.js` |
-| 23 and newer | the backend turns off network encryption (`net.AllowEncryption=0`); server and menu do the same | LawinServer, Erbium, ATLAS |
-| 24.00 and newer | the menu turns off encryption; from UE 5.3 (about 27) Iris networking – server and menu agree | ATLAS, Magnesium |
-| 28.00 and newer | Chapter 5 movement (tac sprint, hurdling, sliding) is off in menu and server | ATLAS, Magnesium |
+| 23 and newer | the backend turns off network encryption (`net.AllowEncryption=0`); server and menu do the same from UE 5.1 (= 23.x) | LawinServer, Erbium, ATLAS |
+| 26.00 and newer | Iris networking from UE 5.3 – server and menu agree. One exception: on 27.11 the Durian playlist (`Playlist_Durian`) stays on the old GenericLegacy networking. The server writes its choice into a small shared "transport manifest"; on 27.11 the menu reads it when it joins a server on the same PC | ATLAS, Magnesium (`dllmain.cpp`, `FinalizeTransportPolicy`) |
+| 27.00 and newer | the menu turns off Chapter 5 movement from UE 5.4: tac sprint, hurdling, sliding and clambering | ATLAS `dllmain.cpp` |
+| 27.00 and newer | the server turns off tac sprint, sliding and clambering from UE 5.4. It turns off hurdling only on 27.11 with one of the known S27 custom-map playlists (`Playlist_Arena_DefaultSolo_Respawn`, `Playlist_OnlyUp_Jett`, `Playlist_TiltedZW_Jett`) | Magnesium `dllmain.cpp`, `Configuration.h` (`IsKnownS27CustomMapPlaylist`) |
 | 15.30 – 16.40 | Bubble Builds (see [below](#bubble-builds)) | Epic patch notes, research |
 | 19.00 – 19.99 | Bubble Builds as "Meshes Low" (experimental, see [below](#bubble-builds)) | research |
 | below 37.00 | "Reset builds" key in the F9 menu (from 37.00 Fortnite has its own "Reset Building" key) | Epic patch notes |
@@ -218,11 +226,13 @@ The UI shows seven steps: Backend, Server, Redirect, Login, Your game, Game serv
    away, and `niobium_client.dll` 6 s (8 s from 20.00) after its login.
 6. **Game server:** connect to the control pipe (up to 4 minutes) and send the profile's match settings
    in this order: `bEnableCheats` = true, `playlist` (if the profile has one), `bLateGame`, `bInfiniteAmmo`,
-   `bInfiniteMats`, `bPlayerBots`, `PlayerBotCount`, `PlayerBotTargetELO` (`niobium_core::bots::server_config_for`,
-   see [Match rules and AI bots](#match-rules-classic-match-and-ai-bots)). The live log says "Connected to the
+   `bInfiniteMats`, `bPlayerBots`, `PlayerBotCount`, `PlayerBotTargetELO`, and only when the profile has Bosses &
+   NPCs on `bLivingWorld`, `LivingWorldMaxAI` (`niobium_core::bots::server_config_for`, see
+   [Match rules and AI bots](#match-rules-classic-match-and-ai-bots) and
+   [Bosses & NPCs](#bosses--npcs-living-world-experimental)). The live log says "Connected to the
    server's control pipe – commands on, match settings sent", then the toast "The server is waiting for you".
    You start the match on "Match Control" ("Start match") or with START SERVER in the server window. The
-   server loads the map only after that, so the bot settings arrive in time.
+   server loads the map only after that, so the bot and Bosses & NPCs settings arrive in time.
 7. **Lobby:** as soon as the server log says `IpNetDriver … listening on port` (wait up to 30 minutes),
    the toast "Server ready" appears. Press Play in the game.
 
@@ -366,23 +376,30 @@ know the setting "…"."), and the same for numbers out of range:
 | `bPlayerBots` | true/false – Fortnite's own AI bots, only on 19.10-CL-18675304 (see [AI bots](#ai-bots-1910-experimental)). Server default: false |
 | `PlayerBotCount` | number of AI bots. Not refused when out of range: clamped to 1–99. Server default: 30 |
 | `PlayerBotTargetELO` | skill rating of the AI bots. Clamped to 0–5000. Server default: 500 |
+| `bLivingWorld` | true/false – Bosses & NPCs (see [Bosses & NPCs](#bosses--npcs-living-world-experimental)). Server default: false |
+| `LivingWorldMaxAI` | most bosses and NPCs at once. Clamped to 1–100. Server default: 40 |
 
 `bAutoRestart`, `bNoFallDamage` and `bInstantReload` do **not** exist.
 
 The three bot keys are only taken **before "Start match"** (`FConfiguration::bReadyToStart`), because the
 server decides about bots when the match starts. After that the answer is `ok:false` with "Bot settings
-take effect next match."
+take effect next match." The same goes for `bLivingWorld` and `LivingWorldMaxAI`: "Bosses & NPCs settings take
+effect next match." (older server builds say "Living world settings take effect next match."). The launcher
+shows such an answer as a "Server" pop-up with the server's text, whichever spelling it has.
 
 What the launcher sends:
 
 - When it connects, in this order: `bEnableCheats` = true, `playlist` (if the profile has one), `bLateGame`,
   `bInfiniteAmmo`, `bInfiniteMats`, `bPlayerBots`, `PlayerBotCount` (the profile's count, clamped to 1–99),
-  `PlayerBotTargetELO` (from the profile's bot skill). All values come from the active profile.
+  `PlayerBotTargetELO` (from the profile's bot skill), then `bLivingWorld` = true and `LivingWorldMaxAI` (clamped
+  to 1–100) **only when the profile has Bosses & NPCs on** (see [Bosses & NPCs](#bosses--npcs-living-world-experimental)).
+  All values come from the active profile.
 - Before every `startmatch`, `bEnableCheats` = true again. Also as soon as `status.ready` changes from false to
   true (start through START SERVER or the auto-host countdown – "Toggle Auto Host" in the server window
   turns cheats off otherwise).
-- From the "Match Control" page: `playlist`, `bLateGame`, `bForceRespawns`, `RespawnTime`, `bInfiniteAmmo`,
-  `bInfiniteMats`, `bTrickshotDetection`, `bDisableJumpFatigue`, `bAutoReloadOnWaypointTP`, `BotHealth`,
+- From the "Match Control" page: `playlist`, `bLateGame`, `bLivingWorld`, `LivingWorldMaxAI`, `bForceRespawns`,
+  `RespawnTime`, `bInfiniteAmmo`, `bInfiniteMats`, `bTrickshotDetection`, `bDisableJumpFatigue`,
+  `bAutoReloadOnWaypointTP`, `BotHealth`,
   `BotShield`; as `exec` the commands of the buttons (`startaircraft`, `pausesafezone`, `resumesafezone`,
   `skipsafezone`, `give …`, `givetoall …`, `parkour …`, `targetbot …`, `bot <n>`, `tpbot`, `delbot`,
   `demospeed …`, `gravity …`, `god`, `s niobium o`, `w niobium`, `l 2500`, `givetraps`, `giveammo`, `regen`)
@@ -397,8 +414,9 @@ Server → launcher:
 | `{"event":"reply","id":1,"ok":true,"message":"Done: startaircraft"}` | answer to a command (short English text, e.g. "Saved: bInfiniteAmmo", "Server is starting. Loading the map..."). With `ok:false` the launcher shows the text as a toast titled "Server" |
 | `{"event":"status","phase":"joinable","ready":true,"players":1,"lategame":false,"playlist":"/Game/…","port":7777}` | every 2 s. `phase`: `notReady`, `ready`, `joinable`, `started`, `ended`. `ready` = the start was triggered |
 | `{"event":"trickshot","player":"georg","victim":"Bot 3","meters":87}` | trickshot spotted (see below). The launcher shows the toast "TRICKSHOT! georg" with "on Bot 3 · 87 m" |
-| `{"event":"matchEnd"}` | match over – launcher toast "Match over" |
-| `{"event":"playerBots","state":"active","reason":""}` or `{"event":"playerBots","state":"unavailable","reason":"Bots aren't available for this copy of 19.10."}` | only when the profile has AI bots on: the server's decision for this match (see [AI bots](#ai-bots-1910-experimental)). The launcher writes "AI bots are on for this match." or "AI bots are off: <reason>" in the live log and sends the Tauri event `server:playerBots` `{ state, reason }`; for "unavailable" the UI shows the toast "AI bots are off for this match" with the reason |
+| `{"event":"matchEnd"}` | match over – launcher toast "Match over"; the UI forgets this match's AI bots and Bosses & NPCs answers |
+| `{"event":"playerBots","state":"active","reason":""}` or `{"event":"playerBots","state":"unavailable","reason":"Bots aren't available for this copy of 19.10."}` | only when the profile has AI bots on: the server's decision for this match (see [AI bots](#ai-bots-1910-experimental)). The launcher writes "AI bots are on for this match." or "AI bots are off: <reason>" in the live log (source Niobium, category `bots`) and sends the Tauri event `server:playerBots` `{ state, reason }`; for "unavailable" the UI shows the toast "AI bots are off for this match" with the reason |
+| `{"event":"livingWorld","state":"unavailable","reason":"not built yet for this version","spawned":0}` (`state` also "off", later "active") | how Bosses & NPCs go this match, sent at "Start match" (see [Bosses & NPCs](#bosses--npcs-living-world-experimental)). Today the server only sends "unavailable" (switch on) or "off" (switch off). The launcher forwards it (and any later update) as the Tauri event `server:livingWorld` `{ state, reason, spawned }`; "off" gets no log line and shows nothing |
 
 Unknown commands → `reply` with `ok:false` ("Unknown command "…"."). The pipe threads never touch game
 objects; they put commands in a queue that runs in the game thread.
@@ -646,12 +664,13 @@ ported from Legendary (GPL-3.0-or-later, see [`THIRD_PARTY_NOTICES.md`](../THIRD
 
 ### Where the files come from
 
-- **The manifest** (a small file that lists a build's files and the pieces they are made of, 2.9–34 MB):
+- **The manifest** (a small file that lists a build's files and the pieces they are made of, 2.5–34 MB):
   Epic's CDN refuses old manifests without a token (answer 403), so it comes from the public GitHub archive
   `polynite/fn-releases`
   (`https://raw.githubusercontent.com/polynite/fn-releases/master/manifests/<id>.manifest`). Fallback:
   `VastBlast/FortniteManifestArchive` (`…/main/Fortnite/Windows/<id>.manifest`), only for the 15 builds
-  where that file is byte-identical (not for 18.00-CL-17468642 and 18.20-CL-17792290). Every manifest is
+  where that file is byte-identical (not for 18.00-CL-17468642 and 18.20-CL-17792290). VastBlast has none of
+  the 21.x–30.x builds, so for those polynite is the only source (`vastblast: false`). Every manifest is
   **pinned by its SHA-1** in `build-catalog.json`; any other file is refused (`MANIFEST_MISMATCH`). The
   Tectors/FortXD archive is never used (its files are damaged).
 - **Every game byte** (the "chunks") comes only from Epic's official CDN hosts, path `/Builds/Fortnite/CloudDir/`,
@@ -663,8 +682,12 @@ ported from Legendary (GPL-3.0-or-later, see [`THIRD_PARTY_NOTICES.md`](../THIRD
 
 ### What it offers (`launcher/core/data/build-catalog.json`, checked on 26 Oct 2026)
 
-17 builds. All carry the badge **Experimental** (only versions in `TESTED` get "Tested", and 19.10 can't be
-downloaded). The sizes are what the UI shows (decimal GB); "free space" is on disk + 2 GiB.
+44 builds: 17 from Chapter 2 (13.x–18.x) and 27 from 21.x–30.x (20 main builds, two per season, plus 7 more).
+All carry the badge **Experimental** (only versions in `TESTED` get "Tested", and 19.10 can't be downloaded).
+The sizes are what the UI shows (decimal GB); "free space" is on disk + 2 GiB. For 21.x–30.x the last column
+is the season's `about` line on its card; each build also has a short note (e.g. "Darth Vader arrives as a boss
+with his Lightsaber." on 21.10). From 28.x on every note starts with "Very big: about N GB on disk." (warning
+colour in the picker).
 
 | Season | Builds | Download | On disk | Note on the card |
 |---|---|---|---|---|
@@ -673,6 +696,30 @@ downloaded). The sizes are what the UI shows (decimal GB); "free space" is on di
 | Chapter 2 Season 6 | 16.00-CL-15685441 | 35.1 GB | 38.9 GB | "Has the Chapter 2 'bubble wrap' build look (Bubble Builds)." |
 | Chapter 2 Season 7 | 17.21-CL-16949556, -16967001; 17.50-CL-17388565 | 38.4–40.3 GB | 42.6–44.5 GB | – |
 | Chapter 2 Season 8 | 18.00-CL-17468642; 18.10-CL-17619277, -17661844; 18.20-CL-17745267, -17792290; 18.21-CL-17811397; 18.30-CL-17882303 | 40.1–41.1 GB | 44.2–45.4 GB | – |
+| Chapter 3 Season 3 | 21.10-CL-20696680; 21.20-CL-21035704; 21.50-CL-21657658 | 35.0–36.6 GB | 38.5–40.1 GB | Vibin': Reality Tree, Ballers, Darth Vader and Indiana Jones. Dragon Ball from 21.40. |
+| Chapter 3 Season 4 | 22.20-CL-22600409; 22.40-CL-23070899 | 35.9–36.9 GB | 39.5–40.6 GB | Paradise: Chrome, The Herald, Spider-Gwen. Fortnitemares 2022 in 22.20. |
+| Chapter 4 Season 1 | 23.40-CL-24087481; 23.50-CL-24441668 | 46.3–46.9 GB | 50.6–51.2 GB | New Chapter 4 island, Reality Augments, Doom Slayer and Geralt. Most Wanted in 23.40. |
+| Chapter 4 Season 2 | 24.20-CL-25156858; 24.30-CL-25347382; 24.40-CL-25595478 | 38.5–62.5 GB | 42.6–67.7 GB | MEGA: Mega City, Kinetic Blade. Attack on Titan (24.20), Star Wars (24.30), Ranked (24.40). |
+| Chapter 4 Season 3 | 25.11-CL-26171015; 25.20-CL-26629111; 25.30-CL-26867995 | 64.1–64.4 GB | 69.3–69.6 GB | WILDS: jungle, raptors, Optimus Prime. Futurama (25.20), Jujutsu Kaisen (25.30). |
+| Chapter 4 Season 4 | 26.20-CL-28096793; 26.30-CL-28688692 | 67.1–73.9 GB | 72.5–79.3 GB | Last Resort: heists, Kado Thorne, Ahsoka Tano. 6th birthday (26.20), Fortnitemares 2023 (26.30). |
+| Chapter 4 Season OG | 27.00-CL-29072304; 27.10-CL-29552510; 27.11-CL-29739262 | 74.2–81.5 GB | 79.6–87.3 GB | The Chapter 1 map comes back: Season 5 (27.00), Seasons 7–8 (27.10), Seasons 9–X (27.11). |
+| Chapter 5 Season 1 | 28.01-CL-30313795; 28.20-CL-31286935; 28.30-CL-31511038 | 95.8–98.6 GB | 102.9–106.1 GB | Underground: new island, Society bosses, weapon mods, Peter Griffin. Winterfest 2023 in 28.01. |
+| Chapter 5 Season 2 | 29.00-CL-32116959; 29.20-CL-32716692; 29.40-CL-33629566 | 101.3–107.7 GB | 108.9–116.2 GB | Myths & Mortals: Mount Olympus, Zeus and Hades bosses, Korra. Star Wars in 29.40. |
+| Chapter 5 Season 3 | 30.00-CL-33962396; 30.10-CL-34399867; 30.40-CL-35235494 | 107.8–111.6 GB | 116.0–119.8 GB | Wrecked: wasteland, Nitro cars, Megalo Don, Fallout and Magneto. Metallica (30.10), Fall Guys (30.40). |
+
+**How 21.x–30.x were checked** (26 Oct 2026, about 230,000 HEAD requests over Epic's four hosts): a random
+sample is not enough here – Epic deleted the chunks of `FortniteClient-Win64-Shipping.exe` of many builds whose
+random chunks all still exist (21.00-CL-20548557 passed 50 of 50 random chunks, but 190 of its 215 exe chunks are
+gone). So every chunk of the shipping exe of all 92 builds 21.00–30.40 was checked (64 complete); then 36 of them
+got 400 random chunks, up to 600 chunks no neighbouring build uses, every chunk under `Binaries/` and up to 600
+chunks no other complete build uses – all present. 21.50-CL-21657658, 22.40-CL-23070899 and 27.11-CL-29739262
+were checked chunk by chunk (38,240, 38,720 and 82,973 chunks, all present). The manifests parse with Niobium's
+own parser (binary, feature level 17 or 21, not encrypted, version and CL as in the catalog, longest path 106
+characters). Left out because exe chunks are gone: every 21.00, 22.00 and 23.10 build, most other 21.x–23.x
+builds and 24.01-CL-24757023. The downloader still checks every chunk before it writes anything, so a chunk Epic deletes later only
+gives `CHUNKS_MISSING`.
+
+28.x–30.x need 103–120 GB on disk and have 98,000–114,000 chunks, so "Check at Epic" takes a few minutes.
 
 Nothing from 31.00 on is ever offered: the catalog is filtered by `SERVER_MAX_EXCLUSIVE` (the game server's
 limit), so the live game can never show up (test `new_builds_are_filtered`).
@@ -682,7 +729,10 @@ limit), so the live game can never show up (test `new_builds_are_filtered`).
 | Seasons | Badge | Why |
 |---|---|---|
 | All of Chapter 1 (1.x–10.x), Chapter 2 Seasons 1, 2 and 4 (11.x, 12.x, 14.x), **Chapter 3 Seasons 1 and 2 (19.x, 20.x)** | **Not available from Epic** | Epic has deleted part of the chunks of every build of these seasons that was checked, so no download can get one complete |
-| Chapter 3 Seasons 3 and 4 (21.x, 22.x), all of Chapter 4 (23.x–27.x), Chapter 5 Seasons 1–3 (28.x–30.x) | **Not offered yet** | Niobium's game server isn't tested on these yet. Epic still has many of these builds; they can come later |
+
+**Not offered yet:** no season has this badge right now (21.x–30.x can be downloaded since 26 Oct 2026). The
+status stays in the code for a season the game server isn't ready for: a season with no build in the catalog
+whose status says "available" shows it (test `season_without_builds_is_not_offered_yet`).
 
 The text above the cards (once per reason, Rust `NOTE_NOT_FROM_EPIC` / `NOTE_NOT_OFFERED_YET`):
 "Epic has deleted part of the files for this season, so no download can get it complete. If you already have
@@ -697,7 +747,8 @@ So no download can get 19.10, wherever the manifest comes from. A 19.10 you alre
 if it is in your Library, the Season 1 card says "Your 19.10 keeps working." The test
 `builtin_catalog_is_valid` makes sure 19.10 never gets into the catalog.
 
-Inside the offered seasons, builds that were not complete in the check are left out too (e.g. 18.40).
+Inside the offered seasons, builds that were not complete in the check are left out too (e.g. 18.40, 21.00,
+22.00, 23.10).
 
 ### Steps of one download (`download/mod.rs` `job_steps`, `epic/install.rs`)
 
@@ -716,7 +767,8 @@ The UI shows four steps: **Check at Epic**, **Download**, **Check files**, **Add
    size, so a bad folder is refused before the download starts, and its text shows under the folder field.
    Default folder: `<fixed drive with the most free space, no FAT>:\Niobium\Builds\<version>-CL-<cl>`.
 3. **Check at Epic:** a HEAD request for every chunk still needed, 32 at a time ("Checking that Epic still has
-   every file… (about 1 min)"). The first chunk Epic no longer has (404 from two hosts) stops everything with
+   every file… (a few minutes)" – about 1 minute for a 40 GB build, a few minutes for the 100+ GB builds of
+   28.x–30.x). The first chunk Epic no longer has (404 from two hosts) stops everything with
    `CHUNKS_MISSING` **before a single byte is written**; 403 from two hosts → `EPIC_BLOCKED`. If it stops
    here, the empty folders it made are removed again.
 4. **Download:** 16 HTTP workers and 4 file writers. Each writer writes one file at a time, strictly in order,
@@ -764,7 +816,7 @@ The UI shows four steps: **Check at Epic**, **Download**, **Check files**, **Add
 | `NETWORK` | "The connection to Epic's download servers dropped. Press Resume and Niobium continues where it stopped." |
 | `NOT_ENOUGH_SPACE` | "There isn't enough free space on drive D:. This version needs 47.5 GB and 12.3 GB is free. Free up space or pick another folder." ("this drive" when the letter is unknown) |
 | `FAT32` | "Drive E: can't hold files bigger than 4 GB (FAT32). Pick a folder on another drive." |
-| `ONEDRIVE` | "This folder is synced by OneDrive. Pick a folder outside OneDrive, or it will try to upload about 40 GB." |
+| `ONEDRIVE` | "This folder is synced by OneDrive. Pick a folder outside OneDrive, or it will try to upload the whole game (up to about 120 GB)." |
 | `NOT_EMPTY` | "This folder already has other files in it. Pick an empty folder." |
 | `WRITE_FAILED` | "Niobium can't write to this folder. Pick another one (not inside Program Files)." |
 | `VERIFY_FAILED` | "A downloaded file was still damaged. Please try again later." |
@@ -793,7 +845,7 @@ Resume, Try again, Pick another folder, Open folder, and Close (nothing on disk)
 
 | Command | Answer |
 |---|---|
-| `catalog_list` | `{ checkedOn, chapters: [{ chapter, label, seasons: [{ season, label, versions, status: "available" \| "notFromEpic" \| "notOfferedYet", note, builds: [{ key, version, cl, downloadBytes, installedBytes, badge: "tested" \| "experimental", note }] }] }] }` |
+| `catalog_list` | `{ checkedOn, chapters: [{ chapter, label, seasons: [{ season, label, versions, status: "available" \| "notFromEpic" \| "notOfferedYet", note, about, builds: [{ key, version, cl, downloadBytes, installedBytes, badge: "tested" \| "experimental", note }] }] }] }` |
 | `download_start { key, folder }` | starts; refuses with `{ code, message }` (folder problems, another download running) |
 | `download_pause { key }` | stops between chunks (refuses with a text) |
 | `download_resume { key }` | continues in the same folder (refuses with `{ code, message }`) |
@@ -823,6 +875,8 @@ these defaults):
 | `bots` | false | play with AI bots (only possible on 19.10-CL-18675304) |
 | `botCount` | 30 | number of AI bots, 1–99 (clamped when sent) |
 | `botSkill` | "easy" | "easy", "normal" or "hard" (any other value loads as "easy") |
+| `livingWorld` | false | Bosses & NPCs on (see [Bosses & NPCs](#bosses--npcs-living-world-experimental)) |
+| `livingWorldMaxAI` | 40 | most bosses and NPCs at once, 1–100 (clamped when sent) |
 
 All three rules off = **Classic match** ("like back then"). The profile editor shows a gold "Classic match"
 badge (or "Custom", with a "Classic" button that switches all three off) and the line "Classic match = like
@@ -854,7 +908,8 @@ Control → "Target dummies", command `bot <n>`), which stand still and work on 
   don't exist in this Fortnite version."; everything else (also 19.10 with another or unknown CL): "AI bots aren't
   available for this version yet." The editor then greys the section out, shows "Fortnite <version>: <note>" and
   saves `bots: false`. The UI mirrors the rule in `launcher/src/lib/bots.ts`; Rust's answer wins.
-- "Match Control" → "Game": the start card shows the chip "AI bots 30 · Easy" ("Off" when the server said no).
+- "Match Control" → "Game": the start card shows the chip "AI bots 30 · Easy" ("Off" when the server said no
+  this match; the answer is forgotten at `matchEnd` and when the game server stops).
 - The settings go to the server when the control pipe connects (see [Launch sequence](#launch-sequence-host--play--how-launchersrc-taurisrcenginers-does-it)).
   A change in the profile counts from the next Host & Play.
 
@@ -899,6 +954,53 @@ rewrites, its backend, and its storm, inventory and loadout code (Niobium has it
 available" or "error" are warnings (`logparse.rs`, `tagged_line`). Other lines you may see: "bot service started",
 "MMR bracket … to …, … bot types, ELO …", "spawn amount: … bots (max players …, humans …)", "1 bots spawned" and
 every 10th, "… default outfits for bots", "cached … POI volumes and … foundations", "Error: …".
+
+### Bosses & NPCs (living world, experimental)
+
+The goal: the season's bosses, guards and creatures walk around, like back then. **Today no version spawns
+any of them.** The game server is built in steps, season by season (19.10 first). Until a season is built,
+the server answers "unavailable" with the reason "not built yet for this version" (`native/server`,
+`LivingWorld.cpp`, `FLivingWorldHooks::Hook`). What exists now: the profile switch, the two pipe keys, the
+pipe event, the status chip, the live-log lines and the topic filter. This section is the launcher side.
+Code: `launcher/core/src/livingworld.rs`, `bots.rs` (`server_config_for`), `profiles.rs`, `logparse.rs`,
+`launcher/src-tauri/src/engine.rs`; UI `launcher/src/lib/livingworld.ts`, `ProfilesPage.tsx`, `MatchPage.tsx`,
+`LogsPage.tsx`, `store.ts`.
+
+- **Profile:** `livingWorld` (default false) and `livingWorldMaxAI` (default 40; JSON key with a capital "AI").
+  Old profiles load with these defaults. A new profile and the "Default" profile have it off.
+- **Profile editor:** in the "Match rules" box, the switch "Bosses & NPCs" with the badge "Experimental", the hint
+  "Bosses, guards and creatures of this season walk around, like back then. Still being built: not every season
+  has them yet." and the slider "Max. bosses & NPCs" (1–100). It doesn't change "Classic match" (bosses were
+  there back then), and the "Classic" button leaves it alone. When on, the profile gets the tag "Bosses & NPCs".
+- **Match Control → Game → "Game mode":** the same switch and slider for the running server (only before "Start
+  match"; they send `config` `bLivingWorld` / `LivingWorldMaxAI`; switching on also sends the max shown, because
+  it isn't sent at connect while the profile has the switch off). Once the server has answered with the switch
+  on, the row "This match" shows a status chip: "Not available: <reason>" (warning; today always "Not available:
+  not built yet for this version") or, once a season is built, "Active · 12 spawned" (green; just "Active" while
+  `spawned` is 0).
+- **Switch off = nothing changes:** the keys aren't sent, the server answers "off", and the launcher shows no
+  chip, no pop-up and no live-log line for it.
+- **Pipe keys** (sent when the pipe connects, after the bot keys, before the map loads, **only when the profile
+  has the switch on** – the server's default is off): `bLivingWorld` = true, `LivingWorldMaxAI` 1–100
+  (`livingworld::clamp_max_ai`). So a server that is already past "Start match" when the pipe connects only
+  refuses them (a "Server" pop-up) when the switch is on.
+- **Pipe event** `{"event":"livingWorld","state":"unavailable"|"active"|"off","reason":"…","spawned":N}` →
+  Tauri event `server:livingWorld` `{ state, reason, spawned }` on every event. The server sends one at "Start
+  match": today "unavailable" (switch on) or "off" (switch off); "active" comes once a season is built, and if
+  the server sends more (e.g. with a new `spawned`), the chip follows.
+  - Live log (source Niobium, category `livingWorld`): a line only when the switch is on and the state or the
+    reason changed within the match: "Bosses & NPCs aren't available: <reason>" (warning), later "Bosses &
+    NPCs are on: 12 spawned." (or "… are on for this match." while 0). "off" never gets a line. After `matchEnd`
+    the next match gets its own line.
+  - Pop-up "Bosses & NPCs aren't available this match" with the reason: at most once per match for each reason.
+  - The chip, the AI bots answer (`server:playerBots`) and the pop-up memory are cleared at `matchEnd` (the
+    server can stay open for the next match) and when the game server stops.
+- **Log lines:** `[LivingWorld] …` lines of the server get the category `livingWorld` (source Server, without the
+  tag); lines with "disabled", "failed", "fail:", "unavailable", "not available" or "error" are warnings (same
+  rule as `[PlayerBots]`). With the switch on the server writes these lines today too (e.g. "unavailable: not
+  built yet for this version (Fortnite 19.10, max AI 40)"); they help build the next seasons, so the test
+  checklist asks for them. The Live Log has a topic filter for our own server lines: "Loot", "AI bots" and
+  "Bosses & NPCs" (click the active one again to see everything).
 
 ## Pickups, floor loot and the loot log
 
@@ -995,9 +1097,10 @@ fixed-port note) come before the UI listens, so a `log:line` event then would be
 event. If the UI never asks, Rust sends them as events 10 s after the main window shows.
 
 Events: `services`, `launch:step`, `log:line`, `toast`, `server:event`, `trickshot`, `detect`,
-`bubble:ini-changed`, `app:close-requested`, `server:playerBots` (`{ state, reason }`), `download:progress`,
-`download:done`, `download:error`, `download:state`.
+`bubble:ini-changed`, `app:close-requested`, `server:playerBots` (`{ state, reason }`), `server:livingWorld`
+(`{ state, reason, spawned }`), `download:progress`, `download:done`, `download:error`, `download:state`.
 
 New settings keys in `config.json`: `bubbleBuilds` (true/false, default false) and `lastSeenVersion` (text
 or null). New profile keys: `infiniteAmmo`, `infiniteMats`, `bots`, `botCount`, `botSkill` (see
-[Match rules](#match-rules-classic-match)).
+[Match rules](#match-rules-classic-match)), `livingWorld`, `livingWorldMaxAI` (see
+[Bosses & NPCs](#bosses--npcs-living-world-experimental)).

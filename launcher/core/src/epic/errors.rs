@@ -102,7 +102,7 @@ impl DownloadError {
     pub fn onedrive() -> Self {
         err(
             ONEDRIVE,
-            "This folder is synced by OneDrive. Pick a folder outside OneDrive, or it will try to upload about 40 GB.",
+            "This folder is synced by OneDrive. Pick a folder outside OneDrive, or it will try to upload the whole game (up to about 120 GB).",
         )
     }
 
@@ -191,6 +191,8 @@ mod tests {
         );
         assert_eq!(DownloadError::fat32("").message, "This drive can't hold files bigger than 4 GB (FAT32). Pick a folder on another drive.");
         assert!(DownloadError::not_enough_space("", 1, 0).message.starts_with("There isn't enough free space on this drive."));
+        // true for every build in the list: the biggest one (30.10) is about 120 GB on disk
+        assert_eq!(DownloadError::onedrive().message, "This folder is synced by OneDrive. Pick a folder outside OneDrive, or it will try to upload the whole game (up to about 120 GB).");
         assert_eq!(DownloadError::chunks_missing().code, "CHUNKS_MISSING");
         let json = serde_json::to_value(DownloadError::network()).unwrap();
         assert_eq!(json["code"], "NETWORK");

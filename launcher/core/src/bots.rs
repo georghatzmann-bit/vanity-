@@ -95,7 +95,9 @@ pub fn bots_support(version: &str, changelist: Option<u32>) -> BotsSupport {
 
 /// The match settings sent to the server right after the control pipe connects, in this order
 /// (the server handles the pipe in order). `bEnableCheats` comes first: without it the server
-/// refuses every other key.
+/// refuses every other key. The "Bosses & NPCs" keys (`bLivingWorld`, `LivingWorldMaxAI`, see
+/// `crate::livingworld`) come last and only when the profile has them on: the server's default is
+/// off, and a key it refuses (the pipe connected after "Start match") would only bring a pop-up.
 pub fn server_config_for(profile: &Profile) -> Vec<(&'static str, Value)> {
     let mut out: Vec<(&'static str, Value)> = vec![("bEnableCheats", Value::Bool(true))];
     if !profile.playlist.is_empty() {
@@ -107,6 +109,10 @@ pub fn server_config_for(profile: &Profile) -> Vec<(&'static str, Value)> {
     out.push(("bPlayerBots", Value::Bool(profile.bots)));
     out.push(("PlayerBotCount", Value::from(clamp_bot_count(profile.bot_count))));
     out.push(("PlayerBotTargetELO", Value::from(profile.bot_skill.target_elo().min(BOT_ELO_MAX))));
+    if profile.living_world {
+        out.push(("bLivingWorld", Value::Bool(true)));
+        out.push(("LivingWorldMaxAI", Value::from(crate::livingworld::clamp_max_ai(profile.living_world_max_ai))));
+    }
     out
 }
 
@@ -196,6 +202,7 @@ mod tests {
         p.bot_skill = BotSkill::Normal;
         p.infinite_ammo = true;
         let keys: Vec<&str> = server_config_for(&p).iter().map(|(k, _)| *k).collect();
+        // Bosses & NPCs off (the default): their keys aren't sent at all
         assert_eq!(
             keys,
             [
@@ -209,6 +216,24 @@ mod tests {
                 "PlayerBotTargetELO"
             ]
         );
+        // switched on: the two keys come last
+        p.living_world = true;
+        let keys: Vec<&str> = server_config_for(&p).iter().map(|(k, _)| *k).collect();
+        assert_eq!(
+            keys,
+            [
+                "bEnableCheats",
+                "playlist",
+                "bLateGame",
+                "bInfiniteAmmo",
+                "bInfiniteMats",
+                "bPlayerBots",
+                "PlayerBotCount",
+                "PlayerBotTargetELO",
+                "bLivingWorld",
+                "LivingWorldMaxAI"
+            ]
+        );
         let cfg = server_config_for(&p);
         assert_eq!(cfg[0].1, Value::Bool(true));
         assert_eq!(cfg[1].1, "Playlist_DefaultSolo");
@@ -218,6 +243,37 @@ mod tests {
         assert_eq!(cfg[5].1, true);
         assert_eq!(cfg[6].1, 40);
         assert_eq!(cfg[7].1, 1000);
+        assert_eq!(cfg[8].1, true);
+        assert_eq!(cfg[9].1, 40);
+    }
+
+    #[test]
+    fn living_world_keys_come_last() {
+        let mut p = profile();
+        p.living_world = true;
+        p.living_world_max_ai = 25;
+        let cfg = server_config_for(&p);
+        // after the bot keys, in this order, and nothing after them
+        let n = cfg.len();
+        assert_eq!(cfg[n - 3].0, "PlayerBotTargetELO");
+        assert_eq!(cfg[n - 2], ("bLivingWorld", Value::Bool(true)));
+        assert_eq!(cfg[n - 1], ("LivingWorldMaxAI", Value::from(25)));
+        // the count is kept to 1–100
+        p.living_world_max_ai = 0;
+        assert_eq!(server_config_for(&p)[n - 1].1, 1);
+        p.living_world_max_ai = 250;
+        assert_eq!(server_config_for(&p)[n - 1].1, 100);
+        // with a playlist (one key more) they are still the last two
+        p.playlist = "Playlist_DefaultSolo".into();
+        let keys: Vec<&str> = server_config_for(&p).iter().map(|(k, _)| *k).collect();
+        assert_eq!(keys.len(), n + 1);
+        assert_eq!(&keys[keys.len() - 2..], ["bLivingWorld", "LivingWorldMaxAI"]);
+        // switched off again: neither key, whatever the count says
+        p.living_world = false;
+        let keys: Vec<&str> = server_config_for(&p).iter().map(|(k, _)| *k).collect();
+        assert_eq!(keys.len(), n - 1);
+        assert_eq!(keys.last(), Some(&"PlayerBotTargetELO"));
+        assert!(!keys.contains(&"bLivingWorld") && !keys.contains(&"LivingWorldMaxAI"));
     }
 
     #[test]
@@ -234,6 +290,10 @@ mod tests {
         assert_eq!(get("bPlayerBots"), false);
         assert_eq!(get("PlayerBotCount"), 30);
         assert_eq!(get("PlayerBotTargetELO"), 500);
+        // Bosses & NPCs off: nothing is sent (the server's default is off)
+        assert!(!keys.contains(&"bLivingWorld"));
+        assert!(!keys.contains(&"LivingWorldMaxAI"));
+        assert_eq!(keys.last(), Some(&"PlayerBotTargetELO"));
     }
 
     #[test]

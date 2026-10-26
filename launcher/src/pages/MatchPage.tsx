@@ -12,6 +12,7 @@ import {
   Crosshair,
   FastForward,
   Feather,
+  FlaskConical,
   Flag,
   Gift,
   Heart,
@@ -63,6 +64,7 @@ import { useCalmMotion } from "@/hooks/use-calm-motion";
 import { playlistLabel, playlists } from "@/lib/demo-data";
 import { api, inTauri, onEvent, type TrickshotPreset } from "@/lib/api";
 import { botSkillLabel, botsSupportFor, clampBotCount } from "@/lib/bots";
+import { LIVING_WORLD_MAX_MAX, LIVING_WORLD_MAX_MIN, clampLivingWorldMax, livingWorldStatus, livingWorldText } from "@/lib/livingworld";
 import { EASE_OUT, SPRING_PLAYFUL, SPRING_UI } from "@/lib/motion";
 import { activeProfile, buildOf, useApp, type ServiceStatus } from "@/lib/store";
 import { parkourFile, parkours, kindLabel, levelWord, TILE_METERS, type Parkour } from "@/lib/parkours";
@@ -123,6 +125,9 @@ interface MatchState {
   /** null = value from the active profile (the launcher sends it when the server starts) */
   infiniteAmmo: boolean | null;
   infiniteMats: boolean | null;
+  /** Bosses & NPCs – null = value from the active profile (only before "Start match") */
+  livingWorld: boolean | null;
+  livingWorldMaxAI: number | null;
   item: string;
   activeParkour: string | null;
   targetHp: number;
@@ -151,6 +156,8 @@ const matchDefaults: Omit<MatchState, "tab"> = {
   respawnTime: 3,
   infiniteAmmo: null,
   infiniteMats: null,
+  livingWorld: null,
+  livingWorldMaxAI: null,
   item: "heavy_sr",
   activeParkour: null,
   targetHp: 50,
@@ -467,6 +474,33 @@ function AiBotsChip() {
   return <InfoChip label="AI bots" value={value} />;
 }
 
+/**
+ * What the server says about Bosses & NPCs this match: "Active · 12 spawned" or "Not available: …".
+ * Nothing while there is no answer yet, after the match ended, or when the switch is off ("off").
+ */
+function LivingWorldStatusRow() {
+  const answer = useApp((s) => s.livingWorld);
+  if (!answer || answer.state === "off") return null;
+  const { text, tone } = livingWorldStatus(answer);
+  return (
+    <div className="flex items-center justify-between gap-6 py-3.5 first:pt-0 last:pb-0">
+      <p className="shrink-0 text-sm font-medium">This match</p>
+      <span
+        role="status"
+        className={cn(
+          "inline-flex min-w-0 items-start gap-2 rounded-lg px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
+          tone === "success" && "bg-success/12 text-success ring-success/25",
+          tone === "warning" && "bg-warning/12 text-warning ring-warning/25",
+          tone === "muted" && "bg-white/[0.05] text-muted-foreground ring-white/[0.06]",
+        )}
+      >
+        <span aria-hidden className="mt-[5px] size-1.5 shrink-0 rounded-full bg-current" />
+        <span className="min-w-0 break-words">{text}</span>
+      </span>
+    </div>
+  );
+}
+
 /** "Mode  Solo" chip whose value fades when it changes. */
 function InfoChip({ label, value }: { label: string; value: string }) {
   return (
@@ -499,6 +533,8 @@ function GameTab() {
   const lateGame = m.lateGame ?? profile?.lategame ?? false;
   const infiniteAmmo = m.infiniteAmmo ?? profile?.infiniteAmmo ?? false;
   const infiniteMats = m.infiniteMats ?? profile?.infiniteMats ?? false;
+  const livingWorld = m.livingWorld ?? profile?.livingWorld ?? false;
+  const livingWorldMax = m.livingWorldMaxAI ?? clampLivingWorldMax(profile?.livingWorldMaxAI ?? 40);
   const allItems = itemGroups.flatMap((g) => g.items);
   const itemName = allItems.find((i) => i.id === m.item)?.label ?? m.item;
 
@@ -539,6 +575,46 @@ function GameTab() {
                 }}
               />
             </SettingRow>
+            <SettingRow
+              label={livingWorldText.switchLabel}
+              htmlFor="m-living"
+              badge={
+                <Badge variant="warning">
+                  <FlaskConical />
+                  {livingWorldText.badge}
+                </Badge>
+              }
+              hint={livingWorldText.hint}
+              disabled={m.started}
+            >
+              <Switch
+                id="m-living"
+                checked={livingWorld}
+                disabled={m.started}
+                onCheckedChange={(v) =>
+                  flip("livingWorld", v, async () =>
+                    // The max isn't sent at connect while the profile has the switch off, so it goes along here
+                    (!v || (await config("LivingWorldMaxAI", livingWorldMax, livingWorldText.maxLabel))) &&
+                    config("bLivingWorld", v, livingWorldText.switchLabel),
+                  )
+                }
+              />
+            </SettingRow>
+            <SettingRow label={livingWorldText.maxLabel} hint="Fewer = smoother on one PC" disabled={m.started || !livingWorld}>
+              <Slider
+                className="w-36"
+                aria-label={livingWorldText.maxLabel}
+                min={LIVING_WORLD_MAX_MIN}
+                max={LIVING_WORLD_MAX_MAX}
+                step={1}
+                value={[livingWorldMax]}
+                disabled={m.started || !livingWorld}
+                onValueChange={([v]) => setMatch({ livingWorldMaxAI: clampLivingWorldMax(v) })}
+                onValueCommit={([v]) => config("LivingWorldMaxAI", clampLivingWorldMax(v), livingWorldText.maxLabel)}
+              />
+              <ValueChip>{livingWorldMax}</ValueChip>
+            </SettingRow>
+            <LivingWorldStatusRow />
           </Rows>
         </Panel>
 

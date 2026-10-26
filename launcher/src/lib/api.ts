@@ -57,6 +57,10 @@ export interface Profile {
   /** Number of AI bots, 1–99. */
   botCount: number;
   botSkill: BotSkill;
+  /** "Bosses & NPCs" (experimental): the season's bosses, guards and creatures walk around. */
+  livingWorld: boolean;
+  /** Most bosses and NPCs at once, 1–100. */
+  livingWorldMaxAI: number;
 }
 
 /** How good the AI bots are (Rust maps it to a skill rating: easy 500, normal 1000, hard 2000). */
@@ -72,6 +76,14 @@ export interface BotsSupport {
 export interface PlayerBotsEvent {
   state: "active" | "unavailable";
   reason: string;
+}
+
+/** Payload of the event "server:livingWorld": how "Bosses & NPCs" go this match. */
+export interface LivingWorldEvent {
+  state: "active" | "unavailable" | "off";
+  reason: string;
+  /** Bosses and NPCs in the match so far. */
+  spawned: number;
 }
 
 export interface Friend {
@@ -229,6 +241,8 @@ export interface CatalogSeason {
   status: SeasonStatus;
   /** Card text for "notFromEpic" / "notOfferedYet" ("" when available). */
   note: string;
+  /** One short line about what the season had, e.g. "WILDS: jungle, raptors, Optimus Prime." ("" = none). */
+  about?: string;
   builds: CatalogBuild[];
 }
 
@@ -585,6 +599,7 @@ export type EventName =
   | "detect"
   | "app:close-requested"
   | "server:playerBots"
+  | "server:livingWorld"
   | "download:progress"
   | "download:done"
   | "download:error"

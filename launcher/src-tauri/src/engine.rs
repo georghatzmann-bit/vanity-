@@ -16,6 +16,7 @@ use niobium_core::bots::{self, PlayerBotsEvent};
 use niobium_core::earlylog::EarlyLines;
 use niobium_core::helperprocs::HelperPids;
 use niobium_core::launchargs;
+use niobium_core::livingworld::LivingWorldEvent;
 use niobium_core::logparse::{self, Detection};
 use niobium_core::perfmode::{self, MeshChange, Prepared, Restored};
 use niobium_core::profiles::{self, Config, Profile, BACKEND_PORT, GAME_SERVER_PORT};
@@ -37,6 +38,10 @@ pub const EVENT_CLOSE_REQUESTED: &str = "app:close-requested";
 /// Tauri event when the server says whether AI bots run this match (payload
 /// `niobium_core::bots::PlayerBotsEvent`: `{ state: "active" | "unavailable", reason }`).
 pub const EVENT_PLAYER_BOTS: &str = "server:playerBots";
+
+/// Tauri event when the server says how "Bosses & NPCs" go this match (payload
+/// `niobium_core::livingworld::LivingWorldEvent`: `{ state: "active" | "unavailable" | "off", reason, spawned }`).
+pub const EVENT_LIVING_WORLD: &str = "server:livingWorld";
 
 /// Category of the launcher's own log lines in the live log.
 const CAT: &str = "Niobium";
@@ -907,6 +912,7 @@ impl Engine {
         let app = self.app.clone();
         std::thread::spawn(move || {
             let mut was_ready = false;
+            let mut last_living_world: Option<LivingWorldEvent> = None;
             for ev in rx {
                 let _ = app.emit("server:event", serde_json::json!({ "event": ev.event, "data": ev.rest }));
                 // Match just started (launcher, START SERVER or the auto-host countdown in the server window):
@@ -932,8 +938,22 @@ impl Engine {
                     let bots = PlayerBotsEvent::from_pipe(&ev.rest);
                     let engine = app.state::<Arc<Engine>>();
                     let level = if bots.state == "active" { "info" } else { "warning" };
-                    engine.log("launcher", level, CAT, &bots.log_line(), None);
+                    // Category "bots", so the Live Log's "AI bots" topic shows it next to the server's lines
+                    engine.log("launcher", level, logparse::CATEGORY_BOTS, &bots.log_line(), None);
                     let _ = app.emit(EVENT_PLAYER_BOTS, bots);
+                }
+                // Bosses & NPCs: on, not available (with the reason) or off – sent at "Start match". The live
+                // log only gets a line when the switch is on and the state or reason changes within a match
+                // ("off" never gets one); the UI gets every event and ignores "off".
+                if ev.event == "livingWorld" {
+                    let living = LivingWorldEvent::from_pipe(&ev.rest);
+                    if living.worth_a_log_line(last_living_world.as_ref()) {
+                        let engine = app.state::<Arc<Engine>>();
+                        // Category "livingWorld", so the Live Log's "Bosses & NPCs" topic shows it too
+                        engine.log("launcher", living.log_level(), logparse::CATEGORY_LIVING_WORLD, &living.log_line(), None);
+                    }
+                    let _ = app.emit(EVENT_LIVING_WORLD, living.clone());
+                    last_living_world = Some(living);
                 }
                 // Show refused commands as a hint (the server explains why)
                 if ev.event == "reply" && ev.rest.get("ok").and_then(|v| v.as_bool()) == Some(false) {
@@ -941,6 +961,8 @@ impl Engine {
                     let _ = app.emit("toast", Toast { kind: "warning".into(), title: "Server".into(), description: msg });
                 }
                 if ev.event == "matchEnd" {
+                    // the next match gets its own Bosses & NPCs line, even with the same answer
+                    last_living_world = None;
                     let _ = app.emit("toast", Toast { kind: "info".into(), title: "Match over".into(), description: "The server says the round has ended.".into() });
                 }
             }
@@ -958,8 +980,10 @@ impl Engine {
     /// on the server (jump fatigue, auto reload, …) (NiobiumControl.cpp, ApplyConfig).
     ///
     /// Order (see `niobium_core::bots::server_config_for`): bEnableCheats, playlist, bLateGame,
-    /// bInfiniteAmmo, bInfiniteMats, bPlayerBots, PlayerBotCount, PlayerBotTargetELO. The bot keys go
-    /// out before the map loads (the server waits for "Start match"), which is when it accepts them.
+    /// bInfiniteAmmo, bInfiniteMats, bPlayerBots, PlayerBotCount, PlayerBotTargetELO, then
+    /// bLivingWorld and LivingWorldMaxAI only when the profile has Bosses & NPCs on. The bot and
+    /// "Bosses & NPCs" keys go out before the map loads (the server waits for "Start match"), which
+    /// is when it accepts them.
     fn apply_profile_to_server(&self, link: &ServerLink, profile: &Profile) {
         for (key, value) in bots::server_config_for(profile) {
             if let Err(e) = link.set_config(key, value) {

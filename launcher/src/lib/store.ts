@@ -18,10 +18,12 @@ import {
   type ServiceStatus,
   type Settings,
   type PlayerBotsEvent,
+  type LivingWorldEvent,
   type Toast,
 } from "./api";
 import { botsText } from "./bots";
 import { demoLogScript } from "./demo-data";
+import { livingWorldText } from "./livingworld";
 
 export type { ServiceStatus };
 
@@ -113,6 +115,9 @@ interface AppState {
   /** The server's answer about AI bots for this match (event "server:playerBots"); null = none yet. */
   playerBots: PlayerBotsEvent | null;
 
+  /** How "Bosses & NPCs" go this match (event "server:livingWorld"); null = no answer yet. */
+  livingWorld: LivingWorldEvent | null;
+
   init: () => Promise<void>;
 }
 
@@ -124,6 +129,20 @@ function showToast(t: Toast) {
   fn(t.title, t.description ? { description: t.description } : undefined);
 }
 
+/**
+ * Reasons of "Bosses & NPCs aren't available" pop-ups already shown this match: each reason pops up at
+ * most once per match (like the live-log line in Rust). Emptied at the end of a match and when the game
+ * server stops.
+ */
+const livingWorldWarned = new Set<string>();
+
+/** The bot and Bosses & NPCs answers belong to one match: forget them (end of match, server stopped). */
+function forgetMatchAnswers() {
+  livingWorldWarned.clear();
+  const s = useApp.getState();
+  if (s.playerBots || s.livingWorld) useApp.setState({ playerBots: null, livingWorld: null });
+}
+
 /** "Always sprint" was removed: an old client.json may still have it on, but it always stays off. */
 function withoutSprint(settings: ClientSettings): ClientSettings {
   return { ...settings, preferences: { ...settings.preferences, sprintByDefault: false } };
@@ -131,7 +150,8 @@ function withoutSprint(settings: ClientSettings): ClientSettings {
 
 /**
  * Browser preview only: ?page=library, ?welcome=1, ?whatsnew=1, ?gusrestored=1, ?closeconfirm=1,
- * ?botsoff=1, ?dl=running (see downloads.ts) – for screenshots. Always null in the real launcher.
+ * ?botsoff=1, ?livingworld=active|unavailable, ?dl=running (see downloads.ts) – for screenshots. Always
+ * null in the real launcher.
  */
 export function previewParam(name: string): string | null {
   if (inTauri) return null;
@@ -203,6 +223,8 @@ export const useApp = create<AppState>()((set, get) => ({
 
   playerBots: null,
 
+  livingWorld: null,
+
   init: async () => {
     if (get().ready) return;
     let config = emptyConfig;
@@ -258,6 +280,26 @@ export const useApp = create<AppState>()((set, get) => ({
       set({ playerBots: { state, reason } });
       if (state === "unavailable") toast.warning(botsText.unavailableTitle, { description: reason || botsText.noteNotYet });
     });
+    // How Bosses & NPCs go this match (the status chip on Match Control). "off" (the switch is off) changes
+    // nothing you can see: no chip. Only "unavailable" needs a message, once per match for each reason.
+    onEvent<LivingWorldEvent>("server:livingWorld", (payload) => {
+      const state = payload?.state === "active" || payload?.state === "unavailable" ? payload.state : "off";
+      if (state === "off") {
+        if (get().livingWorld) set({ livingWorld: null });
+        return;
+      }
+      const reason = typeof payload?.reason === "string" ? payload.reason : "";
+      const spawned = typeof payload?.spawned === "number" && payload.spawned > 0 ? Math.floor(payload.spawned) : 0;
+      set({ livingWorld: { state, reason, spawned } });
+      if (state === "unavailable" && !livingWorldWarned.has(reason)) {
+        livingWorldWarned.add(reason);
+        toast.warning(livingWorldText.unavailableTitle, reason ? { description: reason } : undefined);
+      }
+    });
+    // The match is over (the server can stay open for the next one): its bot and Bosses & NPCs answers go
+    onEvent<{ event?: string }>("server:event", (payload) => {
+      if (payload?.event === "matchEnd") forgetMatchAnswers();
+    });
     // The window was asked to close (X, Alt+F4, taskbar) while something runs: Rust waits for the answer
     onEvent<CloseRequested>("app:close-requested", (payload) =>
       set({
@@ -282,14 +324,18 @@ export const useApp = create<AppState>()((set, get) => ({
         set({ playerBots: { state: "unavailable", reason } });
         window.setTimeout(() => toast.warning(botsText.unavailableTitle, { description: reason }), 600);
       }
+      const lw = previewParam("livingworld");
+      if (lw === "active") set({ livingWorld: { state: "active", reason: "", spawned: 12 } });
+      if (lw === "unavailable") set({ livingWorld: { state: "unavailable", reason: "not built yet for this version", spawned: 0 } });
       startDemoLog();
     }
   },
 }));
 
-// The bot answer belongs to one match: forget it when the game server stops
+// The bot and Bosses & NPCs answers belong to one match: forget them when the game server stops
+// (the end of a match does the same, see "server:event" in init)
 useApp.subscribe((s, prev) => {
-  if (s.playerBots && prev.services.server !== "stopped" && s.services.server === "stopped") useApp.setState({ playerBots: null });
+  if (prev.services.server !== "stopped" && s.services.server === "stopped") forgetMatchAnswers();
 });
 
 /** Sample lines in the browser preview, so the log page isn't empty. */

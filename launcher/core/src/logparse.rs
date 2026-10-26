@@ -81,26 +81,35 @@ pub enum Level {
 pub const CATEGORY_LOOT: &str = "loot";
 /// Live-log category of the AI bot lines (`[PlayerBots] …`).
 pub const CATEGORY_BOTS: &str = "bots";
+/// Live-log category of the "Bosses & NPCs" lines (`[LivingWorld] …`).
+pub const CATEGORY_LIVING_WORLD: &str = "livingWorld";
 
 /// Line tags our own server DLL writes, and the live-log category each one gets.
 ///
 /// - `[NiobiumLoot] features: <comma list>`, `[NiobiumLoot] items: <count>`, then up to 400
 ///   `[NiobiumLoot] item <ItemDefinitionName>` – written once after the loot setup.
 /// - `[PlayerBots] …` – what the AI bot setup did (e.g. `disabled: build doesn't match`).
-const TAGS: &[(&str, &str)] = &[("[NiobiumLoot]", CATEGORY_LOOT), ("[PlayerBots]", CATEGORY_BOTS)];
+/// - `[LivingWorld] …` – what the "Bosses & NPCs" setup did (e.g. `12 spawned`, `unavailable: …`).
+const TAGS: &[(&str, &str)] = &[
+    ("[NiobiumLoot]", CATEGORY_LOOT),
+    ("[PlayerBots]", CATEGORY_BOTS),
+    ("[LivingWorld]", CATEGORY_LIVING_WORLD),
+];
 
-/// Words that make a `[PlayerBots]` line a warning.
-const BOT_WARNING_WORDS: &[&str] = &["disabled", "failed", "fail:", "unavailable", "not available", "error"];
+/// Words that make a `[PlayerBots]` or `[LivingWorld]` line a warning.
+const WARNING_WORDS: &[&str] = &["disabled", "failed", "fail:", "unavailable", "not available", "error"];
 
-/// Recognises a line of our own server DLL by its tag (`[NiobiumLoot]`, `[PlayerBots]`), also
-/// behind Unreal's time stamp brackets. Returns (level, category, text after the tag).
+/// Recognises a line of our own server DLL by its tag (`[NiobiumLoot]`, `[PlayerBots]`,
+/// `[LivingWorld]`), also behind Unreal's time stamp brackets. Returns (level, category, text after
+/// the tag).
 pub fn tagged_line(line: &str) -> Option<(Level, &'static str, String)> {
     let mut rest = line.trim();
     loop {
         if let Some((tag, category)) = TAGS.iter().find(|(tag, _)| rest.starts_with(tag)) {
             let message = rest[tag.len()..].trim().to_string();
             let lower = message.to_ascii_lowercase();
-            let level = if *category == CATEGORY_BOTS && BOT_WARNING_WORDS.iter().any(|w| lower.contains(w)) {
+            let warns = *category == CATEGORY_BOTS || *category == CATEGORY_LIVING_WORLD;
+            let level = if warns && WARNING_WORDS.iter().any(|w| lower.contains(w)) {
                 Level::Warning
             } else {
                 Level::Info
@@ -117,7 +126,7 @@ pub fn tagged_line(line: &str) -> Option<(Level, &'static str, String)> {
 }
 
 /// Splits an Unreal log line "[time][frame]LogCategory: Warning: text".
-/// Lines of our own server DLL (`[NiobiumLoot]`, `[PlayerBots]`) get their own category.
+/// Lines of our own server DLL (`[NiobiumLoot]`, `[PlayerBots]`, `[LivingWorld]`) get their own category.
 pub fn split_line(line: &str) -> (Level, String, String) {
     if let Some((level, category, message)) = tagged_line(line) {
         return (level, category.to_string(), message);
@@ -196,6 +205,34 @@ mod tests {
         assert_eq!((lv, cat.as_str(), msg.as_str()), (Level::Info, "bots", "service set up, 30 bots, ELO 500"));
         let (lv, _, _) = split_line("[  0][PlayerBots] Error: no navigation data");
         assert_eq!(lv, Level::Warning);
+    }
+
+    #[test]
+    fn living_world_lines() {
+        let (lv, cat, msg) = split_line("[LivingWorld] 12 spawned (max 40)");
+        assert_eq!((lv, cat.as_str(), msg.as_str()), (Level::Info, "livingWorld", "12 spawned (max 40)"));
+        assert_eq!(cat, CATEGORY_LIVING_WORLD);
+        // behind Unreal's time stamps and with a Windows line end
+        let (lv, cat, msg) = split_line("[2026.10.26-21.02.11:204][ 12][LivingWorld] spawner data found: 31 points\r");
+        assert_eq!((lv, cat.as_str(), msg.as_str()), (Level::Info, "livingWorld", "spawner data found: 31 points"));
+        // problems are warnings, like the bot lines
+        for line in [
+            "[LivingWorld] unavailable: no spawner data for this season",
+            "[LivingWorld] disabled: the switch is off",
+            "[LivingWorld] Error: boss class not found",
+            "[  0][LivingWorld] spawn failed for 3 guards",
+        ] {
+            let (lv, cat, _) = split_line(line);
+            assert_eq!((lv, cat.as_str()), (Level::Warning, "livingWorld"), "{line}");
+        }
+        // not detected as anything else
+        assert_eq!(detect("[LivingWorld] 12 spawned"), None);
+        // only as a tag at the start, not inside other text or with another name
+        assert!(tagged_line("LogFort: [LivingWorld] inside the text").is_none());
+        assert!(tagged_line("[LivingWorldX] nope").is_none());
+        assert!(tagged_line("[Livingworld] wrong case").is_none());
+        // the loot tag stays info even with a warning word in it
+        assert_eq!(split_line("[NiobiumLoot] item WID_Failed_Thing").0, Level::Info);
     }
 
     #[test]
