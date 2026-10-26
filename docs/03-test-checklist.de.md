@@ -146,15 +146,35 @@ Ob die DLL geladen ist, siehst du im Live Log: „niobium_client.dll loaded“ (
 - [ ] Im Spiel **F9** drücken → das Menü „Niobium | Menu“ geht auf, die Maus ist frei.
       Links stehen fünf Reiter: **Main**, **Commands**, **Options**, **Trickshot**, **Credits**.
       Alles ist auf Englisch.
-- [ ] Reiter **Main** → „Editing“: „Reset on release“ an- und ausschalten und im Spiel beim Bearbeiten
-      prüfen. In 19.10 steht dort nur dieser Schalter. „Edit on release“ gibt es nur bis 10.40,
-      „Disable pre-edits“ nur bis 15.10.
+- [ ] Reiter **Main** → „Editing“: Auf jeder Version stehen dort alle drei Zeilen – „Edit on release“,
+      „Reset on release“, „Disable pre-edits“. Jede an- und ausschalten und beim Bearbeiten prüfen.
+      Auf 19.10 steht bei „Edit on release“ und „Disable pre-edits“ „Uses Fortnite's own … setting“: Dann
+      ändert sich Fortnites eigene Einstellung (Einstellungen → Spiel) mit – bitte nachsehen, ob dort dasselbe
+      steht. „Reset on release“ läuft auf 19.10 über Niobiums eigenen Code (ohne diese Zeile darunter). Ist
+      eine Zeile grau, bitte einen Screenshot.
 - [ ] Reiter **Main** → „Field of view“: den Regler „Degrees (normal: 80)“ bewegen → das Bild ändert sich
       sofort. „Back to 80“ stellt es wieder normal.
 - [ ] **F8** → Konsole; `fov 110` eingeben → Enter.
 - [ ] Reiter **Options** → „Keys“ → **Change menu key [F9]** → eine andere Taste drücken → das Menü geht
       jetzt mit der neuen Taste auf. Danach wieder auf F9 stellen.
-- [ ] Reiter **Options** → „Build look“: Bei 19.10 steht dort „Bubble Builds: Not available on 19.10“.
+- [ ] Reiter **Main** → „Graphics“ → **Bubble look** an → im Match ein paar Wände bauen → der durchsichtige
+      Teil sieht weich und „bubblig“ aus. Darunter steht „Bubble look: on (4 of 4 build textures)“ (oder
+      „waiting for the build textures. Place one build piece.“). Den Regler „Bubble strength“ bewegen → es
+      ändert sich sofort. Bitte ein Screenshot mit Bubble look an und aus.
+- [ ] Reiter **Options** → „Build look“: Auf 19.10 steht dort der Bubble-Builds-Status (siehe Schritt 8).
+- [ ] **Reset builds** (Reiter **Options** → „Reset builds“):
+      - „Reset builds“ einschalten → **Reset builds key [none]** → eine Taste drücken (z. B. die Taste, die du
+        in Fortnite für Reset nimmst; nicht die linke oder rechte Maustaste).
+      - Einem Match beitreten → der Status wechselt von „Checking the server...“ zu **„Ready.“** (grüner Punkt).
+      - Eine Wand bauen, bearbeiten (z. B. Fenster oder Tür), bestätigen. Dann die Wand anschauen, **ohne** die
+        Edit-Taste zu drücken, und deine Reset-builds-Taste drücken → die Wand ist wieder ganz.
+      - Der normale Weg geht weiterhin: Edit-Taste → im Edit-Modus Reset.
+      - Wenn du gerade ein Teil bearbeitest und die Reset-builds-Taste drückst: Nichts Komisches passiert,
+        dein Edit läuft einfach weiter.
+      - Aus großer Entfernung (mehr als etwa 20 m) probieren: Es passiert nichts.
+      - Im Server-Fenster „Allow Reset Builds Key“ ausschalten → ein neues Match starten → der Status sagt
+        „This server can't do it. It needs a Niobium server.“
+      - Wenn etwas nicht stimmt: die Zeilen mit `[reset-builds]` aus der `stdout.log` des Servers.
 - [ ] Reiter **Trickshot**: Er hat vier Bereiche.
       - „Load a parkour“: eine Karte pro Strecke (Name, easy/medium/hard, kurze Beschreibung, Knopf
         **Load**), darunter „Start over“ und „Clear everything“.
@@ -229,51 +249,60 @@ Die Antworten vom Server stehen in der Konsole (**F8**). Sie beginnen mit „[Ni
   „… jump objects couldn't be placed.“, „… target bots couldn't spawn.“ oder „The parkour list is missing.
   Please start the game from the Niobium launcher.“: Schreib die Zeile ab oder mach ein Foto davon.
 
-## Schritt 8 – Bubble Builds (braucht einen Build von 15.40 bis 16.00)
+## Schritt 8 – Bubble Builds (15.40 bis 16.00, und als Experiment auf 19.10)
 
-Bubble Builds ist der durchsichtige „Luftpolsterfolie“-Look der Bauteile aus Chapter 2 Season 5–6. Den gibt
-es nur im Leistungsmodus („Performance Mode“) bei Fortnite 15.40 bis 16.00. Bei 15.30 und 16.10 bis 16.40
-heißt es „Experimental“ (kann klappen, muss aber nicht). Während des Spielens lässt es sich nicht umschalten –
-es gilt ab dem nächsten Start.
+Bubble Builds ist der durchsichtige „Luftpolster“-Look der Bauten aus Chapter 2 Season 5–6. Es gibt ihn nur
+im Leistungsmodus auf Fortnite 15.40 bis 16.00. Auf 15.30 und 16.10 bis 16.40 ist er „Experimental“ (kann
+kommen oder nicht). Auf **19.x** ist er auch „Experimental“: Leistungsmodus plus **Meshes: Low** – nah am alten
+Look, aber nicht genau gleich. Umschalten geht nicht während des Spiels – es gilt beim nächsten Start.
 
-Wenn du keinen solchen Build hast: nur den Teil „Bei 19.10“ ganz unten machen.
+Mit Bubble Builds ändert Niobium für dieses eine Spiel drei Zeilen in Fortnites eigener Einstellungsdatei und
+**setzt sie danach von selbst zurück** (das hattest du so gewollt). Mach bitte vorher eine Kopie von
+`%LOCALAPPDATA%\FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini` (z. B. auf den Desktop),
+damit du am Ende vergleichen kannst.
 
-**Build vorbereiten.** Ein neues Profil nimmt im Moment immer den *ersten* Build in der Library. Darum:
+**Auf 19.10** (kein anderer Build nötig):
 
-- [ ] **Library** → auf der 19.10-Karte **…** → **Remove from list** (deine Dateien bleiben unberührt).
-- [ ] **Add a build** → dein Ordner mit 15.40 bis 16.00 → **Check** → **Add build**.
-- [ ] Die Zeile „Bubble Builds“ auf der Karte zeigt **Supported** (oder **Experimental** bei 15.30 /
-      16.10 bis 16.40); mit der Maus darüber siehst du die Erklärung. Die Zahl „Bubble Builds ready“ oben
-      zählt ihn mit.
-- [ ] **Profiles** → **New profile** → ein Name wie „Bubble test“, dein Spielername → **Create** → auf der
-      neuen Karte **Use this profile**. Auf der Karte steht „Build: Fortnite 15.…“.
-- [ ] Später fügst du 19.10 genauso wieder hinzu; das Profil „Default“ funktioniert dann von selbst wieder.
+- [ ] **Settings** → die Karte „Bubble Builds“ ganz oben → einschalten. Sie hat das Abzeichen „Experimental“
+      und sagt „Works as an experiment on your active build, Fortnite 19.10. It's not the exact Chapter 2 look.“
+- [ ] **Library**: Die 19.10-Karte zeigt „Bubble Builds: Experimental“.
+- [ ] **Host & Play.** Im Live Log steht:
+      - „Backed up Fortnite's graphics settings. They are put back when the game closes.“
+      - „Meshes set to Low for this game (it was …).“ – oder „Meshes is already Low.“
+      - „Bubble Builds on: starting in Performance Mode (-FeatureLevelES31)“
+      - Die Zeile „Starting your game: …“ enthält `-FeatureLevelES31`, die Zeile „Starting the server
+        Fortnite: …“ **nicht**.
+- [ ] Während das Spiel läuft, gibt es die Datei `%LOCALAPPDATA%\Niobium\gus-backup.json`.
+- [ ] Im Spiel ist die Grafik einfacher. Im Match ein paar Wände und Böden bauen → während sie hochgehen,
+      sehen sie weißer und durchsichtiger aus. Bitte ein Screenshot.
+- [ ] **F9** → **Options** → „Build look“: „Bubble Builds: On (Performance Mode, Meshes Low)“ mit grünem Punkt.
+- [ ] **Stop all.** Kurz nachdem das Spiel zu ist, steht im Live Log und als Pop-up **„Fortnite's graphics
+      settings were put back.“** Die Datei `gus-backup.json` ist weg.
+- [ ] `GameUserSettings.ini` mit deiner Kopie vergleichen: Die Zeilen `bPreferFeatureLevelES31`,
+      `PreferredFeatureLevel` und `MeshQuality` sind wie vorher. (Andere Zeilen, die Fortnite selbst während
+      des Spiels gespeichert hat, z. B. die letzte Spielzeit, dürfen anders sein – das ist normal.)
+- [ ] **Absturz-Test (freiwillig):** Host & Play mit Bubble Builds → während das Spiel läuft, `Niobium.exe` im
+      Task-Manager beenden → Fortnite auch schließen → Niobium wieder starten → im Live Log steht, dass die
+      Einstellungen zurückgesetzt wurden.
+- [ ] Bubble Builds ausschalten → nochmal **Host & Play** → kein `-FeatureLevelES31` und keine „Backed up …“-Zeile
+      im Log; F9 → Options sagt „Bubble Builds: Off – turn it on in the launcher, then restart the game.“
 
-**Einschalten und spielen:**
+**Auf 15.40 bis 16.00** (nur wenn du so einen Build hast):
 
-- [ ] **Settings** → die Karte „Bubble Builds“ ganz oben → einschalten („On“). Unter dem Text steht
-      „Works on your active build, Fortnite 15.…“ (oder der „Experimental“-Text).
-- [ ] **Home**: Neben „Active build“ steht ein Abzeichen „Bubble Builds“.
-- [ ] **Host & Play.** Im Live Log steht „Bubble Builds on: starting in Performance Mode (-FeatureLevelES31)“.
-      Die Zeile „Starting your game: …“ enthält `-FeatureLevelES31`; die Zeile „Starting the server
-      Fortnite: …“ enthält es **nicht**.
-- [ ] Im Spiel ist die Grafik einfacher (Leistungsmodus). Im Match ein paar Wände und Böden bauen → sie haben
-      den durchsichtigen „Luftpolsterfolie“-Look. Bitte schick mir einen Screenshot.
-- [ ] **F9** → **Options** → „Build look“: „Bubble Builds: On (set in the launcher)“ mit einem grünen Punkt.
-- [ ] **Stop all.** Hat Fortnite den Leistungsmodus als Standard gespeichert, erscheint ein Fenster
-      „Performance Mode is now saved“: „Fortnite saved Performance Mode as your default. This also affects
-      your other builds. Reset it?“ → **Reset** → die Meldung „Performance Mode reset“. (Kommt kein Fenster,
-      hat Fortnite die Einstellung nicht geändert – das ist auch in Ordnung.) **Keep** lässt alles so.
-- [ ] Bubble Builds ausschalten → nochmal **Host & Play** → kein `-FeatureLevelES31` im Log; in F9 → Options
-      steht „Bubble Builds: Off – turn it on in the launcher, then restart the game.“
+- [ ] **Library** → auf der 19.10-Karte **…** → **Remove from list** (deine Dateien bleiben unberührt). Ein neues
+      Profil nimmt im Moment immer den *ersten* Build in der Library.
+- [ ] **Add a build** → dein 15.40-bis-16.00-Ordner → **Check** → **Add build**. Die Zeile „Bubble Builds“ auf der
+      Karte zeigt **Supported** (oder **Experimental** bei 15.30 / 16.10 bis 16.40).
+- [ ] **Profiles** → **New profile** → ein Name wie „Bubble test“ → **Create** → **Use this profile**.
+- [ ] **Host & Play** → dieselben Log-Zeilen wie oben. Im Match haben die Bauten den durchsichtigen
+      „Luftpolster“-Look. Bitte ein Screenshot. F9 → Options → „Build look“ mit grünem Punkt.
+- [ ] **Stop all** → „Fortnite's graphics settings were put back.“
+- [ ] Später fügst du 19.10 genauso wieder hinzu; das Profil „Default“ geht dann von selbst wieder.
 
-**Bei 19.10** (Schalter an):
-
-- [ ] Auf der Karte in Settings steht „Your active build is Fortnite 19.10. Only on Fortnite 15.40 – 16.00
-      (Chapter 2, Seasons 5–6). Try Mobile Builds in the F9 menu.“
-- [ ] **Host & Play** → im Live Log steht „Bubble Builds are on, but Fortnite 19.10 can't show them –
-      starting normally“. Das Spiel startet genau wie ohne Schalter.
-- [ ] F9 → **Main** → „Graphics“ → **Mobile Builds**: geht bei jeder Version, sofort.
+**Andere Versionen:** Die Settings-Karte sagt „Not available for <Version>. … try Bubble look in the F9 menu.“
+**Host & Play** → „Bubble Builds are on, but Fortnite <Version> can't show them – starting normally“, und
+Fortnites Einstellungsdatei wird nicht angefasst. F9 → Main → „Graphics“ → **Bubble look** und **Mobile Builds**
+gehen auf jeder Version, sofort.
 
 ## Schritt 9 – Beenden
 
@@ -466,7 +495,7 @@ Dateien wichtig:
 - `<Build>\FortniteGame\Binaries\Win64\stdout.log` und der Ordner `MagnesiumCrashes` daneben – was der Game
   Server sagt.
 
-Bekannte Grenzen: 9.40–10.40 ohne Party/XMPP; „Edit on release“ nur bis 10.40; ab 31.00 noch nicht startbar;
+Bekannte Grenzen: 9.40–10.40 ohne Party/XMPP; ab 31.00 noch nicht startbar;
 KI-Bots nur auf 19.10 (CL-18675304). Bei Trickshot-Parkours kann es je nach Version andere Objekte geben – fehlt
 eins, sagt der Server das in der Konsole (siehe Schritt 7). Einen Build, den du in Schritt 14 heruntergeladen
 hast, testest du genauso.
@@ -479,10 +508,13 @@ hast, testest du genauso.
    **Folder** öffnet den Ordner).
 4. Bei einem Fortnite-Absturz: Seite **Crash Analysis** → den neuesten Eintrag → **Copy report**.
 5. Bei Trickshot-Sachen: die Zeilen aus der Konsole (**F8**), die mit „[Niobium]“ beginnen.
-6. Bei Bubble Builds: ein Screenshot deiner Bauten im Spiel und die Zeile „Starting your game: …“.
-7. Bei KI-Bots: Live Log → `bots` suchen → **Copy**, dazu was du im Spiel gesehen hast (Schritt 13).
-8. Bei Loot: Live Log → `loot` suchen → **Copy**, dazu die `[FloorLoot]`-Zeilen aus `stdout.log` (Schritt 12).
-9. Bei einem Download: ein Screenshot der Download-Karte und die Live-Log-Zeilen, die mit „Download of“ anfangen.
+6. Bei Bubble Builds: ein Screenshot deiner Bauten im Spiel, die Zeile „Starting your game: …“ und die Zeilen
+   mit „graphics settings“ oder „Meshes“.
+7. Bei Reset builds: ein Screenshot von F9 → Options → „Reset builds“ und die `[reset-builds]`-Zeilen aus der
+   `stdout.log` des Servers.
+8. Bei KI-Bots: Live Log → `bots` suchen → **Copy**, dazu was du im Spiel gesehen hast (Schritt 13).
+9. Bei Loot: Live Log → `loot` suchen → **Copy**, dazu die `[FloorLoot]`-Zeilen aus `stdout.log` (Schritt 12).
+10. Bei einem Download: ein Screenshot der Download-Karte und die Live-Log-Zeilen, die mit „Download of“ anfangen.
 
 Kurz und ehrlich: Ich kann hier kein Fortnite starten. Alles bis zum Ladebildschirm ist aus den
 Quell-Projekten (Reboot-Ablauf, LawinServer, Tellurium, Magnesium) 1:1 nachgebaut und gegen deren Verhalten

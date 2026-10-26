@@ -140,15 +140,34 @@ Whether the DLL is loaded you can see in the Live Log: "niobium_client.dll loade
 - [ ] In the game, press **F9** → the menu "Niobium | Menu" opens and the mouse is free.
       On the left there are five tabs: **Main**, **Commands**, **Options**, **Trickshot**, **Credits**.
       Everything is in English.
-- [ ] Tab **Main** → "Editing": switch "Reset on release" on and off and check it while editing in the game.
-      In 19.10 this is the only toggle there. "Edit on release" only exists up to 10.40,
-      "Disable pre-edits" only up to 15.10.
+- [ ] Tab **Main** → "Editing": all three rows are there on every version – "Edit on release",
+      "Reset on release", "Disable pre-edits". Switch each one on and off and check it while editing.
+      On 19.10, "Edit on release" and "Disable pre-edits" say "Uses Fortnite's own … setting": then
+      Fortnite's own setting (Settings → Game) changes too – check that it shows the same. "Reset on
+      release" uses Niobium's own code on 19.10 (no such line under it). If a row is grey, a screenshot please.
 - [ ] Tab **Main** → "Field of view": move the slider "Degrees (normal: 80)" → the picture changes at once.
       "Back to 80" sets it back to normal.
 - [ ] **F8** → console; type `fov 110` → Enter.
 - [ ] Tab **Options** → "Keys" → **Change menu key [F9]** → press another key → now the menu opens with the
       new key. Then set it back to F9.
-- [ ] Tab **Options** → "Build look": on 19.10 it says "Bubble Builds: Not available on 19.10".
+- [ ] Tab **Main** → "Graphics" → **Bubble look** on → in a match, build a few walls → the see-through part
+      looks soft and bubbly. The line below says "Bubble look: on (4 of 4 build textures)" (or "waiting for
+      the build textures. Place one build piece."). Move "Bubble strength" → it changes right away.
+      Screenshot please, with Bubble look on and off.
+- [ ] Tab **Options** → "Build look": on 19.10 it shows the Bubble Builds status (see Step 8).
+- [ ] **Reset builds** (Tab **Options** → "Reset builds"):
+      - Switch "Reset builds" on → **Reset builds key [none]** → press a key (for example the key you use
+        for Reset in Fortnite; not the left or right mouse button).
+      - Join a match → the status turns from "Checking the server..." to **"Ready."** (green dot).
+      - Build a wall, edit it (e.g. a window or a door), confirm. Then look at it **without** pressing the
+        edit key and press your Reset builds key → the wall is a full wall again.
+      - The normal way still works: edit key → Reset in edit mode.
+      - While you are editing a piece and press the Reset builds key: nothing strange happens, your edit
+        just keeps going.
+      - Try it from far away (more than about 20 m): nothing happens.
+      - Server window: switch "Allow Reset Builds Key" off → start a new match → the status says "This
+        server can't do it. It needs a Niobium server."
+      - If something is wrong: the lines with `[reset-builds]` from the server's `stdout.log`.
 - [ ] Tab **Trickshot**: it has four sections.
       - "Load a parkour": one card per course (name, easy/medium/hard, short description, button
         **Load**), below that "Start over" and "Clear everything".
@@ -223,49 +242,60 @@ The server's answers appear in the console (**F8**). They start with "[Niobium]"
   "… jump objects couldn't be placed.", "… target bots couldn't spawn." or "The parkour list is missing.
   Please start the game from the Niobium launcher.": copy the line or take a photo of it.
 
-## Step 8 – Bubble Builds (needs a 15.40 – 16.00 build)
+## Step 8 – Bubble Builds (15.40 – 16.00, and as an experiment on 19.10)
 
 Bubble Builds is the see-through "bubble wrap" build look of Chapter 2 Seasons 5–6. It only exists in
 Performance Mode on Fortnite 15.40 – 16.00. On 15.30 and 16.10 – 16.40 it is "Experimental" (may or may
-not show up). You can't switch it while playing – it applies on the next launch.
+not show up). On **19.x** it is also "Experimental": Performance Mode plus **Meshes: Low** – close to the
+old look, not the same. You can't switch it while playing – it applies on the next launch.
 
-If you don't have such a build: only do the part "On 19.10" at the end.
+With Bubble Builds on, Niobium changes three lines in Fortnite's own settings file for this one game and
+**puts them back by itself afterwards** (you agreed to that). Before you start, please make a copy of
+`%LOCALAPPDATA%\FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini` (for example on the desktop),
+so you can compare it at the end.
 
-**Get the build ready.** Right now a new profile always uses the *first* build in the Library. So:
+**On 19.10** (no other build needed):
 
-- [ ] **Library** → on the 19.10 card **…** → **Remove from list** (your files stay untouched).
-- [ ] **Add a build** → your 15.40 – 16.00 folder → **Check** → **Add build**.
-- [ ] The card's row "Bubble Builds" shows **Supported** (or **Experimental** on 15.30 / 16.10 – 16.40);
-      hovering over it shows the explanation. The number "Bubble Builds ready" at the top counts it.
-- [ ] **Profiles** → **New profile** → a name such as "Bubble test", your player name → **Create** → on the
-      new card **Use this profile**. The card says "Build: Fortnite 15.…".
+- [ ] **Settings** → the "Bubble Builds" card at the top → switch it on. It has the badge "Experimental" and
+      says "Works as an experiment on your active build, Fortnite 19.10. It's not the exact Chapter 2 look."
+- [ ] **Library**: the 19.10 card shows "Bubble Builds: Experimental".
+- [ ] **Host & Play.** The Live Log says:
+      - "Backed up Fortnite's graphics settings. They are put back when the game closes."
+      - "Meshes set to Low for this game (it was …)." – or "Meshes is already Low."
+      - "Bubble Builds on: starting in Performance Mode (-FeatureLevelES31)"
+      - The line "Starting your game: …" contains `-FeatureLevelES31`; the line "Starting the server
+        Fortnite: …" does **not**.
+- [ ] While the game runs there is a file `%LOCALAPPDATA%\Niobium\gus-backup.json`.
+- [ ] In the game the graphics are simpler. In a match, build a few walls and floors → while they go up,
+      they look whiter and more see-through. Screenshot please.
+- [ ] **F9** → **Options** → "Build look": "Bubble Builds: On (Performance Mode, Meshes Low)" with a green dot.
+- [ ] **Stop all.** A moment after the game has closed: the Live Log and a pop-up say **"Fortnite's graphics
+      settings were put back."** The file `gus-backup.json` is gone.
+- [ ] Compare `GameUserSettings.ini` with your copy: the lines `bPreferFeatureLevelES31`,
+      `PreferredFeatureLevel` and `MeshQuality` are like before. (Other lines Fortnite itself saved during
+      the game, such as the last played time, may differ – that's normal.)
+- [ ] **Crash test (optional):** Host & Play with Bubble Builds on → while the game runs, end `Niobium.exe`
+      in Task Manager → close Fortnite too → start Niobium again → the Live Log says the settings were put
+      back.
+- [ ] Switch Bubble Builds off → **Host & Play** again → no `-FeatureLevelES31` and no "Backed up …" line
+      in the log; F9 → Options says "Bubble Builds: Off – turn it on in the launcher, then restart the game."
+
+**On 15.40 – 16.00** (only if you have such a build):
+
+- [ ] **Library** → on the 19.10 card **…** → **Remove from list** (your files stay untouched). Right now a
+      new profile always uses the *first* build in the Library.
+- [ ] **Add a build** → your 15.40 – 16.00 folder → **Check** → **Add build**. The card's row "Bubble
+      Builds" shows **Supported** (or **Experimental** on 15.30 / 16.10 – 16.40).
+- [ ] **Profiles** → **New profile** → a name such as "Bubble test" → **Create** → **Use this profile**.
+- [ ] **Host & Play** → the same log lines as above. In a match, the builds have the see-through "bubble
+      wrap" look. Screenshot please. F9 → Options → "Build look" with a green dot.
+- [ ] **Stop all** → "Fortnite's graphics settings were put back."
 - [ ] Later you add 19.10 again the same way; the profile "Default" then works again by itself.
 
-**Switch it on and play:**
-
-- [ ] **Settings** → the "Bubble Builds" card at the top → switch it on ("On"). Below the text it says
-      "Works on your active build, Fortnite 15.…" (or the "Experimental" text).
-- [ ] **Home**: next to "Active build" there is a "Bubble Builds" chip.
-- [ ] **Host & Play.** The Live Log says "Bubble Builds on: starting in Performance Mode
-      (-FeatureLevelES31)". The line "Starting your game: …" contains `-FeatureLevelES31`; the line
-      "Starting the server Fortnite: …" does **not**.
-- [ ] In the game, the graphics are simpler (Performance Mode). In a match, build a few walls and floors →
-      they have the see-through "bubble wrap" look. Please send a screenshot.
-- [ ] **F9** → **Options** → "Build look": "Bubble Builds: On (set in the launcher)" with a green dot.
-- [ ] **Stop all.** If Fortnite saved Performance Mode as its default, a window "Performance Mode is now
-      saved" appears: "Fortnite saved Performance Mode as your default. This also affects your other builds.
-      Reset it?" → **Reset** → the pop-up "Performance Mode reset". (If no window appears, Fortnite didn't
-      change the setting – that's fine too.) **Keep** leaves it as it is.
-- [ ] Switch Bubble Builds off → **Host & Play** again → no `-FeatureLevelES31` in the log; F9 → Options says
-      "Bubble Builds: Off – turn it on in the launcher, then restart the game."
-
-**On 19.10** (with the switch on):
-
-- [ ] The Settings card says "Your active build is Fortnite 19.10. Only on Fortnite 15.40 – 16.00 (Chapter 2,
-      Seasons 5–6). Try Mobile Builds in the F9 menu."
-- [ ] **Host & Play** → the Live Log says "Bubble Builds are on, but Fortnite 19.10 can't show them –
-      starting normally". The game starts exactly as without the switch.
-- [ ] F9 → **Main** → "Graphics" → **Mobile Builds**: works on every version, right away.
+**Other versions:** the Settings card says "Not available for <version>. … try Bubble look in the F9 menu."
+**Host & Play** → "Bubble Builds are on, but Fortnite <version> can't show them – starting normally", and
+Fortnite's settings file is not touched. F9 → Main → "Graphics" → **Bubble look** and **Mobile Builds**
+work on every version, right away.
 
 ## Step 9 – Stop
 
@@ -451,7 +481,7 @@ only the build card shows "Untested" and the log has a note. If it doesn't work,
 - `<build>\FortniteGame\Binaries\Win64\stdout.log` and the folder `MagnesiumCrashes` next to it – what the
   game server says.
 
-Known limits: 9.40–10.40 without party/XMPP; "Edit on release" only up to 10.40; 31.00 and newer don't
+Known limits: 9.40–10.40 without party/XMPP; 31.00 and newer don't
 start yet; AI bots only on 19.10 (CL-18675304). For trickshot parkours there may be other objects
 depending on the version – if one is missing, the server says so in the console (see Step 7). A build you
 downloaded in Step 14 is tested the same way.
@@ -464,10 +494,13 @@ downloaded in Step 14 is tested the same way.
    **Folder** opens it).
 4. If Fortnite crashed: page **Crash Analysis** → the newest entry → **Copy report**.
 5. For trickshot things: the lines from the console (**F8**) that start with "[Niobium]".
-6. For Bubble Builds: a screenshot of your builds in the game and the "Starting your game: …" line.
-7. For AI bots: Live Log → search `bots` → **Copy**, plus what you saw in the game (Step 13).
-8. For loot: Live Log → search `loot` → **Copy**, plus the `[FloorLoot]` lines from `stdout.log` (Step 12).
-9. For a download: a screenshot of the download card and the Live Log lines that start with "Download of".
+6. For Bubble Builds: a screenshot of your builds in the game, the "Starting your game: …" line and the
+   lines with "graphics settings" or "Meshes".
+7. For Reset builds: a screenshot of F9 → Options → "Reset builds" and the `[reset-builds]` lines from
+   the server's `stdout.log`.
+8. For AI bots: Live Log → search `bots` → **Copy**, plus what you saw in the game (Step 13).
+9. For loot: Live Log → search `loot` → **Copy**, plus the `[FloorLoot]` lines from `stdout.log` (Step 12).
+10. For a download: a screenshot of the download card and the Live Log lines that start with "Download of".
 
 Short and honest: I can't start Fortnite here. Everything up to the loading screen is rebuilt 1:1 from
 the source projects (Reboot launch flow, LawinServer, Tellurium, Magnesium) and checked against how they

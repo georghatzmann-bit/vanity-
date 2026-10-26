@@ -67,12 +67,14 @@ resource folder under `dlls/`, the backend under `backend/main.js` and Node unde
 | `%LOCALAPPDATA%\Niobium\backend-data\` | data of the backend (locker, profiles, `Config\config.ini`, friends list) |
 | `%LOCALAPPDATA%\Niobium\server\` | everything the game server writes (`auto_hosting.json`, `loadouts`, `Maps`, `trickshots`) |
 | `%LOCALAPPDATA%\Niobium\server\parkours.json` | trickshot parkours – the launcher writes it, the game server and the F9 menu read it (see below) |
+| `%LOCALAPPDATA%\Niobium\gus-backup.json` | only while a game with Bubble Builds runs: the original lines of Fortnite's `GameUserSettings.ini` that Niobium changed for this game (see [Bubble Builds](#bubble-builds)). Deleted once they are back |
 | `%LOCALAPPDATA%\Niobium\logs\` | logs of the DLLs: `redirect.log` (redirect), `client-diagnostics.log` (in-game menu). The game server writes `stdout.log` in the build's `FortniteGame\Binaries\Win64` folder |
 | `%LOCALAPPDATA%\Niobium\` (program files) | the installer's default install folder (Tauri, "current user" mode) is this same folder. The installer puts `Niobium.exe`, `backend\`, `dlls\` and `node\` there; an update replaces them and uninstalling deletes them, so nothing the launcher or backend writes goes into those folders |
 
 Niobium changes nothing in the folder of a build you add yourself and nothing in other launchers'
 folders. The one file outside its own folders it may touch is Fortnite's own `GameUserSettings.ini` –
-and only two lines, only after you click "Reset" (see [Bubble Builds](#bubble-builds)). The build
+only with Bubble Builds on, only three lines, with a backup first, and they are put back after the game
+(see [Bubble Builds](#bubble-builds)). The build
 downloader writes only into the folder you pick for a download: the build's own files and
 `.niobium-download\`.
 
@@ -129,15 +131,19 @@ What changes per version (`launcher/core/src/launchargs.rs`, `VersionRules`):
 | 24.00 and newer | the menu turns off encryption; from UE 5.3 (about 27) Iris networking – server and menu agree | ATLAS, Magnesium |
 | 28.00 and newer | Chapter 5 movement (tac sprint, hurdling, sliding) is off in menu and server | ATLAS, Magnesium |
 | 15.30 – 16.40 | Bubble Builds (see [below](#bubble-builds)) | Epic patch notes, research |
+| 19.00 – 19.99 | Bubble Builds as "Meshes Low" (experimental, see [below](#bubble-builds)) | research |
+| below 37.00 | "Reset builds" key in the F9 menu (from 37.00 Fortnite has its own "Reset Building" key) | Epic patch notes |
 
 Playlists (control pipe, like the buttons in the server window): Trios from 7.40, Tournament from 6.10,
 Arena from 8.20, Zero Build and Arena Zero Build from 20.00, Playground from 4.50 (the server window shows
 its button only up to 11.30). The server refuses a playlist that is too new for the build, with a note.
 
-In-game menu per version (from the ATLAS code, names as in the "Main" tab): "Edit on release" only
-below Unreal 4.24 (up to 10.40), "Disable pre-edits" below 15.20, "Reset on release" below 24.30, "Free
-camera" up to 10.40; field of view, first person, target info, "Respawn after you die", the console and the
-"Trickshot" tab on every version. Toggles a version doesn't have are simply hidden. "Always sprint" was
+In-game menu per version: "Edit on release", "Reset on release" and "Disable pre-edits" are shown on
+every version. Below the version where Epic's own setting works on PC, Niobium's hook does the work; from
+that version on the F9 switch changes Epic's own setting instead – never both at once (see
+[Edit routes](#edit-routes-edit-on-release-reset-on-release-disable-pre-edits)). "Free camera" up to 10.40;
+field of view, first person, target info, "Respawn after you die", "Bubble look", the console and the
+"Trickshot" tab on every version. Other toggles a version doesn't have are simply hidden. "Always sprint" was
 removed: it is off for everyone, and an old `"sprintByDefault": true` in client.json is ignored.
 
 The redirect writes `%LOCALAPPDATA%\Niobium\logs\redirect.log`: which pattern matched, whether the
@@ -237,27 +243,37 @@ runs in **Performance Mode** (the ES3.1 renderer) on Fortnite **15.40 – 16.00*
 removed it in 16.10; it came back briefly in 16.20 – 16.40 and was fixed in 16.50. It can't be switched
 while playing – the renderer is picked when the game starts.
 
+On **19.x** (Chapter 3 Season 1) players got a similar look with Performance Mode plus **Meshes: Low**:
+builds look whiter and more see-through while they go up. Niobium offers that as "experimental". It is
+close to the old look, not the same. For every other version there is **"Bubble look"** in the F9 menu
+(Main → Graphics): it lowers the detail of the four build blueprint textures (`BluePrintTexture02`,
+`BluePrintTexture04`, `BlueprintTextureMetal`, `BrickBlueprintTexture`), only on your PC, right away,
+with a "Bubble strength" slider. It pauses itself while real Bubble Builds are on.
+
 ### Version gate (`VersionRules::for_version(..).bubble_builds`)
 
 | Level | Versions | Note the UI shows |
 |---|---|---|
 | `supported` | 15.40 ≤ v < 16.10 | "The see-through 'bubble wrap' build look from Chapter 2 Seasons 5–6. Starts the game in Performance Mode (lower graphics). Applies on next launch." |
 | `experimental` | v = 15.30, or 16.10 ≤ v < 16.50 | "Epic changed how builds look around this version. Your builds may look normal even with this on." |
-| `unavailable` | everything else | "Only on Fortnite 15.40 – 16.00 (Chapter 2, Seasons 5–6). Try Mobile Builds in the F9 menu." |
+| `lowMeshes` (shown as "Experimental") | 19.00 ≤ v < 20.00 | "Chapter 3 version: starts the game in Performance Mode with Meshes set to Low. Builds look whiter and more see-through while they go up, like 'bubble wrap' builds. The whole game has lower graphics. Applies on next launch." |
+| `unavailable` | everything else | "Not available for <version>. Bubble Builds work on 15.40 – 16.00, and as an experiment on Chapter 3 Season 1 (19.x). On other versions, try Bubble look in the F9 menu." |
 
 "15.4" and "15.40" are the same here (see [Versions](#versions)). The Tauri command
-`bubble_builds_support { version }` returns `{ level: "supported" | "experimental" | "unavailable", note }`.
+`bubble_builds_support { version }` returns `{ level: "supported" | "experimental" | "lowMeshes" | "unavailable", note }`.
 The UI mirrors the same rules in `launcher/src/lib/bubble.ts` for the browser preview.
 
 ### What changes at launch
 
 Setting: `settings.bubbleBuilds` (default `false`), the "Bubble Builds" card at the top of Settings.
-Only when it is on **and** the version is `supported` or `experimental`:
+Only when it is on **and** the version is `supported`, `experimental` or `lowMeshes`:
 
 - **Only the player's game** – never the server – gets `-FeatureLevelES31` (unless the profile already has
   `-FeatureLevelES31` or `-FeatureLevelES3_1`, any case).
 - If the profile's arguments contain `-d3d12` or `-dx12`, they become `-d3d11` for this launch only. The
   profile itself is not changed.
+- On `supported` and `lowMeshes` versions Meshes is set to Low in Fortnite's settings file for this one
+  game (see the next section). On `experimental` versions that file only gets the backup.
 - Never `-sm5`, no pak files, no console variables, nothing written into the build folder.
 - The live log says "Bubble Builds on: starting in Performance Mode (-FeatureLevelES31)". On a version
   without Bubble Builds it says "Bubble Builds are on, but Fortnite <version> can't show them – starting
@@ -265,24 +281,39 @@ Only when it is on **and** the version is `supported` or `experimental`:
 
 With the setting off, the arguments are exactly the same as without the feature (tests in `launchargs.rs`).
 
-### The GameUserSettings.ini check (`launcher/core/src/perfmode.rs`)
+### Fortnite's settings file: backup and automatic restore (`launcher/core/src/perfmode.rs`)
 
-Fortnite may save Performance Mode as the default in
+Fortnite saves Performance Mode and Meshes in
 `%LOCALAPPDATA%\FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini` – a file every build
-shares. So:
+shares. With Bubble Builds on, Niobium changes it for one game and puts it back afterwards (agreed with
+Georg: "Ja, mit Zurücksetzen"):
 
-1. Before the player's game starts with Bubble Builds, the launcher **reads** that file and remembers the two
-   lines of `[D3DRHIPreference]`: `bPreferFeatureLevelES31` and `PreferredFeatureLevel`. If the file doesn't
-   exist, nothing is remembered and nothing else happens.
-2. After the game has closed (and 1 s more), it reads them again. If they were not ES3.1 before and are
-   ES3.1 now (`bPreferFeatureLevelES31=True` or `PreferredFeatureLevel=es31`), it logs a warning and sends
-   the Tauri event `bubble:ini-changed` with `{ path }`.
-3. The UI asks: "Performance Mode is now saved" – "Fortnite saved Performance Mode as your default. This also
-   affects your other builds. Reset it?" with **Keep** and **Reset**.
-4. Only on **Reset** the UI calls the Tauri command `reset_performance_mode_ini`. It puts back exactly the
-   two remembered lines (a line that wasn't there before is removed again) and changes nothing else in the
-   file; encoding (UTF-8, UTF-8 with BOM, UTF-16) and line endings stay. The snapshot lives only in memory:
-   after a launcher restart there is nothing to reset ("There is nothing to reset – …").
+1. **Backup first.** Before the first Fortnite of a start (the server Fortnite reads the same file), the
+   launcher writes `%LOCALAPPDATA%\Niobium\gus-backup.json`: the file path and, for each line, the original
+   line or "absent", plus whether its section existed:
+   - `bPreferFeatureLevelES31` and `PreferredFeatureLevel` in `[D3DRHIPreference]`;
+   - `MeshQuality` in `[PerformanceMode]` – only on `supported` and `lowMeshes` versions.
+2. **Then Meshes Low.** Only after the backup is on disk, `MeshQuality` is set to `0` (if it isn't 0
+   already). A missing line is added; a missing `[PerformanceMode]` section is added at the end. Nothing
+   else in the file changes.
+3. **Left alone:** a missing INI; a file whose bytes would not come back the same after reading (broken
+   UTF-8, odd UTF-16); a file where one of these keys or its section header appears twice. The log says why.
+4. **Put back** – exactly those lines (a line or section that wasn't there before is removed again);
+   encoding (UTF-8, UTF-8 with BOM, UTF-16 LE) and line endings stay. Then the backup is deleted, the live
+   log says "Fortnite's graphics settings were put back." and a toast shows the same. This happens:
+   - when the player's game has closed and no other Fortnite runs any more (the server may also save
+     the file, so it waits for that one too);
+   - when a start fails before the game launches;
+   - when Niobium is closed during a game;
+   - after a launcher crash: on the next start, before anything else – or, if Fortnite still runs, as
+     soon as every Fortnite has closed.
+5. If an old Fortnite is still running at a new start, the launcher waits up to 5 s (Stop all cancels the
+   wait). If it still runs, the file is not changed for this game: "Another Fortnite is still running, so
+   Fortnite's graphics settings were not changed for this game. …"
+
+Live log lines: "Backed up Fortnite's graphics settings. They are put back when the game closes.",
+"Meshes set to Low for this game (it was <n>).", "Meshes is already Low.", "Meshes set to Low for this
+game (Fortnite's settings had no Meshes line yet).", "Fortnite's graphics settings were not changed: …".
 
 ### Where it shows
 
@@ -495,7 +526,8 @@ On/off: pipe key `bTrickshotDetection` (default: on; in the launcher "Match Cont
   Console; the launcher writes the same): `{ "hotkey": 120, "joinHotkey": 116, "consoleMode": 0,
   "preferences": { "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": true, "respawnsEnabled": true,
   "firstPerson": false, "sprintByDefault": false, "inGameFog": true, "mobileBuilds": false, "slashKey": true,
-  "saveTogglePreferences": true }, "commands": [], "macros": [] }` (keys = Windows VK codes; `consoleMode` 0 =
+  "saveTogglePreferences": true, "bubbleLook": false, "bubbleStrength": 5, "resetBuilds": false,
+  "resetBuildsKey": 0 }, "commands": [], "macros": [] }` (keys = Windows VK codes; `consoleMode` 0 =
   Niobium console, 1 = original Unreal console). `sprintByDefault` stays in the file only so old files still
   load: "Always sprint" was removed, the launcher always writes `false` and the menu ignores the key.
   Trickshot presets are **not** in here but in the launcher's `config.json` (`trickshotPresets`). You make them
@@ -508,9 +540,9 @@ On/off: pipe key `bTrickshotDetection` (default: on; in the launcher "Match Cont
 
 | Tab | Contents |
 |---|---|
-| Main | Join a server, Editing, Graphics (Mobile Builds, In-game fog, Simpler textures), Movement, Field of view, Respawn, Other |
+| Main | Join a server, Editing (Edit on release, Reset on release, Disable pre-edits – every version), Graphics (Mobile Builds, Bubble look + Bubble strength, In-game fog, Simpler textures), Movement, Field of view, Respawn, Other |
 | Commands | your own commands and command chains, each with its own key |
-| Options | Build look (Bubble Builds status), General (Which console?, Open the console with the … key, Remember my settings), Keys (Change menu key, Change join key, Reset everything) |
+| Options | Build look (Bubble Builds status), General (Which console?, Open the console with the … key, Remember my settings), Reset builds (switch, Reset builds key, status), Keys (Change menu key, Change join key, Reset everything) |
 | Trickshot | Niobium: Load a parkour, Target bot, Gear, Practice (`ATLAS/Private/NiobiumTrickshotTab.cpp`) |
 | Credits | names Erbium and ATLAS Console; the licence line "Niobium is based on ATLAS Console by cipherfps, ralz and contributors." |
 
@@ -519,13 +551,59 @@ On/off: pipe key `bTrickshotDetection` (default: on; in the launcher "Match Cont
   "Open the console with the … key" is on – `VK_OEM_2` (US `/`, German `#`); then it opens with "/" already typed.
 - Host features are sent by the menu as `cheat <command>` to the server (see "Who may send cheat commands?").
 
-**Bubble Builds status row** (Options → "Build look", read-only): it looks for `-FeatureLevelES31` (or
+**Bubble Builds status row** (Options → "Build look", read-only; on 15.40 – 16.00 and 19.x it also checks Meshes: "Bubble Builds: On (Performance Mode, Meshes Low)" or a hint to set Meshes to Low and restart): it looks for `-FeatureLevelES31` (or
 `-FeatureLevelES3_1`) in `GetCommandLineW()` – case-insensitive, whole switch only – and uses the version the
 game reports (`-niobiumversion=` from the launcher as a fallback and for the label). Same version gate as
 `VersionRules`. It shows "Bubble Builds: On (set in the launcher)", "Bubble Builds: Off – turn it on in the
 launcher, then restart the game." or "Bubble Builds: Not available on <version>", with an amber
 "Experimental" badge where it applies and the hint "… Can't be changed while playing." The "Mobile Builds"
 toggle in "Main" works on every version, right away.
+
+### Edit routes (Edit on release, Reset on release, Disable pre-edits)
+
+`native/client/ATLAS/Public/EditFeatureRoutes.h`. Each feature takes exactly **one** route per game:
+
+| Feature | Niobium's hook | Fortnite's own setting | Note |
+|---|---|---|---|
+| Edit on release | below 11.00 | from 11.00 ("Confirm Edit on Release"; from 24.30 "Auto Confirm Edits" = Edit) | 10.x has the setting only for mobile, so it is never written there |
+| Disable pre-edits | below 15.20 | from 15.20 ("Disable Pre-Edits") | 15.10's option only reset edits when you left build mode |
+| Reset on release | below 24.30 | from 24.30 ("Auto Confirm Edits" = Reset; Edit + Reset = "Both") | |
+
+- **Hook:** our detour does the work, Epic's setting is never touched.
+- **Fortnite's setting:** the F9 switch reads and writes Epic's own setting (via reflection, only on the
+  game thread), our detour does nothing. The row says "Uses Fortnite's own … setting". Changing it in F9
+  changes it in Fortnite's settings too.
+- **Unavailable:** greyed out with the reason – "Couldn't be set up on this version.", "Waiting for
+  Fortnite's settings..." or "Not available on <version>". The menu only switches to Fortnite's setting
+  when its getter and setter were really found (fail closed).
+
+### Reset builds
+
+Aim at one of your edited build pieces, press the **Reset builds key**, and it goes back to the unedited
+piece – without opening edit mode. Editing and resetting the normal way (edit key → reset) still works.
+Fortnite only got its own "Reset Building" key in **37.00**; from there the F9 row just points to
+Fortnite's Keyboard Controls.
+
+- **Client** (`ATLAS/Private/QuickReset.cpp`, `Public/QuickReset.h`): F9 → Options → "Reset builds"
+  (switch, off at first), "Reset builds key [<key>]" (no key at first; not the left or right mouse button),
+  status: "Join a match to use it." / "Checking the server..." / "Ready." / "This server can't do it. It
+  needs a Niobium server." / "Not available on this version." / "Close the original console first (Esc)."
+  A key that is also a menu, join, console or command key is refused. Keys typed into a console never count.
+- **Server** (`Erbium/Private/QuickReset.cpp`, `Public/QuickReset.h`): host switch "Allow Reset Builds Key"
+  in the server window (on by default).
+- **Wire format** (plain ASCII, fixed width, lowercase hex):
+  - hello, client → server via `ServerCheat`: `nbedit:v1:h:<session16>`
+  - ack, server → client via `ClientMessage`: `nbedit:v1:a:<session16>` – only below 37.00, when the host
+    allows it and the server's self-test finds the unedited wood wall class; at most once per second.
+  - arm, client → server via `ServerCheat`: `nbedit:v1:r:<session16>:<seq8>`, right after it
+    `ServerEditBuildingActor(Target, Target->Class, 0, false)`.
+- **The server resets only when all of these hold:** the arm is fresh (one-shot, 1000 ms, same controller
+  and world, newer sequence number); same class, rotation 0, not mirrored; the piece was placed by a player;
+  nobody is editing it; the pawn is alive and not in a vehicle; same team (unless the playlist allows
+  editing enemy walls); within 2048 units; at most one reset every 80 ms. Anything else: nothing happens.
+  If the player is already editing that piece, the request is dropped and their edit keeps going.
+- The unedited class comes from `AllPlayerBuildableClasses`, or from the `PBWA_{W,S,M}1_{Solid,Floor,StairW,RoofC}`
+  paths. The game server's `stdout.log` has `[reset-builds]` lines for testing.
 
 The buttons in the "Trickshot" tab:
 

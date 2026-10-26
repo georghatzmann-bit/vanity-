@@ -57,12 +57,16 @@ removes an old Vanity install if it finds one. Your settings stay.
   nothing gets lost; floor loot on 19.10; a list of the match's loot in the Live Log.
 - **Match Control:** start the match, game mode, Lategame, storm, respawn, items, target dummies and trickshot
   parkours, all from the launcher.
-- **F9 in-game menu:** Edit on release, Reset on release, field of view, keys, joining by IP, a
-  console, your own commands and a "Trickshot" tab.
+- **F9 in-game menu:** Edit on release, Reset on release and Disable pre-edits on every version (Niobium's
+  own code on old versions, Fortnite's own setting where Epic has one – never both), a "Reset builds" key
+  (aim at an edited build and press it, no edit mode needed), "Bubble look", field of view, keys, joining
+  by IP, a console, your own commands and a "Trickshot" tab.
 - **Trickshot parkours:** 9 ready-made courses with jump objects and standing target bots, plus a big
   "TRICKSHOT!" banner when you eliminate someone in the air.
-- **Bubble Builds (new):** the see-through "bubble wrap" build look of Chapter 2 Seasons 5–6, on
-  Fortnite 15.40 – 16.00. Switch it on in Settings; it applies on the next launch.
+- **Bubble Builds:** the see-through "bubble wrap" build look of Chapter 2 Seasons 5–6, on
+  Fortnite 15.40 – 16.00, and as an experiment on 19.x (Performance Mode + Meshes Low). Switch it on in
+  Settings; it applies on the next launch. Fortnite's graphics settings are backed up first and put back
+  after the game by themselves.
 - **Crash Analysis and Live Log:** what went wrong, in plain words.
 
 ## Status
@@ -80,6 +84,7 @@ removes an old Vanity install if it finds one. Your settings stay.
 | 8 | Polish, crash analysis, installer | crash analysis + installer done, polish ongoing |
 | 9 | Niobium: new name and logo, everything in English, Bubble Builds, new animated look, splash screen, welcome screen, branded installer | in the installer – waiting for a test |
 | 10 | "Download a version" (from Epic's own servers), "Classic match" profiles, AI bots on 19.10 (experimental), pickup and floor-loot fixes, loot list | new – waiting for a test ([`docs/03-test-checklist.md`](docs/03-test-checklist.md), Steps 10–14) |
+| 11 | Edit features on every version without overlap, "Reset builds" key, "Bubble look", Bubble Builds on 19.x with automatic settings restore | new – waiting for a test ([`docs/03-test-checklist.md`](docs/03-test-checklist.md), Steps 6 and 8) |
 
 ## Folders
 
