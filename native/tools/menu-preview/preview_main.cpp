@@ -21,6 +21,8 @@ void Preview_SetState(int Tab, bool Menu, bool Console);
 unsigned char* Preview_DecodeLogo(int* W, int* H);
 void Preview_SetLogo(ImTextureID Id, int W, int H);
 void Preview_SetBubbleBuilds(double FortniteVersion, const wchar_t* LauncherVersion, bool FeatureLevelES31);
+void Preview_SetMeshQuality(int StartMeshQuality, int LiveMeshQuality);
+void Preview_SetBubbleLook(bool On, int Strength, int State, int AppliedCount);
 void Preview_SetSavedCommands(bool Filled);
 void Preview_SetRebinding(bool Rebinding);
 
@@ -74,17 +76,28 @@ int main(int Argc, char** Argv)
     // Builds row pretends to run in (version 0 = unknown, like the plain preview).
     // SizeW/SizeH: window size (0 = the large 760 x 820 used for most shots).
     // Extra: what else to show (saved commands, waiting for a key, lobby hint).
+    // Bubble: the "Bubble look" switch on the Main tab (off / on and waiting for the textures /
+    // on and active / not available). MeshQuality: what the game's Meshes setting reports to
+    // the Options status row when the session started (-1 = unknown, 0 = Low, 1 = High);
+    // MeshLive: its value now (-2 = unchanged).
     enum : unsigned { ExtraNone = 0, ExtraSaved = 1, ExtraRebind = 2, ExtraLobby = 4 };
+    enum : int { BubbleOff = 0, BubbleWaiting = 1, BubbleActive = 2, BubbleUnavailable = 3 };
     struct Shot
     {
         const char* Name; int Tab; bool Menu; bool Console; bool Toast; float Scroll = -1.f;
         double Version = 0.0; const wchar_t* LauncherVersion = L""; bool Es31 = false;
         float SizeW = 0.f; float SizeH = 0.f; unsigned Extra = ExtraNone;
+        int Bubble = BubbleOff; int MeshQuality = -1; int MeshLive = -2;
     };
 #if NIOBIUM_PREVIEW_TRICKSHOT
     const Shot Shots[] = {
         { "f9-1-main", 0, true, false, false },
         { "f9-1b-main-bottom", 0, true, false, false, 1.f },
+        // Bubble look on (Graphics section): active on 19.10, waiting in a small window, and a
+        // version without the texture property.
+        { "f9-1c-main-bubble-look", 0, true, false, false, 0.42f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleActive },
+        { "f9-1d-main-bubble-waiting-small", 0, true, false, false, 0.5f, 19.10, L"19.10", true, 500.f, 320.f, ExtraNone, BubbleWaiting },
+        { "f9-1e-main-bubble-unavailable", 0, true, false, false, 0.42f, 3.5, L"3.5", false, 0.f, 0.f, ExtraNone, BubbleUnavailable },
         { "f9-2-commands", 1, true, false, false },
         { "f9-2b-commands-saved", 1, true, false, false, -1.f, 0.0, L"", false, 0.f, 0.f, ExtraSaved },
         { "f9-3-options", 2, true, false, false, -1.f, 15.40, L"15.40", true },
@@ -92,6 +105,14 @@ int main(int Argc, char** Argv)
         { "f9-3c-options-bubble-off", 2, true, false, false, -1.f, 15.50, L"15.50", false },
         { "f9-3d-options-bubble-experimental", 2, true, false, false, -1.f, 16.20, L"16.20", true },
         { "f9-3e-options-bubble-unavailable", 2, true, false, false, -1.f, 12.41, L"12.41", false },
+        // 19.x (Chapter 3 Season 1, launcher level "lowMeshes"): on, on but Meshes High, off,
+        // Meshes changed during the session (both ways), Meshes not readable.
+        { "f9-3f-options-bubble-19-on", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 0 },
+        { "f9-3g-options-bubble-19-meshes-high", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 1 },
+        { "f9-3h-options-bubble-19-off", 2, true, false, false, -1.f, 19.10, L"19.10", false },
+        { "f9-3i-options-bubble-19-meshes-now-low", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 1, 0 },
+        { "f9-3j-options-bubble-19-meshes-now-high", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 0, 1 },
+        { "f9-3k-options-bubble-19-meshes-unknown", 2, true, false, false, -1.f, 19.10, L"19.10", true },
         { "f9-4-trickshot", 3, true, false, false },
         { "f9-4b-trickshot-middle", 3, true, false, false, 0.5f },
         { "f9-4c-trickshot-bottom", 3, true, false, false, 1.f },
@@ -102,6 +123,7 @@ int main(int Argc, char** Argv)
         // every text must still fit or wrap.
         { "f9-8-main-small", 0, true, false, false, -1.f, 0.0, L"", false, 500.f, 320.f },
         { "f9-8b-options-small", 2, true, false, false, -1.f, 16.20, L"16.20", true, 500.f, 320.f },
+        { "f9-8g-options-bubble-19-meshes-high-small", 2, true, false, false, -1.f, 19.10, L"19.10", true, 500.f, 320.f, ExtraNone, BubbleOff, 1 },
         { "f9-8c-commands-saved-small", 1, true, false, false, 1.f, 0.0, L"", false, 500.f, 320.f, ExtraSaved },
         { "f9-8d-trickshot-default", 3, true, false, false, -1.f, 0.0, L"", false, 580.f, 410.f },
         { "f9-8e-options-rebind-small", 2, true, false, false, 1.f, 15.40, L"15.40", true, 500.f, 320.f, ExtraRebind },
@@ -112,8 +134,11 @@ int main(int Argc, char** Argv)
 #else
     const Shot Shots[] = {
         { "f9-1-main", 0, true, false, false },
+        { "f9-1c-main-bubble-look", 0, true, false, false, 0.42f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleActive },
         { "f9-2-commands", 1, true, false, false },
         { "f9-3-options", 2, true, false, false, -1.f, 15.40, L"15.40", true },
+        { "f9-3f-options-bubble-19-on", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 0 },
+        { "f9-3g-options-bubble-19-meshes-high", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 1 },
         { "f9-4-credits", 3, true, false, false },
         { "f9-5-console", 0, false, true, false },
     };
@@ -123,6 +148,11 @@ int main(int Argc, char** Argv)
     {
         Preview_SetState(S.Tab, S.Menu, S.Console);
         Preview_SetBubbleBuilds(S.Version, S.LauncherVersion, S.Es31);
+        Preview_SetMeshQuality(S.MeshQuality, S.MeshLive == -2 ? S.MeshQuality : S.MeshLive);
+        // Strength 5 (the default); "active" shows 3 of the 4 textures loaded, to check the text.
+        Preview_SetBubbleLook(S.Bubble != BubbleOff, 5,
+            S.Bubble == BubbleActive ? 2 : S.Bubble == BubbleWaiting ? 1 : S.Bubble == BubbleUnavailable ? 3 : 0,
+            S.Bubble == BubbleActive ? 3 : 0);
         Preview_SetSavedCommands((S.Extra & ExtraSaved) != 0);
         Preview_SetRebinding((S.Extra & ExtraRebind) != 0);
 #if NIOBIUM_PREVIEW_TRICKSHOT

@@ -38,6 +38,25 @@ void Preview_SetBubbleBuilds(double FortniteVersion, const wchar_t* LauncherVers
     g_BubbleBuildsCommandLine = &Preview_GetCommandLine;
 }
 
+// What the game's Meshes setting reports to the status row (-1 = unknown, 0 = Low, 1 = High):
+// the value the session started with, and the live value (differs after a change in Video
+// settings). In the game the game thread reads both (Client.cpp); the preview just sets them.
+void Preview_SetMeshQuality(int StartMeshQuality, int LiveMeshQuality)
+{
+    NiobiumBubbleLook::StartMeshQuality.store(StartMeshQuality);
+    NiobiumBubbleLook::MeshQuality.store(LiveMeshQuality);
+}
+
+// "Bubble look" on the Main tab: on/off, strength, and the state the game thread would report
+// (0 = off, 1 = waiting for the textures, 2 = active, 3 = not available on this version).
+void Preview_SetBubbleLook(bool On, int Strength, int State, int AppliedCount)
+{
+    FConfiguration::bBubbleLook.store(On);
+    FConfiguration::BubbleStrength.store(NiobiumBubbleLook::SanitizeStrength(Strength));
+    NiobiumBubbleLook::State.store(State);
+    NiobiumBubbleLook::AppliedCount.store(AppliedCount);
+}
+
 // A few saved commands and one chain, to check that the row buttons fit (never saved to disk).
 void Preview_SetSavedCommands(bool Filled)
 {

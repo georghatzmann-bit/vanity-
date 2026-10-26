@@ -25,6 +25,13 @@ struct FConfiguration
 	static inline std::atomic_bool bEOREnabled = true;
 	static inline std::atomic_bool bROREnabled = true;
 	static inline std::atomic_bool bMobileBuilds = false;
+	// [Niobium] "Bubble look" (Main > Graphics): lowers the detail of the four build blueprint
+	// textures by BubbleStrength (1-8) levels. Applied on the game thread (Client.cpp,
+	// MaintainBubbleLook). bBubbleProbe is a debug-only switch ("bubbleProbe": true in
+	// client.json) that logs what the game reports for those textures; it never writes.
+	static inline std::atomic_bool bBubbleLook = false;
+	static inline std::atomic_int BubbleStrength = 5;
+	static inline std::atomic_bool bBubbleProbe = false;
 	static inline std::atomic_bool bGameplayFog = true;
 	static inline std::atomic_bool bFirstPerson = false;
 	static inline std::atomic_bool bDebugCamera = false;

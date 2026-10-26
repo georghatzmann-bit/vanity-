@@ -52,6 +52,11 @@ namespace HotkeyPersist
         bool ResetOnRelease = true;
         bool DisablePreEdits = true;
         bool MobileBuilds = false;
+        // [Niobium] Bubble look (F9 > Main > Graphics). Older files without these keys load as
+        // off / strength 5. BubbleProbe is a debug switch: only written when it is on.
+        bool BubbleLook = false;
+        int BubbleStrength = 5;
+        bool BubbleProbe = false;
         bool InGameFog = true;
         bool FirstPerson = false;
         // [Niobium] "Always sprint" was removed. client.json keeps its
@@ -470,6 +475,20 @@ namespace HotkeyPersist
             object, "disablePreEdits", preferences.DisablePreEdits);
         preferences.MobileBuilds = ParseBoolField(
             object, "mobileBuilds", preferences.MobileBuilds);
+        preferences.BubbleLook = ParseBoolField(
+            object, "bubbleLook", preferences.BubbleLook);
+        {
+            // Out-of-range values are pulled into 1-8 (same range as the slider).
+            int strength = ParseIntField(
+                object, "bubbleStrength", preferences.BubbleStrength);
+            if (strength < 1)
+                strength = 1;
+            if (strength > 8)
+                strength = 8;
+            preferences.BubbleStrength = strength;
+        }
+        preferences.BubbleProbe = ParseBoolField(
+            object, "bubbleProbe", preferences.BubbleProbe);
         preferences.InGameFog = ParseBoolField(
             object, "inGameFog", preferences.InGameFog);
         preferences.FirstPerson = ParseBoolField(
@@ -691,6 +710,17 @@ namespace HotkeyPersist
                 f << "    \"resetOnRelease\": " << boolean(preferences->ResetOnRelease) << ",\n";
                 f << "    \"disablePreEdits\": " << boolean(preferences->DisablePreEdits) << ",\n";
                 f << "    \"mobileBuilds\": " << boolean(preferences->MobileBuilds) << ",\n";
+                f << "    \"bubbleLook\": " << boolean(preferences->BubbleLook) << ",\n";
+                {
+                    int strength = preferences->BubbleStrength;
+                    if (strength < 1)
+                        strength = 1;
+                    if (strength > 8)
+                        strength = 8;
+                    f << "    \"bubbleStrength\": " << strength << ",\n";
+                }
+                if (preferences->BubbleProbe)
+                    f << "    \"bubbleProbe\": true,\n"; // debug only, see FConfiguration::bBubbleProbe
                 f << "    \"inGameFog\": " << boolean(preferences->InGameFog) << ",\n";
                 f << "    \"firstPerson\": " << boolean(preferences->FirstPerson) << ",\n";
                 f << "    \"sprintByDefault\": false,\n"; // removed option, always off

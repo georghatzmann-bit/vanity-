@@ -111,6 +111,7 @@
     <ClInclude Include="SDK\Memcury.h" />
     <ClInclude Include="SDK\Offsets.h" />
     <ClInclude Include="ATLAS\Public\NiobiumTrickshotTab.h" />
+    <ClInclude Include="ATLAS\Public\BubbleLook.h" />
     <ClInclude Include="third_party\nlohmann\json.hpp" />
   </ItemGroup>
   <ItemGroup>

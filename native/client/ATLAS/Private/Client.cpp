@@ -17,6 +17,7 @@
 #include "../Public/PlaylistHudPatchPolicy.h"
 #include "../Public/TournamentRefreshPolicy.h"
 #include "../Public/NiobiumTrickshotTab.h" // [Niobium] trickshot banner (NiobiumToast_Push)
+#include "../Public/BubbleLook.h" // [Niobium] Bubble look state shared with the menu
 
 #include <array>
 #include <atomic>
@@ -11660,6 +11661,681 @@ static void ProcessDurianPhaseSync(UWorld* world)
 		phaseIndex, oldPhaseIndex, script);
 }
 
+// =============================================================================================
+// [Niobium] Bubble look (F9 > Main > Graphics) and the read-only Bubble Builds probe.
+//
+// Bubble look lowers the detail of the four build "blueprint" textures, which draw the
+// see-through part of builds (placement preview, building up, damage). It only changes one
+// transient int per texture, UStreamableRenderAsset::CachedCombinedLODBias: the texture
+// streamer reads it on every update and keeps fewer mips, so the textures turn soft. Nothing is
+// loaded, saved or written anywhere else, and a game restart resets it anyway.
+//
+// Rules: runs only on the game thread (the GetMaxTickRate pump), about once per second. Textures
+// are only looked up with StaticFindObject (never loaded). The property offset is found by name
+// at runtime and checked (int property, inside the object, value 0-15). The value the game had
+// is remembered per texture object the first time; "on" writes original + strength (max 15),
+// "off" writes the original back. If the game changes the value itself (texture reloaded, new
+// object after a map change, quality change), that becomes the new original. Every access is
+// guarded with SEH and IsLiveUObject.
+
+static constexpr int32 kBubbleMaxLodBias = 15;      // MAX_TEXTURE_MIP_COUNT; clamped by the engine
+static constexpr uint32 kBubbleUObjectHeaderSize = 0x28;
+static constexpr ULONGLONG kBubbleTickMs = 1000;
+static constexpr ULONGLONG kBubbleSettingsReadMs = 2000;
+static constexpr ULONGLONG kBubbleProbeHeartbeatMs = 60000;
+static constexpr uint32 kBubbleTexturesMissingTicks = 180; // about 3 minutes in a match
+
+struct FBubbleTextureSlot
+{
+	const wchar_t* Path;
+	const char* Name;
+	UObject* Object;      // last texture object seen at Path (only compared, never used once gone)
+	int32 ObjectIndex;
+	int32 Original;       // CachedCombinedLODBias before Bubble look touched this object
+	int32 Written;        // the value Bubble look wrote last
+	bool HasOriginal;
+	bool Applied;         // the current value is ours (differs from Original)
+	bool Rejected;        // value outside 0-15 (or NeverStream): this object is never touched
+	int32 ProbeValue;     // last value the probe logged (-1000 = none)
+	UObject* ProbeObject;
+};
+
+static FBubbleTextureSlot g_BubbleTextures[NiobiumBubbleLook::TextureCount] = {
+	{ L"/Game/Packages/Fortress_SharedMaterials/BluePrintTexture02.BluePrintTexture02",
+		"BluePrintTexture02", nullptr, -1, 0, 0, false, false, false, -1000, nullptr },
+	{ L"/Game/Packages/Fortress_SharedMaterials/BluePrintTexture04.BluePrintTexture04",
+		"BluePrintTexture04", nullptr, -1, 0, 0, false, false, false, -1000, nullptr },
+	{ L"/Game/Packages/Fortress_SharedMaterials/BlueprintTextureMetal.BlueprintTextureMetal",
+		"BlueprintTextureMetal", nullptr, -1, 0, 0, false, false, false, -1000, nullptr },
+	{ L"/Game/Packages/Fortress_SharedMaterials/BrickBlueprintTexture.BrickBlueprintTexture",
+		"BrickBlueprintTexture", nullptr, -1, 0, 0, false, false, false, -1000, nullptr },
+};
+
+// Offset (and bool mask) of a texture property, found by name. Read-only use (probe log, and
+// NeverStream for Bubble look).
+struct FBubbleProbeField
+{
+	uint32 Offset = 0;
+	uint32 Size = 0;
+	uint8 BoolMask = 0;
+	bool Valid = false;
+};
+
+struct FBubbleLookRuntime
+{
+	const UClass* TextureClass = nullptr;
+	// CachedCombinedLODBias on TextureClass: 0 = not resolved yet, 1 = usable, -1 = missing.
+	int OffsetState = 0;
+	uint32 LodBiasOffset = 0;
+	// Read-only texture fields, resolved once per TextureClass (FieldClass).
+	const UClass* FieldClass = nullptr;
+	FBubbleProbeField NeverStream{};
+	FBubbleProbeField LodGroup{};
+	FBubbleProbeField LodBias{};
+	// None of the four textures has shown up yet: ticks spent in a match world while looking.
+	// After kBubbleTexturesMissingTicks the menu says "isn't available" (the paths probably
+	// don't exist on this version); it keeps looking and switches on if one shows up later.
+	bool EverFoundTexture = false;
+	uint32 MatchTicksWithoutTextures = 0;
+	bool LoggedTexturesMissing = false;
+	ULONGLONG NextTickAt = 0;
+	ULONGLONG NextSettingsReadAt = 0;
+	ULONGLONG NextProbeHeartbeatAt = 0;
+	int LastState = -1;
+	int LastAppliedCount = -1;
+	int ProbeMeshQuality = -1000;
+	int ProbePerformanceMode = -1000;
+	bool ProbeLoggedProperties = false;
+	const UObject* FortKismetLibraryDefault = nullptr;
+};
+
+static FBubbleLookRuntime g_BubbleLook;
+
+// CachedCombinedLODBias offset on the texture class, found by name (int property only), and
+// checked to lie inside the object.
+static bool ResolveBubbleLodBiasOffsetUnsafe(const UClass* textureClass, uint32* outputOffset)
+{
+	constexpr uint64 kIntProperty = 0x80;
+	const UField* namedProperty = textureClass->GetProperty("CachedCombinedLODBias");
+	const UField* intProperty = textureClass->GetProperty("CachedCombinedLODBias", kIntProperty);
+	if (!namedProperty || namedProperty != intProperty)
+		return false;
+
+	const uint32 offset = GetFromOffset<uint32>(intProperty, Offsets::Offset_Internal);
+	const uint32 elementSize = GetFromOffset<uint32>(intProperty, Offsets::ElementSize);
+	const int32 objectSize = textureClass->GetPropertiesSize();
+	if (elementSize != sizeof(int32) || objectSize <= 0 ||
+		offset < kBubbleUObjectHeaderSize || (offset % sizeof(int32)) != 0 ||
+		offset > static_cast<uint32>(objectSize) - sizeof(int32))
+	{
+		return false;
+	}
+	*outputOffset = offset;
+	return true;
+}
+
+static bool ResolveBubbleLodBiasOffset(const UClass* textureClass, uint32* outputOffset)
+{
+	if (!IsLiveUObject(textureClass) || !outputOffset)
+		return false;
+	__try
+	{
+		return ResolveBubbleLodBiasOffsetUnsafe(textureClass, outputOffset);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return false;
+	}
+}
+
+// Only finds a texture that is already loaded; never loads one.
+static UObject* FindLoadedBubbleTexture(const UClass* textureClass, const wchar_t* path)
+{
+	if (!IsLiveUObject(textureClass) || !path || !Offsets::StaticFindObject)
+		return nullptr;
+	__try
+	{
+		const UObject* texture = SDK::StaticFindObject(path, textureClass);
+		if (!IsLiveUObject(texture) || !texture->IsA(textureClass))
+			return nullptr;
+		return const_cast<UObject*>(texture);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return nullptr;
+	}
+}
+
+// Reads the int at offset if the object's own class is big enough for it.
+static bool ReadBubbleTextureInt(UObject* texture, uint32 offset, int32* value)
+{
+	if (!IsLiveUObject(texture) || !value)
+		return false;
+	__try
+	{
+		const int32 objectSize = texture->Class ? texture->Class->GetPropertiesSize() : 0;
+		if (objectSize <= 0 || offset > static_cast<uint32>(objectSize) - sizeof(int32))
+			return false;
+		*value = *reinterpret_cast<volatile int32*>(reinterpret_cast<uint8*>(texture) + offset);
+		return true;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return false;
+	}
+}
+
+static bool WriteBubbleTextureLodBias(UObject* texture, uint32 offset, int32 value)
+{
+	if (!IsLiveUObject(texture) || value < 0 || value > kBubbleMaxLodBias)
+		return false;
+	__try
+	{
+		const int32 objectSize = texture->Class ? texture->Class->GetPropertiesSize() : 0;
+		if (objectSize <= 0 || offset > static_cast<uint32>(objectSize) - sizeof(int32))
+			return false;
+		// One aligned 32-bit store; the streamer only reads this value.
+		*reinterpret_cast<volatile int32*>(reinterpret_cast<uint8*>(texture) + offset) = value;
+		return true;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return false;
+	}
+}
+
+// Calls a reflected getter that takes nothing and returns one plain value of returnSize bytes
+// (checked against the function's parameters first). Game thread only.
+static bool CallBubbleGetterUnsafe(
+	const UObject* target, const char* functionName, uint32 returnSize, void* output)
+{
+	if (!IsLiveUObject(target) || !functionName || !output || returnSize == 0 || returnSize > 8)
+		return false;
+	UFunction* function = target->GetFunction(functionName);
+	if (!IsLiveUObject(function))
+		return false;
+
+	constexpr uint64 kReturnParm = 0x400;
+	const auto params = function->GetParams();
+	if (params.NameOffsetMap.size() != 1 || params.Size < returnSize || params.Size > 16)
+		return false;
+	const auto& returnValue = params.NameOffsetMap[0];
+	if (returnValue.Offset != 0 || returnValue.ElementSize != returnSize ||
+		(returnValue.PropertyFlags & kReturnParm) == 0)
+	{
+		return false;
+	}
+
+	alignas(16) uint8 buffer[16]{};
+	target->ProcessEvent(function, buffer);
+	memcpy(output, buffer, returnSize);
+	return true;
+}
+
+static bool CallBubbleGetter(
+	const UObject* target, const char* functionName, uint32 returnSize, void* output)
+{
+	__try
+	{
+		return CallBubbleGetterUnsafe(target, functionName, returnSize, output);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return false;
+	}
+}
+
+// Cached once found; looked up again (StaticFindObject, cheap) while it can't be found.
+static const UObject* ResolveFortKismetLibraryDefault()
+{
+	if (IsLiveUObject(g_BubbleLook.FortKismetLibraryDefault))
+		return g_BubbleLook.FortKismetLibraryDefault;
+	g_BubbleLook.FortKismetLibraryDefault = nullptr;
+	if (!Offsets::StaticFindObject)
+		return nullptr;
+	__try
+	{
+		const UClass* classClass = UClass::StaticClass();
+		if (!IsLiveUObject(classClass))
+			return nullptr;
+		const UClass* library = static_cast<const UClass*>(SDK::StaticFindObject(
+			L"/Script/FortniteGame.FortKismetLibrary", classClass));
+		if (!IsLiveUObject(library) || !library->IsA(classClass))
+			return nullptr;
+		const UObject* defaultObject = library->GetDefaultObj();
+		if (!IsLiveUObject(defaultObject))
+			return nullptr;
+		g_BubbleLook.FortKismetLibraryDefault = defaultObject;
+		return defaultObject;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return nullptr;
+	}
+}
+
+// IsInPerformanceMode() and GetMeshQuality() through FortKismetLibrary.GetFortGameUserSettings().
+// Read-only getters. -1 = not readable on this version.
+static void ReadBubbleGameUserSettings(int* performanceMode, int* meshQuality)
+{
+	*performanceMode = -1;
+	*meshQuality = -1;
+	const UObject* library = ResolveFortKismetLibraryDefault();
+	if (!library)
+		return;
+
+	UObject* settings = nullptr;
+	if (!CallBubbleGetter(library, "GetFortGameUserSettings", sizeof(UObject*), &settings) ||
+		!IsLiveUObject(settings))
+	{
+		return;
+	}
+
+	uint8 inPerformanceMode = 0;
+	if (CallBubbleGetter(settings, "IsInPerformanceMode", sizeof(uint8), &inPerformanceMode))
+		*performanceMode = inPerformanceMode != 0 ? 1 : 0;
+
+	int32 quality = -1;
+	if (CallBubbleGetter(settings, "GetMeshQuality", sizeof(int32), &quality) &&
+		quality >= 0 && quality <= 16)
+	{
+		*meshQuality = quality;
+	}
+}
+
+static FBubbleProbeField ResolveBubbleProbeFieldUnsafe(
+	const UClass* textureClass, const char* name, uint64 castFlag)
+{
+	FBubbleProbeField field{};
+	const UField* named = textureClass->GetProperty(name);
+	const UField* typed = castFlag ? textureClass->GetProperty(name, castFlag) : named;
+	if (!named || named != typed)
+		return field;
+	field.Offset = GetFromOffset<uint32>(typed, Offsets::Offset_Internal);
+	field.Size = GetFromOffset<uint32>(typed, Offsets::ElementSize);
+	if (castFlag == 0x20000)
+		field.BoolMask = typed->GetFieldMask();
+	const int32 objectSize = textureClass->GetPropertiesSize();
+	field.Valid = objectSize > 0 &&
+		(field.Size == 1 || field.Size == 2 || field.Size == 4) &&
+		field.Offset >= kBubbleUObjectHeaderSize &&
+		field.Offset + field.Size <= static_cast<uint32>(objectSize) &&
+		(castFlag != 0x20000 || field.BoolMask != 0);
+	return field;
+}
+
+static FBubbleProbeField ResolveBubbleProbeField(
+	const UClass* textureClass, const char* name, uint64 castFlag)
+{
+	if (!IsLiveUObject(textureClass))
+		return {};
+	__try
+	{
+		return ResolveBubbleProbeFieldUnsafe(textureClass, name, castFlag);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return {};
+	}
+}
+
+// -1000 = not readable.
+static int ReadBubbleProbeField(UObject* texture, const FBubbleProbeField& field)
+{
+	if (!field.Valid || !IsLiveUObject(texture))
+		return -1000;
+	__try
+	{
+		const uint8* at = reinterpret_cast<const uint8*>(texture) + field.Offset;
+		if (field.BoolMask)
+			return (*at & field.BoolMask) != 0 ? 1 : 0;
+		if (field.Size == 1)
+			return *at;
+		if (field.Size == 2)
+			return *reinterpret_cast<const int16*>(at);
+		return *reinterpret_cast<const int32*>(at);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return -1000;
+	}
+}
+
+// NeverStream, LODGroup and LODBias on the texture class, once per class.
+static void ResolveBubbleTextureFields()
+{
+	const UClass* textureClass = g_BubbleLook.TextureClass;
+	if (!textureClass || textureClass == g_BubbleLook.FieldClass)
+		return;
+	g_BubbleLook.FieldClass = textureClass;
+	constexpr uint64 kIntProperty = 0x80;
+	constexpr uint64 kBoolProperty = 0x20000;
+	g_BubbleLook.NeverStream = ResolveBubbleProbeField(textureClass, "NeverStream", kBoolProperty);
+	g_BubbleLook.LodGroup = ResolveBubbleProbeField(textureClass, "LODGroup", 0);
+	g_BubbleLook.LodBias = ResolveBubbleProbeField(textureClass, "LODBias", kIntProperty);
+	g_BubbleLook.ProbeLoggedProperties = false;
+}
+
+// Debug only (FConfiguration::bBubbleProbe): logs what the game reports for the four textures.
+// Never writes. One block when something changes, plus a heartbeat every minute.
+static void LogBubbleProbe(ULONGLONG now, int performanceMode, int meshQuality)
+{
+	const UClass* textureClass = g_BubbleLook.TextureClass;
+	ResolveBubbleTextureFields();
+	const FBubbleProbeField& neverStream = g_BubbleLook.NeverStream;
+	const FBubbleProbeField& lodGroup = g_BubbleLook.LodGroup;
+	const FBubbleProbeField& lodBias = g_BubbleLook.LodBias;
+
+	bool changed = meshQuality != g_BubbleLook.ProbeMeshQuality ||
+		performanceMode != g_BubbleLook.ProbePerformanceMode;
+	UObject* found[NiobiumBubbleLook::TextureCount]{};
+	int32 cached[NiobiumBubbleLook::TextureCount]{};
+	for (int i = 0; i < NiobiumBubbleLook::TextureCount; ++i)
+	{
+		FBubbleTextureSlot& slot = g_BubbleTextures[i];
+		found[i] = textureClass ? FindLoadedBubbleTexture(textureClass, slot.Path) : nullptr;
+		cached[i] = -1000;
+		if (found[i] && g_BubbleLook.OffsetState == 1)
+		{
+			int32 value = 0;
+			if (ReadBubbleTextureInt(found[i], g_BubbleLook.LodBiasOffset, &value))
+				cached[i] = value;
+		}
+		if (found[i] != slot.ProbeObject || cached[i] != slot.ProbeValue)
+			changed = true;
+	}
+	if (!changed && now < g_BubbleLook.NextProbeHeartbeatAt)
+		return;
+	g_BubbleLook.NextProbeHeartbeatAt = now + kBubbleProbeHeartbeatMs;
+	g_BubbleLook.ProbeMeshQuality = meshQuality;
+	g_BubbleLook.ProbePerformanceMode = performanceMode;
+
+	if (!g_BubbleLook.ProbeLoggedProperties)
+	{
+		g_BubbleLook.ProbeLoggedProperties = true;
+		AtlasDiagnostics::WriteLine(
+			"bubble-probe properties version=%.2f texture-class=%p cached-lod-bias=%s offset=0x%X "
+			"never-stream=0x%X/%u mask=0x%02X lod-group=0x%X/%u lod-bias=0x%X/%u",
+			VersionInfo.FortniteVersion, textureClass,
+			g_BubbleLook.OffsetState == 1 ? "ok" : (g_BubbleLook.OffsetState < 0 ? "missing" : "unknown"),
+			g_BubbleLook.LodBiasOffset,
+			neverStream.Valid ? neverStream.Offset : 0u, neverStream.Valid ? neverStream.Size : 0u,
+			static_cast<unsigned>(neverStream.BoolMask),
+			lodGroup.Valid ? lodGroup.Offset : 0u, lodGroup.Valid ? lodGroup.Size : 0u,
+			lodBias.Valid ? lodBias.Offset : 0u, lodBias.Valid ? lodBias.Size : 0u);
+	}
+
+	AtlasDiagnostics::WriteLine(
+		"bubble-probe settings performance-mode=%d mesh-quality=%d bubble-look=%d strength=%d",
+		performanceMode, meshQuality,
+		FConfiguration::bBubbleLook.load(std::memory_order_acquire) ? 1 : 0,
+		FConfiguration::BubbleStrength.load(std::memory_order_acquire));
+	for (int i = 0; i < NiobiumBubbleLook::TextureCount; ++i)
+	{
+		FBubbleTextureSlot& slot = g_BubbleTextures[i];
+		slot.ProbeObject = found[i];
+		slot.ProbeValue = cached[i];
+		if (!found[i])
+		{
+			AtlasDiagnostics::WriteLine("bubble-probe texture=%s found=0", slot.Name);
+			continue;
+		}
+		AtlasDiagnostics::WriteLine(
+			"bubble-probe texture=%s found=1 address=%p index=%d offset=0x%X "
+			"cached-lod-bias=%d never-stream=%d lod-group=%d lod-bias=%d original=%d applied=%d",
+			slot.Name, found[i], found[i]->Index, g_BubbleLook.LodBiasOffset, cached[i],
+			ReadBubbleProbeField(found[i], neverStream),
+			ReadBubbleProbeField(found[i], lodGroup),
+			ReadBubbleProbeField(found[i], lodBias),
+			slot.HasOriginal && slot.Object == found[i] ? slot.Original : -1,
+			slot.Applied && slot.Object == found[i] ? 1 : 0);
+	}
+}
+
+static void PublishBubbleLookState(NiobiumBubbleLook::EState state, int appliedCount)
+{
+	NiobiumBubbleLook::AppliedCount.store(appliedCount, std::memory_order_release);
+	NiobiumBubbleLook::State.store(static_cast<int>(state), std::memory_order_release);
+	if (static_cast<int>(state) != g_BubbleLook.LastState ||
+		appliedCount != g_BubbleLook.LastAppliedCount)
+	{
+		g_BubbleLook.LastState = static_cast<int>(state);
+		g_BubbleLook.LastAppliedCount = appliedCount;
+		static const char* const kNames[] = { "off", "waiting", "active", "unavailable" };
+		const int index = static_cast<int>(state);
+		AtlasDiagnostics::WriteLine("bubble-look state=%s textures=%d",
+			index >= 0 && index < 4 ? kNames[index] : "?", appliedCount);
+	}
+}
+
+// inMatch: a live match world with a local player (not the frontend). Only used to decide when
+// textures that never show up count as missing on this version.
+static void MaintainBubbleLook(ULONGLONG now, bool inMatch)
+{
+	using NiobiumBubbleLook::EState;
+
+	// Game thread only. The worker-thread fallback (headless hosts) never sets the id.
+	const DWORD gameThreadId = g_ClientGameThreadId.load(std::memory_order_acquire);
+	if (gameThreadId == 0 || gameThreadId != GetCurrentThreadId())
+		return;
+	if (now < g_BubbleLook.NextTickAt)
+		return;
+	g_BubbleLook.NextTickAt = now + kBubbleTickMs;
+
+	const bool desired = FConfiguration::bBubbleLook.load(std::memory_order_acquire);
+	const bool probe = FConfiguration::bBubbleProbe.load(std::memory_order_acquire);
+	const int32 strength = NiobiumBubbleLook::SanitizeStrength(
+		FConfiguration::BubbleStrength.load(std::memory_order_acquire));
+
+	// FortGameUserSettings: only on 19.x (for the Options status row) or with the probe.
+	int performanceMode = NiobiumBubbleLook::PerformanceMode.load(std::memory_order_acquire);
+	int meshQuality = NiobiumBubbleLook::MeshQuality.load(std::memory_order_acquire);
+	if ((probe || NiobiumBubbleLook::IsLowMeshesVersion(VersionInfo.FortniteVersion)) &&
+		now >= g_BubbleLook.NextSettingsReadAt)
+	{
+		g_BubbleLook.NextSettingsReadAt = now + kBubbleSettingsReadMs;
+		ReadBubbleGameUserSettings(&performanceMode, &meshQuality);
+		NiobiumBubbleLook::PerformanceMode.store(performanceMode, std::memory_order_release);
+		NiobiumBubbleLook::MeshQuality.store(meshQuality, std::memory_order_release);
+		// The first reading is what this session started with (Meshes needs a restart).
+		int unknown = -1;
+		if (meshQuality >= 0 &&
+			NiobiumBubbleLook::StartMeshQuality.compare_exchange_strong(
+				unknown, meshQuality, std::memory_order_acq_rel))
+		{
+			AtlasDiagnostics::WriteLine(
+				"bubble-builds mesh-quality start=%d performance-mode=%d",
+				meshQuality, performanceMode);
+		}
+	}
+
+	bool anyApplied = false;
+	for (const FBubbleTextureSlot& slot : g_BubbleTextures)
+		anyApplied = anyApplied || slot.Applied;
+	if (!desired && !anyApplied && !probe)
+	{
+		PublishBubbleLookState(EState::Off, 0);
+		return;
+	}
+
+	if (!IsLiveUObject(g_BubbleLook.TextureClass))
+	{
+		g_BubbleLook.TextureClass = ResolveTexture2DClassForArenaIcons(); // /Script/Engine.Texture2D
+		g_BubbleLook.OffsetState = 0;
+	}
+	if (g_BubbleLook.TextureClass && g_BubbleLook.OffsetState == 0)
+	{
+		uint32 offset = 0;
+		if (ResolveBubbleLodBiasOffset(g_BubbleLook.TextureClass, &offset))
+		{
+			g_BubbleLook.OffsetState = 1;
+			g_BubbleLook.LodBiasOffset = offset;
+			AtlasDiagnostics::WriteLine(
+				"bubble-look property CachedCombinedLODBias offset=0x%X texture-class=%p",
+				offset, g_BubbleLook.TextureClass);
+		}
+		else
+		{
+			g_BubbleLook.OffsetState = -1;
+			AtlasDiagnostics::WriteLine(
+				"bubble-look unavailable reason=property-missing version=%.2f texture-class=%p",
+				VersionInfo.FortniteVersion, g_BubbleLook.TextureClass);
+		}
+	}
+
+	ResolveBubbleTextureFields();
+	if (probe)
+		LogBubbleProbe(now, performanceMode, meshQuality);
+
+	if (g_BubbleLook.OffsetState < 0)
+	{
+		// Nothing was ever written on this version (the offset never resolved).
+		PublishBubbleLookState(desired ? EState::Unavailable : EState::Off, 0);
+		return;
+	}
+	if (!g_BubbleLook.TextureClass || g_BubbleLook.OffsetState == 0)
+	{
+		PublishBubbleLookState(desired ? EState::Waiting : EState::Off, 0);
+		return;
+	}
+
+	const uint32 offset = g_BubbleLook.LodBiasOffset;
+	int foundCount = 0;
+	int unusableCount = 0; // value outside 0-15, NeverStream, or already at the lowest detail
+	int appliedCount = 0;  // textures whose value is ours right now
+	for (FBubbleTextureSlot& slot : g_BubbleTextures)
+	{
+		UObject* texture = FindLoadedBubbleTexture(g_BubbleLook.TextureClass, slot.Path);
+		if (!texture)
+			continue; // not loaded (yet); the old slot data is only compared, never used
+		++foundCount;
+
+		if (texture != slot.Object || texture->Index != slot.ObjectIndex)
+		{
+			// First sighting, or a new object after a map change / reload: new original.
+			if (slot.Object)
+			{
+				AtlasDiagnostics::WriteLine(
+					"bubble-look texture-changed texture=%s old=%p new=%p",
+					slot.Name, slot.Object, texture);
+			}
+			slot.Object = texture;
+			slot.ObjectIndex = texture->Index;
+			slot.HasOriginal = false;
+			slot.Applied = false;
+			slot.Rejected = false;
+		}
+
+		int32 current = 0;
+		if (!ReadBubbleTextureInt(texture, offset, &current))
+			continue;
+
+		if (slot.Applied && current != slot.Written)
+		{
+			// The game recalculated the value itself: that is the new original.
+			AtlasDiagnostics::WriteLine(
+				"bubble-look game-changed texture=%s value=%d expected=%d",
+				slot.Name, current, slot.Written);
+			slot.Applied = false;
+			slot.HasOriginal = false;
+		}
+
+		// While the value isn't ours, the game's current value is the original, so a later
+		// "off" can only put back what the game itself had just before.
+		if (!slot.Applied)
+		{
+			// A texture that never streams keeps all its mips; the bias does nothing there.
+			const bool neverStreams =
+				ReadBubbleProbeField(texture, g_BubbleLook.NeverStream) == 1;
+			if (current < 0 || current > kBubbleMaxLodBias || neverStreams)
+			{
+				if (!slot.Rejected)
+				{
+					AtlasDiagnostics::WriteLine(
+						"bubble-look skipped texture=%s object=%p value=%d never-stream=%d "
+						"(needs 0-15 and a streamed texture)",
+						slot.Name, texture, current, neverStreams ? 1 : 0);
+				}
+				slot.Rejected = true;
+				slot.HasOriginal = false;
+				++unusableCount;
+				continue;
+			}
+			slot.Original = current;
+			slot.HasOriginal = true;
+			slot.Rejected = false;
+		}
+
+		if (desired)
+		{
+			const int32 target = (std::min)(slot.Original + strength, kBubbleMaxLodBias);
+			if (target == slot.Original)
+			{
+				// Already at the lowest detail: nothing to change on this texture.
+				++unusableCount;
+				continue;
+			}
+			if (current != target)
+			{
+				if (!WriteBubbleTextureLodBias(texture, offset, target))
+					continue;
+				AtlasDiagnostics::WriteLine(
+					"bubble-look applied texture=%s object=%p original=%d value=%d",
+					slot.Name, texture, slot.Original, target);
+			}
+			slot.Written = target;
+			slot.Applied = true;
+			++appliedCount;
+		}
+		else if (slot.Applied)
+		{
+			if (WriteBubbleTextureLodBias(texture, offset, slot.Original))
+			{
+				AtlasDiagnostics::WriteLine(
+					"bubble-look restored texture=%s object=%p value=%d",
+					slot.Name, texture, slot.Original);
+				slot.Applied = false;
+				slot.Written = slot.Original;
+			}
+		}
+	}
+
+	// Textures that never show up in a match probably don't exist at these paths on this
+	// version. Counted only while looking (switch on or probe), never after one was found.
+	if (foundCount > 0)
+	{
+		g_BubbleLook.EverFoundTexture = true;
+	}
+	else if (!g_BubbleLook.EverFoundTexture && inMatch &&
+		g_BubbleLook.MatchTicksWithoutTextures < kBubbleTexturesMissingTicks)
+	{
+		++g_BubbleLook.MatchTicksWithoutTextures;
+	}
+	const bool texturesMissing = !g_BubbleLook.EverFoundTexture &&
+		g_BubbleLook.MatchTicksWithoutTextures >= kBubbleTexturesMissingTicks;
+	if (texturesMissing && !g_BubbleLook.LoggedTexturesMissing)
+	{
+		g_BubbleLook.LoggedTexturesMissing = true;
+		AtlasDiagnostics::WriteLine(
+			"bubble-look unavailable reason=textures-missing version=%.2f match-ticks=%u",
+			VersionInfo.FortniteVersion, g_BubbleLook.MatchTicksWithoutTextures);
+	}
+
+	if (!desired)
+	{
+		// A changed texture that isn't loaded right now is restored when the same object shows
+		// up again; a new object starts from the game's own value anyway.
+		PublishBubbleLookState(EState::Off, 0);
+		return;
+	}
+	if (appliedCount > 0)
+		PublishBubbleLookState(EState::Active, appliedCount);
+	else if ((foundCount > 0 && unusableCount == foundCount) || texturesMissing)
+		PublishBubbleLookState(EState::Unavailable, 0);
+	else
+		PublishBubbleLookState(EState::Waiting, 0);
+}
+
 static UWorld* ClientGameThreadTick()
 {
 	InitializeClientUObjects();
@@ -11739,6 +12415,10 @@ static UWorld* ClientGameThreadTick()
 	ProcessDurianPhaseSync(world);
 
 	const ULONGLONG now = GetTickCount64();
+	// [Niobium] Bubble look + probe: game thread only, about once per second.
+	MaintainBubbleLook(now,
+		!frontendActive && IsLiveUObject(world) && IsLiveUObject(playerController) &&
+			!IsFrontendWorld(world));
 	MaintainFirstPersonRuntimeState(
 		world, playerController, frontendActive, now);
 	if (supportsArenaRuntime)

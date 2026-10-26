@@ -2,7 +2,7 @@
 // (c) ralz, cipherfps and contributors, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
 // Niobium changes: data paths, visible names/credit, MinHook via project reference,
 // all visible menu texts in plain English with short hints, brand colours, Bubble Builds
-// status row (all marked with [Niobium]).
+// status row, Bubble look switch (all marked with [Niobium]).
 #include "pch.h"
 #include "../Public/GUI.h"
 #include "../Public/Hotkey.h"
@@ -11,6 +11,7 @@
 #include "../Public/Diagnostics.h"
 #include "../Public/Icon.h"
 #include "../Public/NiobiumTrickshotTab.h" // [Niobium] Trickshot tab and trickshot banner
+#include "../Public/BubbleLook.h" // [Niobium] Bubble look state (written by the game thread)
 #include "../ImGui/imgui.h"
 #include "../ImGui/imgui_internal.h"
 #include "../ImGui/imgui_stdlib.h"
@@ -549,6 +550,16 @@ static HotkeyPersist::UserPreferences CaptureUserPreferences()
     preferences.MobileBuilds =
         FConfiguration::bMobileBuilds.load(
             std::memory_order_acquire);
+    preferences.BubbleLook =
+        FConfiguration::bBubbleLook.load(
+            std::memory_order_acquire);
+    preferences.BubbleStrength = NiobiumBubbleLook::SanitizeStrength(
+        FConfiguration::BubbleStrength.load(
+            std::memory_order_acquire));
+    // Debug switch: not shown in the menu, only kept so saving doesn't drop it.
+    preferences.BubbleProbe =
+        FConfiguration::bBubbleProbe.load(
+            std::memory_order_acquire);
     preferences.InGameFog =
         FConfiguration::bGameplayFog.load(
             std::memory_order_acquire);
@@ -577,6 +588,11 @@ static void ApplyUserPreferences(
         preferences.DisablePreEdits, std::memory_order_release);
     FConfiguration::bMobileBuilds.store(
         preferences.MobileBuilds, std::memory_order_release);
+    FConfiguration::bBubbleLook.store(
+        preferences.BubbleLook, std::memory_order_release);
+    FConfiguration::BubbleStrength.store(
+        NiobiumBubbleLook::SanitizeStrength(preferences.BubbleStrength),
+        std::memory_order_release);
     FConfiguration::bGameplayFog.store(
         preferences.InGameFog, std::memory_order_release);
     FConfiguration::bFirstPerson.store(
@@ -599,6 +615,10 @@ void GUI_LoadUserPreferences()
     preferences.SaveTogglePreferences =
         savedPreferences.SaveTogglePreferences;
     ApplyUserPreferences(preferences);
+    // [Niobium] The Bubble look probe is a debug switch, not a toggle: it follows the file
+    // even when "Remember my settings" is off.
+    FConfiguration::bBubbleProbe.store(
+        savedPreferences.BubbleProbe, std::memory_order_release);
 
     unsigned int commandMask =
         SettingCommandMobileBuilds |
@@ -804,8 +824,12 @@ void FGUI::ResetAll()
     FGUI::MacroDraftSteps.clear();
     RefreshExclusiveCommandHotkeys();
 
+    // [Niobium] Keep the hidden Bubble look probe switch; everything else goes back to default.
+    HotkeyPersist::UserPreferences savedDefaults = defaults;
+    savedDefaults.BubbleProbe = FConfiguration::bBubbleProbe.load(
+        std::memory_order_acquire);
     HotkeyPersist::SaveAll(FGUI::HotkeyVK, FGUI::JoinHotkeyVK,
-        static_cast<int>(EConsoleMode::Atlas), {}, {}, &defaults);
+        static_cast<int>(EConsoleMode::Atlas), {}, {}, &savedDefaults);
 }
 
 void GUI_LoadTextures(ID3D11Device* device)
@@ -1296,8 +1320,9 @@ static const char* FitLabel(const char* longLabel, const char* shortLabel, float
 // exists in Performance Mode (the ES3.1 renderer). The launcher turns it on by starting the game
 // client with -FeatureLevelES31. It can't be switched while playing, so the menu only reports
 // what the launcher did. Same version rules as VersionRules in launcher/core/src/launchargs.rs:
-// supported 15.40 <= v < 16.10, experimental 15.30 and 16.10 <= v < 16.50, everything else
-// unavailable.
+// supported 15.40 <= v < 16.10, experimental 15.30 and 16.10 <= v < 16.50, "lowMeshes"
+// 19.00 <= v < 20.00 (Chapter 3 Season 1: Performance Mode with Meshes set to Low, also
+// experimental), everything else unavailable.
 
 // Where the status row reads the command line from. The menu preview tool swaps this to show
 // every state; the game always uses GetCommandLineW.
@@ -1307,6 +1332,7 @@ enum class EBubbleBuildsLevel : uint8_t
 {
     Supported,
     Experimental,
+    LowMeshes, // [Niobium] 19.x: Performance Mode + Meshes Low (launcher level "lowMeshes")
     Unavailable
 };
 
@@ -1321,6 +1347,8 @@ static EBubbleBuildsLevel BubbleBuildsLevelFor(double fortniteVersion)
         return EBubbleBuildsLevel::Supported;
     if (hundredths == 1530 || (hundredths >= 1610 && hundredths < 1650))
         return EBubbleBuildsLevel::Experimental;
+    if (NiobiumBubbleLook::IsLowMeshesVersion(fortniteVersion))
+        return EBubbleBuildsLevel::LowMeshes;
     return EBubbleBuildsLevel::Unavailable;
 }
 
@@ -1386,26 +1414,67 @@ static std::string FormatFortniteVersion(double fortniteVersion)
     return text;
 }
 
-static void DrawBubbleBuildsStatus(float width)
+// The Fortnite version the menu shows ("19.10"). The running game knows its version best; the
+// launcher's text is only the fallback (and the nicer label when both say the same).
+// "version" receives the number used for the version rules (0 = unknown).
+static std::string MenuFortniteVersionText(const wchar_t* commandLine, double* version)
 {
-    const wchar_t* commandLine =
-        g_BubbleBuildsCommandLine ? g_BubbleBuildsCommandLine() : nullptr;
-
-    // The running game knows its version best; the launcher's text is only the fallback
-    // (and the nicer label when both say the same).
     const std::string launcherVersion = LauncherFortniteVersion(commandLine);
-    double version = VersionInfo.FortniteVersion;
-    if (!(version > 0.0) && !launcherVersion.empty())
-        version = strtod(launcherVersion.c_str(), nullptr);
+    double current = VersionInfo.FortniteVersion;
+    if (!(current > 0.0) && !launcherVersion.empty())
+        current = strtod(launcherVersion.c_str(), nullptr);
 
-    std::string versionText = FormatFortniteVersion(version);
-    if (!launcherVersion.empty() && version > 0.0 &&
-        std::llround(strtod(launcherVersion.c_str(), nullptr) * 100.0) == std::llround(version * 100.0))
+    std::string versionText = FormatFortniteVersion(current);
+    if (!launcherVersion.empty() && current > 0.0 &&
+        std::llround(strtod(launcherVersion.c_str(), nullptr) * 100.0) == std::llround(current * 100.0))
     {
         versionText = launcherVersion;
     }
     if (versionText.empty())
         versionText = "this version";
+    if (version)
+        *version = current;
+    return versionText;
+}
+
+// Status row: a small dot, then the text (wrapped, never cut off).
+static void StatusDotRow(const char* text, ImVec4 dotColour, bool dotFilled, float width)
+{
+    const float lineHeight = ImGui::GetTextLineHeight();
+    const float radius = 4.5f;
+    const float dotSpace = radius * 2.f + 8.f;
+    const ImVec2 position = ImGui::GetCursorScreenPos();
+    const ImVec2 centre(position.x + radius + 1.f, position.y + lineHeight * 0.5f);
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    if (dotFilled)
+    {
+        drawList->AddCircleFilled(centre, radius + 3.f,
+            ImGui::GetColorU32(ImVec4(dotColour.x, dotColour.y, dotColour.z, 0.18f)));
+        drawList->AddCircleFilled(centre, radius, ImGui::GetColorU32(dotColour));
+    }
+    else
+    {
+        drawList->AddCircle(centre, radius - 0.5f, ImGui::GetColorU32(dotColour), 0, 1.4f);
+    }
+
+    ImGui::Indent(dotSpace);
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + (std::max)(40.f, width - dotSpace));
+    ImGui::TextUnformatted(text);
+    ImGui::PopTextWrapPos();
+    ImGui::Unindent(dotSpace);
+}
+
+// Status colours: success #22C55E, warning #F59E0B (gold is never a warning).
+static const ImVec4 kNiobiumSuccess(0.133f, 0.773f, 0.369f, 1.f);
+static const ImVec4 kNiobiumWarning(0.961f, 0.620f, 0.043f, 1.f);
+
+static void DrawBubbleBuildsStatus(float width)
+{
+    const wchar_t* commandLine =
+        g_BubbleBuildsCommandLine ? g_BubbleBuildsCommandLine() : nullptr;
+
+    double version = 0.0;
+    const std::string versionText = MenuFortniteVersionText(commandLine, &version);
 
     const EBubbleBuildsLevel level = BubbleBuildsLevelFor(version);
     // Both spellings count, like in the launcher (is_feature_level_es31 in launchargs.rs).
@@ -1420,10 +1489,43 @@ static void DrawBubbleBuildsStatus(float width)
     {
         status = "Bubble Builds: Not available on " + versionText;
     }
+    else if (featureLevelES31 && level == EBubbleBuildsLevel::LowMeshes)
+    {
+        // [Niobium] 19.x: the game's own Meshes setting decides. It only applies after a
+        // restart, so the row follows the value this session started with and only mentions a
+        // later change (both read by the game thread, Client.cpp; -1 = not read yet / unknown).
+        const int startMeshes =
+            NiobiumBubbleLook::StartMeshQuality.load(std::memory_order_acquire);
+        const int liveMeshes =
+            NiobiumBubbleLook::MeshQuality.load(std::memory_order_acquire);
+        if (startMeshes >= 1)
+        {
+            status = liveMeshes == 0
+                ? "Bubble Builds: Meshes is now Low. Restart the game to turn them on."
+                : "Bubble Builds: Performance Mode is on, but Meshes is High. "
+                  "Set Meshes to Low in Video settings, then restart.";
+            dotColour = kNiobiumWarning;
+        }
+        else if (startMeshes == 0)
+        {
+            status = liveMeshes >= 1
+                ? "Bubble Builds: On (Performance Mode, Meshes Low). "
+                  "You set Meshes to High, so they turn off after a restart."
+                : "Bubble Builds: On (Performance Mode, Meshes Low)";
+            dotColour = kNiobiumSuccess;
+        }
+        else
+        {
+            // Meshes couldn't be read: don't claim Low.
+            status = "Bubble Builds: On (Performance Mode)";
+            dotColour = kNiobiumSuccess;
+        }
+        dotFilled = true;
+    }
     else if (featureLevelES31)
     {
         status = "Bubble Builds: On (set in the launcher)";
-        dotColour = ImVec4(0.133f, 0.773f, 0.369f, 1.f); // success #22C55E
+        dotColour = kNiobiumSuccess;
         dotFilled = true;
     }
     else
@@ -1431,33 +1533,9 @@ static void DrawBubbleBuildsStatus(float width)
         status = "Bubble Builds: Off " NB_DASH " turn it on in the launcher, then restart the game.";
     }
 
-    // Status row: a small dot, then the text (wrapped, never cut off).
-    {
-        const float lineHeight = ImGui::GetTextLineHeight();
-        const float radius = 4.5f;
-        const float dotSpace = radius * 2.f + 8.f;
-        const ImVec2 position = ImGui::GetCursorScreenPos();
-        const ImVec2 centre(position.x + radius + 1.f, position.y + lineHeight * 0.5f);
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        if (dotFilled)
-        {
-            drawList->AddCircleFilled(centre, radius + 3.f,
-                ImGui::GetColorU32(ImVec4(dotColour.x, dotColour.y, dotColour.z, 0.18f)));
-            drawList->AddCircleFilled(centre, radius, ImGui::GetColorU32(dotColour));
-        }
-        else
-        {
-            drawList->AddCircle(centre, radius - 0.5f, ImGui::GetColorU32(dotColour), 0, 1.4f);
-        }
+    StatusDotRow(status.c_str(), dotColour, dotFilled, width);
 
-        ImGui::Indent(dotSpace);
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + (std::max)(40.f, width - dotSpace));
-        ImGui::TextUnformatted(status.c_str());
-        ImGui::PopTextWrapPos();
-        ImGui::Unindent(dotSpace);
-    }
-
-    if (level == EBubbleBuildsLevel::Experimental)
+    if (level == EBubbleBuildsLevel::Experimental || level == EBubbleBuildsLevel::LowMeshes)
     {
         // Small amber "Experimental" pill (warning colour #F59E0B; gold is never a warning).
         const char* badge = "Experimental";
@@ -1466,7 +1544,7 @@ static void DrawBubbleBuildsStatus(float width)
         const ImVec2 position = ImGui::GetCursorScreenPos();
         const ImVec2 size(textSize.x + padding.x * 2.f, textSize.y + padding.y * 2.f);
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        const ImVec4 amber(0.961f, 0.620f, 0.043f, 1.f);
+        const ImVec4 amber = kNiobiumWarning;
         drawList->AddRectFilled(position, ImVec2(position.x + size.x, position.y + size.y),
             ImGui::GetColorU32(ImVec4(amber.x, amber.y, amber.z, 0.14f)), size.y * 0.5f);
         drawList->AddRect(position, ImVec2(position.x + size.x, position.y + size.y),
@@ -1474,13 +1552,21 @@ static void DrawBubbleBuildsStatus(float width)
         drawList->AddText(ImVec2(position.x + padding.x, position.y + padding.y),
             ImGui::GetColorU32(amber), badge);
         ImGui::Dummy(size);
-        ControlHint("Epic changed how builds look around this version. Your builds may look normal even with this on.", width);
+        if (level == EBubbleBuildsLevel::Experimental)
+            ControlHint("Epic changed how builds look around this version. Your builds may look normal even with this on.", width);
     }
 
     if (level == EBubbleBuildsLevel::Unavailable)
     {
-        ControlHint("Only on Fortnite 15.40 " NB_DASH " 16.00 (Chapter 2, Seasons 5" NB_DASH "6). "
-            "Try Mobile Builds in the Main tab.", width);
+        ControlHint("Only on Fortnite 15.40 " NB_DASH " 16.00 (Chapter 2, Seasons 5" NB_DASH "6), "
+            "and as an experiment on 19.x (Chapter 3, Season 1). "
+            "Try Bubble look or Mobile Builds in the Main tab.", width);
+    }
+    else if (level == EBubbleBuildsLevel::LowMeshes)
+    {
+        ControlHint("Chapter 3 version: Performance Mode with Meshes set to Low. Builds look whiter "
+            "and more see-through while they go up. The whole game has lower graphics. "
+            "Turn it on or off in the launcher. Applies on next launch.", width);
     }
     else
     {
@@ -1503,6 +1589,70 @@ static bool LabeledSliderInt(
     return ImGui::SliderInt(
         id, value, minimum, maximum, format,
         ImGuiSliderFlags_AlwaysClamp);
+}
+
+static bool IsGameThreadDispatcherReady(); // [Niobium] defined with the game-thread mailbox below
+
+// [Niobium] Status and "Bubble strength" slider under the "Bubble look" checkbox (Main tab),
+// indented to line up with the checkbox label. The game thread reports the state
+// (NiobiumBubbleLook::State); this only reads it.
+static void DrawBubbleLookControls(float width)
+{
+    const float indent =
+        ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x;
+    const float innerWidth = (std::max)(40.f, width - indent);
+    ImGui::Indent(indent);
+
+    const auto state = static_cast<NiobiumBubbleLook::EState>(
+        NiobiumBubbleLook::State.load(std::memory_order_acquire));
+    // Without the game-thread pump (unsupported client build) nothing ever runs Bubble look,
+    // so "Off" there means it can't work, not "waiting".
+    if (state == NiobiumBubbleLook::EState::Unavailable ||
+        (state == NiobiumBubbleLook::EState::Off && !IsGameThreadDispatcherReady()))
+    {
+        const wchar_t* commandLine =
+            g_BubbleBuildsCommandLine ? g_BubbleBuildsCommandLine() : nullptr;
+        const std::string status = "Bubble look isn't available on " +
+            MenuFortniteVersionText(commandLine, nullptr) + ".";
+        StatusDotRow(status.c_str(), kNiobiumWarning, false, innerWidth);
+        // No strength slider: there is nothing it could change on this version.
+        ImGui::Unindent(indent);
+        return;
+    }
+    else if (state == NiobiumBubbleLook::EState::Active)
+    {
+        const int applied = (std::min)(NiobiumBubbleLook::TextureCount, (std::max)(1,
+            NiobiumBubbleLook::AppliedCount.load(std::memory_order_acquire)));
+        char status[96]{};
+        snprintf(status, sizeof(status), "Bubble look: on (%d of %d build textures)",
+            applied, NiobiumBubbleLook::TextureCount);
+        StatusDotRow(status, kNiobiumSuccess, true, innerWidth);
+    }
+    else
+    {
+        // Off (the game thread hasn't seen the switch yet, at most a second) counts as
+        // waiting, too.
+        StatusDotRow("Bubble look: waiting for the build textures. Place one build piece.",
+            kNiobiumMutedText, false, innerWidth);
+    }
+
+    int strength = NiobiumBubbleLook::SanitizeStrength(
+        FConfiguration::BubbleStrength.load(std::memory_order_acquire));
+    if (LabeledSliderInt(
+            "Bubble strength", "##bubble_strength",
+            &strength, NiobiumBubbleLook::MinStrength, NiobiumBubbleLook::MaxStrength,
+            innerWidth))
+    {
+        // The game thread picks the new value up within about a second.
+        FConfiguration::BubbleStrength.store(
+            NiobiumBubbleLook::SanitizeStrength(strength), std::memory_order_release);
+    }
+    // Saved once the slider is let go, not on every step while dragging.
+    if (ImGui::IsItemDeactivatedAfterEdit())
+        SaveUserPreferences();
+    ControlHint("Higher = softer bubbles.", innerWidth);
+
+    ImGui::Unindent(indent);
 }
 
 static bool LabeledCombo(
@@ -2668,6 +2818,11 @@ void GUI_CancelGameplayMouseRestore()
         g_GameplayMouseRestoreGeneration.load(
             std::memory_order_acquire),
         std::memory_order_release);
+}
+
+static bool IsGameThreadDispatcherReady()
+{
+    return g_GameThreadDispatcherReady.load(std::memory_order_acquire);
 }
 
 void GUI_SetGameThreadDispatcherReady(bool ready)
@@ -5275,6 +5430,17 @@ void GUI_Render()
         FConfiguration::bMobileBuilds,
         SettingCommandMobileBuilds);
     ControlHint("Draws builds and the world with less detail, like on phones. Works on every version, right away.", CW, true);
+
+    // [Niobium] Bubble look: the game thread lowers the detail of the four build blueprint
+    // textures (Client.cpp, MaintainBubbleLook). Saved in client.json like Mobile Builds.
+    PersistentCheckbox(
+        "Bubble look###bubble_look",
+        FConfiguration::bBubbleLook);
+    ControlHint("Makes the see-through part of builds soft and bubbly by lowering the detail of "
+        "the build blueprint textures. Only you see it. Works right away, no restart. "
+        "Close to the old effect, not Epic's exact one.", CW, true);
+    if (FConfiguration::bBubbleLook.load(std::memory_order_acquire))
+        DrawBubbleLookControls(CW);
 
     PersistentAbsoluteCommandCheckbox(
         "In-game fog###ingame_fog",
