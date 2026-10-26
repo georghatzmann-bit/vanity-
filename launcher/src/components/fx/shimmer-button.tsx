@@ -72,11 +72,11 @@ export function ShimmerButton({
         className={cn(
           "pointer-events-none absolute inset-0 -z-10 rounded-[inherit] transition-shadow duration-200",
           brand
-            ? "bg-brand shadow-[inset_0_1px_0_rgb(255_255_255/0.28),inset_0_0_0_1px_rgb(255_255_255/0.12),0_10px_30px_-10px_rgb(122_60_255/0.7)] group-hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.3),inset_0_0_0_1px_rgb(255_255_255/0.16),0_14px_40px_-10px_rgb(122_60_255/0.85)]"
+            ? "bg-brand shadow-[inset_0_1px_0_rgb(255_255_255/0.28),inset_0_0_0_1px_rgb(255_255_255/0.12),0_10px_30px_-10px_rgb(139_92_246/0.7)] group-hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.3),inset_0_0_0_1px_rgb(255_255_255/0.16),0_14px_40px_-10px_rgb(139_92_246/0.85)]"
             : "glass-strong",
         )}
       />
-      {/* gold tip on hover (hero moment) */}
+      {/* cyan tip on hover (hero moment) */}
       {brand && (
         <span
           aria-hidden

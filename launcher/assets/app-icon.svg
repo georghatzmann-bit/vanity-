@@ -1,49 +1,48 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Niobium app icon master (1024). Nb = niobium, element 41. Brand: docs/brand.md -->
+  <!-- Rift app icon master (1024): a glowing rift tearing through a portal ring. Brand: docs/brand.md -->
   <defs>
-    <linearGradient id="nb-base" x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2B5BFF"/>
-      <stop offset="0.5" stop-color="#5546FF"/>
-      <stop offset="0.85" stop-color="#7A3CFF"/>
+    <linearGradient id="rf-ring" x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B69CFF"/>
+      <stop offset="0.3" stop-color="#8B5CF6"/>
+      <stop offset="0.62" stop-color="#7C6CF6"/>
+      <stop offset="0.86" stop-color="#22D3EE"/>
     </linearGradient>
-    <linearGradient id="nb-gold" x1="960" y1="960" x2="619.52" y2="619.52" gradientUnits="userSpaceOnUse">
-      <stop offset="0.14" stop-color="#FFC857" stop-opacity="1"/>
-      <stop offset="0.3" stop-color="#FFC857" stop-opacity="0.72"/>
-      <stop offset="0.56" stop-color="#FF6FA8" stop-opacity="0.26"/>
-      <stop offset="0.9" stop-color="#FF6FA8" stop-opacity="0"/>
-    </linearGradient>
-    <radialGradient id="nb-depth" cx="64" cy="960" r="761.6" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0B0738" stop-opacity="0.42"/>
-      <stop offset="1" stop-color="#0B0738" stop-opacity="0"/>
+    <radialGradient id="rf-portal" cx="512" cy="512" r="386" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2A1766"/>
+      <stop offset="0.55" stop-color="#140D33"/>
+      <stop offset="1" stop-color="#0B0A1A"/>
     </radialGradient>
-    <radialGradient id="nb-bloom" cx="229.76" cy="189.44" r="618.24" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8FB0FF" stop-opacity="0.24"/>
-      <stop offset="1" stop-color="#8FB0FF" stop-opacity="0"/>
+    <linearGradient id="rf-core" x1="0" y1="40" x2="0" y2="990" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="0.5" stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <mask id="rf-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <path d="M598 30L555.67 200.86L565.49 291.69L421.27 478.47L485.79 548.64L397.96 719L451.35 790.19L420.23 897.33L420 994L420 994L439.77 902.67L508.65 789.81L498.04 725L638.21 531.36L562.73 461.53L630.51 300.31L584.33 199.14L598 30Z" fill="#000" stroke="#000" stroke-width="44" stroke-linejoin="round"/>
+    </mask>
+    <radialGradient id="rf-bloom" cx="512" cy="512" r="386" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#8B5CF6" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="nb-sheen" x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.20"/>
-      <stop offset="0.40" stop-color="#FFFFFF" stop-opacity="0.07"/>
-      <stop offset="0.405" stop-color="#FFFFFF" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="nb-rim" x1="0" y1="64" x2="0" y2="960" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.42"/>
-      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.06"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.16"/>
-    </linearGradient>
-    <linearGradient id="nb-ink" x1="0" y1="382" x2="0" y2="750" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E6E4FF"/>
-    </linearGradient>
-    <filter id="nb-shadow" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#14095A" flood-opacity="0.45"/>
+    <filter id="rf-glow-wide" x="-60%" y="-30%" width="220%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="70"/>
     </filter>
+    <filter id="rf-glow" x="-60%" y="-30%" width="220%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <clipPath id="rf-inside"><circle cx="512" cy="512" r="387"/></clipPath>
   </defs>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nb-base)"/>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nb-bloom)"/>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nb-depth)"/>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nb-gold)"/>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nb-sheen)"/>
-  <rect x="68" y="68" width="888" height="888" rx="204" fill="none" stroke="url(#nb-rim)" stroke-width="8"/>
-  <path d="M160 227.31H207.95V248H226.58V227.31H239.15V211.91H226.58V151.96H202.28L160 211.97ZM207.95 211.91H179.14V211.78L207.82 170.91H207.95ZM287.23 151.96H269.25L245.46 167.11V184.51L268.02 170.21H268.15V248H287.23Z" fill="#FFFFFF" fill-opacity="0.9"/>
-  <path d="M184.5 382H276.5V750H184.5ZM408.5 382H500.5V750H408.5ZM184.5 382H288.55L500.5 750H396.45ZM537.5 382H629.5V750H537.5ZM537.5 613.84A151 136.16 0 1 1 839.5 613.84A151 136.16 0 1 1 537.5 613.84ZM629.5 613.84A59 57.04 0 1 0 747.5 613.84A59 57.04 0 1 0 629.5 613.84Z" fill="url(#nb-ink)" filter="url(#nb-shadow)"/>
+  <circle cx="512" cy="512" r="417" fill="url(#rf-portal)"/>
+  <circle cx="512" cy="512" r="386" fill="url(#rf-bloom)"/>
+  <circle cx="512" cy="512" r="308.8" fill="none" stroke="#A78BFA" stroke-opacity="0.16" stroke-width="6"/>
+  <circle cx="512" cy="512" r="223.88" fill="none" stroke="#A78BFA" stroke-opacity="0.11" stroke-width="6"/>
+  <g clip-path="url(#rf-inside)"><path d="M598 30L555.67 200.86L565.49 291.69L421.27 478.47L485.79 548.64L397.96 719L451.35 790.19L420.23 897.33L420 994L420 994L439.77 902.67L508.65 789.81L498.04 725L638.21 531.36L562.73 461.53L630.51 300.31L584.33 199.14L598 30Z" fill="#8B5CF6" opacity="0.95" filter="url(#rf-glow-wide)"/></g>
+  <circle cx="512" cy="512" r="417" fill="none" stroke="url(#rf-ring)" stroke-width="62" mask="url(#rf-cut)"/>
+  <circle cx="512" cy="512" r="445" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="5" stroke-dasharray="774.09 2040.78" transform="rotate(-200 512 512)" mask="url(#rf-cut)"/>
+  <path d="M598 30L555.67 200.86L565.49 291.69L421.27 478.47L485.79 548.64L397.96 719L451.35 790.19L420.23 897.33L420 994L420 994L439.77 902.67L508.65 789.81L498.04 725L638.21 531.36L562.73 461.53L630.51 300.31L584.33 199.14L598 30Z" fill="#22D3EE" filter="url(#rf-glow)"/>
+  <path d="M563.13 548.44L667.66 504.93L720 528L720 528L668.34 495.07L556.87 531.56ZM468.43 492.16L371 515.72L326 486L326 486L369 524.28L471.57 507.84ZM449.43 716.58L372 760L372 760L454.57 727.42Z" fill="#67E8F9" opacity="0.85"/>
+  <path d="M598 30L555.67 200.86L565.49 291.69L421.27 478.47L485.79 548.64L397.96 719L451.35 790.19L420.23 897.33L420 994L420 994L439.77 902.67L508.65 789.81L498.04 725L638.21 531.36L562.73 461.53L630.51 300.31L584.33 199.14L598 30Z" fill="url(#rf-core)"/>
+  <path d="M598 30L562.83 200.43L581.75 293.85L456.63 474.23L523.89 544.32L422.98 720.5L465.68 790.09L425.11 898.67L420 994L420 994L434.89 901.33L494.32 789.91L473.02 723.5L600.11 535.68L527.37 465.77L614.25 298.15L577.17 199.57L598 30Z" fill="#FFFFFF"/>
 </svg>

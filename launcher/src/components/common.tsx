@@ -202,7 +202,7 @@ export function EmptyState({
       )}
     >
       <div className="relative">
-        <div className="absolute -inset-4 rounded-full bg-[radial-gradient(closest-side,rgb(122_60_255/0.25),transparent)]" />
+        <div className="absolute -inset-4 rounded-full bg-[radial-gradient(closest-side,rgb(139_92_246/0.25),transparent)]" />
         {/* CSS loop (.nb-loop), not Motion: it pauses with the window and while you play */}
         <div
           className={cn(
@@ -292,12 +292,12 @@ export function KeyCaptureButton({
 export type IconTone = "brand" | "success" | "warning" | "danger" | "muted" | "gold";
 
 const toneStyle: Record<IconTone, string> = {
-  brand: "from-brand-blue/25 to-brand-violet/25 text-violet-text ring-brand-violet/25",
+  brand: "from-brand-cyan/25 to-brand-violet/25 text-violet-text ring-brand-violet/25",
   success: "from-success/20 to-success/10 text-success ring-success/25",
   warning: "from-warning/20 to-warning/10 text-warning ring-warning/25",
   danger: "from-destructive/20 to-destructive/10 text-destructive ring-destructive/25",
   muted: "from-white/[0.08] to-white/[0.03] text-muted-foreground ring-white/[0.08]",
-  gold: "from-gold/25 to-gold/5 text-gold ring-gold/25",
+  gold: "from-brand-cyan/25 to-brand-cyan/5 text-cyan-text ring-brand-cyan/25",
 };
 
 const tileSize = {

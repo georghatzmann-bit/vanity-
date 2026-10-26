@@ -779,7 +779,7 @@ function BusCard() {
       </div>
       <div aria-hidden className="relative mt-auto h-10 overflow-hidden rounded-lg bg-black/20 ring-1 ring-white/[0.04]">
         <svg viewBox="0 0 200 40" preserveAspectRatio="none" className="absolute inset-0 size-full">
-          <path d="M 8 32 C 60 32, 90 10, 192 8" fill="none" stroke="rgb(180 155 255 / 0.35)" strokeWidth="1.2" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
+          <path d="M 8 32 C 60 32, 90 10, 192 8" fill="none" stroke="rgb(196 181 253 / 0.35)" strokeWidth="1.2" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
         </svg>
         <Plane className="absolute bottom-1.5 left-2 size-4 rotate-[35deg] text-violet-text transition-[left,bottom,rotate] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:bottom-[1.3rem] group-hover:left-[calc(100%-1.75rem)] group-hover:rotate-[20deg] motion-reduce:transition-none" />
       </div>
@@ -1046,10 +1046,10 @@ function TrickshotBannerPreview() {
     <div className="relative h-36 overflow-hidden rounded-lg ring-1 ring-white/[0.06]">
       {/* evening sky, sun and hills */}
       <div aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,#1d2552_0%,#3f4fa3_45%,#7f7bd0_72%,#c9a3c4_100%)]" />
-      <div aria-hidden className="absolute -top-10 right-12 size-32 rounded-full bg-[radial-gradient(closest-side,rgb(255_200_87/0.5),transparent)]" />
+      <div aria-hidden className="absolute -top-10 right-12 size-32 rounded-full bg-[radial-gradient(closest-side,rgb(34_211_238/0.5),transparent)]" />
       <svg aria-hidden viewBox="0 0 400 60" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-14 w-full">
-        <path d="M0 40 C60 22 110 30 160 36 C220 44 260 18 320 26 C360 31 385 38 400 34 V60 H0 Z" fill="#2a2d5e" />
-        <path d="M0 50 C80 38 140 46 200 48 C270 50 330 40 400 46 V60 H0 Z" fill="#151832" />
+        <path d="M0 40 C60 22 110 30 160 36 C220 44 260 18 320 26 C360 31 385 38 400 34 V60 H0 Z" fill="#2c2560" />
+        <path d="M0 50 C80 38 140 46 200 48 C270 50 330 40 400 46 V60 H0 Z" fill="#17142e" />
       </svg>
       <div aria-hidden className="absolute inset-0 bg-black/15" />
       <div className="absolute inset-0 flex items-center justify-center">
@@ -1058,7 +1058,7 @@ function TrickshotBannerPreview() {
           initial={{ scale: 0.7, opacity: 0, y: 8 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           transition={{ ...SPRING_PLAYFUL, delay: 0.12 }}
-          className="gradient-border gradient-border-brand relative rounded-xl bg-[#0a0b12]/80 px-7 py-3 text-center shadow-[0_18px_50px_-15px_rgb(122_60_255/0.75)] backdrop-blur"
+          className="gradient-border gradient-border-brand relative rounded-xl bg-[#07070c]/80 px-7 py-3 text-center shadow-[0_18px_50px_-15px_rgb(139_92_246/0.75)] backdrop-blur"
         >
           <p className="text-gradient-brand text-xl font-extrabold tracking-[0.2em]">TRICKSHOT!</p>
           <p className="mt-0.5 text-sm font-medium">
@@ -1088,7 +1088,7 @@ function LevelDots({ level }: { level: number }) {
         {[1, 2, 3].map((n) => (
           <span
             key={n}
-            className={cn("h-1.5 w-3.5 rounded-full", n <= level ? "bg-brand shadow-[0_0_6px_rgb(122_60_255/0.6)]" : "bg-white/[0.12]")}
+            className={cn("h-1.5 w-3.5 rounded-full", n <= level ? "bg-brand shadow-[0_0_6px_rgb(139_92_246/0.6)]" : "bg-white/[0.12]")}
           />
         ))}
       </span>
@@ -1234,9 +1234,9 @@ function ParkourMap({ parkour: p, className }: { parkour: Parkour; className?: s
       viewBox={`0 0 ${MAP_W} ${MAP_H}`}
       className={cn("block h-32 w-full rounded-lg ring-1 ring-white/[0.05]", className)}
       style={{
-        backgroundColor: "rgb(5 6 12 / 0.55)",
+        backgroundColor: "rgb(4 4 8 / 0.55)",
         backgroundImage:
-          "radial-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1px), radial-gradient(70% 120% at 12% 50%, rgb(122 60 255 / 0.16), transparent 70%)",
+          "radial-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1px), radial-gradient(70% 120% at 12% 50%, rgb(139 92 246 / 0.16), transparent 70%)",
         backgroundSize: "12px 12px, 100% 100%",
       }}
       role="img"
@@ -1245,7 +1245,7 @@ function ParkourMap({ parkour: p, className }: { parkour: Parkour; className?: s
       <defs>
         <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={MAP_W} y2={0}>
           <stop offset="0" stopColor="#ffffff" stopOpacity={0.75} />
-          <stop offset="1" stopColor="#b49bff" stopOpacity={0.9} />
+          <stop offset="1" stopColor="#c4b5fd" stopOpacity={0.9} />
         </linearGradient>
       </defs>
       {rects.map(({ rect, start }, i) => {
@@ -1259,8 +1259,8 @@ function ParkourMap({ parkour: p, className }: { parkour: Parkour; className?: s
             width={w}
             height={h}
             rx={2}
-            fill={start ? "rgb(122 60 255 / 0.2)" : "rgb(255 255 255 / 0.06)"}
-            stroke={start ? "rgb(180 155 255 / 0.6)" : "rgb(255 255 255 / 0.14)"}
+            fill={start ? "rgb(139 92 246 / 0.2)" : "rgb(255 255 255 / 0.06)"}
+            stroke={start ? "rgb(196 181 253 / 0.6)" : "rgb(255 255 255 / 0.14)"}
             strokeWidth={1}
           />
         );
@@ -1297,7 +1297,7 @@ function ParkourMap({ parkour: p, className }: { parkour: Parkour; className?: s
             <circle cx={x} cy={y} r={7} fill="none" stroke="var(--destructive)" strokeOpacity={0.45} strokeWidth={0.8} />
             <circle cx={x} cy={y} r={3.4} fill="var(--destructive)" />
             {Math.abs(up) >= 3 && (
-              <text x={labelX} y={labelY} textAnchor="middle" fontSize={8} fill="rgb(242 243 248 / 0.7)">
+              <text x={labelX} y={labelY} textAnchor="middle" fontSize={8} fill="rgb(244 244 248 / 0.7)">
                 {up > 0 ? `${up} m higher` : `${-up} m lower`}
               </text>
             )}
@@ -1473,7 +1473,7 @@ function BotLineup({ count }: { count: number }) {
 function BotVitals({ health, shield }: { health: number; shield: number }) {
   return (
     <div className="surface-subtle mt-4 flex flex-col gap-2.5 rounded-lg px-4 py-3.5">
-      <VitalBar icon={Shield} label="Shield" value={shield} barClass="from-brand-blue to-blue-text" />
+      <VitalBar icon={Shield} label="Shield" value={shield} barClass="from-brand-cyan to-cyan-text" />
       <VitalBar icon={Heart} label="Health" value={health} barClass="from-success to-[#86efac]" />
       <p className="text-[11px] text-faint">Preview of a new dummy</p>
     </div>

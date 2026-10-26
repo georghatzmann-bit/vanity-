@@ -25,7 +25,7 @@ export function WhatsNew() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.2, ease: EASE_IN } }}
     >
-      <div className="absolute inset-0 bg-[#05060a]/60 backdrop-blur-md" onClick={() => finishWelcome()} />
+      <div className="absolute inset-0 bg-[#040407]/60 backdrop-blur-md" onClick={() => finishWelcome()} />
       <motion.div
         role="dialog"
         aria-modal="true"
@@ -33,15 +33,15 @@ export function WhatsNew() {
         initial={{ opacity: 0, y: 16, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1, transition: SPRING_UI }}
         exit={{ opacity: 0, y: 8, scale: 0.98 }}
-        className="glass-strong relative w-full max-w-md overflow-hidden rounded-2xl p-7 shadow-[0_30px_80px_-20px_rgb(0_0_0/0.9),0_0_60px_-24px_rgb(122_60_255/0.6)]"
+        className="glass-strong relative w-full max-w-md overflow-hidden rounded-2xl p-7 shadow-[0_30px_80px_-20px_rgb(0_0_0/0.9),0_0_60px_-24px_rgb(139_92_246/0.6)]"
       >
-        <div className="pointer-events-none absolute -top-24 -right-20 size-64 rounded-full bg-[radial-gradient(closest-side,rgb(122_60_255/0.3),transparent)]" />
+        <div className="pointer-events-none absolute -top-24 -right-20 size-64 rounded-full bg-[radial-gradient(closest-side,rgb(139_92_246/0.3),transparent)]" />
         <div className="relative flex items-center gap-4">
           <LogoMark size={44} />
           <div>
             <div className="flex items-center gap-2">
               <NewDot />
-              <span className="text-[11px] font-semibold tracking-[0.14em] text-gold uppercase">New in {version}</span>
+              <span className="text-[11px] font-semibold tracking-[0.14em] text-cyan-text uppercase">New in {version}</span>
             </div>
             <h2 id="whats-new-title" className="mt-1 text-xl font-semibold">
               What's new
@@ -60,7 +60,7 @@ export function WhatsNew() {
               variants={{ hidden: { opacity: 0, x: -10 }, show: { opacity: 1, x: 0, transition: { duration: 0.4, ease: EASE_OUT } } }}
               className="flex gap-3"
             >
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue/25 to-brand-violet/25 text-violet-text ring-1 ring-brand-violet/25">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan/25 to-brand-violet/25 text-violet-text ring-1 ring-brand-violet/25">
                 <c.icon className="size-4" />
               </div>
               <div>

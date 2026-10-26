@@ -31,7 +31,7 @@ export function Sidebar() {
       {/* Soft brand light behind the logo */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-40 rounded-t-2xl bg-[radial-gradient(120%_80%_at_20%_0%,rgb(122_60_255/0.16),transparent_70%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-40 rounded-t-2xl bg-[radial-gradient(120%_80%_at_20%_0%,rgb(139_92_246/0.16),transparent_70%)]"
       />
 
       <button
@@ -112,16 +112,16 @@ function NavButton({
       {active && (
         <motion.span
           layoutId="nav-active"
-          className="absolute inset-0 rounded-lg bg-gradient-to-r from-brand-violet/[0.2] via-brand-indigo/[0.08] to-transparent shadow-[inset_0_0_0_1px_rgb(180_155_255/0.14),0_8px_24px_-14px_rgb(122_60_255/0.8)]"
+          className="absolute inset-0 rounded-lg bg-gradient-to-r from-brand-violet/[0.2] via-brand-violet-fill/[0.08] to-transparent shadow-[inset_0_0_0_1px_rgb(196_181_253/0.14),0_8px_24px_-14px_rgb(139_92_246/0.8)]"
           transition={SPRING_UI}
         >
-          <span className="absolute top-2 bottom-2 -left-px w-[3px] rounded-full bg-gradient-to-b from-brand-blue to-brand-violet shadow-[0_0_10px_rgb(122_60_255/0.9)]" />
+          <span className="absolute top-2 bottom-2 -left-px w-[3px] rounded-full bg-gradient-to-b from-brand-cyan to-brand-violet shadow-[0_0_10px_rgb(139_92_246/0.9)]" />
         </motion.span>
       )}
       <Icon
         className={cn(
           "relative size-[18px] transition-[color,scale] duration-200 group-hover:scale-110",
-          active && "text-violet-text drop-shadow-[0_0_6px_rgb(122_60_255/0.7)]",
+          active && "text-violet-text drop-shadow-[0_0_6px_rgb(139_92_246/0.7)]",
         )}
       />
       {wide && <span className="relative truncate font-medium">{item.label}</span>}

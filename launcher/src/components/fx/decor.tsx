@@ -7,8 +7,8 @@ export function Skeleton({ className, ...props }: ComponentProps<"div">) {
 }
 
 /**
- * Text in the brand gradient. "soft" (default) = white → violet → blue, for headlines.
- * "brand" = blue → violet → gold, for one big number or word.
+ * Text in the brand gradient. "soft" (default) = white → violet → cyan, for headlines.
+ * "brand" = cyan → violet, for one big number or word.
  */
 export function GradientText({
   children,
@@ -35,17 +35,17 @@ export function Sheen({ once = false, className }: { once?: boolean; className?:
 }
 
 /**
- * Decorative light for a hero card: violet and blue glows, a slowly turning sheen and fine diagonal lines.
+ * Decorative light for a hero card: violet and cyan glows, a slowly turning sheen and fine diagonal lines.
  * Put it as the first child of a `relative overflow-hidden` card.
  */
 export function HeroBackdrop({ className }: { className?: string }) {
   return (
     <div aria-hidden className={cn("pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]", className)}>
-      <div className="absolute -top-40 -right-24 size-[28rem] rounded-full bg-[radial-gradient(closest-side,rgb(122_60_255/0.42),transparent)]" />
-      <div className="absolute -bottom-48 left-1/4 size-[26rem] rounded-full bg-[radial-gradient(closest-side,rgb(43_91_255/0.3),transparent)]" />
-      <div className="absolute -right-10 -bottom-16 size-48 rounded-full bg-[radial-gradient(closest-side,rgb(255_200_87/0.12),transparent)]" />
+      <div className="absolute -top-40 -right-24 size-[28rem] rounded-full bg-[radial-gradient(closest-side,rgb(139_92_246/0.42),transparent)]" />
+      <div className="absolute -bottom-48 left-1/4 size-[26rem] rounded-full bg-[radial-gradient(closest-side,rgb(34_211_238/0.3),transparent)]" />
+      <div className="absolute -right-10 -bottom-16 size-48 rounded-full bg-[radial-gradient(closest-side,rgb(34_211_238/0.12),transparent)]" />
       <div className="nb-loop absolute top-1/2 left-1/2 size-[160%] -translate-x-1/2 -translate-y-1/2 [animation:nb-orbit_40s_linear_infinite]">
-        <div className="size-full bg-[conic-gradient(from_210deg_at_50%_50%,transparent_0deg,rgb(180_155_255/0.08)_40deg,transparent_90deg,transparent_200deg,rgb(143_168_255/0.06)_240deg,transparent_290deg)]" />
+        <div className="size-full bg-[conic-gradient(from_210deg_at_50%_50%,transparent_0deg,rgb(196_181_253/0.08)_40deg,transparent_90deg,transparent_200deg,rgb(103_232_249/0.06)_240deg,transparent_290deg)]" />
       </div>
       <div
         className="absolute inset-0 opacity-[0.06]"
@@ -59,12 +59,12 @@ export function HeroBackdrop({ className }: { className?: string }) {
   );
 }
 
-/** Small dot that says "new" (gold, softly glowing). */
+/** Small dot that says "new" (cyan, softly glowing). */
 export function NewDot({ className }: { className?: string }) {
   return (
     <span className={cn("relative inline-flex size-2", className)}>
-      <span className="nb-loop absolute inset-0 rounded-full bg-gold opacity-60 animate-ping" />
-      <span className="relative inline-flex size-2 rounded-full bg-gold shadow-[0_0_8px_rgb(255_200_87/0.7)]" />
+      <span className="nb-loop absolute inset-0 rounded-full bg-brand-cyan opacity-60 animate-ping" />
+      <span className="relative inline-flex size-2 rounded-full bg-brand-cyan shadow-[0_0_8px_rgb(34_211_238/0.7)]" />
     </span>
   );
 }

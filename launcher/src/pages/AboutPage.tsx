@@ -201,11 +201,11 @@ function ElementTile({ symbol, number, name, own = false, size = "md" }: { symbo
         "relative flex shrink-0 flex-col justify-between overflow-hidden rounded-xl ring-1",
         size === "md" ? "size-[68px] p-2" : "size-12 p-1.5",
         own
-          ? "bg-brand text-white shadow-[0_10px_30px_-10px_rgb(122_60_255/0.8),inset_0_1px_0_rgb(255_255_255/0.25)] ring-white/20"
+          ? "bg-brand text-white shadow-[0_10px_30px_-10px_rgb(139_92_246/0.8),inset_0_1px_0_rgb(255_255_255/0.25)] ring-white/20"
           : "bg-white/[0.04] text-foreground ring-white/[0.08]",
       )}
     >
-      {own && <span aria-hidden className="absolute -right-3 -bottom-3 size-8 rounded-full bg-[radial-gradient(closest-side,rgb(255_200_87/0.7),transparent)]" />}
+      {own && <span aria-hidden className="absolute -right-3 -bottom-3 size-8 rounded-full bg-[radial-gradient(closest-side,rgb(34_211_238/0.7),transparent)]" />}
       <span className={cn("relative font-mono leading-none tabular-nums", size === "md" ? "text-[10px]" : "text-[9px]", own ? "text-white/80" : "text-muted-foreground")}>
         {number}
       </span>
@@ -259,7 +259,7 @@ function CreditMark({ name, size = "md" }: { name: string; size?: "sm" | "md" })
     <div
       aria-hidden
       className={cn(
-        "flex shrink-0 items-center justify-center bg-gradient-to-br from-brand-blue/25 to-brand-violet/25 font-semibold tracking-tight text-violet-text shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] ring-1 ring-brand-violet/25",
+        "flex shrink-0 items-center justify-center bg-gradient-to-br from-brand-cyan/25 to-brand-violet/25 font-semibold tracking-tight text-violet-text shadow-[inset_0_1px_0_rgb(255_255_255/0.08)] ring-1 ring-brand-violet/25",
         size === "md" ? "size-12 rounded-xl text-sm" : "size-9 rounded-lg text-xs",
       )}
     >

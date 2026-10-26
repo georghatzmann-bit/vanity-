@@ -189,7 +189,7 @@ function PickerBody({ target, onDone, onCancel }: { target: PickerTarget; onDone
                 <motion.span
                   layoutId="picker-active"
                   transition={SPRING_UI}
-                  className="pointer-events-none absolute inset-0 rounded-xl shadow-[inset_0_0_0_1px_rgb(180_155_255/0.55),0_0_24px_-10px_rgb(122_60_255/0.9)]"
+                  className="pointer-events-none absolute inset-0 rounded-xl shadow-[inset_0_0_0_1px_rgb(196_181_253/0.55),0_0_24px_-10px_rgb(139_92_246/0.9)]"
                 />
               )}
               <VersionTile version={b.version} />

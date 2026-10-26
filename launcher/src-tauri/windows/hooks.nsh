@@ -6,9 +6,9 @@
 
 !define NIOBIUM_HOOK_DIR "${__FILEDIR__}"
 
-; ---------- Look & feel (dark, brand background #0A0B12) ----------
-!define MUI_BGCOLOR "0A0B12"            ; header band + Welcome/Finish page background (edge colour of header.bmp)
-!define MUI_TEXTCOLOR "F2F3F8"
+; ---------- Look & feel (dark, brand background #07070C) ----------
+!define MUI_BGCOLOR "07070C"            ; header band + Welcome/Finish page background (edge colour of header.bmp)
+!define MUI_TEXTCOLOR "F4F4F8"
 !define MUI_FORCECLASSICCONTROLS        ; Finish-page checkboxes honour MUI_TEXTCOLOR (MUI2 bug #443)
 !define MUI_HEADERIMAGE_RIGHT           ; logo on the right of the header band
 !define MUI_ABORTWARNING
@@ -19,12 +19,12 @@
 !define MUI_FINISHPAGE_RUN_TEXT "Launch $(^Name) now"
 !define MUI_FINISHPAGE_LINK "Source code and help (GitHub)"
 !define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/georghatzmann-bit/vanity-"
-!define MUI_FINISHPAGE_LINK_COLOR "B49BFF"
+!define MUI_FINISHPAGE_LINK_COLOR "C4B5FD"
 
-; Windows 11: dark title bar + caption colour #0A0B12 (COLORREF 0x00BBGGRR). Fails harmlessly on Windows 10.
+; Windows 11: dark title bar + caption colour #07070C (COLORREF 0x00BBGGRR). Fails harmlessly on Windows 10.
 !macro NIOBIUM_DARK_TITLE_BAR
   System::Call 'dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 20, *i 1, i 4)'
-  System::Call 'dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 35, *i 0x00120B0A, i 4)'
+  System::Call 'dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 35, *i 0x000C0707, i 4)'
 !macroend
 
 ; ---------- Fading splash before the wizard (AdvSplash ships with NSIS) ----------

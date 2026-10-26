@@ -233,7 +233,7 @@ function ConnectionVisual({ ready, target }: { ready: boolean; target: string | 
       <Node icon={Gamepad2} label="You" lit />
       <div className="relative h-[3px] flex-1 overflow-hidden rounded-full bg-white/[0.06]">
         <motion.div
-          className="absolute inset-y-0 left-0 rounded-full bg-brand shadow-[0_0_12px_rgb(122_60_255/0.7)]"
+          className="absolute inset-y-0 left-0 rounded-full bg-brand shadow-[0_0_12px_rgb(139_92_246/0.7)]"
           initial={false}
           animate={{ width: ready ? "100%" : "0%" }}
           transition={{ duration: 0.6, ease: EASE_OUT }}
@@ -256,7 +256,7 @@ function Node({ icon: Icon, label, lit, mono }: { icon: typeof Server; label: st
         className={cn(
           "flex size-11 items-center justify-center rounded-xl ring-1 transition-[background-color,box-shadow,color] duration-300",
           lit
-            ? "bg-gradient-to-br from-brand-blue/30 to-brand-violet/30 text-violet-text ring-brand-violet/40 shadow-[0_0_24px_-6px_rgb(122_60_255/0.7)]"
+            ? "bg-gradient-to-br from-brand-cyan/30 to-brand-violet/30 text-violet-text ring-brand-violet/40 shadow-[0_0_24px_-6px_rgb(139_92_246/0.7)]"
             : "bg-white/[0.04] text-faint ring-white/[0.08]",
         )}
       >
@@ -272,7 +272,7 @@ function Avatar({ name }: { name: string }) {
   const hue = 218 + (([...name].reduce((a, c) => a + c.charCodeAt(0), 0) * 7) % 48);
   return (
     <div
-      className="flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_4px_14px_-6px_rgb(122_60_255/0.6)]"
+      className="flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_4px_14px_-6px_rgb(139_92_246/0.6)]"
       style={{ backgroundImage: `linear-gradient(135deg, hsl(${hue} 88% 60%), hsl(${hue + 22} 82% 56%))` }}
     >
       {name[0]?.toUpperCase()}
@@ -333,7 +333,7 @@ function HowItWorks() {
       <Stagger className="grid gap-3 md:grid-cols-3" inView stagger={0.08}>
         {howSteps.map((s, i) => (
           <Reveal key={s.title} kind="scale" className="relative flex gap-3 rounded-lg surface-subtle p-4">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white tabular-nums shadow-[0_0_14px_-3px_rgb(122_60_255/0.8)]">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white tabular-nums shadow-[0_0_14px_-3px_rgb(139_92_246/0.8)]">
               {i + 1}
             </span>
             <div className="min-w-0">

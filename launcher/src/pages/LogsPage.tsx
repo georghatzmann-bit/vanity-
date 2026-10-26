@@ -258,7 +258,7 @@ export function LogsPage() {
                       fresh && "animate-in fade-in-0 slide-in-from-left-1 duration-300",
                       l.level === "error" && "bg-destructive/[0.07] shadow-[inset_2px_0_0_rgb(239_68_68/0.75)]",
                       l.level === "warning" && "bg-warning/[0.05] shadow-[inset_2px_0_0_rgb(245_158_11/0.6)]",
-                      l.detected && "bg-brand-violet/[0.08] shadow-[inset_2px_0_0_rgb(122_60_255/0.85)]",
+                      l.detected && "bg-brand-violet/[0.08] shadow-[inset_2px_0_0_rgb(139_92_246/0.85)]",
                     )}
                   >
                     <span className="text-faint tabular-nums">{l.time}</span>
@@ -289,7 +289,7 @@ export function LogsPage() {
                 transition={{ duration: 0.2, ease: EASE_OUT }}
                 className="absolute right-4 bottom-4"
               >
-                <Button size="sm" onClick={() => setFollow(true)} className="rounded-full shadow-[0_10px_30px_-10px_rgb(122_60_255/0.8)]">
+                <Button size="sm" onClick={() => setFollow(true)} className="rounded-full shadow-[0_10px_30px_-10px_rgb(139_92_246/0.8)]">
                   <ArrowDown />
                   Back to live
                 </Button>

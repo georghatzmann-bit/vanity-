@@ -3,21 +3,28 @@ import { MotionConfigContext, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 /*
- * Niobium logo: a periodic-table tile for niobium ("Nb", element 41) on an anodised-niobium
- * gradient (deep blue #2B5BFF -> violet #7A3CFF, a touch of gold #FFC857 in the bottom-right corner).
- * Every letter is a vector path, so the logo looks the same everywhere without fonts.
+ * Rift logo: a portal ring (violet #8B5CF6 -> cyan #22D3EE) torn open by a jagged, glowing rift
+ * (cyan edges, white-hot core). The rift cuts through the ring at the top and bottom.
+ * Every shape is a vector path, so the logo looks the same everywhere without fonts.
  * Masters: launcher/assets/app-icon.svg (rich) and app-icon-simple.svg. Brand rules: docs/brand.md.
  */
 
-// Geometric "Nb" monogram in a 1024 box. The rich tile sits lower to make room for the "41".
-const NB_RICH = "M184.5 382H276.5V750H184.5ZM408.5 382H500.5V750H408.5ZM184.5 382H288.55L500.5 750H396.45ZM537.5 382H629.5V750H537.5ZM537.5 613.84A151 136.16 0 1 1 839.5 613.84A151 136.16 0 1 1 537.5 613.84ZM629.5 613.84A59 57.04 0 1 0 747.5 613.84A59 57.04 0 1 0 629.5 613.84Z";
-const NB_SIMPLE = "M184.5 336H276.5V704H184.5ZM408.5 336H500.5V704H408.5ZM184.5 336H288.55L500.5 704H396.45ZM537.5 336H629.5V704H537.5ZM537.5 567.84A151 136.16 0 1 1 839.5 567.84A151 136.16 0 1 1 537.5 567.84ZM629.5 567.84A59 57.04 0 1 0 747.5 567.84A59 57.04 0 1 0 629.5 567.84Z";
-// Atomic number "41" (Inter Display Bold outlines, SIL OFL 1.1).
-const ATOMIC_NUMBER = "M160 227.31H207.95V248H226.58V227.31H239.15V211.91H226.58V151.96H202.28L160 211.97ZM207.95 211.91H179.14V211.78L207.82 170.91H207.95ZM287.23 151.96H269.25L245.46 167.11V184.51L268.02 170.21H268.15V248H287.23Z";
-// "Niobium" wordmark (Inter Display Bold outlines, SIL OFL 1.1).
-const WORDMARK = "M0 100H15.04V66.26C15.04 63.13 14.99 56.93 14.7 49.32C18.8 56.69 22.51 62.99 24.61 66.31L45.8 100H61.67V27.25H46.68V63.23C46.68 66.31 46.73 72.31 46.92 77.93C44.04 72.71 40.92 67.19 39.21 64.45L15.82 27.25H0ZM71.17 100H85.57V48.44H71.17ZM78.35 41.94C83.08 41.94 86.55 38.67 86.55 34.28C86.55 29.88 83.08 26.61 78.35 26.61C73.61 26.61 70.14 29.88 70.14 34.28C70.14 38.67 73.61 41.94 78.35 41.94ZM118.65 101.17C134.33 101.17 144.88 90.43 144.88 74.27C144.88 58.11 134.33 47.27 118.65 47.27C103.03 47.27 92.48 58.11 92.48 74.27C92.48 90.43 103.03 101.17 118.65 101.17ZM118.65 89.5C111.67 89.5 106.98 83.84 106.98 74.27C106.98 64.65 111.72 58.94 118.65 58.94C125.64 58.94 130.37 64.65 130.37 74.27C130.37 83.84 125.69 89.5 118.65 89.5ZM181.33 101.07C194.8 101.07 203.64 90.33 203.64 74.17C203.64 58.35 194.61 47.36 181.42 47.36C174.73 47.36 169.56 50 166.24 55.57H166.19V27.25H151.79V100H165.99V92.09H166.04C169.02 98.1 174.54 101.07 181.33 101.07ZM177.62 89.36C170.34 89.36 165.51 83.4 165.51 74.17C165.51 64.99 170.34 58.98 177.62 58.98C184.6 58.98 189.14 64.5 189.14 74.17C189.14 83.84 184.6 89.36 177.62 89.36ZM210.55 100H224.96V48.44H210.55ZM217.73 41.94C222.46 41.94 225.93 38.67 225.93 34.28C225.93 29.88 222.46 26.61 217.73 26.61C212.99 26.61 209.53 29.88 209.53 34.28C209.53 38.67 212.99 41.94 217.73 41.94ZM252.23 101.07C259.65 101.07 264.87 97.75 268.34 91.89V100H282.45V48.44H268.1V77.1C268.1 85.11 263.95 88.67 257.99 88.67C251.98 88.67 248.52 85.01 248.52 78.08V48.44H234.11V80.71C234.11 93.75 241.24 101.07 252.23 101.07ZM291.66 100H306.06V69.58C306.06 62.94 310.16 59.23 315.29 59.23C320.32 59.23 323.83 62.7 323.83 68.07V100H337.7V68.95C337.7 63.18 341.17 59.23 346.73 59.23C351.67 59.23 355.47 62.26 355.47 68.46V100H369.83V65.82C369.83 54 362.46 47.36 352.54 47.36C345.07 47.36 338.73 51.12 336.04 57.42C333.89 51.12 328.08 47.36 321.15 47.36C314.61 47.36 308.6 50.73 305.52 57.71V48.44H291.66Z";
-const WORDMARK_VIEWBOX = "0 26.61 369.83 74.56";
-const WORDMARK_RATIO = 4.9601; // width / height
+// The rift in a 1024 box: outer body + white core. The simple variant is a little wider for small sizes.
+const RIFT_RICH = "M598 30L555.67 200.86L565.49 291.69L421.27 478.47L485.79 548.64L397.96 719L451.35 790.19L420.23 897.33L420 994L420 994L439.77 902.67L508.65 789.81L498.04 725L638.21 531.36L562.73 461.53L630.51 300.31L584.33 199.14L598 30Z";
+const CORE_RICH = "M598 30L562.83 200.43L581.75 293.85L456.63 474.23L523.89 544.32L422.98 720.5L465.68 790.09L425.11 898.67L420 994L420 994L434.89 901.33L494.32 789.91L473.02 723.5L600.11 535.68L527.37 465.77L614.25 298.15L577.17 199.57L598 30Z";
+const RIFT_SIMPLE = "M598 30L553.95 200.97L561.59 291.18L412.78 479.48L476.64 549.68L391.96 718.64L447.92 790.21L419.05 897.01L420 994L420 994L440.95 902.99L512.08 789.79L504.04 725.36L647.36 530.32L571.22 460.52L634.41 300.82L586.05 199.03L598 30Z";
+const CORE_SIMPLE = "M598 30L561.97 200.48L579.8 293.59L452.39 474.74L519.32 544.84L419.98 720.32L463.96 790.11L424.53 898.51L420 994L420 994L435.47 901.49L496.04 789.89L476.02 723.68L604.68 535.16L531.61 465.26L616.2 298.41L578.03 199.52L598 30Z";
+// Hair-line side cracks (rich only).
+const BRANCHES = "M563.13 548.44L667.66 504.93L720 528L720 528L668.34 495.07L556.87 531.56ZM468.43 492.16L371 515.72L326 486L326 486L369 524.28L471.57 507.84ZM449.43 716.58L372 760L372 760L454.57 727.42Z";
+// "RIFT" wordmark (Inter Display Bold outlines, SIL OFL 1.1).
+const WORDMARK = "M0 100H15.04V74.56H28.22C28.27 74.56 28.32 74.56 28.37 74.56L41.26 100H57.37L42.77 71.73C50.93 67.97 55.76 60.74 55.76 51.12C55.76 36.47 45.51 27.25 29.1 27.25H0ZM15.04 62.5V39.75H28.17C36.13 39.75 41.06 44.19 41.06 51.12C41.06 58.06 36.13 62.5 28.22 62.5ZM86.08 27.25H71.04V100H86.08ZM102.92 100H117.96V70.51H151.06V58.01H117.96V40.14H153.5V27.25H102.92ZM163.85 40.14H185.92V100H200.96V40.14H222.98V27.25H163.85Z";
+const WORDMARK_VIEWBOX = "0 27.25 222.98 72.75";
+const WORDMARK_RATIO = 3.0649; // width / height
+
+// Ring geometry (1024 box): outer radius 448, 62 wide; the portal inside has radius 386.
+const RING_R = 417;
+const RING_W = 62;
+const PORTAL_R = 386;
 
 export type LogoVariant = "auto" | "rich" | "simple";
 
@@ -30,30 +37,29 @@ function useCalmMotion() {
 
 /** SVG ids must be unique per instance and safe inside url(#...). */
 function useSvgId() {
-  return "nb" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  return "rf" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
 export interface LogoMarkProps {
   className?: string;
   /** Size in px. Without it the size comes from className (default 32 px). */
   size?: number;
-  /** "rich" shows the small "41", "simple" is the bold tile for small sizes. "auto" = rich from 64 px. */
+  /** "rich" adds the portal depth rings and side cracks, "simple" is the bold mark for small sizes. "auto" = rich from 64 px. */
   variant?: LogoVariant;
-  /** Soft brand glow behind the tile that slowly breathes (stays still when motion is reduced). */
+  /** Soft violet/cyan glow behind the mark that slowly breathes (stays still when motion is reduced). */
   glow?: boolean;
   /** Accessible name. Leave it out when text next to the logo already says "Niobium". */
   title?: string;
 }
 
-/** The "Nb" tile. */
+/** The portal mark. */
 export function LogoMark({ className, size, variant = "auto", glow = false, title }: LogoMarkProps) {
   const uid = useSvgId();
   const calm = useCalmMotion();
   const rich = variant === "rich" || (variant === "auto" && size !== undefined && size >= 64);
   const id = (name: string) => `${uid}-${name}`;
   const url = (name: string) => `url(#${id(name)})`;
-  const [inkTop, inkBottom] = rich ? [382, 750] : [336, 704];
-  const rim = rich ? 8 : 14;
+  const rift = rich ? RIFT_RICH : RIFT_SIMPLE;
   const style: CSSProperties | undefined = size ? { width: size, height: size } : undefined;
 
   return (
@@ -74,64 +80,75 @@ export function LogoMark({ className, size, variant = "auto", glow = false, titl
           )}
           style={{
             background:
-              "radial-gradient(closest-side, rgb(122 60 255 / 0.6), rgb(43 91 255 / 0.3) 55%, transparent 100%)",
+              "radial-gradient(closest-side, rgb(139 92 246 / 0.62), rgb(34 211 238 / 0.26) 55%, transparent 100%)",
           }}
         />
       )}
       <svg viewBox="0 0 1024 1024" className="relative block size-full" focusable="false" aria-hidden>
         <defs>
-          <linearGradient id={id("base")} x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#2B5BFF" />
-            <stop offset="0.5" stopColor="#5546FF" />
-            <stop offset="0.85" stopColor="#7A3CFF" />
+          <linearGradient id={id("ring")} x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#B69CFF" />
+            <stop offset="0.3" stopColor="#8B5CF6" />
+            <stop offset="0.62" stopColor="#7C6CF6" />
+            <stop offset="0.86" stopColor="#22D3EE" />
           </linearGradient>
-          <radialGradient id={id("bloom")} cx="229.76" cy="189.44" r="618.24" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#8FB0FF" stopOpacity="0.24" />
-            <stop offset="1" stopColor="#8FB0FF" stopOpacity="0" />
+          <radialGradient id={id("portal")} cx="512" cy="512" r={PORTAL_R} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#2A1766" />
+            <stop offset="0.55" stopColor="#140D33" />
+            <stop offset="1" stopColor="#0B0A1A" />
           </radialGradient>
-          <radialGradient id={id("depth")} cx="64" cy="960" r="761.6" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#0B0738" stopOpacity="0.42" />
-            <stop offset="1" stopColor="#0B0738" stopOpacity="0" />
+          <radialGradient id={id("bloom")} cx="512" cy="512" r={PORTAL_R} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#8B5CF6" stopOpacity="0.55" />
+            <stop offset="0.6" stopColor="#8B5CF6" stopOpacity="0.12" />
+            <stop offset="1" stopColor="#8B5CF6" stopOpacity="0" />
           </radialGradient>
-          <linearGradient id={id("gold")} x1="960" y1="960" x2="619.52" y2="619.52" gradientUnits="userSpaceOnUse">
-            <stop offset="0.14" stopColor="#FFC857" />
-            <stop offset="0.3" stopColor="#FFC857" stopOpacity="0.72" />
-            <stop offset="0.56" stopColor="#FF6FA8" stopOpacity="0.26" />
-            <stop offset="0.9" stopColor="#FF6FA8" stopOpacity="0" />
+          <linearGradient id={id("core")} x1="0" y1="40" x2="0" y2="990" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#22D3EE" />
+            <stop offset="0.5" stopColor="#67E8F9" />
+            <stop offset="1" stopColor="#A78BFA" />
           </linearGradient>
-          <linearGradient id={id("sheen")} x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.2" />
-            <stop offset="0.4" stopColor="#FFFFFF" stopOpacity="0.07" />
-            <stop offset="0.405" stopColor="#FFFFFF" stopOpacity="0" />
-          </linearGradient>
-          <linearGradient id={id("rim")} x1="0" y1="64" x2="0" y2="960" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.42" />
-            <stop offset="0.5" stopColor="#FFFFFF" stopOpacity="0.06" />
-            <stop offset="1" stopColor="#FFFFFF" stopOpacity="0.16" />
-          </linearGradient>
-          <linearGradient id={id("ink")} x1="0" y1={inkTop} x2="0" y2={inkBottom} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#FFFFFF" />
-            <stop offset="1" stopColor="#E6E4FF" />
-          </linearGradient>
-          <filter id={id("shadow")} x="-20%" y="-20%" width="140%" height="150%" colorInterpolationFilters="sRGB">
-            <feDropShadow dx="0" dy="16" stdDeviation="20" floodColor="#14095A" floodOpacity="0.45" />
+          <mask id={id("cut")} maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+            <rect width="1024" height="1024" fill="#fff" />
+            <path d={rift} fill="#000" stroke="#000" strokeWidth="44" strokeLinejoin="round" />
+          </mask>
+          <filter id={id("glow-wide")} x="-60%" y="-30%" width="220%" height="160%" colorInterpolationFilters="sRGB">
+            <feGaussianBlur stdDeviation="70" />
           </filter>
+          <filter id={id("glow")} x="-60%" y="-30%" width="220%" height="160%" colorInterpolationFilters="sRGB">
+            <feGaussianBlur stdDeviation="26" />
+          </filter>
+          <clipPath id={id("inside")}>
+            <circle cx="512" cy="512" r={PORTAL_R + 1} />
+          </clipPath>
         </defs>
-        {(["base", "bloom", "depth", "gold", "sheen"] as const).map((layer) => (
-          <rect key={layer} x="64" y="64" width="896" height="896" rx="208" fill={url(layer)} />
-        ))}
-        <rect
-          x={64 + rim / 2}
-          y={64 + rim / 2}
-          width={896 - rim}
-          height={896 - rim}
-          rx={208 - rim / 2}
+        <circle cx="512" cy="512" r={RING_R} fill={url("portal")} />
+        <circle cx="512" cy="512" r={PORTAL_R} fill={url("bloom")} />
+        {rich && (
+          <>
+            <circle cx="512" cy="512" r="308.8" fill="none" stroke="#A78BFA" strokeOpacity="0.16" strokeWidth="6" />
+            <circle cx="512" cy="512" r="223.88" fill="none" stroke="#A78BFA" strokeOpacity="0.11" strokeWidth="6" />
+          </>
+        )}
+        <g clipPath={url("inside")}>
+          <path d={rift} fill="#8B5CF6" opacity="0.95" filter={url("glow-wide")} />
+        </g>
+        <circle cx="512" cy="512" r={RING_R} fill="none" stroke={url("ring")} strokeWidth={RING_W} mask={url("cut")} />
+        <circle
+          cx="512"
+          cy="512"
+          r="445"
           fill="none"
-          stroke={url("rim")}
-          strokeWidth={rim}
+          stroke="#FFFFFF"
+          strokeOpacity="0.22"
+          strokeWidth="5"
+          strokeDasharray="774.09 2040.78"
+          transform="rotate(-200 512 512)"
+          mask={url("cut")}
         />
-        {rich && <path d={ATOMIC_NUMBER} fill="#FFFFFF" fillOpacity="0.9" />}
-        <path d={rich ? NB_RICH : NB_SIMPLE} fill={url("ink")} filter={url("shadow")} />
+        <path d={rift} fill="#22D3EE" filter={url("glow")} />
+        {rich && <path d={BRANCHES} fill="#67E8F9" opacity="0.85" />}
+        <path d={rift} fill={url("core")} />
+        <path d={rich ? CORE_RICH : CORE_SIMPLE} fill="#FFFFFF" />
       </svg>
     </span>
   );
@@ -145,7 +162,7 @@ export interface WordmarkProps {
   title?: string;
 }
 
-/** "Niobium" in the brand lettering. Uses the current text colour. */
+/** "RIFT" in the brand lettering. Uses the current text colour. */
 export function Wordmark({ className, height, title = "Niobium" }: WordmarkProps) {
   return (
     <svg
@@ -164,20 +181,20 @@ export function Wordmark({ className, height, title = "Niobium" }: WordmarkProps
 
 export interface LogoProps {
   className?: string;
-  /** Tile size in px; the wordmark scales with it. */
+  /** Mark size in px; the wordmark scales with it. */
   size?: number;
   glow?: boolean;
   /** Show "old seasons, new shine." under the name. */
   tagline?: boolean;
 }
 
-/** Tile + wordmark lock-up, e.g. for the splash, welcome and about screens. */
+/** Mark + wordmark lock-up, e.g. for the splash, welcome and about screens. */
 export function Logo({ className, size = 40, glow = false, tagline = false }: LogoProps) {
   return (
     <span className={cn("inline-flex items-center", className)} style={{ gap: size * 0.3 }} role="img" aria-label="Niobium">
       <LogoMark size={size} glow={glow} />
       <span className="flex flex-col" style={{ gap: size * 0.12 }}>
-        <Wordmark height={size * 0.5} title="" className="text-foreground" />
+        <Wordmark height={size * 0.42} title="" className="text-foreground" />
         {tagline && <span className="text-xs text-muted-foreground">old seasons, new shine.</span>}
       </span>
     </span>

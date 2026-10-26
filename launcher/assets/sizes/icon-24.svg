@@ -1,29 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <!-- Niobium icon, pixel-tuned for exactly 24x24 px -->
+  <!-- Rift icon, pixel-tuned for exactly 24x24 px -->
   <defs>
-    <linearGradient id="nb-base" x1="1" y1="1" x2="23" y2="23" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2B5BFF"/>
-      <stop offset="0.5" stop-color="#5546FF"/>
-      <stop offset="0.85" stop-color="#7A3CFF"/>
+    <linearGradient id="rf-ring" x1="0.75" y1="0.75" x2="23.25" y2="23.25" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B69CFF"/>
+      <stop offset="0.3" stop-color="#8B5CF6"/>
+      <stop offset="0.62" stop-color="#7C6CF6"/>
+      <stop offset="0.86" stop-color="#22D3EE"/>
     </linearGradient>
-    <linearGradient id="nb-gold" x1="23" y1="23" x2="14.64" y2="14.64" gradientUnits="userSpaceOnUse">
-      <stop offset="0.14" stop-color="#FFC857" stop-opacity="1"/>
-      <stop offset="0.3" stop-color="#FFC857" stop-opacity="0.72"/>
-      <stop offset="0.56" stop-color="#FF6FA8" stop-opacity="0.26"/>
-      <stop offset="0.9" stop-color="#FF6FA8" stop-opacity="0"/>
+    <radialGradient id="rf-portal" cx="12" cy="12" r="8.65" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2A1766"/>
+      <stop offset="0.55" stop-color="#140D33"/>
+      <stop offset="1" stop-color="#0B0A1A"/>
+    </radialGradient>
+    <linearGradient id="rf-core" x1="0" y1="0.94" x2="0" y2="23.2" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="0.5" stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#A78BFA"/>
     </linearGradient>
-    <radialGradient id="nb-depth" cx="1" cy="23" r="18.7" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0B0738" stop-opacity="0.42"/>
-      <stop offset="1" stop-color="#0B0738" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="nb-bloom" cx="5.07" cy="4.08" r="15.18" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8FB0FF" stop-opacity="0.24"/>
-      <stop offset="1" stop-color="#8FB0FF" stop-opacity="0"/>
-    </radialGradient>
+    <mask id="rf-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+      <rect width="24" height="24" fill="#fff"/>
+      <path d="M14.02 0.7L12.34 4.75L12.8 6.78L8.88 11.33L10.31 12.98L8.62 16.81L10.15 18.52L9.1 20.83L9.84 23.3L9.84 23.3L11.06 21.36L12.35 18.51L12.38 17.03L16.03 12.33L14.18 10.7L15.23 7.1L14.38 4.63L14.02 0.7Z" fill="#000" stroke="#000" stroke-width="2.2" stroke-linejoin="round"/>
+    </mask>
   </defs>
-  <rect x="1" y="1" width="22" height="22" rx="5" fill="url(#nb-base)"/>
-  <rect x="1" y="1" width="22" height="22" rx="5" fill="url(#nb-bloom)"/>
-  <rect x="1" y="1" width="22" height="22" rx="5" fill="url(#nb-depth)"/>
-  <rect x="1" y="1" width="22" height="22" rx="5" fill="url(#nb-gold)"/>
-  <path d="M2 6H5V18H2ZM8 6H11V18H8ZM2 6H5.26L11 18H7.74ZM13 6H16V18H13ZM13 13.5A4.5 4.5 0 1 1 22 13.5A4.5 4.5 0 1 1 13 13.5ZM16 13.5A1.5 1.92 0 1 0 19 13.5A1.5 1.92 0 1 0 16 13.5Z" fill="#FFFFFF"/>
+  <circle cx="12" cy="12" r="9.95" fill="url(#rf-portal)"/>
+  <circle cx="12" cy="12" r="9.95" fill="none" stroke="url(#rf-ring)" stroke-width="2.6" mask="url(#rf-cut)"/>
+  <path d="M14.02 0.7L12.34 4.75L12.8 6.78L8.88 11.33L10.31 12.98L8.62 16.81L10.15 18.52L9.1 20.83L9.84 23.3L9.84 23.3L11.06 21.36L12.35 18.51L12.38 17.03L16.03 12.33L14.18 10.7L15.23 7.1L14.38 4.63L14.02 0.7Z" fill="url(#rf-core)"/>
+  <path d="M14.02 0.7L12.85 4.72L13.41 6.86L10.21 11.17L11.74 12.82L9.56 16.87L10.7 18.52L9.59 20.96L9.84 23.3L9.84 23.3L10.57 21.23L11.8 18.51L11.44 16.98L14.6 12.49L12.86 10.86L14.63 7.02L13.87 4.66L14.02 0.7Z" fill="#FFFFFF"/>
 </svg>

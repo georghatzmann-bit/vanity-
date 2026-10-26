@@ -225,11 +225,11 @@ function BubbleBuildsCard({ on, onChange }: { on: boolean; onChange: (v: boolean
       <div
         aria-hidden
         className={cn(
-          "pointer-events-none absolute -top-24 -left-16 size-72 rounded-full bg-[radial-gradient(closest-side,rgb(122_60_255/0.28),transparent)] transition-opacity duration-500",
+          "pointer-events-none absolute -top-24 -left-16 size-72 rounded-full bg-[radial-gradient(closest-side,rgb(139_92_246/0.28),transparent)] transition-opacity duration-500",
           on ? "opacity-100" : "opacity-40",
         )}
       />
-      <div aria-hidden className="pointer-events-none absolute -right-10 -bottom-20 size-56 rounded-full bg-[radial-gradient(closest-side,rgb(43_91_255/0.18),transparent)]" />
+      <div aria-hidden className="pointer-events-none absolute -right-10 -bottom-20 size-56 rounded-full bg-[radial-gradient(closest-side,rgb(34_211_238/0.18),transparent)]" />
 
       <div className="relative flex flex-col gap-5 p-6 sm:flex-row sm:items-center">
         <BubbleWrap lit={lit} on={on} />
@@ -348,7 +348,7 @@ function BubbleWrap({ lit, on }: { lit: boolean; on: boolean }) {
       variants={{ on: { transition: { staggerChildren: 0.035 } }, off: { transition: { staggerChildren: 0.02, staggerDirection: -1 } } }}
       className={cn(
         "grid size-[84px] shrink-0 grid-cols-4 place-items-center gap-1 rounded-2xl p-2.5 ring-1 transition-[background-color,box-shadow] duration-500",
-        on ? "bg-brand-violet/[0.12] ring-brand-violet/30 shadow-[0_0_30px_-8px_rgb(122_60_255/0.6)]" : "bg-white/[0.03] ring-white/[0.08]",
+        on ? "bg-brand-violet/[0.12] ring-brand-violet/30 shadow-[0_0_30px_-8px_rgb(139_92_246/0.6)]" : "bg-white/[0.03] ring-white/[0.08]",
       )}
     >
       {cells.map((_, i) => (
@@ -361,9 +361,9 @@ function BubbleWrap({ lit, on }: { lit: boolean; on: boolean }) {
           className={cn(
             "size-[14px] rounded-full transition-[background,box-shadow] duration-500",
             lit
-              ? "bg-[radial-gradient(circle_at_32%_30%,rgb(255_255_255/0.85),rgb(180_155_255/0.55)_35%,rgb(122_60_255/0.25)_75%)] shadow-[0_0_10px_rgb(122_60_255/0.55)]"
+              ? "bg-[radial-gradient(circle_at_32%_30%,rgb(255_255_255/0.85),rgb(196_181_253/0.55)_35%,rgb(139_92_246/0.25)_75%)] shadow-[0_0_10px_rgb(139_92_246/0.55)]"
               : on
-                ? "bg-[radial-gradient(circle_at_32%_30%,rgb(255_255_255/0.5),rgb(180_155_255/0.25)_40%,transparent_80%)] ring-1 ring-white/15"
+                ? "bg-[radial-gradient(circle_at_32%_30%,rgb(255_255_255/0.5),rgb(196_181_253/0.25)_40%,transparent_80%)] ring-1 ring-white/15"
                 : "bg-[radial-gradient(circle_at_32%_30%,rgb(255_255_255/0.25),transparent_60%)] ring-1 ring-white/10",
           )}
         />

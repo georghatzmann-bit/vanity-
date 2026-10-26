@@ -17,7 +17,7 @@ struct FNiobiumTabHost
     void (*SectionLabel)(const char* Label);
     void (*BeginSectionBody)();
     void (*EndSectionBody)();
-    // Menu accent colour (brand violet #7A3CFF) with the given alpha.
+    // Menu accent colour (brand violet #8B5CF6) with the given alpha.
     ImVec4 (*Accent)(float Alpha);
 
     // Optional (may be nullptr):

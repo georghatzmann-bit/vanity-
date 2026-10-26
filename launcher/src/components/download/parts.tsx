@@ -61,9 +61,9 @@ export function ProgressRing({
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={cn("absolute inset-0 -rotate-90", spin && "nb-loop animate-spin-slow")} aria-hidden>
         <defs>
           <linearGradient id="nb-ring-gradient" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#2b5bff" />
-            <stop offset="60%" stopColor="#7a3cff" />
-            <stop offset="100%" stopColor="#ffc857" />
+            <stop offset="0%" stopColor="#22d3ee" />
+            <stop offset="60%" stopColor="#8b5cf6" />
+            <stop offset="100%" stopColor="#22d3ee" />
           </linearGradient>
         </defs>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgb(255 255 255 / 0.08)" strokeWidth={stroke} />

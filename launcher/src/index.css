@@ -4,42 +4,46 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Niobium design tokens ("anodised metal in the dark", see docs/brand.md).
- * One accent (violet/blue gradient). Green/orange/red are only for status. Gold is a reward, never a fill.
+ * Brand design tokens ("Rift": a portal back to old seasons, see docs/brand.md).
+ * Two accents that always travel together: violet (main, fills) and neon cyan (light, highlights).
+ * Green/orange/red are only for status. Text in an accent colour uses the -text variants.
  * Spacing on a 4 px grid. Radius: 12 px cards, 8 px controls, full for pills.
  */
 :root {
   /* ---- brand palette (docs/brand.md) ---- */
-  --nb-bg: #0a0b12;
-  --nb-surface: #11131c;
-  --nb-surface-raised: #171a26;
+  --nb-bg: #07070c;
+  --nb-surface: #0f0f19;
+  --nb-surface-raised: #161624;
   --nb-border: rgb(255 255 255 / 0.08);
-  --nb-text: #f2f3f8;
-  --nb-text-muted: #a3a8c3;
-  --nb-text-faint: #6e7392;
-  --nb-blue: #2b5bff;
-  --nb-indigo: #5546ff;
-  --nb-violet: #7a3cff;
-  --nb-gold: #ffc857;
-  --nb-blue-text: #8fa8ff;
-  --nb-violet-text: #b49bff;
-  --nb-ring: #9b7bff;
+  --nb-text: #f4f4f8;
+  --nb-text-muted: #a6a6bc;
+  --nb-text-faint: #80809a;
+  --nb-violet: #8b5cf6;
+  --nb-violet-fill: #7c3aed;
+  --nb-cyan: #22d3ee;
+  --nb-violet-text: #c4b5fd;
+  --nb-cyan-text: #67e8f9;
+  --nb-ring: #22d3ee;
 
-  --nb-gradient: linear-gradient(135deg, #2b5bff 0%, #5546ff 50%, #7a3cff 85%);
-  --nb-gradient-shine: linear-gradient(135deg, #2b5bff 0%, #7a3cff 70%, #ffc857 100%);
-  --nb-gradient-text: linear-gradient(100deg, #f2f3f8 0%, #b49bff 55%, #8fa8ff 100%);
-  --nb-glass: rgb(17 19 28 / 0.62);
-  --nb-glass-strong: rgb(23 26 38 / 0.82);
-  --nb-glow: 0 0 0 1px rgb(122 60 255 / 0.35), 0 10px 40px -10px rgb(122 60 255 / 0.6);
-  --nb-glow-blue: 0 10px 40px -12px rgb(43 91 255 / 0.65);
+  /* button fill: violet into a deep cyan, white text stays >= 5.3:1 over the whole gradient */
+  --nb-gradient: linear-gradient(135deg, #7c3aed 0%, #6d28d9 55%, #0e7490 100%);
+  /* decoration only (lines, bars, rims): the full violet -> neon cyan of the logo ring */
+  --nb-gradient-shine: linear-gradient(135deg, #8b5cf6 0%, #7c6cf6 55%, #22d3ee 100%);
+  --nb-gradient-text: linear-gradient(100deg, #f4f4f8 0%, #c4b5fd 55%, #67e8f9 100%);
+  --nb-glass: rgb(15 15 25 / 0.62);
+  --nb-glass-strong: rgb(22 22 36 / 0.82);
+  --nb-glow: 0 0 0 1px rgb(139 92 246 / 0.35), 0 10px 40px -10px rgb(139 92 246 / 0.6),
+    0 0 28px -10px rgb(34 211 238 / 0.45);
+  --nb-glow-cyan: 0 10px 40px -12px rgb(34 211 238 / 0.6);
   --nb-highlight: inset 0 1px 0 rgb(255 255 255 / 0.06);
-  /* hairline gradient for glass borders: light at the top left, a hint of violet at the bottom right */
+  /* hairline gradient for glass borders: light at the top left, violet into cyan at the bottom right */
   --nb-edge: linear-gradient(
     160deg,
     rgb(255 255 255 / 0.16) 0%,
     rgb(255 255 255 / 0.05) 38%,
     rgb(255 255 255 / 0.03) 62%,
-    rgb(122 60 255 / 0.22) 100%
+    rgb(139 92 246 / 0.2) 88%,
+    rgb(34 211 238 / 0.22) 100%
   );
 
   /* ---- motion (mirrors src/lib/motion.ts) ---- */
@@ -58,17 +62,17 @@
   --popover: var(--nb-surface-raised);
   --popover-foreground: var(--nb-text);
 
-  /* fill for buttons (white text: 5.3:1) */
-  --primary: var(--nb-indigo);
+  /* fill for buttons (white text: 5.7:1) */
+  --primary: var(--nb-violet-fill);
   --primary-foreground: #ffffff;
-  /* accent used as text on dark (8.5:1) */
+  /* accent used as text on dark (10.9:1) */
   --primary-text: var(--nb-violet-text);
 
-  --secondary: #1b1e2c;
+  --secondary: #1a1a28;
   --secondary-foreground: var(--nb-text);
-  --muted: #151824;
+  --muted: #13131f;
   --muted-foreground: var(--nb-text-muted);
-  --accent: #1f2233;
+  --accent: #1e1e2e;
   --accent-foreground: var(--nb-text);
 
   --destructive: #ef4444;
@@ -113,13 +117,12 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* brand colours as Tailwind colours: bg-brand-violet, text-violet-text, text-gold, bg-surface … */
-  --color-brand-blue: var(--nb-blue);
-  --color-brand-indigo: var(--nb-indigo);
+  /* brand colours as Tailwind colours: bg-brand-violet, text-violet-text, text-cyan-text, bg-surface … */
   --color-brand-violet: var(--nb-violet);
-  --color-gold: var(--nb-gold);
-  --color-blue-text: var(--nb-blue-text);
+  --color-brand-violet-fill: var(--nb-violet-fill);
+  --color-brand-cyan: var(--nb-cyan);
   --color-violet-text: var(--nb-violet-text);
+  --color-cyan-text: var(--nb-cyan-text);
   --color-faint: var(--nb-text-faint);
   --color-surface: var(--nb-surface);
   --color-surface-raised: var(--nb-surface-raised);
@@ -182,7 +185,7 @@
   }
 
   ::selection {
-    background: rgb(122 60 255 / 0.45);
+    background: rgb(139 92 246 / 0.45);
   }
 
   /* Thin, quiet scrollbars */
@@ -250,7 +253,7 @@
     position: relative;
   }
   .gradient-border-brand::before {
-    background: linear-gradient(135deg, rgb(43 91 255 / 0.9), rgb(122 60 255 / 0.9) 70%, rgb(255 200 87 / 0.8));
+    background: linear-gradient(135deg, rgb(139 92 246 / 0.9), rgb(124 108 246 / 0.9) 55%, rgb(34 211 238 / 0.85));
   }
 
   /* When glass is off in Settings: solid surfaces */
@@ -280,8 +283,8 @@
     transition: opacity 200ms var(--nb-ease-out);
     background: radial-gradient(
       420px circle at var(--mx, 50%) var(--my, 0%),
-      rgb(122 60 255 / 0.12),
-      rgb(43 91 255 / 0.05) 40%,
+      rgb(139 92 246 / 0.12),
+      rgb(34 211 238 / 0.05) 40%,
       transparent 70%
     );
   }
@@ -300,7 +303,7 @@
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.07), rgb(180 155 255 / 0.08), transparent);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.07), rgb(196 181 253 / 0.08), transparent);
     animation: nb-shimmer 1.6s ease-in-out infinite;
   }
 
@@ -322,8 +325,8 @@
   .hover-glow:hover {
     box-shadow:
       var(--nb-highlight),
-      0 0 0 1px rgb(122 60 255 / 0.22),
-      0 18px 44px -18px rgb(122 60 255 / 0.5);
+      0 0 0 1px rgb(139 92 246 / 0.22),
+      0 18px 44px -18px rgb(139 92 246 / 0.5);
   }
 
   /*
@@ -379,8 +382,8 @@
 @utility glow-primary {
   box-shadow: var(--nb-glow);
 }
-@utility glow-blue {
-  box-shadow: var(--nb-glow-blue);
+@utility glow-cyan {
+  box-shadow: var(--nb-glow-cyan);
 }
 
 /* Brand gradient fills */
@@ -399,7 +402,7 @@
   color: transparent;
 }
 @utility text-gradient-brand {
-  background-image: linear-gradient(110deg, #8fa8ff 0%, #b49bff 60%, #ffc857 120%);
+  background-image: linear-gradient(110deg, #67e8f9 0%, #c4b5fd 60%, #a78bfa 120%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -410,12 +413,12 @@
   &:focus-visible {
     box-shadow:
       0 0 0 2px var(--nb-bg),
-      0 0 0 4px rgb(155 123 255 / 0.7);
+      0 0 0 4px rgb(167 139 250 / 0.7);
   }
 }
 
 /* ---------------------------------------------------------------------------------------------
- * Animated background: slow aurora (blue, violet, a small gold one), dot grid, grain, vignette.
+ * Animated background: slow aurora (violet, cyan, a small deep-violet one), dot grid, grain, vignette.
  * Blobs are soft radial gradients (no blur filter). Background.tsx moves them with transforms at a
  * low frame rate, so the glass panels above don't have to re-blur 60 times a second.
  * ------------------------------------------------------------------------------------------- */
@@ -425,7 +428,7 @@
   overflow: hidden;
   pointer-events: none;
   background:
-    radial-gradient(120% 80% at 50% -20%, rgb(85 70 255 / 0.12), transparent 60%),
+    radial-gradient(120% 80% at 50% -20%, rgb(124 58 237 / 0.12), transparent 60%),
     var(--nb-bg);
 }
 
@@ -443,28 +446,28 @@
   height: 70vmax;
   left: -18vmax;
   top: -34vmax;
-  background: radial-gradient(closest-side, rgb(43 91 255 / 0.32), rgb(43 91 255 / 0.12) 45%, transparent 72%);
+  background: radial-gradient(closest-side, rgb(34 211 238 / 0.2), rgb(34 211 238 / 0.07) 45%, transparent 72%);
 }
 .aurora > span:nth-child(2) {
   width: 64vmax;
   height: 64vmax;
   right: -20vmax;
   top: -10vmax;
-  background: radial-gradient(closest-side, rgb(122 60 255 / 0.34), rgb(122 60 255 / 0.12) 45%, transparent 72%);
+  background: radial-gradient(closest-side, rgb(139 92 246 / 0.34), rgb(139 92 246 / 0.12) 45%, transparent 72%);
 }
 .aurora > span:nth-child(3) {
   width: 26vmax;
   height: 26vmax;
   right: 8vmax;
   bottom: -8vmax;
-  background: radial-gradient(closest-side, rgb(255 200 87 / 0.14), rgb(255 111 168 / 0.06) 50%, transparent 72%);
+  background: radial-gradient(closest-side, rgb(124 58 237 / 0.2), rgb(34 211 238 / 0.05) 50%, transparent 72%);
 }
 .aurora > span:nth-child(4) {
   width: 52vmax;
   height: 52vmax;
   left: 18vmax;
   bottom: -30vmax;
-  background: radial-gradient(closest-side, rgb(85 70 255 / 0.22), transparent 70%);
+  background: radial-gradient(closest-side, rgb(124 58 237 / 0.22), transparent 70%);
 }
 
 /* Fine dot grid for depth, strongest near the top */
@@ -490,8 +493,8 @@
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(180deg, transparent 0%, rgb(10 11 18 / 0.2) 55%, rgb(10 11 18 / 0.7) 100%),
-    radial-gradient(140% 100% at 50% 0%, transparent 60%, rgb(5 6 10 / 0.5) 100%);
+    linear-gradient(180deg, transparent 0%, rgb(7 7 12 / 0.2) 55%, rgb(7 7 12 / 0.7) 100%),
+    radial-gradient(140% 100% at 50% 0%, transparent 60%, rgb(4 4 7 / 0.5) 100%);
 }
 
 /*
@@ -660,7 +663,7 @@
 }
 [data-sonner-toaster] [data-sonner-toast].nb-toast[data-type="info"] [data-icon],
 [data-sonner-toaster] [data-sonner-toast].nb-toast[data-type="default"] [data-icon] {
-  background: rgb(122 60 255 / 0.16);
+  background: rgb(139 92 246 / 0.16);
 }
 [data-sonner-toaster] [data-sonner-toast].nb-toast [data-close-button] {
   background: var(--nb-surface-raised);

@@ -46,15 +46,15 @@ static_assert(sizeof("–") == 4, "NiobiumTrickshotTab.cpp must be built with /u
 namespace
 {
     // ---------------------------------------------------------------- Colours (palette from GUI.cpp)
-    constexpr ImVec4 kMuted(0.431f, 0.451f, 0.573f, 1.f); // text-faint #6E7392 (decoration only)
-    constexpr ImVec4 kHintText(0.639f, 0.659f, 0.765f, 1.f); // text-muted #A3A8C3 (hints, status)
-    constexpr ImVec4 kPrimary(0.949f, 0.953f, 0.973f, 1.f); // brand text #F2F3F8
+    constexpr ImVec4 kMuted(0.502f, 0.502f, 0.604f, 1.f); // text-faint #80809A (decoration only)
+    constexpr ImVec4 kHintText(0.651f, 0.651f, 0.737f, 1.f); // text-muted #A6A6BC (hints, status)
+    constexpr ImVec4 kPrimary(0.957f, 0.957f, 0.973f, 1.f); // brand text #F4F4F8
     constexpr ImVec4 kSecondary(0.58f, 0.60f, 0.66f, 1.f);
     constexpr ImVec4 kError(1.f, 0.39f, 0.43f, 1.f);
-    constexpr ImVec4 kCardBg(0.078f, 0.096f, 0.141f, 1.f);
-    constexpr ImVec4 kCardBorder(0.137f, 0.165f, 0.243f, 1.f);
-    // Accent for text (brand violet-text #B49BFF): plain violet is too dark for small text.
-    constexpr ImVec4 kAccentText(0.706f, 0.608f, 1.f, 1.f);
+    constexpr ImVec4 kCardBg(0.071f, 0.071f, 0.125f, 1.f); // #121220
+    constexpr ImVec4 kCardBorder(0.141f, 0.141f, 0.227f, 1.f); // border #24243A
+    // Accent for text (brand violet-text #C4B5FD): plain violet is too dark for small text.
+    constexpr ImVec4 kAccentText(0.769f, 0.710f, 0.992f, 1.f);
 
     constexpr float kActionButtonHeight = 28.f;
     constexpr double kStatusOkSeconds = 3.0;
@@ -67,7 +67,7 @@ namespace
     {
         if (Host.Accent)
             return Host.Accent(Alpha);
-        return ImVec4(0.478f, 0.235f, 1.f, Alpha); // brand violet #7A3CFF
+        return ImVec4(0.545f, 0.361f, 0.965f, Alpha); // brand violet #8B5CF6
     }
 
     // ---------------------------------------------------------------- Parkour file
@@ -1184,17 +1184,17 @@ void NiobiumToast_Draw()
     const ImVec2 panelMax(panelMin.x + panelWidth, panelMin.y + panelHeight);
     const float rounding = 10.f * scale;
 
-    // Brand colours: violet #7A3CFF for glow, border and strip, a blue #2B5BFF glow underneath
-    // and gold #FFC857 for the title (gold is the "reward" colour of the brand).
-    constexpr float accentR = 0.478f;
-    constexpr float accentG = 0.235f;
-    constexpr float accentB = 1.f;
-    constexpr float blueR = 0.169f;
-    constexpr float blueG = 0.357f;
-    constexpr float blueB = 1.f;
-    constexpr float goldR = 1.f;
-    constexpr float goldG = 0.784f;
-    constexpr float goldB = 0.341f;
+    // Brand colours: violet #8B5CF6 for glow, border and strip, a neon cyan #22D3EE glow underneath
+    // and cyan-text #67E8F9 for the title (the "light" colour of the brand, 13:1 on the panel).
+    constexpr float accentR = 0.545f;
+    constexpr float accentG = 0.361f;
+    constexpr float accentB = 0.965f;
+    constexpr float blueR = 0.133f;
+    constexpr float blueG = 0.827f;
+    constexpr float blueB = 0.933f;
+    constexpr float goldR = 0.404f;
+    constexpr float goldG = 0.910f;
+    constexpr float goldB = 0.976f;
 
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
 
@@ -1208,7 +1208,7 @@ void NiobiumToast_Draw()
     drawList->AddRectFilled(
         ImVec2(panelMin.x + 2.f, panelMin.y + 5.f), ImVec2(panelMax.x + 2.f, panelMax.y + 5.f),
         Color(0.f, 0.f, 0.f, 0.35f * alpha), rounding);
-    drawList->AddRectFilled(panelMin, panelMax, Color(0.039f, 0.043f, 0.071f, 0.94f * alpha), rounding);
+    drawList->AddRectFilled(panelMin, panelMax, Color(0.027f, 0.027f, 0.047f, 0.94f * alpha), rounding);
     drawList->AddRect(panelMin, panelMax, Color(accentR, accentG, accentB, 0.55f * alpha), rounding, 0, 1.5f);
     drawList->AddRectFilled(
         panelMin, ImVec2(panelMin.x + strip, panelMax.y),
@@ -1232,6 +1232,6 @@ void NiobiumToast_Draw()
             std::floor(contentCenterX - subtitleExtent.x * 0.5f),
             std::floor(titlePosition.y + titleExtent.y + gap));
         drawList->AddText(font, subtitleSize, subtitlePosition,
-            Color(0.949f, 0.953f, 0.973f, alpha), subtitle, nullptr, 0.f, &clip);
+            Color(0.957f, 0.957f, 0.973f, alpha), subtitle, nullptr, 0.f, &clip);
     }
 }

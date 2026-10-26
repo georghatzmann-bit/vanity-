@@ -1,48 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <!-- Niobium icon, pixel-tuned for exactly 48x48 px -->
+  <!-- Rift icon, pixel-tuned for exactly 48x48 px -->
   <defs>
-    <linearGradient id="nb-base" x1="2" y1="2" x2="46" y2="46" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2B5BFF"/>
-      <stop offset="0.5" stop-color="#5546FF"/>
-      <stop offset="0.85" stop-color="#7A3CFF"/>
+    <linearGradient id="rf-ring" x1="1.5" y1="1.5" x2="46.5" y2="46.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B69CFF"/>
+      <stop offset="0.3" stop-color="#8B5CF6"/>
+      <stop offset="0.62" stop-color="#7C6CF6"/>
+      <stop offset="0.86" stop-color="#22D3EE"/>
     </linearGradient>
-    <linearGradient id="nb-gold" x1="46" y1="46" x2="29.28" y2="29.28" gradientUnits="userSpaceOnUse">
-      <stop offset="0.14" stop-color="#FFC857" stop-opacity="1"/>
-      <stop offset="0.3" stop-color="#FFC857" stop-opacity="0.72"/>
-      <stop offset="0.56" stop-color="#FF6FA8" stop-opacity="0.26"/>
-      <stop offset="0.9" stop-color="#FF6FA8" stop-opacity="0"/>
-    </linearGradient>
-    <radialGradient id="nb-depth" cx="2" cy="46" r="37.4" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0B0738" stop-opacity="0.42"/>
-      <stop offset="1" stop-color="#0B0738" stop-opacity="0"/>
+    <radialGradient id="rf-portal" cx="24" cy="24" r="18.1" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2A1766"/>
+      <stop offset="0.55" stop-color="#140D33"/>
+      <stop offset="1" stop-color="#0B0A1A"/>
     </radialGradient>
-    <radialGradient id="nb-bloom" cx="10.14" cy="8.16" r="30.36" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8FB0FF" stop-opacity="0.24"/>
-      <stop offset="1" stop-color="#8FB0FF" stop-opacity="0"/>
+    <linearGradient id="rf-core" x1="0" y1="1.88" x2="0" y2="46.41" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="0.5" stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <mask id="rf-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+      <rect width="48" height="48" fill="#fff"/>
+      <path d="M28.03 1.41L25.08 9.47L25.82 13.58L18.26 22.61L21.16 25.9L17.6 33.64L20.55 37.04L18.59 41.76L19.69 46.59L19.69 46.59L21.72 42.61L24.45 37.02L24.4 34.05L31.52 24.73L27.87 21.46L30.24 14.17L28.36 9.28L28.03 1.41Z" fill="#000" stroke="#000" stroke-width="3.6" stroke-linejoin="round"/>
+    </mask>
+    <radialGradient id="rf-bloom" cx="24" cy="24" r="18.1" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#8B5CF6" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="nb-sheen" x1="2" y1="2" x2="46" y2="46" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.20"/>
-      <stop offset="0.40" stop-color="#FFFFFF" stop-opacity="0.07"/>
-      <stop offset="0.405" stop-color="#FFFFFF" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="nb-rim" x1="0" y1="2" x2="0" y2="46" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.42"/>
-      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.06"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.16"/>
-    </linearGradient>
-    <linearGradient id="nb-ink" x1="0" y1="14" x2="0" y2="34" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E6E4FF"/>
-    </linearGradient>
-    <filter id="nb-shadow" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="0.75" stdDeviation="0.94" flood-color="#14095A" flood-opacity="0.45"/>
+    <filter id="rf-glow-wide" x="-60%" y="-30%" width="220%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="3.28"/>
     </filter>
+    <filter id="rf-glow" x="-60%" y="-30%" width="220%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.22"/>
+    </filter>
+    <clipPath id="rf-inside"><circle cx="24" cy="24" r="18.15"/></clipPath>
   </defs>
-  <rect x="2" y="2" width="44" height="44" rx="9.5" fill="url(#nb-base)"/>
-  <rect x="2" y="2" width="44" height="44" rx="9.5" fill="url(#nb-bloom)"/>
-  <rect x="2" y="2" width="44" height="44" rx="9.5" fill="url(#nb-depth)"/>
-  <rect x="2" y="2" width="44" height="44" rx="9.5" fill="url(#nb-gold)"/>
-  <rect x="2" y="2" width="44" height="44" rx="9.5" fill="url(#nb-sheen)"/>
-  <rect x="2.5" y="2.5" width="43" height="43" rx="9" fill="none" stroke="url(#nb-rim)" stroke-width="1"/>
-  <path d="M6 14H11V34H6ZM18 14H23V34H18ZM6 14H11.64L23 34H17.36ZM25 14H30V34H25ZM25 26.5A8.5 7.5 0 1 1 42 26.5A8.5 7.5 0 1 1 25 26.5ZM30 26.5A3.5 3.2 0 1 0 37 26.5A3.5 3.2 0 1 0 30 26.5Z" fill="url(#nb-ink)" filter="url(#nb-shadow)"/>
+  <circle cx="24" cy="24" r="20.3" fill="url(#rf-portal)"/>
+  <circle cx="24" cy="24" r="18.1" fill="url(#rf-bloom)"/>
+  <g clip-path="url(#rf-inside)"><path d="M28.03 1.41L25.08 9.47L25.82 13.58L18.26 22.61L21.16 25.9L17.6 33.64L20.55 37.04L18.59 41.76L19.69 46.59L19.69 46.59L21.72 42.61L24.45 37.02L24.4 34.05L31.52 24.73L27.87 21.46L30.24 14.17L28.36 9.28L28.03 1.41Z" fill="#8B5CF6" opacity="0.95" filter="url(#rf-glow-wide)"/></g>
+  <circle cx="24" cy="24" r="20.3" fill="none" stroke="url(#rf-ring)" stroke-width="4.4" mask="url(#rf-cut)"/>
+  <circle cx="24" cy="24" r="22" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="0.6" stroke-dasharray="38.88 102.49" transform="rotate(-200 24 24)" mask="url(#rf-cut)"/>
+  <path d="M28.03 1.41L25.08 9.47L25.82 13.58L18.26 22.61L21.16 25.9L17.6 33.64L20.55 37.04L18.59 41.76L19.69 46.59L19.69 46.59L21.72 42.61L24.45 37.02L24.4 34.05L31.52 24.73L27.87 21.46L30.24 14.17L28.36 9.28L28.03 1.41Z" fill="#22D3EE" filter="url(#rf-glow)"/>
+  <path d="M28.03 1.41L25.08 9.47L25.82 13.58L18.26 22.61L21.16 25.9L17.6 33.64L20.55 37.04L18.59 41.76L19.69 46.59L19.69 46.59L21.72 42.61L24.45 37.02L24.4 34.05L31.52 24.73L27.87 21.46L30.24 14.17L28.36 9.28L28.03 1.41Z" fill="url(#rf-core)"/>
+  <path d="M28.03 1.41L25.9 9.42L26.93 13.73L20.66 22.32L23.75 25.61L19.3 33.74L21.53 37.04L19.37 41.97L19.69 46.59L19.69 46.59L20.94 42.4L23.47 37.02L22.7 33.95L28.93 25.02L25.47 21.74L29.14 14.02L27.54 9.33L28.03 1.41Z" fill="#FFFFFF"/>
 </svg>

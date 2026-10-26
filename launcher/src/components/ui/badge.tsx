@@ -5,7 +5,7 @@ import { Slot } from "radix-ui"
 
 /*
  * Small status chips. Colour is never the only signal – always put a word inside.
- * default = violet tint, brand = gradient, success/warning/destructive = status, gold = "New", muted = quiet.
+ * default = violet tint, brand = gradient, success/warning/destructive = status, gold = "New" (cyan highlight), muted = quiet.
  */
 const badgeVariants = cva(
   "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive [&>svg]:pointer-events-none [&>svg]:size-3",
@@ -19,7 +19,7 @@ const badgeVariants = cva(
         success: "bg-success/12 text-success ring-1 ring-success/25 ring-inset",
         warning: "bg-warning/12 text-warning ring-1 ring-warning/25 ring-inset",
         destructive: "bg-destructive/12 text-destructive ring-1 ring-destructive/25 ring-inset",
-        gold: "bg-gold/12 text-gold ring-1 ring-gold/30 ring-inset",
+        gold: "bg-brand-cyan/12 text-cyan-text ring-1 ring-brand-cyan/30 ring-inset",
         outline: "border-white/[0.12] text-foreground [a&]:hover:bg-white/[0.06]",
         ghost: "[a&]:hover:bg-white/[0.06]",
         link: "text-violet-text underline-offset-4 [a&]:hover:underline",

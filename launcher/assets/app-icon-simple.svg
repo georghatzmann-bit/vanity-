@@ -1,48 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Niobium logo, simple variant (no atomic number) for small UI sizes -->
+  <!-- Rift logo, simple variant (no depth rings or side cracks) for small UI sizes -->
   <defs>
-    <linearGradient id="nb-base" x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2B5BFF"/>
-      <stop offset="0.5" stop-color="#5546FF"/>
-      <stop offset="0.85" stop-color="#7A3CFF"/>
+    <linearGradient id="rf-ring" x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B69CFF"/>
+      <stop offset="0.3" stop-color="#8B5CF6"/>
+      <stop offset="0.62" stop-color="#7C6CF6"/>
+      <stop offset="0.86" stop-color="#22D3EE"/>
     </linearGradient>
-    <linearGradient id="nb-gold" x1="960" y1="960" x2="619.52" y2="619.52" gradientUnits="userSpaceOnUse">
-      <stop offset="0.14" stop-color="#FFC857" stop-opacity="1"/>
-      <stop offset="0.3" stop-color="#FFC857" stop-opacity="0.72"/>
-      <stop offset="0.56" stop-color="#FF6FA8" stop-opacity="0.26"/>
-      <stop offset="0.9" stop-color="#FF6FA8" stop-opacity="0"/>
-    </linearGradient>
-    <radialGradient id="nb-depth" cx="64" cy="960" r="761.6" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0B0738" stop-opacity="0.42"/>
-      <stop offset="1" stop-color="#0B0738" stop-opacity="0"/>
+    <radialGradient id="rf-portal" cx="512" cy="512" r="386" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2A1766"/>
+      <stop offset="0.55" stop-color="#140D33"/>
+      <stop offset="1" stop-color="#0B0A1A"/>
     </radialGradient>
-    <radialGradient id="nb-bloom" cx="229.76" cy="189.44" r="618.24" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8FB0FF" stop-opacity="0.24"/>
-      <stop offset="1" stop-color="#8FB0FF" stop-opacity="0"/>
+    <linearGradient id="rf-core" x1="0" y1="40" x2="0" y2="990" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="0.5" stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <mask id="rf-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <path d="M598 30L553.95 200.97L561.59 291.18L412.78 479.48L476.64 549.68L391.96 718.64L447.92 790.21L419.05 897.01L420 994L420 994L440.95 902.99L512.08 789.79L504.04 725.36L647.36 530.32L571.22 460.52L634.41 300.82L586.05 199.03L598 30Z" fill="#000" stroke="#000" stroke-width="44" stroke-linejoin="round"/>
+    </mask>
+    <radialGradient id="rf-bloom" cx="512" cy="512" r="386" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#8B5CF6" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="nb-sheen" x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.20"/>
-      <stop offset="0.40" stop-color="#FFFFFF" stop-opacity="0.07"/>
-      <stop offset="0.405" stop-color="#FFFFFF" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="nb-rim" x1="0" y1="64" x2="0" y2="960" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.42"/>
-      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.06"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.16"/>
-    </linearGradient>
-    <linearGradient id="nb-ink" x1="0" y1="336" x2="0" y2="704" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E6E4FF"/>
-    </linearGradient>
-    <filter id="nb-shadow" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#14095A" flood-opacity="0.45"/>
+    <filter id="rf-glow-wide" x="-60%" y="-30%" width="220%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="70"/>
     </filter>
+    <filter id="rf-glow" x="-60%" y="-30%" width="220%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <clipPath id="rf-inside"><circle cx="512" cy="512" r="387"/></clipPath>
   </defs>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nb-base)"/>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nb-bloom)"/>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nb-depth)"/>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nb-gold)"/>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nb-sheen)"/>
-  <rect x="68" y="68" width="888" height="888" rx="204" fill="none" stroke="url(#nb-rim)" stroke-width="8"/>
-  <path d="M184.5 336H276.5V704H184.5ZM408.5 336H500.5V704H408.5ZM184.5 336H288.55L500.5 704H396.45ZM537.5 336H629.5V704H537.5ZM537.5 567.84A151 136.16 0 1 1 839.5 567.84A151 136.16 0 1 1 537.5 567.84ZM629.5 567.84A59 57.04 0 1 0 747.5 567.84A59 57.04 0 1 0 629.5 567.84Z" fill="url(#nb-ink)" filter="url(#nb-shadow)"/>
+  <circle cx="512" cy="512" r="417" fill="url(#rf-portal)"/>
+  <circle cx="512" cy="512" r="386" fill="url(#rf-bloom)"/>
+  <g clip-path="url(#rf-inside)"><path d="M598 30L553.95 200.97L561.59 291.18L412.78 479.48L476.64 549.68L391.96 718.64L447.92 790.21L419.05 897.01L420 994L420 994L440.95 902.99L512.08 789.79L504.04 725.36L647.36 530.32L571.22 460.52L634.41 300.82L586.05 199.03L598 30Z" fill="#8B5CF6" opacity="0.95" filter="url(#rf-glow-wide)"/></g>
+  <circle cx="512" cy="512" r="417" fill="none" stroke="url(#rf-ring)" stroke-width="62" mask="url(#rf-cut)"/>
+  <circle cx="512" cy="512" r="445" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="5" stroke-dasharray="774.09 2040.78" transform="rotate(-200 512 512)" mask="url(#rf-cut)"/>
+  <path d="M598 30L553.95 200.97L561.59 291.18L412.78 479.48L476.64 549.68L391.96 718.64L447.92 790.21L419.05 897.01L420 994L420 994L440.95 902.99L512.08 789.79L504.04 725.36L647.36 530.32L571.22 460.52L634.41 300.82L586.05 199.03L598 30Z" fill="#22D3EE" filter="url(#rf-glow)"/>
+  <path d="M598 30L553.95 200.97L561.59 291.18L412.78 479.48L476.64 549.68L391.96 718.64L447.92 790.21L419.05 897.01L420 994L420 994L440.95 902.99L512.08 789.79L504.04 725.36L647.36 530.32L571.22 460.52L634.41 300.82L586.05 199.03L598 30Z" fill="url(#rf-core)"/>
+  <path d="M598 30L561.97 200.48L579.8 293.59L452.39 474.74L519.32 544.84L419.98 720.32L463.96 790.11L424.53 898.51L420 994L420 994L435.47 901.49L496.04 789.89L476.02 723.68L604.68 535.16L531.61 465.26L616.2 298.41L578.03 199.52L598 30Z" fill="#FFFFFF"/>
 </svg>

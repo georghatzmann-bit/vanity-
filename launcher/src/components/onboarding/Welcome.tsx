@@ -74,9 +74,9 @@ export function Welcome() {
       exit={{ opacity: 0, transition: { duration: 0.25, ease: EASE_IN } }}
     >
       {/* Veil over the app, the aurora still glows through */}
-      <div className="absolute inset-0 bg-[#0a0b12]/80 backdrop-blur-xl" />
-      <div className="pointer-events-none absolute -top-40 left-1/2 size-[44rem] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(122_60_255/0.22),transparent)]" />
-      <div className="pointer-events-none absolute -bottom-56 left-1/4 size-[36rem] rounded-full bg-[radial-gradient(closest-side,rgb(43_91_255/0.16),transparent)]" />
+      <div className="absolute inset-0 bg-[#07070c]/80 backdrop-blur-xl" />
+      <div className="pointer-events-none absolute -top-40 left-1/2 size-[44rem] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(139_92_246/0.22),transparent)]" />
+      <div className="pointer-events-none absolute -bottom-56 left-1/4 size-[36rem] rounded-full bg-[radial-gradient(closest-side,rgb(34_211_238/0.16),transparent)]" />
 
       <div className="relative flex h-9 items-center justify-between px-8 mt-6">
         <StepDots step={step} />
@@ -219,7 +219,7 @@ function StepDots({ step }: { step: number }) {
         <li key={label} className="relative flex h-2 items-center">
           <span className={cn("block h-2 rounded-full transition-[width,background-color] duration-300", i === step ? "w-7" : "w-2", i < step ? "bg-violet-text/60" : "bg-white/[0.12]")} />
           {i === step && (
-            <motion.span layoutId="welcome-dot" transition={SPRING_UI} className="absolute inset-0 rounded-full bg-brand shadow-[0_0_12px_rgb(122_60_255/0.8)]" />
+            <motion.span layoutId="welcome-dot" transition={SPRING_UI} className="absolute inset-0 rounded-full bg-brand shadow-[0_0_12px_rgb(139_92_246/0.8)]" />
           )}
         </li>
       ))}
@@ -232,7 +232,7 @@ function StepFrame({ icon: Icon, title, hint, children }: { icon: typeof Gamepad
   return (
     <div className="glass-strong rounded-2xl p-8">
       <div className="mb-6 flex items-start gap-4">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-blue/30 to-brand-violet/30 text-violet-text ring-1 ring-brand-violet/30">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan/30 to-brand-violet/30 text-violet-text ring-1 ring-brand-violet/30">
           <Icon className="size-5" />
         </div>
         <div>
@@ -347,7 +347,7 @@ function ReadyStep({ name, hasBuild, onGo, onBack }: { name: string; hasBuild: b
   );
 }
 
-/** A few gold and violet sparks that fly out once around the logo. */
+/** A few cyan and violet sparks that fly out once around the logo. */
 function Sparkles8() {
   const sparks = Array.from({ length: 10 }, (_, i) => {
     const angle = (i / 10) * Math.PI * 2 + 0.3;
@@ -359,7 +359,7 @@ function Sparkles8() {
       {sparks.map((s, i) => (
         <motion.span
           key={i}
-          className={cn("absolute size-1.5 rounded-full", s.gold ? "bg-gold shadow-[0_0_8px_rgb(255_200_87/0.9)]" : "bg-violet-text shadow-[0_0_8px_rgb(180_155_255/0.9)]")}
+          className={cn("absolute size-1.5 rounded-full", s.gold ? "bg-brand-cyan shadow-[0_0_8px_rgb(34_211_238/0.9)]" : "bg-violet-text shadow-[0_0_8px_rgb(196_181_253/0.9)]")}
           initial={{ x: 0, y: 0, opacity: 0, scale: 0.4 }}
           animate={{ x: s.x, y: s.y, opacity: [0, 1, 0], scale: [0.4, 1, 0.6] }}
           transition={{ duration: 1.1, delay: s.delay, ease: EASE_OUT }}

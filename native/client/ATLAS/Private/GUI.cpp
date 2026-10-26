@@ -45,24 +45,27 @@ extern bool ATLAS_PrepareReplicationForOpen(
     wchar_t* error,
     size_t errorCapacity);
 
-// [Niobium] Brand accent violet #7A3CFF (was the ATLAS accent #00A2CE), pressed #5546FF.
-#define ACCENT_R 0.478f
-#define ACCENT_G 0.235f
-#define ACCENT_B 1.f
+// [Niobium] Brand accent violet #8B5CF6 (was the ATLAS accent #00A2CE), pressed #7C3AED.
+#define ACCENT_R 0.545f
+#define ACCENT_G 0.361f
+#define ACCENT_B 0.965f
 
 static ImVec4 Accent(float a = 1.f) { return ImVec4(ACCENT_R, ACCENT_G, ACCENT_B, a); }
-static ImVec4 AccentDk(float a = 1.f) { return ImVec4(0.333f, 0.275f, 1.f, a); }
-// [Niobium] Accent for text and thin glyphs: violet-text #B49BFF (8.5:1 on the menu background;
+static ImVec4 AccentDk(float a = 1.f) { return ImVec4(0.486f, 0.227f, 0.929f, a); }
+// [Niobium] Second brand accent, neon cyan #22D3EE: thin light only (the active-tab indicator),
+// never a fill behind text.
+static ImVec4 AccentCyan(float a = 1.f) { return ImVec4(0.133f, 0.827f, 0.933f, a); }
+// [Niobium] Accent for text and thin glyphs: violet-text #C4B5FD (10.3:1 on the menu background;
 // plain violet is too dark for small text).
-static ImVec4 AccentText(float a = 1.f) { return ImVec4(0.706f, 0.608f, 1.f, a); }
-// [Niobium] Brand text #F2F3F8, text-muted #A3A8C3 (hints and other secondary text people need
-// to read, 8.4:1) and text-faint #6E7392 (captions, key labels, disabled text only).
-static const ImVec4 kNiobiumText(0.949f, 0.953f, 0.973f, 1.f);
-static const ImVec4 kNiobiumHintText(0.639f, 0.659f, 0.765f, 1.f);
-static const ImVec4 kNiobiumMutedText(0.431f, 0.451f, 0.573f, 1.f);
-// [Niobium] Brand backgrounds: bg #0A0B12 (top bar, sidebar), surface #11131C (window),
-// surface-raised #171A26 (fields, buttons).
-static const ImVec4 kNiobiumBg(0.039f, 0.043f, 0.071f, 1.f);
+static ImVec4 AccentText(float a = 1.f) { return ImVec4(0.769f, 0.710f, 0.992f, a); }
+// [Niobium] Brand text #F4F4F8, text-muted #A6A6BC (hints and other secondary text people need
+// to read, 8.0:1) and text-faint #80809A (captions, key labels, disabled text only, 5.0:1).
+static const ImVec4 kNiobiumText(0.957f, 0.957f, 0.973f, 1.f);
+static const ImVec4 kNiobiumHintText(0.651f, 0.651f, 0.737f, 1.f);
+static const ImVec4 kNiobiumMutedText(0.502f, 0.502f, 0.604f, 1.f);
+// [Niobium] Brand backgrounds: bg #07070C (top bar, sidebar), surface #0F0F19 (window),
+// surface-raised #161624 (fields, buttons).
+static const ImVec4 kNiobiumBg(0.027f, 0.027f, 0.047f, 1.f);
 
 // [Niobium] GUI.cpp is built without /utf-8 and stays plain ASCII. The few non-ASCII characters
 // of the menu texts are UTF-8 bytes (what ImGui expects) in their own literals that the compiler
@@ -1193,51 +1196,51 @@ static void PushStyle()
     auto C = [](float r, float g, float b, float a = 1.f) { return ImVec4(r, g, b, a); };
     ImVec4* col = s.Colors;
 
-    // [Niobium] brand surface #11131C (was #11151f)
-    col[ImGuiCol_WindowBg] = C(0.0667f, 0.0745f, 0.1098f, 1.f);
-    col[ImGuiCol_ChildBg] = C(0.0667f, 0.0745f, 0.1098f, 1.f);
-    col[ImGuiCol_PopupBg] = C(0.0667f, 0.0745f, 0.1098f, 0.98f);
-    col[ImGuiCol_Border] = C(0.137f, 0.165f, 0.243f, 1.f);
+    // [Niobium] brand surface #0F0F19 (was #11151f)
+    col[ImGuiCol_WindowBg] = C(0.059f, 0.059f, 0.098f, 1.f);
+    col[ImGuiCol_ChildBg] = C(0.059f, 0.059f, 0.098f, 1.f);
+    col[ImGuiCol_PopupBg] = C(0.059f, 0.059f, 0.098f, 0.98f);
+    col[ImGuiCol_Border] = C(0.141f, 0.141f, 0.227f, 1.f); // [Niobium] border #24243A
     col[ImGuiCol_BorderShadow] = C(0.f, 0.f, 0.f, 0.f);
-    col[ImGuiCol_FrameBg] = C(0.090f, 0.102f, 0.149f, 1.f); // [Niobium] surface-raised #171A26
-    col[ImGuiCol_FrameBgHovered] = C(0.12f, 0.145f, 0.21f, 1.f);
-    col[ImGuiCol_FrameBgActive] = C(0.14f, 0.17f, 0.25f, 1.f);
-    col[ImGuiCol_TitleBg] = kNiobiumBg; // [Niobium] brand bg #0A0B12
+    col[ImGuiCol_FrameBg] = C(0.086f, 0.086f, 0.141f, 1.f); // [Niobium] surface-raised #161624
+    col[ImGuiCol_FrameBgHovered] = C(0.118f, 0.118f, 0.188f, 1.f);
+    col[ImGuiCol_FrameBgActive] = C(0.141f, 0.141f, 0.227f, 1.f);
+    col[ImGuiCol_TitleBg] = kNiobiumBg; // [Niobium] brand bg #07070C
     col[ImGuiCol_TitleBgActive] = kNiobiumBg;
-    col[ImGuiCol_TitleBgCollapsed] = C(0.039f, 0.043f, 0.071f, 0.9f);
-    col[ImGuiCol_ScrollbarBg] = C(0.039f, 0.043f, 0.071f, 0.f);
-    col[ImGuiCol_ScrollbarGrab] = C(0.137f, 0.165f, 0.243f, 1.f);
+    col[ImGuiCol_TitleBgCollapsed] = C(0.027f, 0.027f, 0.047f, 0.9f);
+    col[ImGuiCol_ScrollbarBg] = C(0.027f, 0.027f, 0.047f, 0.f);
+    col[ImGuiCol_ScrollbarGrab] = C(0.141f, 0.141f, 0.227f, 1.f);
     col[ImGuiCol_ScrollbarGrabHovered] = Accent(0.5f);
     col[ImGuiCol_ScrollbarGrabActive] = Accent(1.f);
     col[ImGuiCol_CheckMark] = Accent();
     col[ImGuiCol_SliderGrab] = Accent();
     col[ImGuiCol_SliderGrabActive] = AccentDk();
-    col[ImGuiCol_Button] = C(0.090f, 0.102f, 0.149f, 1.f); // [Niobium] surface-raised #171A26
+    col[ImGuiCol_Button] = C(0.086f, 0.086f, 0.141f, 1.f); // [Niobium] surface-raised #161624
     col[ImGuiCol_ButtonHovered] = Accent(0.18f);
     col[ImGuiCol_ButtonActive] = Accent(0.32f);
     col[ImGuiCol_Header] = Accent(0.14f);
     col[ImGuiCol_HeaderHovered] = Accent(0.22f);
     col[ImGuiCol_HeaderActive] = Accent(0.32f);
-    col[ImGuiCol_Separator] = C(0.137f, 0.165f, 0.243f, 1.f);
+    col[ImGuiCol_Separator] = C(0.141f, 0.141f, 0.227f, 1.f);
     col[ImGuiCol_SeparatorHovered] = Accent(0.4f);
     col[ImGuiCol_SeparatorActive] = Accent(1.f);
     col[ImGuiCol_ResizeGrip] = Accent(0.22f);
     col[ImGuiCol_ResizeGripHovered] = Accent(0.55f);
     col[ImGuiCol_ResizeGripActive] = Accent(0.90f);
-    col[ImGuiCol_Tab] = C(0.0667f, 0.0745f, 0.1098f, 1.f);
+    col[ImGuiCol_Tab] = C(0.059f, 0.059f, 0.098f, 1.f);
     col[ImGuiCol_TabHovered] = Accent(0.2f);
-    col[ImGuiCol_TabActive] = C(0.090f, 0.102f, 0.149f, 1.f);
+    col[ImGuiCol_TabActive] = C(0.086f, 0.086f, 0.141f, 1.f);
     col[ImGuiCol_TabUnfocused] = col[ImGuiCol_Tab];
     col[ImGuiCol_TabUnfocusedActive] = col[ImGuiCol_TabActive];
-    col[ImGuiCol_Text] = kNiobiumText; // [Niobium] brand text #F2F3F8
+    col[ImGuiCol_Text] = kNiobiumText; // [Niobium] brand text #F4F4F8
     col[ImGuiCol_TextDisabled] = kNiobiumMutedText;
     col[ImGuiCol_PlotLines] = Accent();
     col[ImGuiCol_PlotLinesHovered] = Accent();
     col[ImGuiCol_PlotHistogram] = Accent();
     col[ImGuiCol_PlotHistogramHovered] = AccentDk();
-    col[ImGuiCol_TableHeaderBg] = C(0.0667f, 0.0745f, 0.1098f, 1.f);
-    col[ImGuiCol_TableBorderLight] = C(0.137f, 0.165f, 0.243f, 1.f);
-    col[ImGuiCol_TableBorderStrong] = C(0.137f, 0.165f, 0.243f, 1.f);
+    col[ImGuiCol_TableHeaderBg] = C(0.059f, 0.059f, 0.098f, 1.f);
+    col[ImGuiCol_TableBorderLight] = C(0.141f, 0.141f, 0.227f, 1.f);
+    col[ImGuiCol_TableBorderStrong] = C(0.141f, 0.141f, 0.227f, 1.f);
     col[ImGuiCol_TableRowBg] = C(0.f, 0.f, 0.f, 0.f);
     col[ImGuiCol_TableRowBgAlt] = C(1.f, 1.f, 1.f, 0.03f);
     col[ImGuiCol_DragDropTarget] = Accent(0.8f);
@@ -1800,8 +1803,8 @@ static bool SidebarTab(const char* label, int index, float height)
     else if (hovered)
         dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), ImGui::GetColorU32(Accent(0.05f)));
 
-    ImVec4 textCol = active ? AccentText() : ImVec4(0.50f, 0.55f, 0.66f, 1.f); // [Niobium] violet-text
-    if (!active && hovered) textCol = ImVec4(0.78f, 0.82f, 0.90f, 1.f);
+    ImVec4 textCol = active ? AccentText() : ImVec4(0.56f, 0.56f, 0.66f, 1.f); // [Niobium] violet-text
+    if (!active && hovered) textCol = ImVec4(0.82f, 0.82f, 0.90f, 1.f);
 
     const ImVec2 ts = ImGui::CalcTextSize(label);
     dl->AddText(ImVec2(p.x + 26.f, p.y + (size.y - ts.y) * 0.5f), ImGui::GetColorU32(textCol), label);
@@ -5478,7 +5481,7 @@ void GUI_Render()
     {
         ImGui::GetWindowDrawList()->AddRectFilled(
             wp, ImVec2(wp.x + W, wp.y + TopBarH),
-            ImGui::GetColorU32(kNiobiumBg), // [Niobium] brand bg #0A0B12
+            ImGui::GetColorU32(kNiobiumBg), // [Niobium] brand bg #07070C
             ImGui::GetStyle().WindowRounding, ImDrawFlags_RoundCornersTop);
 
         const float LogoSize = 30.f;
@@ -5540,7 +5543,7 @@ void GUI_Render()
             if (hovered)
                 dl->AddRectFilled(rmin, rmax, ImGui::GetColorU32(Accent(0.20f)), 4.f);
             const float pad = 6.f;
-            const ImU32 xcol = ImGui::GetColorU32(hovered ? AccentText() : ImVec4(0.55f, 0.60f, 0.70f, 1.f));
+            const ImU32 xcol = ImGui::GetColorU32(hovered ? AccentText() : ImVec4(0.60f, 0.60f, 0.70f, 1.f));
             dl->AddLine(ImVec2(rmin.x + pad, rmin.y + pad), ImVec2(rmax.x - pad, rmax.y - pad), xcol, 1.6f);
             dl->AddLine(ImVec2(rmax.x - pad, rmin.y + pad), ImVec2(rmin.x + pad, rmax.y - pad), xcol, 1.6f);
         }
@@ -5550,7 +5553,7 @@ void GUI_Render()
     // child cannot paint over its left segment.
     {
         ImDrawList* fdl = ImGui::GetWindowDrawList();
-        const ImU32 line = IM_COL32(35, 42, 62, (int)(fade * 255.f));
+        const ImU32 line = IM_COL32(36, 36, 58, (int)(fade * 255.f)); // [Niobium] border #24243A
         fdl->AddLine(
             ImVec2(wp.x, wp.y + TopBarH - 1.f),
             ImVec2(wp.x + W, wp.y + TopBarH - 1.f),
@@ -5569,7 +5572,7 @@ void GUI_Render()
     const float TabsTop = 12.f;
 
     ImGui::SetCursorPos(ImVec2(0.f, TopBarH));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, kNiobiumBg); // [Niobium] brand bg #0A0B12 (was #0e1118)
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, kNiobiumBg); // [Niobium] brand bg #07070C (was #0e1118)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
     ImGui::BeginChild("##sidebar", ImVec2(SidebarW, H - TopBarH), false, ImGuiWindowFlags_NoScrollbar);
     {
@@ -5590,7 +5593,7 @@ void GUI_Render()
         const float indY = sbPos.y + s_IndicatorY;
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImVec2(sbPos.x, indY - 9.f), ImVec2(sbPos.x + 3.f, indY + 9.f),
-            ImGui::GetColorU32(Accent()), 2.f);
+            ImGui::GetColorU32(AccentCyan()), 2.f); // [Niobium] cyan indicator next to the violet tab tint
     }
     ImGui::EndChild();
     ImGui::PopStyleVar();

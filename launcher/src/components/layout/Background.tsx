@@ -12,7 +12,7 @@ const paths = [
 ];
 
 /**
- * Background behind all glass: a slow aurora in the brand colours (blue, violet, a small gold one),
+ * Background behind all glass: a slow aurora in the brand colours (violet, cyan, a small deep-violet one),
  * a fine dot grid, film grain and a vignette.
  * `animate` = settings.animatedBackground and not reduced motion; `paused` = window hidden/minimized.
  */

@@ -14,11 +14,11 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-brand text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.22),inset_0_0_0_1px_rgb(255_255_255/0.1),0_6px_20px_-8px_rgb(122_60_255/0.7)] hover:brightness-110 hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.25),inset_0_0_0_1px_rgb(255_255_255/0.14),0_8px_28px_-8px_rgb(122_60_255/0.85)]",
+          "bg-brand text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.22),inset_0_0_0_1px_rgb(255_255_255/0.1),0_6px_20px_-8px_rgb(139_92_246/0.7)] hover:brightness-110 hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.25),inset_0_0_0_1px_rgb(255_255_255/0.14),0_8px_28px_-8px_rgb(139_92_246/0.85)]",
         destructive:
           "bg-destructive/90 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_20px_-10px_rgb(239_68_68/0.7)] hover:bg-destructive focus-visible:ring-destructive/40",
         outline:
-          "bg-white/[0.02] text-foreground shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)] hover:bg-white/[0.06] hover:shadow-[inset_0_0_0_1px_rgb(180_155_255/0.4)]",
+          "bg-white/[0.02] text-foreground shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)] hover:bg-white/[0.06] hover:shadow-[inset_0_0_0_1px_rgb(196_181_253/0.4)]",
         secondary:
           "bg-white/[0.07] text-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.06),inset_0_0_0_1px_rgb(255_255_255/0.07)] backdrop-blur-md hover:bg-white/[0.11]",
         ghost:

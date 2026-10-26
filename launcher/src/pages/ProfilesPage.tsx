@@ -170,7 +170,7 @@ export function ProfilesPage() {
                         <motion.span
                           layoutId="profile-active"
                           transition={SPRING_UI}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-brand px-3 text-xs font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_6px_20px_-8px_rgb(122_60_255/0.8)]"
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-brand px-3 text-xs font-semibold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_6px_20px_-8px_rgb(139_92_246/0.8)]"
                         >
                           <Check className="size-3.5" strokeWidth={3} />
                           Active profile
@@ -215,7 +215,7 @@ function ProfileMark({ name, active }: { name: string; active: boolean }) {
       className={cn(
         "flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold transition-[background,color,box-shadow] duration-300",
         active
-          ? "bg-brand text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_8px_24px_-8px_rgb(122_60_255/0.8)]"
+          ? "bg-brand text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_8px_24px_-8px_rgb(139_92_246/0.8)]"
           : "bg-gradient-to-br from-white/[0.09] to-white/[0.03] text-violet-text ring-1 ring-white/[0.08]",
       )}
     >

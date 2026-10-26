@@ -109,8 +109,8 @@ function TabsTrigger({
           className={cn(
             "pointer-events-none absolute",
             variant === "line"
-              ? "inset-x-1 -bottom-px h-0.5 rounded-full bg-brand shadow-[0_0_10px_rgb(122_60_255/0.7)]"
-              : "inset-0 rounded-lg bg-white/[0.09] shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_0_0_1px_rgb(255_255_255/0.06),0_4px_14px_-6px_rgb(122_60_255/0.55)]"
+              ? "inset-x-1 -bottom-px h-0.5 rounded-full bg-brand shadow-[0_0_10px_rgb(139_92_246/0.7)]"
+              : "inset-0 rounded-lg bg-white/[0.09] shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_0_0_1px_rgb(255_255_255/0.06),0_4px_14px_-6px_rgb(139_92_246/0.55)]"
           )}
         />
       )}

@@ -529,7 +529,7 @@ function Segmented({ id, options, value, onChange }: { id: string; options: stri
               <motion.span
                 layoutId={`${id}-pill`}
                 transition={SPRING_UI}
-                className="absolute inset-0 rounded-md bg-brand shadow-[inset_0_1px_0_rgb(255_255_255/0.2),0_4px_14px_-4px_rgb(122_60_255/0.7)]"
+                className="absolute inset-0 rounded-md bg-brand shadow-[inset_0_1px_0_rgb(255_255_255/0.2),0_4px_14px_-4px_rgb(139_92_246/0.7)]"
               />
             )}
             <span className="relative">{label}</span>
@@ -567,7 +567,7 @@ function VkCapture({ value, onChange, emptyLabel }: { value: number; onChange: (
       className={cn(
         "relative h-9 min-w-24 overflow-hidden rounded-lg px-3 font-mono text-xs font-semibold transition-[background-color,box-shadow,color] duration-150 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
         listening
-          ? "bg-brand-violet/20 text-violet-text shadow-[inset_0_0_0_1px_rgb(122_60_255/0.6),0_0_18px_-4px_rgb(122_60_255/0.7)]"
+          ? "bg-brand-violet/20 text-violet-text shadow-[inset_0_0_0_1px_rgb(139_92_246/0.6),0_0_18px_-4px_rgb(139_92_246/0.7)]"
           : "bg-[linear-gradient(180deg,rgb(255_255_255/0.09),rgb(255_255_255/0.035))] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.1),inset_0_-2px_0_rgb(0_0_0/0.35)] hover:bg-white/[0.1]",
       )}
     >
@@ -639,7 +639,7 @@ function OverlayPreview({
         <div className="flex items-center gap-2.5">
           <span className="relative flex size-2">
             <span className="nb-loop absolute inline-flex size-full animate-ping rounded-full bg-brand-violet opacity-60" />
-            <span className="relative inline-flex size-2 rounded-full bg-violet-text shadow-[0_0_8px_rgb(122_60_255/0.8)]" />
+            <span className="relative inline-flex size-2 rounded-full bg-violet-text shadow-[0_0_8px_rgb(139_92_246/0.8)]" />
           </span>
           <p className="text-[15px] font-semibold">Live preview</p>
         </div>
@@ -655,20 +655,20 @@ function OverlayPreview({
         </div>
         <div aria-hidden className="absolute top-[46%] -left-[30%] h-[90%] w-[110%] rounded-[50%] bg-[#2f5a2b]" />
         <div aria-hidden className="absolute top-[58%] -right-[35%] h-[90%] w-[120%] rounded-[50%] bg-[#264b23]" />
-        <div aria-hidden className="absolute inset-0 bg-[#0a0b12]/50" />
+        <div aria-hidden className="absolute inset-0 bg-[#07070c]/50" />
         <div
           aria-hidden
-          className="absolute top-1/2 left-1/2 size-[130%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(122_60_255/0.28),rgb(43_91_255/0.1)_55%,transparent)]"
+          className="absolute top-1/2 left-1/2 size-[130%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(139_92_246/0.28),rgb(34_211_238/0.1)_55%,transparent)]"
         />
 
         <motion.div
           initial={calm ? false : { opacity: 0, y: 14, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.15 }}
-          className="relative overflow-hidden rounded-lg bg-[#11131c]/[0.97] shadow-[0_30px_70px_-24px_rgb(0_0_0/0.95),0_0_0_1px_rgb(122_60_255/0.18)] ring-1 ring-white/[0.06]"
+          className="relative overflow-hidden rounded-lg bg-[#0f0f19]/[0.97] shadow-[0_30px_70px_-24px_rgb(0_0_0/0.95),0_0_0_1px_rgb(139_92_246/0.18)] ring-1 ring-white/[0.06]"
         >
           {/* Title bar: logo, "Niobium | Menu", menu key, close */}
-          <div className="flex items-center gap-2 border-b border-[#232a3e] bg-[#0a0b12] px-3 py-2">
+          <div className="flex items-center gap-2 border-b border-[#24243a] bg-[#07070c] px-3 py-2">
             <LogoMark size={20} variant="simple" />
             <p className="text-[11px]">
               <span className="font-semibold text-violet-text">Niobium</span> <span className="text-muted-foreground">| Menu</span>
@@ -681,7 +681,7 @@ function OverlayPreview({
 
           <div className="grid h-[33rem] grid-cols-[5rem_minmax(0,1fr)] xl:grid-cols-[5.5rem_minmax(0,1fr)]">
             {/* Sidebar with the tabs */}
-            <div role="tablist" aria-label="F9 menu tabs" className="flex flex-col border-r border-[#232a3e] bg-[#0d0f17] py-2">
+            <div role="tablist" aria-label="F9 menu tabs" className="flex flex-col border-r border-[#24243a] bg-[#0b0b13] py-2">
               {F9_TABS.map((label, i) => {
                 const active = tab === i;
                 return (
@@ -698,7 +698,7 @@ function OverlayPreview({
                   >
                     {active && (
                       <motion.span layoutId="f9-tab-active" transition={SPRING_UI} className="absolute inset-0 bg-brand-violet/[0.13]">
-                        <span className="absolute top-1/2 left-0 h-[60%] w-[2px] -translate-y-1/2 rounded-full bg-brand-violet shadow-[0_0_8px_rgb(122_60_255/0.9)]" />
+                        <span className="absolute top-1/2 left-0 h-[60%] w-[2px] -translate-y-1/2 rounded-full bg-brand-violet shadow-[0_0_8px_rgb(139_92_246/0.9)]" />
                       </motion.span>
                     )}
                     <span className="relative">{label}</span>
@@ -1066,7 +1066,7 @@ function F9Spot({ id, children, className }: { id: string; children: ReactNode; 
         <motion.span
           key={flash.n}
           aria-hidden
-          className="pointer-events-none absolute -inset-1 rounded-md bg-brand-violet/[0.12] shadow-[inset_0_0_0_1px_rgb(155_123_255/0.7),0_0_18px_-4px_rgb(122_60_255/0.8)]"
+          className="pointer-events-none absolute -inset-1 rounded-md bg-brand-violet/[0.12] shadow-[inset_0_0_0_1px_rgb(167_139_250/0.7),0_0_18px_-4px_rgb(139_92_246/0.8)]"
           initial={{ opacity: 0 }}
           animate={{ opacity: [0, 1, 1, 0] }}
           transition={{ duration: 1.8, times: [0, 0.12, 0.6, 1], ease: "easeOut" }}
@@ -1163,12 +1163,12 @@ function F9Check({ id, label, on, hint, fromGame = false }: { id: string; label:
           <svg viewBox="0 0 12 12" className="size-3" aria-hidden>
             {fromGame ? (
               // Fortnite's own value: only the game knows it
-              <path d="M3.2 6h5.6" fill="none" stroke="#9b7bff" strokeOpacity={0.7} strokeWidth={1.8} strokeLinecap="round" />
+              <path d="M3.2 6h5.6" fill="none" stroke="#a78bfa" strokeOpacity={0.7} strokeWidth={1.8} strokeLinecap="round" />
             ) : (
               <motion.path
                 d="M2.4 6.3 4.9 8.7 9.7 3.4"
                 fill="none"
-                stroke="#9b7bff"
+                stroke="#a78bfa"
                 strokeWidth={1.8}
                 strokeLinecap="round"
                 strokeLinejoin="round"

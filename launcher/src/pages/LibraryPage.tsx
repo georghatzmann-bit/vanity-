@@ -102,7 +102,7 @@ export function LibraryPage() {
       >
         <Stagger className="relative flex flex-col gap-2" inView stagger={0.05}>
           {/* the chapter line on the left */}
-          <span aria-hidden className="absolute top-4 bottom-4 left-[19px] w-px bg-gradient-to-b from-brand-blue/50 via-brand-violet/40 to-transparent" />
+          <span aria-hidden className="absolute top-4 bottom-4 left-[19px] w-px bg-gradient-to-b from-brand-cyan/50 via-brand-violet/40 to-transparent" />
           {versionSupport.map((v) => (
             <Reveal key={v.version} kind="slide" className="relative flex items-center gap-4 rounded-lg py-2.5 pr-4 pl-3 transition-colors hover:bg-white/[0.03]">
               <SupportDot level={v.level} />
@@ -176,7 +176,7 @@ function BuildCard({ build, active, onOpen, onRemove }: { build: BuildInfo; acti
           className="absolute inset-0 opacity-[0.16]"
           style={{ backgroundImage: "repeating-linear-gradient(115deg, #fff 0 1px, transparent 1px 18px)", maskImage: "linear-gradient(90deg, transparent, black 70%)" }}
         />
-        <div aria-hidden className="absolute -top-16 -left-10 size-48 rounded-full bg-[radial-gradient(closest-side,rgb(143_168_255/0.35),transparent)]" />
+        <div aria-hidden className="absolute -top-16 -left-10 size-48 rounded-full bg-[radial-gradient(closest-side,rgb(103_232_249/0.35),transparent)]" />
         <span
           aria-hidden
           className="absolute right-4 -bottom-3 text-6xl font-bold tracking-tighter text-white/[0.13] tabular-nums transition-[translate,color] duration-500 ease-out group-hover:-translate-x-1.5 group-hover:text-white/[0.22]"
@@ -190,7 +190,7 @@ function BuildCard({ build, active, onOpen, onRemove }: { build: BuildInfo; acti
             {chip.text}
           </Badge>
           {active && (
-            <Badge variant="brand" className="shadow-[0_0_14px_-2px_rgb(122_60_255/0.8)]">
+            <Badge variant="brand" className="shadow-[0_0_14px_-2px_rgb(139_92_246/0.8)]">
               <Check />
               Active
             </Badge>
@@ -333,7 +333,7 @@ function DownloadTile({ big, onClick }: { big: boolean; onClick: () => void }) {
       className={cn(
         tileLayout(big),
         dashedTile,
-        job ? "border-brand-violet/30 bg-brand-violet/[0.04] hover:border-brand-violet/50" : "border-white/[0.1] hover:border-brand-blue/50",
+        job ? "border-brand-violet/30 bg-brand-violet/[0.04] hover:border-brand-violet/50" : "border-white/[0.1] hover:border-brand-cyan/50",
       )}
     >
       {job ? (
@@ -360,13 +360,13 @@ function TileIcon({ tone, children }: { tone: "violet" | "blue"; children: React
         aria-hidden
         className={cn(
           "absolute -inset-5 rounded-full opacity-60 transition-opacity duration-300 group-hover:opacity-100",
-          tone === "violet" ? "bg-[radial-gradient(closest-side,rgb(122_60_255/0.22),transparent)]" : "bg-[radial-gradient(closest-side,rgb(43_91_255/0.26),transparent)]",
+          tone === "violet" ? "bg-[radial-gradient(closest-side,rgb(139_92_246/0.22),transparent)]" : "bg-[radial-gradient(closest-side,rgb(34_211_238/0.26),transparent)]",
         )}
       />
       <div
         className={cn(
           "relative flex size-12 items-center justify-center rounded-xl bg-gradient-to-b from-white/[0.09] to-white/[0.03] shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_0_0_1px_rgb(255_255_255/0.06)] transition-transform duration-300 group-hover:scale-110",
-          tone === "violet" ? "text-violet-text group-hover:-rotate-3" : "text-blue-text",
+          tone === "violet" ? "text-violet-text group-hover:-rotate-3" : "text-cyan-text",
         )}
       >
         {children}
@@ -435,7 +435,7 @@ function SupportDot({ level }: { level: string }) {
     <span className="relative z-10 flex size-4 shrink-0 items-center justify-center">
       <span
         className={cn(
-          "size-2.5 rounded-full ring-4 ring-[#10121b]",
+          "size-2.5 rounded-full ring-4 ring-[#0e0e17]",
           level === "supported" && "bg-success shadow-[0_0_10px_rgb(34_197_94/0.7)]",
           level === "experimental" && "bg-warning/80",
           level !== "supported" && level !== "experimental" && "bg-white/20",

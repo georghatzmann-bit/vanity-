@@ -95,7 +95,7 @@ export function CrashesPage() {
                       <motion.span
                         layoutId="crash-active"
                         transition={SPRING_UI}
-                        className="absolute top-3 bottom-3 left-0 w-[3px] rounded-r-full bg-brand shadow-[0_0_10px_rgb(122_60_255/0.9)]"
+                        className="absolute top-3 bottom-3 left-0 w-[3px] rounded-r-full bg-brand shadow-[0_0_10px_rgb(139_92_246/0.9)]"
                       />
                     )}
                     <div className="flex items-start justify-between gap-3">

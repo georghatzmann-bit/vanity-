@@ -1,94 +1,102 @@
-# Niobium brand
+# Rift brand
 
-The launcher used to be called "Vanity". From now on it is **Niobium**.
+The launcher was called "Vanity", then "Niobium". From now on it is **Rift**: like the rifts in Fortnite, it is a portal back to the old seasons.
+
+> **Status:** the logo, colours and all visual assets are Rift already. The names in text, ids, data folders and DLL names (`Niobium`, `niobium`, `--nb-*` CSS variables, `[Niobium]` code tags) are renamed in the next step. Until then the UI still says "Niobium" next to the new logo.
 
 ## Name
 
 | What | Value |
 | --- | --- |
-| Display name | **Niobium** |
-| Long form + tagline | **NiobiumFN — old seasons, new shine.** |
-| Short tagline | old seasons, new shine. |
-| Lowercase id | `niobium` (files, ids, env vars, pipe name) |
-| In-game chat / console prefix | `[Niobium] ` (with the trailing space) |
+| Display name | **Rift** |
+| Long form | **RiftFN** |
+| Tagline | **Step back into any season.** |
+| Lowercase id | `rift` (files, ids, env vars, pipe name) |
+| In-game chat / console prefix | `[Rift] ` (with the trailing space) |
 
-Why this name: niobium is element 41 (symbol **Nb**). When niobium is anodised it turns deep blue, violet and gold. The logo uses exactly those colours.
-
-Write "Niobium" with a capital N and the rest lower case. Never write "NIOBIUM" in running text. "NiobiumFN" is only used as the long form (tagline, installer sidebar, about screen).
+Write "Rift" with a capital R and the rest lower case in running text. All caps "RIFT" only appears in the wordmark (artwork), never typed. "RiftFN" is only the long form (installer sidebar, about screen).
 
 ## Colours
 
 ### Core palette
 
-| Token | Hex | Use |
-| --- | --- | --- |
-| `bg` | `#0A0B12` | App background. **Also the installer header band and the Welcome/Finish page background.** |
-| `surface` | `#11131C` | Cards, panels, the sidebar |
-| `surface-raised` | `#171A26` | Popovers, menus, hovered rows |
-| `border` | `rgb(255 255 255 / 0.08)` | Hairlines on glass and cards |
-| `text` | `#F2F3F8` | Main text (17.7:1 on `bg`) |
-| `text-muted` | `#A3A8C3` | Secondary text and hints (8.4:1 on `bg`) |
-| `text-faint` | `#6E7392` | Captions, disabled labels (4.2:1, large or non-essential text only) |
-| `blue` | `#2B5BFF` | Brand colour 1: gradients, fills, glows |
-| `violet` | `#7A3CFF` | Brand colour 2: gradients, fills, glows, main accent |
-| `gold` | `#FFC857` | A touch only: the logo corner, "New" dots, the end of a progress bar, small sparkles. Never a large fill. |
-| `blue-text` | `#8FA8FF` | Blue used as text or icons on dark (8.6:1) |
-| `violet-text` | `#B49BFF` | Violet used as text, links and active labels (8.5:1) |
-| `ring` | `#9B7BFF` | Focus rings |
+Near-black with two accents that always travel together: **violet** (the portal, fills) and **neon cyan** (the light coming through the rift). Contrast ratios are WCAG 2.x, measured on `bg` / `surface` / `surface-raised`.
 
-`blue` and `violet` are only about 3.7:1 on `bg`. Do not use them for small text. Use `blue-text` and `violet-text` for text instead.
+| Token | Hex | Use | Contrast |
+| --- | --- | --- | --- |
+| `bg` | `#07070C` | App background. **Also the installer header band and the Welcome/Finish page background.** | |
+| `surface` | `#0F0F19` | Cards, panels, the sidebar, the F9 menu window | |
+| `surface-raised` | `#161624` | Popovers, menus, hovered rows, fields and buttons in the F9 menu | |
+| `border` | `rgb(255 255 255 / 0.08)` | Hairlines on glass and cards (F9 menu: `#24243A`) | |
+| `text` | `#F4F4F8` | Main text | 18.3 / 17.4 / 16.3 |
+| `text-muted` | `#A6A6BC` | Secondary text and hints | 8.4 / 8.0 / 7.5 |
+| `text-faint` | `#80809A` | Captions, disabled labels, key hints | 5.2 / 5.0 / 4.7 |
+| `violet` | `#8B5CF6` | Brand colour 1: the ring, fills, glows, the main accent | 4.7 / 4.5 / 4.2 |
+| `violet-fill` | `#7C3AED` | Button fills with white text (white on it: 5.7:1) | |
+| `cyan` | `#22D3EE` | Brand colour 2: the rift light, thin lines, indicators, glows, focus rings | 11.1 / 10.5 / 9.9 |
+| `violet-text` | `#C4B5FD` | Violet used as text, links and active labels | 10.9 / 10.3 / 9.7 |
+| `cyan-text` | `#67E8F9` | Cyan used as text or icons ("New" badges, highlights) | 13.9 / 13.1 / 12.3 |
+| `ring` | `#22D3EE` | Focus rings (non-text, 9.9:1 or more) | |
 
-White text on a `blue` fill is 5.2:1 and on a `violet` fill 5.4:1, so both work as button fills. For dark text on `gold` use `bg` (12.8:1).
+Rules:
 
-Status colours stay as they are and are not brand colours: success `#22C55E`, warning `#F59E0B`, danger `#EF4444`. Gold is **not** a warning colour.
+- Small text (under 18.66 px bold / 24 px regular) needs at least 4.5:1. Every text token above passes on all three backgrounds.
+- `violet` is below 4.5:1 on `surface-raised`, so it is **never** used for text. Use `violet-text` / `cyan-text` for anything that is read.
+- White text on `violet-fill` is 5.7:1, on `violet` only 4.2:1, so buttons use `violet-fill` (or `--nb-gradient`, at least 5.3:1 everywhere).
+- Never put white text on `cyan`. If something has to sit on a cyan fill, use `bg` (11.1:1).
+
+Status colours stay as they are and are not brand colours: success `#22C55E`, warning `#F59E0B`, danger `#EF4444`. Cyan is **not** an info/success colour.
 
 ### Gradients and effects
 
 ```css
 :root {
-  --nb-bg: #0A0B12;
-  --nb-surface: #11131C;
-  --nb-surface-raised: #171A26;
+  --nb-bg: #07070c;
+  --nb-surface: #0f0f19;
+  --nb-surface-raised: #161624;
   --nb-border: rgb(255 255 255 / 0.08);
-  --nb-text: #F2F3F8;
-  --nb-text-muted: #A3A8C3;
-  --nb-text-faint: #6E7392;
-  --nb-blue: #2B5BFF;
-  --nb-violet: #7A3CFF;
-  --nb-gold: #FFC857;
-  --nb-blue-text: #8FA8FF;
-  --nb-violet-text: #B49BFF;
-  --nb-ring: #9B7BFF;
+  --nb-text: #f4f4f8;
+  --nb-text-muted: #a6a6bc;
+  --nb-text-faint: #80809a;
+  --nb-violet: #8b5cf6;
+  --nb-violet-fill: #7c3aed;
+  --nb-cyan: #22d3ee;
+  --nb-violet-text: #c4b5fd;
+  --nb-cyan-text: #67e8f9;
+  --nb-ring: #22d3ee;
 
-  /* main brand gradient (buttons, active states, progress) */
-  --nb-gradient: linear-gradient(135deg, #2B5BFF 0%, #5546FF 50%, #7A3CFF 85%);
-  /* same with the gold tip, for hero moments only (splash progress, Play button hover) */
-  --nb-gradient-shine: linear-gradient(135deg, #2B5BFF 0%, #7A3CFF 70%, #FFC857 100%);
+  /* button fill: violet into a deep cyan; white text stays >= 5.3:1 over the whole gradient */
+  --nb-gradient: linear-gradient(135deg, #7c3aed 0%, #6d28d9 55%, #0e7490 100%);
+  /* decoration only (lines, bars, rims, hover tips): the violet -> neon cyan of the logo ring */
+  --nb-gradient-shine: linear-gradient(135deg, #8b5cf6 0%, #7c6cf6 55%, #22d3ee 100%);
+  /* headline text */
+  --nb-gradient-text: linear-gradient(100deg, #f4f4f8 0%, #c4b5fd 55%, #67e8f9 100%);
   /* glass panel */
-  --nb-glass: rgb(17 19 28 / 0.62);
-  --nb-glass-strong: rgb(23 26 38 / 0.82);
-  /* brand glow (primary button, active nav item, logo) */
-  --nb-glow: 0 0 0 1px rgb(122 60 255 / 0.35), 0 10px 40px -10px rgb(122 60 255 / 0.6);
-  --nb-glow-blue: 0 10px 40px -12px rgb(43 91 255 / 0.65);
+  --nb-glass: rgb(15 15 25 / 0.62);
+  --nb-glass-strong: rgb(22 22 36 / 0.82);
+  /* brand glow (primary button, active nav item, logo): violet with a cyan halo */
+  --nb-glow: 0 0 0 1px rgb(139 92 246 / 0.35), 0 10px 40px -10px rgb(139 92 246 / 0.6),
+    0 0 28px -10px rgb(34 211 238 / 0.45);
+  --nb-glow-cyan: 0 10px 40px -12px rgb(34 211 238 / 0.6);
 }
 ```
 
-Suggested mapping onto the existing shadcn tokens in `launcher/src/index.css`: `--background` = `bg`, `--card` = `surface`, `--popover` = `surface-raised`, `--foreground` = `text`, `--muted-foreground` = `text-muted`, `--primary` = `#5546FF` (or the `--nb-gradient` on the main button), `--primary-text` = `violet-text`, `--ring` = `ring`, `--border` = `border`.
+Tailwind colours (`launcher/src/index.css`, `@theme`): `brand-violet`, `brand-violet-fill`, `brand-cyan`, `violet-text`, `cyan-text`, `faint`, `surface`, `surface-raised`; utilities `bg-brand`, `bg-brand-shine`, `text-gradient`, `text-gradient-brand`, `glow-primary`, `glow-cyan`, `focus-ring`. shadcn mapping: `--background` = `bg`, `--card` = `surface`, `--popover` = `surface-raised`, `--primary` = `violet-fill`, `--primary-text` = `violet-text`, `--ring` = `ring`.
 
-In-game F9 menu (ImGui): accent `#7A3CFF` = `ImVec4(0.478f, 0.235f, 1.0f, 1.0f)`, hover `#9B7BFF`, pressed `#5546FF`, window background `#11131C` and title bar `#0A0B12`. This replaces the ATLAS accent `#00A2CE`.
+In-game F9 menu (ImGui, `native/client/ATLAS/Private/GUI.cpp`): accent `#8B5CF6` = `ImVec4(0.545f, 0.361f, 0.965f)`, pressed `#7C3AED`, text accent `#C4B5FD`, cyan `#22D3EE` for the active-tab indicator (`AccentCyan()`), window `#0F0F19`, title bar and sidebar `#07070C`, fields and buttons `#161624`, borders `#24243A`. The trickshot banner uses a cyan glow and a `cyan-text` title. This replaces the ATLAS accent `#00A2CE`.
 
 ## Logo
 
-The logo is a periodic-table tile: a bold white **Nb** with a small **41** in the top-left corner. It sits on a rounded square with the anodised-niobium gradient (deep blue `#2B5BFF` at the top left, violet `#7A3CFF`, and a gold `#FFC857` flare in the bottom-right corner). Large versions add a soft diagonal sheen, a thin light rim and a soft shadow under the letters.
+The logo is a **portal ring torn open by a rift**: a thick ring (light violet at the top left, through violet `#8B5CF6`, into neon cyan `#22D3EE` at the bottom right) around a dark portal, and a jagged, lightning-shaped tear that runs from the top right to the bottom left. The tear glows: cyan edges, a white-hot core and a soft violet light inside the portal. It cuts through the ring at the top and the bottom, so the ring is broken where the rift passes.
 
 ### Variants
 
 | Variant | When | Looks like |
 | --- | --- | --- |
-| **Rich** | 64 px and larger | Gradient, gold corner, sheen, rim, letter shadow, and the "41" |
-| **Simple** | Smaller than 64 px | The same tile without the "41"; the letters sit in the middle |
-| **Pixel-tuned** | Exactly 16, 24, 32, 48 and 64 px (the `.ico`) | Simple tile redrawn on the pixel grid so every stem is sharp. 16 to 32 px is just bold white "Nb" on the gradient. |
-| **Lock-up** | Splash, welcome, about | Tile + "Niobium" wordmark |
+| **Rich** | 64 px and larger, app icon master | Ring with a light rim at the top, portal with two faint depth orbits, wide violet + cyan glow, hair-line side cracks, white core |
+| **Simple** | Smaller than 64 px in the UI, F9 menu | The same without the depth orbits and side cracks; the rift is 12 % wider |
+| **Pixel-tuned** | Exactly 16, 24, 32, 48 and 64 px (the `.ico`) | Redrawn per size: ring radius and width on the pixel grid, the rift 1.3 to 1.7 times wider with a minimum stroke, no blur at 16 to 32 px |
+| **Lock-up** | Splash, welcome, about, installer | Mark + "RIFT" wordmark |
 
 ### Files
 
@@ -100,74 +108,78 @@ The logo is a periodic-table tile: a bold white **Nb** with a small **41** in th
 | `launcher/assets/app-icon.png` | 1024 px render of the master. Input for `pnpm tauri icon`. |
 | `launcher/public/logo.svg` | Rich logo for the web UI (also the favicon) |
 | `launcher/public/logo-simple.svg` | Simple logo for small spots |
-| `launcher/public/logo-wordmark.svg` | Lock-up: tile + "Niobium", for dark backgrounds |
+| `launcher/public/logo-wordmark.svg` | Lock-up: mark + "RIFT", for dark backgrounds |
 | `launcher/src-tauri/icons/*` | App icons. `icon.ico` holds 16/24/32/48/64 (pixel-tuned) and 256 (rich). |
 | `launcher/src/components/layout/Logo.tsx` | React: `LogoMark`, `Wordmark`, `Logo` |
-| `native/client/ATLAS/Public/Icon.h` | F9-menu logo: the simple tile as a 512 x 512 PNG byte array |
+| `launcher/splash.html` | Splash window with the rich mark and the wordmark inline |
+| `native/client/ATLAS/Public/Icon.h` | F9-menu logo: the simple mark as a 512 x 512 PNG byte array |
 | `launcher/src-tauri/windows/assets/*.bmp` | Installer art (see below) |
 
 ### Construction
 
-- 1024 box. The tile is 896 x 896 at (64, 64) with a corner radius of 208.
-- Layers, bottom to top: the blue to violet gradient (diagonal, with `#5546FF` in the middle), a light-blue bloom at the top left, a dark-indigo depth shade at the bottom left, the gold corner flare (gold into a soft pink `#FF6FA8` and then into the violet, like real anodised metal), the glass sheen (a diagonal with a soft edge at 40 %), an inner rim (white 42 % at the top, fading out), the "41", and the letters.
-- "Nb" is a hand-built geometric monogram: a stem width of 25 % of the cap height, the b-bowl at 74 % of the cap height, and white to a faint lavender `#E6E4FF` from top to bottom.
-- The "41" and the wordmark are outlines of Inter Display Bold (by Rasmus Andersson, SIL Open Font License 1.1). Only the outlines are used. No font file ships, so the logo looks the same everywhere.
-- The wordmark is "Niobium" in Inter Display Bold with -1 % tracking. Always use the `Wordmark` component or `logo-wordmark.svg`. Never type it in a font.
+- 1024 box, centre (512, 512). Ring: outer radius 448, 62 wide (centre line r = 417). Portal: radius 386, radial gradient `#2A1766` → `#140D33` → `#0B0A1A`, with a violet bloom.
+- Ring gradient (diagonal, top left to bottom right): `#B69CFF` 0 %, `#8B5CF6` 30 %, `#7C6CF6` 62 %, `#22D3EE` 86 %. A 5 px white rim (22 %) runs along the upper left of the ring.
+- The rift is a poly-line of 9 points from (598, 30) to (420, 994) with a half-width per point (0 at the tips, 60 at the widest), outlined with mitred joins, so both edges are sharp and jagged. Body: `#22D3EE` → `#67E8F9` → `#A78BFA` from top to bottom; core: the same line at half width in white. The ring is masked 22 px around the rift.
+- Glow: the rift blurred in cyan (σ 26) on top of the ring, and in violet (σ 70) clipped to the portal.
+- The wordmark is "RIFT" in Inter Display Bold (by Rasmus Andersson, SIL Open Font License 1.1) with +6 % tracking, converted to outlines. No font file ships, so it looks the same everywhere. Always use the `Wordmark` component or `logo-wordmark.svg`; never type it in a font.
 
 ### Rules
 
-- Leave clear space around the tile of at least 25 % of its size. The minimum size is 16 px.
-- Put it on dark backgrounds (`bg`, `surface`, or dark glass). On light backgrounds it still works as an app icon, but do not place the wordmark on light backgrounds; the wordmark is light.
-- Do not recolour, stretch, rotate, outline or add new effects to the tile. Do not swap the corner the gold sits in.
-- Glow is allowed: the soft violet/blue glow behind the tile (`LogoMark glow`) on the splash, the welcome screen and the about page.
+- Leave clear space around the mark of at least 25 % of its size. The minimum size is 16 px.
+- Put it on dark backgrounds (`bg`, `surface`, or dark glass). The portal is dark, so the mark also works as an app icon on light taskbars, but never put the wordmark on light backgrounds; the wordmark is light.
+- Do not recolour, stretch, mirror or rotate the mark. The rift always runs from the top right to the bottom left, the ring always goes violet (top left) to cyan (bottom right).
+- Glow is allowed: the soft violet/cyan glow behind the mark (`LogoMark glow`) on the splash, the welcome screen and the about page.
 
 ### React API (`@/components/layout/Logo`)
 
 ```tsx
-<LogoMark className="size-9" />            // simple tile, sized by class (default 32 px)
-<LogoMark size={96} glow />                // rich tile (auto: rich from 64 px) + breathing glow
-<LogoMark size={48} variant="rich" />      // force the "41"
-<Wordmark className="h-6 text-foreground" />  // "Niobium", uses the current text colour
-<Logo size={56} glow tagline />            // tile + wordmark + "old seasons, new shine."
+<LogoMark className="size-9" />            // simple mark, sized by class (default 32 px)
+<LogoMark size={96} glow />                // rich mark (auto: rich from 64 px) + breathing glow
+<LogoMark size={48} variant="rich" />      // force the depth orbits and side cracks
+<Wordmark className="h-6 text-foreground" />  // "RIFT", uses the current text colour
+<Logo size={56} glow tagline />            // mark + wordmark + tagline
 ```
 
-The glow stays still when the OS asks for reduced motion or the app's "Reduce motion" option is on (it reads `MotionConfig`). Every instance gets its own gradient ids (`useId`), so many logos can share one page.
+The glow stays still when the OS asks for reduced motion or the app's "Reduce motion" option is on (it reads `MotionConfig`). Every instance gets its own gradient, mask and filter ids (`useId`), so many logos can share one page.
 
 ### Regenerating the app icons
 
-1. Edit `launcher/assets/app-icon.svg` (and the simple and size files if the letters change). Render it to `launcher/assets/app-icon.png` at 1024 px with a transparent background.
+The assets come from one small Python + Playwright pipeline (geometry in `brand.py`, installer art in `art.py`, `build_all.py` writes everything into the project):
+
+1. `python3 build_all.py` writes the SVG masters, the per-size SVGs, `public/logo*.svg`, renders `assets/app-icon.png` (1024 px, transparent) and the three installer BMPs.
 2. Run `cd launcher && pnpm tauri icon assets/app-icon.png`. Then delete the `android/` and `ios/` folders it creates; this app is desktop-only.
-3. The CLI scales every size down from the 1024 master, so small sizes get blurry. Render `assets/sizes/icon-*.svg` at their exact sizes and rebuild `icon.ico` from those (16/24/32/48/64) plus a 256 px render of the master. Also overwrite `32x32.png` and `64x64.png`, and `Square30/44/71/89` and `StoreLogo` with the simple variant.
+3. `python3 build_all.py post-cli` replaces the blurry small sizes from the CLI with pixel-tuned renders (`32x32`, `64x64`, `Square30/44/71/89`, `StoreLogo`), rebuilds `icon.ico` from the pixel-tuned 16/24/32/48/64 plus a 256 px render of the master, and regenerates `native/client/ATLAS/Public/Icon.h`.
+4. `Logo.tsx` and `splash.html` carry the same paths inline; update them when the geometry changes.
 
 ## Installer (NSIS)
 
 | Setting | Value |
 | --- | --- |
-| `MUI_BGCOLOR` | **`0A0B12`**. This is the exact background of `header.bmp` and the colour the sidebar fades into. Use it instead of the old `0F1115`. |
-| `MUI_TEXTCOLOR` | `F2F3F8` |
-| `MUI_FINISHPAGE_LINK_COLOR` | `B49BFF` (violet-text, 8.5:1 on `0A0B12`) |
-| Win11 caption colour (`DWMWA_CAPTION_COLOR`) | `0x00120B0A` (COLORREF is 0x00BBGGRR for `#0A0B12`) |
+| `MUI_BGCOLOR` | **`07070C`**. This is the exact background of `header.bmp` and the colour the sidebar fades into. |
+| `MUI_TEXTCOLOR` | `F4F4F8` |
+| `MUI_FINISHPAGE_LINK_COLOR` | `C4B5FD` (violet-text, 10.9:1 on `07070C`) |
+| Win11 caption colour (`DWMWA_CAPTION_COLOR`) | `0x000C0707` (COLORREF is 0x00BBGGRR for `#07070C`) |
 
 | File | Size | Notes |
 | --- | --- | --- |
-| `windows/assets/sidebar.bmp` | 164 x 314 | Welcome and Finish pages. Glowing logo, "Niobium", "old seasons, new shine.", a gradient line and "NIOBIUMFN". The right edge is exactly `#0A0B12`, so it melts into the page. |
-| `windows/assets/header.bmp` | 150 x 57 | Small tile + wordmark on the right. **Every edge pixel is exactly `#0A0B12`**, so with `MUI_HEADERIMAGE_RIGHT` it blends into the header band. |
-| `windows/assets/splash.bmp` | 420 x 240 | AdvSplash card: logo, wordmark, tagline and gradient line on a dark card with 22 px rounded corners. Everything outside the card is pure `#FF00FF` (the colour key). The edges are hard, with no anti-aliasing against magenta, so there is no pink fringe. Call it with `advsplash::show 900 350 300 0xFF00FF "$PLUGINSDIR\<name>"` (no `.bmp`). |
+| `windows/assets/sidebar.bmp` | 164 x 314 | Welcome and Finish pages. Glowing mark in front of a faint vertical rift of light, "RIFT", "Step back into any season.", a violet → cyan line and "RIFTFN". The right edge is exactly `#07070C`, so it melts into the page. |
+| `windows/assets/header.bmp` | 150 x 57 | Small mark + wordmark on the right. **Every edge pixel is exactly `#07070C`**, so with `MUI_HEADERIMAGE_RIGHT` it blends into the header band. |
+| `windows/assets/splash.bmp` | 420 x 240 | AdvSplash card: mark, wordmark, tagline and a violet → cyan line on a dark card with 22 px rounded corners. Everything outside the card is pure `#FF00FF` (the colour key), with hard edges and no pink fringe. Call it with `advsplash::show 900 350 300 0xFF00FF "$PLUGINSDIR\<name>"` (no `.bmp`). |
 
-All three files are 24-bit, uncompressed (`BI_RGB`), use the 40-byte BITMAPINFOHEADER and have no alpha. The header bytes were checked with Python. They also built through makensis with Tauri's NSIS template without warning 5040.
+All three files are 24-bit, uncompressed (`BI_RGB`), use the 40-byte BITMAPINFOHEADER and have no alpha (the CI checks this in "Check the installer images").
 
 ## UI direction
 
-**Mood: "anodised metal in the dark."** Use a near-black background and glass panels. Colour comes from light (glows, gradients, thin rims), not from big flat coloured areas.
+**Mood: "a portal in the dark."** A near-black background and glass panels. Colour comes from light (glows, gradients, thin rims), not from big flat coloured areas. Violet is the body, cyan is the light that leaks through.
 
-- **Glass.** Panels use `--nb-glass` with `backdrop-filter: blur(20px) saturate(140%)`, a 1 px `--nb-border` and an inner top highlight `inset 0 1px 0 rgb(255 255 255 / 0.06)`. Radius: 12 px for cards, 8 px for controls, full for pills.
+- **Glass.** Panels use `--nb-glass` with `backdrop-filter: blur(20px) saturate(140%)`, a 1 px `--nb-border` and an inner top highlight `inset 0 1px 0 rgb(255 255 255 / 0.06)`. The hairline (`--nb-edge`) goes from white at the top left to violet and a hint of cyan at the bottom right. Radius: 12 px for cards, 8 px for controls, full for pills.
 - **Glow.** Save the brand glow for the one thing that matters on a screen: the Play/Launch button, the active nav item and the logo. Everything else stays calm.
-- **Gold.** Use gold sparingly, as a reward: a "New" dot, the tip of a progress bar, the trickshot highlight, a short sparkle when something finishes.
-- **Background.** Slow "aurora": three big blurred blobs (blue, violet and a small gold one) drifting over 40 to 60 s at 35 % opacity or less, plus the faint dot grid. It is static when motion is reduced.
+- **Cyan.** Use cyan as light, not as paint: indicators, the tip of a progress bar, "New" dots and badges, focus rings, a short sparkle when something finishes. Never a large fill.
+- **Background.** Slow "aurora": big soft blobs (violet, a smaller cyan one, a deep violet one) drifting over 40 to 60 s at 35 % opacity or less, plus the faint dot grid. It is static when motion is reduced.
 - **Motion.** Entrances ease out with `cubic-bezier(0.16, 1, 0.3, 1)`. Exits use `cubic-bezier(0.7, 0, 0.84, 0)` and are shorter. Durations: 120 ms for hover and press, 200 to 260 ms for toggles and panels, 400 to 600 ms for page changes and hero moments. Springs: stiffness 380 / damping 32 for UI, and stiffness 200 / damping 22 for playful moments such as the logo pop. Stagger lists by 40 ms. On press, scale buttons to 0.97. On hover, lift cards by 2 px and add a faint glow.
-- **Signature move: the sheen sweep.** A diagonal white band (about 25 % opacity, tilted 30°) sweeps across the logo tile or the Play button once on load and again on hover, over 700 ms. It is the same diagonal as the sheen in the logo.
-- **Splash (440 x 300).** At 0 ms the tile scales from 0.86 to 1 and goes from blur 12 px to 0 and from opacity 0 to 1 (spring). At 250 ms the glow fades in. At 450 ms the sheen sweeps. At 500 ms the wordmark rises 8 px and fades in, and at 650 ms the tagline follows. A thin `--nb-gradient-shine` line loops until `app_ready`. The splash should feel finished within 1.2 s.
-- **First-run welcome.** Start with the large `Logo` lock-up with glow, then cards that slide in with a 40 ms stagger. "What's new" is a single glass card with a gold "New" dot.
+- **Signature move: the sheen sweep.** A diagonal white band (about 25 % opacity, tilted 30°) sweeps across the logo (clipped to the portal circle) or the Play button once on load and again on hover, over 700 ms.
+- **Splash (440 x 300).** At 0 ms the mark scales from 0.86 to 1 and goes from blur 12 px to 0 and from opacity 0 to 1 (spring). At 250 ms the glow fades in. At 450 ms the sheen sweeps. At 500 ms the wordmark rises 8 px and fades in, and at 650 ms the tagline follows. A thin violet → cyan line loops until `app_ready`. The splash should feel finished within 1.2 s.
+- **First-run welcome.** Start with the large `Logo` lock-up with glow, then cards that slide in with a 40 ms stagger. "What's new" is a single glass card with a cyan "New" dot.
 - **Type.** Keep Segoe UI Variable for the UI. Headings are semibold with -0.01em tracking. Use tabular numbers for versions and stats. The name is always the `Wordmark` SVG.
 - **Reduced motion.** Respect the OS setting and the app's own setting. When either is on, use no infinite animations and replace movement with fades of 150 ms or less.
 - **Words.** Plain, short, friendly English. Say "Play", not "Execute"; say "Your builds", not "Installations".

@@ -77,7 +77,7 @@ export function JobCard({ job, onPickFolder }: { job: DownloadJobView; onPickFol
             ? "bg-[radial-gradient(closest-side,rgb(34_197_94/0.18),transparent)]"
             : failed
               ? "bg-[radial-gradient(closest-side,rgb(239_68_68/0.16),transparent)]"
-              : "bg-[radial-gradient(closest-side,rgb(122_60_255/0.28),transparent)]",
+              : "bg-[radial-gradient(closest-side,rgb(139_92_246/0.28),transparent)]",
         )}
       />
 

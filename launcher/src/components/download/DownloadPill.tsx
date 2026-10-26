@@ -63,7 +63,7 @@ function Pill({ job, wide, onOpen }: { job: DownloadJobView; wide: boolean; onOp
       className={cn(
         "group relative mb-2 flex w-full cursor-pointer items-center rounded-lg bg-black/20 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.05)] transition-colors duration-150 outline-none hover:bg-white/[0.04] focus-visible:ring-[3px] focus-visible:ring-ring/50",
         wide ? "gap-2.5 px-2.5 py-2" : "justify-center py-1.5",
-        t.tone === "brand" && "shadow-[inset_0_0_0_1px_rgb(180_155_255/0.16),0_8px_24px_-16px_rgb(122_60_255/0.9)]",
+        t.tone === "brand" && "shadow-[inset_0_0_0_1px_rgb(196_181_253/0.16),0_8px_24px_-16px_rgb(139_92_246/0.9)]",
         t.tone === "success" && "shadow-[inset_0_0_0_1px_rgb(34_197_94/0.25)]",
         t.tone === "danger" && "shadow-[inset_0_0_0_1px_rgb(239_68_68/0.25)]",
       )}

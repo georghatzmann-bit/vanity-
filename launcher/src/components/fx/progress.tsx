@@ -8,12 +8,12 @@ export interface ProgressBeamProps {
   value: number;
   /** A light travels along the filled part (while something is in progress). */
   active?: boolean;
-  /** Gold dot at the end of the fill (default true). */
+  /** Cyan dot at the end of the fill (default true). */
   tip?: boolean;
   className?: string;
 }
 
-/** Thin progress line: brand gradient fill, travelling light, gold tip. Height via className (default 4 px). */
+/** Thin progress line: brand gradient fill, travelling light, cyan tip. Height via className (default 4 px). */
 export function ProgressBeam({ value, active = false, tip = true, className }: ProgressBeamProps) {
   const v = Math.max(0, Math.min(1, value));
   return (
@@ -25,7 +25,7 @@ export function ProgressBeam({ value, active = false, tip = true, className }: P
       className={cn("relative h-1 w-full rounded-full bg-white/[0.06]", className)}
     >
       <motion.div
-        className="absolute inset-y-0 left-0 rounded-full bg-brand shadow-[0_0_12px_rgb(122_60_255/0.6)]"
+        className="absolute inset-y-0 left-0 rounded-full bg-brand shadow-[0_0_12px_rgb(139_92_246/0.6)]"
         initial={false}
         animate={{ width: `${v * 100}%` }}
         transition={{ duration: 0.6, ease: EASE_OUT }}
@@ -36,7 +36,7 @@ export function ProgressBeam({ value, active = false, tip = true, className }: P
           </span>
         )}
         {tip && v > 0 && (
-          <span className="absolute top-1/2 right-0 size-2 translate-x-1/2 -translate-y-1/2 rounded-full bg-gold shadow-[0_0_10px_2px_rgb(255_200_87/0.55)]" />
+          <span className="absolute top-1/2 right-0 size-2 translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-cyan shadow-[0_0_10px_2px_rgb(34_211_238/0.55)]" />
         )}
       </motion.div>
     </div>
