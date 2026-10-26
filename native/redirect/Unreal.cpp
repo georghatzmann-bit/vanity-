@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "VanityLog.h" // VANITY
+#include "NiobiumLog.h" // NIOBIUM
 #include "Unreal.h"
 #include "Redirection.h"
 #include "Options.h"
@@ -209,7 +209,7 @@ namespace Tellurium
         {
             if (!FCurlHttpRequest::SetURLIdx && !bEOS)
                 InitializeURLIndex();
-            else if (++setupMemLeak == 5 && FixMemLeak && VanityMemLeakAllowed()) // VANITY: nur Chapter 1
+            else if (++setupMemLeak == 5 && FixMemLeak && NiobiumMemLeakAllowed()) // NIOBIUM: only Chapter 1
             {
                 constexpr static auto pattern = Tellurium::Patchfinder::Pattern<"48 89 5C 24 ?? 57 48 83 EC ?? 48 8B 01 4C 8B C2 48 8D 54 24 ? 48 8B D9 FF 50 30">();
                 constexpr static auto pattern2 = Tellurium::Patchfinder::Pattern<"48 8B 01 4C 8D 41 08 48 FF 60 20">();
@@ -227,10 +227,10 @@ namespace Tellurium
                     *(uint8_t*)MemLeakPatch = 0xC3;
 
                     VirtualProtect(LPVOID(MemLeakPatch), 1, oldProt, &oldProt);
-                    VanityLog("Speicherleck-Fix angewendet (0x%llX)", (unsigned long long)MemLeakPatch);
+                    NiobiumLog("Memory-leak fix applied (0x%llX)", (unsigned long long)MemLeakPatch); // NIOBIUM
                 }
                 else
-                    VanityLog("Speicherleck-Fix: Muster nicht gefunden (uebersprungen)");
+                    NiobiumLog("Memory-leak fix: pattern not found (skipped)"); // NIOBIUM
             }
 
             auto URL = GetURL();

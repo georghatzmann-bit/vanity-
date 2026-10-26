@@ -1,10 +1,10 @@
 const Express = require("express");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const express = Express.Router();
 const fs = require("fs");
 const path = require("path");
 const iniparser = require("ini");
-const config = iniparser.parse(fs.readFileSync(vanity.file("Config/config.ini")).toString()); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+const config = iniparser.parse(fs.readFileSync(niobium.file("Config/config.ini")).toString()); // NIOBIUM: path via niobium.js (data folder/resources)
 var Memory_CurrentAccountID = config.Config.displayName;
 
 express.get("/account/api/public/account", async (req, res) => {
@@ -69,7 +69,7 @@ express.get("/account/api/public/account/:accountId", async (req, res) => {
 })
 
 express.get("/sdk/v1/*", async (req, res) => {
-    const sdk = vanity.json("responses/sdkv1.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const sdk = niobium.json("responses/sdkv1.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     res.json(sdk)
 })
 

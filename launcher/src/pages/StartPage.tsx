@@ -1,9 +1,10 @@
 import { AnimatePresence, motion } from "motion/react";
 import {
-  Check,
+  ArrowUpRight,
+  CircleSlash,
+  FlaskConical,
   FolderInput,
   Gamepad2,
-  Loader2,
   PanelsTopLeft,
   Play,
   ScrollText,
@@ -14,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -22,11 +24,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { IconTile, PageShell, Reveal, StatusPill } from "@/components/common";
+import { BubbleStatus } from "@/components/bubble/BubbleStatus";
+import { Eyebrow, IconTile, PageShell, Panel, Reveal, StatusPill, type IconTone } from "@/components/common";
+import { GlowCard, GradientText, HeroBackdrop, NumberTicker, ProgressBeam, ShimmerButton, Stagger, StepTimeline } from "@/components/fx";
 import { runDemoLaunch, stopDemoLaunch } from "@/components/LaunchDemoDriver";
-import { api, inTauri, type ServiceStatus } from "@/lib/api";
+import { api, BACKEND_PORT, GAME_SERVER_PORT, inTauri, type ServiceStatus } from "@/lib/api";
+import { EASE_IN, EASE_OUT } from "@/lib/motion";
 import { activeProfile, buildOf, launchSteps, useApp, type PageId } from "@/lib/store";
 import { cn } from "@/lib/utils";
+
+const swap = {
+  initial: { opacity: 0, scale: 0.94, filter: "blur(4px)" },
+  animate: { opacity: 1, scale: 1, filter: "blur(0px)", transition: { duration: 0.32, ease: EASE_OUT }, transitionEnd: { filter: "none" } },
+  exit: { opacity: 0, scale: 0.96, filter: "blur(4px)", transition: { duration: 0.14, ease: EASE_IN } },
+};
 
 export function StartPage() {
   const config = useApp((s) => s.config);
@@ -36,13 +47,16 @@ export function StartPage() {
 
   const profile = activeProfile(config);
   const build = buildOf(config, profile?.buildId);
-  const running = launchStep >= 0 && launchStep < launchSteps.length;
-  const done = launchStep >= launchSteps.length;
+  const total = launchSteps.length;
+  const running = launchStep >= 0 && launchStep < total;
+  const done = launchStep >= total;
   const busy = running || done;
+  // Untested builds start too (Rust only warns); only versions Niobium can't start are blocked
+  const canStart = Boolean(build) && build?.support !== "unsupported";
 
   const start = async () => {
     if (!profile) {
-      toast.error("Kein Profil", { description: "Lege zuerst in der Bibliothek einen Build an." });
+      toast.error("No profile yet", { description: "Add a build in the Library first." });
       return;
     }
     if (!inTauri) {
@@ -52,14 +66,14 @@ export function StartPage() {
     try {
       await api.hostAndPlay(profile.id);
     } catch (e) {
-      toast.error("Start fehlgeschlagen", { description: String(e) });
+      toast.error("Couldn't start", { description: String(e) });
     }
   };
 
   const stop = async () => {
     if (!inTauri) {
       stopDemoLaunch();
-      toast("Alles gestoppt");
+      toast("Everything stopped");
       return;
     }
     await api.stopAll();
@@ -70,37 +84,72 @@ export function StartPage() {
     api.setActiveProfile(id);
   };
 
+  const heroProgress = done ? 1 : running ? Math.min((launchStep + 0.5) / total, 1) : 0;
+  const stepNow = running ? launchSteps[launchStep] : null;
+
   return (
     <PageShell>
-      <Reveal className="glass relative overflow-hidden rounded-xl">
-        <HeroGlow />
-        <div className="relative flex flex-col gap-8 p-8 lg:flex-row lg:items-end lg:justify-between">
+      {/* Hero: active build + the big Host & Play button */}
+      <GlowCard strong className="relative overflow-hidden">
+        <HeroBackdrop />
+
+        <div className="relative grid gap-8 p-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-md bg-white/[0.08] px-2 py-1 font-medium">
-                {build?.season ?? "Kein Build"}
-              </span>
-              <span className="text-muted-foreground">Aktiver Build</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="px-2.5 py-1 text-xs">
+                {build?.season ?? "No build"}
+              </Badge>
+              {build && <span className="text-xs text-muted-foreground">Active build</span>}
+              {build && <BubbleStatus version={build.version} hideUnavailable />}
             </div>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight">
+
+            <h1 className="mt-5 text-[2.75rem] leading-none font-semibold tracking-tight">
               {build ? (
                 <>
-                  Fortnite <span className="text-primary-text">{build.version}</span>
+                  Fortnite <GradientText variant="brand" className="tabular-nums">{build.version}</GradientText>
                 </>
               ) : (
-                "Noch kein Build"
+                <GradientText>No build yet</GradientText>
               )}
             </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {build
-                ? `${build.changelist ? `CL-${build.changelist} · ` : ""}${build.engine} · Start mit ${profile?.launchArgs || "-d3d11"}`
-                : "Füge in der Bibliothek deinen Fortnite-Ordner hinzu (z. B. 19.10)."}
-            </p>
-            {config.profiles.length > 0 && (
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                <span className="text-xs text-muted-foreground">Profil</span>
+
+            {build ? (
+              <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+                {build.changelist ? <span className="tabular-nums">CL-{build.changelist}</span> : null}
+                {build.changelist ? <Dot /> : null}
+                <span>{build.engine}</span>
+                <Dot />
+                <span className="inline-flex items-center gap-2">
+                  Launch args
+                  <code className="rounded-md bg-white/[0.06] px-1.5 py-0.5 font-mono text-xs text-foreground/90 ring-1 ring-white/[0.06]">
+                    {profile?.launchArgs || "-d3d11"}
+                  </code>
+                </span>
+              </div>
+            ) : (
+              <p className="mt-4 max-w-md text-sm text-muted-foreground">
+                Add your Fortnite folder in the Library (for example 19.10). Niobium finds the version for you.
+              </p>
+            )}
+
+            {build?.support === "experimental" && (
+              <p className="mt-3 inline-flex items-center gap-2 text-xs text-warning">
+                <FlaskConical className="size-3.5" />
+                Untested version – Niobium will try anyway.
+              </p>
+            )}
+            {build?.support === "unsupported" && (
+              <p className="mt-3 inline-flex items-center gap-2 text-xs text-destructive">
+                <CircleSlash className="size-3.5" />
+                Niobium can't start this version. Pick another profile or build.
+              </p>
+            )}
+
+            {config.profiles.length > 0 ? (
+              <div className="mt-7 flex flex-wrap items-center gap-3">
+                <span className="text-xs font-medium text-muted-foreground">Profile</span>
                 <Select value={profile?.id} onValueChange={setActive} disabled={busy}>
-                  <SelectTrigger className="h-9 w-52 bg-white/[0.05]">
+                  <SelectTrigger className="h-9 w-56 bg-white/[0.05]" aria-label="Active profile">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -112,120 +161,200 @@ export function StartPage() {
                   </SelectContent>
                 </Select>
               </div>
+            ) : (
+              <Button variant="secondary" className="mt-7" onClick={() => setPage("library")}>
+                <FolderInput />
+                Open the Library
+              </Button>
             )}
           </div>
 
           <div className="flex flex-col items-start gap-3 lg:items-end">
             <AnimatePresence mode="wait" initial={false}>
               {busy ? (
-                <motion.div key="stop" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.15 }}>
-                  <Button size="lg" variant="secondary" onClick={stop} className="h-12 min-w-56 gap-3 px-8 font-semibold">
-                    {running ? <Loader2 className="size-5 animate-spin" /> : <Square className="size-4" />}
-                    {running ? "Startet … · Abbrechen" : "Alles stoppen"}
-                  </Button>
+                <motion.div key="stop" {...swap}>
+                  <ShimmerButton
+                    size="xl"
+                    tone="neutral"
+                    loading={running}
+                    sheenOnMount={false}
+                    icon={<Square className="size-4 fill-current" />}
+                    onClick={stop}
+                    className="min-w-60"
+                  >
+                    {running ? "Starting… · Cancel" : "Stop all"}
+                  </ShimmerButton>
                 </motion.div>
               ) : (
-                <motion.div key="start" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.15 }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <Button size="lg" onClick={start} disabled={!build || build.support !== "supported"} className="glow-primary h-12 min-w-56 gap-3 px-8 font-semibold">
-                    <Play className="size-5 fill-current" />
+                <motion.div key="start" {...swap}>
+                  <ShimmerButton
+                    size="xl"
+                    pulse
+                    icon={<Play className="fill-current" />}
+                    onClick={start}
+                    disabled={!canStart}
+                    className="min-w-60"
+                  >
                     Host &amp; Play
-                  </Button>
+                  </ShimmerButton>
                 </motion.div>
               )}
             </AnimatePresence>
-            <p className="max-w-56 text-right text-xs text-muted-foreground">
-              Startet Backend, Server und dein Spiel mit einem Klick.
-            </p>
+
+            <div className="h-9 max-w-60 text-xs lg:text-right">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.p
+                  key={running ? `step-${launchStep}` : done ? "done" : "idle"}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0, transition: { duration: 0.25, ease: EASE_OUT } }}
+                  exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
+                  className="text-muted-foreground"
+                >
+                  {stepNow ? (
+                    <>
+                      <span className="font-medium text-violet-text">
+                        Step {launchStep + 1} of {total}
+                      </span>{" "}
+                      · {stepNow.label}: {stepNow.hint}
+                    </>
+                  ) : done ? (
+                    <span className="text-success">You're in. Press Play in Fortnite.</span>
+                  ) : (
+                    "Starts the backend, the server and your game in one click."
+                  )}
+                </motion.p>
+              </AnimatePresence>
+            </div>
           </div>
         </div>
-      </Reveal>
 
-      <Reveal className="glass rounded-xl px-6 pt-5 pb-5">
-        <h2 className="text-sm font-semibold">Startablauf</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Was bei „Host &amp; Play“ nacheinander passiert.</p>
-        <div className="mt-4">
-          <LaunchTimeline step={launchStep} />
-        </div>
-      </Reveal>
+        {/* Thin progress beam along the bottom edge while launching */}
+        <AnimatePresence>
+          {busy && (
+            <motion.div
+              key="beam"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-x-0 bottom-0"
+            >
+              <ProgressBeam value={heroProgress} active={running} tip={running} className="h-[2px] rounded-none bg-transparent" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </GlowCard>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <ServiceCard icon={Waypoints} name="Backend" status={services.backend} detail={`127.0.0.1:${config.settings.backendPort}`} />
-        <ServiceCard icon={Server} name="Game Server" status={services.server} detail={`127.0.0.1:${config.settings.gameServerPort} · ohne Grafik`} />
-        <ServiceCard icon={Gamepad2} name="Dein Spiel" status={services.game} detail={build ? `Fortnite ${build.version}` : "–"} />
-      </div>
+      {/* Launch steps */}
+      <Panel
+        title="Launch steps"
+        description="What happens after you press Host & Play, one step after another."
+        actions={<LaunchStateBadge step={launchStep} total={total} />}
+        bodyClassName="pt-6 pb-6"
+      >
+        <StepTimeline steps={launchSteps} current={launchStep} />
+      </Panel>
 
+      {/* Services */}
+      <Stagger className="grid gap-4 md:grid-cols-3" delay={0.12}>
+        <ServiceCard icon={Waypoints} name="Backend" status={services.backend} detail={`127.0.0.1:${BACKEND_PORT}`} />
+        <ServiceCard icon={Server} name="Game server" status={services.server} detail={`127.0.0.1:${GAME_SERVER_PORT} · ${config.settings.headlessServer ? "no graphics" : "with a window"}`} />
+        <ServiceCard icon={Gamepad2} name="Your game" status={services.game} detail={build ? `Fortnite ${build.version}` : "–"} />
+      </Stagger>
+
+      {/* Quick actions */}
       <Reveal>
-        <h2 className="mb-3 text-sm font-semibold">Schnellzugriff</h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <QuickAction icon={FolderInput} title="Build importieren" hint="Ordner wählen, Version wird erkannt" to="library" onGo={setPage} />
-          <QuickAction icon={UserPlus} title="Bei Freund beitreten" hint="Per IP über Tailscale oder Radmin" to="servers" onGo={setPage} />
-          <QuickAction icon={PanelsTopLeft} title="Ingame-Menü" hint="Edit beim Loslassen, Sichtfeld, Tasten" to="ingame" onGo={setPage} />
-          <QuickAction icon={ScrollText} title="Live-Log" hint="Sehen, was gerade passiert" to="logs" onGo={setPage} />
-        </div>
+        <Eyebrow className="mb-3">Quick actions</Eyebrow>
+        <Stagger className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" delay={0.18}>
+          <QuickAction icon={FolderInput} title="Add a build" hint="Choose your Fortnite folder" to="library" onGo={setPage} />
+          <QuickAction icon={UserPlus} title="Join a friend" hint="By IP over Tailscale or Radmin VPN" to="servers" onGo={setPage} />
+          <QuickAction icon={PanelsTopLeft} title="In-game menu" hint="Edit on release, field of view, keys" to="ingame" onGo={setPage} />
+          <QuickAction icon={ScrollText} title="Live log" hint="See what's happening right now" to="logs" onGo={setPage} />
+        </Stagger>
       </Reveal>
     </PageShell>
   );
 }
 
-function HeroGlow() {
+function Dot() {
+  return <span aria-hidden className="size-1 rounded-full bg-white/20" />;
+}
+
+function LaunchStateBadge({ step, total }: { step: number; total: number }) {
+  const state = step < 0 ? "idle" : step >= total ? "done" : "running";
   return (
-    <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-      <div className="absolute -top-24 -right-16 size-96 rounded-full bg-primary/30 blur-3xl" />
-      <div className="absolute -bottom-32 left-1/3 size-80 rounded-full bg-[#1f4fd1]/20 blur-3xl" />
-      <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: "repeating-linear-gradient(115deg, #fff 0 1px, transparent 1px 22px)", maskImage: "linear-gradient(90deg, transparent 35%, black 100%)" }} />
-    </div>
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.span
+        key={state}
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1, transition: { duration: 0.2, ease: EASE_OUT } }}
+        exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.12 } }}
+      >
+        {state === "idle" && <Badge variant="muted">Ready</Badge>}
+        {state === "running" && (
+          <Badge variant="default">
+            <span className="nb-loop size-1.5 animate-pulse rounded-full bg-violet-text" />
+            Step <NumberTicker value={Math.min(step + 1, total)} fromZero={false} /> of {total}
+          </Badge>
+        )}
+        {state === "done" && <Badge variant="success">In the lobby</Badge>}
+      </motion.span>
+    </AnimatePresence>
   );
 }
 
-function LaunchTimeline({ step }: { step: number }) {
-  const total = launchSteps.length;
-  const progress = step < 0 ? 0 : Math.min(step / (total - 1), 1);
-  return (
-    <div className="relative">
-      <div className="absolute top-4 right-[7%] left-[7%] h-0.5 rounded-full bg-white/[0.06]">
-        <motion.div className="h-full rounded-full bg-gradient-to-r from-primary to-primary-text" initial={false} animate={{ width: `${progress * 100}%` }} transition={{ duration: 0.4, ease: [0.2, 0, 0, 1] }} />
-      </div>
-      <ol className="relative grid grid-cols-7 gap-2">
-        {launchSteps.map((s, i) => {
-          const state = step > i ? "done" : step === i ? "active" : "pending";
-          return (
-            <li key={s.label} className="flex flex-col items-center text-center">
-              <motion.div initial={false} animate={{ scale: state === "active" ? 1.1 : 1 }} className={cn("flex size-8 items-center justify-center rounded-full text-xs font-semibold transition-colors duration-200", state === "done" && "bg-success/20 text-success", state === "active" && "bg-primary text-primary-foreground glow-primary", state === "pending" && "bg-[#1b1e29] text-muted-foreground ring-1 ring-white/[0.08]")}>
-                {state === "done" ? <Check className="size-4" /> : state === "active" ? <Loader2 className="size-4 animate-spin" /> : i + 1}
-              </motion.div>
-              <p className={cn("mt-3 text-xs font-medium", state === "pending" && "text-muted-foreground")}>{s.label}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">{s.hint}</p>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
+const statusTone: Record<ServiceStatus, IconTone> = {
+  stopped: "brand",
+  starting: "warning",
+  running: "success",
+  error: "danger",
+};
 
 function ServiceCard({ icon, name, status, detail }: { icon: LucideIcon; name: string; status: ServiceStatus; detail: string }) {
   return (
-    <Reveal className="glass flex items-center gap-4 rounded-xl p-5">
-      <IconTile icon={icon} className={cn("transition-colors duration-200", status === "running" && "bg-success/15 text-success", status === "starting" && "bg-warning/15 text-warning")} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium">{name}</p>
-          <StatusPill status={status} />
+    <GlowCard
+      kind="scale"
+      className={cn(
+        "relative overflow-hidden p-5 transition-shadow duration-300",
+        status === "running" && "shadow-[0_0_0_1px_rgb(34_197_94/0.18),0_14px_40px_-22px_rgb(34_197_94/0.55)]",
+        status === "error" && "shadow-[0_0_0_1px_rgb(239_68_68/0.25)]",
+      )}
+    >
+      <div className="flex items-center gap-4">
+        <IconTile icon={icon} tone={statusTone[status]} size="lg" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">{name}</p>
+            <StatusPill status={status} />
+          </div>
+          <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{detail}</p>
         </div>
-        <p className="mt-1 truncate text-xs text-muted-foreground">{detail}</p>
       </div>
-    </Reveal>
+      <AnimatePresence>
+        {status === "starting" && (
+          <motion.div
+            key="starting"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-x-0 bottom-0"
+          >
+            <ProgressBeam value={1} active tip={false} className="h-[2px] rounded-none bg-transparent opacity-80" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </GlowCard>
   );
 }
 
 function QuickAction({ icon, title, hint, to, onGo }: { icon: LucideIcon; title: string; hint: string; to: PageId; onGo: (p: PageId) => void }) {
   return (
-    <motion.button type="button" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} transition={{ duration: 0.15 }} onClick={() => onGo(to)} className="glass flex items-center gap-3 rounded-xl p-4 text-left outline-none transition-colors hover:bg-white/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50">
+    <GlowCard interactive kind="scale" onClick={() => onGo(to)} aria-label={title} className="flex h-full items-start gap-3 p-4">
       <IconTile icon={icon} />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{title}</p>
         <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{hint}</p>
       </div>
-    </motion.button>
+      <ArrowUpRight className="size-4 shrink-0 text-faint transition-[color,translate] duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-violet-text" />
+    </GlowCard>
   );
 }

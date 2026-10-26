@@ -1,7 +1,7 @@
 const Express = require("express");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const express = Express.Router();
-const discovery = vanity.json("responses/Athena/Discovery/discovery_frontend.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+const discovery = niobium.json("responses/Athena/Discovery/discovery_frontend.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
 express.post("*/api/v2/discovery/surface/*", async (req, res) => {
     res.json(discovery.v2);

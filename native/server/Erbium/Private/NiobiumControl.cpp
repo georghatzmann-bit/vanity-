@@ -1,6 +1,6 @@
-// [Vanity] Steuer-Pipe für den Launcher – eigener Vanity-Code (GPL-3.0). Siehe VanityControl.h.
+// NIOBIUM: control pipe for the launcher - Niobium's own code (GPL-3.0). See NiobiumControl.h.
 #include "pch.h"
-#include "../Public/VanityControl.h"
+#include "../Public/NiobiumControl.h"
 #include "../Public/Configuration.h"
 #include "../Public/GUI.h"
 #include "../Public/AutoHosting.h"
@@ -15,31 +15,31 @@
 #include <mutex>
 #include <string>
 
-// In FortPlayerControllerAthena.cpp: ist das der Spieler am Host-PC (über 127.0.0.1 verbunden)?
-bool Vanity_IsHostController(AFortPlayerControllerAthena* PlayerController);
+// In FortPlayerControllerAthena.cpp: is this the player at the host PC (connected through 127.0.0.1)?
+bool Niobium_IsHostController(AFortPlayerControllerAthena* PlayerController);
 
 namespace
 {
     using json = nlohmann::json;
 
-    constexpr wchar_t kPipeName[] = L"\\\\.\\pipe\\vanity-server";
+    constexpr wchar_t kPipeName[] = L"\\\\.\\pipe\\niobium-server";
     constexpr size_t kMaxPendingCommands = 256;
     constexpr ULONGLONG kStatusIntervalMs = 2000;
 
     std::mutex GQueueMutex;
-    std::deque<json> GPending; // vom Pipe-Thread befüllt, im Spiel-Takt geleert
+    std::deque<json> GPending; // filled by the pipe thread, emptied on the game thread
 
     std::mutex GWriteMutex;
-    HANDLE GPipe = INVALID_HANDLE_VALUE; // nur unter GWriteMutex anfassen
+    HANDLE GPipe = INVALID_HANDLE_VALUE; // only touch while holding GWriteMutex
     std::atomic_bool GConnected{ false };
     std::atomic_bool GStarted{ false };
     std::atomic_bool GReadySent{ false };
     ULONGLONG GLastStatusMs = 0;
 
-    // Hält den Playlist-Pfad, auf den FConfiguration::Playlist zeigt (dort steht nur ein Zeiger).
+    // Holds the playlist path FConfiguration::Playlist points to (it only stores a pointer).
     std::wstring GPlaylistStorage;
 
-    // ---------------------------------------------------------------- Text-Hilfen
+    // ---------------------------------------------------------------- Text helpers
 
     std::wstring Widen(const std::string& Utf8)
     {
@@ -71,7 +71,7 @@ namespace
         return Text;
     }
 
-    // ---------------------------------------------------------------- Senden
+    // ---------------------------------------------------------------- Sending
 
     void WriteLine(const std::string& Line)
     {
@@ -81,7 +81,7 @@ namespace
         const std::string Data = Line + "\n";
         DWORD Written = 0;
         if (!WriteFile(GPipe, Data.data(), (DWORD)Data.size(), &Written, nullptr))
-            SDK::DbgLog("[Vanity] Pipe-Schreiben fehlgeschlagen error=%lu\n", GetLastError());
+            SDK::DbgLog("[Niobium] Pipe write failed error=%lu\n", GetLastError());
     }
 
     void Reply(long long Id, bool bOk, const std::string& Message)
@@ -94,7 +94,7 @@ namespace
         WriteLine(Out.dump());
     }
 
-    // ---------------------------------------------------------------- Spiel-Zugriffe (nur Spiel-Takt)
+    // ---------------------------------------------------------------- Game access (game thread only)
 
     UNetDriver* GetDriver()
     {
@@ -102,8 +102,8 @@ namespace
         return World ? static_cast<UNetDriver*>(World->NetDriver) : nullptr;
     }
 
-    // Für wen Launcher-Befehle gelten: der Spieler am Host-PC, wenn er verbunden ist,
-    // sonst der erste verbundene Spieler.
+    // Who launcher commands are for: the player at the host PC if connected,
+    // otherwise the first connected player.
     AFortPlayerControllerAthena* FirstConnectedController()
     {
         auto Driver = GetDriver();
@@ -115,7 +115,7 @@ namespace
             if (!Connection || !Connection->PlayerController)
                 continue;
             auto Controller = static_cast<AFortPlayerControllerAthena*>(Connection->PlayerController);
-            if (Vanity_IsHostController(Controller))
+            if (Niobium_IsHostController(Controller))
                 return Controller;
             if (!First)
                 First = Controller;
@@ -137,7 +137,7 @@ namespace
         return Count;
     }
 
-    // Ohne C++-Objekte, damit __try erlaubt ist.
+    // No C++ objects in here, so __try is allowed.
     bool GuardedProcessEvent(UObject* Object, UFunction* Function, void* Params) noexcept
     {
         __try
@@ -151,26 +151,26 @@ namespace
         }
     }
 
-    // Führt einen Cheat-Befehl so aus, als hätte ihn der erste verbundene Spieler in die Konsole getippt
-    // („cheat …“). Dadurch gelten dieselben Prüfungen wie im Spiel.
+    // Runs a cheat command as if the first connected player had typed it into the console
+    // ("cheat ..."). So the same checks apply as in the game.
     bool RunCheat(const std::string& Text, std::string& Error)
     {
         auto Controller = FirstConnectedController();
         if (!Controller)
         {
-            // Wird so im Launcher angezeigt: kurz und ohne Fachwörter.
-            Error = "Noch niemand im Spiel. Tritt zuerst dem Match bei, dann klappt es.";
+            // Shown like this in the launcher: short and without technical words.
+            Error = "Nobody is in the game yet. Join the match first, then try again.";
             return false;
         }
         auto Function = Controller->GetFunction("ServerCheat");
         if (!Function)
         {
-            Error = "Diese Spielversion nimmt keine Befehle an.";
+            Error = "This game version doesn't accept commands.";
             return false;
         }
 
-        // Direkt im Parameterblock aufbauen (keine Kopie): FString gibt seinen Speicher im Destruktor frei,
-        // eine Zuweisung aus einem Zwischenwert würde den Puffer zu früh freigeben.
+        // Build it right in the parameter block (no copy): FString frees its memory in the destructor,
+        // assigning from a temporary would free the buffer too early.
         const std::wstring Wide = Widen(Text);
         struct FParams
         {
@@ -179,7 +179,7 @@ namespace
 
         if (!GuardedProcessEvent(Controller, Function, &Params))
         {
-            Error = "Befehl hat einen Fehler im Spiel ausgelöst";
+            Error = "The command caused an error in the game.";
             return false;
         }
         return true;
@@ -192,7 +192,7 @@ namespace
         const char* Key;
         const wchar_t* Path;
         Playlist Value;
-        double MinVersion; // ab welcher Fortnite-Version es die Playlist gibt (wie die Knöpfe im Server-Fenster)
+        double MinVersion; // first Fortnite version that has the playlist (like the buttons in the server window)
     };
 
     constexpr FPlaylistEntry kPlaylists[] = {
@@ -238,12 +238,12 @@ namespace
         return Out;
     }
 
-    // Akzeptiert Kurznamen (solo, arena_solo, …), Asset-Namen (Playlist_ShowdownAlt_Solo) oder volle /Game/-Pfade.
+    // Accepts short names (solo, arena_solo, ...), asset names (Playlist_ShowdownAlt_Solo) or full /Game/ paths.
     bool SetPlaylist(const std::string& Wanted, std::string& Error)
     {
         if (FConfiguration::bReadyToStart.load(std::memory_order_acquire))
         {
-            Error = "Der Server läuft schon – die Playlist gilt nur vor dem Start";
+            Error = "The server is already running. You can only change the playlist before the start.";
             return false;
         }
 
@@ -261,7 +261,7 @@ namespace
         if (Found && VersionInfo.FortniteVersion + 0.001 < Found->MinVersion)
         {
             char Buffer[160];
-            snprintf(Buffer, sizeof(Buffer), "Playlist „%s“ gibt es erst ab Version %.2f (dieser Build: %.2f)", Found->Key,
+            snprintf(Buffer, sizeof(Buffer), "Playlist \"%s\" needs version %.2f or newer (this build: %.2f).", Found->Key,
                 Found->MinVersion, VersionInfo.FortniteVersion);
             Error = Buffer;
             return false;
@@ -273,7 +273,7 @@ namespace
             GPlaylistStorage = Widen(Wanted);
         else
         {
-            Error = "Unbekannte Playlist „" + Wanted + "“. Bekannt: " + KnownPlaylistKeys() + " oder ein voller /Game/-Pfad";
+            Error = "Unknown playlist \"" + Wanted + "\". Known: " + KnownPlaylistKeys() + ", or a full /Game/ path.";
             return false;
         }
 
@@ -281,17 +281,17 @@ namespace
         const int Selected = Found ? (int)Found->Value : (int)Playlist::Custom;
         GUI::SelectedPlaylist = Selected;
         GUI::PublishSelectedPlaylist(Selected);
-        SDK::DbgLog("[Vanity] Playlist gesetzt: %ls\n", GPlaylistStorage.c_str());
+        SDK::DbgLog("[Niobium] Playlist set: %ls\n", GPlaylistStorage.c_str());
         return true;
     }
 
-    // ---------------------------------------------------------------- Einstellungen
+    // ---------------------------------------------------------------- Settings
 
     bool SetBool(std::atomic_bool& Target, const json& Value, std::string& Error)
     {
         if (!Value.is_boolean())
         {
-            Error = "erwartet true oder false";
+            Error = "Expected true or false.";
             return false;
         }
         Target.store(Value.get<bool>(), std::memory_order_release);
@@ -302,13 +302,13 @@ namespace
     {
         if (!Value.is_number())
         {
-            Error = "erwartet eine Zahl";
+            Error = "Expected a number.";
             return false;
         }
         const int Number = (int)Value.get<double>();
         if (Number < Min || Number > Max)
         {
-            Error = "Wert außerhalb von " + std::to_string(Min) + "–" + std::to_string(Max);
+            Error = "Value must be between " + std::to_string(Min) + " and " + std::to_string(Max) + ".";
             return false;
         }
         Target.store(Number, std::memory_order_release);
@@ -319,13 +319,13 @@ namespace
     {
         if (!Value.is_number())
         {
-            Error = "erwartet eine Zahl";
+            Error = "Expected a number.";
             return false;
         }
         const float Number = Value.get<float>();
         if (Number < Min || Number > Max)
         {
-            Error = "Wert außerhalb des erlaubten Bereichs";
+            Error = "Value is out of range.";
             return false;
         }
         Target.store(Number, std::memory_order_release);
@@ -338,7 +338,7 @@ namespace
         {
             if (!Value.is_string())
             {
-                Error = "erwartet einen Playlist-Namen";
+                Error = "Expected a playlist name.";
                 return false;
             }
             return SetPlaylist(Value.get<std::string>(), Error);
@@ -347,7 +347,7 @@ namespace
         {
             if (!Value.is_boolean())
             {
-                Error = "erwartet true oder false";
+                Error = "Expected true or false.";
                 return false;
             }
             FConfiguration::SetLateGameEnabled(Value.get<bool>());
@@ -357,15 +357,15 @@ namespace
         {
             if (!Value.is_boolean())
             {
-                Error = "erwartet true oder false";
+                Error = "Expected true or false.";
                 return false;
             }
-            // Achtung: false setzt alle Trickshot-Schalter (Nachladen, Eis, Sprung-Müdigkeit, Auto-God …) zurück.
+            // Careful: false resets all trickshot switches (reload, ice, jump fatigue, auto god mode ...).
             FConfiguration::SetTrickshotTabEnabled(Value.get<bool>());
             return true;
         }
-        // Trickshot-Erkennung (Kill in der Luft → Meldung an alle), siehe VanityParkour.cpp.
-        if (Key == "bTrickshotDetection") return SetBool(FConfiguration::bVanityTrickshotDetection, Value, Error);
+        // Trickshot detection (elimination in the air -> message to everyone), see NiobiumParkour.cpp.
+        if (Key == "bTrickshotDetection") return SetBool(FConfiguration::bNiobiumTrickshotDetection, Value, Error);
         if (Key == "bAutoReloadOnWaypointTP") return SetBool(FConfiguration::bAutoReloadOnWaypointTP, Value, Error);
         if (Key == "bRemoveIceOnWaypointTP") return SetBool(FConfiguration::bRemoveIceOnWaypointTP, Value, Error);
         if (Key == "bDisableJumpFatigue") return SetBool(FConfiguration::bDisableJumpFatigue, Value, Error);
@@ -375,7 +375,7 @@ namespace
         {
             if (!SetBool(FConfiguration::bAutoBusStart, Value, Error))
                 return false;
-            // Wie der Schalter im Server-Fenster: die eigene Wahl gilt, nicht die Playlist-Vorgabe.
+            // Like the switch in the server window: your own choice wins over the playlist default.
             FConfiguration::bBusSettingsUserOverride.store(true, std::memory_order_release);
             return true;
         }
@@ -404,7 +404,7 @@ namespace
         if (Key == "bAutoStartEvent") return SetBool(FConfiguration::bAutoStartEvent, Value, Error);
         if (Key == "bJoinInProgress") return SetBool(FConfiguration::bJoinInProgress, Value, Error);
 
-        Error = "Einstellung „" + Key + "“ kennt der Server nicht";
+        Error = "The server doesn't know the setting \"" + Key + "\".";
         return false;
     }
 
@@ -436,7 +436,7 @@ namespace
         return Out;
     }
 
-    // ---------------------------------------------------------------- Befehle (Spiel-Takt)
+    // ---------------------------------------------------------------- Commands (game thread)
 
     void Handle(const json& Command)
     {
@@ -451,11 +451,11 @@ namespace
                 Text = Text.substr(6);
             if (Text.empty())
             {
-                Reply(Id, false, "Leerer Befehl");
+                Reply(Id, false, "Empty command.");
                 return;
             }
             if (RunCheat(Text, Error))
-                Reply(Id, true, "Ausgeführt: " + Text);
+                Reply(Id, true, "Done: " + Text);
             else
                 Reply(Id, false, Error);
             return;
@@ -466,7 +466,7 @@ namespace
             const std::string Key = Command.value("key", std::string());
             const json Value = Command.contains("value") ? Command["value"] : json();
             if (ApplyConfig(Key, Value, Error))
-                Reply(Id, true, Key + " gesetzt");
+                Reply(Id, true, "Saved: " + Key);
             else
                 Reply(Id, false, Error);
             return;
@@ -476,15 +476,15 @@ namespace
         {
             if (FConfiguration::bReadyToStart.load(std::memory_order_acquire))
             {
-                Reply(Id, false, "Der Server läuft schon");
+                Reply(Id, false, "The server is already running.");
                 return;
             }
-            // Gleiche Schritte wie der START-SERVER-Knopf im Server-Fenster.
+            // Same steps as the START SERVER button in the server window.
             AutoHosting::CancelCountdown();
             AutoHosting::SaveNow(true);
             FConfiguration::bReadyToStart.store(true, std::memory_order_release);
-            SDK::DbgLog("[Vanity] Start über den Launcher\n");
-            Reply(Id, true, "Server startet – Karte wird geladen");
+            SDK::DbgLog("[Niobium] Start requested by the launcher\n");
+            Reply(Id, true, "Server is starting. Loading the map...");
             return;
         }
 
@@ -496,10 +496,10 @@ namespace
             return;
         }
 
-        Reply(Id, false, "Unbekannter Befehl „" + Name + "“");
+        Reply(Id, false, "Unknown command \"" + Name + "\".");
     }
 
-    // ---------------------------------------------------------------- Pipe-Thread
+    // ---------------------------------------------------------------- Pipe thread
 
     DWORD WINAPI PipeThread(LPVOID)
     {
@@ -509,7 +509,7 @@ namespace
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1, 64 * 1024, 64 * 1024, 0, nullptr);
             if (Pipe == INVALID_HANDLE_VALUE)
             {
-                SDK::DbgLog("[Vanity] CreateNamedPipe fehlgeschlagen error=%lu\n", GetLastError());
+                SDK::DbgLog("[Niobium] CreateNamedPipe failed error=%lu\n", GetLastError());
                 Sleep(3000);
                 continue;
             }
@@ -527,7 +527,7 @@ namespace
                 GPipe = Pipe;
             }
             GConnected.store(true, std::memory_order_release);
-            SDK::DbgLog("[Vanity] Launcher über die Steuer-Pipe verbunden\n");
+            SDK::DbgLog("[Niobium] Launcher connected to the control pipe\n");
 
             {
                 json Hello;
@@ -558,7 +558,7 @@ namespace
                         GPending.push_back(std::move(Parsed));
                 }
                 if (Buffer.size() > 1024 * 1024)
-                    Buffer.clear(); // Schutz vor endlosen Zeilen
+                    Buffer.clear(); // guard against endless lines
             }
 
             GConnected.store(false, std::memory_order_release);
@@ -570,12 +570,12 @@ namespace
             DisconnectNamedPipe(Pipe);
             CloseHandle(Pipe);
             GReadySent.store(false, std::memory_order_release);
-            SDK::DbgLog("[Vanity] Launcher getrennt – warte auf neue Verbindung\n");
+            SDK::DbgLog("[Niobium] Launcher disconnected - waiting for a new connection\n");
         }
     }
 }
 
-namespace VanityControl
+namespace NiobiumControl
 {
     void Start()
     {
@@ -585,7 +585,7 @@ namespace VanityControl
         if (Thread)
             CloseHandle(Thread);
         else
-            SDK::DbgLog("[Vanity] Pipe-Thread konnte nicht gestartet werden\n");
+            SDK::DbgLog("[Niobium] Could not start the pipe thread\n");
     }
 
     void GameThreadTick()
@@ -647,12 +647,12 @@ namespace VanityControl
             Out["player"] = Player;
             Out["victim"] = Victim;
             Out["meters"] = Meters;
-            // Namen kommen aus dem Spiel: kaputtes UTF-8 ersetzen statt eine Ausnahme zu werfen.
+            // Names come from the game: replace broken UTF-8 instead of throwing.
             WriteLine(Out.dump(-1, ' ', false, json::error_handler_t::replace));
         }
         catch (...)
         {
-            SDK::DbgLog("[Vanity] Trickshot-Ereignis konnte nicht gesendet werden\n");
+            SDK::DbgLog("[Niobium] Could not send the trickshot event\n");
         }
     }
 }

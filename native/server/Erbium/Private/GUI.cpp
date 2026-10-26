@@ -8,7 +8,7 @@
 #include <ImGui/imgui_impl_dx11.h>
 #include "../Public/Calendar.h"
 #include "../Public/AutoHosting.h"
-#include "../Public/VanityControl.h" // [Vanity]
+#include "../Public/NiobiumControl.h" // NIOBIUM: launcher control pipe
 #include "../Public/Configuration.h"
 #include "../Public/Events.h"
 #include "../Public/Misc.h"
@@ -4469,7 +4469,7 @@ namespace SafeZoneMap
             if (SUCCEEDED(SHGetFolderPathW(
                     nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, localAppData)))
             {
-                result = std::wstring(localAppData) + L"\\Vanity\\server\\Maps";
+                result = std::wstring(localAppData) + L"\\Niobium\\server\\Maps"; // NIOBIUM: own data folder
             }
             else
             {
@@ -4794,7 +4794,7 @@ void GUI::SafeZoneMapGameTick()
     TrickshotManager::GameThreadTick();
     ABuildingSMActor::TickSavedTrapAttachments();
     AFortPlayerPawnAthena::TickPendingPlayerMapIcons();
-    VanityControl::GameThreadTick(); // [Vanity] Befehle vom Launcher
+    NiobiumControl::GameThreadTick(); // NIOBIUM: commands from the launcher
 }
 
 bool GameTextureBridge::ExtractToRGBA(const UTexture2D* Texture, std::vector<unsigned char>& RGBA,
@@ -7198,7 +7198,7 @@ namespace TrickshotManager
         if (FAILED(SHGetFolderPathA(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, Path)))
             return {};
 
-        fs::path Directory = fs::path(Path) / "Vanity" / "server" / "trickshots";
+        fs::path Directory = fs::path(Path) / "Niobium" / "server" / "trickshots"; // NIOBIUM: own data folder
         std::error_code Error;
         fs::create_directories(Directory, Error);
         return Error ? fs::path{} : Directory;

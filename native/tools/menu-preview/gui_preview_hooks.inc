@@ -1,11 +1,11 @@
 
-// ===== Nur für die Vanity Menü-Vorschau angehängt (nicht Teil des Spiel-Builds) =====
+// ===== Appended only for the Niobium menu preview (not part of the game build) =====
 void Preview_SetState(int Tab, bool Menu, bool Console)
 {
     FGUI::ActiveTab = Tab;
     FGUI::bVisible = Menu;
     FGUI::bConsoleVisible = Console;
-    g_ConsoleUi.Expanded = Console; // zweiter Druck auf die Konsolen-Taste: große Ansicht
+    g_ConsoleUi.Expanded = Console; // second press of the console key: the large view
 }
 unsigned char* Preview_DecodeLogo(int* W, int* H)
 {
@@ -23,8 +23,60 @@ void Preview_AddConsoleLine(const char* Text)
     AppendConsoleLine(EConsoleLineKind::Output, Text);
 }
 
-// Platzhalter für die wenigen Spiel-Funktionen, die das Menü aufruft (im Spiel liefern
-// Client.cpp/dllmain.cpp die echten Werte; für Screenshots reichen feste Antworten).
+// Bubble Builds status row: pretend to be a game with this Fortnite version, started by the
+// launcher with or without -FeatureLevelES31. Version 0 = unknown (as in the plain preview).
+static wchar_t g_PreviewCommandLine[256] = L"menu-preview.exe";
+static LPWSTR WINAPI Preview_GetCommandLine() { return g_PreviewCommandLine; }
+void Preview_SetBubbleBuilds(double FortniteVersion, const wchar_t* LauncherVersion, bool FeatureLevelES31)
+{
+    VersionInfo.FortniteVersion = FortniteVersion;
+    swprintf(g_PreviewCommandLine, 256,
+        L"FortniteClient-Win64-Shipping.exe -epicapp=Fortnite%ls%ls%ls",
+        LauncherVersion && *LauncherVersion ? L" -niobiumversion=" : L"",
+        LauncherVersion && *LauncherVersion ? LauncherVersion : L"",
+        FeatureLevelES31 ? L" -FeatureLevelES31" : L"");
+    g_BubbleBuildsCommandLine = &Preview_GetCommandLine;
+}
+
+// A few saved commands and one chain, to check that the row buttons fit (never saved to disk).
+void Preview_SetSavedCommands(bool Filled)
+{
+    FGUI::Commands.clear();
+    FGUI::Macros.clear();
+    if (!Filled)
+        return;
+
+    HotkeyPersist::CommandBind Ammo{};
+    Ammo.Command = "cheat giveammo";
+    Ammo.VK = VK_F6;
+    Ammo.DefaultVK = VK_F6;
+    FGUI::Commands.push_back(Ammo);
+
+    HotkeyPersist::CommandBind Bot{};
+    Bot.Command = "cheat targetbot 50 30";
+    FGUI::Commands.push_back(Bot);
+
+    HotkeyPersist::CommandMacro Chain{};
+    Chain.Name = "cheat parkour first-jump";
+    Chain.VK = VK_XBUTTON2;
+    Chain.DefaultVK = VK_XBUTTON2;
+    HotkeyPersist::MacroStep First{};
+    First.Command = "cheat parkour first-jump";
+    First.DelayMs = 1500;
+    HotkeyPersist::MacroStep Second{};
+    Second.Command = "cheat parkour sniper";
+    Chain.Steps = { First, Second };
+    FGUI::Macros.push_back(Chain);
+}
+
+// Shows the "Press the new key..." state of the menu key button in the Options tab.
+void Preview_SetRebinding(bool Rebinding)
+{
+    FGUI::bRebinding = Rebinding;
+}
+
+// Stand-ins for the few game functions the menu calls (in the game Client.cpp/dllmain.cpp
+// return the real values; fixed answers are enough for screenshots).
 bool ATLAS_PrepareReplicationForOpen(const char*, wchar_t*, unsigned __int64) { return true; }
 bool Client::HasReceivedServerCommandList() { return true; }
 bool Client::IsConsoleCaptureReady() { return true; }

@@ -1,11 +1,11 @@
-// VANITY: Ersatz fuer libcurl.
+// NIOBIUM: stand-in for libcurl.
 //
-// Magnesium benutzt curl nur fuer Discord-Webhooks und eine Telemetrie-Funktion. Beides braucht
-// Vanity nicht und soll keine Verbindung nach aussen aufbauen. Statt die vielen Aufrufstellen
-// zu entfernen, ersetzen wir curl durch No-Op-Funktionen: `curl_easy_init` gibt `nullptr`, also
-// steigt jede echte Sende-Funktion sofort wieder aus. Nichts wird gesendet, nichts wird gelinkt.
+// Magnesium only uses curl for Discord webhooks and one telemetry function. Niobium needs neither
+// and must not open any connection to the outside. Instead of removing the many call sites,
+// curl is replaced with no-op functions: `curl_easy_init` returns `nullptr`, so every real send
+// function bails out right away. Nothing is sent, nothing is linked.
 //
-// Ersetzt das urspruengliche libcurl/curl.h (BSD/MIT, Daniel Stenberg) vollstaendig.
+// Fully replaces the original libcurl/curl.h (BSD/MIT, Daniel Stenberg).
 #pragma once
 #include <cstddef>
 
@@ -31,7 +31,7 @@ enum
     CURL_GLOBAL_ALL = 3,
 };
 
-// Optionen und Infos – die konkreten Werte sind egal, da nichts ausgefuehrt wird.
+// Options and infos - the actual values don't matter, because nothing runs.
 enum
 {
     CURLOPT_URL = 10002,

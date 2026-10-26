@@ -1,4 +1,4 @@
-// Leerer Ersatz für das pch.h des Ingame-Menüs: die ImGui-Dateien aus native/client binden "pch.h" ein,
-// brauchen für die Vorschau unter Linux aber nichts daraus.
+// Empty stand-in for the in-game menu's pch.h: the ImGui files from native/client include "pch.h",
+// but the preview doesn't need anything from it.
 #pragma once
 #include <cstddef>

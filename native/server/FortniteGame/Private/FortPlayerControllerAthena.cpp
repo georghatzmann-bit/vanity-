@@ -28,7 +28,7 @@
 #include "../Public/FortVehicleMods.h"
 #include "../Public/FortVehicleSeatWeaponComponent.h"
 #include "../Public/CustomSafeZoneRuntime.h"
-#include <Erbium/Public/VanityParkour.h> // VANITY: parkour/targetbot + Trickshot-Erkennung
+#include <Erbium/Public/NiobiumParkour.h> // NIOBIUM: parkour/targetbot + trickshot detection
 
 #include <d3d11.h>
 #include <sstream>
@@ -13171,9 +13171,9 @@ void AFortPlayerControllerAthena::ClientOnPawnDied(AFortPlayerControllerAthena* 
     auto KillerPlayerController = (KillerPlayerState && KillerPlayerState->HasOwner() &&
          IsUsableDeathObject(KillerPlayerState->Owner)) ? KillerPlayerState->Owner
                   ->Cast<AFortPlayerControllerAthena>() : nullptr;
-    // VANITY: trickshot detection runs for every final elimination (bots included, respawn modes too),
-    // before the native death path changes any pawn state. It only reads; see VanityParkour.cpp.
-    VanityParkour::OnElimination(PlayerController, PlayerState,
+    // NIOBIUM: trickshot detection runs for every final elimination (bots included, respawn modes too),
+    // before the native death path changes any pawn state. It only reads; see NiobiumParkour.cpp.
+    NiobiumParkour::OnElimination(PlayerController, PlayerState,
         IsUsableDeathObject(PlayerController->Pawn) ? (AFortPlayerPawnAthena*)PlayerController->Pawn : nullptr,
         KillerPlayerController, KillerPlayerState, KillerPawn);
     const int32 ScoreRoyaleKillerScoreBefore = KillerPlayerState &&
@@ -19238,38 +19238,38 @@ bool AFortPlayerControllerAthena::TryEliminatePlayer(AFortPlayerControllerAthena
     return false;
 }
 
-// VANITY: thin bridges for Erbium/Private/VanityParkour.cpp ("cheat parkour" / "cheat targetbot"),
+// NIOBIUM: thin bridges for Erbium/Private/NiobiumParkour.cpp ("cheat parkour" / "cheat targetbot"),
 // so the parkour builder uses exactly the same resolvers as "summon" and "give" and removes bots like "delbot".
-static bool GVanityQuietBotSpawn = false;
+static bool GNiobiumQuietBotSpawn = false;
 
-void Vanity_SetQuietBotSpawn(bool bQuiet)
+void Niobium_SetQuietBotSpawn(bool bQuiet)
 {
-    GVanityQuietBotSpawn = bQuiet;
+    GNiobiumQuietBotSpawn = bQuiet;
 }
 
-const UClass* Vanity_FindActorClass(const std::string& Arg)
+const UClass* Niobium_FindActorClass(const std::string& Arg)
 {
     return FindActorClassByCommandArg(Arg);
 }
 
-const UFortItemDefinition* Vanity_FindItemDefinition(const std::string& Arg)
+const UFortItemDefinition* Niobium_FindItemDefinition(const std::string& Arg)
 {
     return FindItemDefinitionByCommandArg(Arg);
 }
 
-int Vanity_GiveItem(AFortPlayerControllerAthena* PlayerController, const UFortItemDefinition* Definition,
+int Niobium_GiveItem(AFortPlayerControllerAthena* PlayerController, const UFortItemDefinition* Definition,
     int Count)
 {
     return GiveItemForCommand(PlayerController, Definition, Count);
 }
 
-// VANITY: for the launcher pipe - true for the player sitting at the host PC (local player or 127.0.0.1).
-bool Vanity_IsHostController(AFortPlayerControllerAthena* PlayerController)
+// NIOBIUM: for the launcher pipe - true for the player sitting at the host PC (local player or 127.0.0.1).
+bool Niobium_IsHostController(AFortPlayerControllerAthena* PlayerController)
 {
     return IsCheatCommandHost(PlayerController);
 }
 
-bool Vanity_RemoveSpawnedBot(AFortPlayerControllerAthena* BotController)
+bool Niobium_RemoveSpawnedBot(AFortPlayerControllerAthena* BotController)
 {
     // Same steps as the "delbot" loop, for one still-alive tracked bot. Dead bots are left to the
     // terminal spawnbot cleanup that already runs after their elimination.
@@ -19295,15 +19295,15 @@ bool Vanity_RemoveSpawnedBot(AFortPlayerControllerAthena* BotController)
     return true;
 }
 
-// VANITY: short German answer for cheats that need your own pawn. There is none on the battle bus,
+// NIOBIUM: short English answer for cheats that need your own pawn. There is none on the battle bus,
 // while dead/spectating or while still loading - exactly when the F9 "Trickshot" tab or the launcher
 // buttons are often clicked.
-static void Vanity_TellNoPawn(AFortPlayerControllerAthena* PlayerController)
+static void Niobium_TellNoPawn(AFortPlayerControllerAthena* PlayerController)
 {
-    PlayerController->ClientMessage(FString(L"[Vanity] Geht gerade nicht \u2013 du hast gerade keine "
-        L"Spielfigur (im Bus oder tot?)."), FName(), 1.f);
+    PlayerController->ClientMessage(FString(L"[Niobium] Can't do that right now. You don't have a "
+        L"character (on the bus or eliminated?)."), FName(), 1.f);
 }
-// VANITY: end
+// NIOBIUM: end
 
 // A WithValidation function rejected inside this dispatch is charged to the commanding client's connection by FObjectReplicator.
 struct FScopedSyntheticRpcValidation
@@ -19366,7 +19366,7 @@ void AFortPlayerControllerAthena::ServerCheat(UObject* Context, FFrame& Stack)
     if (args.size() == 0)
     {
     _help:
-        // VANITY: the last two help lines (parkour, targetbot) are Vanity commands, see VanityParkour.cpp.
+        // NIOBIUM: the last two help lines (parkour, targetbot) are Niobium commands, see NiobiumParkour.cpp.
         PlayerController->ClientMessage(FString(LR"(
 cheat startaircraft - Starts the battle bus
 cheat resumesafezone - Resumes the storm
@@ -19438,8 +19438,8 @@ cheat clearinventory - Clears your inventory of all items that are droppable
 cheat delitem - Removes the item you currently have equipped
 cheat spawn <class/path> <s[size] | s[X,Y,Z]> <h[meters]> - Spawns an actor at your location
 cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
-cheat parkour <name | retry | clear | sniper | list> - Vanity-Parkour: bauen, zurueck zum Start, alles weg, Sniper, Liste
-cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 50 Leben, 30 m)
+cheat parkour <id | retry | clear | sniper | list> - Trickshot parkour: build, back to start, remove all, sniper, list
+cheat targetbot <hp> <m> - A standing target bot in front of you (default: 50 HP, 30 m)
 )"), FName(), 1);
     }
     else
@@ -19468,12 +19468,12 @@ cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 5
                 {
                     auto GamePhaseLogic = UFortGameStateComponent_BattleRoyaleGamePhaseLogic::Get(UWorld::GetWorld());
 
-                    // VANITY: the phase logic is missing while the match is still loading or in modes
+                    // NIOBIUM: the phase logic is missing while the match is still loading or in modes
                     // without a bus; answer instead of calling through a null pointer.
                     if (!GamePhaseLogic)
                     {
-                        PlayerController->ClientMessage(FString(L"[Vanity] Der Bus kann gerade nicht "
-                            L"starten. Versuch es gleich nochmal."), FName(), 1.f);
+                        PlayerController->ClientMessage(FString(L"[Niobium] The bus can't start right now. "
+                            L"Try again in a moment."), FName(), 1.f);
                         return;
                     }
 
@@ -19509,14 +19509,14 @@ cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 5
                 }
                 else
                 {
-                    // VANITY: null-safe lookup - without phase logic (match still loading, mode without
+                    // NIOBIUM: null-safe lookup - without phase logic (match still loading, mode without
                     // storm) the old code dereferenced a null pointer.
                     auto GamePhaseLogic = UFortGameStateComponent_BattleRoyaleGamePhaseLogic::GetDefaultObj()
                         ? UFortGameStateComponent_BattleRoyaleGamePhaseLogic::Get(UWorld::GetWorld()) : nullptr;
                     if (!GamePhaseLogic)
                     {
-                        PlayerController->ClientMessage(FString(L"[Vanity] Geht gerade nicht \u2013 hier "
-                            L"gibt es gerade keinen Sturm."), FName(), 1.f);
+                        PlayerController->ClientMessage(FString(L"[Niobium] Can't do that right now. "
+                            L"There is no storm here."), FName(), 1.f);
                         return;
                     }
 
@@ -19663,14 +19663,14 @@ cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 5
                     return;
                 }
 
-                // VANITY: only plain numbers from 0.1 to 10. The engine reads "demospeed abc" as 0 (the
+                // NIOBIUM: only plain numbers from 0.1 to 10. The engine reads "demospeed abc" as 0 (the
                 // whole server stands still) and negative values as backwards time.
                 float DemoSpeed = 0.f;
                 if (!TryParseCommandFloat(std::string(args[1].c_str()), DemoSpeed) || DemoSpeed < 0.1f ||
                     DemoSpeed > 10.f)
                 {
-                    PlayerController->ClientMessage(FString(L"[Vanity] Schreib eine Zahl von 0.1 bis 10, "
-                        L"z. B. demospeed 0.5 (Zeitlupe) oder demospeed 1 (normal)."), FName(), 1.f);
+                    PlayerController->ClientMessage(FString(L"[Niobium] Type a number from 0.1 to 10, "
+                        L"like demospeed 0.5 (slow motion) or demospeed 1 (normal)."), FName(), 1.f);
                     return;
                 }
 
@@ -20175,7 +20175,7 @@ cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 5
 
                 if (!Pawn)
                 {
-                    Vanity_TellNoPawn(PlayerController); // VANITY: say why nothing happens
+                    Niobium_TellNoPawn(PlayerController); // NIOBIUM: say why nothing happens
                     return;
                 }
 
@@ -20192,10 +20192,10 @@ cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 5
                     return;
                 }
 
-                // VANITY: stof accepts "inf" and "nan", which would break the movement physics.
+                // NIOBIUM: stof accepts "inf" and "nan", which would break the movement physics.
                 if (!std::isfinite(Multiplier))
                 {
-                    PlayerController->ClientMessage(FString(L"Invalid multiplier!"), FName(), 1.f);
+                    PlayerController->ClientMessage(FString(L"[Niobium] That's not a valid number."), FName(), 1.f);
                     return;
                 }
 
@@ -20207,24 +20207,24 @@ cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 5
             {
                 auto Pawn = PlayerController->Pawn;
 
-                // VANITY: check the pawn BEFORE using it. It used to call GetMaxHealth() on a null pawn
+                // NIOBIUM: check the pawn BEFORE using it. It used to call GetMaxHealth() on a null pawn
                 // (battle bus, dead/spectating, still loading) and crashed the server - exactly when
-                // "Leben auffuellen" in F9 or the launcher was clicked.
+                // the "refill health" button in F9 or the launcher was clicked.
                 if (!Pawn)
                 {
-                    Vanity_TellNoPawn(PlayerController);
+                    Niobium_TellNoPawn(PlayerController);
                     return;
                 }
 
                 float MaxHealth = Pawn->GetMaxHealth();
                 float MaxShield = Pawn->GetMaxShield();
 
-                // VANITY: never set 0 health "to the maximum" when a build reports no max health.
+                // NIOBIUM: never set 0 health "to the maximum" when a build reports no max health.
                 if (FPlatformMath::IsFinite(MaxHealth) && MaxHealth > 0.f)
                     Pawn->SetHealth(MaxHealth);
                 Pawn->SetShield(MaxShield);
 
-                // VANITY: same potion cue as before; PlayGodModeCue also checks the PlayerState and its
+                // NIOBIUM: same potion cue as before; PlayGodModeCue also checks the PlayerState and its
                 // AbilitySystemComponent, which were used unchecked here.
                 PlayGodModeCue(PlayerController);
 
@@ -21454,8 +21454,8 @@ cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 5
                         (HasLocation
                             ? L" @ " + FormatCommandFloatForMessage((float)SpawnLocation.X) + L" " + FormatCommandFloatForMessage((float)SpawnLocation.Y) + L" " + FormatCommandFloatForMessage((float)SpawnLocation.Z)
                             : std::wstring()) + L")";
-                    // VANITY: the parkour builder reports its target bots itself (German, one summary line).
-                    if (!GVanityQuietBotSpawn)
+                    // NIOBIUM: the parkour builder reports its target bots itself (one summary line).
+                    if (!GNiobiumQuietBotSpawn)
                         CallerController->ClientMessage(FString(Message.c_str()), FName(), 1.f);
                     ++SpawnedCount;
                 }
@@ -21467,17 +21467,17 @@ cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 5
                         : L"Spawned " + std::to_wstring(SpawnedCount) +
                             L" of " + std::to_wstring(Count) +
                             L" bots; first failure: " + FirstFailure + L".";
-                    // VANITY: the parkour builder reports failed target bots itself (German, "[Vanity] ...").
-                    if (!GVanityQuietBotSpawn)
+                    // NIOBIUM: the parkour builder reports failed target bots itself ("[Niobium] ...").
+                    if (!GNiobiumQuietBotSpawn)
                         CallerController->ClientMessage(FString(FailureMessage.c_str()), FName(), 1.f);
                 }
             }
             else if (command == "tpbot" || command == "tpbots")
             {
-                // VANITY: without your own pawn there is nowhere to bring the bots; say so instead of nothing.
+                // NIOBIUM: without your own pawn there is nowhere to bring the bots; say so instead of nothing.
                 if (!PlayerController->Pawn)
                 {
-                    Vanity_TellNoPawn(PlayerController);
+                    Niobium_TellNoPawn(PlayerController);
                     return;
                 }
 
@@ -21494,7 +21494,7 @@ cheat targetbot <leben> <meter> - Ein stehender Ziel-Bot vor dir (ohne Zahlen: 5
 
                         if (BotPawn && PlayerPawn)
                         {
-                            if (BotPS && BotPS->bIsABot) // VANITY: BotPS was used unchecked
+                            if (BotPS && BotPS->bIsABot) // NIOBIUM: BotPS was used unchecked
                             {
                                 auto ActorLocation = PlayerPawn->K2_GetActorLocation();
                                 ActorLocation.Z += 200.f;
@@ -22172,11 +22172,11 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                     return;
                 }
 
-                // VANITY: stof accepts "inf" and "nan", which would break the movement physics.
+                // NIOBIUM: stof accepts "inf" and "nan", which would break the movement physics.
                 if (!std::isfinite(X) || !std::isfinite(Y) || !std::isfinite(Z))
                 {
                     PlayerController->ClientMessage(
-                        FString(L"Invalid input. Please provide numeric values."), FName(), 1.f);
+                        FString(L"[Niobium] Those aren't valid numbers."), FName(), 1.f);
                     return;
                 }
 
@@ -22187,7 +22187,7 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                 }
                 else
                 {
-                    Vanity_TellNoPawn(PlayerController); // VANITY: say why nothing happens
+                    Niobium_TellNoPawn(PlayerController); // NIOBIUM: say why nothing happens
                 }
             }
             else if (command == "velocity" || command == "v")
@@ -22199,12 +22199,12 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                     return;
                 }
 
-                // VANITY: check the pawn BEFORE reading its movement (it was read first and crashed on the
+                // NIOBIUM: check the pawn BEFORE reading its movement (it was read first and crashed on the
                 // bus / while dead), and catch bad numbers ("v abc" threw an uncaught exception).
                 auto VelocityPawn = PlayerController->Pawn;
                 if (!VelocityPawn || !VelocityPawn->CharacterMovement)
                 {
-                    Vanity_TellNoPawn(PlayerController);
+                    Niobium_TellNoPawn(PlayerController);
                     return;
                 }
 
@@ -22212,7 +22212,7 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                 if (!TryParseCommandFloat(std::string(args[1].c_str()), VelocityMultiplier))
                 {
                     PlayerController->ClientMessage(
-                        FString(L"Invalid input. Please provide numeric values."), FName(), 1.f);
+                        FString(L"[Niobium] That's not a valid number."), FName(), 1.f);
                     return;
                 }
 
@@ -22414,7 +22414,7 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                 auto Pawn = PlayerController->Pawn;
                 if (!Pawn)
                 {
-                    Vanity_TellNoPawn(PlayerController); // VANITY: say why nothing happens
+                    Niobium_TellNoPawn(PlayerController); // NIOBIUM: say why nothing happens
                     return;
                 }
 
@@ -22464,7 +22464,7 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                 auto Pawn = PlayerController->Pawn;
                 if (!Pawn)
                 {
-                    Vanity_TellNoPawn(PlayerController); // VANITY: say why nothing happens
+                    Niobium_TellNoPawn(PlayerController); // NIOBIUM: say why nothing happens
                     return;
                 }
 
@@ -22497,7 +22497,7 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                 auto Pawn = PlayerController->Pawn;
                 if (!Pawn)
                 {
-                    Vanity_TellNoPawn(PlayerController); // VANITY: say why nothing happens
+                    Niobium_TellNoPawn(PlayerController); // NIOBIUM: say why nothing happens
                     return;
                 }
 
@@ -23978,17 +23978,17 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                     PlayerController->ClientMessage(
                         FString(L"Usage: cheat shortcmds <items/objects>"), FName(), 1.f);
             }
-            // VANITY: trickshot parkours and target bots (Erbium/Private/VanityParkour.cpp).
+            // NIOBIUM: trickshot parkours and target bots (Erbium/Private/NiobiumParkour.cpp).
             else if (command == "parkour" || command == "targetbot")
             {
-                std::vector<std::string> VanityArgs;
+                std::vector<std::string> NiobiumArgs;
                 for (size_t ArgIndex = 1; ArgIndex < args.size(); ++ArgIndex)
-                    VanityArgs.emplace_back(args[ArgIndex].c_str());
+                    NiobiumArgs.emplace_back(args[ArgIndex].c_str());
 
                 if (command == "parkour")
-                    VanityParkour::HandleParkourCommand(PlayerController, VanityArgs);
+                    NiobiumParkour::HandleParkourCommand(PlayerController, NiobiumArgs);
                 else
-                    VanityParkour::HandleTargetBotCommand(PlayerController, VanityArgs);
+                    NiobiumParkour::HandleTargetBotCommand(PlayerController, NiobiumArgs);
             }
             else
                 goto _help;

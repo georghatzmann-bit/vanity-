@@ -4,46 +4,87 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Vanity – Farben und Maße
- * Eine Akzentfarbe (Violett). Grün/Orange/Rot nur für Status.
- * Abstände nach 4er-Raster, Ecken 8 px, drei Textgrößen (20/14/12 px).
+ * Niobium design tokens ("anodised metal in the dark", see docs/brand.md).
+ * One accent (violet/blue gradient). Green/orange/red are only for status. Gold is a reward, never a fill.
+ * Spacing on a 4 px grid. Radius: 12 px cards, 8 px controls, full for pills.
  */
 :root {
+  /* ---- brand palette (docs/brand.md) ---- */
+  --nb-bg: #0a0b12;
+  --nb-surface: #11131c;
+  --nb-surface-raised: #171a26;
+  --nb-border: rgb(255 255 255 / 0.08);
+  --nb-text: #f2f3f8;
+  --nb-text-muted: #a3a8c3;
+  --nb-text-faint: #6e7392;
+  --nb-blue: #2b5bff;
+  --nb-indigo: #5546ff;
+  --nb-violet: #7a3cff;
+  --nb-gold: #ffc857;
+  --nb-blue-text: #8fa8ff;
+  --nb-violet-text: #b49bff;
+  --nb-ring: #9b7bff;
+
+  --nb-gradient: linear-gradient(135deg, #2b5bff 0%, #5546ff 50%, #7a3cff 85%);
+  --nb-gradient-shine: linear-gradient(135deg, #2b5bff 0%, #7a3cff 70%, #ffc857 100%);
+  --nb-gradient-text: linear-gradient(100deg, #f2f3f8 0%, #b49bff 55%, #8fa8ff 100%);
+  --nb-glass: rgb(17 19 28 / 0.62);
+  --nb-glass-strong: rgb(23 26 38 / 0.82);
+  --nb-glow: 0 0 0 1px rgb(122 60 255 / 0.35), 0 10px 40px -10px rgb(122 60 255 / 0.6);
+  --nb-glow-blue: 0 10px 40px -12px rgb(43 91 255 / 0.65);
+  --nb-highlight: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  /* hairline gradient for glass borders: light at the top left, a hint of violet at the bottom right */
+  --nb-edge: linear-gradient(
+    160deg,
+    rgb(255 255 255 / 0.16) 0%,
+    rgb(255 255 255 / 0.05) 38%,
+    rgb(255 255 255 / 0.03) 62%,
+    rgb(122 60 255 / 0.22) 100%
+  );
+
+  /* ---- motion (mirrors src/lib/motion.ts) ---- */
+  --nb-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --nb-ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --nb-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ---- shadcn tokens mapped onto the brand ---- */
   --radius: 0.5rem;
 
-  --background: #0f1115;
-  --foreground: #e8eaf0;
+  --background: var(--nb-bg);
+  --foreground: var(--nb-text);
 
-  --card: #161922;
-  --card-foreground: #e8eaf0;
-  --popover: #181b25;
-  --popover-foreground: #e8eaf0;
+  --card: var(--nb-surface);
+  --card-foreground: var(--nb-text);
+  --popover: var(--nb-surface-raised);
+  --popover-foreground: var(--nb-text);
 
-  /* Füllfarbe für Knöpfe (weiße Schrift: Kontrast 4,75) */
-  --primary: #7457f5;
+  /* fill for buttons (white text: 5.3:1) */
+  --primary: var(--nb-indigo);
   --primary-foreground: #ffffff;
-  /* Akzent als Schrift auf dunklem Grund (Kontrast 6,9) */
-  --primary-text: #a78bfa;
+  /* accent used as text on dark (8.5:1) */
+  --primary-text: var(--nb-violet-text);
 
-  --secondary: #1e2230;
-  --secondary-foreground: #e8eaf0;
-  --muted: #1a1d27;
-  --muted-foreground: #9096a8;
-  --accent: #232738;
-  --accent-foreground: #e8eaf0;
+  --secondary: #1b1e2c;
+  --secondary-foreground: var(--nb-text);
+  --muted: #151824;
+  --muted-foreground: var(--nb-text-muted);
+  --accent: #1f2233;
+  --accent-foreground: var(--nb-text);
 
   --destructive: #ef4444;
   --success: #22c55e;
   --warning: #f59e0b;
 
-  --border: rgb(255 255 255 / 0.07);
+  --border: var(--nb-border);
   --input: rgb(255 255 255 / 0.1);
-  --ring: #8b72ff;
+  --ring: var(--nb-ring);
 
-  --surface-glass: rgb(22 25 34 / 0.62);
-  --surface-glass-strong: rgb(24 27 37 / 0.82);
+  /* old names, still used by a few pages */
+  --surface-glass: var(--nb-glass);
+  --surface-glass-strong: var(--nb-glass-strong);
 
-  --font-system: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
+  /* Windows' own UI font (docs/brand.md: no font file ships). The name is always the Wordmark SVG. */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
     Arial, sans-serif;
   --font-code: "Cascadia Mono", "Cascadia Code", Consolas, "JetBrains Mono", ui-monospace,
     monospace;
@@ -72,13 +113,33 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
+  /* brand colours as Tailwind colours: bg-brand-violet, text-violet-text, text-gold, bg-surface … */
+  --color-brand-blue: var(--nb-blue);
+  --color-brand-indigo: var(--nb-indigo);
+  --color-brand-violet: var(--nb-violet);
+  --color-gold: var(--nb-gold);
+  --color-blue-text: var(--nb-blue-text);
+  --color-violet-text: var(--nb-violet-text);
+  --color-faint: var(--nb-text-faint);
+  --color-surface: var(--nb-surface);
+  --color-surface-raised: var(--nb-surface-raised);
+
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
 
-  --font-sans: var(--font-system);
+  --font-sans: var(--font-ui);
   --font-mono: var(--font-code);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-expo: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-shimmer: nb-shimmer 1.6s linear infinite;
+  --animate-breathe: nb-breathe 3.6s ease-in-out infinite;
+  --animate-spin-slow: spin 6s linear infinite;
 }
 
 @layer base {
@@ -94,13 +155,26 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-system);
+    font-family: var(--font-ui);
     font-size: 14px;
+    letter-spacing: -0.006em;
+    font-optical-sizing: auto;
     overflow: hidden;
     user-select: none;
   }
 
-  /* Text in Eingabefeldern und Logs darf markiert werden */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  h1 {
+    letter-spacing: -0.025em;
+  }
+
+  /* Text in inputs and logs may be selected */
   input,
   textarea,
   .selectable {
@@ -108,10 +182,10 @@
   }
 
   ::selection {
-    background: rgb(116 87 245 / 0.45);
+    background: rgb(122 60 255 / 0.45);
   }
 
-  /* Dünne, unauffällige Scrollbalken */
+  /* Thin, quiet scrollbars */
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -125,113 +199,477 @@
   ::-webkit-scrollbar-thumb:hover {
     background-color: rgb(255 255 255 / 0.16);
   }
-  ::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
     background: transparent;
   }
 }
 
 @layer components {
-  /* Glas-Fläche: halbdurchsichtig mit Unschärfe, dazu eine feine Lichtkante oben */
-  .glass {
-    background: var(--surface-glass);
-    backdrop-filter: blur(18px) saturate(140%);
-    -webkit-backdrop-filter: blur(18px) saturate(140%);
+  /*
+   * Glass surface: see-through with blur, a 1 px gradient hairline (::before) and a light edge on top.
+   * Use .glass for cards/panels, .glass-strong for sidebar, dialogs, menus and toasts.
+   * Write only the unprefixed backdrop-filter: the build adds -webkit- itself. With both written,
+   * it keeps only the -webkit- one, which WebView2/Chromium ignores (no blur at all).
+   */
+  .glass,
+  .glass-strong {
+    position: relative;
+    background: var(--nb-glass);
+    backdrop-filter: blur(20px) saturate(140%);
     box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.05),
-      0 0 0 1px rgb(255 255 255 / 0.04);
-  }
-
-  /* Wenn der Glas-Effekt in den Einstellungen aus ist: feste Fläche */
-  .no-glass .glass,
-  .no-glass .glass-strong {
-    background: var(--card);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+      var(--nb-highlight),
+      0 1px 2px rgb(0 0 0 / 0.25),
+      0 12px 32px -18px rgb(0 0 0 / 0.6);
   }
 
   .glass-strong {
-    background: var(--surface-glass-strong);
-    backdrop-filter: blur(24px) saturate(150%);
-    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    background: var(--nb-glass-strong);
+    backdrop-filter: blur(28px) saturate(150%);
   }
 
-  /* Leuchtender Hauptknopf */
-  .glow-primary {
+  .glass::before,
+  .glass-strong::before,
+  .gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--nb-edge);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* 1 px brand-gradient border for highlighted things (active card, selected build) */
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border-brand::before {
+    background: linear-gradient(135deg, rgb(43 91 255 / 0.9), rgb(122 60 255 / 0.9) 70%, rgb(255 200 87 / 0.8));
+  }
+
+  /* When glass is off in Settings: solid surfaces */
+  .no-glass .glass,
+  .no-glass .glass-strong {
+    background: var(--nb-surface);
+    backdrop-filter: none;
+  }
+  .no-glass .glass-strong {
+    background: var(--nb-surface-raised);
+  }
+
+  /* Quiet inner surface (rows inside a card) */
+  .surface-subtle {
+    background: rgb(255 255 255 / 0.03);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.04);
+  }
+
+  /* Spotlight: a soft light that follows the mouse (GlowCard sets --mx/--my) */
+  .spotlight::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms var(--nb-ease-out);
+    background: radial-gradient(
+      420px circle at var(--mx, 50%) var(--my, 0%),
+      rgb(122 60 255 / 0.12),
+      rgb(43 91 255 / 0.05) 40%,
+      transparent 70%
+    );
+  }
+  .spotlight:hover::after {
+    opacity: 1;
+  }
+
+  /* Loading placeholder with a moving shine */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: rgb(255 255 255 / 0.05);
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.07), rgb(180 155 255 / 0.08), transparent);
+    animation: nb-shimmer 1.6s ease-in-out infinite;
+  }
+
+  /* Faint film grain over a surface */
+  .grain::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  /* Hover glow for interactive cards (GlowCard interactive) */
+  .hover-glow {
+    transition: box-shadow 200ms var(--nb-ease-out);
+  }
+  .hover-glow:hover {
     box-shadow:
-      0 0 0 1px rgb(167 139 250 / 0.35),
-      0 8px 32px -8px rgb(116 87 245 / 0.75);
+      var(--nb-highlight),
+      0 0 0 1px rgb(122 60 255 / 0.22),
+      0 18px 44px -18px rgb(122 60 255 / 0.5);
+  }
+
+  /*
+   * Signature move: the sheen sweep. A diagonal light band crosses the element once on load
+   * (.sheen-once) and again whenever its .group parent is hovered. Parent needs overflow-hidden.
+   */
+  .sheen {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -50%;
+    width: 50%;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.26), transparent);
+    transform: translateX(-120%) skewX(-20deg);
+  }
+  .sheen-once {
+    animation: nb-sheen 750ms var(--nb-ease-out) 450ms 1 backwards;
+  }
+  .group:hover .sheen {
+    transform: translateX(320%) skewX(-20deg);
+    transition: transform 700ms var(--nb-ease-out);
+  }
+  .reduce-motion .sheen {
+    display: none;
+  }
+
+  /* Keycap, e.g. F9 */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    height: 1.5rem;
+    padding: 0 0.4rem;
+    border-radius: 6px;
+    font-family: var(--font-code);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--nb-text);
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.04));
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.1),
+      inset 0 -2px 0 rgb(0 0 0 / 0.35);
   }
 }
 
-/* Hintergrund: langsam treibende Farbflächen hinter dem Glas */
+/*
+ * Brand utilities (real Tailwind utilities, so variants work: data-[state=checked]:bg-brand, hover:glow-primary …)
+ */
+
+/* Brand glow: only for the one thing that matters on a screen */
+@utility glow-primary {
+  box-shadow: var(--nb-glow);
+}
+@utility glow-blue {
+  box-shadow: var(--nb-glow-blue);
+}
+
+/* Brand gradient fills */
+@utility bg-brand {
+  background-image: var(--nb-gradient);
+}
+@utility bg-brand-shine {
+  background-image: var(--nb-gradient-shine);
+}
+
+/* Text with the brand gradient (headlines, big numbers) */
+@utility text-gradient {
+  background-image: var(--nb-gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@utility text-gradient-brand {
+  background-image: linear-gradient(110deg, #8fa8ff 0%, #b49bff 60%, #ffc857 120%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility focus-ring {
+  outline: none;
+  &:focus-visible {
+    box-shadow:
+      0 0 0 2px var(--nb-bg),
+      0 0 0 4px rgb(155 123 255 / 0.7);
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Animated background: slow aurora (blue, violet, a small gold one), dot grid, grain, vignette.
+ * Blobs are soft radial gradients (no blur filter). Background.tsx moves them with transforms at a
+ * low frame rate, so the glass panels above don't have to re-blur 60 times a second.
+ * ------------------------------------------------------------------------------------------- */
+.nb-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 80% at 50% -20%, rgb(85 70 255 / 0.12), transparent 60%),
+    var(--nb-bg);
+}
+
 .aurora {
   position: absolute;
-  inset: -20%;
-  pointer-events: none;
-  filter: blur(80px);
-  opacity: 0.5;
+  inset: 0;
 }
 .aurora > span {
   position: absolute;
   border-radius: 999px;
-  animation: aurora-drift 48s ease-in-out infinite alternate;
+  will-change: transform;
 }
 .aurora > span:nth-child(1) {
-  width: 46%;
-  height: 46%;
-  left: 8%;
-  top: 4%;
-  background: #5b3fd9;
+  width: 70vmax;
+  height: 70vmax;
+  left: -18vmax;
+  top: -34vmax;
+  background: radial-gradient(closest-side, rgb(43 91 255 / 0.32), rgb(43 91 255 / 0.12) 45%, transparent 72%);
 }
 .aurora > span:nth-child(2) {
-  width: 38%;
-  height: 40%;
-  right: 6%;
-  top: 22%;
-  background: #1f4fd1;
-  animation-duration: 60s;
-  animation-delay: -12s;
+  width: 64vmax;
+  height: 64vmax;
+  right: -20vmax;
+  top: -10vmax;
+  background: radial-gradient(closest-side, rgb(122 60 255 / 0.34), rgb(122 60 255 / 0.12) 45%, transparent 72%);
 }
 .aurora > span:nth-child(3) {
-  width: 30%;
-  height: 34%;
-  left: 38%;
-  bottom: 2%;
-  background: #8a2fc9;
-  opacity: 0.6;
-  animation-duration: 72s;
-  animation-delay: -30s;
+  width: 26vmax;
+  height: 26vmax;
+  right: 8vmax;
+  bottom: -8vmax;
+  background: radial-gradient(closest-side, rgb(255 200 87 / 0.14), rgb(255 111 168 / 0.06) 50%, transparent 72%);
+}
+.aurora > span:nth-child(4) {
+  width: 52vmax;
+  height: 52vmax;
+  left: 18vmax;
+  bottom: -30vmax;
+  background: radial-gradient(closest-side, rgb(85 70 255 / 0.22), transparent 70%);
 }
 
-@keyframes aurora-drift {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(6%, 4%, 0) scale(1.08);
-  }
-  100% {
-    transform: translate3d(-4%, 6%, 0) scale(0.95);
-  }
-}
-
-.reduce-motion .aurora > span,
-.static-background .aurora > span {
-  animation: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .aurora > span {
-    animation: none;
-  }
-}
-
-/* Feines Punktraster über dem Hintergrund für mehr Tiefe */
+/* Fine dot grid for depth, strongest near the top */
 .dot-grid {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: radial-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-image: radial-gradient(rgb(255 255 255 / 0.055) 1px, transparent 1px);
   background-size: 24px 24px;
-  mask-image: radial-gradient(ellipse at 50% 0%, black 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 20%, transparent 75%);
+}
+
+.nb-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.nb-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, transparent 0%, rgb(10 11 18 / 0.2) 55%, rgb(10 11 18 / 0.7) 100%),
+    radial-gradient(140% 100% at 50% 0%, transparent 60%, rgb(5 6 10 / 0.5) 100%);
+}
+
+/*
+ * Endless decorative loops carry the class .nb-loop. They pause while the window is hidden/minimized
+ * (.nb-paused on the app root) and stop with reduced motion (app option or OS setting).
+ */
+.nb-paused .nb-loop,
+.nb-paused .skeleton::after {
+  animation-play-state: paused !important;
+}
+.reduce-motion .nb-loop,
+.reduce-motion .skeleton::after {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheen {
+    display: none;
+  }
+  .nb-loop,
+  .skeleton::after {
+    animation: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Keyframes used by components (all transform/opacity only)
+ * ------------------------------------------------------------------------------------------- */
+@keyframes nb-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes nb-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+}
+
+/* breathing glow behind the logo tile (LogoMark glow) */
+@keyframes nb-logo-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+/* gentle up-and-down of the EmptyState icon */
+@keyframes nb-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* light that travels along a progress bar */
+@keyframes nb-beam {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+@keyframes nb-sheen {
+  from {
+    transform: translateX(-120%) skewX(-20deg);
+  }
+  to {
+    transform: translateX(320%) skewX(-20deg);
+  }
+}
+
+/* rotating conic ring (active step, loading) */
+@keyframes nb-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Toasts (sonner): dark glass with a coloured edge per type
+ * ------------------------------------------------------------------------------------------- */
+[data-sonner-toaster] [data-sonner-toast].nb-toast {
+  background: var(--nb-glass-strong);
+  backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid rgb(255 255 255 / 0.09);
+  border-radius: 12px;
+  color: var(--nb-text);
+  padding: 14px 16px 14px 18px;
+  gap: 12px;
+  box-shadow:
+    var(--nb-highlight),
+    0 18px 50px -20px rgb(0 0 0 / 0.8),
+    0 0 0 1px rgb(0 0 0 / 0.2);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--nb-gradient);
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast[data-type="success"]::after {
+  background: var(--success);
+  box-shadow: 0 0 12px rgb(34 197 94 / 0.6);
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast[data-type="error"]::after {
+  background: var(--destructive);
+  box-shadow: 0 0 12px rgb(239 68 68 / 0.6);
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast[data-type="warning"]::after {
+  background: var(--warning);
+  box-shadow: 0 0 12px rgb(245 158 11 / 0.6);
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast [data-title] {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast [data-description] {
+  font-size: 12px;
+  color: var(--nb-text-muted);
+  margin-top: 2px;
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast [data-icon] {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(255 255 255 / 0.06);
+  flex-shrink: 0;
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast[data-type="success"] [data-icon] {
+  background: rgb(34 197 94 / 0.14);
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast[data-type="error"] [data-icon] {
+  background: rgb(239 68 68 / 0.14);
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast[data-type="warning"] [data-icon] {
+  background: rgb(245 158 11 / 0.14);
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast[data-type="info"] [data-icon],
+[data-sonner-toaster] [data-sonner-toast].nb-toast[data-type="default"] [data-icon] {
+  background: rgb(122 60 255 / 0.16);
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast [data-close-button] {
+  background: var(--nb-surface-raised);
+  border-color: rgb(255 255 255 / 0.1);
+  color: var(--nb-text-muted);
+}
+[data-sonner-toaster] [data-sonner-toast].nb-toast [data-button] {
+  background: var(--nb-gradient);
+  color: #fff;
+  border-radius: 6px;
+  font-weight: 600;
 }

@@ -1,8 +1,8 @@
 {
-  "name": "vanity-backend",
+  "name": "niobium-backend",
   "private": true,
   "version": "0.1.0",
-  "description": "Lokales Fortnite-Backend für Vanity (basiert auf LawinServer, GPL-3.0)",
+  "description": "Local Fortnite backend for Niobium (based on LawinServer, GPL-3.0)",
   "license": "GPL-3.0-only",
   "type": "commonjs",
   "scripts": {

@@ -1,8 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Vanity",
+  "productName": "Niobium",
+  "mainBinaryName": "Niobium",
   "version": "0.1.0",
-  "identifier": "dev.vanity.launcher",
+  "identifier": "dev.niobium.launcher",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -14,7 +15,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Vanity",
+        "title": "Niobium",
         "width": 1280,
         "height": 800,
         "minWidth": 1024,
@@ -23,7 +24,23 @@
         "decorations": false,
         "shadow": true,
         "resizable": true,
-        "backgroundColor": "#0F1115"
+        "visible": false,
+        "backgroundColor": "#0A0B12"
+      },
+      {
+        "label": "splash",
+        "title": "Niobium",
+        "url": "splash.html",
+        "width": 440,
+        "height": 300,
+        "center": true,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false
       }
     ],
     "security": {
@@ -37,8 +54,8 @@
     ],
     "publisher": "Georg Hatzmann",
     "category": "Game",
-    "shortDescription": "Launcher für OG-Fortnite-Privatserver",
-    "copyright": "GPL-3.0 – siehe LICENSE",
+    "shortDescription": "Launcher for OG Fortnite private servers",
+    "copyright": "© 2026 Niobium · GPL-3.0",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -50,9 +67,15 @@
       "nsis": {
         "installMode": "currentUser",
         "languages": [
-          "German"
+          "English"
         ],
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "compression": "lzma",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "headerImage": "windows/assets/header.bmp",
+        "sidebarImage": "windows/assets/sidebar.bmp",
+        "installerHooks": "windows/hooks.nsh"
       }
     },
     "resources": {

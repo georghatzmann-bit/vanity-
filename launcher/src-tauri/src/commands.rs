@@ -1,15 +1,17 @@
-//! Die Funktionen, die die Oberfläche aufruft (Tauri-Commands).
+//! The functions the UI calls (Tauri commands).
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::State;
+use std::time::Duration;
+use tauri::{AppHandle, Manager, State};
 
-use vanity_core::crash::{self, CrashReport};
-use vanity_core::profiles::{self, Config, Friend, Profile, Settings};
-use vanity_core::version::{self, BuildInfo, DetectReport};
+use niobium_core::crash::{self, CrashReport};
+use niobium_core::launchargs::{self, BubbleBuildsInfo};
+use niobium_core::profiles::{self, Config, Friend, Profile, Settings, TrickshotPreset};
+use niobium_core::version::{self, BuildInfo, DetectReport};
 
-use crate::engine::Engine;
-use vanity_core::profiles::TrickshotPreset;
+use crate::engine::{Engine, LogLinePayload};
 
 type E<'a> = State<'a, Arc<Engine>>;
 type R<T> = Result<T, String>;
@@ -17,7 +19,7 @@ type R<T> = Result<T, String>;
 fn save(engine: &Engine) {
     let cfg = engine.config.lock().unwrap();
     if let Err(e) = profiles::save(&cfg) {
-        eprintln!("[Vanity] Einstellungen konnten nicht gespeichert werden: {e}");
+        eprintln!("[Niobium] Couldn't save the settings: {e}");
     }
 }
 
@@ -33,8 +35,12 @@ pub fn platform() -> String {
 
 #[tauri::command]
 pub fn update_settings(engine: E, settings: Settings) -> R<()> {
+    let mut settings = settings;
+    // Backend and game server ports are fixed – other values are set back (and noted once in the log)
+    let notes = settings.pin_fixed_ports();
     engine.config.lock().unwrap().settings = settings;
     save(&engine);
+    engine.note_fixed_ports(notes);
     Ok(())
 }
 
@@ -118,11 +124,12 @@ pub fn list_crashes() -> Vec<CrashReport> {
     crash::list(30)
 }
 
-/// Lokale IP-Adressen, die der Host an Freunde weitergeben kann.
+/// Local IP addresses the host can give to friends. The port is always the fixed game server
+/// port (7777).
 #[tauri::command]
-pub fn share_addresses(engine: E) -> Vec<(String, String)> {
-    let port = engine.config.lock().unwrap().settings.game_server_port;
-    let mut out = vec![("Nur dieser PC".to_string(), format!("127.0.0.1:{port}"))];
+pub fn share_addresses() -> Vec<(String, String)> {
+    let port = profiles::GAME_SERVER_PORT;
+    let mut out = vec![("This PC only".to_string(), format!("127.0.0.1:{port}"))];
     if let Ok(addrs) = if_addrs::get_if_addrs() {
         for a in addrs {
             if a.is_loopback() {
@@ -135,7 +142,7 @@ pub fn share_addresses(engine: E) -> Vec<(String, String)> {
                 } else if o[0] == 26 {
                     "Radmin VPN"
                 } else {
-                    "Netzwerk"
+                    "Network"
                 };
                 out.push((label.to_string(), format!("{v4}:{port}")));
             }
@@ -144,7 +151,7 @@ pub fn share_addresses(engine: E) -> Vec<(String, String)> {
     out
 }
 
-// --- Aktionen, die etwas starten ---------------------------------------------
+// --- Actions that start something ---------------------------------------------
 
 #[tauri::command]
 pub fn host_and_play(engine: E, profile_id: String) -> R<()> {
@@ -152,7 +159,7 @@ pub fn host_and_play(engine: E, profile_id: String) -> R<()> {
     std::thread::spawn(move || {
         if let Err(err) = e.host_and_play(&profile_id) {
             let _ = tauri::Emitter::emit(&e.app, "toast", crate::engine::Toast {
-                kind: "error".into(), title: "Start fehlgeschlagen".into(), description: err,
+                kind: "error".into(), title: "Couldn't start".into(), description: err,
             });
             e.stop_all();
         }
@@ -204,18 +211,18 @@ pub fn set_trickshot_presets(engine: E, presets: Vec<TrickshotPreset>) -> Config
     c.clone()
 }
 
-// --- Einstellungen des Ingame-Menüs (client.json, auch von der Client-DLL gelesen) ------------
+// --- Settings of the in-game menu (client.json, also read by the client DLL) ------------
 
 fn client_settings_path() -> PathBuf {
     profiles::config_dir().join("client.json")
 }
 
 fn default_client_settings() -> serde_json::Value {
-    // Gleiches Format wie die Ingame-Menü-DLL (ATLAS-Console-Basis) – beide lesen/schreiben dieselbe Datei.
+    // Same format as the in-game menu DLL (based on ATLAS Console) – both read/write the same file.
     serde_json::json!({
-        "hotkey": 120,       // F9 – Menü
-        "joinHotkey": 116,   // F5 – schnell beitreten
-        "consoleMode": 0,    // 0 = Vanity-Konsole, 1 = Original-Unreal-Konsole
+        "hotkey": 120,       // F9 – menu
+        "joinHotkey": 116,   // F5 – quick join
+        "consoleMode": 0,    // 0 = Niobium console, 1 = original Unreal console
         "preferences": {
             "saveTogglePreferences": true, "slashKey": true,
             "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": true,
@@ -234,7 +241,7 @@ pub fn get_client_settings() -> serde_json::Value {
             if let serde_json::Value::Object(base) = &mut value {
                 for (k, v) in saved {
                     if k == "preferences" {
-                        // feldweise übernehmen, damit fehlende Schalter ihre Vorgabe behalten
+                        // take over field by field, so missing switches keep their default
                         if let (Some(serde_json::Value::Object(defaults)), serde_json::Value::Object(saved_prefs)) =
                             (base.get_mut("preferences"), v)
                         {
@@ -264,13 +271,76 @@ pub fn set_client_settings(value: serde_json::Value) -> R<()> {
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
+/// Folders the UI shows (Settings / Logs): config, logs, Fortnite crash reports and logs.
 #[tauri::command]
-pub fn vanity_paths() -> serde_json::Value {
-    let local = dirs::data_local_dir().unwrap_or_default().join("Vanity");
+pub fn niobium_paths() -> serde_json::Value {
+    let local = profiles::local_dir();
     serde_json::json!({
         "config": profiles::config_dir().to_string_lossy(),
         "logs": local.join("logs").to_string_lossy(),
         "crashes": crash::crashes_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
         "fortniteLogs": dirs::data_local_dir().unwrap_or_default().join("FortniteGame").join("Saved").join("Logs").to_string_lossy(),
     })
+}
+
+// --- Splash screen -----------------------------------------------------------------
+
+static MAIN_SHOWN: AtomicBool = AtomicBool::new(false);
+
+/// How long after the main window shows the start log lines still wait for `pending_log_lines`.
+/// After that they are sent as normal "log:line" events (in case the UI never asks).
+const EARLY_LOG_FALLBACK: Duration = Duration::from_secs(10);
+
+/// Shows and focuses the main window and closes the splash. Only the first call does anything
+/// (the UI calls it, and the safety net in `lib.rs` calls it again after 8 s).
+pub fn show_main_window(app: &AppHandle) {
+    if MAIN_SHOWN.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.set_focus();
+    }
+    if let Some(splash) = app.get_webview_window("splash") {
+        let _ = splash.close();
+    }
+    // Log lines from the start (e.g. the note about copied Vanity settings) wait for the UI to
+    // fetch them with `pending_log_lines`. Safety net if it never does: send them as events later.
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(EARLY_LOG_FALLBACK);
+        if let Some(engine) = handle.try_state::<Arc<Engine>>() {
+            engine.release_early_log();
+        }
+    });
+}
+
+/// Launcher log lines written before the UI listened to "log:line" (e.g. "Copied your settings
+/// from Vanity to Niobium …", "Backend port is fixed at 3551 …"), oldest first. The UI calls this
+/// once, right after its "log:line" listener is registered. From then on every line comes as a
+/// "log:line" event; later calls return an empty list.
+#[tauri::command]
+pub fn pending_log_lines(engine: E) -> Vec<LogLinePayload> {
+    engine.pending_log_lines()
+}
+
+/// The UI has loaded its config and drawn the first frame.
+#[tauri::command]
+pub fn app_ready(app: AppHandle) {
+    show_main_window(&app);
+}
+
+// --- Bubble Builds -------------------------------------------------------------------
+
+/// `{ level: "supported" | "experimental" | "unavailable", note }` for a Fortnite version.
+#[tauri::command]
+pub fn bubble_builds_support(version: String) -> BubbleBuildsInfo {
+    launchargs::bubble_builds_support(&version)
+}
+
+/// Puts the two remembered `[D3DRHIPreference]` lines back into Fortnite's GameUserSettings.ini
+/// (only after the user clicked "Reset" on the "bubble:ini-changed" question).
+#[tauri::command]
+pub fn reset_performance_mode_ini(engine: E) -> R<()> {
+    engine.reset_performance_mode_ini()
 }

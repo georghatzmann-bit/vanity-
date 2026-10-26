@@ -1,33 +1,33 @@
-// Vanity-Backend: Einstiegspunkt.
-// Liest die Einstellungen aus Umgebungsvariablen, bereitet den Daten-Ordner vor, hängt die
-// /vanity-Endpunkte vor LawinServer und startet HTTP (VANITY_BACKEND_PORT) sowie
-// XMPP + Matchmaker (VANITY_MATCHMAKER_PORT).
+// Niobium backend: entry point.
+// Reads the settings from environment variables, prepares the data folder, puts the
+// /niobium endpoints in front of LawinServer and starts HTTP (NIOBIUM_BACKEND_PORT) and
+// XMPP + matchmaker (NIOBIUM_MATCHMAKER_PORT).
 import http from "node:http";
 import express, { type NextFunction, type Request, type Response } from "express";
-import { createVanityRouter } from "./api";
+import { createNiobiumRouter } from "./api";
 import { forwardAsyncErrors } from "./async-errors";
 import { ConfigError, loadConfig, type BackendConfig } from "./config";
 import { findResourceDir, prepareDataDir } from "./data";
-import { createLawinApp, startXmppAndMatchmaker, vanity } from "./lawin";
+import { createLawinApp, niobium, startXmppAndMatchmaker } from "./lawin";
 import { createStubRouter } from "./stubs";
 
-declare const __VANITY_VERSION__: string | undefined;
-const VERSION = typeof __VANITY_VERSION__ === "string" ? __VANITY_VERSION__ : "dev";
+declare const __NIOBIUM_VERSION__: string | undefined;
+const VERSION = typeof __NIOBIUM_VERSION__ === "string" ? __NIOBIUM_VERSION__ : "dev";
 
 function log(message: string): void {
-  console.log(`[Vanity] ${message}`);
+  console.log(`[Niobium] ${message}`);
 }
 
 function pathOf(req: Request): string {
   return req.originalUrl.split("?")[0] ?? req.originalUrl;
 }
 
-/** Eine Zeile pro Anfrage: `[HTTP] GET /pfad → 200` */
+/** One line per request: `[HTTP] GET /path → 200` */
 function requestLog(req: Request, res: Response, next: NextFunction): void {
   const method = req.method;
   const path = pathOf(req);
   res.on("close", () => {
-    console.log(`[HTTP] ${method} ${path} → ${res.writableFinished ? res.statusCode : "abgebrochen"}`);
+    console.log(`[HTTP] ${method} ${path} → ${res.writableFinished ? res.statusCode : "aborted"}`);
   });
   next();
 }
@@ -35,17 +35,17 @@ function requestLog(req: Request, res: Response, next: NextFunction): void {
 function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   const status = (err as { status?: unknown }).status;
   const code = typeof status === "number" && status >= 400 && status < 600 ? status : 500;
-  if (code >= 500) console.error(`[Vanity] Fehler bei ${req.method} ${pathOf(req)}:`, err);
+  if (code >= 500) console.error(`[Niobium] Error at ${req.method} ${pathOf(req)}:`, err);
   if (res.headersSent) {
-    // Antwort läuft schon (z. B. Fehler nach res.json) – nur sauber abschließen
+    // The answer is already on its way (e.g. an error after res.json) – just finish it cleanly
     if (!res.writableEnded) res.end();
     return;
   }
   res.status(code).json({
-    errorCode: code >= 500 ? "errors.com.vanity.internal_error" : "errors.com.vanity.bad_request",
-    errorMessage: code >= 500 ? "Interner Fehler im Vanity-Backend" : String((err as Error).message ?? err),
+    errorCode: code >= 500 ? "errors.com.niobium.internal_error" : "errors.com.niobium.bad_request",
+    errorMessage: code >= 500 ? "Internal error in the Niobium backend" : String((err as Error).message ?? err),
     numericErrorCode: code,
-    originatingService: "vanity",
+    originatingService: "niobium",
     intent: "prod",
   });
 }
@@ -60,12 +60,12 @@ function main(): void {
   try {
     config = loadConfig();
   } catch (err) {
-    console.error(`[Vanity] ${err instanceof ConfigError ? err.message : String(err)}`);
+    console.error(`[Niobium] ${err instanceof ConfigError ? err.message : String(err)}`);
     process.exit(1);
   }
 
   const resourceDir = findResourceDir(__dirname);
-  vanity.configure({
+  niobium.configure({
     resourceDir,
     dataDir: config.dataDir,
     bindAddress: config.bind,
@@ -73,48 +73,48 @@ function main(): void {
     gameServer: config.gameServer,
   });
 
-  const copied = prepareDataDir(resourceDir, config.dataDir, vanity.WRITABLE);
-  log(`Daten-Ordner: ${config.dataDir}${copied.length ? ` (${copied.length} Standard-Dateien kopiert)` : ""}`);
+  const copied = prepareDataDir(resourceDir, config.dataDir, niobium.WRITABLE);
+  log(`Data folder: ${config.dataDir}${copied.length ? ` (${copied.length} default files copied)` : ""}`);
 
-  // LawinServer nutzt async-Handler: Fehler darin werden zu einer 500-Antwort (statt hängender
-  // Anfrage), alles Übrige wird nur geloggt, damit das Backend weiterläuft.
+  // LawinServer uses async handlers: errors in them become a 500 answer (instead of a hanging
+  // request), everything else is only logged, so the backend keeps running.
   forwardAsyncErrors();
   process.on("unhandledRejection", (reason) => {
-    console.error("[Vanity] Unbehandelter Fehler:", reason);
+    console.error("[Niobium] Unhandled error:", reason);
   });
 
   const app = express();
   app.disable("x-powered-by");
   app.use(requestLog);
   app.use(
-    createVanityRouter({
+    createNiobiumRouter({
       version: VERSION,
-      getGameServer: () => ({ ...vanity.settings.gameServer }),
+      getGameServer: () => ({ ...niobium.settings.gameServer }),
       setGameServer: (target) => {
-        vanity.setGameServer(target.ip, target.port);
-        log(`Matchmaker schickt Spieler jetzt zu ${target.ip}:${target.port}`);
+        niobium.setGameServer(target.ip, target.port);
+        log(`The matchmaker now sends players to ${target.ip}:${target.port}`);
       },
     }),
   );
-  app.use(createStubRouter()); // Endpunkte neuerer Builds, die LawinServer nicht kennt
+  app.use(createStubRouter()); // endpoints of newer builds that LawinServer doesn't know
   app.use(createLawinApp());
   app.use(errorHandler);
 
   const server = http.createServer(app);
   server.on("error", (err: NodeJS.ErrnoException) => {
-    const reason = err.code === "EADDRINUSE" ? "ist schon belegt" : `geht nicht (${err.code ?? err.message})`;
-    console.error(`[Vanity] HTTP-Port ${config.bind}:${config.httpPort} ${reason}`);
+    const reason = err.code === "EADDRINUSE" ? "is already in use" : `doesn't work (${err.code ?? err.message})`;
+    console.error(`[Niobium] HTTP port ${config.bind}:${config.httpPort} ${reason}`);
     process.exit(1);
   });
 
   server.listen(config.httpPort, config.bind, () => {
-    log(`Backend ${VERSION} läuft auf http://${urlHost(config.bind)}:${config.httpPort} (Bind ${config.bind})`);
-    log(`Matchmaker-Ziel: ${config.gameServer.ip}:${config.gameServer.port}`);
+    log(`Backend ${VERSION} is running on http://${urlHost(config.bind)}:${config.httpPort} (bind ${config.bind})`);
+    log(`Matchmaker target: ${config.gameServer.ip}:${config.gameServer.port}`);
     startXmppAndMatchmaker();
   });
 
   const stop = (): void => {
-    log("wird beendet");
+    log("shutting down");
     server.close();
     process.exit(0);
   };

@@ -1,9 +1,9 @@
 const Express = require("express");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const express = Express.Router();
 const fs = require("fs");
-const friendslist = vanity.json("responses/friendslist.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-const friendslist2 = vanity.json("responses/friendslist2.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+const friendslist = niobium.json("responses/friendslist.json"); // NIOBIUM: path via niobium.js (data folder/resources)
+const friendslist2 = niobium.json("responses/friendslist2.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 const functions = require("./functions.js");
 
 express.get("/friends/api/v1/*/settings", async (req, res) => {
@@ -50,8 +50,8 @@ express.get("/friends/api/public/friends/:accountId", async (req, res) => {
             "status": FriendObject.status
         })
 
-        vanity.writeFile("responses/friendslist.json", JSON.stringify(friendslist, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-        vanity.writeFile("responses/friendslist2.json", JSON.stringify(friendslist2, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("responses/friendslist.json", JSON.stringify(friendslist, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
+        niobium.writeFile("responses/friendslist2.json", JSON.stringify(friendslist2, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     if (memory.season >= 7) {
@@ -103,8 +103,8 @@ express.get("/friends/api/v1/:accountId/summary", async (req, res) => {
             "status": "ACCEPTED"
         })
 
-        vanity.writeFile("responses/friendslist.json", JSON.stringify(friendslist, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-        vanity.writeFile("responses/friendslist2.json", JSON.stringify(friendslist2, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("responses/friendslist.json", JSON.stringify(friendslist, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
+        niobium.writeFile("responses/friendslist2.json", JSON.stringify(friendslist2, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     res.json(friendslist2)

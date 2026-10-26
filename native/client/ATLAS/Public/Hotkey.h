@@ -1,6 +1,6 @@
-// [Vanity] Geaenderte Fassung. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
-// (c) ralz, cipherfps und Mitwirkende, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
-// Vanity-Aenderungen: Datenpfade, sichtbare Namen/Nennung, MinHook ueber Projektverweis.
+// [Niobium] Modified version. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
+// (c) ralz, cipherfps and contributors, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
+// Niobium changes: data paths, visible names/credit, MinHook via project reference.
 #pragma once
 
 #include <Windows.h>
@@ -81,11 +81,11 @@ namespace HotkeyPersist
         wchar_t path[MAX_PATH]{};
         if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, path)))
         {
-            std::wstring dir = std::wstring(path) + L"\\Vanity";
+            std::wstring dir = std::wstring(path) + L"\\Niobium"; // [Niobium] %APPDATA%\Niobium\client.json
             CreateDirectoryW(dir.c_str(), nullptr);
             return dir + L"\\client.json";
         }
-        return L"vanity-client.json";
+        return L"niobium-client.json";
     }
 
     inline std::string ReadFileContents()

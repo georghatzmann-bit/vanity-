@@ -1,7 +1,7 @@
-//! Liest Fortnites Absturzberichte und erklärt sie in einfacher Sprache.
+//! Reads Fortnite's crash reports and explains them in plain words.
 //!
-//! Ordner: `%LOCALAPPDATA%\FortniteGame\Saved\Crashes\<Bericht>\`
-//! Darin u. a. `CrashContext.runtime-xml` mit Fehlermeldung und Aufrufliste.
+//! Folder: `%LOCALAPPDATA%\FortniteGame\Saved\Crashes\<report>\`
+//! It holds, among others, `CrashContext.runtime-xml` with the error message and the call stack.
 
 use serde::Serialize;
 use std::fs;
@@ -13,7 +13,7 @@ use std::time::SystemTime;
 pub struct CrashReport {
     pub id: String,
     pub folder: String,
-    /// Sekunden seit 1970 (für Sortierung und Anzeige)
+    /// Seconds since 1970 (for sorting and display)
     pub time: u64,
     pub version: String,
     pub title: String,
@@ -29,7 +29,7 @@ pub fn crashes_dir() -> Option<PathBuf> {
     dirs::data_local_dir().map(|d| d.join("FortniteGame").join("Saved").join("Crashes"))
 }
 
-/// Alle Absturzberichte, neueste zuerst (höchstens `limit`).
+/// All crash reports, newest first (at most `limit`).
 pub fn list(limit: usize) -> Vec<CrashReport> {
     let Some(dir) = crashes_dir() else { return vec![] };
     list_in(&dir, limit)
@@ -68,7 +68,7 @@ fn analyze_folder(folder: &Path, time: u64) -> Option<CrashReport> {
         .and_then(|p| fs::read(p).ok())
         .map(|b| decode_text(&b))
         .unwrap_or_default();
-    // Das Log im Bericht hilft, wenn die XML fehlt oder leer ist
+    // The log in the report helps when the XML is missing or empty
     let log_tail = fs::read_dir(folder)
         .ok()?
         .filter_map(Result::ok)
@@ -86,7 +86,7 @@ fn analyze_folder(folder: &Path, time: u64) -> Option<CrashReport> {
     Some(analyze(&id, &folder.to_string_lossy(), time, &xml, &log_tail))
 }
 
-/// Text aus UTF-8 oder UTF-16 (mit BOM) lesen.
+/// Reads text from UTF-8 or UTF-16 (with BOM).
 fn decode_text(bytes: &[u8]) -> String {
     if bytes.starts_with(&[0xFF, 0xFE]) {
         let units: Vec<u16> = bytes[2..].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
@@ -122,14 +122,14 @@ struct Explanation {
     todo: Vec<String>,
 }
 
-/// Erstellt die Erklärung aus Fehlermeldung, Aufrufliste und Log.
+/// Builds the explanation from the error message, call stack and log.
 pub fn analyze(id: &str, folder: &str, time: u64, xml: &str, log_tail: &str) -> CrashReport {
     let error = tag(xml, "ErrorMessage").unwrap_or_default();
     let callstack_raw = tag(xml, "CallStack").unwrap_or_default();
     let version = tag(xml, "BuildVersion")
         .or_else(|| tag(xml, "EngineVersion"))
         .and_then(|v| crate::version::parse_version_string(&v).map(|p| p.version).or(Some(v)))
-        .unwrap_or_else(|| "unbekannt".into());
+        .unwrap_or_else(|| "unknown".into());
     let callstack: Vec<String> = callstack_raw
         .lines()
         .map(str::trim)
@@ -148,12 +148,12 @@ pub fn analyze(id: &str, folder: &str, time: u64, xml: &str, log_tail: &str) -> 
 
     let mut technical = vec![];
     if !error.is_empty() {
-        technical.push(("Fehler".to_string(), error.lines().next().unwrap_or_default().to_string()));
+        technical.push(("Error".to_string(), error.lines().next().unwrap_or_default().to_string()));
     }
     if !first_module.is_empty() {
-        technical.push(("Modul".to_string(), first_module));
+        technical.push(("Module".to_string(), first_module));
     }
-    technical.push(("Ordner".to_string(), folder.to_string()));
+    technical.push(("Folder".to_string(), folder.to_string()));
 
     CrashReport {
         id: id.to_string(),
@@ -175,65 +175,65 @@ fn explain(lower: &str, module_lower: &str, module: &str) -> Explanation {
 
     if lower.contains("pak chunk signature") || lower.contains("when 0 bytes remain") || lower.contains("corrupt") {
         return Explanation {
-            title: "Build-Dateien beschädigt",
+            title: "Build files are damaged",
             severity: "high",
-            what: "Fortnite hat sich beim Laden geschlossen, weil Spieldateien nicht stimmen.",
-            cause: "Eine der großen Spieldateien (.pak) ist kaputt oder unvollständig – meistens beim Entpacken oder durch ein Virenprogramm.".into(),
-            todo: todo(&["Den Build-Ordner neu entpacken.", "Den Ordner im Virenprogramm als Ausnahme eintragen."]),
+            what: "Fortnite closed while loading because some game files are wrong.",
+            cause: "One of the big game files (.pak) is broken or incomplete – usually from unpacking or an antivirus program.".into(),
+            todo: todo(&["Unpack the build folder again.", "Add the folder as an exception in your antivirus program."]),
         };
     }
     if lower.contains("dxgi_error_device_removed") || lower.contains("device removed") || lower.contains("gpu crash") || lower.contains("d3d device") {
         return Explanation {
-            title: "Grafikkarte hat aufgegeben",
+            title: "The graphics card gave up",
             severity: "medium",
-            what: "Das Bild ist eingefroren und Fortnite wurde beendet.",
-            cause: "Der Grafiktreiber hat die Verbindung zum Spiel verloren. Bei alten Builds passiert das oft mit DirectX 12 oder mit Overlays anderer Programme.".into(),
-            todo: todo(&["Mit -d3d11 starten (Profil → Startargumente).", "Overlays von Discord, Steam oder GeForce Experience ausschalten.", "Grafiktreiber aktualisieren."]),
+            what: "The picture froze and Fortnite was closed.",
+            cause: "The graphics driver lost its connection to the game. With old builds this often happens with DirectX 12 or with overlays from other programs.".into(),
+            todo: todo(&["Start with -d3d11 (Profile → Launch arguments).", "Turn off overlays from Discord, Steam or GeForce Experience.", "Update your graphics driver."]),
         };
     }
     if lower.contains("out of memory") || lower.contains("ran out of memory") {
         return Explanation {
-            title: "Arbeitsspeicher voll",
+            title: "Out of memory",
             severity: "high",
-            what: "Fortnite hatte keinen freien Arbeitsspeicher mehr.",
-            cause: "Server und Spiel laufen gleichzeitig – das braucht viel RAM.".into(),
-            todo: todo(&["Andere Programme schließen.", "Server ohne Grafik starten (Einstellungen → Spiel)."]),
+            what: "Fortnite ran out of free memory (RAM).",
+            cause: "The server and the game run at the same time – that needs a lot of RAM.".into(),
+            todo: todo(&["Close other programs.", "Start the server without graphics (Settings → Game)."]),
         };
     }
     if lower.contains("gfsdk_aftermath") {
         return Explanation {
-            title: "NVIDIA-Absturzhilfe stört",
+            title: "NVIDIA crash helper gets in the way",
             severity: "medium",
-            what: "Fortnite ist in einer NVIDIA-Datei abgestürzt.",
-            cause: "Die Datei GFSDK_Aftermath_Lib.dll im Build verträgt sich nicht mit dem alten Spiel.".into(),
-            todo: todo(&["In Vanity unter Bibliothek → Build → „Aftermath-Datei umbenennen“ (Vanity fragt vorher)."]),
+            what: "Fortnite crashed in an NVIDIA file.",
+            cause: "The file GFSDK_Aftermath_Lib.dll in the build doesn't work well with the old game.".into(),
+            todo: todo(&["In Niobium go to Library → your build → \"Rename Aftermath file\" (Niobium asks first)."]),
         };
     }
     let access_violation = lower.contains("access_violation") || lower.contains("access violation");
-    let (title, what, cause, steps): (&str, &str, String, Vec<&str>) = if module_lower.contains("vanity_client") {
-        ("Absturz im Ingame-Menü", "Fortnite wurde beendet – der Fehler kam aus dem Vanity-Ingame-Menü.",
-         "Das Menü hat auf etwas im Spiel zugegriffen, das in dieser Version anders aufgebaut ist.".into(),
-         vec!["Den Bericht kopieren und an mich schicken – dann kann ich das Menü reparieren.", "Bis dahin in Einstellungen das Ingame-Menü ausschalten."])
-    } else if module_lower.contains("vanity_server") {
-        ("Absturz im Game Server", "Der Server-Fortnite wurde beendet – der Fehler kam aus dem Game Server.",
-         "Der Game Server (Magnesium-Basis) hat in dieser Situation einen Fehler.".into(),
-         vec!["Den Bericht kopieren und an mich schicken.", "Mit einer anderen Playlist oder ohne Lategame erneut versuchen."])
-    } else if module_lower.contains("vanity_redirect") {
-        ("Absturz in der Umleitung", "Fortnite wurde beim Start beendet – der Fehler kam aus der Umleitungs-DLL.",
-         "Die Umleitung findet in diesem Build die passende Stelle nicht.".into(),
-         vec!["Den Bericht kopieren und an mich schicken."])
+    let (title, what, cause, steps): (&str, &str, String, Vec<&str>) = if module_lower.contains("niobium_client") {
+        ("Crash in the in-game menu", "Fortnite was closed – the error came from the Niobium in-game menu (F9).",
+         "The menu touched something in the game that is built differently in this version.".into(),
+         vec!["Copy the report and send it to the developer – then the menu can be fixed.", "Until then, turn off the in-game menu in Settings."])
+    } else if module_lower.contains("niobium_server") {
+        ("Crash in the game server", "The server Fortnite was closed – the error came from the game server.",
+         "The game server (based on Magnesium) has a bug in this situation.".into(),
+         vec!["Copy the report and send it to the developer.", "Try again with another playlist or without Lategame."])
+    } else if module_lower.contains("niobium_redirect") {
+        ("Crash in the redirect", "Fortnite was closed while starting – the error came from the redirect DLL.",
+         "The redirect can't find the right spot in this build.".into(),
+         vec!["Copy the report and send it to the developer."])
     } else if module_lower.contains("console.dll") || module_lower.contains("atlas") || module_lower.contains("magnesium") || module_lower.contains("tellurium") {
-        ("Absturz in einer fremden DLL", "Fortnite wurde beendet – der Fehler kam aus einer Zusatz-DLL, die nicht von Vanity ist.",
-         format!("Die DLL „{module}“ passt nicht zu dieser Fortnite-Version oder greift im falschen Moment zu."),
-         vec!["Diese DLL nicht mehr zusammen mit Vanity verwenden.", "Vanity bringt alle nötigen DLLs selbst mit."])
+        ("Crash in a DLL that isn't from Niobium", "Fortnite was closed – the error came from an extra DLL that isn't part of Niobium.",
+         format!("The DLL \"{module}\" doesn't fit this Fortnite version or steps in at the wrong moment."),
+         vec!["Stop using this DLL together with Niobium.", "Niobium already brings every DLL it needs."])
     } else if access_violation {
-        ("Unerlaubter Speicherzugriff", "Fortnite wurde plötzlich beendet.",
-         "Ein Programmteil wollte Daten lesen, die es nicht (mehr) gibt. Das passiert bei alten Builds häufiger.".into(),
-         vec!["Noch einmal starten – oft klappt es beim zweiten Mal.", "Wenn es immer an derselben Stelle passiert: Bericht kopieren und an mich schicken."])
+        ("Memory access error", "Fortnite closed all of a sudden.",
+         "A part of the game tried to read data that isn't there (any more). This happens more often with old builds.".into(),
+         vec!["Start again – it often works the second time.", "If it always happens at the same spot: copy the report and send it to the developer."])
     } else {
-        ("Unbekannter Absturz", "Fortnite wurde unerwartet beendet.",
-         "Vanity kennt diesen Fehler noch nicht.".into(),
-         vec!["Den Bericht kopieren und an mich schicken."])
+        ("Unknown crash", "Fortnite closed unexpectedly.",
+         "Niobium doesn't know this error yet.".into(),
+         vec!["Copy the report and send it to the developer."])
     };
     Explanation { title, severity: if access_violation { "high" } else { "medium" }, what, cause, todo: steps.iter().map(|s| s.to_string()).collect() }
 }
@@ -257,7 +257,7 @@ kernel32.dll!BaseThreadInitThunk()</CallStack>
     fn explains_foreign_console_dll() {
         let r = analyze("x", "C:\\Crashes\\x", 0, XML, "");
         assert_eq!(r.version, "19.40");
-        assert_eq!(r.title, "Absturz in einer fremden DLL");
+        assert_eq!(r.title, "Crash in a DLL that isn't from Niobium");
         assert!(r.likely_cause.contains("console.dll"));
         assert_eq!(r.callstack.len(), 3);
         assert_eq!(r.severity, "high");
@@ -266,14 +266,17 @@ kernel32.dll!BaseThreadInitThunk()</CallStack>
     #[test]
     fn explains_pak() {
         let r = analyze("y", "f", 0, "", "LogPakFile: Error: Pak chunk signature verification failed!");
-        assert_eq!(r.title, "Build-Dateien beschädigt");
+        assert_eq!(r.title, "Build files are damaged");
     }
 
     #[test]
     fn explains_own_client() {
-        let xml = XML.replace("console.dll", "vanity_client.dll");
+        let xml = XML.replace("console.dll", "niobium_client.dll");
         let r = analyze("z", "f", 0, &xml, "");
-        assert_eq!(r.title, "Absturz im Ingame-Menü");
+        assert_eq!(r.title, "Crash in the in-game menu");
+        let xml = XML.replace("console.dll", "niobium_redirect.dll");
+        assert_eq!(analyze("z", "f", 0, &xml, "").title, "Crash in the redirect");
+        assert!(analyze("z", "f", 0, "", "").what_to_do.iter().all(|s| s.is_ascii()));
     }
 
     #[test]
@@ -285,7 +288,7 @@ kernel32.dll!BaseThreadInitThunk()</CallStack>
 
     #[test]
     fn lists_folders() {
-        let dir = std::env::temp_dir().join(format!("vanity-crash-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("niobium-crash-{}", std::process::id()));
         let c = dir.join("UECC-Windows-ABC");
         fs::create_dir_all(&c).unwrap();
         fs::write(c.join("CrashContext.runtime-xml"), XML).unwrap();

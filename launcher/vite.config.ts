@@ -1,13 +1,24 @@
+import fs from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-// Tauri erwartet einen festen Port und soll Rust-Dateien nicht beobachten.
+const root = import.meta.dirname;
+const mainPage = path.resolve(root, "index.html");
+// The splash window (tauri.conf.json, label "splash") always loads splash.html – it must ship in
+// dist/ as its own page next to index.html. Without it Tauri would fall back to index.html and load
+// the whole app inside the small splash window, so a missing file stops the build.
+const splashPage = path.resolve(root, "splash.html");
+if (!fs.existsSync(splashPage)) {
+  throw new Error("[niobium] launcher/splash.html is missing – the splash window in tauri.conf.json needs it.");
+}
+
+// Tauri expects a fixed port and should not watch the Rust files.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: { "@": path.resolve(import.meta.dirname, "src") },
+    alias: { "@": path.resolve(root, "src") },
   },
   clearScreen: false,
   server: {
@@ -17,7 +28,10 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
-    // Der Launcher lädt von der Festplatte, große Dateien sind kein Problem
+    // The launcher loads from disk, big files are no problem
     chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      input: { main: mainPage, splash: splashPage },
+    },
   },
 });

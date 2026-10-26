@@ -1,7 +1,8 @@
-// [Vanity] Geaenderte Fassung. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
-// (c) ralz, cipherfps und Mitwirkende, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
-// Vanity-Aenderungen: Datenpfade, sichtbare Namen/Nennung, MinHook ueber Projektverweis,
-// alle sichtbaren Menue-Texte auf einfachem Deutsch (markiert mit [Vanity]).
+// [Niobium] Modified version. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
+// (c) ralz, cipherfps and contributors, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
+// Niobium changes: data paths, visible names/credit, MinHook via project reference,
+// all visible menu texts in plain English with short hints, brand colours, Bubble Builds
+// status row (all marked with [Niobium]).
 #include "pch.h"
 #include "../Public/GUI.h"
 #include "../Public/Hotkey.h"
@@ -9,7 +10,7 @@
 #include "../Public/Client.h"
 #include "../Public/Diagnostics.h"
 #include "../Public/Icon.h"
-#include "../Public/VanityTrickshotTab.h" // [Vanity] Trickshot-Reiter und Trickshot-Banner
+#include "../Public/NiobiumTrickshotTab.h" // [Niobium] Trickshot tab and trickshot banner
 #include "../ImGui/imgui.h"
 #include "../ImGui/imgui_internal.h"
 #include "../ImGui/imgui_stdlib.h"
@@ -40,30 +41,32 @@ extern bool ATLAS_PrepareReplicationForOpen(
     wchar_t* error,
     size_t errorCapacity);
 
-#define ACCENT_R 0.f
-#define ACCENT_G 0.635f
-#define ACCENT_B 0.808f
+// [Niobium] Brand accent violet #7A3CFF (was the ATLAS accent #00A2CE), pressed #5546FF.
+#define ACCENT_R 0.478f
+#define ACCENT_G 0.235f
+#define ACCENT_B 1.f
 
 static ImVec4 Accent(float a = 1.f) { return ImVec4(ACCENT_R, ACCENT_G, ACCENT_B, a); }
-static ImVec4 AccentDk(float a = 1.f) { return ImVec4(0.f, 0.38f, 0.50f, a); }
+static ImVec4 AccentDk(float a = 1.f) { return ImVec4(0.333f, 0.275f, 1.f, a); }
+// [Niobium] Accent for text and thin glyphs: violet-text #B49BFF (8.5:1 on the menu background;
+// plain violet is too dark for small text).
+static ImVec4 AccentText(float a = 1.f) { return ImVec4(0.706f, 0.608f, 1.f, a); }
+// [Niobium] Brand text #F2F3F8, text-muted #A3A8C3 (hints and other secondary text people need
+// to read, 8.4:1) and text-faint #6E7392 (captions, key labels, disabled text only).
+static const ImVec4 kNiobiumText(0.949f, 0.953f, 0.973f, 1.f);
+static const ImVec4 kNiobiumHintText(0.639f, 0.659f, 0.765f, 1.f);
+static const ImVec4 kNiobiumMutedText(0.431f, 0.451f, 0.573f, 1.f);
+// [Niobium] Brand backgrounds: bg #0A0B12 (top bar, sidebar), surface #11131C (window),
+// surface-raised #171A26 (fields, buttons).
+static const ImVec4 kNiobiumBg(0.039f, 0.043f, 0.071f, 1.f);
 
-// [Vanity] Deutsche Menue-Texte. GUI.cpp wird ohne /utf-8 gebaut und bleibt darum reines ASCII:
-// Umlaute & Co. stehen als UTF-8-Bytes (das erwartet ImGui) in eigenen Literalen, die der
-// Compiler zusammenklebt, z. B. "Men" DE_ue  ->  "Menue" mit echtem u-Umlaut. So haengt nichts
-// von der Codepage ab. Fuer L"..."-Texte (Konsole) stattdessen Unicode-Escapes benutzen
-// (Backslash, "u", vier Hex-Ziffern, z. B. 00FC fuer den u-Umlaut).
-// Alle Zeichen sind in der eingebetteten Schrift vorhanden (geprueft).
-#define DE_ae "\xC3\xA4"         // a-Umlaut (U+00E4)
-#define DE_oe "\xC3\xB6"         // o-Umlaut (U+00F6)
-#define DE_ue "\xC3\xBC"         // u-Umlaut (U+00FC)
-#define DE_Ae "\xC3\x84"         // A-Umlaut (U+00C4)
-#define DE_Ue "\xC3\x9C"         // U-Umlaut (U+00DC)
-#define DE_ss "\xC3\x9F"         // scharfes s (U+00DF)
-#define DE_DASH "\xE2\x80\x93"   // Gedankenstrich (U+2013)
-#define DE_LQ "\xE2\x80\x9E"     // Anfuehrungszeichen unten (U+201E)
-#define DE_RQ "\xE2\x80\x9C"     // Anfuehrungszeichen oben (U+201C)
-#define DE_DOTS "\xE2\x80\xA6"   // Auslassungspunkte (U+2026)
-#define DE_NBSP "\xC2\xA0"       // geschuetztes Leerzeichen (U+00A0): ImGui bricht dort nicht um
+// [Niobium] GUI.cpp is built without /utf-8 and stays plain ASCII. The few non-ASCII characters
+// of the menu texts are UTF-8 bytes (what ImGui expects) in their own literals that the compiler
+// glues onto the neighbouring ones, e.g. "Off " NB_DASH " on". For wide L"..." texts (console)
+// use Unicode escapes instead (backslash, "u", four hex digits, e.g. 2013 for the en dash).
+// All of these characters exist in the embedded font.
+#define NB_DASH "\xE2\x80\x93"   // en dash (U+2013)
+#define NB_NBSP "\xC2\xA0"       // no-break space (U+00A0): ImGui never wraps there
 
 enum class EConsoleLineKind : uint8_t
 {
@@ -237,7 +240,7 @@ static bool StartsWithInsensitive(const std::string& value, const std::string& p
 
 static EConsoleLineKind ClassifyConsoleOutput(const std::string& text)
 {
-    if (StartsWithInsensitive(text, "[Vanity]"))
+    if (StartsWithInsensitive(text, "[Niobium]"))
         return EConsoleLineKind::System;
 
     static const char* kErrorWords[] = {
@@ -347,10 +350,10 @@ static void DrainConsoleOutput()
     const unsigned int dropped = g_ConsoleDroppedMessages.exchange(0, std::memory_order_acq_rel);
     if (dropped > 0)
     {
-        // [Vanity] auf Deutsch
+        // [Niobium] plain English
         char message[128]{};
-        snprintf(message, sizeof(message), "[Vanity] %u Meldung%s ausgelassen, damit das Spiel fl" DE_ue "ssig bleibt.",
-            dropped, dropped == 1 ? "" : "en");
+        snprintf(message, sizeof(message), "[Niobium] Skipped %u message%s so the game stays smooth.",
+            dropped, dropped == 1 ? "" : "s");
         AppendConsoleLine(EConsoleLineKind::System, message);
     }
 
@@ -439,28 +442,28 @@ static const char* VKName(int vk)
 {
     static char buf[32];
 
-    // [Vanity] Tastennamen wie auf einer deutschen Tastatur (nur Anzeige, wird nirgends gespeichert).
+    // [Niobium] Friendly key names (display only, never saved).
     switch (vk)
     {
-    case VK_LBUTTON: return "Maus 1";
-    case VK_RBUTTON: return "Maus 2";
-    case VK_MBUTTON: return "Maus 3";
-    case VK_XBUTTON1: return "Maus 4";
-    case VK_XBUTTON2: return "Maus 5";
+    case VK_LBUTTON: return "Mouse 1";
+    case VK_RBUTTON: return "Mouse 2";
+    case VK_MBUTTON: return "Mouse 3";
+    case VK_XBUTTON1: return "Mouse 4";
+    case VK_XBUTTON2: return "Mouse 5";
     case VK_F1:  return "F1";  case VK_F2:  return "F2";
     case VK_F3:  return "F3";  case VK_F4:  return "F4";
     case VK_F5:  return "F5";  case VK_F6:  return "F6";
     case VK_F7:  return "F7";  case VK_F8:  return "F8";
     case VK_F9:  return "F9";  case VK_F10: return "F10";
     case VK_F11: return "F11"; case VK_F12: return "F12";
-    case VK_INSERT: return "Einfg";  case VK_DELETE: return "Entf";
-    case VK_HOME:   return "Pos1";   case VK_END:    return "Ende";
-    case VK_PRIOR:  return "Bild auf"; case VK_NEXT: return "Bild ab";
-    case VK_SPACE:  return "Leertaste"; case VK_RETURN: return "Enter";
-    case VK_TAB:    return "Tab";    case VK_BACK:   return "R" DE_ue "cktaste";
-    case VK_LEFT:   return "Pfeil links"; case VK_RIGHT: return "Pfeil rechts";
-    case VK_UP:     return "Pfeil hoch";  case VK_DOWN:  return "Pfeil runter";
-    case VK_CAPITAL: return "Feststell"; case VK_OEM_3: return "`";
+    case VK_INSERT: return "Insert"; case VK_DELETE: return "Delete";
+    case VK_HOME:   return "Home";   case VK_END:    return "End";
+    case VK_PRIOR:  return "Page Up"; case VK_NEXT:  return "Page Down";
+    case VK_SPACE:  return "Space";  case VK_RETURN: return "Enter";
+    case VK_TAB:    return "Tab";    case VK_BACK:   return "Backspace";
+    case VK_LEFT:   return "Left arrow"; case VK_RIGHT: return "Right arrow";
+    case VK_UP:     return "Up arrow";   case VK_DOWN:  return "Down arrow";
+    case VK_CAPITAL: return "Caps Lock"; case VK_OEM_3: return "`";
     }
 
     if (vk >= '0' && vk <= '9') { buf[0] = (char)vk; buf[1] = '\0'; return buf; }
@@ -468,7 +471,7 @@ static const char* VKName(int vk)
 
     if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9)
     {
-        snprintf(buf, sizeof(buf), "Num %d", vk - VK_NUMPAD0); // [Vanity] wie im Launcher
+        snprintf(buf, sizeof(buf), "Num %d", vk - VK_NUMPAD0); // [Niobium] same as in the launcher
         return buf;
     }
 
@@ -485,7 +488,7 @@ static const char* VKName(int vk)
 
 static const char* BindName(int vk)
 {
-    return (vk > 0 && vk <= 254) ? VKName(vk) : "keine"; // [Vanity] vorher "UNBOUND"
+    return (vk > 0 && vk <= 254) ? VKName(vk) : "none"; // [Niobium] was "UNBOUND"
 }
 
 // Saved command hotkeys are actions owned by ATLAS. Keep an atomic lookup for
@@ -629,8 +632,8 @@ static bool TogglePreferencePersistenceCheckbox()
 {
     bool value = FConfiguration::bSaveTogglePreferences.load(
         std::memory_order_acquire);
-    // [Vanity] Text auf Deutsch, ImGui-ID bleibt fest ("###save_toggles").
-    if (!ImGui::Checkbox("Schalter merken###save_toggles", &value))
+    // [Niobium] Plain English label; the ImGui id stays fixed ("###save_toggles").
+    if (!ImGui::Checkbox("Remember my settings###save_toggles", &value))
         return false;
 
     FConfiguration::bSaveTogglePreferences.store(
@@ -1131,25 +1134,26 @@ static void PushStyle()
     auto C = [](float r, float g, float b, float a = 1.f) { return ImVec4(r, g, b, a); };
     ImVec4* col = s.Colors;
 
-    col[ImGuiCol_WindowBg] = C(0.0667f, 0.0824f, 0.1216f, 1.f); // #11151f
-    col[ImGuiCol_ChildBg] = C(0.066f, 0.082f, 0.122f, 1.f);
-    col[ImGuiCol_PopupBg] = C(0.066f, 0.082f, 0.122f, 0.98f);
+    // [Niobium] brand surface #11131C (was #11151f)
+    col[ImGuiCol_WindowBg] = C(0.0667f, 0.0745f, 0.1098f, 1.f);
+    col[ImGuiCol_ChildBg] = C(0.0667f, 0.0745f, 0.1098f, 1.f);
+    col[ImGuiCol_PopupBg] = C(0.0667f, 0.0745f, 0.1098f, 0.98f);
     col[ImGuiCol_Border] = C(0.137f, 0.165f, 0.243f, 1.f);
     col[ImGuiCol_BorderShadow] = C(0.f, 0.f, 0.f, 0.f);
-    col[ImGuiCol_FrameBg] = C(0.094f, 0.114f, 0.165f, 1.f);
+    col[ImGuiCol_FrameBg] = C(0.090f, 0.102f, 0.149f, 1.f); // [Niobium] surface-raised #171A26
     col[ImGuiCol_FrameBgHovered] = C(0.12f, 0.145f, 0.21f, 1.f);
     col[ImGuiCol_FrameBgActive] = C(0.14f, 0.17f, 0.25f, 1.f);
-    col[ImGuiCol_TitleBg] = C(0.043f, 0.051f, 0.071f, 1.f);
-    col[ImGuiCol_TitleBgActive] = C(0.043f, 0.051f, 0.071f, 1.f);
-    col[ImGuiCol_TitleBgCollapsed] = C(0.043f, 0.051f, 0.071f, 0.9f);
-    col[ImGuiCol_ScrollbarBg] = C(0.043f, 0.051f, 0.071f, 0.f);
+    col[ImGuiCol_TitleBg] = kNiobiumBg; // [Niobium] brand bg #0A0B12
+    col[ImGuiCol_TitleBgActive] = kNiobiumBg;
+    col[ImGuiCol_TitleBgCollapsed] = C(0.039f, 0.043f, 0.071f, 0.9f);
+    col[ImGuiCol_ScrollbarBg] = C(0.039f, 0.043f, 0.071f, 0.f);
     col[ImGuiCol_ScrollbarGrab] = C(0.137f, 0.165f, 0.243f, 1.f);
     col[ImGuiCol_ScrollbarGrabHovered] = Accent(0.5f);
     col[ImGuiCol_ScrollbarGrabActive] = Accent(1.f);
     col[ImGuiCol_CheckMark] = Accent();
     col[ImGuiCol_SliderGrab] = Accent();
     col[ImGuiCol_SliderGrabActive] = AccentDk();
-    col[ImGuiCol_Button] = C(0.094f, 0.114f, 0.165f, 1.f);
+    col[ImGuiCol_Button] = C(0.090f, 0.102f, 0.149f, 1.f); // [Niobium] surface-raised #171A26
     col[ImGuiCol_ButtonHovered] = Accent(0.18f);
     col[ImGuiCol_ButtonActive] = Accent(0.32f);
     col[ImGuiCol_Header] = Accent(0.14f);
@@ -1161,18 +1165,18 @@ static void PushStyle()
     col[ImGuiCol_ResizeGrip] = Accent(0.22f);
     col[ImGuiCol_ResizeGripHovered] = Accent(0.55f);
     col[ImGuiCol_ResizeGripActive] = Accent(0.90f);
-    col[ImGuiCol_Tab] = C(0.066f, 0.082f, 0.122f, 1.f);
+    col[ImGuiCol_Tab] = C(0.0667f, 0.0745f, 0.1098f, 1.f);
     col[ImGuiCol_TabHovered] = Accent(0.2f);
-    col[ImGuiCol_TabActive] = C(0.094f, 0.114f, 0.165f, 1.f);
+    col[ImGuiCol_TabActive] = C(0.090f, 0.102f, 0.149f, 1.f);
     col[ImGuiCol_TabUnfocused] = col[ImGuiCol_Tab];
     col[ImGuiCol_TabUnfocusedActive] = col[ImGuiCol_TabActive];
-    col[ImGuiCol_Text] = C(0.847f, 0.878f, 0.941f, 1.f);
-    col[ImGuiCol_TextDisabled] = C(0.353f, 0.388f, 0.478f, 1.f);
+    col[ImGuiCol_Text] = kNiobiumText; // [Niobium] brand text #F2F3F8
+    col[ImGuiCol_TextDisabled] = kNiobiumMutedText;
     col[ImGuiCol_PlotLines] = Accent();
     col[ImGuiCol_PlotLinesHovered] = Accent();
     col[ImGuiCol_PlotHistogram] = Accent();
     col[ImGuiCol_PlotHistogramHovered] = AccentDk();
-    col[ImGuiCol_TableHeaderBg] = C(0.066f, 0.082f, 0.122f, 1.f);
+    col[ImGuiCol_TableHeaderBg] = C(0.0667f, 0.0745f, 0.1098f, 1.f);
     col[ImGuiCol_TableBorderLight] = C(0.137f, 0.165f, 0.243f, 1.f);
     col[ImGuiCol_TableBorderStrong] = C(0.137f, 0.165f, 0.243f, 1.f);
     col[ImGuiCol_TableRowBg] = C(0.f, 0.f, 0.f, 0.f);
@@ -1235,11 +1239,10 @@ static void EndSectionBody()
     ImGui::Unindent(SectionBodyIndent);
 }
 
-// [Vanity] Bausteine fuer die deutschen Erklaerungen (gleicher Stil wie im Trickshot-Reiter).
-static const ImVec4 kVanityMutedText(0.353f, 0.388f, 0.478f, 1.f);
+// [Niobium] Building blocks for the short hints (same style as in the Trickshot tab).
 
-// Grauer Satz, der sagt, was ein Schalter oder Knopf macht. Wird auf "width" umgebrochen.
-// underCheckbox: direkt unter einem Haken-Schalter, eingerueckt auf Hoehe von dessen Text.
+// Grey sentence that says what a toggle or button does. Wraps at "width".
+// underCheckbox: right below a checkbox, indented to line up with its label.
 static void ControlHint(const char* text, float width, bool underCheckbox = false)
 {
     const float indent = underCheckbox
@@ -1249,7 +1252,7 @@ static void ControlHint(const char* text, float width, bool underCheckbox = fals
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3.f);
     if (indent > 0.f)
         ImGui::Indent(indent);
-    ImGui::PushStyleColor(ImGuiCol_Text, kVanityMutedText);
+    ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumHintText);
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + (std::max)(40.f, width - indent));
     ImGui::TextUnformatted(text);
     ImGui::PopTextWrapPos();
@@ -1258,8 +1261,8 @@ static void ControlHint(const char* text, float width, bool underCheckbox = fals
         ImGui::Unindent(indent);
 }
 
-// Rote Meldung, wenn eine Taste nicht belegt werden konnte (auf "width" umgebrochen).
-// Steht im Reiter "Befehle" und "Optionen", damit man sie dort sieht, wo man die Taste waehlt.
+// Red message when a key could not be assigned (wraps at "width").
+// Shown in the "Commands" and "Options" tabs, right where you pick the key.
 static void DrawBindError(float width)
 {
     if (g_BindError.empty() || GetTickCount64() >= g_BindErrorUntil)
@@ -1271,7 +1274,7 @@ static void DrawBindError(float width)
     ImGui::PopStyleColor();
 }
 
-// Erklaerung, solange die Maus ueber dem letzten Element steht.
+// Explanation while the mouse is over the last item.
 static void HoverHint(const char* text)
 {
     if (text && *text && ImGui::BeginItemTooltip())
@@ -1283,13 +1286,212 @@ static void HoverHint(const char* text)
     }
 }
 
-// Langer Knopftext, wenn er in "width" passt, sonst der kurze (deutsche Woerter sind laenger).
+// Long button label if it fits in "width", otherwise the short one.
 static const char* FitLabel(const char* longLabel, const char* shortLabel, float width)
 {
     const float needed =
         ImGui::CalcTextSize(longLabel, nullptr, true).x +
         ImGui::GetStyle().FramePadding.x * 2.f;
     return needed <= width ? longLabel : shortLabel;
+}
+
+// ---------------------------------------------------------------------------------------------
+// [Niobium] Bubble Builds status (read-only).
+// Bubble Builds is the see-through "bubble wrap" build look of Chapter 2 Seasons 5-6. It only
+// exists in Performance Mode (the ES3.1 renderer). The launcher turns it on by starting the game
+// client with -FeatureLevelES31. It can't be switched while playing, so the menu only reports
+// what the launcher did. Same version rules as VersionRules in launcher/core/src/launchargs.rs:
+// supported 15.40 <= v < 16.10, experimental 15.30 and 16.10 <= v < 16.50, everything else
+// unavailable.
+
+// Where the status row reads the command line from. The menu preview tool swaps this to show
+// every state; the game always uses GetCommandLineW.
+static LPWSTR(WINAPI* g_BubbleBuildsCommandLine)() = &GetCommandLineW;
+
+enum class EBubbleBuildsLevel : uint8_t
+{
+    Supported,
+    Experimental,
+    Unavailable
+};
+
+// Compares whole hundredths, so "15.4" (how the game stores 15.40) can't be mixed up.
+static EBubbleBuildsLevel BubbleBuildsLevelFor(double fortniteVersion)
+{
+    if (!(fortniteVersion > 0.0) || fortniteVersion > 1000.0)
+        return EBubbleBuildsLevel::Unavailable;
+
+    const long long hundredths = std::llround(fortniteVersion * 100.0);
+    if (hundredths >= 1540 && hundredths < 1610)
+        return EBubbleBuildsLevel::Supported;
+    if (hundredths == 1530 || (hundredths >= 1610 && hundredths < 1650))
+        return EBubbleBuildsLevel::Experimental;
+    return EBubbleBuildsLevel::Unavailable;
+}
+
+// Case-insensitive search for a whole command line switch ("-name", "-name=value" or "-name"
+// in quotes). Never matches inside a longer switch such as "-namex".
+static const wchar_t* FindCommandLineSwitch(const wchar_t* commandLine, const wchar_t* name)
+{
+    if (!commandLine || !name || !*name)
+        return nullptr;
+
+    const size_t nameLength = wcslen(name);
+    for (const wchar_t* at = commandLine; *at; ++at)
+    {
+        if (_wcsnicmp(at, name, nameLength) != 0)
+            continue;
+
+        const wchar_t before = at == commandLine ? L' ' : at[-1];
+        const wchar_t after = at[nameLength];
+        const bool startsToken = before == L' ' || before == L'\t' || before == L'"';
+        const bool endsToken = after == L'\0' || after == L' ' || after == L'\t' ||
+            after == L'"' || after == L'=';
+        if (startsToken && endsToken)
+            return at;
+    }
+    return nullptr;
+}
+
+// The version text the launcher passed (-niobiumversion=15.40), digits and dots only.
+static std::string LauncherFortniteVersion(const wchar_t* commandLine)
+{
+    static const wchar_t kSwitch[] = L"-niobiumversion";
+    const wchar_t* found = FindCommandLineSwitch(commandLine, kSwitch);
+    if (!found || found[_countof(kSwitch) - 1] != L'=')
+        return {};
+
+    std::string version;
+    for (const wchar_t* at = found + _countof(kSwitch); *at && version.size() < 12; ++at)
+    {
+        if ((*at >= L'0' && *at <= L'9') || *at == L'.')
+            version.push_back(static_cast<char>(*at));
+        else
+            break;
+    }
+    if (version.empty() || version == "0")
+        return {};
+    return version;
+}
+
+// "15.40" from 15.4. Early Chapter 1 builds used one decimal ("1.8", "3.5"), later ones two.
+static std::string FormatFortniteVersion(double fortniteVersion)
+{
+    if (!(fortniteVersion > 0.0) || fortniteVersion > 1000.0)
+        return {};
+
+    const long long hundredths = std::llround(fortniteVersion * 100.0);
+    const long long major = hundredths / 100;
+    const long long minor = hundredths % 100;
+    char text[32]{};
+    if (major < 5 && minor % 10 == 0)
+        snprintf(text, sizeof(text), "%lld.%lld", major, minor / 10);
+    else
+        snprintf(text, sizeof(text), "%lld.%02lld", major, minor);
+    return text;
+}
+
+static void DrawBubbleBuildsStatus(float width)
+{
+    const wchar_t* commandLine =
+        g_BubbleBuildsCommandLine ? g_BubbleBuildsCommandLine() : nullptr;
+
+    // The running game knows its version best; the launcher's text is only the fallback
+    // (and the nicer label when both say the same).
+    const std::string launcherVersion = LauncherFortniteVersion(commandLine);
+    double version = VersionInfo.FortniteVersion;
+    if (!(version > 0.0) && !launcherVersion.empty())
+        version = strtod(launcherVersion.c_str(), nullptr);
+
+    std::string versionText = FormatFortniteVersion(version);
+    if (!launcherVersion.empty() && version > 0.0 &&
+        std::llround(strtod(launcherVersion.c_str(), nullptr) * 100.0) == std::llround(version * 100.0))
+    {
+        versionText = launcherVersion;
+    }
+    if (versionText.empty())
+        versionText = "this version";
+
+    const EBubbleBuildsLevel level = BubbleBuildsLevelFor(version);
+    // Both spellings count, like in the launcher (is_feature_level_es31 in launchargs.rs).
+    const bool featureLevelES31 =
+        FindCommandLineSwitch(commandLine, L"-FeatureLevelES31") != nullptr ||
+        FindCommandLineSwitch(commandLine, L"-FeatureLevelES3_1") != nullptr;
+
+    std::string status;
+    ImVec4 dotColour = kNiobiumMutedText;
+    bool dotFilled = false;
+    if (level == EBubbleBuildsLevel::Unavailable)
+    {
+        status = "Bubble Builds: Not available on " + versionText;
+    }
+    else if (featureLevelES31)
+    {
+        status = "Bubble Builds: On (set in the launcher)";
+        dotColour = ImVec4(0.133f, 0.773f, 0.369f, 1.f); // success #22C55E
+        dotFilled = true;
+    }
+    else
+    {
+        status = "Bubble Builds: Off " NB_DASH " turn it on in the launcher, then restart the game.";
+    }
+
+    // Status row: a small dot, then the text (wrapped, never cut off).
+    {
+        const float lineHeight = ImGui::GetTextLineHeight();
+        const float radius = 4.5f;
+        const float dotSpace = radius * 2.f + 8.f;
+        const ImVec2 position = ImGui::GetCursorScreenPos();
+        const ImVec2 centre(position.x + radius + 1.f, position.y + lineHeight * 0.5f);
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        if (dotFilled)
+        {
+            drawList->AddCircleFilled(centre, radius + 3.f,
+                ImGui::GetColorU32(ImVec4(dotColour.x, dotColour.y, dotColour.z, 0.18f)));
+            drawList->AddCircleFilled(centre, radius, ImGui::GetColorU32(dotColour));
+        }
+        else
+        {
+            drawList->AddCircle(centre, radius - 0.5f, ImGui::GetColorU32(dotColour), 0, 1.4f);
+        }
+
+        ImGui::Indent(dotSpace);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + (std::max)(40.f, width - dotSpace));
+        ImGui::TextUnformatted(status.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::Unindent(dotSpace);
+    }
+
+    if (level == EBubbleBuildsLevel::Experimental)
+    {
+        // Small amber "Experimental" pill (warning colour #F59E0B; gold is never a warning).
+        const char* badge = "Experimental";
+        const ImVec2 textSize = ImGui::CalcTextSize(badge);
+        const ImVec2 padding(8.f, 2.f);
+        const ImVec2 position = ImGui::GetCursorScreenPos();
+        const ImVec2 size(textSize.x + padding.x * 2.f, textSize.y + padding.y * 2.f);
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec4 amber(0.961f, 0.620f, 0.043f, 1.f);
+        drawList->AddRectFilled(position, ImVec2(position.x + size.x, position.y + size.y),
+            ImGui::GetColorU32(ImVec4(amber.x, amber.y, amber.z, 0.14f)), size.y * 0.5f);
+        drawList->AddRect(position, ImVec2(position.x + size.x, position.y + size.y),
+            ImGui::GetColorU32(ImVec4(amber.x, amber.y, amber.z, 0.55f)), size.y * 0.5f, 0, 1.f);
+        drawList->AddText(ImVec2(position.x + padding.x, position.y + padding.y),
+            ImGui::GetColorU32(amber), badge);
+        ImGui::Dummy(size);
+        ControlHint("Epic changed how builds look around this version. Your builds may look normal even with this on.", width);
+    }
+
+    if (level == EBubbleBuildsLevel::Unavailable)
+    {
+        ControlHint("Only on Fortnite 15.40 " NB_DASH " 16.00 (Chapter 2, Seasons 5" NB_DASH "6). "
+            "Try Mobile Builds in the Main tab.", width);
+    }
+    else
+    {
+        ControlHint("The see-through \"bubble wrap\" build look from Chapter 2 Seasons 5" NB_DASH "6. "
+            "Can't be changed while playing.", width);
+    }
 }
 
 static bool LabeledSliderInt(
@@ -1341,7 +1543,7 @@ static bool SidebarTab(const char* label, int index, float height)
     else if (hovered)
         dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), ImGui::GetColorU32(Accent(0.05f)));
 
-    ImVec4 textCol = active ? Accent() : ImVec4(0.50f, 0.55f, 0.66f, 1.f);
+    ImVec4 textCol = active ? AccentText() : ImVec4(0.50f, 0.55f, 0.66f, 1.f); // [Niobium] violet-text
     if (!active && hovered) textCol = ImVec4(0.78f, 0.82f, 0.90f, 1.f);
 
     const ImVec2 ts = ImGui::CalcTextSize(label);
@@ -2263,7 +2465,7 @@ static bool ExecuteConsoleCommandWithReturnedOutput(
             "console-return-path invoke-failed target=%p",
             reinterpret_cast<void*>(native));
         QueueCommandError(
-            L"[Vanity] Fehler: Der Befehl konnte nicht ausgef\u00FChrt werden."); // [Vanity]
+            L"[Niobium] Error: the command could not run."); // [Niobium]
         // The native call may already have performed part or all of the
         // command before faulting. Treat it as consumed so the Kismet fallback
         // cannot execute a state-changing command twice.
@@ -2296,7 +2498,7 @@ static bool ExecuteConsoleCommandWithReturnedOutput(
             output.NumElements,
             output.MaxElements);
         QueueCommandError(
-            L"[Vanity] Der Befehl lief, aber die Antwort vom Spiel war unlesbar."); // [Vanity]
+            L"[Niobium] The command ran, but the game's reply could not be read."); // [Niobium]
         return true;
     }
 
@@ -2349,7 +2551,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     {
         AtlasDiagnostics::WriteLine("command-skip no-world command=%s", cmd);
         if (showConsoleErrors)
-            QueueCommandError(L"[Vanity] Geht gerade nicht \u2013 warte, bis du im Spiel bist."); // [Vanity]
+            QueueCommandError(L"[Niobium] Not right now \u2013 wait until you are in the game."); // [Niobium]
         return false;
     }
 
@@ -2358,7 +2560,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     {
         AtlasDiagnostics::WriteLine("command-skip no-player command=%s", cmd);
         if (showConsoleErrors)
-            QueueCommandError(L"[Vanity] Geht gerade nicht \u2013 deine Spielfigur ist noch nicht da."); // [Vanity]
+            QueueCommandError(L"[Niobium] Not right now \u2013 your character isn't there yet."); // [Niobium]
         return false;
     }
 
@@ -2366,7 +2568,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     if (len <= 1)
     {
         if (showConsoleErrors)
-            QueueCommandError(L"[Vanity] Im Befehl steht ein Zeichen, das nicht geht."); // [Vanity]
+            QueueCommandError(L"[Niobium] The command has a character that can't be used."); // [Niobium]
         return false;
     }
 
@@ -2374,7 +2576,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     if (MultiByteToWideChar(CP_UTF8, 0, cmd, -1, wide.data(), len) != len)
     {
         if (showConsoleErrors)
-            QueueCommandError(L"[Vanity] Der Befehl konnte nicht gelesen werden."); // [Vanity]
+            QueueCommandError(L"[Niobium] The command could not be read."); // [Niobium]
         return false;
     }
     wide.resize(static_cast<size_t>(len - 1));
@@ -3121,9 +3323,9 @@ static void JoinSelectedHost()
     }
 }
 
-// [Vanity] Helfer fuer den Trickshot-Reiter (VanityTrickshotTab.cpp). Ein gesendeter Befehl
-// landet wie bei den "Run"-Knoepfen als "> befehl" im Konsolen-Protokoll.
-static bool VanityTabExec(const char* command)
+// [Niobium] Helper for the Trickshot tab (NiobiumTrickshotTab.cpp). A sent command shows up as
+// "> command" in the console log, just like with the "Run" buttons.
+static bool NiobiumTabExec(const char* command)
 {
     if (!Exec(command))
         return false;
@@ -3133,6 +3335,9 @@ static bool VanityTabExec(const char* command)
 
 void GUI_Init()
 {
+    // [Niobium] Never write imgui.ini into the game folder (the working directory of the game).
+    // Every window already uses NoSavedSettings; this also stops ImGui from ever trying.
+    ImGui::GetIO().IniFilename = nullptr;
     AtlasDiagnostics::BeginSession(FConfiguration::ConsoleVersion);
     const bool repairMenuHotkey =
         !HotkeyPersist::HasValidSavedMenuHotkey();
@@ -3474,23 +3679,23 @@ static int PollBindKey(const InputPressCounts& presses)
     return 0;
 }
 
-// [Vanity] message = deutscher Text fuer das Menue, reason = unveraenderter englischer Grund
-// fuer das Diagnose-Protokoll (bleibt wie in ATLAS, damit Logs vergleichbar bleiben).
+// [Niobium] message = plain text for the menu, reason = the unchanged reason for the
+// diagnostics log (stays as in ATLAS so logs remain comparable).
 static void SetBindError(const char* message, const char* reason)
 {
-    g_BindError = message ? message : "Diese Taste ist schon belegt.";
+    g_BindError = message ? message : "That key is already in use.";
     g_BindErrorUntil = GetTickCount64() + 3500;
     AtlasDiagnostics::WriteLine("bind-rejected reason=%s",
         reason ? reason : "That key is already in use.");
 }
 
-// [Vanity] Meldungen beim Belegen einer Taste (Text fuers Menue + englischer Log-Grund).
+// [Niobium] Messages when assigning a key (text for the menu + reason for the log).
 static constexpr const char* kBindTakenText =
-    "Diese Taste ist schon f" DE_ue "r etwas anderes belegt.";
+    "That key is already used for something else.";
 static constexpr const char* kBindTakenReason =
-    "That key is already assigned to another Vanity action.";
+    "That key is already assigned to another Niobium action.";
 static constexpr const char* kBindReservedText =
-    "Men" DE_ue "-, Beitreten- und Konsolen-Tasten gehen hier nicht.";
+    "The menu, join and console keys can't be used here.";
 static constexpr const char* kBindReservedReason =
     "Menu, Join, and console keys are reserved.";
 
@@ -3848,14 +4053,14 @@ static bool FinishSavedCommandEdit(bool keepOpenOnInvalid)
 
     const std::string command =
         TrimCommand(g_SavedCommandEdit.Draft);
-    // [Vanity] Meldungen auf Deutsch (nur Anzeige unter dem Eingabefeld).
+    // [Niobium] Short messages, shown below the input field only.
     const char* error = nullptr;
     if (command.empty())
-        error = "Der Befehl darf nicht leer sein.";
+        error = "The command can't be empty.";
     else if (command.find_first_of("\r\n") != std::string::npos)
-        error = "Der Befehl muss in eine Zeile passen.";
+        error = "The command must fit on one line.";
     else if (command.size() > kMaximumConsoleCommandLength)
-        error = "Der Befehl ist zu lang.";
+        error = "The command is too long.";
 
     if (error)
     {
@@ -3971,7 +4176,7 @@ static void RenderSavedCommandEditor(float width)
             ESavedCommandEditTarget::MacroDelay;
     if (editingDelay)
     {
-        ImGui::TextUnformatted("    Pause"); // [Vanity] vorher "wait"
+        ImGui::TextUnformatted("    Wait"); // [Niobium] was "wait"
         ImGui::SameLine(0.f, 6.f);
         ImGui::SetNextItemWidth((std::min)(100.f, width));
     }
@@ -4247,7 +4452,7 @@ static bool SubmitConsoleCommand()
 
     if (raw.size() > kMaximumConsoleCommandLength)
     {
-        AppendConsoleLine(EConsoleLineKind::Error, "[Vanity] Der Befehl ist zu lang " DE_DASH " bitte k" DE_ue "rzer."); // [Vanity]
+        AppendConsoleLine(EConsoleLineKind::Error, "[Niobium] That command is too long " NB_DASH " please make it shorter."); // [Niobium]
         g_ConsoleUi.FocusInput = true;
         return false;
     }
@@ -4255,7 +4460,7 @@ static bool SubmitConsoleCommand()
     const std::string command = NormalizeConsoleCommand(raw);
     if (command.empty())
     {
-        AppendConsoleLine(EConsoleLineKind::Error, "[Vanity] Schreib nach dem / noch einen Befehl, z. B. /god"); // [Vanity]
+        AppendConsoleLine(EConsoleLineKind::Error, "[Niobium] Type a command after the /, for example /god"); // [Niobium]
         g_ConsoleUi.FocusInput = true;
         return false;
     }
@@ -4266,9 +4471,9 @@ static bool SubmitConsoleCommand()
             EConsoleLineKind::Error,
             g_GameThreadDispatcherReady.load(
                 std::memory_order_acquire)
-                // [Vanity] auf Deutsch
-                ? "[Vanity] Zu viele Befehle auf einmal " DE_DASH " dieser wurde nicht geschickt. Kurz warten."
-                : "[Vanity] Befehle gehen noch nicht " DE_DASH " warte, bis das Spiel fertig geladen ist.");
+                // [Niobium] plain English
+                ? "[Niobium] Too many commands at once " NB_DASH " this one wasn't sent. Wait a moment."
+                : "[Niobium] Commands don't work yet " NB_DASH " wait until the game has finished loading.");
         g_ConsoleUi.FocusInput = true;
         return false;
     }
@@ -4377,8 +4582,8 @@ static void DrawConsoleHistoryPopup(
 static bool RenderConsoleCommandInput(
     float rightPadding, float frameOpacity)
 {
-    // [Vanity] "Leeren" statt "Clear"; Breite nach dem Text, damit nichts abgeschnitten wird.
-    const char* clearLabel = "Leeren##console_logs";
+    // [Niobium] The button width follows the label, so nothing gets cut off.
+    const char* clearLabel = "Clear##console_logs";
     const float clearButtonWidth = (std::max)(
         62.f,
         ImGui::CalcTextSize(clearLabel, nullptr, true).x +
@@ -4774,8 +4979,8 @@ void GUI_Render()
     const float consoleFade = s_ConsoleFade * s_ConsoleFade * (3.f - 2.f * s_ConsoleFade);
     const float surfaceFade = (std::max)(menuFade, consoleFade);
 
-    // [Vanity] Trickshot-Banner: jeden Frame, auch wenn Menue und Konsole zu sind.
-    VanityToast_Draw();
+    // [Niobium] Trickshot banner: every frame, even when the menu and the console are closed.
+    NiobiumToast_Draw();
 
     if (surfaceFade <= 0.f)
         return;
@@ -4833,7 +5038,7 @@ void GUI_Render()
     {
         ImGui::GetWindowDrawList()->AddRectFilled(
             wp, ImVec2(wp.x + W, wp.y + TopBarH),
-            ImGui::GetColorU32(ImVec4(0.0549f, 0.0667f, 0.0941f, 1.f)),
+            ImGui::GetColorU32(kNiobiumBg), // [Niobium] brand bg #0A0B12
             ImGui::GetStyle().WindowRounding, ImDrawFlags_RoundCornersTop);
 
         const float LogoSize = 30.f;
@@ -4845,24 +5050,6 @@ void GUI_Render()
         else
             ImGui::Dummy(ImVec2(LogoSize, LogoSize));
 
-        ImGui::SameLine(PadL + LogoSize + 8.f);
-        const float TitleY = (TopBarH - ImGui::GetTextLineHeight()) * 0.5f;
-        ImGui::SetCursorPosY(TitleY);
-        ImGui::PushStyleColor(ImGuiCol_Text, Accent());
-        ImGui::Text("Vanity");
-        ImGui::PopStyleColor();
-        ImGui::SameLine(0.f, 6.f);
-        ImGui::SetCursorPosY(TitleY);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-        ImGui::TextUnformatted("| Men" DE_ue); // [Vanity] vorher "| Console"
-        ImGui::PopStyleColor();
-
-        ImGui::SameLine(0.f, 8.f);
-        ImGui::SetCursorPosY(TitleY);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 0.6f));
-        ImGui::TextUnformatted(FConfiguration::ConsoleVersion);
-        ImGui::PopStyleColor();
-
         char Badge[32];
         snprintf(Badge, sizeof(Badge), "[%s]", VKName(FGUI::HotkeyVK));
         const float BadgeW = ImGui::CalcTextSize(Badge).x;
@@ -4871,9 +5058,34 @@ void GUI_Render()
         // Close button pinned to the top-right; the hotkey badge sits to its left.
         const float CloseSize = 22.f;
         const float CloseX = W - CloseSize - 12.f;
+        const float BadgeX = CloseX - 12.f - BadgeW;
 
-        ImGui::SetCursorPos(ImVec2(CloseX - 12.f - BadgeW, (TopBarH - BadgeH) * 0.5f));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 0.85f));
+        ImGui::SameLine(PadL + LogoSize + 8.f);
+        const float TitleY = (TopBarH - ImGui::GetTextLineHeight()) * 0.5f;
+        ImGui::SetCursorPosY(TitleY);
+        ImGui::PushStyleColor(ImGuiCol_Text, AccentText()); // [Niobium] name in violet-text
+        ImGui::TextUnformatted("Niobium");
+        ImGui::PopStyleColor();
+        ImGui::SameLine(0.f, 6.f);
+        ImGui::SetCursorPosY(TitleY);
+        ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumMutedText);
+        ImGui::TextUnformatted("| Menu"); // [Niobium] was "| Console"
+        ImGui::PopStyleColor();
+
+        // [Niobium] The version only shows when it fits in front of the key badge
+        // (narrow windows used to draw it under the badge).
+        const float VersionX = ImGui::GetItemRectMax().x - wp.x + 8.f;
+        if (VersionX + ImGui::CalcTextSize(FConfiguration::ConsoleVersion).x + 12.f <= BadgeX)
+        {
+            ImGui::SameLine(0.f, 8.f);
+            ImGui::SetCursorPosY(TitleY);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.431f, 0.451f, 0.573f, 0.75f));
+            ImGui::TextUnformatted(FConfiguration::ConsoleVersion);
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::SetCursorPos(ImVec2(BadgeX, (TopBarH - BadgeH) * 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.431f, 0.451f, 0.573f, 0.9f));
         ImGui::TextUnformatted(Badge);
         ImGui::PopStyleColor();
 
@@ -4888,7 +5100,7 @@ void GUI_Render()
             if (hovered)
                 dl->AddRectFilled(rmin, rmax, ImGui::GetColorU32(Accent(0.20f)), 4.f);
             const float pad = 6.f;
-            const ImU32 xcol = ImGui::GetColorU32(hovered ? Accent() : ImVec4(0.55f, 0.60f, 0.70f, 1.f));
+            const ImU32 xcol = ImGui::GetColorU32(hovered ? AccentText() : ImVec4(0.55f, 0.60f, 0.70f, 1.f));
             dl->AddLine(ImVec2(rmin.x + pad, rmin.y + pad), ImVec2(rmax.x - pad, rmax.y - pad), xcol, 1.6f);
             dl->AddLine(ImVec2(rmax.x - pad, rmin.y + pad), ImVec2(rmin.x + pad, rmax.y - pad), xcol, 1.6f);
         }
@@ -4906,19 +5118,18 @@ void GUI_Render()
         fdl->AddLine(ImVec2(wp.x + SidebarW, wp.y + TopBarH), ImVec2(wp.x + SidebarW, wp.y + H), line, 1.f);
     }
 
-    // [Vanity] Neuer Reiter "Trickshot" (Index 3), "Credits" rutscht auf Index 4.
-    // Die Seitenleiste hat Platz fuer 6 Reiter (Mindesthoehe 320 px, je 40 px).
-    // Namen auf Deutsch; sie muessen in die 118 px breite Seitenleiste passen
-    // ("Einstellungen" waere zu breit, darum "Optionen"). Die Reiter-ID ist der Index.
+    // [Niobium] Extra "Trickshot" tab (index 3); "Credits" moved to index 4.
+    // The sidebar has room for 6 tabs (minimum height 320 px, 40 px each). Names must fit
+    // the 118 px sidebar. The tab id is the index.
     static const char* kTabs[] = {
-        "Start", "Befehle", "Optionen", "Trickshot", "Credits"
+        "Main", "Commands", "Options", "Trickshot", "Credits"
     };
     const int kTabCount = (int)(sizeof(kTabs) / sizeof(kTabs[0]));
     const float TabH = 40.f;
     const float TabsTop = 12.f;
 
     ImGui::SetCursorPos(ImVec2(0.f, TopBarH));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0549f, 0.0667f, 0.0941f, 1.f)); // #0e1118
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, kNiobiumBg); // [Niobium] brand bg #0A0B12 (was #0e1118)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
     ImGui::BeginChild("##sidebar", ImVec2(SidebarW, H - TopBarH), false, ImGuiWindowFlags_NoScrollbar);
     {
@@ -4951,8 +5162,8 @@ void GUI_Render()
     const float ContentPadX = ContentHorizontalInset;
     const float ContentPadTop = 14.f;
     const bool bCommandsTab = FGUI::ActiveTab == 1;
-    // [Vanity] Der Trickshot-Reiter ist immer laenger als das Fenster: feste Bildlaufleiste,
-    // damit die Knopfbreiten nicht springen.
+    // [Niobium] The Trickshot tab is always taller than the window: keep the scrollbar
+    // visible so the button widths don't jump.
     const bool bTrickshotTab = FGUI::ActiveTab == 3;
     const float ContentChildW =
         (W - SidebarW) - ContentPadX;
@@ -4961,10 +5172,20 @@ void GUI_Render()
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, fade);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.f, 6.f));
-    const ImGuiWindowFlags ContentFlags = (bCommandsTab || bTrickshotTab) ? ImGuiWindowFlags_AlwaysVerticalScrollbar : ImGuiWindowFlags_None; // [Vanity] + Trickshot
+    const ImGuiWindowFlags ContentFlags = (bCommandsTab || bTrickshotTab) ? ImGuiWindowFlags_AlwaysVerticalScrollbar : ImGuiWindowFlags_None; // [Niobium] + Trickshot
     ImGui::BeginChild("##content",
         ImVec2(ContentChildW, (H - TopBarH) - ContentPadTop - 12.f), false,
         ContentFlags);
+    {
+        // [Niobium] Every tab shares this child window, so a new tab starts at the top
+        // instead of inheriting the scroll position of the tab before.
+        static int s_LastContentTab = -1;
+        if (s_LastContentTab != FGUI::ActiveTab)
+        {
+            s_LastContentTab = FGUI::ActiveTab;
+            ImGui::SetScrollY(0.f);
+        }
+    }
 
     float CW =
         ImGui::GetContentRegionAvail().x -
@@ -4974,15 +5195,15 @@ void GUI_Render()
 
     switch (FGUI::ActiveTab)
     {
-    case 0: // main tab ([Vanity] Reiter "Start": Texte auf Deutsch, graue Erklaerungen dazu)
+    case 0: // main tab ([Niobium] "Main": plain English texts with grey hints)
     {
-        SectionLabel("Server beitreten");
+        SectionLabel("Join a server");
         BeginSectionBody();
 
-    const char* hostTypeItems[] = { "Auf diesem PC", "Auf einem anderen PC" };
+    const char* hostTypeItems[] = { "On this PC", "On another PC" };
     const float hostControlWidth = CW;
     LabeledCombo(
-        "Wo l" DE_ae "uft der Server?", "##hosttype", &FGUI::HostType,
+        "Where is the server running?", "##hosttype", &FGUI::HostType,
         hostTypeItems, IM_ARRAYSIZE(hostTypeItems),
         hostControlWidth);
 
@@ -4991,32 +5212,32 @@ void GUI_Render()
     if (FGUI::HostType == 0)
     {
         if (ImGui::Button(
-                FitLabel("Server auf diesem PC beitreten###join_local",
-                    "Beitreten###join_local", hostControlWidth),
+                FitLabel("Join the server on this PC###join_local",
+                    "Join###join_local", hostControlWidth),
                 ImVec2(hostControlWidth, 0.f)))
             JoinSelectedHost();
     }
     else
     {
         ImGui::PushItemWidth(hostControlWidth);
-        ImGui::InputTextWithHint("##remoteip", "IP-Adresse vom anderen PC", FGUI::RemoteIP, sizeof(FGUI::RemoteIP));
+        ImGui::InputTextWithHint("##remoteip", "IP address of the other PC", FGUI::RemoteIP, sizeof(FGUI::RemoteIP));
         ImGui::PopItemWidth();
 
         ImGui::Spacing();
 
         if (ImGui::Button(
-                FitLabel("Server mit dieser IP beitreten###join_remote",
-                    "Beitreten###join_remote", hostControlWidth),
+                FitLabel("Join the server at this IP###join_remote",
+                    "Join###join_remote", hostControlWidth),
                 ImVec2(hostControlWidth, 0.f)))
             JoinSelectedHost();
-        HoverHint("Geht nur, wenn oben eine IP-Adresse steht.");
+        HoverHint("Only works when an IP address is filled in above.");
     }
 
     ImGui::Spacing();
     {
         char joinHint[160];
         snprintf(joinHint, sizeof(joinHint),
-            "Tipp: Ist das Men" DE_ue " zu, trittst du mit der Taste %s sofort bei.",
+            "Tip: when the menu is closed, press %s to join right away.",
             VKName(FGUI::JoinHotkeyVK));
         ControlHint(joinHint, hostControlWidth);
     }
@@ -5024,54 +5245,54 @@ void GUI_Render()
 
     if (VersionInfo.EngineVersion < 4.24 || VersionInfo.FortniteVersion < 24.30)
     {
-        SectionLabel("Editieren");
+        SectionLabel("Editing");
         BeginSectionBody();
 
         if (VersionInfo.EngineVersion < 4.24)
         {
             PersistentCheckbox(
-                "Edit beim Loslassen###eor", FConfiguration::bEOREnabled);
-            ControlHint("Dein Edit ist fertig, sobald du die Taste losl" DE_ae "sst.", CW, true);
+                "Edit on release###eor", FConfiguration::bEOREnabled);
+            ControlHint("Your edit is confirmed as soon as you let go of the key.", CW, true);
         }
 
         if (VersionInfo.FortniteVersion < 24.30)
         {
             PersistentCheckbox(
-                "Zur" DE_ue "cksetzen beim Loslassen###ror", FConfiguration::bROREnabled);
-            ControlHint("Zur" DE_ue "cksetzen ist fertig, sobald du die Taste losl" DE_ae "sst.", CW, true);
+                "Reset on release###ror", FConfiguration::bROREnabled);
+            ControlHint("Your reset is confirmed as soon as you let go of the key.", CW, true);
         }
 
         if (VersionInfo.FortniteVersion < 15.20)
         {
             PersistentCheckbox(
-                "Keine Vorschau-Edits###disable_pre_edits",
+                "Disable pre-edits###disable_pre_edits",
                 FConfiguration::bDisablePreEdits);
-            ControlHint("Du editierst nie aus Versehen das durchsichtige Vorschau-Teil.", CW, true);
+            ControlHint("You never edit the see-through preview piece by accident.", CW, true);
         }
         EndSectionBody();
     }
 
-    SectionLabel("Grafik");
+    SectionLabel("Graphics");
     BeginSectionBody();
 
     PersistentAbsoluteCommandCheckbox(
-        "Einfache Bauteile (wie am Handy)###mobile_builds",
+        "Mobile Builds###mobile_builds",
         FConfiguration::bMobileBuilds,
         SettingCommandMobileBuilds);
-    ControlHint("Bauteile und Umgebung werden einfacher gezeichnet.", CW, true);
+    ControlHint("Draws builds and the world with less detail, like on phones. Works on every version, right away.", CW, true);
 
     PersistentAbsoluteCommandCheckbox(
-        "Nebel im Spiel###ingame_fog",
+        "In-game fog###ingame_fog",
         FConfiguration::bGameplayFog,
         SettingCommandInGameFog);
-    ControlHint("Aus = klarere Sicht in die Ferne.", CW, true);
+    ControlHint("Off = clearer view into the distance.", CW, true);
 
     {
         const float sliderWidth = CW;
         int mipMapLODBias = FConfiguration::MipMapLODBias.load(
             std::memory_order_acquire);
         if (LabeledSliderInt(
-                "Texturen vereinfachen", "##potatographics",
+                "Simpler textures", "##potatographics",
                 &mipMapLODBias, 0, 15,
                 sliderWidth))
         {
@@ -5083,16 +5304,16 @@ void GUI_Render()
                 SettingCommandMipMapLODBias,
                 std::memory_order_acq_rel);
         }
-        ControlHint("0 = normal. H" DE_oe "her = unsch" DE_ae "rfer, l" DE_ae "uft aber oft fl" DE_ue "ssiger.", sliderWidth);
+        ControlHint("0 = normal. Higher = blurrier, but often runs smoother.", sliderWidth);
     }
     EndSectionBody();
 
     if (VersionInfo.FortniteVersion < 5.00)
     {
-        SectionLabel("Laufen");
+        SectionLabel("Movement");
         BeginSectionBody();
         if (PersistentCheckbox(
-                "Immer sprinten###sprint_by_default",
+                "Always sprint###sprint_by_default",
                 FConfiguration::bSprintByDefault))
         {
             AtlasDiagnostics::WriteLine(
@@ -5102,14 +5323,14 @@ void GUI_Render()
                     ? "enabled"
                     : "disabled");
         }
-        ControlHint("Du rennst, ohne die Sprint-Taste zu halten.", CW, true);
+        ControlHint("You run without holding the sprint key.", CW, true);
         EndSectionBody();
     }
 
-    SectionLabel("Sichtfeld");
+    SectionLabel("Field of view");
     {
         BeginSectionBody();
-        const char* resetLabel = "Zur" DE_ue "ck auf 80###reset_fov";
+        const char* resetLabel = "Back to 80###reset_fov";
         const float ResetW = (std::max)(
             110.f,
             ImGui::CalcTextSize(resetLabel, nullptr, true).x +
@@ -5121,7 +5342,7 @@ void GUI_Render()
         int fieldOfView = FConfiguration::FOV.load(
             std::memory_order_acquire);
         if (LabeledSliderInt(
-                "Blickwinkel (normal: 80)", "##fov",
+                "Degrees (normal: 80)", "##fov",
                 &fieldOfView, 1, 175, SliderW))
         {
             std::lock_guard<std::mutex> lock(
@@ -5144,52 +5365,52 @@ void GUI_Render()
                 SettingCommandFOV,
                 std::memory_order_acq_rel);
         }
-        ControlHint("Gr" DE_oe DE_ss "er = du siehst mehr vom Rand.", CW);
+        ControlHint("Higher = you see more at the edges.", CW);
         EndSectionBody();
     }
 
-    SectionLabel("Nach dem Tod");
+    SectionLabel("Respawn");
     BeginSectionBody();
     PersistentCheckbox(
-        "Wieder einsteigen###respawns_enabled", FConfiguration::bForceRespawns);
-    ControlHint("Du kommst nach dem Tod aus der Luft zur" DE_ue "ck. Gilt ab dem n" DE_ae "chsten Spielstart.", CW, true);
+        "Respawn after you die###respawns_enabled", FConfiguration::bForceRespawns);
+    ControlHint("You drop back in from the sky after you die. Applies from your next game start.", CW, true);
     EndSectionBody();
 
-    SectionLabel("Sonstiges");
+    SectionLabel("Other");
     BeginSectionBody();
     PersistentCheckbox(
-        "Ich-Perspektive###first_person", FConfiguration::bFirstPerson);
-    ControlHint("Du siehst aus den Augen deiner Figur.", CW, true);
+        "First person###first_person", FConfiguration::bFirstPerson);
+    ControlHint("You see through your character's eyes.", CW, true);
 
     if (VersionInfo.FortniteVersion <= 10.40)
     {
         SessionToggleCommandCheckbox(
-            "Freie Kamera###debug_camera",
+            "Free camera###debug_camera",
             FConfiguration::bDebugCamera,
             SettingCommandDebugCamera);
-        ControlHint("Die Kamera fliegt frei herum, deine Figur bleibt stehen.", CW, true);
+        ControlHint("The camera flies around freely while your character stays put.", CW, true);
     }
 
     SessionToggleCommandCheckbox(
-        "Ziel-Infos###target_info",
+        "Target info###target_info",
         FConfiguration::bTargetInfo,
         SettingCommandTargetInfo);
-    ControlHint("Zeigt Infos zu dem, was du gerade anvisierst.", CW, true);
+    ControlHint("Shows info about whatever you are aiming at.", CW, true);
     EndSectionBody();
 
-        ImGui::Dummy(ImVec2(0.f, 8.f)); // [Vanity] etwas Luft unter dem letzten Hinweis
+        ImGui::Dummy(ImVec2(0.f, 8.f)); // [Niobium] a little space below the last hint
         break;
     }
-    case 1: // Commands ([Vanity] Reiter "Befehle": Texte auf Deutsch, Erklaerungen dazu)
+    case 1: // Commands ([Niobium] plain English texts with hints)
     {
-        SectionLabel("Neuer Befehl");
+        SectionLabel("New command");
         BeginSectionBody();
         ControlHint(
-            "Befehl eintippen, Taste w" DE_ae "hlen, " DE_LQ "Speichern" DE_RQ " klicken. "
-            "Mehrere Befehle hintereinander: vorher " DE_LQ "+" DE_NBSP "Schritt" DE_RQ ".", CW);
+            "Type a command, pick a key and click \"Save\". "
+            "For several commands in a row, add each one with \"+" NB_NBSP "Step\" first.", CW);
 
         ImGui::PushItemWidth(CW);
-        ImGui::InputTextWithHint("##commandinput", "Befehl, z. B. cheat giveammo", FGUI::CommandInput, sizeof(FGUI::CommandInput));
+        ImGui::InputTextWithHint("##commandinput", "Command, e.g. cheat giveammo", FGUI::CommandInput, sizeof(FGUI::CommandInput));
         ImGui::PopItemWidth();
 
         ImGui::Spacing();
@@ -5197,12 +5418,12 @@ void GUI_Render()
         const float AddButtonW = 110.f;
         const float DelayInputW = CW - AddButtonW - ImGui::GetStyle().ItemSpacing.x;
         ImGui::PushItemWidth(DelayInputW > 140.f ? DelayInputW : 140.f);
-        ImGui::InputTextWithHint("##stepdelay", "Pause danach (ms)", FGUI::MacroDelayInput, sizeof(FGUI::MacroDelayInput), ImGuiInputTextFlags_CharsDecimal);
+        ImGui::InputTextWithHint("##stepdelay", "Wait afterwards (ms)", FGUI::MacroDelayInput, sizeof(FGUI::MacroDelayInput), ImGuiInputTextFlags_CharsDecimal);
         ImGui::PopItemWidth();
-        HoverHint("So lange wird gewartet, bevor der n" DE_ae "chste Schritt kommt. 1000 ms = 1 Sekunde.");
+        HoverHint("How long to wait before the next step. 1000 ms = 1 second.");
         ImGui::SameLine();
 
-        if (ImGui::Button("+ Schritt###add_step", ImVec2(AddButtonW, 0.f)))
+        if (ImGui::Button("+ Step###add_step", ImVec2(AddButtonW, 0.f)))
         {
             const char* start = FGUI::CommandInput;
             while (*start == ' ' || *start == '\t')
@@ -5217,7 +5438,7 @@ void GUI_Render()
                 FGUI::CommandInput[0] = '\0';
             }
         }
-        HoverHint("Merkt sich den Befehl als Schritt. So baust du eine Kette aus mehreren Befehlen.");
+        HoverHint("Adds the command as a step. That's how you build a chain of commands.");
 
         if (!FGUI::MacroDraftSteps.empty())
         {
@@ -5228,12 +5449,12 @@ void GUI_Render()
                 auto& step = FGUI::MacroDraftSteps[i];
                 ImGui::PushID(i);
 
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.847f, 0.878f, 0.941f, 1.f));
+                ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumText);
                 ImGui::TextWrapped("%s", step.Command.c_str());
                 ImGui::PopStyleColor();
                 ImGui::SameLine();
 
-                if (ImGui::SmallButton("Entfernen###remove_step"))
+                if (ImGui::SmallButton("Remove###remove_step"))
                 {
                     FGUI::MacroDraftSteps.erase(FGUI::MacroDraftSteps.begin() + i);
                     ImGui::PopID();
@@ -5242,8 +5463,8 @@ void GUI_Render()
 
                 if (i + 1 < (int)FGUI::MacroDraftSteps.size())
                 {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-                    ImGui::Text("Pause: %d ms", step.DelayMs);
+                    ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumMutedText);
+                    ImGui::Text("Wait: %d ms", step.DelayMs);
                     ImGui::PopStyleColor();
                 }
 
@@ -5260,15 +5481,15 @@ void GUI_Render()
         if (FGUI::RebindingCommandIndex == -1)
         {
             snprintf(pendingBindLabel, sizeof(pendingBindLabel), "%s",
-                FitLabel("Taste dr" DE_ue "cken " DE_DOTS " (Esc = abbrechen)###new_bind",
-                    "Taste dr" DE_ue "cken " DE_DOTS "###new_bind", BindButtonWidth));
+                FitLabel("Press a key... (Esc = cancel)###new_bind",
+                    "Press a key...###new_bind", BindButtonWidth));
         }
         else
         {
             char longBindLabel[96];
             char shortBindLabel[96];
-            snprintf(longBindLabel, sizeof(longBindLabel), "Taste w" DE_ae "hlen [%s]###new_bind", BindName(FGUI::PendingCommandVK));
-            snprintf(shortBindLabel, sizeof(shortBindLabel), "Taste [%s]###new_bind", BindName(FGUI::PendingCommandVK));
+            snprintf(longBindLabel, sizeof(longBindLabel), "Pick a key [%s]###new_bind", BindName(FGUI::PendingCommandVK));
+            snprintf(shortBindLabel, sizeof(shortBindLabel), "Key [%s]###new_bind", BindName(FGUI::PendingCommandVK));
             snprintf(pendingBindLabel, sizeof(pendingBindLabel), "%s",
                 FitLabel(longBindLabel, shortBindLabel, BindButtonWidth));
         }
@@ -5282,12 +5503,12 @@ void GUI_Render()
             BeginBindCapture();
         }
         HoverHint(FGUI::RebindingCommandIndex == -1
-            ? "Dr" DE_ue "ck jetzt die Taste, die du willst. Esc bricht ab."
-            : "Mit dieser Taste startest du den Befehl sp" DE_ae "ter, wenn das Men" DE_ue " zu ist. Ohne Taste geht es nur mit " DE_LQ "Ausf" DE_ue "hren" DE_RQ ".");
+            ? "Press the key you want now. Esc cancels."
+            : "This key runs the command later, when the menu is closed. Without a key it only runs with \"Run\".");
 
         ImGui::SameLine();
 
-        if (ImGui::Button("Speichern###save_command", ImVec2(AddButtonW, 0.f)))
+        if (ImGui::Button("Save###save_command", ImVec2(AddButtonW, 0.f)))
         {
             std::vector<HotkeyPersist::MacroStep> steps = FGUI::MacroDraftSteps;
 
@@ -5333,35 +5554,35 @@ void GUI_Render()
                 FGUI::SaveCommands();
             }
         }
-        HoverHint("Legt den Befehl (oder alle Schritte) unten bei " DE_LQ "Deine Befehle" DE_RQ " ab.");
-        DrawBindError(CW); // [Vanity] vorher nur im Reiter "Optionen" sichtbar
+        HoverHint("Puts the command (or all steps) into \"Your commands\" below.");
+        DrawBindError(CW); // [Niobium] was only visible in the "Options" tab before
 
         EndSectionBody();
-        SectionLabel("Deine Befehle");
+        SectionLabel("Your commands");
         BeginSectionBody();
 
         if (FGUI::Commands.empty() && FGUI::Macros.empty())
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-            ImGui::TextWrapped("Noch keine gespeicherten Befehle.");
+            ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumHintText);
+            ImGui::TextWrapped("No saved commands yet.");
             ImGui::PopStyleColor();
         }
         else
         {
-            ControlHint("Doppelklick auf einen Befehl: Text " DE_ae "ndern.", CW);
+            ControlHint("Double-click a command to change its text.", CW);
 
-            // Knopftexte der Zeilen: lang, wenn sie in ein Drittel passen, sonst kurz.
+            // Row button labels: long if they fit in a third, otherwise short.
             const float RowButtonW = (CW - ImGui::GetStyle().ItemSpacing.x * 2.f) / 3.f;
-            const char* runLabel = FitLabel("Ausf" DE_ue "hren###run", "Los###run", RowButtonW);
-            const char* waitKeyLabel = FitLabel("Taste dr" DE_ue "cken " DE_DOTS "###bind", "Dr" DE_ue "cken " DE_DOTS "###bind", RowButtonW);
-            const char* unbindLabel = FitLabel("Taste entfernen###bind", "Taste weg###bind", RowButtonW);
-            const char* bindLabelText = FitLabel("Taste w" DE_ae "hlen###bind", "Taste###bind", RowButtonW);
-            const char* deleteLabel = "L" DE_oe "schen###delete";
-            const char* runHint = "Schickt den Befehl jetzt sofort ab.";
-            const char* waitKeyHint = "Dr" DE_ue "ck jetzt die Taste, die du willst. Esc bricht ab.";
-            const char* unbindHint = "Die Taste wird wieder frei. Der Befehl bleibt gespeichert.";
-            const char* bindHint = "Leg eine Taste fest. Dann startet der Befehl per Tastendruck, wenn das Men" DE_ue " zu ist.";
-            const char* deleteHint = "L" DE_oe "scht den Befehl aus der Liste.";
+            const char* runLabel = FitLabel("Run now###run", "Run###run", RowButtonW);
+            const char* waitKeyLabel = FitLabel("Press a key...###bind", "Press...###bind", RowButtonW);
+            const char* unbindLabel = FitLabel("Remove key###bind", "Unbind###bind", RowButtonW);
+            const char* bindLabelText = FitLabel("Pick a key###bind", "Key###bind", RowButtonW);
+            const char* deleteLabel = "Delete###delete";
+            const char* runHint = "Sends the command right now.";
+            const char* waitKeyHint = "Press the key you want now. Esc cancels.";
+            const char* unbindHint = "Frees the key. The command stays saved.";
+            const char* bindHint = "Pick a key. Then the command runs with one key press when the menu is closed.";
+            const char* deleteHint = "Deletes the command from the list.";
 
             for (int i = 0; i < (int)FGUI::Commands.size(); i++)
             {
@@ -5374,7 +5595,7 @@ void GUI_Render()
                 }
                 else
                 {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.847f, 0.878f, 0.941f, 1.f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumText);
                     ImGui::TextWrapped("%s", command.Command.c_str());
                     ImGui::PopStyleColor();
 
@@ -5390,8 +5611,8 @@ void GUI_Render()
                     }
                 }
 
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-                ImGui::Text("Taste: %s", BindName(command.VK));
+                ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumMutedText);
+                ImGui::Text("Key: %s", BindName(command.VK));
                 ImGui::PopStyleColor();
 
                 const float ButtonW = RowButtonW;
@@ -5471,7 +5692,7 @@ void GUI_Render()
                     }
                     else
                     {
-                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.847f, 0.878f, 0.941f, 1.f));
+                        ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumText);
                         ImGui::TextWrapped("%s", macro.Steps[stepIndex].Command.c_str());
                         ImGui::PopStyleColor();
 
@@ -5504,11 +5725,9 @@ void GUI_Render()
                         {
                             ImGui::PushStyleColor(
                                 ImGuiCol_Text,
-                                ImVec4(
-                                    0.353f, 0.388f,
-                                    0.478f, 1.f));
+                                kNiobiumMutedText);
                             ImGui::Text(
-                                "    Pause %d ms",
+                                "    Wait %d ms",
                                 macro.Steps[stepIndex].DelayMs);
                             ImGui::PopStyleColor();
 
@@ -5529,8 +5748,8 @@ void GUI_Render()
                     }
                 }
 
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.353f, 0.388f, 0.478f, 1.f));
-                ImGui::Text("Taste: %s", BindName(macro.VK));
+                ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumMutedText);
+                ImGui::Text("Key: %s", BindName(macro.VK));
                 ImGui::PopStyleColor();
 
                 const float MacroButtonW = RowButtonW;
@@ -5539,7 +5758,7 @@ void GUI_Render()
                     FinishSavedCommandEdit(false);
                     QueueMacro(macro);
                 }
-                HoverHint("Schickt alle Schritte nacheinander ab.");
+                HoverHint("Sends all steps one after another.");
                 ImGui::SameLine();
 
                 const bool waitingForMacroKey = FGUI::RebindingMacroIndex == i;
@@ -5603,20 +5822,26 @@ void GUI_Render()
         }
         EndSectionBody();
 
-        ImGui::Dummy(ImVec2(0.f, 8.f)); // [Vanity] etwas Luft unten
+        ImGui::Dummy(ImVec2(0.f, 8.f)); // [Niobium] a little space at the bottom
         break;
     }
-    case 2: // Config ([Vanity] Reiter "Optionen": Texte auf Deutsch, Erklaerungen dazu)
+    case 2: // Config ([Niobium] "Options": plain English texts with hints)
     {
-    SectionLabel("Allgemein");
+    // [Niobium] Read-only Bubble Builds status first: it is the setting people look up most.
+    SectionLabel("Build look");
+    BeginSectionBody();
+    DrawBubbleBuildsStatus(CW);
+    EndSectionBody();
+
+    SectionLabel("General");
     BeginSectionBody();
     int consoleMode =
         FConfiguration::ConsoleMode.load(std::memory_order_acquire);
     const char* consoleModeItems[] = {
-        "Vanity-Konsole", "Original-Konsole (Unreal)"
+        "Niobium console", "Original console (Unreal)"
     };
     if (LabeledCombo(
-            "Welche Konsole?", "##console_mode", &consoleMode,
+            "Which console?", "##console_mode", &consoleMode,
             consoleModeItems, IM_ARRAYSIZE(consoleModeItems),
             CW))
     {
@@ -5632,31 +5857,32 @@ void GUI_Render()
         if (consoleMode == static_cast<int>(EConsoleMode::Unreal))
             CloseConsoleSurface();
     }
-    ControlHint("Die Konsole " DE_oe "ffnest du mit F8. Die Vanity-Konsole kennt Kurzbefehle wie /god.", CW);
+    ControlHint("Open the console with F8. The Niobium console knows shortcuts like /god.", CW);
 
     {
-        // Die Taste heisst je nach Tastatur anders (deutsch meist "#", US "/"): Name vom System holen.
+        // The key has a different name on different keyboards (German usually "#", US "/"),
+        // so ask the system for its name.
         char slashLabel[96];
         snprintf(slashLabel, sizeof(slashLabel),
-            "Konsole mit Taste %s " DE_oe "ffnen###slash_key", VKName(VK_OEM_2));
+            "Open the console with the %s key###slash_key", VKName(VK_OEM_2));
         PersistentCheckbox(
             slashLabel, FConfiguration::bSlashKeyEnabled);
-        ControlHint("Sie geht mit / schon drin auf " DE_DASH " dann z." DE_NBSP "B. nur noch god tippen und Enter. Nur mit der Vanity-Konsole.", CW, true);
+        ControlHint("It opens with / already typed " NB_DASH " then just type god and press Enter. Only with the Niobium console.", CW, true);
     }
     TogglePreferencePersistenceCheckbox();
-    ControlHint("Aus = beim n" DE_ae "chsten Start sind alle Schalter wieder wie am Anfang.", CW, true);
+    ControlHint("Off = every toggle is back to normal the next time you start the game.", CW, true);
     EndSectionBody();
-    SectionLabel("Tasten");
+    SectionLabel("Keys");
     BeginSectionBody();
-    // Waehrend auf die neue Taste gewartet wird, behaelt der Knopf seine ID (###rebind_menu/_join).
+    // While waiting for the new key, the button keeps its id (###rebind_menu/_join).
     const char* waitForKeyText = FitLabel(
-        "Neue Taste dr" DE_ue "cken " DE_DOTS " (Esc = abbrechen)",
-        "Neue Taste dr" DE_ue "cken " DE_DOTS, CW);
+        "Press the new key... (Esc = cancel)",
+        "Press the new key...", CW);
     char waitForKeyLabel[96];
     if (FGUI::bRebinding)
     {
         snprintf(waitForKeyLabel, sizeof(waitForKeyLabel), "%s###rebind_menu", waitForKeyText);
-        ImGui::PushStyleColor(ImGuiCol_Text, Accent());
+        ImGui::PushStyleColor(ImGuiCol_Text, AccentText());
         ImGui::PushStyleColor(ImGuiCol_Button, Accent(0.18f));
         ImGui::Button(waitForKeyLabel, ImVec2(CW, 0.f));
         ImGui::PopStyleColor(2);
@@ -5664,7 +5890,7 @@ void GUI_Render()
     else
     {
         char btnLabel[96];
-        snprintf(btnLabel, sizeof(btnLabel), "Men" DE_ue "-Taste " DE_ae "ndern [%s]###rebind_menu", VKName(FGUI::HotkeyVK));
+        snprintf(btnLabel, sizeof(btnLabel), "Change menu key [%s]###rebind_menu", VKName(FGUI::HotkeyVK));
         if (ImGui::Button(btnLabel, ImVec2(CW, 0.f)))
         {
             FGUI::bRebinding = true;
@@ -5673,13 +5899,13 @@ void GUI_Render()
             FGUI::RebindingMacroIndex = -2;
             BeginBindCapture();
         }
-        HoverHint("Mit dieser Taste " DE_oe "ffnest und schlie" DE_ss "t du dieses Men" DE_ue ".");
+        HoverHint("This key opens and closes this menu.");
     }
 
     if (FGUI::bRebindingJoin)
     {
         snprintf(waitForKeyLabel, sizeof(waitForKeyLabel), "%s###rebind_join", waitForKeyText);
-        ImGui::PushStyleColor(ImGuiCol_Text, Accent());
+        ImGui::PushStyleColor(ImGuiCol_Text, AccentText());
         ImGui::PushStyleColor(ImGuiCol_Button, Accent(0.18f));
         ImGui::Button(waitForKeyLabel, ImVec2(CW, 0.f));
         ImGui::PopStyleColor(2);
@@ -5687,7 +5913,7 @@ void GUI_Render()
     else
     {
         char joinBtnLabel[96];
-        snprintf(joinBtnLabel, sizeof(joinBtnLabel), "Beitreten-Taste " DE_ae "ndern [%s]###rebind_join", VKName(FGUI::JoinHotkeyVK));
+        snprintf(joinBtnLabel, sizeof(joinBtnLabel), "Change join key [%s]###rebind_join", VKName(FGUI::JoinHotkeyVK));
         if (ImGui::Button(joinBtnLabel, ImVec2(CW, 0.f)))
         {
             FGUI::bRebindingJoin = true;
@@ -5696,43 +5922,43 @@ void GUI_Render()
             FGUI::RebindingMacroIndex = -2;
             BeginBindCapture();
         }
-        HoverHint("Mit dieser Taste trittst du dem Server aus " DE_LQ "Start" DE_RQ " bei, wenn das Men" DE_ue " zu ist.");
+        HoverHint("This key joins the server picked in \"Main\" when the menu is closed.");
     }
 
-    DrawBindError(CW); // [Vanity] gleiche Meldung, jetzt auf Knopfbreite umgebrochen
+    DrawBindError(CW); // [Niobium] same message, now wrapped at the button width
 
-    if (ImGui::Button("Alles zur" DE_ue "cksetzen###reset_all", ImVec2(CW, 0.f)))
+    if (ImGui::Button("Reset everything###reset_all", ImVec2(CW, 0.f)))
     {
         EndBindCapture();
         FGUI::ResetAll();
         CloseConsoleSurface();
     }
-    ControlHint("Achtung: Stellt alle Schalter und Tasten zur" DE_ue "ck und l" DE_oe "scht deine gespeicherten Befehle.", CW);
+    ControlHint("Careful: resets all toggles and keys and deletes your saved commands.", CW);
     EndSectionBody();
 
         ImGui::Dummy(ImVec2(0.f, 8.f));
         break;
     }
-    case 3: // [Vanity] Trickshot
+    case 3: // [Niobium] Trickshot
     {
-        // Inhalt in VanityTrickshotTab.cpp; die Helfer hier sind file-static und werden
-        // per Zeiger durchgereicht.
-        static const FVanityTabHost VanityHost = {
-            &VanityTabExec,
+        // The content lives in NiobiumTrickshotTab.cpp; the helpers here are file-static and
+        // are passed in as pointers.
+        static const FNiobiumTabHost NiobiumHost = {
+            &NiobiumTabExec,
             &SectionLabel,
             &BeginSectionBody,
             &EndSectionBody,
             &Accent,
             &Client::GetConsoleSessionGeneration
         };
-        VanityTrickshotTab_Draw(VanityHost, CW);
+        NiobiumTrickshotTab_Draw(NiobiumHost, CW);
         ImGui::Dummy(ImVec2(0.f, 8.f));
         break;
     }
-    case 4: // Credits ([Vanity] vorher Index 3)
+    case 4: // Credits ([Niobium] was index 3)
     {
-        // [Vanity] Ueberschriften auf Deutsch; die Nennungen selbst bleiben unveraendert (Lizenz).
-        // Beschreibungen und Hinweis brechen um, damit sie auch im kleinsten Fenster ganz lesbar sind.
+        // [Niobium] The credits themselves stay unchanged (license). Descriptions and the note
+        // wrap so they are fully readable even in the smallest window.
         const float creditsWrapX =
             ImGui::GetCursorPosX() + CW + SectionBodyIndent;
         const auto rule = []()
@@ -5743,7 +5969,7 @@ void GUI_Render()
             drawList->AddLine(
                 ImVec2(position.x, position.y + 1.f),
                 ImVec2(position.x + width, position.y + 1.f),
-                ImGui::GetColorU32(Accent(0.30f)), 1.f);
+                ImGui::GetColorU32(Accent(0.40f)), 1.f);
             ImGui::Dummy(ImVec2(0.f, 9.f));
         };
 
@@ -5754,15 +5980,15 @@ void GUI_Render()
         }
 
         ImGui::BeginGroup();
-        ImGui::PushStyleColor(ImGuiCol_Text, Accent());
-        ImGui::TextUnformatted("Vanity");
+        ImGui::PushStyleColor(ImGuiCol_Text, AccentText());
+        ImGui::TextUnformatted("Niobium");
         ImGui::PopStyleColor();
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.54f, 0.56f, 0.62f, 1.f));
         {
-            // [Vanity] "Ingame-Menue - Version", umgebrochen statt am Rand abgeschnitten
+            // [Niobium] "In-game menu - version", wrapped instead of cut off at the edge
             char subtitle[160];
-            snprintf(subtitle, sizeof(subtitle), "Ingame-Men" DE_ue "  " DE_DASH "  %s", FConfiguration::ConsoleVersion);
+            snprintf(subtitle, sizeof(subtitle), "In-game menu  " NB_DASH "  %s", FConfiguration::ConsoleVersion);
             ImGui::PushTextWrapPos(creditsWrapX);
             ImGui::TextUnformatted(subtitle);
             ImGui::PopTextWrapPos();
@@ -5771,17 +5997,17 @@ void GUI_Render()
         ImGui::EndGroup();
 
         ImGui::Dummy(ImVec2(0.f, 14.f));
-        ImGui::PushStyleColor(ImGuiCol_Text, Accent(0.85f));
+        ImGui::PushStyleColor(ImGuiCol_Text, AccentText(0.85f));
         ImGui::TextUnformatted("CREDITS");
         ImGui::PopStyleColor();
         rule();
 
-        // [Vanity] kurze Erklaerung fuer die Seite
-        ControlHint("Vanity baut auf diesen Projekten auf. Danke! Klick auf einen Namen " DE_oe "ffnet seine Seite im Browser.",
+        // [Niobium] short explanation for the page
+        ControlHint("Niobium is built on these projects. Thank you! Click a name to open its page in your browser.",
             creditsWrapX - ImGui::GetCursorPosX());
         ImGui::Spacing();
 
-        ImGui::PushStyleColor(ImGuiCol_Text, Accent(0.95f));
+        ImGui::PushStyleColor(ImGuiCol_Text, AccentText(0.95f));
         ImGui::TextUnformatted("Erbium");
         ImGui::PopStyleColor();
         if (ImGui::IsItemHovered())
@@ -5796,13 +6022,13 @@ void GUI_Render()
         ImGui::SameLine(0.f, 8.f);
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.58f, 0.60f, 0.66f, 1.f));
-        ImGui::PushTextWrapPos(creditsWrapX); // [Vanity] umbrechen statt abschneiden
+        ImGui::PushTextWrapPos(creditsWrapX); // [Niobium] wrap instead of cutting off
         ImGui::TextUnformatted("- Base of the project");
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
 
-        // [Vanity] Sichtbare Nennung laut ATLAS Console Attribution License.
-        ImGui::PushStyleColor(ImGuiCol_Text, Accent(0.95f));
+        // [Niobium] Visible credit as required by the ATLAS Console Attribution License.
+        ImGui::PushStyleColor(ImGuiCol_Text, AccentText(0.95f));
         ImGui::TextUnformatted("ATLAS Console");
         ImGui::PopStyleColor();
         if (ImGui::IsItemHovered())
@@ -5817,7 +6043,7 @@ void GUI_Render()
         ImGui::SameLine(0.f, 8.f);
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.58f, 0.60f, 0.66f, 1.f));
-        ImGui::PushTextWrapPos(creditsWrapX); // [Vanity] umbrechen statt abschneiden
+        ImGui::PushTextWrapPos(creditsWrapX); // [Niobium] wrap instead of cutting off
         ImGui::TextUnformatted("- Base of this in-game menu (cipherfps, ralz and contributors)");
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
@@ -5825,8 +6051,8 @@ void GUI_Render()
         ImGui::Dummy(ImVec2(0.f, 18.f));
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.42f, 0.44f, 0.50f, 1.f));
-        ImGui::PushTextWrapPos(creditsWrapX); // [Vanity] umbrechen statt abschneiden
-        ImGui::TextUnformatted("Vanity is based on ATLAS Console by cipherfps, ralz and contributors.");
+        ImGui::PushTextWrapPos(creditsWrapX); // [Niobium] wrap instead of cutting off
+        ImGui::TextUnformatted("Niobium is based on ATLAS Console by cipherfps, ralz and contributors.");
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
 

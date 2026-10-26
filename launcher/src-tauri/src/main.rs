@@ -1,6 +1,6 @@
-// Im Release-Build kein zusätzliches Konsolenfenster unter Windows öffnen.
+// No extra console window on Windows in the release build.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    vanity_launcher_lib::run()
+    niobium_launcher_lib::run()
 }

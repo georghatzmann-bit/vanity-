@@ -1,25 +1,25 @@
-// Ressourcen-Ordner finden und den Daten-Ordner beim ersten Start befüllen.
+// Find the resource folder and fill the data folder on the first start.
 import fs from "node:fs";
 import path from "node:path";
 
 /**
- * Ordner mit den mitgelieferten LawinServer-Daten (profiles/, responses/, CloudStorage/, Config/, public/).
- * Gebaut liegt er neben dist/main.js; beim Ausführen aus dem Quellcode (src/) ist es ../lawinserver.
- * Bewusst relativ zur Programmdatei und nicht zum Arbeitsordner.
+ * Folder with the bundled LawinServer data (profiles/, responses/, CloudStorage/, Config/, public/).
+ * When built it is next to dist/main.js; when running from the source (src/) it is ../lawinserver.
+ * Relative to the program file on purpose, not to the working folder.
  */
 export function findResourceDir(baseDir: string): string {
   const candidates = [baseDir, path.join(baseDir, "..", "lawinserver")];
   for (const dir of candidates) {
     if (fs.existsSync(path.join(dir, "profiles")) && fs.existsSync(path.join(dir, "responses"))) return dir;
   }
-  throw new Error(`LawinServer-Daten nicht gefunden (gesucht in: ${candidates.join(", ")})`);
+  throw new Error(`LawinServer data not found (looked in: ${candidates.join(", ")})`);
 }
 
 /**
- * Legt den Daten-Ordner an und kopiert jede mitgelieferte Standard-Datei der beschreibbaren Pfade,
- * die dort noch fehlt. Vorhandene Dateien werden nie überschrieben (der Spind bleibt erhalten,
- * neue Standard-Dateien späterer Versionen kommen trotzdem dazu).
- * @returns die kopierten Pfade (relativ zum Daten-Ordner)
+ * Creates the data folder and copies every bundled default file of the writable paths that is
+ * still missing there. Existing files are never overwritten (the locker stays, new default files
+ * of later versions are still added).
+ * @returns the copied paths (relative to the data folder)
  */
 export function prepareDataDir(resourceDir: string, dataDir: string, writable: readonly string[]): string[] {
   const copied: string[] = [];

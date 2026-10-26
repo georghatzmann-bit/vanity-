@@ -1,10 +1,10 @@
-//! Erkennt, welche Fortnite-Version in einem Build-Ordner liegt.
+//! Finds out which Fortnite version is in a build folder.
 //!
-//! Vorgehen (wie bei Reboot nachgelesen, aber neu geschrieben):
-//! 1. `FortniteClient-Win64-Shipping.exe` im Ordner suchen.
-//! 2. Die Versionszeile `++Fortnite+Release-19.10-CL-18675304` aus den Datei-Infos von
-//!    `CrashReportClient.exe` bzw. der Spiel-exe lesen.
-//! 3. Ersatzweise die Spiel-exe nach genau dieser Zeichenfolge (UTF-16) durchsuchen.
+//! How (same idea as Reboot Launcher, written from scratch):
+//! 1. Look for `FortniteClient-Win64-Shipping.exe` in the folder.
+//! 2. Read the version line `++Fortnite+Release-19.10-CL-18675304` from the file info of
+//!    `CrashReportClient.exe` or the game exe.
+//! 3. Otherwise search the game exe for exactly that text (UTF-16).
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -16,13 +16,13 @@ pub const EAC_EXE: &str = "FortniteClient-Win64-Shipping_EAC.exe";
 pub const CRASH_REPORT_EXE: &str = "CrashReportClient.exe";
 pub const AFTERMATH_DLL: &str = "GFSDK_Aftermath_Lib.dll";
 
-/// Versionen, die wirklich getestet wurden (von dir bestätigt). Nur die bekommen „getestet“.
+/// Versions that were really tested (confirmed by you). Only these get "tested".
 pub const TESTED: &[&str] = &["19.10"];
-/// Älteste Version, mit der die Bauteile (Umleitung aus Tellurium, Game Server aus Erbium/Magnesium)
-/// umgehen können. Alles ab hier wird gestartet – ungetestete Versionen mit Hinweis.
+/// Oldest version the parts (redirect from Tellurium, game server from Erbium/Magnesium) can handle.
+/// Everything from here on is started – untested versions with a note.
 pub const MIN_VERSION: (u32, u32) = (1, 7);
-/// Ab hier lehnt der Game Server (Erbium/Magnesium, `SDK/Offsets.h`: MaximumSupportedFortniteVersionExclusive)
-/// den Build selbst ab – Hosten geht dort nicht, also starten wir solche Builds nicht.
+/// From here on the game server (Erbium/Magnesium, `SDK/Offsets.h`: MaximumSupportedFortniteVersionExclusive)
+/// refuses the build itself – hosting doesn't work there, so we don't start such builds.
 pub const SERVER_MAX_EXCLUSIVE: (u32, u32) = (31, 0);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,27 +42,27 @@ pub struct BuildInfo {
     pub changelist: Option<u32>,
     pub season: String,
     pub engine: String,
-    /// Ordner, den der Nutzer gewählt hat
+    /// Folder the user picked
     pub path: String,
-    /// Ordner mit der Spiel-exe (…\FortniteGame\Binaries\Win64)
+    /// Folder with the game exe (…\FortniteGame\Binaries\Win64)
     pub binaries: String,
     pub support: Support,
-    /// Erklärung zur Stufe in einfachen Worten (siehe `support_note`)
+    /// Plain-words explanation of the support level (see `support_note`)
     #[serde(default)]
     pub support_note: String,
     #[serde(default)]
     pub launch_args: String,
 }
 
-/// Wie gut Vanity eine Version kennt.
+/// How well Niobium knows a version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Support {
-    /// getestet – darauf ist alles abgestimmt
+    /// tested – everything is tuned for it
     Supported,
-    /// die Bauteile kennen die Version, getestet wurde sie nicht – Start wird versucht
+    /// the parts know the version but it wasn't tested – we try to start it
     Experimental,
-    /// zu alt (vor `MIN_VERSION`) oder Version unlesbar
+    /// too old (before `MIN_VERSION`), too new, or the version can't be read
     Unsupported,
 }
 
@@ -81,18 +81,18 @@ pub struct DetectReport {
     pub has_aftermath: bool,
 }
 
-/// Liest „19.10“ und die Changelist aus einer Fortnite-Versionszeile.
+/// Reads "19.10" and the changelist from a Fortnite version line.
 ///
-/// Mögliche Formen:
+/// Possible forms:
 /// - `++Fortnite+Release-19.10-CL-18675304`
 /// - `5.0.0-18675304+++Fortnite+Release-19.10`
-/// - `4.19.0-3870737+++Fortnite+Release-Next` (Version über die Changelist-Tabelle)
+/// - `4.19.0-3870737+++Fortnite+Release-Next` (version from the changelist table)
 pub fn parse_version_string(raw: &str) -> Option<VersionString> {
     let raw = raw.trim().trim_matches('\0');
     let idx = raw.find("++Fortnite+Release-")?;
     let after = &raw[idx + "++Fortnite+Release-".len()..];
 
-    // Engine-Teil vorne: "5.0.0-18675304+"
+    // Engine part in front: "5.0.0-18675304+"
     let (engine, engine_cl) = {
         let head = raw[..idx].trim_end_matches('+');
         let mut parts = head.splitn(2, '-');
@@ -101,7 +101,7 @@ pub fn parse_version_string(raw: &str) -> Option<VersionString> {
         (e, cl)
     };
 
-    // Release-Teil: "19.10-CL-18675304" oder "19.10" oder "Cert"/"Next"
+    // Release part: "19.10-CL-18675304" or "19.10" or "Cert"/"Next"
     let mut release = after;
     let mut cl = engine_cl;
     if let Some(pos) = after.find("-CL-") {
@@ -119,14 +119,14 @@ pub fn parse_version_string(raw: &str) -> Option<VersionString> {
     let version = if release.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         normalize_version(&release)
     } else {
-        // "Cert", "Next" usw. → Version über die Changelist
+        // "Cert", "Next" etc. → version from the changelist
         cl.and_then(version_for_changelist)?.to_string()
     };
 
     Some(VersionString { version, changelist: cl, engine, raw: raw.to_string() })
 }
 
-/// „19.1“ → „19.10“, „4.5“ bleibt „4.5“ (Fortnite schreibt zweistellige Unterversionen ab 5.0).
+/// "19.1" → "19.10", "4.5" stays "4.5" (Fortnite uses two-digit minor versions from 5.0 on).
 fn normalize_version(v: &str) -> String {
     let mut parts = v.split('.');
     let major: u32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
@@ -138,8 +138,8 @@ fn normalize_version(v: &str) -> String {
     }
 }
 
-/// Changelist → Version für Builds, deren Versionszeile nur „Cert“/„Next“ enthält.
-/// Quelle der Zuordnung: öffentliche Build-Liste (github.com/polynite/fn-releases).
+/// Changelist → version for builds whose version line only says "Cert"/"Next".
+/// Source of the mapping: public build list (github.com/polynite/fn-releases).
 fn version_for_changelist(cl: u32) -> Option<&'static str> {
     const TABLE: &[(u32, &str)] = &[
         (3668626, "1.6.4"), (3681159, "1.7"), (3700114, "1.7.2"), (3724489, "1.8"), (3729133, "1.8.1"), (3741772, "1.8.2"),
@@ -154,7 +154,7 @@ fn version_for_changelist(cl: u32) -> Option<&'static str> {
     TABLE.iter().find(|(c, _)| *c == cl).map(|(_, v)| *v)
 }
 
-/// Chapter/Season zu einer Version, z. B. 19.10 → „Chapter 3 · Season 1“.
+/// Chapter/season for a version, e.g. 19.10 → "Chapter 3 · Season 1".
 pub fn season_for(version: &str) -> String {
     let major: u32 = version.split('.').next().and_then(|s| s.parse().ok()).unwrap_or(0);
     let (chapter, season) = match major {
@@ -164,13 +164,16 @@ pub fn season_for(version: &str) -> String {
         23..=27 => (4, if major == 27 { "OG".to_string() } else { (major - 22).to_string() }),
         28..=32 => (5, if major == 32 { "Remix".to_string() } else { (major - 27).to_string() }),
         33..=36 => (6, (major - 32).to_string()),
-        0 => return "Unbekannte Season".to_string(),
-        _ => return format!("Version {major} · neuere Season"),
+        0 => return "Unknown season".to_string(),
+        _ => return format!("Version {major} · newer season"),
     };
     format!("Chapter {chapter} · Season {season}")
 }
 
-/// „19.10“ → (19, 10); „1.7.2“ → (1, 7). None, wenn vorne keine Zahl steht.
+/// "19.10" → (19, 10); "1.7.2" → (1, 7). None if it doesn't start with a number.
+///
+/// Takes the minor version as written: "15.4" gives (15, 4). For comparisons with version
+/// limits use [`parse_version_number`], which reads "15.4" as 15.40.
 pub fn parse_major_minor(version: &str) -> Option<(u32, u32)> {
     let mut parts = version.split('.');
     let major: u32 = parts.next()?.parse().ok()?;
@@ -178,53 +181,67 @@ pub fn parse_major_minor(version: &str) -> Option<(u32, u32)> {
     Some((major, minor))
 }
 
+/// Like [`parse_major_minor`], but reads a one-digit minor version the way Fortnite means it
+/// (from 5.0 on): "15.4" → (15, 40), "19.1" → (19, 10). Old versions stay as written: "4.5" → (4, 5).
+/// Use this when comparing with version limits.
+pub fn parse_version_number(version: &str) -> Option<(u32, u32)> {
+    let (major, minor) = parse_major_minor(version)?;
+    let minor_text = version.split('.').nth(1).unwrap_or("");
+    let one_digit = minor_text.len() == 1 && minor_text.bytes().all(|b| b.is_ascii_digit());
+    if major >= 5 && one_digit {
+        Some((major, minor * 10))
+    } else {
+        Some((major, minor))
+    }
+}
+
 pub fn support_for(version: &str, _changelist: Option<u32>) -> Support {
     if TESTED.contains(&version) {
         return Support::Supported;
     }
-    match parse_major_minor(version) {
+    match parse_version_number(version) {
         Some(v) if v >= MIN_VERSION && v < SERVER_MAX_EXCLUSIVE => Support::Experimental,
         _ => Support::Unsupported,
     }
 }
 
-/// Kurze Erklärung zur Stufe in einfachen Worten – für Bibliothek und Prüf-Dialog.
-/// Die Grenzen stammen aus dem Quellcode der Bauteile (siehe docs/02-architektur.md, „Versionen“).
+/// Short plain-words explanation of the support level – for the library and the check dialog.
+/// The limits come from the source code of the parts (see docs/02-architecture.md, "Versions").
 pub fn support_note(version: &str) -> String {
-    let Some(v) = parse_major_minor(version) else {
-        return "Version unlesbar".into();
+    let Some(v) = parse_version_number(version) else {
+        return "Can't read the version".into();
     };
     if v < MIN_VERSION {
-        return format!("zu alt – Vanity braucht mindestens {}.{}", MIN_VERSION.0, MIN_VERSION.1);
+        return format!("Too old – Niobium needs at least {}.{}", MIN_VERSION.0, MIN_VERSION.1);
     }
     if v >= SERVER_MAX_EXCLUSIVE {
         return format!(
-            "zu neu – der Game Server (Erbium/Magnesium) kennt Versionen nur bis {}.x; sobald die Quellprojekte nachziehen, kommt sie dazu",
+            "Too new – the game server (Erbium/Magnesium) only knows versions up to {}.x. It will be added once those projects catch up",
             SERVER_MAX_EXCLUSIVE.0 - 1
         );
     }
     if TESTED.contains(&version) {
-        return "getestet".into();
+        return "Tested".into();
     }
-    let mut notes = vec!["ungetestet – Start wird versucht".to_string()];
+    let mut notes = vec!["Untested – we'll try to start it".to_string()];
     if v < (3, 4) {
-        notes.push("sehr alter Build – Erbium nennt die Unterstützung „teilweise“".into());
+        notes.push("Very old build – Erbium calls its support \"partial\"".into());
     }
     if (9, 40) <= v && v <= (10, 40) {
-        notes.push("kein Party-System/XMPP (diese Builds vertragen keine Hotfix-Dateien vom Backend)".into());
+        notes.push("No party system/XMPP (these builds can't handle hotfix files from the backend)".into());
     }
     if v >= (24, 30) {
-        notes.push("Edit/Reset on Release gibt es im Menü ab 24.30 nicht mehr".into());
+        notes.push("Edit/Reset on Release is gone from the menu from 24.30 on".into());
     } else if v >= (15, 20) {
-        notes.push("den Pre-Edits-Schalter gibt es ab 15.20 nicht mehr".into());
+        notes.push("The Pre-Edits switch is gone from 15.20 on".into());
     }
     if v >= (20, 0) {
-        notes.push("Erbium nennt die Unterstützung ab 20.00 „teilweise“".into());
+        notes.push("Erbium calls its support \"partial\" from 20.00 on".into());
     }
     notes.join(" · ")
 }
 
-/// Sucht eine Datei mit genau diesem Namen unterhalb von `root` (höchstens `depth` Ebenen tief).
+/// Looks for a file with exactly this name below `root` (at most `depth` levels deep).
 pub fn find_file(root: &Path, name: &str, depth: usize) -> Option<PathBuf> {
     let direct = root.join(name);
     if direct.is_file() {
@@ -239,7 +256,7 @@ pub fn find_file(root: &Path, name: &str, depth: usize) -> Option<PathBuf> {
         .map(|e| e.path())
         .filter(|p| p.is_dir())
         .collect();
-    // Bekannte Unterordner zuerst, damit die Suche schnell ist
+    // Known sub-folders first, so the search is fast
     dirs.sort_by_key(|p| {
         let n = p.file_name().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
         match n.as_str() {
@@ -251,7 +268,7 @@ pub fn find_file(root: &Path, name: &str, depth: usize) -> Option<PathBuf> {
     dirs.iter().find_map(|d| find_file(d, name, depth - 1))
 }
 
-/// Sucht die UTF-16-Zeichenfolge `++Fortnite+Release-…` in einer Datei.
+/// Searches a file for the UTF-16 text `++Fortnite+Release-…`.
 pub fn scan_file_for_version(path: &Path) -> Option<VersionString> {
     let bytes = fs::read(path).ok()?;
     scan_bytes_for_version(&bytes)
@@ -262,7 +279,7 @@ pub fn scan_bytes_for_version(bytes: &[u8]) -> Option<VersionString> {
     let mut start = 0;
     while let Some(pos) = find_bytes(&bytes[start..], &needle) {
         let at = start + pos;
-        // Rückwärts bis zum Anfang der Zeichenfolge (Engine-Version kann davor stehen)
+        // Walk back to the start of the text (the engine version can come first)
         let mut begin = at;
         while begin >= 2 {
             let ch = u16::from_le_bytes([bytes[begin - 2], bytes[begin - 1]]);
@@ -310,8 +327,8 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     None
 }
 
-/// Liest alle Text-Einträge aus den Versions-Infos einer exe (Windows-Ressource).
-/// `pelite` nur unter Windows; sonst greift die Suche in der Datei.
+/// Reads all text entries from the version info of an exe (Windows resource).
+/// `pelite` only on Windows; elsewhere the search in the file takes over.
 #[cfg(windows)]
 fn version_info_strings(path: &Path) -> Vec<String> {
     use pelite::pe64::{Pe, PeFile};
@@ -331,7 +348,7 @@ fn version_info_strings(_path: &Path) -> Vec<String> {
     Vec::new()
 }
 
-/// Ermittelt die Version: erst Datei-Infos, dann Suche in der exe.
+/// Finds the version: file info first, then a search in the exe.
 pub fn detect_version(shipping_exe: &Path, crash_report_exe: Option<&Path>) -> Option<VersionString> {
     let mut candidates: Vec<&Path> = Vec::new();
     if let Some(c) = crash_report_exe {
@@ -348,7 +365,7 @@ pub fn detect_version(shipping_exe: &Path, crash_report_exe: Option<&Path>) -> O
     candidates.iter().find_map(|exe| scan_file_for_version(exe))
 }
 
-/// Prüft einen gewählten Ordner und liefert Ergebnis + einzelne Prüfschritte für die Oberfläche.
+/// Checks a picked folder and returns the result plus the single check steps for the UI.
 pub fn detect_build(folder: &Path) -> DetectReport {
     let mut checks = Vec::new();
     let fail = |checks: &mut Vec<Check>, text: String| {
@@ -357,15 +374,15 @@ pub fn detect_build(folder: &Path) -> DetectReport {
     };
 
     if !folder.is_dir() {
-        return fail(&mut checks, "Ordner nicht gefunden".into());
+        return fail(&mut checks, "Folder not found".into());
     }
     let Some(exe) = find_file(folder, SHIPPING_EXE, 6) else {
-        return fail(&mut checks, format!("{SHIPPING_EXE} nicht gefunden – ist das der richtige Ordner?"));
+        return fail(&mut checks, format!("{SHIPPING_EXE} not found – is this the right folder?"));
     };
-    checks.push(Check { ok: true, text: format!("{SHIPPING_EXE} gefunden") });
+    checks.push(Check { ok: true, text: format!("Found {SHIPPING_EXE}") });
 
     let binaries = exe.parent().map(Path::to_path_buf).unwrap_or_default();
-    // Build-Wurzel = Ordner über „FortniteGame“
+    // Build root = the folder above "FortniteGame"
     let root = binaries
         .ancestors()
         .find(|p| p.file_name().is_some_and(|n| n.eq_ignore_ascii_case("FortniteGame")))
@@ -375,10 +392,10 @@ pub fn detect_build(folder: &Path) -> DetectReport {
 
     let crash_exe = find_file(&root.join("Engine"), CRASH_REPORT_EXE, 4);
     let Some(v) = detect_version(&exe, crash_exe.as_deref()) else {
-        return fail(&mut checks, "Version konnte nicht gelesen werden".into());
+        return fail(&mut checks, "Couldn't read the version".into());
     };
     let cl_text = v.changelist.map(|c| format!(" (CL-{c})")).unwrap_or_default();
-    checks.push(Check { ok: true, text: format!("Version gelesen: {}{}", v.version, cl_text) });
+    checks.push(Check { ok: true, text: format!("Version: {}{}", v.version, cl_text) });
 
     let paks = root.join("FortniteGame").join("Content").join("Paks");
     let pak_count = fs::read_dir(&paks)
@@ -391,9 +408,9 @@ pub fn detect_build(folder: &Path) -> DetectReport {
     checks.push(Check {
         ok: pak_count > 0,
         text: if pak_count > 0 {
-            format!("Spieldaten vorhanden ({pak_count} .pak-Dateien)")
+            format!("Game files found ({pak_count} .pak files)")
         } else {
-            "Keine Spieldaten (.pak) gefunden – Build unvollständig?".into()
+            "No game files (.pak) found – is the build incomplete?".into()
         },
     });
 
@@ -408,7 +425,7 @@ pub fn detect_build(folder: &Path) -> DetectReport {
             let short: Vec<&str> = e.split('.').take(2).collect();
             format!("Unreal Engine {}", short.join("."))
         })
-        .unwrap_or_else(|| "Unreal Engine (unbekannt)".into());
+        .unwrap_or_else(|| "Unreal Engine (unknown)".into());
 
     let has_aftermath = find_file(&root, AFTERMATH_DLL, 6).is_some();
 
@@ -483,15 +500,21 @@ mod tests {
         assert_eq!(support_for("Cert", None), Support::Unsupported);
         assert_eq!(support_for("30.40", None), Support::Experimental);
         assert_eq!(support_for("31.00", None), Support::Unsupported);
-        assert!(support_note("33.00").contains("zu neu"));
-        assert!(support_note("1.6").contains("zu alt"));
+        assert!(support_note("33.00").contains("Too new"));
+        assert!(support_note("1.6").contains("Too old"));
         assert!(support_note("10.40").contains("XMPP"));
-        assert_eq!(support_note("19.10"), "getestet");
+        assert_eq!(support_note("19.10"), "Tested");
         assert_eq!(parse_version_string("4.16.0-3681159+++Fortnite+Release-Cert").unwrap().version, "1.7");
         assert_eq!(parse_major_minor("33.20"), Some((33, 20)));
+        assert_eq!(parse_version_number("15.4"), Some((15, 40)));
+        assert_eq!(parse_version_number("15.40"), Some((15, 40)));
+        assert_eq!(parse_version_number("16.1"), Some((16, 10)));
+        assert_eq!(parse_version_number("4.5"), Some((4, 5)));
+        assert_eq!(parse_version_number("1.7.2"), Some((1, 7)));
+        assert_eq!(parse_version_number("Cert"), None);
         assert_eq!(season_for("33.20"), "Chapter 6 · Season 1");
         assert_eq!(season_for("32.00"), "Chapter 5 · Season Remix");
-        assert_eq!(season_for("40.00"), "Version 40 · neuere Season");
+        assert_eq!(season_for("40.00"), "Version 40 · newer season");
     }
 
     #[test]
@@ -507,7 +530,7 @@ mod tests {
 
     #[test]
     fn detects_fake_build_folder() {
-        let dir = std::env::temp_dir().join(format!("vanity-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("niobium-test-{}", std::process::id()));
         let bin = dir.join("FortniteGame/Binaries/Win64");
         let paks = dir.join("FortniteGame/Content/Paks");
         fs::create_dir_all(&bin).unwrap();
@@ -520,7 +543,7 @@ mod tests {
         fs::write(bin.join(AFTERMATH_DLL), b"x").unwrap();
 
         let report = detect_build(&dir);
-        let build = report.build.expect("build erkannt");
+        let build = report.build.expect("build detected");
         assert_eq!(build.version, "19.10");
         assert_eq!(build.support, Support::Supported);
         assert_eq!(build.season, "Chapter 3 · Season 1");

@@ -27,7 +27,7 @@
  */
 
 #pragma once
-// [Vanity] MinHook wird als eigenes Projekt (native/minhook) mitgebaut und per Projektverweis gelinkt.
+// [Niobium] MinHook is built as its own project (native/minhook) and linked via a project reference.
 #if !(defined _M_IX86) && !(defined _M_X64) && !(defined __i386__) && !(defined __x86_64__)
 #error MinHook supports only x86 and x64 systems.
 #endif

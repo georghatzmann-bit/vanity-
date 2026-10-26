@@ -1,34 +1,39 @@
-# Vanity – Spiel-DLLs (C++20, x64, Visual Studio 2022)
+# Niobium – game DLLs (C++, x64, Visual Studio 2022)
 
-Diese DLLs werden in das von Vanity gestartete, alte Fortnite geladen. Alles aus Quellcode,
-keine fertigen .lib/.dll. Projektmappe: `Vanity.sln`.
+These DLLs are loaded into the old Fortnite that Niobium starts. Everything is built from source –
+no prebuilt .lib or .dll files. Solution: `Niobium.sln`.
 
-| Projekt | Ergebnis | Aufgabe | Basis / Lizenz |
+| Project | Output | Job | Base / licence |
 |---|---|---|---|
-| `minhook` | (statische Lib) | Funktions-Hooks | MinHook, BSD-2 (`third_party/minhook`) |
-| `redirect` | `vanity_redirect.dll` | leitet alle Epic-Anfragen auf `127.0.0.1:3551` um | Tellurium, BSD-3 (`redirect/LICENSE-Tellurium.txt`) |
-| `server` | `vanity_server.dll` | macht aus Fortnite einen Game Server (Arena, Lategame, Bots, Trickshot) | Magnesium/Erbium, BSD-3 (*in Arbeit*) |
-| `client` | `vanity_client.dll` | Ingame-Menü (F9) | eigener Code + ErbiumClient (GPL-3.0), ImGui (MIT) (*in Arbeit*) |
+| `minhook` | (static library) | function hooks | MinHook, BSD-2 (`third_party/minhook`) |
+| `redirect` | `niobium_redirect.dll` | sends every Epic request to your own backend on `127.0.0.1:3551` | Tellurium, BSD-3 (`redirect/LICENSE-Tellurium.txt`) |
+| `server` | `niobium_server.dll` | turns Fortnite into a game server (Arena, Lategame, bots, trickshot, the launcher's control pipe `\\.\pipe\niobium-server`) | Magnesium (BSD-3) / Erbium (GPL-3.0) |
+| `client` | `niobium_client.dll` | in-game menu (F9) – see [`client/README.md`](client/README.md) | ATLAS Console (ATLAS Console Attribution License v1.0, `client/LICENSE-ATLAS.txt`), Erbium SDK (GPL-3.0), Memcury (MIT), Dear ImGui (MIT) |
 
-## Bauen
+Changes in vendored code are marked: `// NIOBIUM:` in the server and the redirect, `// [Niobium]` in
+the in-game menu. (Before the rename they were `VANITY:` and `[Vanity]`.)
 
-Mit Visual Studio 2022 („Desktop development with C++“): `Vanity.sln` öffnen, **Release / x64**,
-Build. Oder auf der Kommandozeile:
+## Building
+
+With Visual Studio 2022 ("Desktop development with C++", toolset v143): open `Niobium.sln`, pick
+**Release / x64**, build. Or on the command line:
 
 ```
-msbuild native\Vanity.sln /t:Restore,Build /p:Configuration=Release /p:Platform=x64 /m
+msbuild native\Niobium.sln /t:Restore,Build /p:Configuration=Release /p:Platform=x64 /m
 ```
 
-Ergebnis liegt in `native\bin\Release\`.
+The DLLs land in `native\bin\Release\` (`niobium_redirect.dll`, `niobium_server.dll`,
+`niobium_client.dll`). The GitHub workflow builds them the same way and puts them into the installer.
 
-## Probe-Kompilieren unter Linux
+## Test compile on Linux
 
-`native/scripts/check-build.sh <minhook|redirect|server|client|all>` prüft mit clang-cl und den
-MSVC-Headern aus `/opt/xwin` grob, ob der Code übersetzt. Das ist nur eine Vorprüfung – der
-richtige Build läuft mit Visual Studio (auch im GitHub-Workflow).
+`native/scripts/check-build.sh <minhook|redirect|server|client|all>` checks roughly with clang-cl and
+the MSVC headers from `/opt/xwin` whether the code compiles. This is only a first check – the real
+build runs with Visual Studio (also in the GitHub workflow).
 
-## Stand
+Screenshots of the F9 menu without the game: `native/tools/menu-preview/build-and-render.sh <output folder>`.
 
-- **minhook, redirect**: fertig und im Build.
-- **server, client**: Quellcode eingesammelt (Magnesium, ErbiumClient), Projektdateien und die
-  Anbindung an den Launcher (Steuer-Pipe, Ingame-Menü) werden noch gebaut.
+## Status
+
+- **minhook, redirect, server, client:** all four build in the GitHub workflow and are in the installer.
+- Not tested in the real game yet – see [`../docs/03-test-checklist.md`](../docs/03-test-checklist.md).

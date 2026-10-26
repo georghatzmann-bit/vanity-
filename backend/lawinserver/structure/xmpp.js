@@ -3,14 +3,14 @@ const XMLBuilder = require("xmlbuilder");
 const XMLParser = require("xml-parser");
 
 const functions = require("./../structure/functions.js");
-const vanity = require("./vanity.js"); // VANITY: Port und Bind-Adresse aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: port and bind address from src/main.ts
 const matchmaker = require("./matchmaker.js");
 
-const port = vanity.settings.matchmakerPort; // VANITY: VANITY_MATCHMAKER_PORT statt fest 80
+const port = niobium.settings.matchmakerPort; // NIOBIUM: NIOBIUM_MATCHMAKER_PORT instead of always 80
 
-const wss = new WebSocket({ port: port, host: vanity.settings.bindAddress }, () => console.log("XMPP and Matchmaker started listening on port", port)); // VANITY: Bind-Adresse aus VANITY_BIND
+const wss = new WebSocket({ port: port, host: niobium.settings.bindAddress }, () => console.log("XMPP and Matchmaker started listening on port", port)); // NIOBIUM: bind address from NIOBIUM_BIND
 wss.on("error", (err) => {
-    console.log("XMPP and Matchmaker \x1b[31mFAILED\x1b[0m to start hosting.", `(port ${port}: ${err.code || err.message})`); // VANITY: Port und Fehlergrund ausgeben
+    console.log("XMPP and Matchmaker \x1b[31mFAILED\x1b[0m to start hosting.", `(port ${port}: ${err.code || err.message})`); // NIOBIUM: print the port and the reason
 })
 
 

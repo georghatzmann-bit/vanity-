@@ -1,65 +1,73 @@
-# Phase 1 – Test-Checkliste (Oberfläche)
+# Phase 1 – Test checklist (UI) – archived
 
-In Phase 1 ist nur das **Design** fertig. Die Knöpfe zeigen, wie es später aussieht, starten
-aber noch nichts. Fortnite, Backend und DLLs kommen ab Phase 2.
+> **Archived.** This was the checklist for phase 1 (October 2026), when the launcher was still called
+> Vanity, was in German and only showed sample data. It is kept as a record. The quoted texts below are
+> English translations of the old German screens and don't all match today's app.
+> **For the current app use [`03-test-checklist.md`](03-test-checklist.md)** (German:
+> [`03-test-checklist.de.md`](03-test-checklist.de.md)).
 
-## So bekommst du den Launcher
+In phase 1 only the **design** was finished. The buttons showed what it would look like later, but
+didn't start anything yet. Fortnite, the backend and the DLLs came from phase 2 on.
 
-**Weg A – fertiger Installer (empfohlen):**
+## How to get the launcher (back then)
 
-1. Auf GitHub im Repo `vanity-` oben auf **Actions** klicken
+**Way A – ready-made installer (recommended):**
+
+1. On GitHub in the repository `vanity-`, click **Actions** at the top
    (https://github.com/georghatzmann-bit/vanity-/actions).
-2. Den obersten Lauf „Launcher“ mit grünem Haken öffnen (Branch `claude/eloquent-wozniak-en0j35`).
-3. Ganz unten bei **Artifacts** auf `Vanity-Installer-…` klicken → ZIP herunterladen.
-4. ZIP entpacken und `Vanity_0.1.0_x64-setup.exe` starten.
-5. Windows zeigt evtl. „Der Computer wurde durch Windows geschützt“, weil der Installer nicht
-   signiert ist → **Weitere Informationen** → **Trotzdem ausführen**.
-   Installiert wird nur für deinen Benutzer, ohne Admin-Rechte.
+2. Open the top run "Launcher" with a green tick (branch `claude/eloquent-wozniak-en0j35`).
+3. At the very bottom under **Artifacts**, click `Vanity-Installer-…` → download the ZIP.
+4. Unzip it and start `Vanity_0.1.0_x64-setup.exe`.
+5. Windows may say "Windows protected your PC", because the installer isn't signed →
+   **More info** → **Run anyway**. It only installs for your user, without admin rights.
 
-**Weg B – selbst bauen:** siehe `README.md` → „Selbst bauen“.
+Today the installer is called `Niobium-Setup.exe` and has a direct link – see `03-test-checklist.md`.
 
-## Was du testen sollst
+**Way B – build it yourself:** see `README.md` → "Build it yourself".
 
-Hake ab, was passt. Wenn etwas komisch aussieht: Screenshot an mich.
+## What to test
 
-### Fenster
-- [ ] Das Fenster hat keinen Windows-Rahmen, sondern eine eigene dunkle Titelleiste.
-- [ ] Oben links an der Titelleiste ziehen → das Fenster bewegt sich.
-- [ ] Doppelklick auf die Titelleiste → maximiert / wieder klein.
-- [ ] Die drei Knöpfe oben rechts: Minimieren, Maximieren, Schließen (rot beim Drüberfahren).
-- [ ] Fenster am Rand kleiner ziehen → unter ca. 1200 Pixel Breite wird die Seitenleiste
-      schmal (nur Symbole). Beim Drüberfahren erscheint der Name.
+Tick what works. If something looks odd: send me a screenshot.
 
-### Startseite
-- [ ] **Host & Play** klicken → die sieben Schritte laufen nacheinander durch, die drei
-      Dienst-Karten werden orange („Startet …“) und dann grün („Läuft“).
-- [ ] Während es läuft, auf eine andere Seite und zurück wechseln → der Ablauf läuft weiter.
-- [ ] Am Ende erscheint unten rechts „Lobby erreicht (Vorschau)“.
-- [ ] **Alles stoppen** → alles wieder grau („Gestoppt“).
-- [ ] Unten links in der Seitenleiste zeigt „Dienste“ denselben Zustand.
+### Window
+- [ ] The window has no Windows frame but its own dark title bar.
+- [ ] Drag the title bar at the top left → the window moves.
+- [ ] Double-click the title bar → maximised / small again.
+- [ ] The three buttons at the top right: minimise, maximise, close (red on hover).
+- [ ] Make the window narrower at the edge → below about 1200 pixels the sidebar gets narrow (icons
+      only). Hovering shows the name.
 
-### Seiten durchklicken
-- [ ] **Bibliothek**: Karte für 19.10, „Build hinzufügen“ → „Prüfen“ hakt vier Punkte ab.
-- [ ] **Server & Freunde**: Unsinn ins IP-Feld tippen → rote Meldung; `100.101.12.7` → Knopf wird aktiv.
-- [ ] **Match-Steuerung**: Reiter Match / Bots / Trickshot, Regler und Schalter bewegen sich.
-      Bei Bots „Gegner“ wählen → Schwierigkeit wird aktiv und ein Hinweis erscheint.
-- [ ] **Ingame-Menü**: Schalter links ändern die Vorschau rechts. Auf „F9“ klicken, andere
-      Taste drücken → wird übernommen (Esc bricht ab).
-- [ ] **Profile**: „Neues Profil“ anlegen → erscheint als neue Karte; „Aktivieren“ funktioniert.
-- [ ] **Live-Log**: Beispielzeilen laufen ein, Filter (Spiel/Server/…) und Suche funktionieren,
-      „Anmeldung erkannt“ ist violett markiert.
-- [ ] **Absturz-Analyse**: drei Beispiel-Abstürze, „Technische Details“ klappt auf.
-- [ ] **Einstellungen**: „Glas-Effekt“ aus → Flächen werden fest. „Animationen reduzieren“ an
-      → Seitenwechsel ohne Bewegung. Beides bleibt nach Neustart von Vanity gespeichert.
-- [ ] **Über & Credits**: Klick auf ein Projekt öffnet die Seite im Browser.
+### Home
+- [ ] Click **Host & Play** → the seven steps run one after another, the three service cards turn
+      orange ("Starting…") and then green ("Running").
+- [ ] While it runs, switch to another page and back → the sequence keeps running.
+- [ ] At the end, "Lobby reached (preview)" appears at the bottom right.
+- [ ] **Stop all** → everything grey again ("Stopped").
+- [ ] At the bottom left of the sidebar, "Services" shows the same state.
 
-### Gefühl
-- [ ] Animationen wirken flüssig, nicht träge.
-- [ ] Texte sind gut lesbar, nichts ist abgeschnitten oder überlappt.
-- [ ] Gefällt dir die Farbe (Violett)? Wenn nicht: sag mir, welche du lieber hättest.
+### Click through the pages
+- [ ] **Library**: a card for 19.10, "Add a build" → "Check" ticks off four points.
+- [ ] **Servers & Friends**: type nonsense into the IP field → a red message; `100.101.12.7` → the
+      button becomes active.
+- [ ] **Match Control**: tabs Match / Bots / Trickshot, sliders and switches move.
+      Under Bots, picking "Opponents" made the difficulty active and showed a hint.
+- [ ] **In-game Menu**: the switches on the left change the preview on the right. Click "F9", press
+      another key → it is taken over (Esc cancels).
+- [ ] **Profiles**: create a "New profile" → it shows up as a new card; activating it works.
+- [ ] **Live Log**: sample lines come in, the filters (Game/Server/…) and the search work, "Logged in"
+      is marked in violet.
+- [ ] **Crash Analysis**: three sample crashes, "Technical details" opens.
+- [ ] **Settings**: "Glass effect" off → surfaces become solid. "Reduce motion" on → page changes
+      without movement. Both are kept after restarting the launcher.
+- [ ] **About & Credits**: clicking a project opens its page in the browser.
 
-## Rückmeldung
+### Feel
+- [ ] Animations feel smooth, not sluggish.
+- [ ] Texts are easy to read, nothing is cut off or overlaps.
+- [ ] Do you like the colour (violet)? If not: tell me which one you'd rather have.
 
-Schreib mir einfach: „Phase 1 läuft“ – oder was dir aufgefallen ist (gern mit Screenshot).
-Danach geht es mit **Phase 2** weiter: Build wirklich importieren, Fortnite 19.10 starten,
-Live-Log aus dem echten Spiel.
+## Feedback
+
+Just write to me: "Phase 1 works" – or what you noticed (a screenshot is welcome).
+After that, **phase 2** followed: really importing a build, starting Fortnite 19.10, a live log from
+the real game.

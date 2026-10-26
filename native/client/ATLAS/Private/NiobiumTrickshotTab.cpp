@@ -1,13 +1,14 @@
-// [Vanity] Neue Datei (GPL-3.0, Teil von Vanity): Reiter "Trickshot" im F9-Menue und das
-// Trickshot-Banner.
+// [Niobium] New file (GPL-3.0, part of Niobium): the "Trickshot" tab in the F9 menu and the
+// trickshot banner.
 //
-// Bewusst ohne pch.h und ohne SDK-/Spiel-Header: nur ImGui, die Standardbibliothek, nlohmann/json
-// und unter Windows <windows.h>/<shlobj.h> fuer den %LOCALAPPDATA%-Pfad. So kann ein
-// Vorschau-Werkzeug die Datei unter Linux kompilieren und Bildschirmfotos rendern.
-// Alles, was das Spiel betrifft, laeuft ueber FVanityTabHost (Befehle) bzw. VanityToast_Push.
+// Deliberately without pch.h and without SDK/game headers: only ImGui, the standard library,
+// nlohmann/json and, on Windows, <windows.h>/<shlobj.h> for the %LOCALAPPDATA% path. That way a
+// preview tool can compile this file on Linux and render screenshots.
+// Everything that touches the game goes through FNiobiumTabHost (commands) or NiobiumToast_Push.
 //
-// Kodierung: UTF-8. client.vcxproj baut diese Datei mit /utf-8 (deutsche Texte fuer ImGui).
-#include "../Public/VanityTrickshotTab.h"
+// Encoding: UTF-8. client.vcxproj builds this file with /utf-8 (the en dashes in the menu
+// texts must reach ImGui as UTF-8).
+#include "../Public/NiobiumTrickshotTab.h"
 #include "../ImGui/imgui.h"
 #include "../../third_party/nlohmann/json.hpp"
 
@@ -38,19 +39,22 @@
 #include <shlobj.h>
 #endif
 
-// Schuetzt vor einem Build, der UTF-8-Quelltext einliest, aber in eine 8-Bit-Codepage uebersetzt:
-// dann waeren die Umlaute im Menue kaputt. "ü" muss als zwei UTF-8-Bytes ankommen.
-static_assert(sizeof("ü") == 3, "VanityTrickshotTab.cpp muss mit /utf-8 gebaut werden.");
+// Guards against a build that reads UTF-8 source but converts it to an 8-bit code page:
+// the en dashes in the menu would then be garbled. "–" must arrive as three UTF-8 bytes.
+static_assert(sizeof("–") == 4, "NiobiumTrickshotTab.cpp must be built with /utf-8.");
 
 namespace
 {
-    // ---------------------------------------------------------------- Farben (Palette aus GUI.cpp)
-    constexpr ImVec4 kMuted(0.353f, 0.388f, 0.478f, 1.f);
-    constexpr ImVec4 kPrimary(0.847f, 0.878f, 0.941f, 1.f);
+    // ---------------------------------------------------------------- Colours (palette from GUI.cpp)
+    constexpr ImVec4 kMuted(0.431f, 0.451f, 0.573f, 1.f); // text-faint #6E7392 (decoration only)
+    constexpr ImVec4 kHintText(0.639f, 0.659f, 0.765f, 1.f); // text-muted #A3A8C3 (hints, status)
+    constexpr ImVec4 kPrimary(0.949f, 0.953f, 0.973f, 1.f); // brand text #F2F3F8
     constexpr ImVec4 kSecondary(0.58f, 0.60f, 0.66f, 1.f);
     constexpr ImVec4 kError(1.f, 0.39f, 0.43f, 1.f);
     constexpr ImVec4 kCardBg(0.078f, 0.096f, 0.141f, 1.f);
     constexpr ImVec4 kCardBorder(0.137f, 0.165f, 0.243f, 1.f);
+    // Accent for text (brand violet-text #B49BFF): plain violet is too dark for small text.
+    constexpr ImVec4 kAccentText(0.706f, 0.608f, 1.f, 1.f);
 
     constexpr float kActionButtonHeight = 28.f;
     constexpr double kStatusOkSeconds = 3.0;
@@ -59,14 +63,14 @@ namespace
     constexpr size_t kMaxParkourFileBytes = 2u * 1024u * 1024u;
     constexpr size_t kMaxParkours = 64;
 
-    ImVec4 AccentOf(const FVanityTabHost& Host, float Alpha)
+    ImVec4 AccentOf(const FNiobiumTabHost& Host, float Alpha)
     {
         if (Host.Accent)
             return Host.Accent(Alpha);
-        return ImVec4(0.f, 0.635f, 0.808f, Alpha);
+        return ImVec4(0.478f, 0.235f, 1.f, Alpha); // brand violet #7A3CFF
     }
 
-    // ---------------------------------------------------------------- Parkour-Datei
+    // ---------------------------------------------------------------- Parkour file
     struct FParkourEntry
     {
         std::string Id;
@@ -105,18 +109,18 @@ namespace
         if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, localAppData)) &&
             localAppData[0] != L'\0')
         {
-            return std::filesystem::path(localAppData) / L"Vanity" / L"server" / L"parkours.json";
+            return std::filesystem::path(localAppData) / L"Niobium" / L"server" / L"parkours.json";
         }
 
         wchar_t environment[MAX_PATH]{};
         const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", environment, MAX_PATH);
         if (length > 0 && length < MAX_PATH)
-            return std::filesystem::path(environment) / L"Vanity" / L"server" / L"parkours.json";
+            return std::filesystem::path(environment) / L"Niobium" / L"server" / L"parkours.json";
 
         return std::filesystem::path(L"parkours.json");
 #else
         if (const char* localAppData = std::getenv("LOCALAPPDATA"); localAppData && *localAppData)
-            return std::filesystem::path(localAppData) / "Vanity" / "server" / "parkours.json";
+            return std::filesystem::path(localAppData) / "Niobium" / "server" / "parkours.json";
         return std::filesystem::path("parkours.json");
 #endif
     }
@@ -133,8 +137,8 @@ namespace
         return g_Parkours.DefaultPath;
     }
 
-    // Nur Kleinbuchstaben, Ziffern, '-' und '_': der Server trennt "cheat parkour <id>" an
-    // Leerzeichen und schreibt alles klein. Unterbefehle duerfen keine Parkour-Id sein.
+    // Only lowercase letters, digits, '-' and '_': the server splits "cheat parkour <id>" at
+    // spaces and lowercases everything. Sub-commands can't be parkour ids.
     bool SanitizeParkourId(const std::string& Input, std::string& Output)
     {
         Output.clear();
@@ -158,7 +162,7 @@ namespace
             Output != "sniper" && Output != "list";
     }
 
-    // Steuerzeichen raus, auf eine sinnvolle Laenge kuerzen (ohne ein UTF-8-Zeichen zu zerschneiden).
+    // Removes control characters and cuts to a sensible length (without splitting a UTF-8 character).
     std::string CleanText(const std::string& Input, size_t MaxBytes, bool KeepNewlines)
     {
         std::string output;
@@ -233,8 +237,8 @@ namespace
         return !input.bad();
     }
 
-    // Liest die Datei. Bei Erfolg ersetzt sie die Liste; bei einem Fehler bleibt die letzte gute
-    // Liste stehen (z. B. wenn der Launcher die Datei gerade neu schreibt).
+    // Reads the file. On success it replaces the list; on an error the last good list
+    // stays (e.g. while the launcher is rewriting the file).
     void LoadParkours(const std::filesystem::path& Path)
     {
         std::string text;
@@ -297,7 +301,7 @@ namespace
         g_Parkours.State = EParkourFileState::Loaded;
     }
 
-    // Hoechstens alle 2 s: Datei da? Neue Aenderungszeit? Dann neu einlesen.
+    // At most every 2 s: does the file exist? New modification time? Then read it again.
     void RefreshParkoursIfNeeded()
     {
         const double now = ImGui::GetTime();
@@ -328,7 +332,7 @@ namespace
         LoadParkours(path);
     }
 
-    // ---------------------------------------------------------------- Zustand des Reiters
+    // ---------------------------------------------------------------- Tab state
     enum ESection
     {
         SectionParkour = 0,
@@ -340,7 +344,7 @@ namespace
     struct FStatusLine
     {
         int Section = -1;
-        std::string AnchorId; // gesetzt = Meldung erscheint in dieser Parkour-Karte
+        std::string AnchorId; // set = the message shows inside this parkour card
         bool Error = false;
         std::string Text;
         double Until = 0.0;
@@ -360,10 +364,10 @@ namespace
 
     FTabState g_Tab;
 
-    // Von Client.cpp gesetzt (VanityTrickshotTab_SetLobbyCheck); nullptr = kein Lobby-Hinweis.
+    // Set by Client.cpp (NiobiumTrickshotTab_SetLobbyCheck); nullptr = no lobby hint.
     std::atomic<bool (*)()> g_LobbyCheck{ nullptr };
 
-    void ResetTogglesOnNewSession(const FVanityTabHost& Host)
+    void ResetTogglesOnNewSession(const FNiobiumTabHost& Host)
     {
         if (!Host.SessionGeneration)
             return;
@@ -378,7 +382,7 @@ namespace
 
         if (session != g_Tab.Session)
         {
-            // Neues Match: Server-Welt und Spielfigur sind neu, also alles wieder "aus".
+            // New match: the server world and your character are new, so everything is "off" again.
             g_Tab.Session = session;
             g_Tab.SlowMotion = false;
             g_Tab.StormPaused = false;
@@ -386,9 +390,9 @@ namespace
         }
     }
 
-    // Schickt einen Befehl und merkt sich die Rueckmeldung fuer die Zeile unter dem Abschnitt
-    // (oder, mit AnchorId, fuer die Zeile in der angeklickten Parkour-Karte).
-    bool Send(const FVanityTabHost& Host, int Section, const char* Command, const std::string& What,
+    // Sends a command and remembers the feedback for the line below the section
+    // (or, with AnchorId, for the line inside the clicked parkour card).
+    bool Send(const FNiobiumTabHost& Host, int Section, const char* Command, const std::string& What,
         const std::string& AnchorId = std::string())
     {
         const bool sent = Host.Exec && Command && *Command && Host.Exec(Command);
@@ -396,8 +400,8 @@ namespace
         g_Tab.Status.AnchorId = AnchorId;
         g_Tab.Status.Error = !sent;
         g_Tab.Status.Text = sent
-            ? "Gesendet: " + What
-            : std::string("Geht gerade nicht – bist du schon im Match?");
+            ? "Sent: " + What
+            : std::string("Can't do that right now – are you in a match?");
         g_Tab.Status.Until = ImGui::GetTime() + (sent ? kStatusOkSeconds : kStatusErrorSeconds);
         return sent;
     }
@@ -411,17 +415,17 @@ namespace
             ImGui::GetTime() < status.Until;
     }
 
-    // WrapWidth > 0: umbrechen (in der Karte); sonst eine Zeile (unter dem Abschnitt).
+    // WrapWidth > 0: wrap (inside the card); otherwise one line (below the section).
     void DrawStatusText(float WrapWidth = 0.f)
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, g_Tab.Status.Error ? kError : kMuted);
+        ImGui::PushStyleColor(ImGuiCol_Text, g_Tab.Status.Error ? kError : kHintText);
         ImGui::PushTextWrapPos(WrapWidth > 0.f ? ImGui::GetCursorPosX() + WrapWidth : -1.f);
         ImGui::TextUnformatted(g_Tab.Status.Text.c_str());
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
     }
 
-    // Eine Zeile Platz ist immer reserviert, damit nichts springt, wenn die Meldung kommt/geht.
+    // One line of space is always reserved so nothing jumps when the message comes or goes.
     void DrawStatusLine(int Section)
     {
         if (!StatusVisible(Section, std::string()))
@@ -432,10 +436,10 @@ namespace
         DrawStatusText();
     }
 
-    // ---------------------------------------------------------------- kleine Bausteine
+    // ---------------------------------------------------------------- Small building blocks
     void Hint(const char* Text, float Width)
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
+        ImGui::PushStyleColor(ImGuiCol_Text, kHintText);
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + Width);
         ImGui::TextUnformatted(Text);
         ImGui::PopTextWrapPos();
@@ -464,11 +468,11 @@ namespace
     {
         const char* Label = "";
         const char* Tooltip = nullptr;
-        bool Primary = false; // Hauptaktion: Akzent-Hintergrund
-        bool Active = false;  // eingeschalteter Schalter: Akzent-Schrift
+        bool Primary = false; // main action: accent background
+        bool Active = false;  // toggle that is on: accent text
     };
 
-    bool DrawButton(const FVanityTabHost& Host, const FButtonSpec& Spec, float Width, float Height)
+    bool DrawButton(const FNiobiumTabHost& Host, const FButtonSpec& Spec, float Width, float Height)
     {
         int pushed = 0;
         if (Spec.Primary)
@@ -480,7 +484,7 @@ namespace
         }
         else if (Spec.Active)
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, AccentOf(Host, 1.f));
+            ImGui::PushStyleColor(ImGuiCol_Text, kAccentText);
             ImGui::PushStyleColor(ImGuiCol_Button, AccentOf(Host, 0.18f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, AccentOf(Host, 0.26f));
             pushed += 3;
@@ -499,9 +503,9 @@ namespace
         return ImGui::CalcTextSize(Label, nullptr, true).x + style.FramePadding.x * 2.f + 8.f <= Width;
     }
 
-    // Zwei Knoepfe nebeneinander, wenn beide Texte passen, sonst untereinander.
-    // Rueckgabe: 0 = nichts, 1 = erster, 2 = zweiter Knopf geklickt.
-    int DrawButtonPair(const FVanityTabHost& Host, const FButtonSpec& First, const FButtonSpec& Second, float Width)
+    // Two buttons side by side if both labels fit, otherwise stacked.
+    // Returns: 0 = nothing, 1 = first, 2 = second button clicked.
+    int DrawButtonPair(const FNiobiumTabHost& Host, const FButtonSpec& First, const FButtonSpec& Second, float Width)
     {
         const float half = HalfWidth(Width);
         const bool sideBySide = LabelFits(First.Label, half) && LabelFits(Second.Label, half);
@@ -519,13 +523,13 @@ namespace
     {
         switch (Level)
         {
-        case 1: return "leicht";
-        case 2: return "mittel";
-        default: return "schwer";
+        case 1: return "easy";
+        case 2: return "medium";
+        default: return "hard";
         }
     }
 
-    void DrawLevelDots(const FVanityTabHost& Host, int Level, float Height)
+    void DrawLevelDots(const FNiobiumTabHost& Host, int Level, float Height)
     {
         constexpr float radius = 4.f;
         constexpr float gap = 5.f;
@@ -545,8 +549,8 @@ namespace
         }
     }
 
-    // Eine Karte pro Parkour: Name, Stufe als Punkte, Beschreibung, Knopf "Laden".
-    bool DrawParkourCard(const FVanityTabHost& Host, const FParkourEntry& Entry, int Index, float Width)
+    // One card per parkour: name, level as dots, description, "Load" button.
+    bool DrawParkourCard(const FNiobiumTabHost& Host, const FParkourEntry& Entry, int Index, float Width)
     {
         ImGui::PushID(Index);
 
@@ -564,7 +568,7 @@ namespace
         ImGui::BeginGroup();
         const float rowRight = start.x + padding + innerWidth;
 
-        // Zeile 1: Name, Punkte, "leicht/mittel/schwer" ... [Laden]
+        // Row 1: name, dots, "easy/medium/hard" ... [Load]
         ImGui::AlignTextToFramePadding();
         ImGui::PushStyleColor(ImGuiCol_Text, kPrimary);
         ImGui::TextUnformatted(Entry.Name.c_str());
@@ -572,11 +576,11 @@ namespace
         ImGui::SameLine(0.f, 10.f);
         DrawLevelDots(Host, Entry.Level, ImGui::GetFrameHeight());
         ImGui::SameLine(0.f, 6.f);
-        ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
+        ImGui::PushStyleColor(ImGuiCol_Text, kHintText);
         ImGui::TextUnformatted(LevelWord(Entry.Level));
         ImGui::PopStyleColor();
 
-        const char* loadLabel = "Laden";
+        const char* loadLabel = "Load";
         const float loadWidth = ImGui::CalcTextSize(loadLabel).x + style.FramePadding.x * 2.f + 28.f;
         const float loadX = rowRight - loadWidth;
         if (ImGui::GetItemRectMax().x + style.ItemSpacing.x <= loadX)
@@ -586,11 +590,11 @@ namespace
         }
         FButtonSpec load;
         load.Label = loadLabel;
-        load.Tooltip = "Baut die Strecke um dich herum auf und stellt dich an den Start.";
+        load.Tooltip = "Builds the course around you and puts you at the start.";
         load.Primary = true;
         const bool pressed = DrawButton(Host, load, loadWidth, 0.f);
 
-        // Zeile 2: Beschreibung
+        // Row 2: description
         if (!Entry.Description.empty())
         {
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + innerWidth);
@@ -600,7 +604,7 @@ namespace
             ImGui::PopTextWrapPos();
         }
 
-        // Rueckmeldung zum Klick auf "Laden" direkt in der Karte, damit man sie sieht.
+        // Feedback for the "Load" click right inside the card, so you see it.
         if (StatusVisible(SectionParkour, Entry.Id))
             DrawStatusText(innerWidth);
         ImGui::EndGroup();
@@ -622,13 +626,13 @@ namespace
         return pressed;
     }
 
-    // ---------------------------------------------------------------- Abschnitte
-    void DrawParkourSection(const FVanityTabHost& Host, float Width)
+    // ---------------------------------------------------------------- Sections
+    void DrawParkourSection(const FNiobiumTabHost& Host, float Width)
     {
-        Host.SectionLabel("Parkour laden");
+        Host.SectionLabel("Load a parkour");
         Host.BeginSectionBody();
 
-        Hint("Wähle eine Strecke. Du landest am Start und bekommst eine Sniper.", Width);
+        Hint("Pick a course. You start at the beginning and get a sniper.", Width);
 
         if (!g_Parkours.Entries.empty())
         {
@@ -639,7 +643,7 @@ namespace
                 {
                     char command[96];
                     std::snprintf(command, sizeof(command), "cheat parkour %s", entry.Id.c_str());
-                    if (Send(Host, SectionParkour, command, "„" + entry.Name + "“ laden", entry.Id))
+                    if (Send(Host, SectionParkour, command, "load \"" + entry.Name + "\"", entry.Id))
                         g_Tab.ActiveParkourId = entry.Id;
                 }
             }
@@ -647,25 +651,25 @@ namespace
         else
         {
             Hint(g_Parkours.State == EParkourFileState::Broken
-                    ? "Die Parkour-Liste ist kaputt – starte den Server neu über den Vanity-Launcher."
-                    : "Keine Parkours gefunden – starte den Server über den Vanity-Launcher.",
+                    ? "The parkour list is broken – restart the server from the Niobium launcher."
+                    : "No parkours found – start the server from the Niobium launcher.",
                 Width);
         }
 
         ImGui::Spacing();
         FButtonSpec retry;
-        retry.Label = "Nochmal von vorne";
-        retry.Tooltip = "Bringt dich zurück an den Start. Leben wird voll, Waffen werden nachgeladen.";
+        retry.Label = "Start over";
+        retry.Tooltip = "Takes you back to the start. Refills your health and reloads your weapons.";
         FButtonSpec clear;
-        clear.Label = "Alles wegräumen";
-        clear.Tooltip = "Entfernt alle Parkour-Teile und alle Ziel-Bots.";
+        clear.Label = "Clear everything";
+        clear.Tooltip = "Removes all parkour pieces and all target bots.";
         switch (DrawButtonPair(Host, retry, clear, Width))
         {
         case 1:
-            Send(Host, SectionParkour, "cheat parkour retry", "Nochmal von vorne");
+            Send(Host, SectionParkour, "cheat parkour retry", "Start over");
             break;
         case 2:
-            if (Send(Host, SectionParkour, "cheat parkour clear", "Alles wegräumen"))
+            if (Send(Host, SectionParkour, "cheat parkour clear", "Clear everything"))
                 g_Tab.ActiveParkourId.clear();
             break;
         default:
@@ -676,57 +680,57 @@ namespace
         Host.EndSectionBody();
     }
 
-    void DrawTargetBotSection(const FVanityTabHost& Host, float Width)
+    void DrawTargetBotSection(const FNiobiumTabHost& Host, float Width)
     {
-        Host.SectionLabel("Ziel-Bot");
+        Host.SectionLabel("Target bot");
         Host.BeginSectionBody();
 
-        Hint("Ein Bot, der still vor dir steht – perfekt zum Zielen.", Width);
+        Hint("A bot that stands still in front of you – great for aiming.", Width);
 
-        // Zwei Regler nebeneinander: erst die Ueberschriften, dann die Regler (gleiche Hoehe).
+        // Two sliders side by side: first the headings, then the sliders (same height).
         const float half = HalfWidth(Width);
         const float rightColumnX = ImGui::GetCursorPosX() + half + ImGui::GetStyle().ItemSpacing.x;
-        ImGui::TextUnformatted("Leben");
+        ImGui::TextUnformatted("Health");
         ImGui::SameLine(0.f, 0.f);
         ImGui::SetCursorPosX(rightColumnX);
-        ImGui::TextUnformatted("Abstand");
+        ImGui::TextUnformatted("Distance");
         ImGui::SetNextItemWidth(half);
-        ImGui::SliderInt("##vanity_bot_health", &g_Tab.BotHealth, 1, 200, "%d", ImGuiSliderFlags_AlwaysClamp);
-        Tooltip("So viel Leben hat der Bot. Strg + Klick: Zahl eintippen.");
+        ImGui::SliderInt("##niobium_bot_health", &g_Tab.BotHealth, 1, 200, "%d", ImGuiSliderFlags_AlwaysClamp);
+        Tooltip("How much health the bot has. Ctrl + click: type a number.");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(half);
-        ImGui::SliderInt("##vanity_bot_distance", &g_Tab.BotDistance, 5, 100, "%d m", ImGuiSliderFlags_AlwaysClamp);
-        Tooltip("So weit vor dir steht der Bot. Strg + Klick: Zahl eintippen.");
+        ImGui::SliderInt("##niobium_bot_distance", &g_Tab.BotDistance, 5, 100, "%d m", ImGuiSliderFlags_AlwaysClamp);
+        Tooltip("How far in front of you the bot stands. Ctrl + click: type a number.");
 
         g_Tab.BotHealth = (std::max)(1, (std::min)(200, g_Tab.BotHealth));
         g_Tab.BotDistance = (std::max)(5, (std::min)(100, g_Tab.BotDistance));
 
         FButtonSpec place;
-        place.Label = "Bot vor mich stellen";
-        place.Tooltip = "Stellt einen Bot mit diesem Leben in diesem Abstand vor dich.";
+        place.Label = "Place bot in front of me";
+        place.Tooltip = "Places a bot with this health at this distance in front of you.";
         place.Primary = true;
         if (DrawButton(Host, place, Width, kActionButtonHeight))
         {
             char command[64];
             std::snprintf(command, sizeof(command), "cheat targetbot %d %d", g_Tab.BotHealth, g_Tab.BotDistance);
             Send(Host, SectionBot, command,
-                "Bot vor mich stellen (" + std::to_string(g_Tab.BotHealth) + " Leben, " +
+                "place bot (" + std::to_string(g_Tab.BotHealth) + " health, " +
                     std::to_string(g_Tab.BotDistance) + " m)");
         }
 
         FButtonSpec removeAll;
-        removeAll.Label = "Alle Bots weg";
-        removeAll.Tooltip = "Entfernt alle Bots.";
+        removeAll.Label = "Remove all bots";
+        removeAll.Tooltip = "Removes all bots.";
         FButtonSpec bringAll;
-        bringAll.Label = "Bots zu mir";
-        bringAll.Tooltip = "Holt alle Bots zu dir.";
+        bringAll.Label = "Bring bots to me";
+        bringAll.Tooltip = "Brings all bots to you.";
         switch (DrawButtonPair(Host, removeAll, bringAll, Width))
         {
         case 1:
-            Send(Host, SectionBot, "cheat delbot", "Alle Bots weg");
+            Send(Host, SectionBot, "cheat delbot", "Remove all bots");
             break;
         case 2:
-            Send(Host, SectionBot, "cheat tpbot", "Bots zu mir");
+            Send(Host, SectionBot, "cheat tpbot", "Bring bots to me");
             break;
         default:
             break;
@@ -736,42 +740,42 @@ namespace
         Host.EndSectionBody();
     }
 
-    void DrawGearSection(const FVanityTabHost& Host, float Width)
+    void DrawGearSection(const FNiobiumTabHost& Host, float Width)
     {
-        Host.SectionLabel("Ausrüstung");
+        Host.SectionLabel("Gear");
         Host.BeginSectionBody();
 
         FButtonSpec sniper;
-        sniper.Label = "Sniper geben";
-        sniper.Tooltip = "Legt dir eine Sniper ins Inventar.";
+        sniper.Label = "Give sniper";
+        sniper.Tooltip = "Puts a sniper in your inventory.";
         FButtonSpec pads;
-        pads.Label = "Sprungpads geben";
-        pads.Tooltip = "Gibt dir Sprungpads und andere Fallen zum Platzieren.";
+        pads.Label = "Give launch pads";
+        pads.Tooltip = "Gives you launch pads and other traps to place.";
         switch (DrawButtonPair(Host, sniper, pads, Width))
         {
         case 1:
-            Send(Host, SectionGear, "cheat parkour sniper", "Sniper geben");
+            Send(Host, SectionGear, "cheat parkour sniper", "Give sniper");
             break;
         case 2:
-            Send(Host, SectionGear, "cheat givetraps", "Sprungpads geben");
+            Send(Host, SectionGear, "cheat givetraps", "Give launch pads");
             break;
         default:
             break;
         }
 
         FButtonSpec ammo;
-        ammo.Label = "Munition auffüllen";
-        ammo.Tooltip = "Füllt deine Munition auf.";
+        ammo.Label = "Refill ammo";
+        ammo.Tooltip = "Refills your ammo.";
         FButtonSpec health;
-        health.Label = "Leben auffüllen";
-        health.Tooltip = "Macht Leben und Schild wieder voll.";
+        health.Label = "Refill health";
+        health.Tooltip = "Fills your health and shield back up.";
         switch (DrawButtonPair(Host, ammo, health, Width))
         {
         case 1:
-            Send(Host, SectionGear, "cheat giveammo", "Munition auffüllen");
+            Send(Host, SectionGear, "cheat giveammo", "Refill ammo");
             break;
         case 2:
-            Send(Host, SectionGear, "cheat regen", "Leben auffüllen");
+            Send(Host, SectionGear, "cheat regen", "Refill health");
             break;
         default:
             break;
@@ -781,50 +785,53 @@ namespace
         Host.EndSectionBody();
     }
 
-    void DrawPracticeSection(const FVanityTabHost& Host, float Width)
+    void DrawPracticeSection(const FNiobiumTabHost& Host, float Width)
     {
-        Host.SectionLabel("Üben");
+        Host.SectionLabel("Practice");
         Host.BeginSectionBody();
 
-        Hint("Merk dir eine Stelle und spring mit einem Klick dorthin zurück.", Width);
+        Hint("Save a spot and jump back to it with one click.", Width);
 
         FButtonSpec save;
-        save.Label = "Position merken";
-        save.Tooltip = "Merkt sich, wo du gerade stehst.";
+        save.Label = "Save spot";
+        save.Tooltip = "Remembers where you are standing right now.";
         FButtonSpec back;
-        back.Label = "Zurück zur Position";
-        back.Tooltip = "Bringt dich sofort zur gemerkten Stelle zurück.";
+        back.Label = "Back to spot";
+        back.Tooltip = "Takes you straight back to the saved spot.";
+        // The waypoint name "niobium" is shared with the launcher's match page (MatchPage.tsx),
+        // so a spot saved there can be reached from here and the other way round. Change both
+        // together. "s"/"w" are Magnesium's waypoint cheats; the phrase is just a free name.
         switch (DrawButtonPair(Host, save, back, Width))
         {
         case 1:
-            Send(Host, SectionPractice, "cheat s vanity o", "Position merken");
+            Send(Host, SectionPractice, "cheat s niobium o", "Save spot");
             break;
         case 2:
-            Send(Host, SectionPractice, "cheat w vanity", "Zurück zur Position");
+            Send(Host, SectionPractice, "cheat w niobium", "Back to spot");
             break;
         default:
             break;
         }
 
         FButtonSpec launch;
-        launch.Label = "Hochschießen";
-        launch.Tooltip = "Schießt dich senkrecht in die Luft.";
+        launch.Label = "Launch me up";
+        launch.Tooltip = "Shoots you straight up into the air.";
         FButtonSpec slowMotion;
-        slowMotion.Label = g_Tab.SlowMotion ? "Zeitlupe: an###vanity_slowmo" : "Zeitlupe: aus###vanity_slowmo";
-        slowMotion.Tooltip = "Das ganze Match läuft halb so schnell. Nochmal klicken = normal.";
+        slowMotion.Label = g_Tab.SlowMotion ? "Slow motion: on###niobium_slowmo" : "Slow motion: off###niobium_slowmo";
+        slowMotion.Tooltip = "The whole match runs at half speed. Click again for normal speed.";
         slowMotion.Active = g_Tab.SlowMotion;
         switch (DrawButtonPair(Host, launch, slowMotion, Width))
         {
         case 1:
-            Send(Host, SectionPractice, "cheat l 2500", "Hochschießen");
+            Send(Host, SectionPractice, "cheat l 2500", "Launch me up");
             break;
         case 2:
             if (g_Tab.SlowMotion)
             {
-                if (Send(Host, SectionPractice, "cheat demospeed 1", "Zeitlupe aus"))
+                if (Send(Host, SectionPractice, "cheat demospeed 1", "Slow motion off"))
                     g_Tab.SlowMotion = false;
             }
-            else if (Send(Host, SectionPractice, "cheat demospeed 0.5", "Zeitlupe an"))
+            else if (Send(Host, SectionPractice, "cheat demospeed 0.5", "Slow motion on"))
             {
                 g_Tab.SlowMotion = true;
             }
@@ -833,46 +840,46 @@ namespace
             break;
         }
 
-        // Zwei feste Knoepfe statt eines Schalters: Der Server stellt die Schwerkraft nur fuer
-        // deine aktuelle Spielfigur ein. Nach dem Sterben ist sie wieder normal, ohne dass das
-        // Menue es merkt - ein "an/aus"-Schalter wuerde dann das Falsche anzeigen.
+        // Two fixed buttons instead of a toggle: the server sets gravity only for your
+        // current character. After you die it is normal again without the menu
+        // noticing - an "on/off" toggle would then show the wrong state.
         FButtonSpec lowGravity;
-        lowGravity.Label = "Wenig Schwerkraft";
-        lowGravity.Tooltip = "Du springst höher und fällst langsamer. Nach dem Sterben ist es wieder normal.";
+        lowGravity.Label = "Low gravity";
+        lowGravity.Tooltip = "You jump higher and fall slower. Back to normal after you die.";
         FButtonSpec normalGravity;
-        normalGravity.Label = "Normale Schwerkraft";
-        normalGravity.Tooltip = "Stellt die Schwerkraft wieder normal ein.";
+        normalGravity.Label = "Normal gravity";
+        normalGravity.Tooltip = "Sets gravity back to normal.";
         switch (DrawButtonPair(Host, lowGravity, normalGravity, Width))
         {
         case 1:
-            Send(Host, SectionPractice, "cheat gravity 0.4", "Wenig Schwerkraft");
+            Send(Host, SectionPractice, "cheat gravity 0.4", "Low gravity");
             break;
         case 2:
-            Send(Host, SectionPractice, "cheat gravity 1", "Normale Schwerkraft");
+            Send(Host, SectionPractice, "cheat gravity 1", "Normal gravity");
             break;
         default:
             break;
         }
 
         FButtonSpec god;
-        god.Label = "Unverwundbar umschalten";
-        god.Tooltip = "Einmal klicken: kein Schaden mehr. Nochmal klicken: wieder normal.";
+        god.Label = "Invincible on/off";
+        god.Tooltip = "Click once: you take no damage. Click again: back to normal.";
         FButtonSpec storm;
-        storm.Label = g_Tab.StormPaused ? "Sturm weiterlaufen lassen###vanity_storm" : "Sturm anhalten###vanity_storm";
-        storm.Tooltip = "Hält den Sturm an oder lässt ihn weiterlaufen.";
+        storm.Label = g_Tab.StormPaused ? "Resume storm###niobium_storm" : "Pause storm###niobium_storm";
+        storm.Tooltip = "Pauses the storm or lets it move again.";
         storm.Active = g_Tab.StormPaused;
         switch (DrawButtonPair(Host, god, storm, Width))
         {
         case 1:
-            Send(Host, SectionPractice, "cheat god", "Unverwundbar umschalten");
+            Send(Host, SectionPractice, "cheat god", "Invincible on/off");
             break;
         case 2:
             if (g_Tab.StormPaused)
             {
-                if (Send(Host, SectionPractice, "cheat resumesafezone", "Sturm weiterlaufen lassen"))
+                if (Send(Host, SectionPractice, "cheat resumesafezone", "Resume storm"))
                     g_Tab.StormPaused = false;
             }
-            else if (Send(Host, SectionPractice, "cheat pausesafezone", "Sturm anhalten"))
+            else if (Send(Host, SectionPractice, "cheat pausesafezone", "Pause storm"))
             {
                 g_Tab.StormPaused = true;
             }
@@ -881,7 +888,7 @@ namespace
             break;
         }
 
-        Hint("Zeitlupe und Sturm gelten für alle im Match.", Width);
+        Hint("Slow motion and the storm affect everyone in the match.", Width);
         DrawStatusLine(SectionPractice);
         Host.EndSectionBody();
     }
@@ -932,7 +939,7 @@ namespace
         }
     }
 
-    // wchar_t ist unter Windows UTF-16, unter Linux UTF-32 (Vorschau).
+    // wchar_t is UTF-16 on Windows and UTF-32 on Linux (preview).
     std::string WideToUtf8(const wchar_t* Text, int Length)
     {
         std::string output;
@@ -971,19 +978,19 @@ namespace
         return Text.substr(first, last - first + 1);
     }
 
-    // "[Vanity] TRICKSHOT! Spieler – 87 m" -> Titel "TRICKSHOT!", Untertitel "Spieler – 87 m".
+    // "[Niobium] TRICKSHOT! player – 87 m" -> title "TRICKSHOT!", subtitle "player – 87 m".
     void BuildToastText(const wchar_t* Text, int Length)
     {
-        // Ein Gedankenstrich aus einem ohne /utf-8 gebauten Server kommt als "â€“" an.
+        // An en dash from a server built without /utf-8 arrives as "â€“".
         std::wstring repaired(Text, static_cast<size_t>(Length));
         const wchar_t broken[] = { static_cast<wchar_t>(0x00E2), static_cast<wchar_t>(0x20AC), static_cast<wchar_t>(0x201C), 0 };
         for (size_t found = repaired.find(broken); found != std::wstring::npos; found = repaired.find(broken, found + 1))
             repaired.replace(found, 3, 1, static_cast<wchar_t>(0x2013));
 
         std::string message = Trim(WideToUtf8(repaired.c_str(), static_cast<int>(repaired.size())));
-        static const char vanityPrefix[] = "[Vanity]";
-        if (message.compare(0, sizeof(vanityPrefix) - 1, vanityPrefix) == 0)
-            message = Trim(message.substr(sizeof(vanityPrefix) - 1));
+        static const char niobiumPrefix[] = "[Niobium]";
+        if (message.compare(0, sizeof(niobiumPrefix) - 1, niobiumPrefix) == 0)
+            message = Trim(message.substr(sizeof(niobiumPrefix) - 1));
 
         static const char trickshot[] = "TRICKSHOT";
         if (message.compare(0, sizeof(trickshot) - 1, trickshot) == 0)
@@ -1021,9 +1028,9 @@ namespace
     }
 }
 
-// ==================================================================== oeffentliche Funktionen
+// ==================================================================== Public functions
 
-void VanityTrickshotTab_SetParkourFile(const wchar_t* Path)
+void NiobiumTrickshotTab_SetParkourFile(const wchar_t* Path)
 {
     if (Path && *Path)
     {
@@ -1041,12 +1048,12 @@ void VanityTrickshotTab_SetParkourFile(const wchar_t* Path)
     g_Parkours.Entries.clear();
 }
 
-void VanityTrickshotTab_SetLobbyCheck(bool (*IsInLobby)())
+void NiobiumTrickshotTab_SetLobbyCheck(bool (*IsInLobby)())
 {
     g_LobbyCheck.store(IsInLobby, std::memory_order_release);
 }
 
-void VanityTrickshotTab_Draw(const FVanityTabHost& Host, float ContentWidth)
+void NiobiumTrickshotTab_Draw(const FNiobiumTabHost& Host, float ContentWidth)
 {
     if (!Host.SectionLabel || !Host.BeginSectionBody || !Host.EndSectionBody)
         return;
@@ -1055,15 +1062,15 @@ void VanityTrickshotTab_Draw(const FVanityTabHost& Host, float ContentWidth)
     ResetTogglesOnNewSession(Host);
     RefreshParkoursIfNeeded();
 
-    ImGui::PushID("VanityTrickshotTab");
+    ImGui::PushID("NiobiumTrickshotTab");
 
     bool (*const isInLobby)() = g_LobbyCheck.load(std::memory_order_acquire);
     if (isInLobby && isInLobby())
     {
         ImGui::Spacing();
-        ImGui::PushStyleColor(ImGuiCol_Text, AccentOf(Host, 1.f));
+        ImGui::PushStyleColor(ImGuiCol_Text, kAccentText);
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + width);
-        ImGui::TextUnformatted("Du bist noch in der Lobby. Starte zuerst ein Match – dann klappen die Knöpfe hier.");
+        ImGui::TextUnformatted("You're still in the lobby. Start a match first – then these buttons work.");
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
     }
@@ -1076,12 +1083,12 @@ void VanityTrickshotTab_Draw(const FVanityTabHost& Host, float ContentWidth)
     ImGui::PopID();
 }
 
-void VanityToast_Push(const wchar_t* Text, int Length)
+void NiobiumToast_Push(const wchar_t* Text, int Length)
 {
     if (!Text || Length <= 0)
         return;
 
-    // Nur die erste Zeile; das Banner zeigt keine langen Texte.
+    // First line only; the banner never shows long texts.
     int count = 0;
     while (count < Length && count < kToastCapacity - 1 &&
         Text[count] != L'\0' && Text[count] != L'\n' && Text[count] != L'\r')
@@ -1091,7 +1098,7 @@ void VanityToast_Push(const wchar_t* Text, int Length)
     if (count == 0)
         return;
 
-    // Spiel-Thread: niemals warten. Ist das Schloss gerade belegt, faellt dieses Banner aus.
+    // Game thread: never wait. If the lock is busy right now, this banner is skipped.
     std::unique_lock<std::mutex> lock(g_ToastMutex, std::try_to_lock);
     if (!lock.owns_lock())
         return;
@@ -1102,7 +1109,7 @@ void VanityToast_Push(const wchar_t* Text, int Length)
     ++g_ToastSerial;
 }
 
-void VanityToast_Draw()
+void NiobiumToast_Draw()
 {
     wchar_t pending[kToastCapacity];
     int pendingLength = 0;
@@ -1141,7 +1148,7 @@ void VanityToast_Draw()
     if (!font || display.x < 64.f || display.y < 64.f)
         return;
 
-    // Aufpoppen (0,22 s, leicht ueberschwingend), dann stehen, in den letzten 0,6 s ausblenden.
+    // Pop in (0.22 s, slight overshoot), then hold, fade out during the last 0.6 s.
     const float appear = Clamp01(elapsed / 0.22f);
     const float scale = 0.70f + 0.30f * EaseOutBack(appear);
     float alpha = Clamp01(elapsed / 0.15f);
@@ -1177,20 +1184,31 @@ void VanityToast_Draw()
     const ImVec2 panelMax(panelMin.x + panelWidth, panelMin.y + panelHeight);
     const float rounding = 10.f * scale;
 
-    constexpr float accentR = 0.f;
-    constexpr float accentG = 0.635f;
-    constexpr float accentB = 0.808f;
+    // Brand colours: violet #7A3CFF for glow, border and strip, a blue #2B5BFF glow underneath
+    // and gold #FFC857 for the title (gold is the "reward" colour of the brand).
+    constexpr float accentR = 0.478f;
+    constexpr float accentG = 0.235f;
+    constexpr float accentB = 1.f;
+    constexpr float blueR = 0.169f;
+    constexpr float blueG = 0.357f;
+    constexpr float blueB = 1.f;
+    constexpr float goldR = 1.f;
+    constexpr float goldG = 0.784f;
+    constexpr float goldB = 0.341f;
 
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
 
-    // weicher Schein, dunkle Flaeche, feiner Rand, Akzent-Streifen links
+    // soft glow, dark panel, thin border, accent strip on the left
+    drawList->AddRectFilled(
+        ImVec2(panelMin.x - 14.f, panelMin.y - 10.f), ImVec2(panelMax.x + 14.f, panelMax.y + 14.f),
+        Color(blueR, blueG, blueB, 0.07f * alpha), rounding + 12.f);
     drawList->AddRectFilled(
         ImVec2(panelMin.x - 8.f, panelMin.y - 8.f), ImVec2(panelMax.x + 8.f, panelMax.y + 8.f),
-        Color(accentR, accentG, accentB, 0.10f * alpha), rounding + 8.f);
+        Color(accentR, accentG, accentB, 0.12f * alpha), rounding + 8.f);
     drawList->AddRectFilled(
         ImVec2(panelMin.x + 2.f, panelMin.y + 5.f), ImVec2(panelMax.x + 2.f, panelMax.y + 5.f),
         Color(0.f, 0.f, 0.f, 0.35f * alpha), rounding);
-    drawList->AddRectFilled(panelMin, panelMax, Color(0.043f, 0.055f, 0.078f, 0.94f * alpha), rounding);
+    drawList->AddRectFilled(panelMin, panelMax, Color(0.039f, 0.043f, 0.071f, 0.94f * alpha), rounding);
     drawList->AddRect(panelMin, panelMax, Color(accentR, accentG, accentB, 0.55f * alpha), rounding, 0, 1.5f);
     drawList->AddRectFilled(
         panelMin, ImVec2(panelMin.x + strip, panelMax.y),
@@ -1204,9 +1222,9 @@ void VanityToast_Draw()
     drawList->AddText(font, titleSize, ImVec2(titlePosition.x, titlePosition.y + 2.f),
         Color(0.f, 0.f, 0.f, 0.55f * alpha), title, nullptr, 0.f, &clip);
     drawList->AddText(font, titleSize, titlePosition,
-        Color(accentR, accentG, accentB, alpha), title, nullptr, 0.f, &clip);
+        Color(goldR, goldG, goldB, alpha), title, nullptr, 0.f, &clip);
     drawList->AddText(font, titleSize, ImVec2(titlePosition.x + bold, titlePosition.y),
-        Color(accentR, accentG, accentB, alpha), title, nullptr, 0.f, &clip);
+        Color(goldR, goldG, goldB, alpha), title, nullptr, 0.f, &clip);
 
     if (hasSubtitle)
     {
@@ -1214,6 +1232,6 @@ void VanityToast_Draw()
             std::floor(contentCenterX - subtitleExtent.x * 0.5f),
             std::floor(titlePosition.y + titleExtent.y + gap));
         drawList->AddText(font, subtitleSize, subtitlePosition,
-            Color(0.847f, 0.878f, 0.941f, alpha), subtitle, nullptr, 0.f, &clip);
+            Color(0.949f, 0.953f, 0.973f, alpha), subtitle, nullptr, 0.f, &clip);
     }
 }

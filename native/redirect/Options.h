@@ -19,7 +19,7 @@ constexpr bool UseBackendParam = false; // for phoenix/paradise launcher
 constexpr bool ManualMapping = false; // if you're using EAC & a manual mapper, then enable this for the dll to work
 constexpr bool FixMemLeak = true; // memory leak fix
 
-// VANITY: Sicherheitsgrenze – nur Modi, die ausschliesslich an das eigene Backend umleiten.
-// Die Modi Hybrid/Dev reden teils mit Epics echten Servern und sind fuer Vanity nicht erlaubt.
+// NIOBIUM: safety limit - only modes that redirect everything to your own backend.
+// The Hybrid/Dev modes partly talk to Epic's real servers and are not allowed in Niobium.
 static_assert(URLSet == Default || URLSet == All,
-              "Vanity erlaubt nur Default oder All (nur eigenes Backend), nicht Hybrid/Dev.");
+              "Niobium only allows Default or All (own backend only), not Hybrid/Dev.");

@@ -46,7 +46,7 @@ void SoftRaster::UpdateTextures(ImDrawData* DrawData)
             Tex->SetStatus(ImTextureStatus_Destroyed);
             continue;
         }
-        // Anlegen oder Aktualisieren: einfach komplett neu kopieren
+        // Create or update: simply copy the whole texture again
         SoftTexture Copy;
         Copy.Width = Tex->Width;
         Copy.Height = Tex->Height;

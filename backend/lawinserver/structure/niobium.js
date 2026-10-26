@@ -1,21 +1,21 @@
-// VANITY: Neue Datei, nicht Teil von LawinServer.
-// Zentrale Stelle für alles, was Vanity an LawinServer anpasst: Daten-Ordner, Ressourcen-Ordner,
-// Ports, Bind-Adresse und das Game-Server-Ziel des Matchmakers.
-// src/main.ts ruft configure() auf, BEVOR ein anderes LawinServer-Modul geladen wird.
+// NIOBIUM: new file, not part of LawinServer.
+// One place for everything Niobium changes in LawinServer: data folder, resource folder,
+// ports, bind address and the matchmaker's game server target.
+// src/main.ts calls configure() BEFORE any other LawinServer module is loaded.
 //
-// LawinServer hat Daten ursprünglich so geladen/gespeichert:
-//   lesen:     require("./../profiles/athena.json")      (relativ zum Modul, von require zwischengespeichert)
-//   schreiben: fs.writeFileSync("./profiles/athena.json") (relativ zum Arbeitsordner)
-// Vanity ersetzt das durch json("profiles/athena.json") und writeFile("profiles/athena.json", …).
-// Beides löst den Pfad über file() auf: beschreibbare Dateien (WRITABLE) liegen im Daten-Ordner,
-// alles andere wird nur gelesen und bleibt im Ressourcen-Ordner (neben dist/main.js).
+// LawinServer originally loaded/saved data like this:
+//   read:  require("./../profiles/athena.json")      (relative to the module, cached by require)
+//   write: fs.writeFileSync("./profiles/athena.json") (relative to the working folder)
+// Niobium replaces that with json("profiles/athena.json") and writeFile("profiles/athena.json", …).
+// Both resolve the path with file(): writable files (WRITABLE) live in the data folder,
+// everything else is only read and stays in the resource folder (next to dist/main.js).
 
 const fs = require("fs");
 const path = require("path");
 
-// Pfade relativ zum LawinServer-Ordner, die LawinServer beschreibt oder die der Nutzer anpassen
-// soll. Ordner enden mit "/". src/main.ts kopiert die mitgelieferten Standard-Dateien dieser
-// Pfade beim ersten Start in den Daten-Ordner.
+// Paths relative to the LawinServer folder that LawinServer writes or that the user may edit.
+// Folders end with "/". On the first start src/main.ts copies the bundled default files of
+// these paths into the data folder.
 const WRITABLE = [
     "profiles/",
     "Config/",
@@ -26,7 +26,7 @@ const WRITABLE = [
     "responses/Athena/SeasonData.json"
 ];
 
-// Ohne configure() verhält sich alles wie im unveränderten LawinServer-Ordner.
+// Without configure() everything behaves like in the unchanged LawinServer folder.
 const settings = {
     resourceDir: path.join(__dirname, ".."),
     dataDir: path.join(__dirname, ".."),
@@ -47,7 +47,7 @@ function setGameServer(ip, port) {
     settings.gameServer = { ip: String(ip), port: Number(port) };
 }
 
-// Ein einzelner Datei-/Profilname ohne Pfadteile (z. B. "athena", "DefaultEngine.ini").
+// A single file/profile name without path parts (e.g. "athena", "DefaultEngine.ini").
 function isSafeName(name) {
     return typeof name == "string" && /^[A-Za-z0-9_.-]+$/.test(name) && !name.includes("..");
 }
@@ -59,18 +59,18 @@ function isWritable(rel) {
         : norm == entry);
 }
 
-// Absoluter Pfad zu einer LawinServer-Datei (rel wie "profiles/athena.json").
-// Wirft bei Pfaden, die aus dem Ordner herausführen (z. B. profileId=../../x).
+// Absolute path of a LawinServer file (rel like "profiles/athena.json").
+// Throws for paths that lead out of the folder (e.g. profileId=../../x).
 function file(rel) {
     if (typeof rel != "string" || rel.includes("\0") || path.isAbsolute(rel) || rel.split(/[\\/]+/).includes("..")) {
-        throw new Error(`VANITY: invalid data path ${JSON.stringify(rel)}`);
+        throw new Error(`NIOBIUM: invalid data path ${JSON.stringify(rel)}`);
     }
 
     return path.join(isWritable(rel) ? settings.dataDir : settings.resourceDir, rel);
 }
 
-// Ersatz für require("./../<rel>") bei JSON-Dateien: gleiches Verhalten wie require
-// (einmal lesen, danach immer dasselbe Objekt; Änderungen bleiben im Speicher).
+// Replacement for require("./../<rel>") for JSON files: same behaviour as require
+// (read once, then always the same object; changes stay in memory).
 const jsonCache = new Map();
 function json(rel) {
     const abs = file(rel);
@@ -84,9 +84,9 @@ function json(rel) {
     return jsonCache.get(abs);
 }
 
-// Ersatz für fs.writeFileSync("./<rel>", data): schreibt erst in eine Temp-Datei und benennt sie
-// dann um, damit ein Abbruch mitten im Schreiben (z. B. Launcher beendet das Backend) keine halbe
-// athena.json hinterlässt.
+// Replacement for fs.writeFileSync("./<rel>", data): writes to a temp file first and then renames
+// it, so stopping in the middle of a write (e.g. the launcher closes the backend) never leaves
+// half an athena.json behind.
 function writeFile(rel, data) {
     const target = file(rel);
     const temp = `${target}.tmp`;
@@ -97,7 +97,7 @@ function writeFile(rel, data) {
     try {
         fs.renameSync(temp, target);
     } catch (err) {
-        // z. B. Windows: Ziel kurz von einem Virenscanner gesperrt
+        // e.g. Windows: the target is briefly locked by a virus scanner
         fs.writeFileSync(target, data);
         try { fs.unlinkSync(temp); } catch (err) {}
     }

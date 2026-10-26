@@ -2,16 +2,21 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import {
   api,
+  appVersion,
   defaultClientSettings,
   defaultSettings,
   inTauri,
   onEvent,
+  onEventReady,
+  DEMO_APP_VERSION,
+  type BubbleIniChanged,
   type ClientSettings,
   type TrickshotPreset,
   type Config,
   type LogLine,
   type Services,
   type ServiceStatus,
+  type Settings,
   type Toast,
 } from "./api";
 import { demoLogScript } from "./demo-data";
@@ -30,16 +35,21 @@ export type PageId =
   | "settings"
   | "about";
 
-/** Schritte beim „Host & Play“-Start – gleiche Reihenfolge wie in engine.rs. */
+const PAGE_IDS: readonly PageId[] = ["start", "library", "servers", "match", "ingame", "profiles", "logs", "crashes", "settings", "about"];
+
+/** Steps of a "Host & Play" launch – same order as in engine.rs. */
 export const launchSteps = [
   { label: "Backend", hint: "Port 3551" },
-  { label: "Server-Fortnite", hint: "ohne Grafik" },
-  { label: "Umleitung", hint: "alles an 127.0.0.1" },
-  { label: "Anmeldung", hint: "Server meldet sich an" },
-  { label: "Dein Spiel", hint: "startet parallel" },
-  { label: "Game Server", hint: "lädt die Karte, Port 7777" },
-  { label: "Lobby", hint: "im Spiel auf „Spielen“" },
+  { label: "Server", hint: "Fortnite with no graphics" },
+  { label: "Redirect", hint: "everything to 127.0.0.1" },
+  { label: "Login", hint: "the server logs in" },
+  { label: "Your game", hint: "starts alongside" },
+  { label: "Game server", hint: "loads the map, port 7777" },
+  { label: "Lobby", hint: "press Play in the game" },
 ] as const;
+
+/** What to show on top of the app after start: nothing, the full welcome, or the "What's new" card. */
+export type WelcomeMode = "none" | "full" | "whatsnew";
 
 const emptyConfig: Config = {
   configVersion: 1,
@@ -52,6 +62,7 @@ const emptyConfig: Config = {
 };
 
 interface AppState {
+  /** Config loaded (or failed to load) – the UI can draw. */
   ready: boolean;
   page: PageId;
   setPage: (page: PageId) => void;
@@ -59,9 +70,11 @@ interface AppState {
   config: Config;
   setConfig: (config: Config) => void;
   reload: () => Promise<void>;
+  /** Changes some settings, saves them and shows a toast if saving fails. */
+  saveSettings: (patch: Partial<Settings>) => Promise<void>;
 
   services: Services;
-  /** -1 = nichts läuft; 0..n-1 = aktueller Schritt; n = fertig */
+  /** -1 = nothing runs; 0..n-1 = current step; n = done */
   launchStep: number;
 
   logs: LogLine[];
@@ -72,10 +85,30 @@ interface AppState {
   saveClientSettings: (patch: Partial<ClientSettings>) => Promise<void>;
   saveTrickshotPresets: (presets: TrickshotPreset[]) => Promise<void>;
 
+  /** Version of the launcher, e.g. "0.1.0". */
+  appVersion: string;
+  welcome: WelcomeMode;
+  /** Closes the welcome / "What's new" and remembers this version (plus optional setting changes). */
+  finishWelcome: (patch?: Partial<Settings>) => Promise<void>;
+
+  /** Set when Fortnite saved Performance Mode as its default (event "bubble:ini-changed"). */
+  bubbleIni: BubbleIniChanged | null;
+  dismissBubbleIni: () => void;
+
   init: () => Promise<void>;
 }
 
 const MAX_LOG_LINES = 3000;
+
+/** Browser preview only: ?page=library, ?welcome=1, ?whatsnew=1, ?bubbleini=1 (for screenshots). */
+function previewParam(name: string): string | null {
+  if (inTauri) return null;
+  try {
+    return new URLSearchParams(window.location.search).get(name);
+  } catch {
+    return null;
+  }
+}
 
 export const useApp = create<AppState>()((set, get) => ({
   ready: false,
@@ -87,6 +120,15 @@ export const useApp = create<AppState>()((set, get) => ({
   reload: async () => {
     const config = await api.getConfig();
     set({ config });
+  },
+  saveSettings: async (patch) => {
+    const settings = { ...get().config.settings, ...patch };
+    set((s) => ({ config: { ...s.config, settings } }));
+    try {
+      await api.updateSettings(settings);
+    } catch (e) {
+      toast.error("Couldn't save", { description: String(e) });
+    }
   },
 
   services: { backend: "stopped", server: "stopped", game: "stopped" },
@@ -104,7 +146,7 @@ export const useApp = create<AppState>()((set, get) => ({
     try {
       await api.setClientSettings(next);
     } catch (e) {
-      toast.error("Konnte nicht speichern", { description: String(e) });
+      toast.error("Couldn't save", { description: String(e) });
     }
   },
   saveTrickshotPresets: async (presets) => {
@@ -112,34 +154,79 @@ export const useApp = create<AppState>()((set, get) => ({
       const config = await api.setTrickshotPresets(presets);
       set({ config });
     } catch (e) {
-      toast.error("Konnte nicht speichern", { description: String(e) });
+      toast.error("Couldn't save", { description: String(e) });
     }
   },
 
+  appVersion: DEMO_APP_VERSION,
+  welcome: "none",
+  finishWelcome: async (patch = {}) => {
+    set({ welcome: "none" });
+    await get().saveSettings({ ...patch, lastSeenVersion: get().appVersion });
+  },
+
+  bubbleIni: null,
+  dismissBubbleIni: () => set({ bubbleIni: null }),
+
   init: async () => {
     if (get().ready) return;
-    const [config, clientSettings] = await Promise.all([api.getConfig(), api.getClientSettings()]);
-    set({ config, clientSettings, ready: true });
+    let config = emptyConfig;
+    let clientSettings = defaultClientSettings;
+    try {
+      [config, clientSettings] = await Promise.all([api.getConfig(), api.getClientSettings()]);
+    } catch (e) {
+      toast.error("Couldn't load your settings", { description: String(e) });
+    }
+    const version = await appVersion().catch(() => DEMO_APP_VERSION);
+
+    // First start → full welcome; new version → short "What's new"
+    let welcome: WelcomeMode = "none";
+    const lastSeen = config.settings.lastSeenVersion ?? "";
+    if (inTauri) {
+      welcome = !lastSeen ? "full" : lastSeen !== version ? "whatsnew" : "none";
+    } else if (previewParam("welcome")) {
+      welcome = "full";
+    } else if (previewParam("whatsnew")) {
+      welcome = "whatsnew";
+    }
+    const startPage = previewParam("page");
+    const page = PAGE_IDS.includes(startPage as PageId) ? (startPage as PageId) : get().page;
+
+    set({ config, clientSettings, appVersion: version, welcome, page, ready: true });
 
     onEvent<Services>("services", (services) => set({ services }));
     onEvent<number>("launch:step", (launchStep) => set({ launchStep }));
-    onEvent<LogLine>("log:line", (line) => get().pushLog(line));
+    // Lines written before this listener existed wait in Rust. Fetch them once the listener is
+    // really registered (so nothing falls in between) and put them before any newer lines.
+    void onEventReady<LogLine>("log:line", (line) => get().pushLog(line))
+      .then(() => api.pendingLogLines())
+      .then((early) => {
+        if (early.length > 0) set((s) => ({ logs: [...early, ...s.logs].slice(-MAX_LOG_LINES) }));
+      })
+      .catch(() => {});
     onEvent<Toast>("toast", (t) => {
       const fn = t.kind === "error" ? toast.error : t.kind === "success" ? toast.success : t.kind === "warning" ? toast.warning : toast;
       fn(t.title, { description: t.description });
     });
-    // Vom Server: {"event":"trickshot","player":…,"victim":…,"meters":N} – Kill in der Luft
+    // From the server: {"event":"trickshot","player":…,"victim":…,"meters":N} – a kill in the air
     onEvent<{ player?: string; victim?: string; meters?: number }>("trickshot", (t) => {
-      const who = t.player || "Jemand";
-      const parts = [t.victim ? `gegen ${t.victim}` : "", typeof t.meters === "number" ? `${t.meters} m` : ""].filter(Boolean);
-      toast.success(`TRICKSHOT! ${who}`, { description: parts.join(" · ") || "Kill in der Luft" });
+      const who = t.player || "Someone";
+      const parts = [t.victim ? `on ${t.victim}` : "", typeof t.meters === "number" ? `${t.meters} m` : ""].filter(Boolean);
+      toast.success(`TRICKSHOT! ${who}`, { description: parts.join(" · ") || "A kill in the air" });
     });
+    // After a game with Bubble Builds: Fortnite saved Performance Mode as its default
+    onEvent<BubbleIniChanged>("bubble:ini-changed", (payload) => set({ bubbleIni: payload }));
 
-    if (!inTauri) startDemoLog();
+    if (!inTauri) {
+      if (previewParam("bubbleini")) {
+        set({ bubbleIni: { path: "C:\\Users\\georg\\AppData\\Local\\FortniteGame\\Saved\\Config\\WindowsClient\\GameUserSettings.ini" } });
+      }
+      startDemoLog();
+    }
   },
 }));
 
-/** Beispiel-Zeilen in der Browser-Vorschau, damit die Log-Seite nicht leer ist. */
+/** Sample lines in the browser preview, so the log page isn't empty. */
 function startDemoLog() {
   let i = 0;
   const tick = () => {
@@ -148,37 +235,38 @@ function startDemoLog() {
     const now = new Date();
     useApp.getState().pushLog({
       ...line,
-      time: now.toLocaleTimeString("de-DE", { hour12: false }) + "." + String(now.getMilliseconds()).padStart(3, "0"),
+      time: now.toLocaleTimeString("en-GB", { hour12: false }) + "." + String(now.getMilliseconds()).padStart(3, "0"),
     });
     window.setTimeout(tick, 260 + Math.random() * 380);
   };
   window.setTimeout(tick, 400);
 }
 
-/** Aktives Profil (oder das erste). */
+/** Active profile (or the first one). */
 export function activeProfile(config: Config) {
   return config.profiles.find((p) => p.id === config.activeProfileId) ?? config.profiles[0] ?? null;
 }
 
-/** Build zu einem Profil. */
+/** Build of a profile. */
 export function buildOf(config: Config, buildId: string | undefined) {
   return config.builds.find((b) => b.id === buildId) ?? config.builds[0] ?? null;
 }
 
+/** Readable name of a Windows virtual-key code, e.g. 120 → "F9". */
 export function keyName(vk: number): string {
   if (vk >= 112 && vk <= 135) return `F${vk - 111}`;
   const named: Record<number, string> = {
-    8: "Rücktaste", 9: "Tab", 13: "Enter", 16: "Umschalt", 17: "Strg", 18: "Alt", 20: "Feststell",
-    27: "Esc", 32: "Leertaste", 33: "Bild ↑", 34: "Bild ↓", 35: "Ende", 36: "Pos1",
-    37: "←", 38: "↑", 39: "→", 40: "↓", 45: "Einfg", 46: "Entf", 192: "^", 226: "<",
+    8: "Backspace", 9: "Tab", 13: "Enter", 16: "Shift", 17: "Ctrl", 18: "Alt", 20: "Caps Lock",
+    27: "Esc", 32: "Space", 33: "Page Up", 34: "Page Down", 35: "End", 36: "Home",
+    37: "←", 38: "↑", 39: "→", 40: "↓", 45: "Insert", 46: "Delete", 192: "^", 226: "<",
   };
   if (named[vk]) return named[vk];
   if (vk >= 48 && vk <= 90) return String.fromCharCode(vk);
   if (vk >= 96 && vk <= 105) return `Num ${vk - 96}`;
-  return `Taste ${vk}`;
+  return `Key ${vk}`;
 }
 
-/** Browser-Tastencode → Windows-VK-Code (für client.json). */
+/** Browser key event → Windows virtual-key code (for client.json). */
 export function vkFromEvent(e: KeyboardEvent): number | null {
   if (/^F\d{1,2}$/.test(e.key)) return 111 + Number(e.key.slice(1));
   const k = e.key.length === 1 ? e.key.toUpperCase() : e.key;

@@ -1,14 +1,14 @@
 import { toast } from "sonner";
 import { launchSteps, useApp } from "@/lib/store";
 
-/** Wie lange jeder Vorschau-Schritt dauert (ms). */
+/** How long each preview step takes (ms). */
 const stepDurations = [700, 1100, 600, 1200, 1300, 1000, 700];
 
 let timer: number | undefined;
 
 /**
- * Nur für die Browser-Vorschau: spielt den Startablauf als Animation ab.
- * Im echten Launcher kommen die Schritte als Ereignisse aus Rust.
+ * Browser preview only: plays the launch as an animation.
+ * In the real launcher the steps arrive as events from Rust.
  */
 export function runDemoLaunch() {
   window.clearTimeout(timer);
@@ -23,7 +23,7 @@ export function runDemoLaunch() {
       },
     });
     if (step >= launchSteps.length) {
-      toast.success("Lobby erreicht (Vorschau)", { description: "Im echten Launcher läuft hier Fortnite." });
+      toast.success("You're in the lobby (preview)", { description: "In the real launcher, Fortnite runs now." });
       return;
     }
     timer = window.setTimeout(() => run(step + 1), stepDurations[step] ?? 800);

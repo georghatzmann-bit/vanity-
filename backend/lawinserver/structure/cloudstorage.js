@@ -1,5 +1,5 @@
 const Express = require("express");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const express = Express.Router();
 const crypto = require("crypto");
 const fs = require("fs");
@@ -25,7 +25,7 @@ express.get("/fortnite/api/cloudstorage/system", async (req, res) => {
         return res.status(404).end();
     }
 
-    const dir = vanity.file("CloudStorage") // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const dir = niobium.file("CloudStorage") // NIOBIUM: path via niobium.js (data folder/resources)
     var CloudFiles = [];
 
     fs.readdirSync(dir).forEach(name => {
@@ -53,7 +53,7 @@ express.get("/fortnite/api/cloudstorage/system", async (req, res) => {
 
 express.get("/fortnite/api/cloudstorage/system/:file", async (req, res) => {
     const memory = functions.GetVersionInfo(req);
-    const file = vanity.isSafeName(req.params.file) ? vanity.file(`CloudStorage/${req.params.file}`) : ""; // VANITY: Ressourcen-Ordner; kein ../ im Dateinamen
+    const file = niobium.isSafeName(req.params.file) ? niobium.file(`CloudStorage/${req.params.file}`) : ""; // NIOBIUM: resource folder; no ../ in the file name
 
     if (fs.existsSync(file)) {
         let ParsedFile = fs.readFileSync(file);
@@ -63,9 +63,9 @@ express.get("/fortnite/api/cloudstorage/system/:file", async (req, res) => {
             ParsedFile += "\n[ConsoleVariables]\nnet.AllowEncryption=0\n";
         }
 
-        // VANITY: XMPP-Port im Hotfix auf VANITY_MATCHMAKER_PORT setzen (LawinServer: fest 80)
-        if (req.params.file === "DefaultEngine.ini" && vanity.settings.matchmakerPort != 80) {
-            ParsedFile = ParsedFile.toString().replace(/^(ServerPort=)80(\r?)$/gm, `$1${vanity.settings.matchmakerPort}$2`);
+        // NIOBIUM: set the XMPP port in the hotfix to NIOBIUM_MATCHMAKER_PORT (LawinServer: always 80)
+        if (req.params.file === "DefaultEngine.ini" && niobium.settings.matchmakerPort != 80) {
+            ParsedFile = ParsedFile.toString().replace(/^(ServerPort=)80(\r?)$/gm, `$1${niobium.settings.matchmakerPort}$2`);
         }
 
         // This hotfix on versions > 19.30 would cause player to be unable to go back to BR from STW
@@ -82,8 +82,8 @@ express.get("/fortnite/api/cloudstorage/system/:file", async (req, res) => {
 
 express.get("/fortnite/api/cloudstorage/user/*/:file", async (req, res) => {
     try {
-        if (!fs.existsSync(vanity.file("ClientSettings"))) { // VANITY: Daten-Ordner statt %LOCALAPPDATA%\LawinServer
-            fs.mkdirSync(vanity.file("ClientSettings"), { recursive: true }); // VANITY: Daten-Ordner statt %LOCALAPPDATA%\LawinServer
+        if (!fs.existsSync(niobium.file("ClientSettings"))) { // NIOBIUM: data folder instead of %LOCALAPPDATA%\LawinServer
+            fs.mkdirSync(niobium.file("ClientSettings"), { recursive: true }); // NIOBIUM: data folder instead of %LOCALAPPDATA%\LawinServer
         }
     } catch (err) {}
 
@@ -100,7 +100,7 @@ express.get("/fortnite/api/cloudstorage/user/*/:file", async (req, res) => {
     var currentBuildID = memory.CL;
 
     let file;
-    file = vanity.file(`ClientSettings/ClientSettings-${currentBuildID}.Sav`); // VANITY: Daten-Ordner statt %LOCALAPPDATA%\LawinServer
+    file = niobium.file(`ClientSettings/ClientSettings-${currentBuildID}.Sav`); // NIOBIUM: data folder instead of %LOCALAPPDATA%\LawinServer
 
     if (fs.existsSync(file)) {
         const ParsedFile = fs.readFileSync(file);
@@ -114,8 +114,8 @@ express.get("/fortnite/api/cloudstorage/user/*/:file", async (req, res) => {
 
 express.get("/fortnite/api/cloudstorage/user/:accountId", async (req, res) => {
     try {
-        if (!fs.existsSync(vanity.file("ClientSettings"))) { // VANITY: Daten-Ordner statt %LOCALAPPDATA%\LawinServer
-            fs.mkdirSync(vanity.file("ClientSettings"), { recursive: true }); // VANITY: Daten-Ordner statt %LOCALAPPDATA%\LawinServer
+        if (!fs.existsSync(niobium.file("ClientSettings"))) { // NIOBIUM: data folder instead of %LOCALAPPDATA%\LawinServer
+            fs.mkdirSync(niobium.file("ClientSettings"), { recursive: true }); // NIOBIUM: data folder instead of %LOCALAPPDATA%\LawinServer
         }
     } catch (err) {}
 
@@ -126,7 +126,7 @@ express.get("/fortnite/api/cloudstorage/user/:accountId", async (req, res) => {
     var currentBuildID = memory.CL;
     
     let file;
-    file = vanity.file(`ClientSettings/ClientSettings-${currentBuildID}.Sav`); // VANITY: Daten-Ordner statt %LOCALAPPDATA%\LawinServer
+    file = niobium.file(`ClientSettings/ClientSettings-${currentBuildID}.Sav`); // NIOBIUM: data folder instead of %LOCALAPPDATA%\LawinServer
 
     if (fs.existsSync(file)) {
         const ParsedFile = fs.readFileSync(file, 'latin1');
@@ -152,8 +152,8 @@ express.get("/fortnite/api/cloudstorage/user/:accountId", async (req, res) => {
 
 express.put("/fortnite/api/cloudstorage/user/*/:file", async (req, res) => {
     try {
-        if (!fs.existsSync(vanity.file("ClientSettings"))) { // VANITY: Daten-Ordner statt %LOCALAPPDATA%\LawinServer
-            fs.mkdirSync(vanity.file("ClientSettings"), { recursive: true }); // VANITY: Daten-Ordner statt %LOCALAPPDATA%\LawinServer
+        if (!fs.existsSync(niobium.file("ClientSettings"))) { // NIOBIUM: data folder instead of %LOCALAPPDATA%\LawinServer
+            fs.mkdirSync(niobium.file("ClientSettings"), { recursive: true }); // NIOBIUM: data folder instead of %LOCALAPPDATA%\LawinServer
         }
     } catch (err) {}
 
@@ -168,7 +168,7 @@ express.put("/fortnite/api/cloudstorage/user/*/:file", async (req, res) => {
     var currentBuildID = memory.CL;
 
     let file;
-    file = vanity.file(`ClientSettings/ClientSettings-${currentBuildID}.Sav`); // VANITY: Daten-Ordner statt %LOCALAPPDATA%\LawinServer
+    file = niobium.file(`ClientSettings/ClientSettings-${currentBuildID}.Sav`); // NIOBIUM: data folder instead of %LOCALAPPDATA%\LawinServer
 
     fs.writeFileSync(file, req.rawBody, 'latin1');
     res.status(204).end();

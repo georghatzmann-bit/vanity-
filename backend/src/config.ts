@@ -1,19 +1,19 @@
-// Einstellungen aus Umgebungsvariablen (siehe docs/02-architektur.md, Abschnitt „Backend“).
+// Settings from environment variables (see docs/02-architecture.md, section "Backend").
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import type { GameServerTarget } from "./lawin";
 
 export interface BackendConfig {
-  /** VANITY_BACKEND_PORT – HTTP (alle umgeleiteten Epic-Anfragen + /vanity/*) */
+  /** NIOBIUM_BACKEND_PORT – HTTP (all redirected Epic requests + /niobium/*) */
   httpPort: number;
-  /** VANITY_MATCHMAKER_PORT – WebSocket für Matchmaker und XMPP */
+  /** NIOBIUM_MATCHMAKER_PORT – WebSocket for the matchmaker and XMPP */
   matchmakerPort: number;
-  /** VANITY_BIND – Adresse, auf der beide Ports lauschen */
+  /** NIOBIUM_BIND – address both ports listen on */
   bind: string;
-  /** VANITY_DATA_DIR – beschreibbare Daten (Profile, Einstellungen) */
+  /** NIOBIUM_DATA_DIR – writable data (profiles, settings) */
   dataDir: string;
-  /** VANITY_GAMESERVER – wohin der Matchmaker Spieler schickt */
+  /** NIOBIUM_GAMESERVER – where the matchmaker sends players */
   gameServer: GameServerTarget;
 }
 
@@ -25,18 +25,18 @@ export function parsePort(value: unknown, name: string): number {
   const text = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
   const port = Number(text);
   if (!/^\d+$/.test(text) || !Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new ConfigError(`${name}: "${String(value)}" ist kein gültiger Port (1–65535)`);
+    throw new ConfigError(`${name}: "${String(value)}" is not a valid port (1–65535)`);
   }
   return port;
 }
 
-/** IPv4/IPv6-Adresse oder Rechnername (ohne Leerzeichen, ohne Port). */
+/** IPv4/IPv6 address or host name (no spaces, no port). */
 export function isValidHost(host: string): boolean {
   if (net.isIP(host) !== 0) return true;
   return host.length > 0 && host.length <= 253 && /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(host);
 }
 
-/** "ip:port" (Port optional, Standard 7777). IPv6 mit Port in eckigen Klammern: "[::1]:7777". */
+/** "ip:port" (port optional, default 7777). IPv6 with a port in square brackets: "[::1]:7777". */
 export function parseGameServer(value: string, name: string): GameServerTarget {
   const text = value.trim();
   let ip = text;
@@ -52,16 +52,17 @@ export function parseGameServer(value: string, name: string): GameServerTarget {
     port = parsePort(portText, name);
   }
 
-  if (!isValidHost(ip)) throw new ConfigError(`${name}: "${value}" ist keine gültige Adresse (erwartet "ip:port")`);
+  if (!isValidHost(ip)) throw new ConfigError(`${name}: "${value}" is not a valid address (expected "ip:port")`);
   return { ip, port };
 }
 
 export function defaultDataDir(): string {
   if (process.platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
-    return path.join(localAppData, "Vanity", "backend");
+    // Not "backend": that is where the installer puts the backend itself (see engine.rs).
+    return path.join(localAppData, "Niobium", "backend-data");
   }
-  return path.join(os.homedir(), ".vanity", "backend");
+  return path.join(os.homedir(), ".niobium", "backend");
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig {
@@ -70,16 +71,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     return v === undefined || v.trim() === "" ? undefined : v.trim();
   };
 
-  const bind = value("VANITY_BIND") ?? "127.0.0.1";
-  if (net.isIP(bind) === 0) throw new ConfigError(`VANITY_BIND: "${bind}" ist keine IP-Adresse`);
+  const bind = value("NIOBIUM_BIND") ?? "127.0.0.1";
+  if (net.isIP(bind) === 0) throw new ConfigError(`NIOBIUM_BIND: "${bind}" is not an IP address`);
 
-  const dataDirRaw = value("VANITY_DATA_DIR");
+  const dataDirRaw = value("NIOBIUM_DATA_DIR");
 
   return {
-    httpPort: parsePort(value("VANITY_BACKEND_PORT") ?? "3551", "VANITY_BACKEND_PORT"),
-    matchmakerPort: parsePort(value("VANITY_MATCHMAKER_PORT") ?? "80", "VANITY_MATCHMAKER_PORT"),
+    httpPort: parsePort(value("NIOBIUM_BACKEND_PORT") ?? "3551", "NIOBIUM_BACKEND_PORT"),
+    matchmakerPort: parsePort(value("NIOBIUM_MATCHMAKER_PORT") ?? "80", "NIOBIUM_MATCHMAKER_PORT"),
     bind,
     dataDir: path.resolve(dataDirRaw ?? defaultDataDir()),
-    gameServer: parseGameServer(value("VANITY_GAMESERVER") ?? `127.0.0.1:${DEFAULT_GAME_SERVER_PORT}`, "VANITY_GAMESERVER"),
+    gameServer: parseGameServer(value("NIOBIUM_GAMESERVER") ?? `127.0.0.1:${DEFAULT_GAME_SERVER_PORT}`, "NIOBIUM_GAMESERVER"),
   };
 }

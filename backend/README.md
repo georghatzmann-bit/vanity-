@@ -1,106 +1,109 @@
-# Vanity-Backend
+# Niobium backend
 
-Das Backend ist ein kleiner Server auf dem eigenen PC. Er antwortet dem alten Fortnite-Build an
-Stelle der echten Epic-Server: Login, Spind, Shop, Einstellungen und Matchmaking. Er spricht
-**nie** mit Epic – alles bleibt auf dem eigenen Rechner (oder im eigenen Netzwerk, wenn man es so
-einstellt).
+The backend is a small server on your own PC. It answers the old Fortnite build instead of the
+real Epic servers: login, locker, shop, settings and matchmaking. It **never** talks to Epic –
+everything stays on your own computer (or in your own network, if you set it up that way).
 
-Gebaut für Fortnite **19.10** (Kapitel 3, Season 1), funktioniert aber wie LawinServer mit allen Versionen.
+Built for Fortnite **19.10** (Chapter 3, Season 1), but like LawinServer it works with every version.
 
-## Woher es kommt
+## Where it comes from
 
-Der Kern ist [LawinServer](https://github.com/Lawin0129/LawinServer) von **Lawin0129** (mit
-PRO100KatYT), lizenziert unter der **GPL-3.0**. Er liegt fast unverändert im Ordner `lawinserver/`.
-Jede Änderung ist im Code mit `// VANITY:` markiert und in
-[`lawinserver/VANITY_CHANGES.md`](lawinserver/VANITY_CHANGES.md) aufgelistet. Danke an Lawin für die Arbeit!
+The core is [LawinServer](https://github.com/Lawin0129/LawinServer) by **Lawin0129** (with
+PRO100KatYT), licensed under the **GPL-3.0**. It sits almost unchanged in the `lawinserver/` folder.
+Every change is marked in the code with `// NIOBIUM:` and listed in
+[`lawinserver/NIOBIUM_CHANGES.md`](lawinserver/NIOBIUM_CHANGES.md). Thanks to Lawin for the work!
 
-Von Vanity selbst kommt nur `src/` (TypeScript): Einstellungen aus Umgebungsvariablen, die
-`/vanity`-Endpunkte, das Logging und der Start.
+Only `src/` (TypeScript) comes from Niobium itself: settings from environment variables, the
+`/niobium` endpoints, the logging and the start.
 
-## Ordner
+## Folders
 
 ```
 backend/
-  src/              unser Code (main.ts = Einstieg)
-  lawinserver/      LawinServer (GPL-3.0) + VANITY_CHANGES.md
-  scripts/build.mjs baut dist/
-  test/smoke.mjs    Test: startet den Server und spielt einen 19.10-Client nach
-  dist/             fertiges Backend (wird gebaut, nicht im Git)
+  src/              our code (main.ts = entry point)
+  lawinserver/      LawinServer (GPL-3.0) + NIOBIUM_CHANGES.md
+  scripts/build.mjs builds dist/
+  test/smoke.mjs    test: starts the server and acts like a 19.10 client
+  test/versions.mjs test: requests of newer builds (Chapter 4 to 6)
+  dist/             the finished backend (built, not in git)
 ```
 
-## Einstellungen (Umgebungsvariablen)
+## Settings (environment variables)
 
-| Variable | Standard | Bedeutung |
+| Variable | Default | Meaning |
 |---|---|---|
-| `VANITY_BACKEND_PORT` | `3551` | HTTP-Port für alle Anfragen des Spiels und `/vanity/*` |
-| `VANITY_MATCHMAKER_PORT` | `80` | Port für Matchmaker und XMPP (WebSocket) |
-| `VANITY_BIND` | `127.0.0.1` | `0.0.0.0`, wenn andere im Netzwerk zugreifen sollen |
-| `VANITY_DATA_DIR` | `%LOCALAPPDATA%\Vanity\backend` (Linux/macOS: `~/.vanity/backend`) | hier landet alles, was sich ändert |
-| `VANITY_GAMESERVER` | `127.0.0.1:7777` | wohin der Matchmaker die Spieler schickt (`ip:port`) |
+| `NIOBIUM_BACKEND_PORT` | `3551` | HTTP port for every request of the game and `/niobium/*` |
+| `NIOBIUM_MATCHMAKER_PORT` | `80` | port for the matchmaker and XMPP (WebSocket) |
+| `NIOBIUM_BIND` | `127.0.0.1` | `0.0.0.0` if others in the network should reach it |
+| `NIOBIUM_DATA_DIR` | `%LOCALAPPDATA%\Niobium\backend-data` (Linux/macOS: `~/.niobium/backend`) | everything that changes goes here |
+| `NIOBIUM_GAMESERVER` | `127.0.0.1:7777` | where the matchmaker sends the players (`ip:port`) |
 
-Ist eine Variable ungültig (z. B. Port `abc`), bricht das Backend mit einer Meldung und Exit-Code 1 ab.
-Das gilt auch, wenn der HTTP-Port schon belegt ist. Ist nur der Matchmaker-Port belegt, läuft das
-Backend weiter und schreibt `XMPP and Matchmaker FAILED to start hosting. (port 80: EADDRINUSE)`.
+If a variable is invalid (e.g. port `abc`), the backend stops with a message and exit code 1.
+The same happens when the HTTP port is already taken. If only the matchmaker port is taken, the
+backend keeps running and writes `XMPP and Matchmaker FAILED to start hosting. (port 80: EADDRINUSE)`.
 
-## Daten-Ordner
+## Data folder
 
-Beim ersten Start kopiert das Backend die Standard-Daten in den Daten-Ordner:
+On the first start the backend copies the default data into the data folder:
 
-- `profiles/` – Spind, Items, V-Bucks (das, was sich im Spiel ändert)
-- `Config/` – `config.ini` und `catalog_config.json` (Shop) zum selbst Anpassen
+- `profiles/` – locker, items, V-Bucks (what changes in the game)
+- `Config/` – `config.ini` and `catalog_config.json` (shop) to edit yourself
 - `responses/friendslist*.json`, `responses/privacy.json`, `responses/Athena/SeasonData.json`
-- `ClientSettings/` – Spiel-Einstellungen (`ClientSettings-<Build>.Sav`)
+- `ClientSettings/` – game settings (`ClientSettings-<build>.Sav`)
 
-Vorhandene Dateien werden nie überschrieben. Wer neu anfangen will, löscht den Ordner.
-Alles andere (Shop-Daten, News, Bilder, Hotfixes) wird nur gelesen und bleibt neben `main.js`.
+Existing files are never overwritten. To start over, delete the folder.
+Everything else (shop data, news, pictures, hotfixes) is only read and stays next to `main.js`.
 
-## Eigene Endpunkte
+## Own endpoints
 
-| Methode + Pfad | Wer darf | Antwort |
+| Method + path | Who may call it | Answer |
 |---|---|---|
-| `GET /vanity/health` | alle | `{ "ok": true, "version": "0.1.0" }` |
-| `GET /vanity/status` | alle | `{ "name", "hosting", "playlist", "players", "maxPlayers", "version", "gameServer": { "ip", "port" } }` |
-| `POST /vanity/status` | nur 127.0.0.1 / ::1 | setzt einzelne Felder von oben, antwortet mit dem neuen Status |
-| `POST /vanity/gameserver` | nur 127.0.0.1 / ::1 | `{ "ip": "100.101.12.7", "port": 7777 }` – Matchmaker-Ziel sofort ändern |
+| `GET /niobium/health` | everyone | `{ "ok": true, "version": "0.1.0" }` |
+| `GET /niobium/status` | everyone | `{ "name", "hosting", "playlist", "players", "maxPlayers", "version", "gameServer": { "ip", "port" } }` |
+| `POST /niobium/status` | only 127.0.0.1 / ::1 | sets single fields from above, answers with the new status |
+| `POST /niobium/gameserver` | only 127.0.0.1 / ::1 | `{ "ip": "100.101.12.7", "port": 7777 }` – change the matchmaker target right away |
 
-- Anfragen von anderen Rechnern auf die POST-Endpunkte bekommen `403`.
-- POST nur mit `Content-Type: application/json` (sonst `415`) – so kann keine fremde Webseite im
-  Browser das Ziel umstellen.
-- Falsche Werte → `400` mit `{ "ok": false, "error": "…" }`.
-- `version` im Status ist die Fortnite-Version des gehosteten Spiels (setzt der Launcher, Standard leer).
-- `gameServer` im Status ist immer das aktuelle Matchmaker-Ziel. `POST /vanity/status` darf es
-  ebenfalls setzen (`"gameServer": { "ip", "port" }` oder `"ip:port"`).
-- Bei `POST /vanity/gameserver` ist `port` optional (Standard `7777`).
+- Requests from other computers to the POST endpoints get `403`.
+- POST only with `Content-Type: application/json` (otherwise `415`) – so no other website in the
+  browser can change the target.
+- Wrong values → `400` with `{ "ok": false, "error": "…" }`.
+- `name` in the status is "Niobium" until the launcher sets it ("<player>'s server").
+- `version` in the status is the Fortnite version of the hosted game (set by the launcher, empty by default).
+- `gameServer` in the status is always the current matchmaker target. `POST /niobium/status` may set it
+  too (`"gameServer": { "ip", "port" }` or `"ip:port"`).
+- For `POST /niobium/gameserver`, `port` is optional (default `7777`).
 
-Jede Anfrage steht als eine Zeile auf stdout, z. B. `[HTTP] GET /vanity/health → 200`
-(ohne `?…`; bricht der Client vorher ab: `→ abgebrochen`). Eigene Meldungen beginnen mit `[Vanity]`.
+Every request is one line on stdout, e.g. `[HTTP] GET /niobium/health → 200`
+(without `?…`; if the client stops early: `→ aborted`). Own messages start with `[Niobium]`.
 
-## Bauen, testen, starten
+## Build, test, start
 
-Voraussetzungen: Node 22 und pnpm 10.
+Needs Node 22 and pnpm 10.
 
 ```sh
 cd backend
 pnpm install
-pnpm build      # Typen prüfen (tsc) + dist/ bauen
-pnpm test       # Smoke-Test gegen dist/main.js
+pnpm build      # check types (tsc) + build dist/
+pnpm test       # smoke test + version test against dist/main.js
 pnpm start      # node dist/main.js
 ```
 
-`pnpm build` erzeugt `dist/main.js` (eine Datei, alle npm-Pakete eingebaut – zur Laufzeit braucht
-es kein `node_modules`) und kopiert die Daten daneben (`profiles/`, `responses/`, `CloudStorage/`,
-`Config/`, `public/`). Dazu kommen `LICENSE` und `THIRD_PARTY_LICENSES.txt`. Der ganze `dist/`-Ordner
-ist das fertige Backend; `main.js` findet seine Daten immer neben sich, egal aus welchem Ordner es
-gestartet wird.
+`pnpm build` creates `dist/main.js` (one file with every npm package built in – it needs no
+`node_modules` to run) and copies the data next to it (`profiles/`, `responses/`, `CloudStorage/`,
+`Config/`, `public/`). `LICENSE` and `THIRD_PARTY_LICENSES.txt` are added too. The whole `dist/` folder
+is the finished backend; `main.js` always finds its data next to itself, no matter which folder it is
+started from.
 
-Der Test startet das Backend auf freien Ports mit einem leeren Temp-Daten-Ordner und prüft Login,
-Profile, Spind speichern (auch nach Neustart), Einstellungen, Content-Pages, Hotfixes, Matchmaking
-mit WebSocket, XMPP, die `/vanity`-Endpunkte und die `403` für Zugriffe aus dem Netzwerk.
+The smoke test starts the backend on free ports with an empty temp data folder and checks login,
+profiles, saving the locker (also after a restart), settings, content pages, hotfixes, matchmaking
+with WebSocket, XMPP, the `/niobium` endpoints and the `403` for requests from the network.
+The version test asks the most important start endpoints as many Fortnite versions (through the
+User-Agent): never a 5xx, the right season, the hotfix rule for 9.40–10.40 and the answers for newer builds.
 
-So startet der Launcher das Backend (Ordner `dist/` als `<ressourcen>/backend/`):
+This is how the launcher starts the backend (the `dist/` folder as `<resources>/backend/`):
 
 ```
-node.exe <ressourcen>/backend/main.js
+node.exe <resources>/backend/main.js
 ```
 
-mit den Umgebungsvariablen von oben und dem Daten-Ordner als Arbeitsordner.
+with the environment variables from above and the data folder as the working folder.

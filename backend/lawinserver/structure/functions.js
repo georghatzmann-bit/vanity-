@@ -1,5 +1,5 @@
 const XMLBuilder = require("xmlbuilder");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const uuid = require("uuid");
 
 async function sleep(ms) {
@@ -69,8 +69,8 @@ function GetVersionInfo(req) {
 }
 
 function getItemShop() {
-    const catalog = JSON.parse(JSON.stringify(vanity.json("responses/catalog.json"))); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const CatalogConfig = vanity.json("Config/catalog_config.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const catalog = JSON.parse(JSON.stringify(niobium.json("responses/catalog.json"))); // NIOBIUM: path via niobium.js (data folder/resources)
+    const CatalogConfig = niobium.json("Config/catalog_config.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     try {
         for (var value in CatalogConfig) {
@@ -165,7 +165,7 @@ function getItemShop() {
 function getTheater(req) {
     const memory = GetVersionInfo(req);
 
-    var theater = JSON.stringify(vanity.json("responses/Campaign/worldstw.json")); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    var theater = JSON.stringify(niobium.json("responses/Campaign/worldstw.json")); // NIOBIUM: path via niobium.js (data folder/resources)
     var Season = "Season" + memory.season;
 
     try {
@@ -249,7 +249,7 @@ function chooseTranslationsInJSON(obj, req, targetLanguage = "") {
 function getContentPages(req) {
     const memory = GetVersionInfo(req);
 
-    const contentpages = JSON.parse(JSON.stringify(vanity.json("responses/contentpages.json"))); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const contentpages = JSON.parse(JSON.stringify(niobium.json("responses/contentpages.json"))); // NIOBIUM: path via niobium.js (data folder/resources)
 
     chooseTranslationsInJSON(contentpages, req)
 
@@ -373,7 +373,7 @@ function getContentPages(req) {
 }
 
 function MakeSurvivorAttributes(templateId) {
-    const SurvivorData = vanity.json("responses/Campaign/survivorData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const SurvivorData = niobium.json("responses/Campaign/survivorData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     var SurvivorAttributes = {
         "level": 1,
         "item_seen": false,

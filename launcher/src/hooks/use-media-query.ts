@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-/** true, solange die CSS-Media-Query zutrifft, z. B. "(min-width: 1200px)". */
+/** true while the CSS media query matches, e.g. "(min-width: 1200px)". */
 export function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     (notify) => {

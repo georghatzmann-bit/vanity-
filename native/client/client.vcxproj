@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Vanity Ingame-Menü (vanity_client.dll). Basis: ATLAS Console (ATLAS Console Attribution License v1.0),
-     Projektdatei von Vanity neu geschrieben: statische Laufzeit, MinHook per Projektverweis, gemeinsame Ausgabeordner. -->
+<!-- Niobium in-game menu (niobium_client.dll). Based on ATLAS Console (ATLAS Console Attribution License v1.0),
+     project file rewritten by Niobium: static runtime, MinHook via project reference, shared output folders. -->
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -35,7 +35,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
-    <TargetName>vanity_client</TargetName>
+    <TargetName>niobium_client</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -93,9 +93,9 @@
     <ClCompile Include="ATLAS\Private\GUI.cpp" />
     <ClCompile Include="ATLAS\Private\HotfixReload.cpp" />
     <ClCompile Include="ATLAS\Private\LoadoutTelemetry.cpp" />
-    <!-- [Vanity] Trickshot-Reiter + Banner: ohne pch.h (auch unter Linux fuer die Menue-Vorschau
-         kompilierbar), Quelltext mit deutschen Texten in UTF-8. -->
-    <ClCompile Include="ATLAS\Private\VanityTrickshotTab.cpp">
+    <!-- [Niobium] Trickshot tab + banner: without pch.h (so the menu preview can also compile it
+         on Linux), source with UTF-8 menu texts. -->
+    <ClCompile Include="ATLAS\Private\NiobiumTrickshotTab.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -110,7 +110,7 @@
     <ClInclude Include="SDK\Includes.h" />
     <ClInclude Include="SDK\Memcury.h" />
     <ClInclude Include="SDK\Offsets.h" />
-    <ClInclude Include="ATLAS\Public\VanityTrickshotTab.h" />
+    <ClInclude Include="ATLAS\Public\NiobiumTrickshotTab.h" />
     <ClInclude Include="third_party\nlohmann\json.hpp" />
   </ItemGroup>
   <ItemGroup>

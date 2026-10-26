@@ -1,34 +1,34 @@
-//! Erkennt wichtige Stellen in den Zeilen, die Fortnite schreibt.
-//! Die Muster stammen aus der Recherche (Reboot Launcher, Unreal-Logs) – selbst formuliert.
+//! Spots important moments in the lines Fortnite writes.
+//! The patterns come from research (Reboot Launcher, Unreal logs) – written from scratch.
 
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Detection {
-    /// Anmeldung beim (eigenen) Backend fertig
+    /// Login to our own backend finished
     LoggedIn,
-    /// Server lauscht auf seinem Port
+    /// Server listens on its port
     ServerListening,
-    /// Spieldateien kaputt oder unvollständig
+    /// Game files broken or incomplete
     BuildCorrupted,
-    /// Backend nicht erreichbar / Anmeldung abgelehnt
+    /// Backend not reachable / login refused
     CannotConnect,
-    /// Match vorbei (nur noch ein Team übrig)
+    /// Match over (only one team left)
     MatchEnded,
-    /// Spiel fährt herunter
+    /// Game is shutting down
     Shutdown,
 }
 
 impl Detection {
     pub fn label(self) -> &'static str {
         match self {
-            Detection::LoggedIn => "Anmeldung erkannt",
-            Detection::ServerListening => "Server bereit",
-            Detection::BuildCorrupted => "Build beschädigt",
-            Detection::CannotConnect => "Keine Verbindung zum Backend",
-            Detection::MatchEnded => "Match vorbei",
-            Detection::Shutdown => "Spiel wird beendet",
+            Detection::LoggedIn => "Logged in",
+            Detection::ServerListening => "Server ready",
+            Detection::BuildCorrupted => "Build damaged",
+            Detection::CannotConnect => "Can't reach the backend",
+            Detection::MatchEnded => "Match over",
+            Detection::Shutdown => "Game is closing",
         }
     }
 }
@@ -77,10 +77,10 @@ pub enum Level {
     Error,
 }
 
-/// Zerlegt eine Unreal-Logzeile „[Zeit][Frame]LogKategorie: Warning: Text“.
+/// Splits an Unreal log line "[time][frame]LogCategory: Warning: text".
 pub fn split_line(line: &str) -> (Level, String, String) {
     let mut rest = line.trim_end();
-    // Zeitstempel-Klammern vorne entfernen
+    // Remove the time stamp brackets in front
     while rest.starts_with('[') {
         match rest.find(']') {
             Some(end) => rest = &rest[end + 1..],

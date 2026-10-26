@@ -1,11 +1,11 @@
 const Express = require("express");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const express = Express.Router();
 const functions = require("./functions.js");
-const keychain = vanity.json("responses/keychain.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+const keychain = niobium.json("responses/keychain.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
 express.get("/fortnite/api/storefront/v2/catalog", async (req, res) => {
-    if ((req.headers["user-agent"] || "").includes("2870186")) { // VANITY: ohne User-Agent kein Absturz
+    if ((req.headers["user-agent"] || "").includes("2870186")) { // NIOBIUM: no crash without a User-Agent
         return res.status(404).end();
     }
 

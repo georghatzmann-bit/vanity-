@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-/** true, wenn die Oberfläche im echten Launcher-Fenster läuft (nicht im Browser-Vorschau-Modus). */
+/** true when the UI runs in the real launcher window (not in the browser preview). */
 export const inTauri = isTauri();
 
 export async function minimizeWindow() {
@@ -17,16 +17,16 @@ export async function closeWindow() {
   if (inTauri) await getCurrentWindow().close();
 }
 
-/** Ruft `onChange` auf, wenn das Fenster maximiert oder wiederhergestellt wird. */
-export function watchMaximized(onChange: (maximized: boolean) => void): () => void {
+/** Calls `read` once and then after every resize of the window (maximize, restore, minimize …). */
+function watchWindowState(read: () => Promise<void>): () => void {
   if (!inTauri) return () => {};
   const win = getCurrentWindow();
   let disposed = false;
   let unlisten: (() => void) | undefined;
-  win.isMaximized().then((m) => !disposed && onChange(m));
+  read().catch(() => {});
   win
     .onResized(async () => {
-      if (!disposed) onChange(await win.isMaximized());
+      if (!disposed) await read().catch(() => {});
     })
     .then((fn) => {
       if (disposed) fn();
@@ -38,7 +38,23 @@ export function watchMaximized(onChange: (maximized: boolean) => void): () => vo
   };
 }
 
-/** Öffnet einen Link im normalen Browser. */
+/** Calls `onChange` when the window is maximized or restored. */
+export function watchMaximized(onChange: (maximized: boolean) => void): () => void {
+  const win = inTauri ? getCurrentWindow() : null;
+  return watchWindowState(async () => {
+    if (win) onChange(await win.isMaximized());
+  });
+}
+
+/** Calls `onChange` when the window is minimized or comes back (used to pause animations). */
+export function watchMinimized(onChange: (minimized: boolean) => void): () => void {
+  const win = inTauri ? getCurrentWindow() : null;
+  return watchWindowState(async () => {
+    if (win) onChange(await win.isMinimized());
+  });
+}
+
+/** Opens a link in the normal browser. */
 export async function openExternal(url: string) {
   if (inTauri) await openUrl(url);
   else window.open(url, "_blank", "noopener,noreferrer");

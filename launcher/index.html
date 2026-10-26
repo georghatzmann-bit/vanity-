@@ -1,11 +1,16 @@
 <!doctype html>
-<html lang="de" class="dark">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
-    <title>Vanity</title>
+    <title>Niobium</title>
+    <!--
+      No inline style or script blocks here: Tauri would give them a CSP nonce, and then the browser
+      ignores 'unsafe-inline' and blocks the styles that Sonner, Motion and Radix add at runtime.
+      The window itself starts hidden with backgroundColor #0A0B12 (tauri.conf.json).
+    -->
   </head>
   <body>
     <div id="root"></div>

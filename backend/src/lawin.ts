@@ -1,6 +1,6 @@
-// Brücke zu den (JavaScript-)Teilen von LawinServer in ../lawinserver.
-// esbuild packt alles in dist/main.js; die require()-Aufrufe in den Funktionen laufen erst,
-// wenn sie aufgerufen werden – also erst nachdem main.ts vanity.configure() aufgerufen hat.
+// Bridge to the (JavaScript) parts of LawinServer in ../lawinserver.
+// esbuild bundles everything into dist/main.js; the require() calls inside the functions only run
+// when they are called – that is, only after main.ts has called niobium.configure().
 import type { Express } from "express";
 
 export interface GameServerTarget {
@@ -8,7 +8,7 @@ export interface GameServerTarget {
   port: number;
 }
 
-interface VanitySettings {
+interface NiobiumSettings {
   resourceDir: string;
   dataDir: string;
   bindAddress: string;
@@ -16,24 +16,24 @@ interface VanitySettings {
   gameServer: GameServerTarget;
 }
 
-interface VanityBridge {
-  /** Pfade relativ zum LawinServer-Ordner, die im Daten-Ordner liegen (Ordner enden mit "/"). */
+interface NiobiumBridge {
+  /** Paths relative to the LawinServer folder that live in the data folder (folders end with "/"). */
   readonly WRITABLE: readonly string[];
-  readonly settings: Readonly<VanitySettings>;
-  configure(options: Partial<VanitySettings>): void;
+  readonly settings: Readonly<NiobiumSettings>;
+  configure(options: Partial<NiobiumSettings>): void;
   setGameServer(ip: string, port: number): void;
 }
 
-/** lawinserver/structure/vanity.js – Pfade, Ports, Game-Server-Ziel (hat keine Nebenwirkungen beim Laden). */
-export const vanity = require("../lawinserver/structure/vanity.js") as VanityBridge;
+/** lawinserver/structure/niobium.js – paths, ports, game server target (no side effects when loaded). */
+export const niobium = require("../lawinserver/structure/niobium.js") as NiobiumBridge;
 
-/** Baut die Express-App von LawinServer (alle Epic-Endpunkte + 404-Antwort). */
+/** Builds LawinServer's Express app (all Epic endpoints + the 404 answer). */
 export function createLawinApp(): Express {
   const lawin = require("../lawinserver/index.js") as { createApp(): Express };
   return lawin.createApp();
 }
 
-/** Startet XMPP + Matchmaker-WebSocket (lauscht auf vanity.settings.matchmakerPort). */
+/** Starts XMPP + the matchmaker WebSocket (listens on niobium.settings.matchmakerPort). */
 export function startXmppAndMatchmaker(): void {
   require("../lawinserver/structure/xmpp.js");
 }

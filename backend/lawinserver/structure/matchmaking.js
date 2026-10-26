@@ -1,10 +1,10 @@
 const Express = require("express");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const express = Express.Router();
 const fs = require("fs");
 const path = require("path");
 const iniparser = require("ini");
-const config = iniparser.parse(fs.readFileSync(vanity.file("Config/config.ini")).toString()); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+const config = iniparser.parse(fs.readFileSync(niobium.file("Config/config.ini")).toString()); // NIOBIUM: path via niobium.js (data folder/resources)
 const functions = require("./functions.js");
 
 express.get("/fortnite/api/matchmaking/session/findPlayer/*", async (req, res) => {
@@ -13,10 +13,10 @@ express.get("/fortnite/api/matchmaking/session/findPlayer/*", async (req, res) =
 })
 
 express.get("/fortnite/api/game/v2/matchmakingservice/ticket/player/*", async (req, res) => {
-    res.cookie("currentbuildUniqueId", String(req.query.bucketId || "").split(":")[0]); // VANITY: fehlender bucketId -> kein 500
+    res.cookie("currentbuildUniqueId", String(req.query.bucketId || "").split(":")[0]); // NIOBIUM: missing bucketId -> no 500
 
     res.json({
-        "serviceUrl": vanity.settings.matchmakerPort == 80 ? "ws://127.0.0.1" : `ws://127.0.0.1:${vanity.settings.matchmakerPort}`, // VANITY: Port aus VANITY_MATCHMAKER_PORT
+        "serviceUrl": niobium.settings.matchmakerPort == 80 ? "ws://127.0.0.1" : `ws://127.0.0.1:${niobium.settings.matchmakerPort}`, // NIOBIUM: port from NIOBIUM_MATCHMAKER_PORT
         "ticketType": "mms-player",
         "payload": "69=",
         "signature": "420="
@@ -38,8 +38,8 @@ express.get("/fortnite/api/matchmaking/session/:session_id", async (req, res) =>
         "ownerId": functions.MakeID().replace(/-/ig, "").toUpperCase(),
         "ownerName": "[DS]fortnite-liveeugcec1c2e30ubrcore0a-z8hj-1968",
         "serverName": "[DS]fortnite-liveeugcec1c2e30ubrcore0a-z8hj-1968",
-        "serverAddress": vanity.settings.gameServer.ip, // VANITY: VANITY_GAMESERVER / POST /vanity/gameserver statt config.ini
-        "serverPort": vanity.settings.gameServer.port, // VANITY: VANITY_GAMESERVER / POST /vanity/gameserver statt config.ini
+        "serverAddress": niobium.settings.gameServer.ip, // NIOBIUM: NIOBIUM_GAMESERVER / POST /niobium/gameserver instead of config.ini
+        "serverPort": niobium.settings.gameServer.port, // NIOBIUM: NIOBIUM_GAMESERVER / POST /niobium/gameserver instead of config.ini
         "maxPublicPlayers": 220,
         "openPublicPlayers": 175,
         "maxPrivatePlayers": 0,

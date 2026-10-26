@@ -1,21 +1,21 @@
-// [Vanity] Trickshot-Parkours, Ziel-Bots und Trickshot-Erkennung – eigener Vanity-Code (GPL-3.0),
-// kein Bestandteil von Magnesium. Siehe VanityParkour.h.
+// NIOBIUM: trickshot parkours, target bots and trickshot detection - Niobium's own code (GPL-3.0),
+// not part of Magnesium. See NiobiumParkour.h.
 //
-// Die Parkours stehen in %LOCALAPPDATA%\Vanity\server\parkours.json (schreibt der Launcher, gleiche Datei
-// wie launcher/src/data/parkours.json). Alle Angaben dort sind Meter relativ zum Spieler:
-// at = [nach vorne, nach rechts, nach oben]. Ein Boden-Stück ist 5,12 m groß.
+// The parkours live in %LOCALAPPDATA%\Niobium\server\parkours.json (written by the launcher, same file
+// as launcher/src/data/parkours.json). All values there are metres relative to the player:
+// at = [forward, right, up]. One floor tile is 5.12 m.
 //
-// Ablauf von „parkour <id>“ (im Spiel-Takt, aus ServerCheat):
-//   1. alten Vanity-Parkour wegräumen
-//   2. Blickrichtung auf 90° runden, Füße F = Spieler − 90 cm + Höhe
-//   3. Start-Boden (w × d Stücke) um F, dann Sprung-Objekte (+ eigene Böden), dann Ziel-Bots auf je einem Boden
-//   4. Spieler auf den Start stellen, Blick nach vorne, Scharfschützengewehr geben, Start merken
+// Steps of "parkour <id>" (on the game thread, from ServerCheat):
+//   1. remove the old Niobium parkour
+//   2. round the view direction to 90 degrees, feet F = player - 90 cm + height
+//   3. start floor (w x d tiles) around F, then jump objects (+ their own floors), then target bots on a floor each
+//   4. put the player on the start, facing forward, give a sniper rifle, remember the start
 //
-// Böden entstehen wie beim Laden eines Trickshot-Presets (GUI.cpp) und bleiben „fest gestützt“,
-// damit Böden in der Luft nie einstürzen. Bots entstehen über den vorhandenen Befehl „bot X Y Z“.
+// Floors are made like when a trickshot preset is loaded (GUI.cpp) and stay "forcibly supported",
+// so floors in the air never collapse. Bots are made with the existing "bot X Y Z" command.
 #include "pch.h"
-#include "../Public/VanityParkour.h"
-#include "../Public/VanityControl.h"
+#include "../Public/NiobiumParkour.h"
+#include "../Public/NiobiumControl.h"
 #include "../Public/Configuration.h"
 #include "../Public/GUI.h"
 #include "../../json.hpp"
@@ -39,9 +39,9 @@ namespace
 {
     using json = nlohmann::json;
 
-    constexpr double kTileCm = 512.0;             // ein Boden-Stück
-    constexpr double kCapsuleHalfHeightCm = 90.0; // Spieler-Mitte bis Füße
-    constexpr double kStandAboveTileCm = 100.0;   // Spieler/Bot so weit über dem Boden absetzen
+    constexpr double kTileCm = 512.0;             // one floor tile
+    constexpr double kCapsuleHalfHeightCm = 90.0; // player centre to feet
+    constexpr double kStandAboveTileCm = 100.0;   // put player/bot this far above the floor
     constexpr int kMaxTilesPerSide = 9;
     constexpr size_t kMaxElements = 48;
     constexpr size_t kMaxBots = 12;
@@ -49,11 +49,11 @@ namespace
     constexpr long long kMaxFileBytes = 2LL * 1024 * 1024;
     constexpr double kMaxOffsetMeters = 1000.0;
     constexpr ULONGLONG kTrickshotRepeatMs = 1500;
-    constexpr double kReuseMarginCm = kTileCm;     // so weit neben dem alten Start-Boden zählt noch „drauf“
-    constexpr double kReuseBelowStartCm = 300.0;   // so weit unter dem alten Start-Boden zählt noch „drauf“
-    constexpr double kReuseMinRaiseCm = 100.0;     // nur wenn der alte Start so hoch über dem Boden war
+    constexpr double kReuseMarginCm = kTileCm;     // this far beside the old start floor still counts as "on it"
+    constexpr double kReuseBelowStartCm = 300.0;   // this far below the old start floor still counts as "on it"
+    constexpr double kReuseMinRaiseCm = 100.0;     // only if the old start was this high above the ground
 
-    // ---------------------------------------------------------------- Daten
+    // ---------------------------------------------------------------- Data
 
     struct FVec3
     {
@@ -98,7 +98,7 @@ namespace
 
     struct FParkourFile
     {
-        std::map<std::string, FKindDef> Kinds; // Schlüssel klein geschrieben
+        std::map<std::string, FKindDef> Kinds; // keys in lower case
         std::vector<std::string> Snipers;
         std::vector<FParkourDef> Parkours;
     };
@@ -106,36 +106,36 @@ namespace
     struct FBotSlot
     {
         TWeakObjectPtr<AFortPlayerControllerAthena> Controller;
-        FVec3 Where; // Bot-Mitte (Boden + 1 m)
+        FVec3 Where; // bot centre (floor + 1 m)
         int Hp = 50;
     };
 
     struct FSpawnedSet
     {
-        std::vector<TWeakObjectPtr<AActor>> Actors; // Böden und Objekte
+        std::vector<TWeakObjectPtr<AActor>> Actors; // floors and objects
         std::vector<FBotSlot> Bots;
     };
 
     struct FAxes
     {
-        double Yaw = 0.0; // Grad
+        double Yaw = 0.0; // degrees
         double FwdX = 1.0;
         double FwdY = 0.0;
     };
 
-    // Nur im Spiel-Takt anfassen.
+    // Only touch on the game thread.
     TWeakObjectPtr<UWorld> GTrackedWorld;
-    FSpawnedSet GParkourSpawned; // von „parkour <id>“
-    FSpawnedSet GTargetSpawned;  // von „targetbot“
+    FSpawnedSet GParkourSpawned; // from "parkour <id>"
+    FSpawnedSet GTargetSpawned;  // from "targetbot"
     bool GHasStart = false;
     FVec3 GStart;
     double GStartYaw = 0.0;
     std::string GStartName;
-    bool GHasBase = false; // Boden-Punkt (Füße ohne Höhe), von dem aus der letzte Parkour gebaut wurde
+    bool GHasBase = false; // ground point (feet without height) the last parkour was built from
     FVec3 GBase;
-    FAxes GStartAxes;               // Blickrichtung des letzten Parkours
-    double GStartHalfFwdCm = 0.0;   // halbe Länge des letzten Start-Bodens (nach vorne)
-    double GStartHalfRightCm = 0.0; // halbe Breite des letzten Start-Bodens (nach rechts)
+    FAxes GStartAxes;               // view direction of the last parkour
+    double GStartHalfFwdCm = 0.0;   // half length of the last start floor (forward)
+    double GStartHalfRightCm = 0.0; // half width of the last start floor (right)
 
     const void* GLastTrickshotVictim = nullptr;
     ULONGLONG GLastTrickshotMs = 0;
@@ -162,19 +162,19 @@ namespace
 
     std::string Quote(const std::string& Text)
     {
-        return "\xE2\x80\x9E" + Text + "\xE2\x80\x9C"; // „…“
+        return "\"" + Text + "\"";
     }
 
-    // Eine Zeile an einen Spieler, immer mit „[Vanity] “ davor.
+    // One line to one player, always starting with "[Niobium] ".
     void Say(AFortPlayerControllerAthena* PlayerController, const std::string& Utf8)
     {
         if (!PlayerController)
             return;
-        const std::wstring Wide = Widen("[Vanity] " + Utf8);
+        const std::wstring Wide = L"[Niobium] " + Widen(Utf8);
         PlayerController->ClientMessage(FString(Wide.c_str()), FName(), 1.f);
     }
 
-    // ---------------------------------------------------------------- Spiel-Zugriffe
+    // ---------------------------------------------------------------- Game access
 
     bool IsLive(const UObject* Object)
     {
@@ -195,7 +195,7 @@ namespace
         return World ? (AFortGameMode*)World->AuthorityGameMode : nullptr;
     }
 
-    // Wechselt die Welt (neues Match), sind alle gemerkten Sachen ungültig.
+    // When the world changes (new match), everything remembered is invalid.
     void EnsureTrackedWorld()
     {
         auto World = UWorld::GetWorld();
@@ -209,7 +209,7 @@ namespace
         GTrackedWorld = TWeakObjectPtr<UWorld>(World);
     }
 
-    // Ohne C++-Objekte, damit __try erlaubt ist.
+    // No C++ objects in here, so __try is allowed.
     bool GuardedProcessEvent(UObject* Object, UFunction* Function, void* Params) noexcept
     {
         __try
@@ -223,13 +223,13 @@ namespace
         }
     }
 
-    // Führt einen vorhandenen Cheat-Befehl als dieser Spieler aus (wie VanityControl::RunCheat).
+    // Runs an existing cheat command as this player (like NiobiumControl::RunCheat).
     bool RunCheatAs(AFortPlayerControllerAthena* PlayerController, const std::string& Text)
     {
         auto Function = PlayerController ? PlayerController->GetFunction("ServerCheat") : nullptr;
         if (!Function)
             return false;
-        // Direkt im Parameterblock aufbauen (keine Kopie), FString gibt seinen Speicher selbst frei.
+        // Build it right in the parameter block (no copy), FString frees its own memory.
         const std::wstring Wide = Widen(Text);
         struct FParams
         {
@@ -238,7 +238,7 @@ namespace
         return GuardedProcessEvent(PlayerController, Function, &Params);
     }
 
-    // Blickrichtung des Spielers (Kamera), sonst Drehung der Spielfigur.
+    // The player's view direction (camera), otherwise the pawn's rotation.
     double GetViewYaw(AFortPlayerControllerAthena* PlayerController, AFortPlayerPawnAthena* Pawn)
     {
         double Yaw = 0.0;
@@ -255,7 +255,7 @@ namespace
         return std::isfinite(Yaw) ? Yaw : 0.0;
     }
 
-    // Auf 90° gerundet: 0 = +X, 1 = +Y, 2 = −X, 3 = −Y.
+    // Rounded to 90 degrees: 0 = +X, 1 = +Y, 2 = -X, 3 = -Y.
     int SnapQuarter(double Yaw)
     {
         int Quarter = (int)std::fmod(std::round(Yaw / 90.0), 4.0);
@@ -275,7 +275,7 @@ namespace
         return Axes;
     }
 
-    // Origin + vorne*Forward + rechts*Right + oben*Up (alles in cm). Rechts = (−FwdY, FwdX).
+    // Origin + forward*Forward + right*Right + up*Up (all in cm). Right = (-FwdY, FwdX).
     FVec3 ShiftCm(const FVec3& Origin, const FAxes& Axes, double ForwardCm, double RightCm, double UpCm)
     {
         FVec3 Out;
@@ -290,7 +290,7 @@ namespace
         return ShiftCm(Origin, Axes, AtMeters.X * 100.0, AtMeters.Y * 100.0, AtMeters.Z * 100.0);
     }
 
-    // Wie ApplyLoadedBuildOwnership beim Laden eines Trickshot-Presets (GUI.cpp).
+    // Like ApplyLoadedBuildOwnership when a trickshot preset is loaded (GUI.cpp).
     void ApplyBuildOwnership(ABuildingSMActor* Build, AFortPlayerControllerAthena* Controller)
     {
         Build->bPlayerPlaced = true;
@@ -309,21 +309,21 @@ namespace
         Build->ForceNetUpdate();
     }
 
-    // Ein Fortnite-Boden hat seinen Ursprung NICHT in der Mitte: er liegt auf Lauf-Höhe in der Mitte seiner
-    // linken Kante (lokal −Y), die Platte reicht von dort 512 cm nach rechts (lokal +Y) und je 256 cm nach
-    // vorne und hinten. Beleg: das mitgelieferte Preset Erbium/Resources/TrickshotPresets/BlockWinner_15Bandit.json
-    // (echte Spieler-Bauten aus FN 10.40, gespeichert mit K2_GetActorLocation). Nur mit diesem Ursprung liegen
-    // alle 219 Böden und 67 Treppen/Dächer darin überschneidungsfrei mittig im 512er-Raster (die drei anderen
-    // Kanten ergeben 17–37 doppelt belegte Felder, „Mitte“ ergibt kein gemeinsames Raster). Alle Bauteile
-    // stehen auf Vielfachen von 384 cm, der Ursprung ist also die Unterkante der Etage = Lauf-Höhe.
+    // A Fortnite floor does NOT have its origin in the middle: it sits at walking height in the middle of its
+    // left edge (local -Y), and the plate reaches 512 cm to the right (local +Y) and 256 cm forward and back
+    // from there. Proof: the bundled preset Erbium/Resources/TrickshotPresets/BlockWinner_15Bandit.json
+    // (real player builds from FN 10.40, saved with K2_GetActorLocation). Only with this origin do all
+    // 219 floors and 67 stairs/roofs in it sit centred in the 512 grid without overlaps (the three other
+    // edges give 17-37 double-used cells, "middle" gives no common grid). All build pieces
+    // sit on multiples of 384 cm, so the origin is the bottom edge of the storey = walking height.
     constexpr double kFloorOriginLeftOfCenterCm = kTileCm / 2.0;
 
-    // Ein Boden-Stück mit der Mitte auf Center. Gleiches Rezept wie das Preset-Laden, aber die Stütze bleibt
-    // immer an.
+    // One floor tile centred on Center. Same recipe as preset loading, but the support always
+    // stays on.
     AActor* SpawnFloorTile(AFortPlayerControllerAthena* Controller, const UClass* FloorClass,
         const FVec3& Center, double Yaw)
     {
-        // Mitte → Ursprung: eine halbe Platte nach links. Lokal −Y ist in der Welt (sin Yaw, −cos Yaw).
+        // Middle -> origin: half a plate to the left. Local -Y in the world is (sin Yaw, -cos Yaw).
         const double YawRadians = Yaw * 3.14159265358979323846 / 180.0;
         const FVector Location(Center.X + kFloorOriginLeftOfCenterCm * std::sin(YawRadians),
             Center.Y - kFloorOriginLeftOfCenterCm * std::cos(YawRadians), Center.Z);
@@ -347,7 +347,7 @@ namespace
         return Plain;
     }
 
-    // W (nach rechts) × D (nach vorne) Stücke, mittig um Center. Gibt die Anzahl zurück.
+    // W (right) x D (forward) tiles, centred on Center. Returns the count.
     int SpawnFloorGrid(AFortPlayerControllerAthena* Controller, const UClass* FloorClass, const FVec3& Center,
         const FAxes& Axes, int W, int D, FSpawnedSet& Set)
     {
@@ -371,7 +371,7 @@ namespace
         return Spawned;
     }
 
-    // Wie „summon“: Reifenstapel gehören dem Spieler.
+    // Like "summon": tire piles belong to the player.
     AActor* SpawnObject(AFortPlayerControllerAthena* Controller, const UClass* Class, const FVec3& Where,
         double Yaw)
     {
@@ -383,7 +383,7 @@ namespace
         return Actor;
     }
 
-    // Setzt BotHealth/BotShield nur für einen Bot und stellt sie danach wieder her.
+    // Sets BotHealth/BotShield for one bot only and restores them afterwards.
     struct FBotStatsOverride
     {
         int OldHealth;
@@ -395,12 +395,12 @@ namespace
         {
             FConfiguration::BotHealth.store(Health, std::memory_order_release);
             FConfiguration::BotShield.store(0, std::memory_order_release);
-            Vanity_SetQuietBotSpawn(true);
+            Niobium_SetQuietBotSpawn(true);
         }
 
         ~FBotStatsOverride()
         {
-            Vanity_SetQuietBotSpawn(false);
+            Niobium_SetQuietBotSpawn(false);
             FConfiguration::BotHealth.store(OldHealth, std::memory_order_release);
             FConfiguration::BotShield.store(OldShield, std::memory_order_release);
         }
@@ -409,7 +409,7 @@ namespace
         FBotStatsOverride& operator=(const FBotStatsOverride&) = delete;
     };
 
-    // Genau ein stehender Bot über den vorhandenen Befehl „bot X Y Z“. Gibt seinen Controller zurück.
+    // Exactly one standing bot through the existing "bot X Y Z" command. Returns its controller.
     AFortPlayerControllerAthena* SpawnStillBot(AFortPlayerControllerAthena* Controller, const FVec3& Where, int Hp)
     {
         auto GameMode = GetGameMode();
@@ -420,7 +420,7 @@ namespace
         for (auto Alive : GameMode->AlivePlayers)
             Before.insert(Alive);
 
-        // Ganze Zentimeter: „bot“ liest drei Zahlen hintereinander sicher als Ort (vor Anzahl/Größe).
+        // Whole centimetres: "bot" safely reads three numbers in a row as a location (before count/size).
         char Command[128];
         snprintf(Command, sizeof(Command), "bot %lld %lld %lld", std::llround(Where.X), std::llround(Where.Y),
             std::llround(Where.Z));
@@ -488,13 +488,13 @@ namespace
         int Bots = 0;
     };
 
-    // Erst die Bots (stehen auf den Böden), dann Böden und Objekte.
+    // Bots first (they stand on the floors), then floors and objects.
     void ClearSet(FSpawnedSet& Set, FClearResult& Result)
     {
         for (const auto& Slot : Set.Bots)
         {
             auto BotController = Slot.Controller.Get();
-            if (BotController && Vanity_RemoveSpawnedBot(BotController))
+            if (BotController && Niobium_RemoveSpawnedBot(BotController))
                 ++Result.Bots;
         }
         for (const auto& Weak : Set.Actors)
@@ -529,25 +529,25 @@ namespace
         Given, AlreadyHad, NotFound
     };
 
-    // Erster Name aus „snipers“, den diese Version kennt (gleicher Auflöser wie „give“).
+    // First name from "snipers" this version knows (same resolver as "give").
     ESniperResult GiveSniper(AFortPlayerControllerAthena* Controller, const std::vector<std::string>& Names)
     {
         for (const auto& Name : Names)
         {
             if (Name.empty())
                 continue;
-            auto Definition = Vanity_FindItemDefinition(Name);
+            auto Definition = Niobium_FindItemDefinition(Name);
             if (!Definition)
                 continue;
             if (HasItem(Controller, Definition))
                 return ESniperResult::AlreadyHad;
-            if (Vanity_GiveItem(Controller, Definition, 1) > 0)
+            if (Niobium_GiveItem(Controller, Definition, 1) > 0)
                 return ESniperResult::Given;
         }
         return ESniperResult::NotFound;
     }
 
-    // Spieler auf einen Punkt stellen, Blick in Richtung Yaw, keine Restgeschwindigkeit.
+    // Puts the player on a point, facing Yaw, with no leftover speed.
     void PlacePlayer(AFortPlayerControllerAthena* Controller, AFortPlayerPawnAthena* Pawn, const FVec3& Where,
         double Yaw)
     {
@@ -577,13 +577,13 @@ namespace
         auto Pawn = Controller->Pawn;
         if (!IsLive(Pawn))
         {
-            Say(Controller, "Du brauchst daf\xC3\xBCr eine Spielfigur. Warte, bis du im Spiel stehst.");
+            Say(Controller, "You need your character for this. Wait until you're in the game.");
             return nullptr;
         }
         return Pawn;
     }
 
-    // ---------------------------------------------------------------- Datei lesen
+    // ---------------------------------------------------------------- Reading the file
 
     std::wstring ParkourFilePath()
     {
@@ -591,7 +591,7 @@ namespace
         const DWORD Length = GetEnvironmentVariableW(L"LOCALAPPDATA", Buffer, (DWORD)(sizeof(Buffer) / sizeof(Buffer[0])));
         if (Length == 0 || Length >= sizeof(Buffer) / sizeof(Buffer[0]))
             return L"";
-        return std::wstring(Buffer, Length) + L"\\Vanity\\server\\parkours.json";
+        return std::wstring(Buffer, Length) + L"\\Niobium\\server\\parkours.json";
     }
 
     bool ReadWholeFile(const std::wstring& Path, std::string& Out)
@@ -618,7 +618,7 @@ namespace
         if (Out.size() >= 3 && (unsigned char)Out[0] == 0xEF && (unsigned char)Out[1] == 0xBB &&
             (unsigned char)Out[2] == 0xBF)
         {
-            Out.erase(0, 3); // UTF-8-BOM
+            Out.erase(0, 3); // UTF-8 BOM
         }
         return !Out.empty();
     }
@@ -662,7 +662,7 @@ namespace
         return true;
     }
 
-    // [w, d] → ganze Zahlen 0..9. Fehlt der Eintrag, bleibt der Standard.
+    // [w, d] -> whole numbers 0..9. Without the entry the default stays.
     void ReadPlatform(const json& Object, int& W, int& D)
     {
         auto It = Object.find("platform");
@@ -738,7 +738,7 @@ namespace
                 Parkour.Level = (int)std::lround(std::clamp(Number, 1.0, 3.0));
             if (ReadNumber(Entry, "height", Number))
                 Parkour.HeightMeters = std::clamp(Number, -50.0, 300.0);
-            // Ohne Angabe: in der Luft ein Stück unter dir, am Boden keins.
+            // Not set: one tile under you in the air, none on the ground.
             Parkour.PlatformW = Parkour.HeightMeters > 0.0 ? 1 : 0;
             Parkour.PlatformD = Parkour.PlatformW;
             ReadPlatform(Entry, Parkour.PlatformW, Parkour.PlatformD);
@@ -785,13 +785,13 @@ namespace
         return true;
     }
 
-    // Liest die Datei. Bei einem Fehler bekommt der Spieler eine klare Meldung und es gibt false.
+    // Reads the file. On an error the player gets a clear message and it returns false.
     bool LoadParkours(AFortPlayerControllerAthena* Controller, FParkourFile& Out)
     {
         std::string Text;
         if (!ReadWholeFile(ParkourFilePath(), Text))
         {
-            Say(Controller, "Die Parkour-Liste fehlt. Starte das Spiel bitte \xC3\xBC" "ber den Vanity-Launcher.");
+            Say(Controller, "The parkour list is missing. Please start the game from the Niobium launcher.");
             return false;
         }
         bool bParsed = false;
@@ -805,12 +805,12 @@ namespace
         }
         if (!bParsed)
         {
-            Say(Controller, "Die Parkour-Liste ist kaputt. Starte den Vanity-Launcher neu, dann wird sie neu geschrieben.");
+            Say(Controller, "The parkour list is broken. Restart the Niobium launcher to write it again.");
             return false;
         }
         if (Out.Parkours.empty())
         {
-            Say(Controller, "In der Parkour-Liste steht kein Parkour.");
+            Say(Controller, "The parkour list is empty.");
             return false;
         }
         return true;
@@ -828,13 +828,13 @@ namespace
         return Ids;
     }
 
-    // ---------------------------------------------------------------- Befehle
+    // ---------------------------------------------------------------- Commands
 
     void SayParkourHelp(AFortPlayerControllerAthena* Controller)
     {
-        Say(Controller, "So geht's: parkour <name> baut einen Parkour um dich.");
-        Say(Controller, "parkour retry = zur\xC3\xBC" "ck zum Start \xC2\xB7 parkour clear = alles weg \xC2\xB7 "
-            "parkour sniper = Scharfsch\xC3\xBC" "tzengewehr \xC2\xB7 parkour list = alle Namen");
+        Say(Controller, "How it works: parkour <id> builds a parkour around you.");
+        Say(Controller, "parkour retry = back to the start | parkour clear = remove all | "
+            "parkour sniper = sniper rifle | parkour list = all ids");
     }
 
     void SaySniperResult(AFortPlayerControllerAthena* Controller, ESniperResult Result)
@@ -842,13 +842,13 @@ namespace
         switch (Result)
         {
         case ESniperResult::Given:
-            Say(Controller, "Scharfsch\xC3\xBC" "tzengewehr ist jetzt in deinem Inventar.");
+            Say(Controller, "A sniper rifle is now in your inventory.");
             break;
         case ESniperResult::AlreadyHad:
-            Say(Controller, "Du hast schon ein Scharfsch\xC3\xBC" "tzengewehr.");
+            Say(Controller, "You already have a sniper rifle.");
             break;
         case ESniperResult::NotFound:
-            Say(Controller, "In dieser Version gibt es keins der Scharfsch\xC3\xBC" "tzengewehre aus der Liste.");
+            Say(Controller, "None of the listed sniper rifles exist in this version.");
             break;
         }
     }
@@ -863,18 +863,18 @@ namespace
         GHasBase = false;
         if (Result.Objects == 0 && Result.Bots == 0)
         {
-            Say(Controller, "Es gab nichts zum Wegr\xC3\xA4" "umen.");
+            Say(Controller, "Nothing to remove.");
             return;
         }
-        Say(Controller, "Wegger\xC3\xA4" "umt: " + std::to_string(Result.Objects) + " Teile und " +
-            std::to_string(Result.Bots) + " Ziel-Bots.");
+        Say(Controller, "Removed " + std::to_string(Result.Objects) + " pieces and " +
+            std::to_string(Result.Bots) + " target bots.");
     }
 
     void DoRetry(AFortPlayerControllerAthena* Controller)
     {
         if (!GHasStart)
         {
-            Say(Controller, "Du hast noch keinen Parkour gebaut. W\xC3\xA4" "hle zuerst einen aus.");
+            Say(Controller, "You haven't built a parkour yet. Pick one first.");
             return;
         }
         auto Pawn = RequirePawn(Controller);
@@ -884,7 +884,7 @@ namespace
         PlacePlayer(Controller, Pawn, GStart, GStartYaw);
         RefillPlayer(Controller, Pawn);
 
-        // Erledigte Ziel-Bots kommen an ihren Platz zurück.
+        // Eliminated target bots come back to their spots.
         int Revived = 0;
         for (auto& Slot : GParkourSpawned.Bots)
         {
@@ -897,11 +897,11 @@ namespace
             }
         }
 
-        std::string Message = "Zur\xC3\xBC" "ck am Start" + (GStartName.empty() ? std::string() : " von " + Quote(GStartName)) +
-            ". Leben voll, Waffen geladen.";
+        std::string Message = "Back at the start" + (GStartName.empty() ? std::string() : " of " + Quote(GStartName)) +
+            ". Full health, weapons reloaded.";
         if (Revived > 0)
-            Message += " " + std::to_string(Revived) + (Revived == 1 ? " Ziel-Bot ist" : " Ziel-Bots sind") +
-                " wieder da.";
+            Message += " " + std::to_string(Revived) + (Revived == 1 ? " target bot is" : " target bots are") +
+                " back.";
         Say(Controller, Message);
     }
 
@@ -943,7 +943,7 @@ namespace
         }
         if (!Parkour)
         {
-            Say(Controller, "Den Parkour " + Quote(Id) + " gibt es nicht. Diese gibt es: " + JoinIds(File));
+            Say(Controller, "There is no parkour " + Quote(Id) + ". Pick one of these: " + JoinIds(File));
             return;
         }
 
@@ -954,13 +954,13 @@ namespace
         Ground.Z = PawnLocation.Z - kCapsuleHalfHeightCm;
         if (!std::isfinite(Ground.X) || !std::isfinite(Ground.Y) || !std::isfinite(Ground.Z))
         {
-            Say(Controller, "Deine Position ist gerade unklar. Versuch es gleich nochmal.");
+            Say(Controller, "Can't find your position right now. Try again in a moment.");
             return;
         }
 
-        // Stehst du noch auf dem alten, erhöhten Start-Boden (oder fliegst direkt darüber), baut der neue
-        // Parkour von der alten Boden-Höhe aus – sonst würden Parkours bei jedem Wechsel ein Stück höher landen.
-        // Gebaut wird trotzdem genau da, wo du stehst (nur die Höhe kommt vom alten Boden).
+        // If you still stand on the old, raised start floor (or fly right above it), the new parkour is
+        // built from the old ground height - otherwise parkours would end up a bit higher with every switch.
+        // It is still built exactly where you stand (only the height comes from the old ground).
         if (GHasStart && GHasBase)
         {
             const double StartFloorZ = GStart.Z - kStandAboveTileCm;
@@ -977,7 +977,7 @@ namespace
                 Ground.Z = GBase.Z;
         }
 
-        // Alten Vanity-Parkour zuerst wegräumen.
+        // Remove the old Niobium parkour first.
         {
             FClearResult Ignored;
             ClearSet(GParkourSpawned, Ignored);
@@ -990,26 +990,26 @@ namespace
         Feet.Z += Parkour->HeightMeters * 100.0;
         const FAxes Axes = SnappedAxes(GetViewYaw(Controller, Pawn));
 
-        auto FloorClass = Vanity_FindActorClass("woodfloor");
+        auto FloorClass = Niobium_FindActorClass("woodfloor");
         const bool bNeedsStartFloor = Parkour->PlatformW > 0 && Parkour->PlatformD > 0;
         if (!FloorClass && (bNeedsStartFloor || Parkour->HeightMeters > 0.0))
         {
-            Say(Controller, "Diese Version kann keine B\xC3\xB6" "den bauen. Der Parkour geht hier leider nicht.");
+            Say(Controller, "This version can't build floors, so this parkour doesn't work here.");
             return;
         }
 
-        // 1. Start-Boden
+        // 1. Start floor
         int Floors = SpawnFloorGrid(Controller, FloorClass, Feet, Axes, Parkour->PlatformW, Parkour->PlatformD,
             GParkourSpawned);
         if (bNeedsStartFloor && Floors == 0)
         {
             FClearResult Ignored;
             ClearSet(GParkourSpawned, Ignored);
-            Say(Controller, "Der Start-Boden lie\xC3\x9F sich nicht bauen. Der Parkour wurde abgebrochen.");
+            Say(Controller, "The start floor couldn't be built, so the parkour was cancelled.");
             return;
         }
 
-        // 2. Sprung-Objekte
+        // 2. Jump objects
         std::map<std::string, const UClass*> ClassByKind;
         std::vector<std::string> MissingLabels;
         int Objects = 0;
@@ -1032,7 +1032,7 @@ namespace
                 {
                     for (const auto& Name : KindIt->second.Summon)
                     {
-                        if (!Name.empty() && (Class = Vanity_FindActorClass(Name)) != nullptr)
+                        if (!Name.empty() && (Class = Niobium_FindActorClass(Name)) != nullptr)
                             break;
                     }
                 }
@@ -1060,7 +1060,7 @@ namespace
             }
         }
 
-        // 3. Ziel-Bots, jeder auf seinem Boden
+        // 3. Target bots, each on its own floor
         int Bots = 0;
         int FailedBots = 0;
         for (const auto& BotDef : Parkour->Bots)
@@ -1080,11 +1080,11 @@ namespace
             {
                 ++FailedBots;
             }
-            // Auch ohne Bot merken: „parkour retry“ versucht es dann nochmal.
+            // Remember it even without a bot: "parkour retry" tries again then.
             GParkourSpawned.Bots.push_back(Slot);
         }
 
-        // 4. Spieler auf den Start, Blick nach vorne
+        // 4. Player onto the start, facing forward
         const FVec3 Start = ShiftCm(Feet, Axes, 0.0, 0.0, kStandAboveTileCm);
         Pawn = Controller->Pawn;
         if (IsLive(Pawn))
@@ -1099,8 +1099,8 @@ namespace
         GStartHalfFwdCm = Parkour->PlatformD * kTileCm * 0.5;
         GStartHalfRightCm = Parkour->PlatformW * kTileCm * 0.5;
 
-        Say(Controller, Quote(Parkour->Name) + " ist bereit! Gebaut: " + std::to_string(Floors) + " B\xC3\xB6" "den, " +
-            std::to_string(Objects) + " Sprung-Objekte, " + std::to_string(Bots) + " Ziel-Bots.");
+        Say(Controller, Quote(Parkour->Name) + " is ready! Built: " + std::to_string(Floors) + " floors, " +
+            std::to_string(Objects) + " jump objects, " + std::to_string(Bots) + " target bots.");
         if (!MissingLabels.empty())
         {
             std::string Missing;
@@ -1110,18 +1110,18 @@ namespace
                     Missing += ", ";
                 Missing += Label;
             }
-            Say(Controller, "Gibt es in dieser Version nicht (weggelassen): " + Missing + ".");
+            Say(Controller, "Not in this version (left out): " + Missing + ".");
         }
         if (FailedObjects > 0)
-            Say(Controller, std::to_string(FailedObjects) + " Sprung-Objekte lie\xC3\x9F" "en sich nicht aufstellen.");
+            Say(Controller, std::to_string(FailedObjects) + " jump objects couldn't be placed.");
         if (FailedBots > 0)
-            Say(Controller, std::to_string(FailedBots) + " Ziel-Bots konnten nicht erscheinen.");
+            Say(Controller, std::to_string(FailedBots) + " target bots couldn't spawn.");
 
         if (IsLive(Controller->Pawn))
             SaySniperResult(Controller, GiveSniper(Controller, File.Snipers));
-        Say(Controller, "Nochmal: parkour retry \xC2\xB7 Alles weg: parkour clear");
+        Say(Controller, "Again: parkour retry | Remove all: parkour clear");
 
-        SDK::DbgLog("[Vanity] parkour %s gebaut: floors=%d objects=%d bots=%d missingKinds=%d\n", Parkour->Id.c_str(),
+        SDK::DbgLog("[Niobium] parkour %s built: floors=%d objects=%d bots=%d missingKinds=%d\n", Parkour->Id.c_str(),
             Floors, Objects, Bots, (int)MissingLabels.size());
     }
 
@@ -1145,7 +1145,7 @@ namespace
         double Meters = 30.0;
         if (!ParseOptionalNumber(Args, 0, 50.0, HpValue) || !ParseOptionalNumber(Args, 1, 30.0, Meters))
         {
-            Say(Controller, "Schreib es so: targetbot 50 30 (Leben, Meter vor dir).");
+            Say(Controller, "Type it like this: targetbot 50 30 (health, metres in front of you).");
             return;
         }
         const int Hp = (int)std::lround(std::clamp(HpValue, 1.0, 500.0));
@@ -1162,11 +1162,11 @@ namespace
         Feet.Z = PawnLocation.Z - kCapsuleHalfHeightCm;
         if (!std::isfinite(Feet.X) || !std::isfinite(Feet.Y) || !std::isfinite(Feet.Z))
         {
-            Say(Controller, "Deine Position ist gerade unklar. Versuch es gleich nochmal.");
+            Say(Controller, "Can't find your position right now. Try again in a moment.");
             return;
         }
 
-        // Richtung: genau deine Blickrichtung. Der Boden liegt gerade im 90°-Raster.
+        // Direction: exactly your view direction. The floor lies straight in the 90-degree grid.
         const double Yaw = GetViewYaw(Controller, Pawn);
         const double Radians = Yaw * 3.14159265358979323846 / 180.0;
         FAxes Exact;
@@ -1175,7 +1175,7 @@ namespace
         Exact.FwdY = std::sin(Radians);
         const FVec3 TileCenter = ShiftCm(Feet, Exact, Meters * 100.0, 0.0, 0.0);
 
-        auto FloorClass = Vanity_FindActorClass("woodfloor");
+        auto FloorClass = Niobium_FindActorClass("woodfloor");
         const int Floors = SpawnFloorGrid(Controller, FloorClass, TileCenter, SnappedAxes(Yaw), 1, 1, GTargetSpawned);
 
         FBotSlot Slot;
@@ -1184,15 +1184,15 @@ namespace
         auto BotController = SpawnStillBot(Controller, Slot.Where, Hp);
         if (!BotController)
         {
-            Say(Controller, "Der Ziel-Bot konnte nicht erscheinen.");
+            Say(Controller, "The target bot couldn't spawn.");
             return;
         }
         Slot.Controller = TWeakObjectPtr<AFortPlayerControllerAthena>(BotController);
         GTargetSpawned.Bots.push_back(Slot);
 
-        Say(Controller, "Ziel-Bot steht " + std::to_string((int)std::lround(Meters)) + " m vor dir (" +
-            std::to_string(Hp) + " Leben)." + (Floors == 0 ? " Ohne Boden \xE2\x80\x93 den gibt es hier nicht." : "") +
-            " Weg damit: parkour clear");
+        Say(Controller, "Target bot is " + std::to_string((int)std::lround(Meters)) + " m in front of you (" +
+            std::to_string(Hp) + " health)." + (Floors == 0 ? " No floor, this version can't build one." : "") +
+            " Remove it: parkour clear");
     }
 
     // ---------------------------------------------------------------- Trickshot
@@ -1224,13 +1224,12 @@ namespace
         return nullptr;
     }
 
-    void SayToEveryone(const std::string& Utf8)
+    void SayToEveryone(const std::wstring& Wide)
     {
         auto World = UWorld::GetWorld();
         auto Driver = World ? (UNetDriver*)World->NetDriver : nullptr;
         if (!Driver)
             return;
-        const std::wstring Wide = Widen(Utf8);
         for (auto Connection : Driver->ClientConnections)
         {
             if (Connection && Connection->PlayerController)
@@ -1246,7 +1245,7 @@ namespace
             return;
         if (VictimPawn && VictimPawn == KillerPawn)
             return;
-        // Nur echte Spieler: kein Bot-PlayerState, kein „bot“-Controller, eine echte Verbindung.
+        // Real players only: no bot PlayerState, no "bot" controller, a real connection.
         if (KillerState->HasbIsABot() && KillerState->bIsABot)
             return;
         if (KillerController && AFortPlayerControllerAthena::IsCheatSpawnedBotController(KillerController))
@@ -1257,7 +1256,7 @@ namespace
         if (!IsAirborne(KillerPawn))
             return;
 
-        // Dasselbe Ausscheiden nur einmal melden.
+        // Report the same elimination only once.
         const void* VictimKey = VictimPawn ? (const void*)VictimPawn : (const void*)VictimController;
         const ULONGLONG Now = GetTickCount64();
         if (VictimKey == GLastTrickshotVictim && Now - GLastTrickshotMs < kTrickshotRepeatMs)
@@ -1275,21 +1274,23 @@ namespace
 
         std::string KillerName = GUI::GetPlayerNameGameThread(KillerState, KillerConnection);
         if (KillerName.empty())
-            KillerName = "Jemand";
+            KillerName = "Someone";
         std::string VictimName = IsLive(VictimState)
             ? GUI::GetPlayerNameGameThread(VictimState, FindConnection(VictimState)) : std::string();
         if (VictimName.empty())
-            VictimName = "Gegner";
+            VictimName = "Opponent";
 
-        SayToEveryone("[Vanity] TRICKSHOT! " + KillerName + " \xE2\x80\x93 " + std::to_string(Meters) + " m");
-        VanityControl::EmitTrickshot(KillerName, VictimName, Meters);
-        SDK::DbgLog("[Vanity] Trickshot: %s -> %s (%d m)\n", KillerName.c_str(), VictimName.c_str(), Meters);
+        // "[Niobium] TRICKSHOT! <killer> \u2013 <metres> m" (en dash). The F9 menu shows its banner for
+        // messages that start with L"[Niobium] TRICKSHOT".
+        SayToEveryone(L"[Niobium] TRICKSHOT! " + Widen(KillerName) + L" \u2013 " + std::to_wstring(Meters) + L" m");
+        NiobiumControl::EmitTrickshot(KillerName, VictimName, Meters);
+        SDK::DbgLog("[Niobium] Trickshot: %s -> %s (%d m)\n", KillerName.c_str(), VictimName.c_str(), Meters);
     }
 }
 
-// ---------------------------------------------------------------- öffentlich
+// ---------------------------------------------------------------- public
 
-namespace VanityParkour
+namespace NiobiumParkour
 {
     void HandleParkourCommand(AFortPlayerControllerAthena* PlayerController,
         const std::vector<std::string>& Args) noexcept
@@ -1327,8 +1328,8 @@ namespace VanityParkour
         }
         catch (...)
         {
-            SDK::DbgLog("[Vanity] parkour: unerwarteter Fehler abgefangen\n");
-            Say(PlayerController, "Da ist etwas schiefgelaufen. Versuch es nochmal.");
+            SDK::DbgLog("[Niobium] parkour: caught an unexpected error\n");
+            Say(PlayerController, "Something went wrong. Please try again.");
         }
     }
 
@@ -1351,8 +1352,8 @@ namespace VanityParkour
         }
         catch (...)
         {
-            SDK::DbgLog("[Vanity] targetbot: unerwarteter Fehler abgefangen\n");
-            Say(PlayerController, "Da ist etwas schiefgelaufen. Versuch es nochmal.");
+            SDK::DbgLog("[Niobium] targetbot: caught an unexpected error\n");
+            Say(PlayerController, "Something went wrong. Please try again.");
         }
     }
 
@@ -1360,7 +1361,7 @@ namespace VanityParkour
         AFortPlayerPawnAthena* VictimPawn, AFortPlayerControllerAthena* KillerController,
         AFortPlayerStateAthena* KillerState, AFortPlayerPawnAthena* KillerPawn) noexcept
     {
-        if (!FConfiguration::bVanityTrickshotDetection.load(std::memory_order_acquire))
+        if (!FConfiguration::bNiobiumTrickshotDetection.load(std::memory_order_acquire))
             return;
         try
         {
@@ -1368,7 +1369,7 @@ namespace VanityParkour
         }
         catch (...)
         {
-            SDK::DbgLog("[Vanity] Trickshot-Erkennung: unerwarteter Fehler abgefangen\n");
+            SDK::DbgLog("[Niobium] Trickshot detection: caught an unexpected error\n");
         }
     }
 }

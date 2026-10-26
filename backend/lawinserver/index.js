@@ -2,17 +2,17 @@ const Express = require("express");
 const fs = require("fs");
 const path = require("path");
 const cookieParser = require("cookie-parser");
-const vanity = require("./structure/vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./structure/niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 
-// VANITY: Der Aufbau der Express-App steckt jetzt in createApp(), damit src/main.ts die App
-// einbinden kann. listen() auf beide Ports, der Start von xmpp.js und das Anlegen der Ordner
-// (früher %LOCALAPPDATA%\LawinServer) passieren in src/main.ts.
-function createApp() { // VANITY
+// NIOBIUM: the Express app is now built in createApp(), so src/main.ts can mount it.
+// listen() on both ports, starting xmpp.js and creating the folders
+// (formerly %LOCALAPPDATA%\LawinServer) happen in src/main.ts.
+function createApp() { // NIOBIUM
 const express = Express();
 
 express.use(Express.json());
 express.use(Express.urlencoded({ extended: true }));
-express.use(Express.static(vanity.file("public"))); // VANITY: Ressourcen-Ordner statt Arbeitsordner
+express.use(Express.static(niobium.file("public"))); // NIOBIUM: resource folder instead of the working folder
 express.use(cookieParser());
 
 express.use(require("./structure/party.js"));
@@ -31,8 +31,8 @@ express.use(require("./structure/matchmaking.js"));
 express.use(require("./structure/cloudstorage.js"));
 express.use(require("./structure/mcp.js"));
 
-// VANITY: express.listen(), require("./structure/xmpp.js") und das Anlegen von
-// %LOCALAPPDATA%\LawinServer bzw. ./ClientSettings wurden nach src/main.ts verschoben.
+// NIOBIUM: express.listen(), require("./structure/xmpp.js") and creating
+// %LOCALAPPDATA%\LawinServer / ./ClientSettings moved to src/main.ts.
 
 // if endpoint not found, return this error
 express.use((req, res, next) => {
@@ -54,7 +54,7 @@ express.use((req, res, next) => {
     });
 });
 
-return express; // VANITY
-} // VANITY
+return express; // NIOBIUM
+} // NIOBIUM
 
-module.exports = { createApp }; // VANITY
+module.exports = { createApp }; // NIOBIUM

@@ -23,7 +23,7 @@
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{6B1D5C3A-0F2E-4C8B-9A61-2D3E4F5A6B03}</ProjectGuid>
     <RootNamespace>Erbium</RootNamespace>
-    <TargetName>vanity_server</TargetName>
+    <TargetName>niobium_server</TargetName>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ProjectName>Magnesium</ProjectName>
   </PropertyGroup>
@@ -180,8 +180,8 @@
     <ClInclude Include="Erbium\Public\Events.h" />
     <ClInclude Include="Erbium\Public\Finders.h" />
     <ClInclude Include="Erbium\Public\AutoHosting.h" />
-    <ClInclude Include="Erbium\Public\VanityControl.h" />
-    <ClInclude Include="Erbium\Public\VanityParkour.h" />
+    <ClInclude Include="Erbium\Public\NiobiumControl.h" />
+    <ClInclude Include="Erbium\Public\NiobiumParkour.h" />
     <ClInclude Include="Erbium\Public\ArenaTelemetry.h" />
     <ClInclude Include="Erbium\Private\ArenaTelemetryPolicy.h" />
     <ClInclude Include="Erbium\Private\ArenaTelemetryWire.h" />
@@ -258,8 +258,8 @@
     <ClCompile Include="Engine\Private\NetDriver.cpp" />
     <ClCompile Include="Erbium\Plugins\CrashReporter\Private\CrashReporter.cpp" />
     <ClCompile Include="Erbium\Private\AutoHosting.cpp" />
-    <ClCompile Include="Erbium\Private\VanityControl.cpp" />
-    <ClCompile Include="Erbium\Private\VanityParkour.cpp" />
+    <ClCompile Include="Erbium\Private\NiobiumControl.cpp" />
+    <ClCompile Include="Erbium\Private\NiobiumParkour.cpp" />
     <ClCompile Include="Erbium\Private\ArenaTelemetry.cpp" />
     <ClCompile Include="Erbium\Private\dllmain.cpp" />
     <ClCompile Include="Erbium\Private\Events.cpp" />

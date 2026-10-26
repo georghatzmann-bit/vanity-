@@ -1,54 +1,101 @@
-# Vanity
+<p align="center">
+  <img src="launcher/public/logo.svg" width="96" height="96" alt="Niobium logo: a periodic-table tile with “Nb” and “41”">
+</p>
 
-Ein moderner Launcher für **OG-Fortnite-Privatserver** – nur für den eigenen Gebrauch, nur mit
-alten Builds, die man selbst besitzt. Kein Kontakt zu Epics echten Servern, keine Funktionen
-für das aktuelle Fortnite.
+# Niobium
 
-> Vanity ist nicht mit Epic Games verbunden. „Fortnite“ ist eine Marke von Epic Games, Inc.
+**NiobiumFN — old seasons, new shine.**
 
-> **Quellen:** Vanity baut auf freien Projekten auf – Backend aus LawinServer, Game Server aus Magnesium/Erbium, Umleitung aus Tellurium.
-> **Versionen:** Vanity startet jede Version von 1.7 bis 30.x (Chapter 1 bis Chapter 5 Season 3). Getestet ist bisher 19.10; alle anderen laufen als „ungetestet“ mit. Ab 31.00 kennt der Game Server (Erbium/Magnesium) die Builds noch nicht – Details in [`docs/02-architektur.md`](docs/02-architektur.md#versionen).
+A modern launcher for **OG Fortnite private servers**. For your own use only, and only with old
+builds you own yourself. Niobium never talks to Epic's real servers, has no features for today's
+Fortnite and does not get around any anti-cheat.
+
+> Niobium is not affiliated with Epic Games. "Fortnite" is a trademark of Epic Games, Inc.
+
+> **New name:** Niobium used to be called **Vanity**. The GitHub repository keeps its old name
+> (`vanity-`). Your old Vanity settings move over by themselves on the first start (see
+> [`docs/02-architecture.md`](docs/02-architecture.md#moving-over-from-vanity)).
 >
-> Vanity basiert beim Ingame-Menü auf **ATLAS Console** von cipherfps, ralz und Mitwirkenden. Alle Lizenzen: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+> **Sources:** Niobium is built on free projects: the backend comes from LawinServer, the game server
+> from Magnesium/Erbium, the redirect from Tellurium and the in-game menu from ATLAS Console.
+>
+> **Versions:** Niobium starts every version from 1.7 to 30.x (Chapter 1 to Chapter 5 Season 3).
+> Only 19.10 is tested so far; all others run as "Untested". From 31.00 on the game server
+> (Erbium/Magnesium) doesn't know the builds yet. Details:
+> [`docs/02-architecture.md`](docs/02-architecture.md#versions).
+>
+> Niobium's in-game menu is based on **ATLAS Console** by cipherfps, ralz and contributors.
+> All licences: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
-## Stand
+## Download and test
 
-| Phase | Inhalt | Status |
+Test build, always built from the latest code:
+**https://github.com/georghatzmann-bit/vanity-/releases/download/niobium-test/Niobium-Setup.exe**
+
+How to test it, step by step: [`docs/03-test-checklist.md`](docs/03-test-checklist.md)
+(in German: [`docs/03-test-checklist.de.md`](docs/03-test-checklist.de.md)).
+
+The installer is in English, installs only for your Windows user (no admin rights) and quietly
+removes an old Vanity install if it finds one. Your settings stay.
+
+## What it can do
+
+- **Host & Play:** one click starts the backend, your own game server and your game.
+- **Library:** add the folder of a build; Niobium reads the version and says how well it is supported.
+- **Match Control:** start the match, game mode, Lategame, storm, respawn, items, bots and trickshot
+  parkours, all from the launcher.
+- **F9 in-game menu:** Edit on release, Reset on release, field of view, keys, joining by IP, a
+  console, your own commands and a "Trickshot" tab.
+- **Trickshot parkours:** 9 ready-made courses with jump objects and standing target bots, plus a big
+  "TRICKSHOT!" banner when you eliminate someone in the air.
+- **Bubble Builds (new):** the see-through "bubble wrap" build look of Chapter 2 Seasons 5–6, on
+  Fortnite 15.40 – 16.00. Switch it on in Settings; it applies on the next launch.
+- **Crash Analysis and Live Log:** what went wrong, in plain words.
+
+## Status
+
+| Phase | What | Status |
 |---|---|---|
-| 0 | Recherche + Plan | fertig – siehe [`docs/00-recherche-und-plan.md`](docs/00-recherche-und-plan.md) |
-| 1 | Launcher-Oberfläche | fertig |
-| 2 | Fortnite 19.10 starten + Logs | im Installer – [`docs/03-test-vollversion.md`](docs/03-test-vollversion.md) |
-| 3 | Backend + Lobby | im Installer (Backend aus LawinServer) |
-| 4 | Game Server, Match auf 127.0.0.1 | im Installer (`vanity_server.dll` aus Magnesium) – Steuerung über das Server-Fenster oder die Launcher-Seite „Match-Steuerung“ |
-| 5 | Ingame-Menü (F9) | im Installer (`vanity_client.dll`, Basis ATLAS Console) – ganz auf Deutsch, mit Reiter „Trickshot“ – wartet auf Test |
-| 6 | Bots | im Server-Fenster (Magnesium) und auf der Launcher-Seite „Match-Steuerung“ (stehende Ziel-Bots) – wartet auf Test |
-| 7 | Trickshot-Modus + Match-Steuerung | Launcher-Seite „Match-Steuerung“ (Spiel, Trickshot, Bots) über die Steuer-Pipe. **Trickshot-Parkours:** 9 fertige Strecken aus Sprung-Objekten und stehenden Ziel-Bots (meist auf einer Plattform in der Luft), dazu eine Sniper – mit einem Klick im Launcher oder im F9-Reiter „Trickshot“ aufgebaut. Kill in der Luft → großes „TRICKSHOT!“-Banner. Trickshot-Presets weiter über das Server-Fenster – wartet auf Test |
-| 8 | Feinschliff, Absturz-Analyse, Installer | Absturz-Analyse + Installer fertig, Feinschliff läuft |
+| 0 | Research + plan | done – see [`docs/00-research-and-plan.md`](docs/00-research-and-plan.md) |
+| 1 | Launcher UI | done |
+| 2 | Start Fortnite 19.10 + logs | in the installer – [`docs/03-test-checklist.md`](docs/03-test-checklist.md) |
+| 3 | Backend + lobby | in the installer (backend from LawinServer) |
+| 4 | Game server, match on 127.0.0.1 | in the installer (`niobium_server.dll` from Magnesium) – control it in the server window or on the launcher page "Match Control" |
+| 5 | In-game menu (F9) | in the installer (`niobium_client.dll`, based on ATLAS Console) – in English, with a "Trickshot" tab – waiting for a test |
+| 6 | Bots | in the server window (Magnesium) and on the launcher page "Match Control" (standing target bots) – waiting for a test |
+| 7 | Trickshot mode + match control | launcher page "Match Control" (Game, Trickshot, Bots) through the control pipe. **Trickshot parkours:** 9 courses made of jump objects and standing target bots (mostly on a platform in the air), plus a sniper – built with one click in the launcher or in the F9 tab "Trickshot". An elimination in the air → big "TRICKSHOT!" banner. Your own command presets on "Match Control" → "Trickshot"; the server window's trickshot tab still works too – waiting for a test |
+| 8 | Polish, crash analysis, installer | crash analysis + installer done, polish ongoing |
+| 9 | Niobium: new name and logo, everything in English, Bubble Builds, new animated look, splash screen, welcome screen, branded installer | in the installer – waiting for a test |
 
-## Aufbau
+## Folders
 
 ```
-launcher/     Tauri 2 – Oberfläche (React, TypeScript, Tailwind, shadcn/ui) + Logik in Rust
-backend/      eingebautes Backend (Node + TypeScript)          – ab Phase 3
-native/       Spiel-DLLs in C++20 (Visual Studio 2022, x64)    – ab Phase 2
-docs/         Plan und Test-Checklisten
+launcher/     Tauri 2 – UI (React, TypeScript, Tailwind, shadcn/ui, Motion) + logic in Rust
+backend/      built-in backend (Node + TypeScript, based on LawinServer)
+native/       game DLLs in C++ (Visual Studio 2022, x64): redirect, game server, in-game menu
+docs/         plan, architecture, test checklists, brand
 ```
 
-## Selbst bauen (optional)
+## Build it yourself (optional)
 
-Normalerweise baut GitHub Actions den Windows-Installer aus diesem Quellcode
-(Reiter **Actions** → letzter Lauf → **Artifacts**). Wer selbst bauen will:
+Normally GitHub Actions builds the Windows installer from this source code (tab **Actions** → latest
+run → **Artifacts**, or the pre-release `niobium-test`). If you want to build it yourself:
 
-1. [Node 22](https://nodejs.org), [pnpm](https://pnpm.io), [Rust](https://rustup.rs) und die
-   [Tauri-Voraussetzungen für Windows](https://v2.tauri.app/start/prerequisites/) installieren.
-2. Im Ordner `launcher/`:
+1. Install [Node 22](https://nodejs.org), [pnpm](https://pnpm.io), [Rust](https://rustup.rs) and the
+   [Tauri prerequisites for Windows](https://v2.tauri.app/start/prerequisites/).
+2. In the `launcher/` folder:
    ```
    pnpm install
-   pnpm tauri dev      # startet den Launcher zum Ausprobieren
-   pnpm tauri build    # baut den Installer
+   pnpm tauri dev      # starts the launcher to try it out
+   pnpm tauri build    # builds the installer
    ```
+3. For a complete installer, first put the parts into `launcher/src-tauri/resources/`, like the
+   workflow `.github/workflows/launcher.yml` does: the built backend (`backend/dist/`) into `backend/`,
+   the three DLLs from `native/bin/Release/` into `dlls/` and a Windows `node.exe` into `node/`.
+   How to build the DLLs: [`native/README.md`](native/README.md); the backend:
+   [`backend/README.md`](backend/README.md).
 
-## Lizenz
+## Licence
 
-GPL-3.0 – siehe [`LICENSE`](LICENSE). Verwendete Projekte und ihre Lizenzen stehen in
+GPL-3.0 – see [`LICENSE`](LICENSE). The projects Niobium uses and their licences are listed in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

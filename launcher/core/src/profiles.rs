@@ -1,7 +1,7 @@
-//! Einstellungen, Profile, Builds und Freunde – gespeichert in `%APPDATA%\Vanity\config.json`.
+//! Settings, profiles, builds and friends – saved in `%APPDATA%\Niobium\config.json`.
 //!
-//! Der ganze Zustand liegt in einer Datei. Geschrieben wird über eine temporäre Datei,
-//! die danach umbenannt wird – so kann ein abgebrochener Schreibvorgang die Datei nicht zerstören.
+//! All state lives in one file. It is written to a temporary file first and then renamed,
+//! so an interrupted write can't break the file.
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -12,6 +12,21 @@ use crate::version::BuildInfo;
 pub const PORT_BACKEND_DEFAULT: u16 = 3551;
 pub const PORT_MATCHMAKER_DEFAULT: u16 = 80;
 pub const PORT_GAMESERVER_DEFAULT: u16 = 7777;
+
+/// The backend always runs on this port. The redirect DLL sends every request of the game to
+/// `http://127.0.0.1:3551`, and that address is built into the DLL (native/redirect/Options.h).
+pub const BACKEND_PORT: u16 = PORT_BACKEND_DEFAULT;
+
+/// The game server always listens on this port. The server DLL takes its port from its own
+/// settings (`%LOCALAPPDATA%\Niobium\server\auto_hosting.json`, default 7777), never from the
+/// launcher – so the matchmaker must send players to 7777.
+pub const GAME_SERVER_PORT: u16 = PORT_GAMESERVER_DEFAULT;
+
+/// Live-log note when a saved config holds another backend port (see `Settings::pin_fixed_ports`).
+pub const NOTE_BACKEND_PORT_FIXED: &str = "Backend port is fixed at 3551 (the game connects there).";
+
+/// Live-log note when a saved config holds another game server port.
+pub const NOTE_GAME_SERVER_PORT_FIXED: &str = "Game server port is fixed at 7777 (the server listens there).";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,12 +69,20 @@ pub struct Settings {
     pub launch_args: String,
     #[serde(default = "yes")]
     pub headless_server: bool,
+    /// Not used. "Restart the server after a match" was never built; the field only stays so
+    /// config files that have it still load (and keep it when saved).
     #[serde(default)]
     pub auto_restart: bool,
+    /// Not used: the backend port is fixed (`BACKEND_PORT`). Kept so old config files still load;
+    /// `pin_fixed_ports` sets it back to 3551.
     #[serde(default = "PORT_BACKEND_DEFAULT_fn")]
     pub backend_port: u16,
+    /// Port of the matchmaker and XMPP WebSocket. Can be changed: the backend puts it into the
+    /// matchmaking ticket and into the XMPP hotfix (DefaultEngine.ini) the game downloads.
     #[serde(default = "PORT_MATCHMAKER_DEFAULT_fn")]
     pub matchmaker_port: u16,
+    /// Not used: the game server port is fixed (`GAME_SERVER_PORT`). Kept so old config files
+    /// still load; `pin_fixed_ports` sets it back to 7777.
     #[serde(default = "PORT_GAMESERVER_DEFAULT_fn")]
     pub game_server_port: u16,
     #[serde(default)]
@@ -70,6 +93,13 @@ pub struct Settings {
     pub reduce_motion: bool,
     #[serde(default = "yes")]
     pub animated_background: bool,
+    /// Bubble Builds: start the player's game in Performance Mode on versions that can show the
+    /// Chapter 2 "bubble wrap" build look (see `launchargs::BubbleSupport`). Applies on next launch.
+    #[serde(default)]
+    pub bubble_builds: bool,
+    /// App version the user last saw (first-run welcome / "What's new"). `None` = never opened.
+    #[serde(default)]
+    pub last_seen_version: Option<String>,
 }
 
 #[allow(non_snake_case)]
@@ -108,11 +138,31 @@ impl Default for Settings {
             glass: true,
             reduce_motion: false,
             animated_background: true,
+            bubble_builds: false,
+            last_seen_version: None,
         }
     }
 }
 
-/// Ein Trickshot-Preset: Name + Server-Befehle, die nacheinander an den Game Server gehen.
+impl Settings {
+    /// Sets the fixed ports back (backend 3551, game server 7777) when the config holds other
+    /// values, e.g. from an older launcher that let you change them. Returns one note for the
+    /// live log per port that was set back (empty if nothing changed).
+    pub fn pin_fixed_ports(&mut self) -> Vec<&'static str> {
+        let mut notes = Vec::new();
+        if self.backend_port != BACKEND_PORT {
+            self.backend_port = BACKEND_PORT;
+            notes.push(NOTE_BACKEND_PORT_FIXED);
+        }
+        if self.game_server_port != GAME_SERVER_PORT {
+            self.game_server_port = GAME_SERVER_PORT;
+            notes.push(NOTE_GAME_SERVER_PORT_FIXED);
+        }
+        notes
+    }
+}
+
+/// A trickshot preset: a name plus server commands that are sent to the game server one after another.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrickshotPreset {
@@ -159,7 +209,7 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Fügt einen Build hinzu oder aktualisiert ihn (gleiche id) und legt bei Bedarf ein Standardprofil an.
+    /// Adds a build or updates it (same id) and creates a default profile if there is none.
     pub fn upsert_build(&mut self, build: BuildInfo) {
         let id = build.id.clone();
         if let Some(existing) = self.builds.iter_mut().find(|b| b.id == id) {
@@ -169,9 +219,9 @@ impl Config {
         }
         if self.profiles.is_empty() {
             let p = Profile {
-                id: "p-standard".into(),
-                name: "Standard".into(),
-                description: "Normales Match auf deinem eigenen Server".into(),
+                id: "p-default".into(),
+                name: "Default".into(),
+                description: "A normal match on your own server".into(),
                 build_id: id.clone(),
                 player_name: self.settings.player_name.clone(),
                 launch_args: self.settings.launch_args.clone(),
@@ -195,13 +245,71 @@ impl Config {
             .find(|p| p.id == self.active_profile_id)
             .or_else(|| self.profiles.first())
     }
+
+    /// Brings stored texts up to date after loading. Runs on every load and is cheap.
+    ///
+    /// - Each build's season and support level/note are worked out again from its version, so
+    ///   notes saved by an older launcher (e.g. German ones from Vanity) are replaced and always
+    ///   match the current version rules.
+    /// - Texts the old Vanity launcher wrote itself (default profile, profile descriptions,
+    ///   playlist tags, friend network) become English. Only exact old texts are changed –
+    ///   anything the user typed stays as it is.
+    pub fn refresh_after_load(&mut self) {
+        for b in &mut self.builds {
+            b.season = crate::version::season_for(&b.version);
+            b.support = crate::version::support_for(&b.version, b.changelist);
+            b.support_note = crate::version::support_note(&b.version);
+        }
+        for p in &mut self.profiles {
+            if p.id == "p-standard" && p.name == "Standard" {
+                p.name = "Default".into();
+            }
+            if let Some(english) = legacy_text(LEGACY_PROFILE_DESCRIPTIONS, &p.description) {
+                p.description = english.into();
+            }
+            for tag in &mut p.tags {
+                if let Some(english) = legacy_text(LEGACY_TAGS, tag) {
+                    *tag = english.into();
+                }
+            }
+        }
+        for f in &mut self.friends {
+            if f.via == "Netzwerk" {
+                f.via = "Other".into();
+            }
+        }
+    }
+}
+
+/// Profile descriptions the Vanity launcher wrote by itself → English.
+const LEGACY_PROFILE_DESCRIPTIONS: &[(&str, &str)] = &[
+    ("Normales Match auf deinem eigenen Server", "A normal match on your own server"),
+    ("Eigenes Profil", "Custom profile"),
+];
+
+/// Playlist tags the Vanity launcher wrote by itself → English.
+const LEGACY_TAGS: &[(&str, &str)] = &[("Turnier Solo", "Tournament Solo"), ("Turnier Duos", "Tournament Duos")];
+
+fn legacy_text(table: &[(&str, &'static str)], text: &str) -> Option<&'static str> {
+    table.iter().find(|(old, _)| *old == text).map(|(_, new)| *new)
 }
 
 pub fn config_dir() -> PathBuf {
     dirs::config_dir()
         .or_else(dirs::data_dir)
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Vanity")
+        .join(APP_DIR)
+}
+
+/// Folder name of the app's own data (in `%APPDATA%` and `%LOCALAPPDATA%`).
+pub const APP_DIR: &str = "Niobium";
+
+/// Folder name the app used before it was renamed to Niobium (only read, for the one-time migration).
+pub const LEGACY_APP_DIR: &str = "Vanity";
+
+/// `%LOCALAPPDATA%\Niobium` – logs, server settings and backend data.
+pub fn local_dir() -> PathBuf {
+    dirs::data_local_dir().unwrap_or_else(|| PathBuf::from(".")).join(APP_DIR)
 }
 
 pub fn config_path() -> PathBuf {
@@ -213,14 +321,16 @@ pub fn load() -> Config {
 }
 
 pub fn load_from(path: &Path) -> Config {
-    match fs::read(path) {
+    let mut config = match fs::read(path) {
         Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|_| {
-            // Kaputte Datei nicht verlieren: zur Seite legen, mit Standard weitermachen
+            // Don't lose a broken file: move it aside and carry on with the defaults
             let _ = fs::rename(path, path.with_extension("json.broken"));
             Config::default()
         }),
         Err(_) => Config::default(),
-    }
+    };
+    config.refresh_after_load();
+    config
 }
 
 pub fn save(config: &Config) -> std::io::Result<()> {
@@ -273,8 +383,8 @@ mod tests {
         c.upsert_build(build("19.10-18675304"));
         assert_eq!(c.builds.len(), 1);
         assert_eq!(c.profiles.len(), 1);
-        assert_eq!(c.active_profile().unwrap().name, "Standard");
-        // Zweiter Build legt kein zweites Profil an
+        assert_eq!(c.active_profile().unwrap().name, "Default");
+        // A second build doesn't create a second profile
         c.upsert_build(build("19.40-0"));
         assert_eq!(c.builds.len(), 2);
         assert_eq!(c.profiles.len(), 1);
@@ -293,7 +403,7 @@ mod tests {
 
     #[test]
     fn save_and_load_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("vanity-cfg-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("niobium-cfg-{}", std::process::id()));
         let path = dir.join("config.json");
         let mut c = Config::default();
         c.settings.player_name = "georg".into();
@@ -302,7 +412,7 @@ mod tests {
         let loaded = load_from(&path);
         assert_eq!(loaded.settings.player_name, "georg");
         assert_eq!(loaded.builds.len(), 1);
-        assert_eq!(loaded.active_profile().unwrap().id, "p-standard");
+        assert_eq!(loaded.active_profile().unwrap().id, "p-default");
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -312,11 +422,115 @@ mod tests {
         assert_eq!(c.settings.player_name, "x");
         assert_eq!(c.settings.backend_port, 3551);
         assert!(c.settings.animated_background);
+        assert!(!c.settings.bubble_builds);
+        assert_eq!(c.settings.last_seen_version, None);
+    }
+
+    #[test]
+    fn new_settings_use_camel_case() {
+        let mut s = Settings::default();
+        s.bubble_builds = true;
+        s.last_seen_version = Some("0.1.0".into());
+        let json = serde_json::to_value(&s).unwrap();
+        assert_eq!(json["bubbleBuilds"], true);
+        assert_eq!(json["lastSeenVersion"], "0.1.0");
+        let back: Settings = serde_json::from_value(json).unwrap();
+        assert!(back.bubble_builds);
+        assert_eq!(back.last_seen_version.as_deref(), Some("0.1.0"));
+        // An old config without the fields still loads
+        let old: Settings = serde_json::from_str(r#"{"playerName":"x"}"#).unwrap();
+        assert!(!old.bubble_builds && old.last_seen_version.is_none());
+    }
+
+    #[test]
+    fn vanity_era_config_loads_in_english() {
+        // What the old Vanity launcher saved (German texts it wrote itself)
+        let old = r#"{
+          "configVersion": 1,
+          "settings": { "playerName": "georg" },
+          "builds": [
+            { "id": "15.40-0", "version": "15.40", "changelist": null, "season": "Chapter 2 · Season 5",
+              "engine": "Unreal Engine 4.26", "path": "C:/b", "binaries": "C:/b/bin", "support": "experimental",
+              "supportNote": "ungetestet – Start wird versucht · den Pre-Edits-Schalter gibt es ab 15.20 nicht mehr",
+              "launchArgs": "-d3d11" },
+            { "id": "19.10-18675304", "version": "19.10", "changelist": 18675304, "season": "Chapter 3 · Season 1",
+              "engine": "Unreal Engine 5.0", "path": "C:/c", "binaries": "C:/c/bin", "support": "supported",
+              "supportNote": "getestet", "launchArgs": "-d3d11" },
+            { "id": "x-0", "version": "", "changelist": null, "season": "Unbekannte Season",
+              "engine": "", "path": "C:/d", "binaries": "C:/d/bin", "support": "unsupported",
+              "supportNote": "Version unlesbar", "launchArgs": "" }
+          ],
+          "profiles": [
+            { "id": "p-standard", "name": "Standard", "description": "Normales Match auf deinem eigenen Server",
+              "buildId": "19.10-18675304", "tags": ["Solo"] },
+            { "id": "p-1", "name": "Turnier mit Max", "description": "Eigenes Profil",
+              "buildId": "19.10-18675304", "tags": ["Turnier Duos", "Lategame"] }
+          ],
+          "activeProfileId": "p-standard",
+          "friends": [ { "id": "f1", "name": "Max", "address": "1.2.3.4:7777", "via": "Netzwerk" },
+                       { "id": "f2", "name": "Lena", "address": "100.1.1.1:7777", "via": "Tailscale" } ]
+        }"#;
+        let dir = std::env::temp_dir().join(format!("niobium-vanity-cfg-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        fs::write(&path, old).unwrap();
+        let c = load_from(&path);
+
+        assert_eq!(c.builds[0].support_note, crate::version::support_note("15.40"));
+        assert!(c.builds[0].support_note.starts_with("Untested"));
+        assert_eq!(c.builds[0].season, "Chapter 2 · Season 5");
+        assert_eq!(c.builds[1].support_note, "Tested");
+        assert_eq!(c.builds[1].support, Support::Supported);
+        assert_eq!(c.builds[2].season, "Unknown season");
+        assert_eq!(c.builds[2].support_note, "Can't read the version");
+        assert_eq!(c.builds[2].support, Support::Unsupported);
+
+        assert_eq!(c.profiles[0].name, "Default");
+        assert_eq!(c.profiles[0].description, "A normal match on your own server");
+        assert_eq!(c.active_profile().unwrap().id, "p-standard");
+        // a name the user typed stays as it is
+        assert_eq!(c.profiles[1].name, "Turnier mit Max");
+        assert_eq!(c.profiles[1].description, "Custom profile");
+        assert_eq!(c.profiles[1].tags, vec!["Tournament Duos".to_string(), "Lategame".to_string()]);
+
+        assert_eq!(c.friends[0].via, "Other");
+        assert_eq!(c.friends[1].via, "Tailscale");
+        assert_eq!(c.settings.player_name, "georg");
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fixed_ports_are_set_back() {
+        // An older launcher let you pick these ports; the game can only use 3551 and 7777.
+        let mut c: Config = serde_json::from_str(
+            r#"{"settings":{"backendPort":4000,"matchmakerPort":8080,"gameServerPort":7778,"autoRestart":true}}"#,
+        )
+        .unwrap();
+        let notes = c.settings.pin_fixed_ports();
+        assert_eq!(notes, vec![NOTE_BACKEND_PORT_FIXED, NOTE_GAME_SERVER_PORT_FIXED]);
+        assert_eq!(c.settings.backend_port, 3551);
+        assert_eq!(c.settings.game_server_port, 7777);
+        // the matchmaker port really works with other values, so it stays
+        assert_eq!(c.settings.matchmaker_port, 8080);
+        // the unused field still loads and is saved again
+        assert!(c.settings.auto_restart);
+        assert_eq!(serde_json::to_value(&c.settings).unwrap()["autoRestart"], true);
+        // second time: nothing left to say
+        assert!(c.settings.pin_fixed_ports().is_empty());
+    }
+
+    #[test]
+    fn default_ports_need_no_note() {
+        let mut s = Settings::default();
+        assert!(s.pin_fixed_ports().is_empty());
+        assert_eq!(NOTE_BACKEND_PORT_FIXED, "Backend port is fixed at 3551 (the game connects there).");
+        let mut only_backend = Settings { backend_port: 3552, ..Settings::default() };
+        assert_eq!(only_backend.pin_fixed_ports(), vec![NOTE_BACKEND_PORT_FIXED]);
     }
 
     #[test]
     fn broken_file_does_not_crash() {
-        let dir = std::env::temp_dir().join(format!("vanity-broken-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("niobium-broken-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("config.json");
         fs::write(&path, b"not json {{{").unwrap();

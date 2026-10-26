@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3097 1024">
+  <!-- Niobium logo lockup: Nb tile + wordmark (letterforms from Inter Display, SIL OFL 1.1) -->
+  <g>
+  <defs>
+    <linearGradient id="nbw-base" x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2B5BFF"/>
+      <stop offset="0.5" stop-color="#5546FF"/>
+      <stop offset="0.85" stop-color="#7A3CFF"/>
+    </linearGradient>
+    <linearGradient id="nbw-gold" x1="960" y1="960" x2="619.52" y2="619.52" gradientUnits="userSpaceOnUse">
+      <stop offset="0.14" stop-color="#FFC857" stop-opacity="1"/>
+      <stop offset="0.3" stop-color="#FFC857" stop-opacity="0.72"/>
+      <stop offset="0.56" stop-color="#FF6FA8" stop-opacity="0.26"/>
+      <stop offset="0.9" stop-color="#FF6FA8" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="nbw-depth" cx="64" cy="960" r="761.6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B0738" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#0B0738" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nbw-bloom" cx="229.76" cy="189.44" r="618.24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8FB0FF" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#8FB0FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="nbw-sheen" x1="64" y1="64" x2="960" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.20"/>
+      <stop offset="0.40" stop-color="#FFFFFF" stop-opacity="0.07"/>
+      <stop offset="0.405" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="nbw-rim" x1="0" y1="64" x2="0" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.42"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="nbw-ink" x1="0" y1="336" x2="0" y2="704" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E6E4FF"/>
+    </linearGradient>
+    <filter id="nbw-shadow" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#14095A" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nbw-base)"/>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nbw-bloom)"/>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nbw-depth)"/>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nbw-gold)"/>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#nbw-sheen)"/>
+  <rect x="68" y="68" width="888" height="888" rx="204" fill="none" stroke="url(#nbw-rim)" stroke-width="8"/>
+  <path d="M184.5 336H276.5V704H184.5ZM408.5 336H500.5V704H408.5ZM184.5 336H288.55L500.5 704H396.45ZM537.5 336H629.5V704H537.5ZM537.5 567.84A151 136.16 0 1 1 839.5 567.84A151 136.16 0 1 1 537.5 567.84ZM629.5 567.84A59 57.04 0 1 0 747.5 567.84A59 57.04 0 1 0 629.5 567.84Z" fill="url(#nbw-ink)" filter="url(#nbw-shadow)"/>
+</g>
+  <path transform="translate(1110.00 699.76)" d="M0 0H78.2V-175.45C78.2 -191.7 77.95 -223.95 76.43 -263.55C97.75 -225.21 117.05 -192.46 127.97 -175.2L238.16 0H320.68V-378.32H242.73V-191.19C242.73 -175.2 242.99 -143.96 244 -114.77C229.02 -141.93 212.77 -170.62 203.89 -184.84L82.27 -378.32H0ZM370.07 0H444.98V-268.12H370.07ZM407.4 -301.89C432.03 -301.89 450.05 -318.91 450.05 -341.76C450.05 -364.61 432.03 -381.62 407.4 -381.62C382.77 -381.62 364.74 -364.61 364.74 -341.76C364.74 -318.91 382.77 -301.89 407.4 -301.89ZM617 6.09C698.51 6.09 753.35 -49.77 753.35 -133.81C753.35 -217.85 698.51 -274.22 617 -274.22C535.75 -274.22 480.91 -217.85 480.91 -133.81C480.91 -49.77 535.75 6.09 617 6.09ZM617 -54.59C580.69 -54.59 556.32 -84.04 556.32 -133.81C556.32 -183.83 580.95 -213.54 617 -213.54C653.31 -213.54 677.94 -183.83 677.94 -133.81C677.94 -84.04 653.56 -54.59 617 -54.59ZM942.9 5.59C1012.97 5.59 1058.93 -50.27 1058.93 -134.32C1058.93 -216.58 1011.96 -273.71 943.4 -273.71C908.62 -273.71 881.7 -260 864.44 -231.05H864.19V-378.32H789.28V0H863.17V-41.13H863.42C878.91 -9.9 907.6 5.59 942.9 5.59ZM923.6 -55.35C885.77 -55.35 860.63 -86.33 860.63 -134.32C860.63 -182.05 885.77 -213.28 923.6 -213.28C959.91 -213.28 983.52 -184.59 983.52 -134.32C983.52 -84.04 959.91 -55.35 923.6 -55.35ZM1094.86 0H1169.77V-268.12H1094.86ZM1132.19 -301.89C1156.82 -301.89 1174.84 -318.91 1174.84 -341.76C1174.84 -364.61 1156.82 -381.62 1132.19 -381.62C1107.56 -381.62 1089.53 -364.61 1089.53 -341.76C1089.53 -318.91 1107.56 -301.89 1132.19 -301.89ZM1311.58 5.59C1350.17 5.59 1377.34 -11.68 1395.37 -42.15V0H1468.75V-268.12H1394.1V-119.08C1394.1 -77.44 1372.52 -58.91 1341.54 -58.91C1310.31 -58.91 1292.28 -77.95 1292.28 -114V-268.12H1217.38V-100.29C1217.38 -32.5 1254.45 5.59 1311.58 5.59ZM1516.61 0H1591.51V-158.18C1591.51 -192.71 1612.84 -212.01 1639.5 -212.01C1665.66 -212.01 1683.94 -193.98 1683.94 -166.05V0H1756.05V-161.48C1756.05 -191.45 1774.07 -212.01 1803.02 -212.01C1828.66 -212.01 1848.47 -196.27 1848.47 -164.02V0H1923.12V-177.73C1923.12 -239.18 1884.78 -273.71 1833.23 -273.71C1794.39 -273.71 1761.38 -254.16 1747.41 -221.41C1736.24 -254.16 1706.03 -273.71 1669.97 -273.71C1635.95 -273.71 1604.72 -256.19 1588.72 -219.88V-268.12H1516.61Z" fill="#F2F3F8"/>
+</svg>

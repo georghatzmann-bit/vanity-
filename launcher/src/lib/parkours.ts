@@ -1,13 +1,13 @@
 /*
- * Trickshot-Parkours aus src/data/parkours.json.
- * Dieselbe Datei steckt im Launcher (Rust, include_str!) und wird beim Start nach
- * %LOCALAPPDATA%\Vanity\server\parkours.json geschrieben – dort lesen Server und F9-Menü.
+ * Trickshot parkours from src/data/parkours.json.
+ * The same file is built into the launcher (Rust, include_str!) and written at start to
+ * %LOCALAPPDATA%\Niobium\server\parkours.json – the server and the F9 menu read it there.
  */
 import raw from "@/data/parkours.json";
 
-/** [vorne, rechts, oben] in Metern, vom Startpunkt aus gesehen. */
+/** [forward, right, up] in metres, seen from the start point. */
 export type Vec3 = [number, number, number];
-/** [breite, tiefe] in Boden-Platten zu je 5,12 m. [0, 0] = keine Platte. */
+/** [width, depth] in floor tiles of 5.12 m each. [0, 0] = no tile. */
 export type Tiles = [number, number];
 
 export interface ParkourKind {
@@ -32,7 +32,7 @@ export interface Parkour {
   name: string;
   level: number;
   description: string;
-  /** Meter über dir; 0 = am Boden */
+  /** Metres above you; 0 = on the ground */
   height: number;
   platform: Tiles;
   elements: ParkourElement[];
@@ -49,13 +49,14 @@ export interface ParkourFile {
 export const parkourFile = raw as unknown as ParkourFile;
 export const parkours: Parkour[] = parkourFile.parkours;
 
-/** Größe einer Boden-Platte in Metern. */
+/** Size of one floor tile in metres. */
 export const TILE_METERS = 5.12;
 
 export function kindLabel(kind: string): string {
   return parkourFile.kinds[kind]?.label ?? kind;
 }
 
+/** "easy", "medium" or "hard". */
 export function levelWord(level: number): string {
-  return level <= 1 ? "leicht" : level === 2 ? "mittel" : "schwer";
+  return level <= 1 ? "easy" : level === 2 ? "medium" : "hard";
 }

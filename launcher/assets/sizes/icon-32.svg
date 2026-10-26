@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Niobium icon, pixel-tuned for exactly 32x32 px -->
+  <defs>
+    <linearGradient id="nb-base" x1="1" y1="1" x2="31" y2="31" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2B5BFF"/>
+      <stop offset="0.5" stop-color="#5546FF"/>
+      <stop offset="0.85" stop-color="#7A3CFF"/>
+    </linearGradient>
+    <linearGradient id="nb-gold" x1="31" y1="31" x2="19.6" y2="19.6" gradientUnits="userSpaceOnUse">
+      <stop offset="0.14" stop-color="#FFC857" stop-opacity="1"/>
+      <stop offset="0.3" stop-color="#FFC857" stop-opacity="0.72"/>
+      <stop offset="0.56" stop-color="#FF6FA8" stop-opacity="0.26"/>
+      <stop offset="0.9" stop-color="#FF6FA8" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="nb-depth" cx="1" cy="31" r="25.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B0738" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#0B0738" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nb-bloom" cx="6.55" cy="5.2" r="20.7" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8FB0FF" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#8FB0FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="1" y="1" width="30" height="30" rx="6.5" fill="url(#nb-base)"/>
+  <rect x="1" y="1" width="30" height="30" rx="6.5" fill="url(#nb-bloom)"/>
+  <rect x="1" y="1" width="30" height="30" rx="6.5" fill="url(#nb-depth)"/>
+  <rect x="1" y="1" width="30" height="30" rx="6.5" fill="url(#nb-gold)"/>
+  <path d="M3 9H7V23H3ZM11 9H15V23H11ZM3 9H7.45L15 23H10.55ZM17 9H21V23H17ZM17 18A6 5 0 1 1 29 18A6 5 0 1 1 17 18ZM21 18A2 1.56 0 1 0 25 18A2 1.56 0 1 0 21 18Z" fill="#FFFFFF"/>
+</svg>

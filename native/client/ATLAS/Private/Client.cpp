@@ -16,7 +16,7 @@
 #include "../Public/ArenaVisualTracePolicy.h"
 #include "../Public/PlaylistHudPatchPolicy.h"
 #include "../Public/TournamentRefreshPolicy.h"
-#include "../Public/VanityTrickshotTab.h" // [Vanity] Trickshot-Banner (VanityToast_Push)
+#include "../Public/NiobiumTrickshotTab.h" // [Niobium] trickshot banner (NiobiumToast_Push)
 
 #include <array>
 #include <atomic>
@@ -409,20 +409,20 @@ static void CaptureClientMessage(UObject* context, FFrame& stack, void* result)
 		fabs(VersionInfo.FortniteVersion - 27.11) < 0.001 &&
 		g_DurianPhaseSyncInstalled.load(std::memory_order_acquire);
 	const bool shouldInspectArenaBridge = SupportsArenaRuntime();
-	// [Vanity] Das Trickshot-Banner braucht die Nachricht in beiden Konsolen-Modi. Die
-	// Bruecken-Handler unten pruefen ihre eigenen Bedingungen selbst, ihr Verhalten bleibt gleich.
-	const bool shouldInspectVanityToast = true;
+	// [Niobium] The trickshot banner needs the message in both console modes. The bridge
+	// handlers below check their own conditions; their behaviour stays the same.
+	const bool shouldInspectNiobiumToast = true;
 
 	const UFunction* function =
 		(shouldCapture || shouldInspectTelemetry ||
 		 shouldInspectDurianCue || shouldInspectArenaBridge ||
-		 shouldInspectVanityToast)
+		 shouldInspectNiobiumToast)
 			? g_ClientMessageFunction.load(std::memory_order_acquire)
 			: nullptr;
 	const uint32_t textOffset =
 		(shouldCapture || shouldInspectTelemetry ||
 		 shouldInspectDurianCue || shouldInspectArenaBridge ||
-		 shouldInspectVanityToast)
+		 shouldInspectNiobiumToast)
 			? g_ClientMessageTextOffset.load(std::memory_order_acquire)
 			: UINT32_MAX;
 	if (function && textOffset != UINT32_MAX && IsDirectClientMessageFrame(&stack, function))
@@ -464,17 +464,17 @@ static void CaptureClientMessage(UObject* context, FFrame& stack, void* result)
 			{
 				return;
 			}
-			// [Vanity] "[Vanity] TRICKSHOT! <Spieler> - <Meter> m" vom Server -> grosses Banner.
-			// Die Nachricht laeuft danach unveraendert weiter (Konsole und Spiel).
-			static constexpr wchar_t vanityTrickshotPrefix[] = L"[Vanity] TRICKSHOT";
-			static constexpr int vanityTrickshotPrefixLength =
-				static_cast<int>(_countof(vanityTrickshotPrefix) - 1);
-			if (copied && shouldInspectVanityToast &&
-				length >= vanityTrickshotPrefixLength &&
-				wmemcmp(messageCopy, vanityTrickshotPrefix,
-					static_cast<size_t>(vanityTrickshotPrefixLength)) == 0)
+			// [Niobium] "[Niobium] TRICKSHOT! <player> - <metres> m" from the server -> big banner.
+			// The message then carries on unchanged (console and game).
+			static constexpr wchar_t niobiumTrickshotPrefix[] = L"[Niobium] TRICKSHOT";
+			static constexpr int niobiumTrickshotPrefixLength =
+				static_cast<int>(_countof(niobiumTrickshotPrefix) - 1);
+			if (copied && shouldInspectNiobiumToast &&
+				length >= niobiumTrickshotPrefixLength &&
+				wmemcmp(messageCopy, niobiumTrickshotPrefix,
+					static_cast<size_t>(niobiumTrickshotPrefixLength)) == 0)
 			{
-				VanityToast_Push(messageCopy, length);
+				NiobiumToast_Push(messageCopy, length);
 			}
 			if (copied && shouldCapture && length > 0)
 			{
@@ -12147,8 +12147,8 @@ static bool InstallGameThreadPump()
 void Client::Init()
 {
 	g_FrontendActive.store(false, std::memory_order_release);
-	// [Vanity] Der Trickshot-Reiter zeigt in der Lobby einen kurzen Hinweis.
-	VanityTrickshotTab_SetLobbyCheck(&Client::IsFrontendActive);
+	// [Niobium] The Trickshot tab shows a short hint while you are in the lobby.
+	NiobiumTrickshotTab_SetLobbyCheck(&Client::IsFrontendActive);
 
 	if (VersionInfo.FortniteVersion < 24.30)
 	{

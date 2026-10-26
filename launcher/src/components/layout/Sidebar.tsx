@@ -1,114 +1,84 @@
-import { motion } from "motion/react";
-import {
-  Bug,
-  Gamepad2,
-  Info,
-  Library,
-  type LucideIcon,
-  PanelsTopLeft,
-  ScrollText,
-  Settings,
-  Swords,
-  UserRound,
-  Users,
-} from "lucide-react";
+import { LayoutGroup, motion } from "motion/react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusPill, statusLabel } from "@/components/common";
+import { Sheen } from "@/components/fx";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { useApp, type PageId, type ServiceStatus } from "@/lib/store";
+import { SPRING_PLAYFUL, SPRING_UI } from "@/lib/motion";
+import { useApp, type ServiceStatus } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { LogoMark } from "./Logo";
-
-interface NavItem {
-  id: PageId;
-  label: string;
-  icon: LucideIcon;
-}
-
-const groups: { title: string; items: NavItem[] }[] = [
-  {
-    title: "Spielen",
-    items: [
-      { id: "start", label: "Start", icon: Gamepad2 },
-      { id: "library", label: "Bibliothek", icon: Library },
-      { id: "servers", label: "Server & Freunde", icon: Users },
-    ],
-  },
-  {
-    title: "Host",
-    items: [{ id: "match", label: "Match-Steuerung", icon: Swords }],
-  },
-  {
-    title: "Anpassen",
-    items: [
-      { id: "ingame", label: "Ingame-Menü", icon: PanelsTopLeft },
-      { id: "profiles", label: "Profile", icon: UserRound },
-    ],
-  },
-  {
-    title: "Hilfe",
-    items: [
-      { id: "logs", label: "Live-Log", icon: ScrollText },
-      { id: "crashes", label: "Absturz-Analyse", icon: Bug },
-    ],
-  },
-];
-
-const footerItems: NavItem[] = [
-  { id: "settings", label: "Einstellungen", icon: Settings },
-  { id: "about", label: "Über & Credits", icon: Info },
-];
+import { LogoMark, Wordmark } from "./Logo";
+import { navFooter, navGroups, type NavItem } from "./nav";
 
 export function Sidebar() {
   const wide = useMediaQuery("(min-width: 1200px)");
   const page = useApp((s) => s.page);
   const setPage = useApp((s) => s.setPage);
   const services = useApp((s) => s.services);
+  const version = useApp((s) => s.appVersion);
 
   const renderItem = (item: NavItem) => (
-    <NavButton
-      key={item.id}
-      item={item}
-      active={page === item.id}
-      wide={wide}
-      onSelect={() => setPage(item.id)}
-    />
+    <NavButton key={item.id} item={item} active={page === item.id} wide={wide} onSelect={() => setPage(item.id)} />
   );
 
   return (
     <aside
       className={cn(
-        "glass-strong relative z-10 m-2 mt-0 flex shrink-0 flex-col rounded-xl py-4 transition-[width] duration-200",
+        "glass-strong relative z-10 m-2 mt-0 flex shrink-0 flex-col rounded-2xl py-4 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
         wide ? "w-60 px-3" : "w-[72px] px-2",
       )}
     >
-      <div className={cn("flex items-center gap-3 pb-5", wide ? "px-2" : "justify-center")}>
-        <LogoMark className="size-9" />
-        {wide && (
-          <div>
-            <p className="text-sm font-semibold tracking-wide">VANITY</p>
-            <p className="text-xs text-muted-foreground">OG-Launcher</p>
-          </div>
+      {/* Soft brand light behind the logo */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-40 rounded-t-2xl bg-[radial-gradient(120%_80%_at_20%_0%,rgb(122_60_255/0.16),transparent_70%)]"
+      />
+
+      <button
+        type="button"
+        onClick={() => setPage("start")}
+        aria-label="Niobium – Home"
+        className={cn(
+          "group relative flex items-center gap-3 rounded-xl pb-5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          wide ? "px-2" : "justify-center",
         )}
-      </div>
+      >
+        <motion.span
+          whileHover={{ scale: 1.06, rotate: -3 }}
+          whileTap={{ scale: 0.95 }}
+          transition={SPRING_PLAYFUL}
+          className="relative overflow-hidden rounded-[10px]"
+        >
+          <LogoMark className="size-9" />
+          <Sheen once />
+        </motion.span>
+        {wide && (
+          <span className="flex min-w-0 flex-col items-start gap-1">
+            <Wordmark height={17} title="" className="text-foreground" />
+            <span className="text-[11px] leading-none text-muted-foreground">old seasons, new shine.</span>
+          </span>
+        )}
+      </button>
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto" aria-label="Hauptmenü">
-        {groups.map((group) => (
-          <div key={group.title} className="flex flex-col gap-1">
-            {wide ? (
-              <p className="px-3 pb-1 text-xs text-muted-foreground">{group.title}</p>
-            ) : (
-              <div className="mx-auto mb-1 h-px w-6 bg-white/[0.06]" />
-            )}
-            {group.items.map(renderItem)}
-          </div>
-        ))}
-      </nav>
+      <LayoutGroup id="sidebar">
+        <nav className="relative flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto" aria-label="Main menu">
+          {navGroups.map((group) => (
+            <div key={group.title} className="flex flex-col gap-0.5">
+              {wide ? (
+                <p className="px-3 pb-1.5 text-[10.5px] font-semibold tracking-[0.12em] text-faint uppercase">{group.title}</p>
+              ) : (
+                <div className="mx-auto mb-1.5 h-px w-6 bg-white/[0.07]" />
+              )}
+              {group.items.map(renderItem)}
+            </div>
+          ))}
+        </nav>
 
-      <div className="flex flex-col gap-1 pt-4">
-        <ServiceSummary services={services} wide={wide} />
-        {footerItems.map(renderItem)}
-      </div>
+        <div className="relative flex flex-col gap-0.5 pt-4">
+          <ServiceSummary services={services} wide={wide} />
+          {navFooter.map(renderItem)}
+          {wide && <p className="px-3 pt-2 text-[10.5px] text-faint tabular-nums">Version {version}</p>}
+        </div>
+      </LayoutGroup>
     </aside>
   );
 }
@@ -132,7 +102,7 @@ function NavButton({
       aria-label={item.label}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "relative flex h-9 shrink-0 items-center gap-3 rounded-lg text-sm transition-colors duration-150 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "group relative flex h-9 shrink-0 cursor-pointer items-center gap-3 rounded-lg text-[13.5px] transition-colors duration-150 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
         wide ? "px-3" : "justify-center",
         active ? "text-foreground" : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
       )}
@@ -140,14 +110,19 @@ function NavButton({
       {active && (
         <motion.span
           layoutId="nav-active"
-          className="absolute inset-0 rounded-lg bg-white/[0.07]"
-          transition={{ type: "spring", stiffness: 500, damping: 40 }}
+          className="absolute inset-0 rounded-lg bg-gradient-to-r from-brand-violet/[0.2] via-brand-indigo/[0.08] to-transparent shadow-[inset_0_0_0_1px_rgb(180_155_255/0.14),0_8px_24px_-14px_rgb(122_60_255/0.8)]"
+          transition={SPRING_UI}
         >
-          <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-primary-text" />
+          <span className="absolute top-2 bottom-2 -left-px w-[3px] rounded-full bg-gradient-to-b from-brand-blue to-brand-violet shadow-[0_0_10px_rgb(122_60_255/0.9)]" />
         </motion.span>
       )}
-      <Icon className={cn("relative size-[18px]", active && "text-primary-text")} />
-      {wide && <span className="relative truncate">{item.label}</span>}
+      <Icon
+        className={cn(
+          "relative size-[18px] transition-[color,scale] duration-200 group-hover:scale-110",
+          active && "text-violet-text drop-shadow-[0_0_6px_rgb(122_60_255/0.7)]",
+        )}
+      />
+      {wide && <span className="relative truncate font-medium">{item.label}</span>}
     </button>
   );
 
@@ -162,7 +137,7 @@ function NavButton({
 
 type Services = { backend: ServiceStatus; server: ServiceStatus; game: ServiceStatus };
 
-/** Eine Zeile für alle drei Dienste – Details im Tooltip. */
+/** One line for all three services – details in the tooltip. */
 function ServiceSummary({ services, wide }: { services: Services; wide: boolean }) {
   const all = [services.backend, services.server, services.game];
   const summary: ServiceStatus = all.includes("error")
@@ -173,22 +148,22 @@ function ServiceSummary({ services, wide }: { services: Services; wide: boolean 
         ? "starting"
         : "stopped";
   const text = {
-    stopped: "Alles gestoppt",
-    starting: "Startet …",
-    running: "Alles läuft",
-    error: "Fehler",
+    stopped: "All stopped",
+    starting: "Starting…",
+    running: "All running",
+    error: "Error",
   }[summary];
   const details = (
     <div className="flex flex-col gap-1.5 py-0.5">
       {(
         [
           ["Backend", services.backend],
-          ["Game Server", services.server],
-          ["Spiel", services.game],
+          ["Game server", services.server],
+          ["Your game", services.game],
         ] as const
       ).map(([label, status]) => (
         <div key={label} className="flex items-center justify-between gap-4">
-          <span>{label}</span>
+          <span className="text-muted-foreground">{label}</span>
           <span>{statusLabel(status)}</span>
         </div>
       ))}
@@ -200,13 +175,13 @@ function ServiceSummary({ services, wide }: { services: Services; wide: boolean 
       <TooltipTrigger asChild>
         <div
           tabIndex={0}
-          aria-label={`Dienste: ${text}`}
+          aria-label={`Services: ${text}`}
           className={cn(
-            "mb-2 flex h-9 items-center rounded-lg bg-white/[0.03] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+            "mb-2 flex h-9 items-center rounded-lg bg-black/20 shadow-[inset_0_0_0_1px_rgb(255_255_255/0.05)] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
             wide ? "justify-between px-3" : "justify-center",
           )}
         >
-          {wide && <span className="text-xs text-muted-foreground">Dienste</span>}
+          {wide && <span className="text-xs text-muted-foreground">Services</span>}
           <StatusPill status={summary} label={wide ? text : ""} />
         </div>
       </TooltipTrigger>

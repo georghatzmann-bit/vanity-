@@ -2153,6 +2153,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
+name = "niobium-core"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "pelite",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "niobium-launcher"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "if-addrs",
+ "niobium-core",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "ureq",
+ "windows",
+]
+
+[[package]]
 name = "no-std-compat"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4191,33 +4218,6 @@ dependencies = [
  "js-sys",
  "serde_core",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "vanity-core"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "pelite",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "vanity-launcher"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "if-addrs",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "ureq",
- "vanity-core",
- "windows",
 ]
 
 [[package]]

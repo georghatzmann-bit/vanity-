@@ -1,10 +1,10 @@
 const Express = require("express");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const express = Express.Router();
 const fs = require("fs");
 const path = require("path");
 const iniparser = require("ini");
-const config = iniparser.parse(fs.readFileSync(vanity.file("Config/config.ini")).toString()); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+const config = iniparser.parse(fs.readFileSync(niobium.file("Config/config.ini")).toString()); // NIOBIUM: path via niobium.js (data folder/resources)
 const functions = require("./functions.js");
 const catalog = functions.getItemShop();
 
@@ -15,18 +15,18 @@ express.use((req, res, next) => {
         });
     }
 
-    // VANITY: profileId wird Teil eines Dateipfads – nur einfache Namen zulassen (kein ../)
-    if (req.query.profileId !== undefined && !vanity.isSafeName(req.query.profileId)) {
+    // NIOBIUM: profileId becomes part of a file path – only allow simple names (no ../)
+    if (req.query.profileId !== undefined && !niobium.isSafeName(req.query.profileId)) {
         return res.status(400).json({
             error: "Invalid profileId."
         });
     }
 
-    fs.readdirSync(vanity.file("profiles")).forEach((file) => { // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    fs.readdirSync(niobium.file("profiles")).forEach((file) => { // NIOBIUM: path via niobium.js (data folder/resources)
         if (file.endsWith(".json")) {
             const memory = functions.GetVersionInfo(req);
 
-            const profile = vanity.json(`profiles/${file}`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+            const profile = niobium.json(`profiles/${file}`); // NIOBIUM: path via niobium.js (data folder/resources)
             if (!profile.rvn) profile.rvn = 0;
             if (!profile.items) profile.items = {}
             if (!profile.stats) profile.stats = {}
@@ -34,7 +34,7 @@ express.use((req, res, next) => {
             if (!profile.commandRevision) profile.commandRevision = 0;
 
             if (file == "athena.json") {
-                var SeasonData = JSON.parse(JSON.stringify(vanity.json("responses/Athena/SeasonData.json"))); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                var SeasonData = JSON.parse(JSON.stringify(niobium.json("responses/Athena/SeasonData.json"))); // NIOBIUM: path via niobium.js (data folder/resources)
                 profile.stats.attributes.season_num = memory.season;
 
                 if (SeasonData[`Season${memory.season}`]) {
@@ -46,7 +46,7 @@ express.use((req, res, next) => {
                     profile.stats.attributes.season_friend_match_boost = SeasonData.battlePassXPFriendBoost;
                 }
 
-                vanity.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                niobium.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
             }
         }
     })
@@ -56,7 +56,7 @@ express.use((req, res, next) => {
 
 // Set support a creator code
 express.post("/fortnite/api/game/v2/profile/*/client/SetAffiliateName", async (req, res) => {
-    const profile = vanity.json("profiles/common_core.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/common_core.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -64,7 +64,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetAffiliateName", async (r
     var QueryRevision = req.query.rvn || -1;
     var StatChanged = false;
 
-    const SupportedCodes = vanity.json("responses/SAC.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const SupportedCodes = niobium.json("responses/SAC.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     SupportedCodes.forEach(code => {
         if (req.body.affiliateName.toLowerCase() == code.toLowerCase() || req.body.affiliateName == "") {
             profile.stats.attributes.mtx_affiliate_set_time = new Date().toISOString();
@@ -90,7 +90,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetAffiliateName", async (r
             "value": profile.stats.attributes.mtx_affiliate
         })
 
-        vanity.writeFile("profiles/common_core.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/common_core.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -115,7 +115,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetAffiliateName", async (r
 
 // Set STW banner
 express.post("/fortnite/api/game/v2/profile/*/client/SetHomebaseBanner", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "profile0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "profile0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -167,7 +167,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetHomebaseBanner", async (
             })
         }
 
-        vanity.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -192,7 +192,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetHomebaseBanner", async (
 
 // Set Homebase Name STW
 express.post("/fortnite/api/game/v2/profile/*/client/SetHomebaseName", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "profile0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "profile0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -236,7 +236,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetHomebaseName", async (re
             })
         }
 
-        vanity.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -261,7 +261,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetHomebaseName", async (re
 
 // Buy skill tree perk STW
 express.post("/fortnite/api/game/v2/profile/*/client/PurchaseHomebaseNode", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "profile0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "profile0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -293,7 +293,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseHomebaseNode", asyn
             "item": profile.items[ID]
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -318,9 +318,9 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseHomebaseNode", asyn
 
 // Open Winterfest presents (11.31, 19.01 & 23.10)
 express.post("/fortnite/api/game/v2/profile/*/client/UnlockRewardNode", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const common_core = vanity.json("profiles/common_core.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const WinterFestIDS = vanity.json("responses/Athena/winterfestRewards.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    const common_core = niobium.json("profiles/common_core.json"); // NIOBIUM: path via niobium.js (data folder/resources)
+    const WinterFestIDS = niobium.json("responses/Athena/winterfestRewards.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     const memory = functions.GetVersionInfo(req);
 
     // do not change any of these or you will end up breaking it
@@ -483,9 +483,9 @@ express.post("/fortnite/api/game/v2/profile/*/client/UnlockRewardNode", async (r
             })
         }
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
         if (CommonCoreChanged == true) {
-            vanity.writeFile("profiles/common_core.json", JSON.stringify(common_core, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+            niobium.writeFile("profiles/common_core.json", JSON.stringify(common_core, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
         }
     }
 
@@ -512,7 +512,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UnlockRewardNode", async (r
 
 // Remove gift box
 express.post("/fortnite/api/game/v2/profile/*/client/RemoveGiftBox", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -554,7 +554,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RemoveGiftBox", async (req,
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -579,7 +579,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RemoveGiftBox", async (req,
 
 // Set party assist quest
 express.post("/fortnite/api/game/v2/profile/*/client/SetPartyAssistQuest", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -602,7 +602,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetPartyAssistQuest", async
             "value": profile.stats.attributes.party_assist_quest
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -627,7 +627,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetPartyAssistQuest", async
 
 // Set pinned BR quest
 express.post("/fortnite/api/game/v2/profile/*/client/AthenaPinQuest", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -650,7 +650,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AthenaPinQuest", async (req
             "value": profile.stats.attributes.pinned_quest
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -675,7 +675,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AthenaPinQuest", async (req
 
 // Set pinned STW quests
 express.post("/fortnite/api/game/v2/profile/*/client/SetPinnedQuests", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -698,7 +698,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetPinnedQuests", async (re
             "value": profile.stats.attributes.client_settings
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -723,7 +723,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetPinnedQuests", async (re
 
 // Replace Daily Quests
 express.post("/fortnite/api/game/v2/profile/*/client/FortRerollDailyQuest", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -732,8 +732,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/FortRerollDailyQuest", asyn
     var QueryRevision = req.query.rvn || -1;
     var StatChanged = false;
 
-    var DailyQuestPath = req.query.profileId == "profile0" || req.query.profileId == "campaign" ? "responses/Campaign/quests.json" : "responses/Athena/quests.json"; // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    var DailyQuestIDS = JSON.parse(JSON.stringify(vanity.json(DailyQuestPath))).Daily; // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    var DailyQuestPath = req.query.profileId == "profile0" || req.query.profileId == "campaign" ? "responses/Campaign/quests.json" : "responses/Athena/quests.json"; // NIOBIUM: path via niobium.js (data folder/resources)
+    var DailyQuestIDS = JSON.parse(JSON.stringify(niobium.json(DailyQuestPath))).Daily; // NIOBIUM: path via niobium.js (data folder/resources)
 
     const NewQuestID = functions.MakeID();
     var randomNumber = Math.floor(Math.random() * DailyQuestIDS.length);
@@ -800,7 +800,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/FortRerollDailyQuest", asyn
             "newQuestId": DailyQuestIDS[randomNumber].templateId
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -826,7 +826,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/FortRerollDailyQuest", asyn
 
 // Mark New Quest Notification Sent
 express.post("/fortnite/api/game/v2/profile/*/client/MarkNewQuestNotificationSent", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -855,7 +855,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/MarkNewQuestNotificationSen
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -880,9 +880,9 @@ express.post("/fortnite/api/game/v2/profile/*/client/MarkNewQuestNotificationSen
 
 // Check for new quests
 express.post("/fortnite/api/game/v2/profile/*/client/ClientQuestLogin", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    var AthenaQuestIDS = JSON.parse(JSON.stringify(vanity.json("responses/Athena/quests.json"))); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    var CampaignQuestIDS = JSON.parse(JSON.stringify(vanity.json("responses/Campaign/quests.json"))); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    var AthenaQuestIDS = JSON.parse(JSON.stringify(niobium.json("responses/Athena/quests.json"))); // NIOBIUM: path via niobium.js (data folder/resources)
+    var CampaignQuestIDS = JSON.parse(JSON.stringify(niobium.json("responses/Campaign/quests.json"))); // NIOBIUM: path via niobium.js (data folder/resources)
     const memory = functions.GetVersionInfo(req);
 
     // do not change any of these or you will end up breaking it
@@ -1257,7 +1257,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClientQuestLogin", async (r
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -1282,7 +1282,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClientQuestLogin", async (r
 
 // Reset item STW
 express.post("/fortnite/api/game/v2/profile/*/client/RefundItem", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -1317,7 +1317,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RefundItem", async (req, re
             "itemId": req.body.targetItemId
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -1342,8 +1342,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/RefundItem", async (req, re
 
 // Refund V-Bucks purchase
 express.post("/fortnite/api/game/v2/profile/*/client/RefundMtxPurchase", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "common_core"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const ItemProfile = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "common_core"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    const ItemProfile = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -1422,8 +1422,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/RefundMtxPurchase", async (
         MultiUpdate[0].profileRevision = ItemProfile.rvn || 0;
         MultiUpdate[0].profileCommandRevision = ItemProfile.commandRevision || 0;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "common_core"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-        vanity.writeFile(`profiles/athena.json`, JSON.stringify(ItemProfile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "common_core"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
+        niobium.writeFile(`profiles/athena.json`, JSON.stringify(ItemProfile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -1449,7 +1449,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RefundMtxPurchase", async (
 
 // Increase a named counter value (e.g. when selecting a game mode)
 express.post("/fortnite/api/game/v2/profile/*/client/IncrementNamedCounterStat", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "profile0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "profile0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -1476,7 +1476,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/IncrementNamedCounterStat",
             "value": profile.stats.attributes.named_counters
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -1501,8 +1501,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/IncrementNamedCounterStat",
 
 // Claim STW daily reward
 express.post("/fortnite/api/game/v2/profile/*/client/ClaimLoginReward", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const DailyRewards = vanity.json("responses/Campaign/dailyRewards.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    const DailyRewards = niobium.json("responses/Campaign/dailyRewards.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     const memory = functions.GetVersionInfo(req);
 
     // do not change any of these or you will end up breaking it
@@ -1542,7 +1542,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClaimLoginReward", async (r
             })
         }
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -1568,7 +1568,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClaimLoginReward", async (r
 
 // Update quest client objectives
 express.post("/fortnite/api/game/v2/profile/*/client/UpdateQuestClientObjectives", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -1632,7 +1632,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpdateQuestClientObjectives
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -1657,7 +1657,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpdateQuestClientObjectives
 
 // Equip team perk STW
 express.post("/fortnite/api/game/v2/profile/*/client/AssignTeamPerkToLoadout", async (req, res) => {
-    const profile = vanity.json("profiles/campaign.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/campaign.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -1681,7 +1681,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignTeamPerkToLoadout", a
             "attributeValue": profile.items[req.body.loadoutId].attributes.team_perk
         })
 
-        vanity.writeFile("profiles/campaign.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/campaign.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -1706,7 +1706,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignTeamPerkToLoadout", a
 
 // Equip gadget STW
 express.post("/fortnite/api/game/v2/profile/*/client/AssignGadgetToLoadout", async (req, res) => {
-    const profile = vanity.json("profiles/campaign.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/campaign.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -1747,7 +1747,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignGadgetToLoadout", asy
             "attributeValue": profile.items[req.body.loadoutId].attributes.gadgets
         })
 
-        vanity.writeFile("profiles/campaign.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/campaign.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -1772,7 +1772,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignGadgetToLoadout", asy
 
 // Assign worker to squad STW
 express.post("/fortnite/api/game/v2/profile/*/client/AssignWorkerToSquad", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "profile0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "profile0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -1833,7 +1833,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignWorkerToSquad", async
             "attributeValue": profile.items[req.body.characterId].attributes.squad_slot_idx
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -1858,7 +1858,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignWorkerToSquad", async
 
 // Assign multiple workers to squad STW
 express.post("/fortnite/api/game/v2/profile/*/client/AssignWorkerToSquadBatch", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "profile0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "profile0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -1920,7 +1920,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignWorkerToSquadBatch", 
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -1945,10 +1945,10 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignWorkerToSquadBatch", 
 
 // Claim STW quest reward
 express.post("/fortnite/api/game/v2/profile/*/client/ClaimQuestReward", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const common_core = vanity.json("profiles/common_core.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const theater0 = vanity.json("profiles/theater0.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    var Rewards = vanity.json("responses/Campaign/rewards.json").quest; // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    const common_core = niobium.json("profiles/common_core.json"); // NIOBIUM: path via niobium.js (data folder/resources)
+    const theater0 = niobium.json("profiles/theater0.json"); // NIOBIUM: path via niobium.js (data folder/resources)
+    var Rewards = niobium.json("responses/Campaign/rewards.json").quest; // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -2087,7 +2087,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClaimQuestReward", async (r
             MultiUpdate[0].profileRevision = theater0.rvn || 0;
             MultiUpdate[0].profileCommandRevision = theater0.commandRevision || 0;
 
-            vanity.writeFile("profiles/theater0.json", JSON.stringify(theater0, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+            niobium.writeFile("profiles/theater0.json", JSON.stringify(theater0, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
         }
 
         if (CommonCoreStatChanged == true) {
@@ -2096,7 +2096,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClaimQuestReward", async (r
             MultiUpdate[1].profileRevision = common_core.rvn || 0;
             MultiUpdate[1].profileCommandRevision = common_core.commandRevision || 0;
 
-            vanity.writeFile("profiles/common_core.json", JSON.stringify(common_core, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+            niobium.writeFile("profiles/common_core.json", JSON.stringify(common_core, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
         }
 
         ApplyProfileChanges.push({
@@ -2113,7 +2113,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClaimQuestReward", async (r
             "attributeValue": profile.items[req.body.questId].attributes.last_state_change_time
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2140,7 +2140,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClaimQuestReward", async (r
 
 // Level item up STW 1
 express.post("/fortnite/api/game/v2/profile/*/client/UpgradeItem", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -2164,7 +2164,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpgradeItem", async (req, r
             "attributeValue": profile.items[req.body.targetItemId].attributes.level
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2189,7 +2189,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpgradeItem", async (req, r
 
 // Level slotted item up STW
 express.post("/fortnite/api/game/v2/profile/*/client/UpgradeSlottedItem", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "collection_book_people0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "collection_book_people0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -2219,7 +2219,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpgradeSlottedItem", async 
             "attributeValue": profile.items[req.body.targetItemId].attributes.level
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "collection_book_people0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "collection_book_people0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2244,7 +2244,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpgradeSlottedItem", async 
 
 // Level item up STW 2
 express.post("/fortnite/api/game/v2/profile/*/client/UpgradeItemBulk", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -2270,7 +2270,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpgradeItemBulk", async (re
             "attributeValue": profile.items[req.body.targetItemId].attributes.level
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2295,7 +2295,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpgradeItemBulk", async (re
 
 // Evolve item STW
 express.post("/fortnite/api/game/v2/profile/*/client/ConvertItem", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -2365,7 +2365,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ConvertItem", async (req, r
             ]
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2391,7 +2391,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ConvertItem", async (req, r
 
 // Evolve slotted item STW
 express.post("/fortnite/api/game/v2/profile/*/client/ConvertSlottedItem", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "collection_book_people0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "collection_book_people0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -2461,7 +2461,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ConvertSlottedItem", async 
             ]
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "collection_book_people0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "collection_book_people0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2487,7 +2487,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ConvertSlottedItem", async 
 
 // Upgrade item rarity STW
 express.post("/fortnite/api/game/v2/profile/*/client/UpgradeItemRarity", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -2552,7 +2552,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpgradeItemRarity", async (
             ]
         }])
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2578,7 +2578,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpgradeItemRarity", async (
 
 // Super charge item STW
 express.post("/fortnite/api/game/v2/profile/*/client/PromoteItem", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -2602,7 +2602,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PromoteItem", async (req, r
             "attributeValue": profile.items[req.body.targetItemId].attributes.level
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2627,8 +2627,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/PromoteItem", async (req, r
 
 // Transform items STW
 express.post("/fortnite/api/game/v2/profile/*/client/TransmogItem", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    var transformItemIDS = vanity.json("responses/Campaign/transformItemIDS.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    var transformItemIDS = niobium.json("responses/Campaign/transformItemIDS.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -2653,7 +2653,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/TransmogItem", async (req, 
             transformItemIDS = transformItemIDS[req.body.transmogKeyTemplateId]
         }
         else {
-            transformItemIDS = vanity.json("responses/Campaign/cardPackData.json").default; // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+            transformItemIDS = niobium.json("responses/Campaign/cardPackData.json").default; // NIOBIUM: path via niobium.js (data folder/resources)
         }
 
         StatChanged = true;
@@ -2692,7 +2692,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/TransmogItem", async (req, 
             "item": Item
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2720,7 +2720,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/TransmogItem", async (req, 
 express.post("/fortnite/api/game/v2/profile/*/client/RedeemResearchToken", async (req, res) => {
     const memory = functions.GetVersionInfo(req);
 
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -2792,7 +2792,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RedeemResearchToken", async
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2819,18 +2819,18 @@ express.post("/fortnite/api/game/v2/profile/*/client/RedeemResearchToken", async
 express.post("/fortnite/api/game/v2/profile/*/client/CraftWorldItem", async (req, res) => {
     const memory = functions.GetVersionInfo(req);
 
-    const profile = vanity.json(`profiles/${req.query.profileId || "theater0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "theater0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
     var schematic_profile;
     // do not change this
     var chosen_profile = false;
 
     if (4 <= memory.season || memory.build == 3.5 || memory.build == 3.6 && chosen_profile == false) {
-        schematic_profile = vanity.json("profiles/campaign.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        schematic_profile = niobium.json("profiles/campaign.json"); // NIOBIUM: path via niobium.js (data folder/resources)
         chosen_profile = true;
     }
 
     if (3 >= memory.season && chosen_profile == false) {
-        schematic_profile = vanity.json("profiles/profile0.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        schematic_profile = niobium.json("profiles/profile0.json"); // NIOBIUM: path via niobium.js (data folder/resources)
         chosen_profile = true;
     }
 
@@ -2961,7 +2961,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/CraftWorldItem", async (req
             ]
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "theater0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "theater0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -2987,7 +2987,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/CraftWorldItem", async (req
 
 // Destroy item STW
 express.post("/fortnite/api/game/v2/profile/*/client/DestroyWorldItems", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "theater0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "theater0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -3013,7 +3013,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/DestroyWorldItems", async (
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "theater0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "theater0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -3038,7 +3038,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/DestroyWorldItems", async (
 
 // Disassemble items STW
 express.post("/fortnite/api/game/v2/profile/*/client/DisassembleWorldItems", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "theater0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "theater0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -3079,7 +3079,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/DisassembleWorldItems", asy
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "theater0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "theater0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -3104,8 +3104,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/DisassembleWorldItems", asy
 
 // Storage transfer STW
 express.post("/fortnite/api/game/v2/profile/*/client/StorageTransfer", async (req, res) => {
-    const theater0 = vanity.json("profiles/theater0.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const outpost0 = vanity.json("profiles/outpost0.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const theater0 = niobium.json("profiles/theater0.json"); // NIOBIUM: path via niobium.js (data folder/resources)
+    const outpost0 = niobium.json("profiles/outpost0.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -3517,8 +3517,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/StorageTransfer", async (re
         MultiUpdate[0].profileRevision = outpost0.rvn || 0;
         MultiUpdate[0].profileCommandRevision = outpost0.commandRevision || 0;
 
-        vanity.writeFile("profiles/theater0.json", JSON.stringify(theater0, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-        vanity.writeFile("profiles/outpost0.json", JSON.stringify(outpost0, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/theater0.json", JSON.stringify(theater0, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
+        niobium.writeFile("profiles/outpost0.json", JSON.stringify(outpost0, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -3544,7 +3544,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/StorageTransfer", async (re
 
 // Modify quickbar STW
 express.post("/fortnite/api/game/v2/profile/*/client/ModifyQuickbar", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "theater0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "theater0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -3587,7 +3587,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ModifyQuickbar", async (req
             "value": profile.stats.attributes.player_loadout
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "theater0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "theater0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -3612,7 +3612,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ModifyQuickbar", async (req
 
 // Hero equipping STW
 express.post("/fortnite/api/game/v2/profile/*/client/AssignHeroToLoadout", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -3650,7 +3650,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignHeroToLoadout", async
             "attributeValue": profile.items[req.body.loadoutId].attributes.crew_members
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -3675,7 +3675,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignHeroToLoadout", async
 
 // Defender equipping STW
 express.post("/fortnite/api/game/v2/profile/*/client/AssignDefenderToLoadout", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -3713,7 +3713,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignDefenderToLoadout", a
             "attributeValue": profile.items[req.body.loadoutId].attributes.crew_members
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -3738,7 +3738,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignDefenderToLoadout", a
 
 // Assigning a Schematic to Defender
 express.post("/fortnite/api/game/v2/profile/*/client/AssignWeaponToDefender", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -3762,7 +3762,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignWeaponToDefender", as
             "attributeValue": profile.items[req.body.defenderId].attributes.weapon_schematic
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -3787,7 +3787,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AssignWeaponToDefender", as
 
 // Clear hero loadout STW
 express.post("/fortnite/api/game/v2/profile/*/client/ClearHeroLoadout", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -3848,7 +3848,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClearHeroLoadout", async (r
             "attributeValue": profile.items[req.body.loadoutId].attributes.gadgets
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -3875,7 +3875,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClearHeroLoadout", async (r
 express.post("/fortnite/api/game/v2/profile/*/client/RecycleItemBatch", async (req, res) => {
     const memory = functions.GetVersionInfo(req);
 
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -3891,10 +3891,10 @@ express.post("/fortnite/api/game/v2/profile/*/client/RecycleItemBatch", async (r
             let id = req.body.targetItemIds[i];
 
             if (memory.season > 11 || memory.build == 11.30 || memory.build == 11.31 || memory.build == 11.40 || memory.build == 11.50) {
-                var collection_book_profile = vanity.json("profiles/collection_book_people0.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                var collection_book_profile = niobium.json("profiles/collection_book_people0.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
                 if (profile.items[id].templateId.toLowerCase().startsWith("schematic:")) {
-                    collection_book_profile = vanity.json("profiles/collection_book_schematics0.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                    collection_book_profile = niobium.json("profiles/collection_book_schematics0.json"); // NIOBIUM: path via niobium.js (data folder/resources)
                 }
 
                 if (MultiUpdate.length == 0) {
@@ -3975,7 +3975,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RecycleItemBatch", async (r
                 MultiUpdate[0].profileRevision = collection_book_profile.rvn;
                 MultiUpdate[0].profileCommandRevision = collection_book_profile.commandRevision;
 
-                vanity.writeFile(`profiles/${collection_book_profile.profileId || "collection_book_people0"}.json`, JSON.stringify(collection_book_profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                niobium.writeFile(`profiles/${collection_book_profile.profileId || "collection_book_people0"}.json`, JSON.stringify(collection_book_profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
             } else {
                 delete profile.items[id];
 
@@ -3993,7 +3993,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RecycleItemBatch", async (r
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4020,7 +4020,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RecycleItemBatch", async (r
 
 // Add item from collection book STW
 express.post("/fortnite/api/game/v2/profile/*/client/ResearchItemFromCollectionBook", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4058,7 +4058,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ResearchItemFromCollectionB
             "item": profile.items[ID]
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4083,7 +4083,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ResearchItemFromCollectionB
 
 // Slot item in collection book STW
 express.post("/fortnite/api/game/v2/profile/*/client/SlotItemInCollectionBook", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4093,10 +4093,10 @@ express.post("/fortnite/api/game/v2/profile/*/client/SlotItemInCollectionBook", 
     var QueryRevision = req.query.rvn || -1;
     var StatChanged = false;
 
-    var collection_book_profile = vanity.json("profiles/collection_book_people0.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    var collection_book_profile = niobium.json("profiles/collection_book_people0.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     if (profile.items[req.body.itemId].templateId.toLowerCase().startsWith("schematic:")) {
-        collection_book_profile = vanity.json("profiles/collection_book_schematics0.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        collection_book_profile = niobium.json("profiles/collection_book_schematics0.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     if (req.body.itemId) {
@@ -4170,8 +4170,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/SlotItemInCollectionBook", 
             "slottedItemId": req.body.itemId
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-        vanity.writeFile(`profiles/${collection_book_profile.profileId || "collection_book_people0"}.json`, JSON.stringify(collection_book_profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
+        niobium.writeFile(`profiles/${collection_book_profile.profileId || "collection_book_people0"}.json`, JSON.stringify(collection_book_profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4198,7 +4198,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SlotItemInCollectionBook", 
 
 // Unslot item from collection book STW
 express.post("/fortnite/api/game/v2/profile/*/client/UnslotItemFromCollectionBook", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4208,10 +4208,10 @@ express.post("/fortnite/api/game/v2/profile/*/client/UnslotItemFromCollectionBoo
     var QueryRevision = req.query.rvn || -1;
     var StatChanged = false;
 
-    var collection_book_profile = vanity.json("profiles/collection_book_people0.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    var collection_book_profile = niobium.json("profiles/collection_book_people0.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     if (req.body.templateId.toLowerCase().startsWith("schematic:")) {
-        collection_book_profile = vanity.json("profiles/collection_book_schematics0.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        collection_book_profile = niobium.json("profiles/collection_book_schematics0.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     const ID = functions.MakeID();
@@ -4267,8 +4267,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/UnslotItemFromCollectionBoo
         MultiUpdate[0].profileRevision = collection_book_profile.rvn || 0;
         MultiUpdate[0].profileCommandRevision = collection_book_profile.commandRevision || 0;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-        vanity.writeFile(`profiles/${collection_book_profile.profileId || "collection_book_people0"}.json`, JSON.stringify(collection_book_profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
+        niobium.writeFile(`profiles/${collection_book_profile.profileId || "collection_book_people0"}.json`, JSON.stringify(collection_book_profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4295,7 +4295,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UnslotItemFromCollectionBoo
 
 // Claim collection book rewards STW
 express.post("/fortnite/api/game/v2/profile/*/client/ClaimCollectionBookRewards", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4318,7 +4318,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClaimCollectionBookRewards"
             "value": profile.stats.attributes.collection_book
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4343,7 +4343,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ClaimCollectionBookRewards"
 
 // Modify schematic perk STW
 express.post("/fortnite/api/game/v2/profile/*/client/RespecAlteration", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4371,7 +4371,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RespecAlteration", async (r
             "attributeValue": profile.items[req.body.targetItemId].attributes.alterations
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4396,7 +4396,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RespecAlteration", async (r
 
 // Upgrade schematic perk STW
 express.post("/fortnite/api/game/v2/profile/*/client/UpgradeAlteration", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4435,7 +4435,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpgradeAlteration", async (
             "attributeValue": profile.items[req.body.targetItemId].attributes.alterations
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4460,7 +4460,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UpgradeAlteration", async (
 
 // Reset research levels STW
 express.post("/fortnite/api/game/v2/profile/*/client/RespecResearch", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4487,7 +4487,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RespecResearch", async (req
             "value": profile.stats.attributes.research_levels
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4512,7 +4512,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RespecResearch", async (req
 
 // Reset upgrade levels STW
 express.post("/fortnite/api/game/v2/profile/*/client/RespecUpgrades", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4538,7 +4538,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RespecUpgrades", async (req
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4563,7 +4563,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RespecUpgrades", async (req
 
 // Upgrade research levels STW
 express.post("/fortnite/api/game/v2/profile/*/client/PurchaseResearchStatUpgrade", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4587,7 +4587,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseResearchStatUpgrade
             "value": profile.stats.attributes.research_levels
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4612,7 +4612,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseResearchStatUpgrade
 
 // Upgrade levels STW
 express.post("/fortnite/api/game/v2/profile/*/client/PurchaseOrUpgradeHomebaseNode", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4661,7 +4661,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseOrUpgradeHomebaseNo
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4686,8 +4686,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseOrUpgradeHomebaseNo
 
 // Refresh expeditions STW
 express.post("/fortnite/api/game/v2/profile/*/client/RefreshExpeditions", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    var expeditionData = vanity.json("responses/Campaign/expeditionData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    var expeditionData = niobium.json("responses/Campaign/expeditionData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4785,7 +4785,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/RefreshExpeditions", async 
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4810,10 +4810,10 @@ express.post("/fortnite/api/game/v2/profile/*/client/RefreshExpeditions", async 
 
 // Start an expedition STW
 express.post("/fortnite/api/game/v2/profile/*/client/StartExpedition", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
     const memory = functions.GetVersionInfo(req);
-    var expeditionData = vanity.json("responses/Campaign/expeditionData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    var itemRatingData = vanity.json("responses/Campaign/itemRatingData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    var expeditionData = niobium.json("responses/Campaign/expeditionData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
+    var itemRatingData = niobium.json("responses/Campaign/itemRatingData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -4960,7 +4960,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/StartExpedition", async (re
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -4985,8 +4985,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/StartExpedition", async (re
 
 // Abandon an expedition STW
 express.post("/fortnite/api/game/v2/profile/*/client/AbandonExpedition", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    var expeditionData = vanity.json("responses/Campaign/expeditionData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    var expeditionData = niobium.json("responses/Campaign/expeditionData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -5105,7 +5105,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/AbandonExpedition", async (
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -5130,8 +5130,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/AbandonExpedition", async (
 
 // Collect a finished expedition STW
 express.post("/fortnite/api/game/v2/profile/*/client/CollectExpedition", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    var expeditionData = vanity.json("responses/Campaign/expeditionData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    var expeditionData = niobium.json("responses/Campaign/expeditionData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -5203,7 +5203,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/CollectExpedition", async (
                         }
                     }
                     if (k == -1) {
-                        OtherProfiles.push(vanity.json(`profiles/${itemProfile}.json`)) // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                        OtherProfiles.push(niobium.json(`profiles/${itemProfile}.json`)) // NIOBIUM: path via niobium.js (data folder/resources)
                         k = MultiUpdate.length;
                         MultiUpdate.push({
                             "profileRevision": OtherProfiles[k].rvn || 0,
@@ -5306,7 +5306,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/CollectExpedition", async (
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
 
         for (var i = 0; i < OtherProfiles.length; i++) {
             OtherProfiles[i].rvn += 1;
@@ -5315,7 +5315,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/CollectExpedition", async (
             MultiUpdate[i].profileRevision += 1;
             MultiUpdate[i].profileCommandRevision += 1;
 
-            vanity.writeFile(`profiles/${OtherProfiles[i].profileId || "campaign"}.json`, JSON.stringify(OtherProfiles[i], null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+            niobium.writeFile(`profiles/${OtherProfiles[i].profileId || "campaign"}.json`, JSON.stringify(OtherProfiles[i], null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
         }
     }
 
@@ -5343,7 +5343,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/CollectExpedition", async (
 
 // Set active hero loadout STW
 express.post("/fortnite/api/game/v2/profile/*/client/SetActiveHeroLoadout", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -5367,7 +5367,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetActiveHeroLoadout", asyn
             "value": profile.stats.attributes.selected_hero_loadout
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -5392,7 +5392,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetActiveHeroLoadout", asyn
 
 // Activate consumable STW
 express.post("/fortnite/api/game/v2/profile/*/client/ActivateConsumable", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -5439,7 +5439,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ActivateConsumable", async 
             })
         }
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -5464,7 +5464,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/ActivateConsumable", async 
 
 // Unassign all squads STW
 express.post("/fortnite/api/game/v2/profile/*/client/UnassignAllSquads", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -5499,7 +5499,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/UnassignAllSquads", async (
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -5524,8 +5524,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/UnassignAllSquads", async (
 
 // Open llama STW
 express.post("/fortnite/api/game/v2/profile/*/client/OpenCardPack", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const cardpackData = vanity.json("responses/Campaign/cardPackData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    const cardpackData = niobium.json("responses/Campaign/cardPackData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -5636,7 +5636,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/OpenCardPack", async (req, 
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -5662,8 +5662,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/OpenCardPack", async (req, 
 
 // Add items to StW X-Ray Llamas
 express.post("/fortnite/api/game/v2/profile/*/client/PopulatePrerolledOffers", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const cardpackData = vanity.json("responses/Campaign/cardPackData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    const cardpackData = niobium.json("responses/Campaign/cardPackData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -5731,7 +5731,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PopulatePrerolledOffers", a
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -5756,10 +5756,10 @@ express.post("/fortnite/api/game/v2/profile/*/client/PopulatePrerolledOffers", a
 
 // Purchase item
 express.post("/fortnite/api/game/v2/profile/*/client/PurchaseCatalogEntry", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "profile0"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const campaign = vanity.json("profiles/campaign.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const athena = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const cardpackData = vanity.json("responses/Campaign/cardPackData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "profile0"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
+    const campaign = niobium.json("profiles/campaign.json"); // NIOBIUM: path via niobium.js (data folder/resources)
+    const athena = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
+    const cardpackData = niobium.json("responses/Campaign/cardPackData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -5849,10 +5849,10 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseCatalogEntry", asyn
                         }
 
                         var Season = value.name.split("BR")[1];
-                        var BattlePass = vanity.json(`responses/Athena/BattlePass/${Season}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                        var BattlePass = niobium.json(`responses/Athena/BattlePass/${Season}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
                         if (BattlePass) {
-                            var SeasonData = vanity.json("responses/Athena/SeasonData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                            var SeasonData = niobium.json("responses/Athena/SeasonData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
                             if (BattlePass.battlePassOfferId == offer.offerId || BattlePass.battleBundleOfferId == offer.offerId) {
                                 var lootList = [];
@@ -6336,7 +6336,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseCatalogEntry", asyn
                                 AthenaModified = true;
                             }
 
-                            vanity.writeFile("responses/Athena/SeasonData.json", JSON.stringify(SeasonData, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                            niobium.writeFile("responses/Athena/SeasonData.json", JSON.stringify(SeasonData, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
                         }
                     }
                 }
@@ -6505,15 +6505,15 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseCatalogEntry", asyn
                 MultiUpdate[0].profileCommandRevision = athena.commandRevision || 0;
             }
 
-            vanity.writeFile("profiles/athena.json", JSON.stringify(athena, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-            vanity.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+            niobium.writeFile("profiles/athena.json", JSON.stringify(athena, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
+            niobium.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
         }
 
         if (AthenaModified == false) {
             profile.rvn += 1;
             profile.commandRevision += 1;
 
-            vanity.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+            niobium.writeFile(`profiles/${req.query.profileId || "profile0"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
         }
     }
 
@@ -6800,10 +6800,10 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseCatalogEntry", asyn
                         }
 
                         var Season = value.name.split("BR")[1];
-                        var BattlePass = vanity.json(`responses/Athena/BattlePass/${Season}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                        var BattlePass = niobium.json(`responses/Athena/BattlePass/${Season}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
                         if (BattlePass) {
-                            var SeasonData = vanity.json("responses/Athena/SeasonData.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                            var SeasonData = niobium.json("responses/Athena/SeasonData.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
                             if (BattlePass.battlePassOfferId == offer.offerId || BattlePass.battleBundleOfferId == offer.offerId) {
                                 var lootList = [];
@@ -7287,7 +7287,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseCatalogEntry", asyn
                                 AthenaModified = true;
                             }
 
-                            vanity.writeFile("responses/Athena/SeasonData.json", JSON.stringify(SeasonData, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+                            niobium.writeFile("responses/Athena/SeasonData.json", JSON.stringify(SeasonData, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
                         }
                     }
                 }
@@ -7476,8 +7476,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseCatalogEntry", asyn
                 MultiUpdate[0].profileCommandRevision = athena.commandRevision || 0;
             }
 
-            vanity.writeFile("profiles/athena.json", JSON.stringify(athena, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-            vanity.writeFile(`profiles/${req.query.profileId || "common_core"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+            niobium.writeFile("profiles/athena.json", JSON.stringify(athena, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
+            niobium.writeFile(`profiles/${req.query.profileId || "common_core"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
         }
 
         if (AthenaModified == false) {
@@ -7489,8 +7489,8 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseCatalogEntry", asyn
                 MultiUpdate[0].profileCommandRevision = campaign.commandRevision || 0;
             }
 
-            vanity.writeFile("profiles/campaign.json", JSON.stringify(campaign, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-            vanity.writeFile(`profiles/${req.query.profileId || "common_core"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+            niobium.writeFile("profiles/campaign.json", JSON.stringify(campaign, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
+            niobium.writeFile(`profiles/${req.query.profileId || "common_core"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
         }
     }
 
@@ -7518,7 +7518,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PurchaseCatalogEntry", asyn
 
 // Set auto claim for a season pass
 express.post("/fortnite/api/game/v2/profile/*/client/SetSeasonPassAutoClaim", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -7557,7 +7557,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetSeasonPassAutoClaim", as
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -7582,7 +7582,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetSeasonPassAutoClaim", as
 
 // Archive locker items
 express.post("/fortnite/api/game/v2/profile/*/client/SetItemArchivedStatusBatch", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -7608,7 +7608,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetItemArchivedStatusBatch"
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -7633,7 +7633,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetItemArchivedStatusBatch"
 
 // Set multiple items favorite
 express.post("/fortnite/api/game/v2/profile/*/client/SetItemFavoriteStatusBatch", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -7659,7 +7659,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetItemFavoriteStatusBatch"
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -7684,7 +7684,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetItemFavoriteStatusBatch"
 
 // Set favorite on item
 express.post("/fortnite/api/game/v2/profile/*/client/SetItemFavoriteStatus", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -7708,7 +7708,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetItemFavoriteStatus", asy
             "attributeValue": profile.items[req.body.targetItemId].attributes.favorite
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -7733,7 +7733,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetItemFavoriteStatus", asy
 
 // Mark item as seen
 express.post("/fortnite/api/game/v2/profile/*/client/MarkItemSeen", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -7763,7 +7763,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/MarkItemSeen", async (req, 
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -7788,7 +7788,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/MarkItemSeen", async (req, 
 
 // Equip BR Locker 1
 express.post("/fortnite/api/game/v2/profile/*/client/EquipBattleRoyaleCustomization", async (req, res) => {
-    const profile = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     try {
         if (!profile.stats.attributes.favorite_dance) {
@@ -7899,7 +7899,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/EquipBattleRoyaleCustomizat
                 "attributeValue": profile.items[req.body.itemToSlot].attributes.variants
             })
         }
-        vanity.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -7924,7 +7924,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/EquipBattleRoyaleCustomizat
 
 // Set BR Banner 1
 express.post("/fortnite/api/game/v2/profile/*/client/SetBattleRoyaleBanner", async (req, res) => {
-    const profile = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -7954,7 +7954,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetBattleRoyaleBanner", asy
             "value": profile.stats.attributes.banner_color
         })
 
-        vanity.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -7979,7 +7979,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetBattleRoyaleBanner", asy
 
 // Set BR Banner 2
 express.post("/fortnite/api/game/v2/profile/*/client/SetCosmeticLockerBanner", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -8011,7 +8011,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetCosmeticLockerBanner", a
             "attributeValue": profile.items[req.body.lockerItem].attributes.banner_color_template
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -8036,7 +8036,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetCosmeticLockerBanner", a
 
 // Set BR Locker 2
 express.post("/fortnite/api/game/v2/profile/*/client/SetCosmeticLockerSlot", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -8155,7 +8155,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetCosmeticLockerSlot", asy
             "attributeValue": profile.items[req.body.lockerItem].attributes.locker_slots_data
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -8180,7 +8180,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetCosmeticLockerSlot", asy
 
 // Set BR Locker 3
 express.post("/fortnite/api/game/v2/profile/*/client/PutModularCosmeticLoadout", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -8288,7 +8288,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PutModularCosmeticLoadout",
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -8313,7 +8313,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/PutModularCosmeticLoadout",
 
 // Get BR Locker 4
 express.get("/api/locker/v3/:deploymentId/account/:accountId/items", async (req, res) => {
-    const profile = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     var StatChanged = false;
 
     if (!profile.stats.attributes.hasOwnProperty("loadout_presets")) {
@@ -8371,7 +8371,7 @@ express.get("/api/locker/v3/:deploymentId/account/:accountId/items", async (req,
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     res.json(response)
@@ -8380,7 +8380,7 @@ express.get("/api/locker/v3/:deploymentId/account/:accountId/items", async (req,
 
 // Set BR Locker 4
 express.put("/api/locker/v3/:deploymentId/loadout/:loadoutType/account/:accountId/active-loadout", async (req, res) => {
-    const profile = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     var StatChanged = false;
 
     var date = new Date().toISOString();
@@ -8490,7 +8490,7 @@ express.put("/api/locker/v3/:deploymentId/loadout/:loadoutType/account/:accountI
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     res.json(response)
@@ -8499,7 +8499,7 @@ express.put("/api/locker/v3/:deploymentId/loadout/:loadoutType/account/:accountI
 
 // Get BR Locker 5
 express.get("/api/locker/v4/:deploymentId/account/:accountId/items", async (req, res) => {
-    const profile = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     var StatChanged = false;
 
     if (!profile.stats.attributes.hasOwnProperty("loadout_presets")) {
@@ -8571,7 +8571,7 @@ express.get("/api/locker/v4/:deploymentId/account/:accountId/items", async (req,
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     res.json(response)
@@ -8580,7 +8580,7 @@ express.get("/api/locker/v4/:deploymentId/account/:accountId/items", async (req,
 
 // Set BR Locker 5
 express.put("/api/locker/v4/:deploymentId/account/:accountId/active-loadout-group", async (req, res) => {
-    const profile = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     var StatChanged = false;
 
     var date = new Date().toISOString();
@@ -8693,7 +8693,7 @@ express.put("/api/locker/v4/:deploymentId/account/:accountId/active-loadout-grou
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     res.json(response)
@@ -8702,7 +8702,7 @@ express.put("/api/locker/v4/:deploymentId/account/:accountId/active-loadout-grou
 
 // Set immutable item attributes (e.g. sidekicks)
 express.post("/api/locker/v4/:deploymentId/account/:accountId/lock-in-immutable-item/:cosmeticItemId", async (req, res) => {
-    const profile = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     var StatChanged = false;
 
     var itemGuid = req.params.cosmeticItemId.split(":")[2] || "";
@@ -8727,7 +8727,7 @@ express.post("/api/locker/v4/:deploymentId/account/:accountId/lock-in-immutable-
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     res.status(204);
@@ -8736,7 +8736,7 @@ express.post("/api/locker/v4/:deploymentId/account/:accountId/lock-in-immutable-
 
 // Set companion name
 express.patch("/api/locker/v4/:deploymentId/account/:accountId/companion-name", async (req, res) => {
-    const profile = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     var StatChanged = false;
 
     if (req.body.cosmeticItemId && req.body.companionName) {
@@ -8754,7 +8754,7 @@ express.patch("/api/locker/v4/:deploymentId/account/:accountId/companion-name", 
         profile.rvn += 1;
         profile.commandRevision += 1;
 
-        vanity.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/athena.json", JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     res.status(204);
@@ -8763,7 +8763,7 @@ express.patch("/api/locker/v4/:deploymentId/account/:accountId/companion-name", 
 
 // Get BR quest progress on S36+
 express.get("/api/quest/v3/:deploymentId/progress/account/:accountId", async (req, res) => {
-    const profile = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     const memory = functions.GetVersionInfo(req);
 
     const SeasonPrefix = memory.season < 10 ? `0${memory.season}` : memory.season;
@@ -8857,7 +8857,7 @@ express.get("/api/quest/v3/:deploymentId/progress/account/:accountId", async (re
 
 // Set Active Archetype (e.g. main vehicle in v30.00+)
 express.post("/fortnite/api/game/v2/profile/*/client/SetActiveArchetype", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -8885,7 +8885,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetActiveArchetype", async 
             "value": profile.stats.attributes.loadout_archetype_values
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "athena"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -8910,7 +8910,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetActiveArchetype", async 
 
 // Set hero variants STW
 express.post("/fortnite/api/game/v2/profile/*/client/SetHeroCosmeticVariants", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "campaign"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "campaign"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -8942,7 +8942,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetHeroCosmeticVariants", a
             "attributeValue": profile.items[req.body.heroItem].attributes.backblingvariants
         })
 
-        vanity.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile(`profiles/${req.query.profileId || "campaign"}.json`, JSON.stringify(profile, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
     }
 
     // this doesn't work properly on version v12.20 and above but whatever
@@ -8967,7 +8967,7 @@ express.post("/fortnite/api/game/v2/profile/*/client/SetHeroCosmeticVariants", a
 
 // any dedicated_server request
 express.post("/fortnite/api/game/v2/profile/*/dedicated_server/*", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];
@@ -8996,7 +8996,7 @@ express.post("/fortnite/api/game/v2/profile/*/dedicated_server/*", async (req, r
 
 // any mcp request that doesn't have something assigned to it
 express.post("/fortnite/api/game/v2/profile/*/client/*", async (req, res) => {
-    const profile = vanity.json(`profiles/${req.query.profileId || "athena"}.json`); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const profile = niobium.json(`profiles/${req.query.profileId || "athena"}.json`); // NIOBIUM: path via niobium.js (data folder/resources)
 
     // do not change any of these or you will end up breaking it
     var ApplyProfileChanges = [];

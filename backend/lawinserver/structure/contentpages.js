@@ -1,10 +1,10 @@
 const Express = require("express");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const express = Express.Router();
 const functions = require("./functions.js");
 
 express.get("/content/api/pages/fortnite-game/spark-tracks", async (req, res) => {
-    const sparkTracks = vanity.json("responses/Athena/sparkTracks.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const sparkTracks = niobium.json("responses/Athena/sparkTracks.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     res.json(sparkTracks)
 })
@@ -49,7 +49,7 @@ express.get("/content/api/pages/fortnite-game/radio-stations", async (req, res) 
 })
 
 express.get("/content/api/pages/fortnite-game/seasonpasses", async (req, res) => {
-    const seasonPasses = vanity.json("responses/Athena/seasonPasses.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const seasonPasses = niobium.json("responses/Athena/seasonPasses.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     functions.chooseTranslationsInJSON(seasonPasses, req)
 
     res.json(seasonPasses)
@@ -62,7 +62,7 @@ express.get("/content/api/pages/*", async (req, res) => {
 })
 
 express.post("/api/v1/fortnite-br/*/target", async (req, res) => {
-    const motd = JSON.parse(JSON.stringify(vanity.json("responses/Athena/motd.json"))); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const motd = JSON.parse(JSON.stringify(niobium.json("responses/Athena/motd.json"))); // NIOBIUM: path via niobium.js (data folder/resources)
     var language = req.body.language || req.body.parameters.language;
     functions.chooseTranslationsInJSON(motd, req, language)
 

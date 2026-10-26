@@ -1,13 +1,13 @@
-# Baut Vanity komplett aus dem Quellcode und legt den fertigen Installer zum Download ab.
+# Builds Niobium completely from source and puts the finished installer up for download.
 #
-# Reihenfolge:
-#  1. check   – Oberfläche: TypeScript prüfen + bauen (Linux, schnell) und Rust-Logik testen
-#  2. backend – Backend zu einer dist/ bündeln (Linux)
-#  3. native  – die drei Spiel-DLLs mit Visual Studio bauen (Windows)
-#  4. windows – alles einsammeln (DLLs, Backend, Node) und den Installer bauen (Windows)
+# Order:
+#  1. check   – UI: check TypeScript + build (Linux, fast) and test the Rust logic
+#  2. backend – bundle the backend into a dist/ (Linux)
+#  3. native  – build the three game DLLs with Visual Studio (Windows)
+#  4. windows – collect everything (DLLs, backend, Node) and build the installer (Windows)
 #
-# Der fertige Installer liegt danach unter „Artifacts“ und zusätzlich als Vorab-Release
-# „vanity-testversion“ mit direktem Link.
+# The finished installer is then under "Artifacts" and also in the pre-release
+# "niobium-test" with a direct link.
 name: Launcher
 
 on:
@@ -27,7 +27,7 @@ env:
 
 jobs:
   check:
-    name: Oberfläche prüfen
+    name: Check the UI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -41,19 +41,19 @@ jobs:
           cache-dependency-path: launcher/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: launcher
-      - name: Typen prüfen
+      - name: Check types
         run: pnpm typecheck
         working-directory: launcher
-      - name: Oberfläche bauen
+      - name: Build the UI
         run: pnpm build
         working-directory: launcher
       - uses: dtolnay/rust-toolchain@stable
-      - name: Rust-Logik testen
+      - name: Test the Rust logic
         run: cargo test
         working-directory: launcher/core
 
   backend:
-    name: Backend bauen
+    name: Build the backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -67,50 +67,50 @@ jobs:
           cache-dependency-path: backend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: backend
-      - name: Backend testen und bündeln
+      - name: Test and bundle the backend
         run: |
           pnpm build
           pnpm test
         working-directory: backend
       - uses: actions/upload-artifact@v6
         with:
-          name: backend-dist
+          name: niobium-backend-dist
           path: backend/dist/
           if-no-files-found: error
           retention-days: 7
 
   native:
-    name: Spiel-DLLs bauen
+    name: Build the game DLLs
     runs-on: windows-latest
-    # Wenn der native Build (noch) scheitert, soll trotzdem ein Installer entstehen,
-    # damit Oberfläche, Import und Absturz-Analyse schon getestet werden können.
+    # If the native build fails (for now), an installer should still be made,
+    # so the UI, build import and crash analysis can already be tested.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
       - uses: microsoft/setup-msbuild@v2
-      - name: DLLs bauen
-        run: msbuild native\Vanity.sln /t:Restore,Build /p:Configuration=Release /p:Platform=x64 /m
-      # Auch wenn ein Projekt scheitert: alles einsammeln, was gebaut wurde (z. B. die Umleitung),
-      # damit der Installer nicht ohne DLLs dasteht.
-      - name: DLLs einsammeln
+      - name: Build the DLLs
+        run: msbuild native\Niobium.sln /t:Restore,Build /p:Configuration=Release /p:Platform=x64 /m
+      # Even if one project fails: collect everything that was built (e.g. the redirect),
+      # so the installer isn't left without DLLs.
+      - name: Collect the DLLs
         if: always()
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dlls | Out-Null
-          Get-ChildItem native\bin\Release\vanity_*.dll -ErrorAction SilentlyContinue | Copy-Item -Destination dlls\
-          Write-Host "Gebaute DLLs:"; Get-ChildItem dlls -ErrorAction SilentlyContinue
+          Get-ChildItem native\bin\Release\niobium_*.dll -ErrorAction SilentlyContinue | Copy-Item -Destination dlls\
+          Write-Host "Built DLLs:"; Get-ChildItem dlls -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: dlls
+          name: niobium-dlls
           path: dlls/
           if-no-files-found: warn
           retention-days: 7
 
   windows:
-    name: Installer bauen
-    # native hat continue-on-error, zählt also auch bei Fehlern als fertig – so sind die DLLs
-    # garantiert hochgeladen, bevor der Installer sie einsammelt (vorher ein Wettlauf).
+    name: Build the installer
+    # native has continue-on-error, so it counts as done even when it fails – this way the DLLs
+    # are surely uploaded before the installer collects them (before, this was a race).
     needs: [check, backend, native]
     runs-on: windows-latest
     permissions:
@@ -133,81 +133,92 @@ jobs:
       - run: pnpm install --frozen-lockfile
         working-directory: launcher
 
-      # Backend holen
+      # Get the backend
       - uses: actions/download-artifact@v7
         with:
-          name: backend-dist
+          name: niobium-backend-dist
           path: launcher/src-tauri/resources/backend
 
-      # DLLs holen – falls der native Build scheiterte, kommen Platzhalter zum Einsatz
-      - name: DLLs holen (falls vorhanden)
+      # Get the DLLs – if the native build failed, placeholders are used
+      - name: Get the DLLs (if there are any)
         uses: actions/download-artifact@v7
         continue-on-error: true
         with:
-          name: dlls
+          name: niobium-dlls
           path: launcher/src-tauri/resources/dlls
 
-      - name: Node für Windows mitliefern
+      - name: Bundle Node for Windows
         shell: pwsh
         working-directory: launcher/src-tauri/resources
         run: |
           $v = "${{ env.NODE_WIN_VERSION }}"
           Invoke-WebRequest "https://nodejs.org/dist/v$v/node-v$v-win-x64.zip" -OutFile node.zip
           $hash = (Get-FileHash node.zip -Algorithm SHA256).Hash.ToLower()
-          if ($hash -ne "${{ env.NODE_WIN_SHA256 }}") { throw "Node-Pruefsumme stimmt nicht: $hash" }
+          if ($hash -ne "${{ env.NODE_WIN_SHA256 }}") { throw "Node checksum doesn't match: $hash" }
           Expand-Archive node.zip -DestinationPath nodetmp -Force
           New-Item -ItemType Directory -Force -Path node | Out-Null
           Copy-Item "nodetmp\node-v$v-win-x64\node.exe" node\node.exe
           Remove-Item node.zip, nodetmp -Recurse -Force
 
-      - name: Ressourcen prüfen
+      - name: Check the resources
         shell: pwsh
         working-directory: launcher/src-tauri/resources
         run: |
-          # .gitkeep-Platzhalter entfernen, damit keine leeren Marker mitgebündelt werden
+          # remove .gitkeep placeholders so no empty markers get bundled
           Get-ChildItem -Recurse -Filter .gitkeep | Remove-Item -Force
-          if (-not (Test-Path node\node.exe)) { throw "node.exe fehlt" }
-          if (-not (Test-Path backend\main.js)) { throw "Backend fehlt" }
+          if (-not (Test-Path node\node.exe)) { throw "node.exe is missing" }
+          if (-not (Test-Path backend\main.js)) { throw "The backend is missing" }
           $dlls = @(Get-ChildItem dlls\*.dll -ErrorAction SilentlyContinue)
           if ($dlls.Count -eq 0) {
-            Write-Warning "Keine DLLs – Installer enthaelt nur Oberflaeche + Backend (Spiel-Teile fehlen)."
-            # leere Platzhalter, damit das Bundle-Glob nicht fehlschlaegt
+            Write-Warning "No DLLs - the installer only has the UI and the backend (the game parts are missing)."
+            # empty placeholder so the bundle glob doesn't fail
             New-Item -ItemType Directory -Force -Path dlls | Out-Null
-            Set-Content dlls\PLATZHALTER.txt "Die Spiel-DLLs wurden in diesem Build nicht erzeugt."
+            Set-Content dlls\PLACEHOLDER.txt "The game DLLs were not built in this build."
           } else {
-            Write-Host "DLLs im Build:"; $dlls | ForEach-Object { Write-Host "  $($_.Name)" }
+            Write-Host "DLLs in the build:"; $dlls | ForEach-Object { Write-Host "  $($_.Name)" }
           }
 
-      - name: Installer bauen
+      # A wrong BMP format is only a warning in NSIS (the installer would ship without the image)
+      - name: Check the installer images
+        shell: pwsh
+        working-directory: launcher/src-tauri/windows/assets
+        run: |
+          foreach ($f in @(@{n='sidebar.bmp';w=164;h=314}, @{n='header.bmp';w=150;h=57}, @{n='splash.bmp';w=0;h=0})) {
+            $b=[IO.File]::ReadAllBytes($f.n); $hdr=[BitConverter]::ToInt32($b,14); $w=[BitConverter]::ToInt32($b,18)
+            $h=[Math]::Abs([BitConverter]::ToInt32($b,22)); $bpp=[BitConverter]::ToInt16($b,28); $comp=[BitConverter]::ToInt32($b,30)
+            if ($b[0] -ne 0x42 -or $hdr -ne 40 -or $bpp -ne 24 -or $comp -ne 0 -or ($f.w -ne 0 -and ($w -ne $f.w -or $h -ne $f.h))) { throw "$($f.n): needs a 24-bit BMP3 $($f.w)x$($f.h)" }
+          }
+
+      - name: Build the installer
         run: pnpm tauri build
         working-directory: launcher
 
-      - name: Installer mit festem Namen ablegen
+      - name: Give the installer a fixed name
         shell: pwsh
         run: |
           $exe = Get-ChildItem launcher\src-tauri\target\release\bundle\nsis\*.exe | Select-Object -First 1
-          Copy-Item $exe.FullName Vanity-Setup.exe
-          Write-Host "Installer: $($exe.Name) -> Vanity-Setup.exe"
+          Copy-Item $exe.FullName Niobium-Setup.exe
+          Write-Host "Installer: $($exe.Name) -> Niobium-Setup.exe"
 
       - uses: actions/upload-artifact@v6
         with:
-          name: Vanity-Installer
-          path: Vanity-Setup.exe
+          name: niobium-installer
+          path: Niobium-Setup.exe
           if-no-files-found: error
           retention-days: 30
 
-      # Direkter Download-Link: Vorab-Release „vanity-testversion“ (nur auf dem eigenen Zweig)
-      - name: Als Testversion veröffentlichen
+      # Direct download link: pre-release "niobium-test"
+      - name: Publish as test build
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: vanity-testversion
-          name: Vanity – Testversion
+          tag_name: niobium-test
+          name: Niobium – test build
           prerelease: true
           body: |
-            Automatisch gebauter Installer vom letzten Stand (${{ github.sha }}).
-            **Zum Testen, nicht für den Dauergebrauch.** Windows-Warnung: „Weitere Informationen“ → „Trotzdem ausführen“.
-          files: Vanity-Setup.exe
+            Installer built automatically from the latest code (${{ github.sha }}).
+            **For testing, not for everyday use.** Windows warning: "More info" → "Run anyway".
+          files: Niobium-Setup.exe
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

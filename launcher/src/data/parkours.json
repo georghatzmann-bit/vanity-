@@ -1,18 +1,18 @@
 {
   "version": 1,
-  "about": "Vanity-Parkours: fertige Trickshot-Strecken aus Sprung-Objekten. Alle Angaben in Metern relativ zu dir: x = nach vorne (Blickrichtung), y = nach rechts, z = nach oben. Der Server sucht für jedes Objekt den ersten Namen, den deine Fortnite-Version kennt.",
+  "about": "Niobium parkours: ready-made trickshot courses built from jump objects. All values are in metres relative to you: x = forward (where you look), y = right, z = up. For each object the server uses the first name your Fortnite version knows.",
   "kinds": {
-    "trampoline": { "label": "Trampolin", "summon": ["tire", "umbrella"] },
-    "launcher": { "label": "Sprung-Geysir", "summon": ["geyser", "airvent", "ufobouncer"] },
-    "sideLauncher": { "label": "Seitwärts-Schleuder", "summon": ["ufobouncer", "geyser", "airvent"] }
+    "trampoline": { "label": "Trampoline", "summon": ["tire", "umbrella"] },
+    "launcher": { "label": "Launcher", "summon": ["geyser", "airvent", "ufobouncer"] },
+    "sideLauncher": { "label": "Side launcher", "summon": ["ufobouncer", "geyser", "airvent"] }
   },
   "snipers": ["reaper_sr", "hunterbolt_sr", "heavy_sr", "bolt_sr", "hunting_sr", "semi"],
   "parkours": [
     {
-      "id": "erster-sprung",
-      "name": "Erster Sprung",
+      "id": "first-jump",
+      "name": "First Jump",
       "level": 1,
-      "description": "Lauf übers Trampolin, flieg hoch und triff den Bot vor dir.",
+      "description": "Run over the trampoline, fly up and hit the bot in front of you.",
       "height": 25,
       "platform": [3, 3],
       "elements": [
@@ -23,10 +23,10 @@
       ]
     },
     {
-      "id": "geysir-shot",
-      "name": "Geysir-Shot",
+      "id": "geyser-shot",
+      "name": "Geyser Shot",
       "level": 1,
-      "description": "Stell dich auf den Geysir, er schießt dich hoch. Oben drehen und schießen.",
+      "description": "Step on the geyser and it shoots you up. Turn around up there and shoot.",
       "height": 25,
       "platform": [3, 3],
       "elements": [
@@ -37,10 +37,10 @@
       ]
     },
     {
-      "id": "trampolin-treppe",
-      "name": "Trampolin-Treppe",
+      "id": "trampoline-stairs",
+      "name": "Trampoline Stairs",
       "level": 2,
-      "description": "Vier Trampoline, jedes etwas höher. Von einem zum nächsten hüpfen, am Ende Schuss.",
+      "description": "Four trampolines, each one a bit higher. Bounce from one to the next, then take the shot.",
       "height": 25,
       "platform": [3, 3],
       "elements": [
@@ -54,10 +54,10 @@
       ]
     },
     {
-      "id": "doppel-ziel",
-      "name": "Doppel-Ziel",
+      "id": "double-target",
+      "name": "Double Target",
       "level": 2,
-      "description": "Ein Geysir, zwei Bots links und rechts. Schaffst du beide in einem Flug?",
+      "description": "One geyser, two bots left and right. Can you hit both in one flight?",
       "height": 25,
       "platform": [3, 3],
       "elements": [
@@ -69,10 +69,10 @@
       ]
     },
     {
-      "id": "spin-runde",
-      "name": "360er-Runde",
+      "id": "spin-360",
+      "name": "360 Spin",
       "level": 2,
-      "description": "Kurzer Abstand zum Bot – zum Üben von Drehungen (360er) vor dem Schuss.",
+      "description": "The bot is close by – practise spins (360s) before the shot.",
       "height": 25,
       "platform": [3, 3],
       "elements": [
@@ -83,10 +83,10 @@
       ]
     },
     {
-      "id": "weitschuss",
-      "name": "Weitschuss",
+      "id": "long-shot",
+      "name": "Long Shot",
       "level": 3,
-      "description": "Hoch oben starten, der Bot steht weit weg und tiefer. Für lange Schüsse.",
+      "description": "Start high up; the bot stands far away and lower down. For long shots.",
       "height": 60,
       "platform": [3, 3],
       "elements": [
@@ -97,10 +97,10 @@
       ]
     },
     {
-      "id": "kette",
-      "name": "Sprung-Kette",
+      "id": "jump-chain",
+      "name": "Jump Chain",
       "level": 3,
-      "description": "Geysir, Trampolin, Geysir – eine Kette durch die Luft. Unterwegs zwei Bots.",
+      "description": "Geyser, trampoline, geyser – a chain through the air. Two bots along the way.",
       "height": 25,
       "platform": [3, 3],
       "elements": [
@@ -114,10 +114,10 @@
       ]
     },
     {
-      "id": "boden-kurs",
-      "name": "Boden-Kurs",
+      "id": "ground-course",
+      "name": "Ground Course",
       "level": 1,
-      "description": "Alles direkt vor dir am Boden – am besten auf einer flachen Wiese starten.",
+      "description": "Everything right in front of you on the ground – best started on a flat field.",
       "height": 0,
       "platform": [0, 0],
       "elements": [
@@ -130,10 +130,10 @@
       ]
     },
     {
-      "id": "freies-ueben",
-      "name": "Freies Üben",
+      "id": "free-practice",
+      "name": "Free Practice",
       "level": 1,
-      "description": "Große Plattform in der Luft mit drei Bots drumherum. Mach, was du willst.",
+      "description": "A big platform in the air with three bots around it. Do whatever you like.",
       "height": 30,
       "platform": [5, 5],
       "elements": [

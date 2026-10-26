@@ -1,5 +1,5 @@
-// Baut dist/: main.js (eine Datei, alle npm-Pakete eingebaut) + die Daten von LawinServer daneben.
-// Aufruf über `pnpm build` (prüft vorher die Typen mit tsc).
+// Builds dist/: main.js (one file with every npm package built in) + LawinServer's data next to it.
+// Run via `pnpm build` (checks the types with tsc first).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,8 +10,8 @@ const lawin = path.join(root, "lawinserver");
 const dist = path.join(root, "dist");
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 
-// Alles, was LawinServer zur Laufzeit liest. Beschreibbares davon (profiles/, Config/, …) wird beim
-// ersten Start in den Daten-Ordner kopiert, siehe lawinserver/structure/vanity.js (WRITABLE).
+// Everything LawinServer reads while running. The writable part (profiles/, Config/, …) is copied into
+// the data folder on the first start, see lawinserver/structure/niobium.js (WRITABLE).
 const DATA_DIRS = ["CloudStorage", "Config", "profiles", "public", "responses"];
 
 fs.rmSync(dist, { recursive: true, force: true });
@@ -23,14 +23,14 @@ const result = await build({
   platform: "node",
   target: "node22",
   format: "cjs",
-  // optionale, native Beschleuniger von ws – ws läuft ohne sie
+  // optional native speed-ups of ws – ws runs without them
   external: ["bufferutil", "utf-8-validate"],
-  define: { __VANITY_VERSION__: JSON.stringify(pkg.version) },
+  define: { __NIOBIUM_VERSION__: JSON.stringify(pkg.version) },
   banner: {
-    js: `// Vanity Backend ${pkg.version} – enthält LawinServer von Lawin0129 (GPL-3.0), siehe LICENSE und THIRD_PARTY_LICENSES.txt`,
+    js: `// Niobium Backend ${pkg.version} – contains LawinServer by Lawin0129 (GPL-3.0), see LICENSE and THIRD_PARTY_LICENSES.txt`,
   },
   legalComments: "eof",
-  // express/lib/view.js lädt Template-Engines dynamisch; LawinServer nutzt keine.
+  // express/lib/view.js loads template engines dynamically; LawinServer uses none.
   logOverride: { "unsupported-require-call": "silent" },
   metafile: true,
   logLevel: "warning",
@@ -40,11 +40,11 @@ for (const dir of DATA_DIRS) {
   fs.cpSync(path.join(lawin, dir), path.join(dist, dir), { recursive: true });
 }
 
-// Sorgt dafür, dass main.js auch dann als CommonJS läuft, wenn ein übergeordneter Ordner
-// eine package.json mit "type": "module" hat.
+// Makes sure main.js runs as CommonJS even if a parent folder has a package.json
+// with "type": "module".
 fs.writeFileSync(path.join(dist, "package.json"), `${JSON.stringify({ private: true, type: "commonjs" }, null, 2)}\n`);
 
-// Lizenzen: Vanity und LawinServer stehen unter GPL-3.0; dazu die Lizenztexte aller eingebauten npm-Pakete.
+// Licences: Niobium and LawinServer are GPL-3.0; plus the licence texts of every built-in npm package.
 fs.copyFileSync(path.join(lawin, "LICENSE"), path.join(dist, "LICENSE"));
 
 const packages = new Map();
@@ -57,8 +57,8 @@ for (const input of Object.keys(result.metafile.inputs)) {
   const licenseFile = fs.readdirSync(dir).find((name) => /^(licen[cs]e|copying)(\.|$)/i.test(name));
   packages.set(dir, {
     id: `${meta.name}@${meta.version}`,
-    license: typeof meta.license === "string" ? meta.license : "siehe Text",
-    text: licenseFile ? fs.readFileSync(path.join(dir, licenseFile), "utf8").trim() : "(kein Lizenztext im Paket enthalten)",
+    license: typeof meta.license === "string" ? meta.license : "see text",
+    text: licenseFile ? fs.readFileSync(path.join(dir, licenseFile), "utf8").trim() : "(no licence text in the package)",
   });
 }
 
@@ -69,17 +69,17 @@ const sections = [...packages.values()]
 fs.writeFileSync(
   path.join(dist, "THIRD_PARTY_LICENSES.txt"),
   [
-    `Vanity Backend ${pkg.version}`,
+    `Niobium Backend ${pkg.version}`,
     "",
-    "Enthält LawinServer (https://github.com/Lawin0129/LawinServer) von Lawin0129 und",
-    "PRO100KatYT, lizenziert unter der GNU General Public License v3.0 (siehe LICENSE).",
-    "Die Daten in profiles/, responses/, CloudStorage/, Config/ und public/ stammen aus LawinServer.",
+    "Contains LawinServer (https://github.com/Lawin0129/LawinServer) by Lawin0129 and",
+    "PRO100KatYT, licensed under the GNU General Public License v3.0 (see LICENSE).",
+    "The data in profiles/, responses/, CloudStorage/, Config/ and public/ comes from LawinServer.",
     "",
-    "In main.js sind außerdem diese npm-Pakete eingebaut:",
+    "main.js also has these npm packages built in:",
     "",
     ...sections,
   ].join("\n"),
 );
 
 const size = (fs.statSync(path.join(dist, "main.js")).size / 1024).toFixed(0);
-console.log(`dist/main.js (${size} KiB), ${packages.size} npm-Pakete eingebaut, Daten: ${DATA_DIRS.join(", ")}`);
+console.log(`dist/main.js (${size} KiB), ${packages.size} npm packages built in, data: ${DATA_DIRS.join(", ")}`);

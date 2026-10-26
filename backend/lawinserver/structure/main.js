@@ -1,5 +1,5 @@
 const Express = require("express");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const express = Express.Router();
 const fs = require("fs");
 const path = require("path");
@@ -8,8 +8,8 @@ const functions = require("./functions.js");
 express.get("/clearitemsforshop", async (req, res) => {
     res.set("Content-Type", "text/plain");
 
-    const athena = vanity.json("profiles/athena.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    const CatalogConfig = vanity.json("Config/catalog_config.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const athena = niobium.json("profiles/athena.json"); // NIOBIUM: path via niobium.js (data folder/resources)
+    const CatalogConfig = niobium.json("Config/catalog_config.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     var StatChanged = false;
 
     for (var value in CatalogConfig) {
@@ -34,7 +34,7 @@ express.get("/clearitemsforshop", async (req, res) => {
         athena.rvn += 1;
         athena.commandRevision += 1;
 
-        vanity.writeFile("profiles/athena.json", JSON.stringify(athena, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        niobium.writeFile("profiles/athena.json", JSON.stringify(athena, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
 
         res.send('Success');
     } else {
@@ -106,7 +106,7 @@ express.get("/launcher/api/public/assets/*", async (req, res) => {
 express.get("/Builds/Fortnite/Content/CloudDir/*.manifest", async (req, res) => {
     res.set("Content-Type", "application/octet-stream")
 
-    const manifest = fs.readFileSync(vanity.file("responses/CloudDir/LawinServer.manifest")); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const manifest = fs.readFileSync(niobium.file("responses/CloudDir/LawinServer.manifest")); // NIOBIUM: path via niobium.js (data folder/resources)
 
     res.status(200).send(manifest).end();
 })
@@ -114,13 +114,13 @@ express.get("/Builds/Fortnite/Content/CloudDir/*.manifest", async (req, res) => 
 express.get("/Builds/Fortnite/Content/CloudDir/*.chunk", async (req, res) => {
     res.set("Content-Type", "application/octet-stream")
 
-    const chunk = fs.readFileSync(vanity.file("responses/CloudDir/LawinServer.chunk")); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const chunk = fs.readFileSync(niobium.file("responses/CloudDir/LawinServer.chunk")); // NIOBIUM: path via niobium.js (data folder/resources)
 
     res.status(200).send(chunk).end();
 })
 
 express.get("/Builds/Fortnite/Content/CloudDir/*.ini", async (req, res) => {
-    const ini = fs.readFileSync(vanity.file("responses/CloudDir/Full.ini")); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const ini = fs.readFileSync(niobium.file("responses/CloudDir/Full.ini")); // NIOBIUM: path via niobium.js (data folder/resources)
 
     res.status(200).send(ini).end();
 })
@@ -147,7 +147,7 @@ express.get("/socialban/api/public/v1/*", async (req, res) => {
 })
 
 express.get("/fortnite/api/game/v2/events/tournamentandhistory/*", async (req, res) => {
-    const tournamentandhistory = vanity.json("responses/Athena/Tournament/tournamentandhistory.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const tournamentandhistory = niobium.json("responses/Athena/Tournament/tournamentandhistory.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     
     res.json(tournamentandhistory)
 })
@@ -220,13 +220,13 @@ express.get("/fortnite/api/game/v2/enabled_features", async (req, res) => {
 // Sidekicks' icons
 express.get("/v1/item/*", async (req, res) => {
     res.set("Content-Type", "image/png");
-    const lawinpfp = fs.readFileSync(vanity.file("public/images/lawinpfp.png")); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const lawinpfp = fs.readFileSync(niobium.file("public/images/lawinpfp.png")); // NIOBIUM: path via niobium.js (data folder/resources)
     res.send(lawinpfp);
 })
 
 express.get("/api/v1/events/Fortnite/download/:accountId", async (req, res) => {
     const memory = functions.GetVersionInfo(req);
-    const tournament = vanity.json("responses/Athena/Tournament/tournament.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const tournament = niobium.json("responses/Athena/Tournament/tournament.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     tournament.player.accountId = req.params.accountId;
 
     if (memory.season >= 33) {
@@ -250,7 +250,7 @@ express.get("/api/v1/events/Fortnite/download/:accountId", async (req, res) => {
 
 
 express.get("/api/v1/events/Fortnite/:eventId/history/:accountId", async (req, res) => {
-    const history = vanity.json("responses/Athena/Tournament/history.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const history = niobium.json("responses/Athena/Tournament/history.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     history[0].scoreKey.eventId = req.params.eventId;
     history[0].teamId = req.params.accountId;
     history[0].teamAccountIds = [req.params.accountId];
@@ -260,7 +260,7 @@ express.get("/api/v1/events/Fortnite/:eventId/history/:accountId", async (req, r
 
 express.get("/api/v1/players/Fortnite/tokens", async (req, res) => {
     const teamAccountIds = (req.query.teamAccountIds || "").split(",");
-    const tournament = vanity.json("responses/Athena/Tournament/tournament.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const tournament = niobium.json("responses/Athena/Tournament/tournament.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     var response = {"accounts": []}
 
     for (const accountId of teamAccountIds) {
@@ -274,8 +274,8 @@ express.get("/api/v1/players/Fortnite/tokens", async (req, res) => {
 })
 
 express.get("/api/v1/leaderboards/Fortnite/:eventId/:eventWindowId/:accountId", async (req, res) => {
-    const leaderboards = vanity.json("responses/Athena/Tournament/leaderboard.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
-    var heroNames = vanity.json("responses/Campaign/heroNames.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const leaderboards = niobium.json("responses/Athena/Tournament/leaderboard.json"); // NIOBIUM: path via niobium.js (data folder/resources)
+    var heroNames = niobium.json("responses/Campaign/heroNames.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     heroNames = heroNames.sort(() => Math.random() - 0.5);
     heroNames.unshift(req.params.accountId);
 
@@ -375,7 +375,7 @@ express.post("/fortnite/api/leaderboards/type/group/stat/:statName/window/:statW
 });
 
 express.post("/fortnite/api/leaderboards/type/global/stat/:statName/window/:statWindow", async (req, res) => {
-    var heroNames = vanity.json("responses/Campaign/heroNames.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    var heroNames = niobium.json("responses/Campaign/heroNames.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
     var entries = [];
     
@@ -484,7 +484,7 @@ express.post("/datarouter/api/v1/public/data", async (req, res) => {
 
 express.post("/api/v1/assets/Fortnite/*/*", async (req, res) => {
     if (req.body.hasOwnProperty("FortCreativeDiscoverySurface") && req.body.FortCreativeDiscoverySurface == 0) {
-        const discovery_api_assets = vanity.json("responses/Athena/Discovery/discovery_api_assets.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+        const discovery_api_assets = niobium.json("responses/Athena/Discovery/discovery_api_assets.json"); // NIOBIUM: path via niobium.js (data folder/resources)
         res.json(discovery_api_assets)
     }
     else {
@@ -558,12 +558,12 @@ express.get("/region", async (req, res) => {
 
 // Parental Controls
 express.all("/v1/epic-settings/public/users/*/values", async (req, res) => {
-    const epicsettings = vanity.json("responses/epic-settings.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const epicsettings = niobium.json("responses/epic-settings.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     res.json(epicsettings)
 })
 
 express.post("/epic/socs/v1/users/*/settings/query", async (req, res) => {
-    const socssettings = vanity.json("responses/socs-settings.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    const socssettings = niobium.json("responses/socs-settings.json"); // NIOBIUM: path via niobium.js (data folder/resources)
     res.json(socssettings)
 })
 

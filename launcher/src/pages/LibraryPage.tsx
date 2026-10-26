@@ -1,15 +1,36 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, CircleDashed, Clock, FolderOpen, FolderPlus, Loader2, MoreHorizontal, Plus, ShieldCheck, X } from "lucide-react";
+import {
+  Bubbles,
+  Check,
+  CircleDashed,
+  CircleSlash,
+  Clock,
+  FlaskConical,
+  FolderOpen,
+  FolderPlus,
+  Layers,
+  MoreHorizontal,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { PageHeader, PageShell, Panel, Reveal } from "@/components/common";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ImportBuildDialog } from "@/components/build/ImportBuild";
+import { IconTile, PageHeader, PageShell, Panel, type IconTone } from "@/components/common";
+import { GlowCard, NumberTicker, Reveal, Sheen, Stagger } from "@/components/fx";
+import { pageGroup } from "@/components/layout/nav";
+import { useBubbleSupport } from "@/hooks/use-bubble-support";
+import { bubbleLevelFor } from "@/lib/bubble";
+import { coverGradient } from "@/lib/builds";
 import { versionSupport } from "@/lib/demo-data";
-import { api, openFolder, pickFolder, type BuildInfo, type DetectReport } from "@/lib/api";
+import { api, openFolder, type BuildInfo } from "@/lib/api";
+import { EASE_OUT, SPRING_UI } from "@/lib/motion";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -21,179 +42,291 @@ export function LibraryPage() {
   const remove = async (id: string) => {
     const config = await api.removeBuild(id);
     useApp.getState().setConfig(config);
-    toast("Aus der Liste entfernt", { description: "Deine Build-Dateien bleiben unangetastet." });
+    toast("Removed from the list", { description: "Your build files stay untouched." });
   };
+
+  const tested = builds.filter((b) => b.support === "supported").length;
+  const bubbleReady = builds.filter((b) => bubbleLevelFor(b.version) !== "unavailable").length;
 
   return (
     <PageShell>
       <PageHeader
-        title="Bibliothek"
-        description="Deine Fortnite-Builds. Beim Hinzufügen erkennt Vanity die Version automatisch und prüft, ob sie unterstützt wird."
-        actions={<Button onClick={() => setImportOpen(true)}><Plus />Build hinzufügen</Button>}
+        eyebrow={pageGroup("library")}
+        title="Library"
+        description="Your Fortnite builds. When you add one, Niobium finds the version and checks if it's supported."
+        actions={
+          <Button onClick={() => setImportOpen(true)}>
+            <Plus />
+            Add a build
+          </Button>
+        }
       />
 
-      <Reveal className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {builds.map((build) => (
-          <BuildCard key={build.id} build={build} active={build.id === activeBuildId} onOpen={() => openFolder(build.path)} onRemove={() => remove(build.id)} />
-        ))}
-        <motion.button type="button" whileHover={{ y: -2 }} transition={{ duration: 0.15 }} onClick={() => setImportOpen(true)} className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/[0.12] p-6 text-center text-muted-foreground outline-none transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50">
-          <div className="flex size-12 items-center justify-center rounded-xl bg-white/[0.05]"><FolderPlus className="size-6" /></div>
-          <div>
-            <p className="text-sm font-medium text-foreground">Build-Ordner hinzufügen</p>
-            <p className="mt-1 text-xs">Den Ordner wählen, in dem „FortniteGame“ liegt.</p>
-          </div>
-        </motion.button>
-      </Reveal>
+      {builds.length > 0 && (
+        <Stagger className="grid grid-cols-3 gap-3" delay={0.06}>
+          <Stat icon={Layers} label="Builds" value={builds.length} />
+          <Stat icon={ShieldCheck} label="Tested" value={tested} tone="success" />
+          <Stat icon={Bubbles} label="Bubble Builds ready" value={bubbleReady} />
+        </Stagger>
+      )}
 
-      <Panel title="Welche Versionen gehen" description="Vanity startet jede Version von 1.7 bis 30.x – Chapter 1 bis Chapter 5 Season 3. Getestet ist bisher nur 19.10; alle anderen sind ungetestet, die Bauteile sind aber dafür gebaut. Neuere Versionen kennt der Game Server noch nicht.">
-        <ul className="flex flex-col gap-2">
-          {versionSupport.map((v) => (
-            <li key={v.version} className="flex items-center gap-4 rounded-lg bg-white/[0.02] px-4 py-3">
-              <SupportBadge level={v.level} />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{v.version} <span className="font-normal text-muted-foreground">· {v.label}</span></p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{v.note}</p>
-              </div>
-            </li>
+      <Stagger className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" delay={0.1} stagger={0.06}>
+        <AnimatePresence>
+          {builds.map((build, i) => (
+            <motion.div key={build.id} {...cardMotion(i)} className="flex">
+              <BuildCard
+                build={build}
+                active={build.id === activeBuildId}
+                onOpen={() => openFolder(build.path)}
+                onRemove={() => remove(build.id)}
+              />
+            </motion.div>
           ))}
-        </ul>
+        </AnimatePresence>
+        <AddTile first={builds.length === 0} onClick={() => setImportOpen(true)} />
+      </Stagger>
+
+      <Panel
+        title="Which versions work"
+        description="Niobium starts every version from 1.7 to 30.x – Chapter 1 to Chapter 5 Season 3. Only 19.10 is tested so far; the others are untested, but every part is built for them. The game server doesn't know newer versions yet."
+      >
+        <Stagger className="relative flex flex-col gap-2" inView stagger={0.05}>
+          {/* the chapter line on the left */}
+          <span aria-hidden className="absolute top-4 bottom-4 left-[19px] w-px bg-gradient-to-b from-brand-blue/50 via-brand-violet/40 to-transparent" />
+          {versionSupport.map((v) => (
+            <Reveal key={v.version} kind="slide" className="relative flex items-center gap-4 rounded-lg py-2.5 pr-4 pl-3 transition-colors hover:bg-white/[0.03]">
+              <SupportDot level={v.level} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">
+                  <span className="tabular-nums">{v.version}</span> <span className="font-normal text-muted-foreground">· {v.label}</span>
+                </p>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{v.note}</p>
+              </div>
+              <SupportBadge level={v.level} />
+            </Reveal>
+          ))}
+        </Stagger>
       </Panel>
 
-      <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <ImportBuildDialog open={importOpen} onOpenChange={setImportOpen} />
     </PageShell>
   );
 }
 
-function BuildCard({ build, active, onOpen, onRemove }: { build: BuildInfo; active: boolean; onOpen: () => void; onRemove: () => void }) {
-  const supported = build.support === "supported";
-  const tooOld = build.support === "unsupported";
+/**
+ * Entrance/exit for a card in a list that can grow and shrink. The card drives its own animation
+ * (instead of waiting for the page's stagger), so it can never get stuck hidden, and new cards pop in.
+ */
+function cardMotion(i: number) {
+  return {
+    layout: true,
+    initial: { opacity: 0, scale: 0.96, y: 8 },
+    animate: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.45, ease: EASE_OUT, delay: 0.08 + i * 0.06 } },
+    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.16 } },
+    transition: SPRING_UI,
+  } as const;
+}
+
+function Stat({ icon, label, value, tone = "brand" }: { icon: LucideIcon; label: string; value: number; tone?: IconTone }) {
   return (
-    <motion.article whileHover={{ y: -2 }} transition={{ duration: 0.15 }} className="glass overflow-hidden rounded-xl">
-      <div className="relative h-28 overflow-hidden bg-gradient-to-br from-primary/40 via-[#2a1f6e]/40 to-[#1f4fd1]/20">
-        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "repeating-linear-gradient(115deg, #fff 0 1px, transparent 1px 18px)" }} />
-        <span className="absolute right-4 bottom-1 text-5xl font-bold tracking-tighter text-white/15">{build.version}</span>
-        <span className={cn("absolute top-4 left-4 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium", supported ? "bg-success/15 text-success" : tooOld ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}>
-          {supported ? <ShieldCheck className="size-3.5" /> : <Clock className="size-3.5" />}
-          {supported ? "Getestet" : tooOld ? "Nicht startbar" : "Ungetestet"}
-        </span>
-        {active && <span className="absolute top-4 right-4 rounded-md bg-black/30 px-2 py-1 text-xs font-medium">Aktiv</span>}
+    <GlowCard kind="scale" className="flex items-center gap-3 px-4 py-3">
+      <IconTile icon={icon} tone={tone} size="sm" />
+      <div className="min-w-0">
+        <p className="text-xl leading-tight font-semibold">
+          <NumberTicker value={value} />
+        </p>
+        <p className="truncate text-[11px] text-muted-foreground">{label}</p>
       </div>
-      <div className="flex flex-col gap-4 p-5">
-        <div>
-          <h2 className="text-sm font-semibold">Fortnite {build.version}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{build.season}{build.changelist ? ` · CL-${build.changelist}` : ""} · {build.engine}</p>
-          {build.supportNote && build.supportNote !== "getestet" && <p className="mt-1 text-xs text-muted-foreground">{build.supportNote}</p>}
+    </GlowCard>
+  );
+}
+
+const supportChip = {
+  supported: { icon: ShieldCheck, text: "Tested", variant: "success" },
+  experimental: { icon: Clock, text: "Untested", variant: "warning" },
+  unsupported: { icon: CircleSlash, text: "Can't start", variant: "destructive" },
+} as const;
+
+function BuildCard({ build, active, onOpen, onRemove }: { build: BuildInfo; active: boolean; onOpen: () => void; onRemove: () => void }) {
+  const chip = supportChip[build.support] ?? supportChip.experimental;
+  const ChipIcon = chip.icon;
+  const note = build.supportNote && !/^(tested|getestet)$/i.test(build.supportNote.trim()) ? build.supportNote : null;
+  return (
+    <GlowCard
+      initial={false}
+      glow={active}
+      spotlight
+      whileHover={{ y: -3 }}
+      className="group hover-glow flex w-full flex-col overflow-hidden"
+    >
+      {/* Cover */}
+      <div className={cn("relative h-32 overflow-hidden rounded-t-xl bg-gradient-to-br", coverGradient(build.version))}>
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-[0.16]"
+          style={{ backgroundImage: "repeating-linear-gradient(115deg, #fff 0 1px, transparent 1px 18px)", maskImage: "linear-gradient(90deg, transparent, black 70%)" }}
+        />
+        <div aria-hidden className="absolute -top-16 -left-10 size-48 rounded-full bg-[radial-gradient(closest-side,rgb(143_168_255/0.35),transparent)]" />
+        <span
+          aria-hidden
+          className="absolute right-4 -bottom-3 text-6xl font-bold tracking-tighter text-white/[0.13] tabular-nums transition-[translate,color] duration-500 ease-out group-hover:-translate-x-1.5 group-hover:text-white/[0.22]"
+        >
+          {build.version}
+        </span>
+        <Sheen />
+        <div className="absolute inset-x-4 top-4 flex items-center justify-between gap-2">
+          <Badge variant={chip.variant} className="bg-black/30 backdrop-blur-md">
+            <ChipIcon />
+            {chip.text}
+          </Badge>
+          {active && (
+            <Badge variant="brand" className="shadow-[0_0_14px_-2px_rgb(122_60_255/0.8)]">
+              <Check />
+              Active
+            </Badge>
+          )}
         </div>
-        <p title={build.path} className="selectable truncate rounded-md bg-black/20 px-3 py-2 font-mono text-xs text-muted-foreground">{build.path}</p>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={onOpen}><FolderOpen />Ordner öffnen</Button>
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+      </div>
+
+      {/* Body */}
+      <div className="flex flex-1 flex-col gap-4 p-5">
+        <div>
+          <h2 className="text-[15px] font-semibold">
+            Fortnite <span className="tabular-nums">{build.version}</span>
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {build.season}
+            {build.changelist ? <span className="tabular-nums"> · CL-{build.changelist}</span> : null} · {build.engine}
+          </p>
+          {note && <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{note}</p>}
+        </div>
+
+        <BubbleRow version={build.version} />
+
+        <p title={build.path} className="selectable truncate rounded-md bg-black/25 px-3 py-2 font-mono text-xs text-muted-foreground ring-1 ring-white/[0.04]">
+          {build.path}
+        </p>
+
+        <div className="mt-auto flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={onOpen}>
+            <FolderOpen />
+            Open folder
+          </Button>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="Mehr Aktionen"><MoreHorizontal /></Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label={`More for Fortnite ${build.version}`}>
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem variant="destructive" onClick={onRemove}>Aus Liste entfernen</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={onRemove}>
+                <Trash2 />
+                Remove from list
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
-    </motion.article>
+    </GlowCard>
   );
 }
+
+/** "Bubble Builds  Supported / Experimental / —" with the English note as a tooltip. */
+function BubbleRow({ version }: { version: string }) {
+  const info = useBubbleSupport(version);
+  if (!info) return null;
+  const chip =
+    info.level === "supported" ? (
+      <Badge variant="default">
+        <Bubbles />
+        Supported
+      </Badge>
+    ) : info.level === "experimental" ? (
+      <Badge variant="warning">
+        <FlaskConical />
+        Experimental
+      </Badge>
+    ) : (
+      <span className="px-1.5 text-sm leading-none text-faint" aria-label="Not available">
+        —
+      </span>
+    );
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div tabIndex={0} className="focus-ring flex cursor-help items-center justify-between gap-3 rounded-lg surface-subtle px-3 py-2">
+          <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+            <Bubbles className="size-3.5 text-faint" />
+            Bubble Builds
+          </span>
+          {chip}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-64">{info.note}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Dashed "add" card. With no builds yet it spans the whole row and says so. */
+function AddTile({ first, onClick }: { first: boolean; onClick: () => void }) {
+  return (
+    <GlowCard
+      interactive
+      kind="scale"
+      onClick={onClick}
+      aria-label="Add a build folder"
+      className={cn(
+        "flex min-h-52 flex-col items-center justify-center gap-4 border border-dashed",
+        "border-white/[0.1] bg-white/[0.01] p-6 text-center text-muted-foreground backdrop-blur-none before:hidden hover:border-brand-violet/40",
+        first && "min-h-64 md:col-span-2 xl:col-span-3",
+      )}
+    >
+      <div className="relative">
+        <div aria-hidden className="absolute -inset-5 rounded-full bg-[radial-gradient(closest-side,rgb(122_60_255/0.22),transparent)] opacity-60 transition-opacity duration-300 group-hover:opacity-100" />
+        <div className="relative flex size-12 items-center justify-center rounded-xl bg-gradient-to-b from-white/[0.09] to-white/[0.03] text-violet-text shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_0_0_1px_rgb(255_255_255/0.06)] transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
+          <FolderPlus className="size-6" />
+        </div>
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-foreground">{first ? "Add your first build" : "Add a build folder"}</p>
+        <p className="mt-1 text-xs">
+          Choose the folder that contains "FortniteGame".{first ? " Niobium only reads it – nothing in it is changed." : ""}
+        </p>
+      </div>
+    </GlowCard>
+  );
+}
+
+const supportLevels: Record<string, { icon: LucideIcon; text: string; variant: "success" | "warning" | "muted" }> = {
+  supported: { icon: Check, text: "Tested", variant: "success" },
+  experimental: { icon: Clock, text: "Untested", variant: "warning" },
+  unsupported: { icon: CircleDashed, text: "Not yet", variant: "muted" },
+  later: { icon: CircleDashed, text: "Later", variant: "muted" },
+};
 
 function SupportBadge({ level }: { level: string }) {
-  const map: Record<string, { icon: typeof Check; text: string; cls: string }> = {
-    supported: { icon: Check, text: "Getestet", cls: "bg-success/15 text-success" },
-    experimental: { icon: Clock, text: "Ungetestet", cls: "bg-warning/15 text-warning" },
-    unsupported: { icon: CircleDashed, text: "Noch nicht", cls: "bg-white/[0.06] text-muted-foreground" },
-    later: { icon: CircleDashed, text: "Später", cls: "bg-white/[0.06] text-muted-foreground" },
-  };
-  const m = map[level] ?? map.later;
+  const m = supportLevels[level] ?? supportLevels.later;
   const Icon = m.icon;
-  return <span className={cn("inline-flex w-28 shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium", m.cls)}><Icon className="size-3.5" />{m.text}</span>;
-}
-
-function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const [path, setPath] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [report, setReport] = useState<DetectReport | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      setReport(null);
-      setChecking(false);
-    }
-  }, [open]);
-
-  const browse = async () => {
-    const p = await pickFolder();
-    if (p) {
-      setPath(p);
-      setReport(null);
-    }
-  };
-
-  const check = async () => {
-    setChecking(true);
-    setReport(null);
-    try {
-      const r = await api.detectBuild(path);
-      setReport(r);
-    } catch (e) {
-      toast.error("Prüfen fehlgeschlagen", { description: String(e) });
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const add = async () => {
-    if (!report?.build) return;
-    const config = await api.addBuild(report.build);
-    useApp.getState().setConfig(config);
-    onOpenChange(false);
-    toast.success("Build hinzugefügt", { description: `Fortnite ${report.build.version}` });
-  };
-
-  const canAdd = report?.build && report.build.support !== "unsupported" && report.checks.every((c) => c.ok);
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-strong sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Build hinzufügen</DialogTitle>
-          <DialogDescription>Wähle den Ordner deines Builds. Vanity liest nur – im Ordner wird nichts verändert.</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="build-path">Build-Ordner</Label>
-          <div className="flex gap-2">
-            <Input id="build-path" value={path} onChange={(e) => { setPath(e.target.value); setReport(null); }} placeholder="C:\…\windows-19.10" className="font-mono text-xs" />
-            <Button variant="secondary" onClick={browse}>Durchsuchen</Button>
-          </div>
-        </div>
-        <div className="min-h-36 rounded-lg bg-black/20 p-4">
-          {!report && !checking && <p className="text-xs text-muted-foreground">Klick auf „Prüfen“. Vanity sucht die Spieldatei und liest die Version aus.</p>}
-          {checking && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin" />Prüfe …</div>}
-          {report && (
-            <ul className="flex flex-col gap-2">
-              <AnimatePresence initial={false}>
-                {report.checks.map((c, i) => (
-                  <motion.li key={i} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 text-xs">
-                    {c.ok ? <Check className="size-4 text-success" /> : <X className="size-4 text-destructive" />}
-                    <span className={c.ok ? "" : "text-destructive"}>{c.text}</span>
-                  </motion.li>
-                ))}
-              </AnimatePresence>
-            </ul>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Abbrechen</Button>
-          {report ? (
-            <Button onClick={add} disabled={!canAdd}><Check />Hinzufügen</Button>
-          ) : (
-            <Button onClick={check} disabled={!path || checking}>{checking && <Loader2 className="animate-spin" />}Prüfen</Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <Badge variant={m.variant} className="w-24 shrink-0">
+      <Icon />
+      {m.text}
+    </Badge>
   );
 }
 
+function SupportDot({ level }: { level: string }) {
+  return (
+    <span className="relative z-10 flex size-4 shrink-0 items-center justify-center">
+      <span
+        className={cn(
+          "size-2.5 rounded-full ring-4 ring-[#10121b]",
+          level === "supported" && "bg-success shadow-[0_0_10px_rgb(34_197_94/0.7)]",
+          level === "experimental" && "bg-warning/80",
+          level !== "supported" && level !== "experimental" && "bg-white/20",
+        )}
+      />
+    </span>
+  );
+}

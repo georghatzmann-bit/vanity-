@@ -1,8 +1,8 @@
-// Versions-Test: tut das Backend für viele Fortnite-Versionen das Richtige?
-// Startet das gebaute Backend einmal und fragt für jede Version (per User-Agent) die wichtigsten
-// Start-Endpunkte ab. Erwartung: nie 5xx, Saison stimmt, Hotfix-Regel für 9.40–10.40 greift,
-// die Stub-Antworten für neuere Builds sind da.
-// Aufruf: pnpm build && node test/versions.mjs
+// Version test: does the backend do the right thing for many Fortnite versions?
+// Starts the built backend once and asks the most important start endpoints for every version
+// (via the User-Agent). Expected: never 5xx, the season is right, the hotfix rule for 9.40–10.40
+// works, the stub answers for newer builds are there.
+// Run: pnpm build && node test/versions.mjs
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
@@ -14,11 +14,11 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MAIN = path.join(ROOT, "dist", "main.js");
 if (!fs.existsSync(MAIN)) {
-  console.error("dist/main.js fehlt – erst `pnpm build` ausführen.");
+  console.error("dist/main.js is missing – run `pnpm build` first.");
   process.exit(2);
 }
 
-// Version → erwartete Saison. Deckt Chapter 1 bis Chapter 6 ab, auch Versionen, die der Launcher (noch) nicht startet.
+// Version → expected season. Covers Chapter 1 to Chapter 6, also versions the launcher doesn't start (yet).
 const VERSIONS = [
   ["1.8", 1], ["3.5", 3], ["5.41", 5], ["7.40", 7], ["9.41", 9], ["10.40", 10], ["12.41", 12],
   ["15.10", 15], ["19.10", 19], ["20.40", 20], ["23.10", 23], ["27.11", 27], ["28.01", 28],
@@ -64,29 +64,29 @@ function request(method, url, ua, { headers = {}, form, body } = {}) {
         resolve({ status: res.statusCode, text, json: () => JSON.parse(text) });
       });
     });
-    req.on("timeout", () => req.destroy(new Error(`Zeitüberschreitung: ${method} ${url}`)));
+    req.on("timeout", () => req.destroy(new Error(`Timed out: ${method} ${url}`)));
     req.on("error", reject);
     if (payload !== undefined) req.write(payload);
     req.end();
   });
 }
 
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "vanity-versions-"));
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "niobium-versions-"));
 const env = {
-  VANITY_BACKEND_PORT: String(await freePort()),
-  VANITY_MATCHMAKER_PORT: String(await freePort()),
-  VANITY_BIND: "127.0.0.1",
-  VANITY_DATA_DIR: dataDir,
+  NIOBIUM_BACKEND_PORT: String(await freePort()),
+  NIOBIUM_MATCHMAKER_PORT: String(await freePort()),
+  NIOBIUM_BIND: "127.0.0.1",
+  NIOBIUM_DATA_DIR: dataDir,
 };
 const child = spawn(process.execPath, [MAIN], { env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
-const base = `http://127.0.0.1:${env.VANITY_BACKEND_PORT}`;
+const base = `http://127.0.0.1:${env.NIOBIUM_BACKEND_PORT}`;
 const deadline = Date.now() + 20000;
 for (;;) {
   try {
-    if ((await request("GET", `${base}/vanity/health`, "test")).status === 200) break;
+    if ((await request("GET", `${base}/niobium/health`, "test")).status === 200) break;
   } catch {}
   if (Date.now() > deadline) {
-    console.error("Backend startet nicht");
+    console.error("The backend doesn't start");
     child.kill("SIGKILL");
     process.exit(2);
   }
@@ -99,12 +99,12 @@ try {
     const [major, minor = "0"] = version.split(".");
     const build = Number(`${major}.${minor}`);
 
-    // Anmeldung wie der Build sie macht
+    // Log in the way the build does
     const token = await request("POST", `${base}/account/api/oauth/token`, ua, {
       headers: { Authorization: "basic ZWM2ODRiOGM2ODdmNDc5ZmFkZWEzY2IyYWQ4M2Y1YzY6ZTFmMzFjMjExZjI4NDEzMTg2MjYyZDM3YTEzZmM4NGQ=" },
-      form: { grant_type: "password", username: `${ACCOUNT}@vanity.local`, password: "vanity" },
+      form: { grant_type: "password", username: `${ACCOUNT}@niobium.local`, password: "niobium" },
     });
-    report(token.status === 200, `${version}: Anmeldung (${token.status})`);
+    report(token.status === 200, `${version}: login (${token.status})`);
     const auth = token.status === 200 ? { Authorization: `bearer ${token.json().access_token}` } : {};
     const accountId = token.status === 200 ? token.json().account_id : ACCOUNT;
 
@@ -132,21 +132,21 @@ try {
       }
       if (route.startsWith("/fortnite/api/cloudstorage/system")) {
         const noHotfix = build >= 9.4 && build <= 10.4;
-        report(noHotfix ? res.status === 404 : res.status === 200, `${version}: Hotfix-Dateien ${noHotfix ? "absichtlich keine (404)" : "vorhanden (200)"} → ${res.status}`);
+        report(noHotfix ? res.status === 404 : res.status === 200, `${version}: hotfix files ${noHotfix ? "none on purpose (404)" : "there (200)"} → ${res.status}`);
       }
       if (route.startsWith("/fortnite/api/calendar/v1/timeline") && res.status === 200) {
         const state = res.json().channels?.["client-events"]?.states?.at(-1)?.state ?? {};
-        report(state.seasonNumber === season, `${version}: Saison erkannt (${state.seasonNumber})`);
+        report(state.seasonNumber === season, `${version}: season detected (${state.seasonNumber})`);
       }
     }
-    report(serverErrors === 0, `${version}: keine 5xx-Antworten (${serverErrors})`);
+    report(serverErrors === 0, `${version}: no 5xx answers (${serverErrors})`);
   }
 
-  // Ohne User-Agent darf nichts abstürzen (Werkzeuge, Browser)
+  // Nothing may crash without a User-Agent (tools, browsers)
   const bare = await request("GET", `${base}/fortnite/api/storefront/v2/catalog`, "");
-  report(bare.status < 500, `ohne User-Agent: Shop antwortet ohne 5xx (${bare.status})`);
+  report(bare.status < 500, `no User-Agent: shop answers without 5xx (${bare.status})`);
   const noBucket = await request("GET", `${base}/fortnite/api/game/v2/matchmakingservice/ticket/player/x`, "");
-  report(noBucket.status < 500, `ohne bucketId: Matchmaking-Ticket ohne 5xx (${noBucket.status})`);
+  report(noBucket.status < 500, `no bucketId: matchmaking ticket without 5xx (${noBucket.status})`);
 } catch (err) {
   results.fail++;
   console.log(`  FAIL  ${err.stack ?? err}`);
@@ -155,5 +155,5 @@ try {
   fs.rmSync(dataDir, { recursive: true, force: true });
 }
 
-console.log(`\n${results.ok} OK, ${results.fail} FEHLER`);
+console.log(`\n${results.ok} OK, ${results.fail} FAILED`);
 process.exit(results.fail ? 1 : 0);

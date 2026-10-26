@@ -1,5 +1,5 @@
-# Erzeugt einen ruhigen, angedeuteten Spiel-Hintergrund (Himmel, Hügel, Wiese) für die Menü-Vorschau.
-# Bewusst stilisiert – es ist KEIN Bild aus Fortnite.
+# Makes a calm, suggested game background (sky, hills, meadow) for the menu preview.
+# Deliberately stylised - it is NOT an image from Fortnite.
 import sys
 from PIL import Image, ImageDraw, ImageFilter
 out, w, h = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
@@ -21,4 +21,4 @@ d.polygon([(int(w * 0.70), int(h * 0.38)), (int(w * 0.76), int(h * 0.30)), (int(
 img = img.filter(ImageFilter.GaussianBlur(3))
 img = img.convert("RGBA")
 open(out, "wb").write(img.tobytes())
-print("Hintergrund:", out)
+print("Background:", out)

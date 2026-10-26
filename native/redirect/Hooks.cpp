@@ -2,7 +2,7 @@
 #include "Hooks.h"
 #include "Patchfinder.h"
 #include "Options.h"
-#include "VanityLog.h" // VANITY
+#include "NiobiumLog.h" // NIOBIUM
 
 bool InitializeForModule(uint64_t Module, void* Hook, void** OG, bool EOS)
 {
@@ -18,7 +18,7 @@ bool InitializeForModule(uint64_t Module, void* Hook, void** OG, bool EOS)
 
     if (!processRequestStr)
     {
-        VanityLog("%s: keine der drei Kennzeichnungen von FCurlHttpRequest::ProcessRequest gefunden", EOS ? "EOS" : "Spiel");
+        NiobiumLog("%s: none of the three markers of FCurlHttpRequest::ProcessRequest found", EOS ? "EOS" : "Game"); // NIOBIUM
         return false;
     }
 
@@ -63,7 +63,7 @@ bool InitializeForModule(uint64_t Module, void* Hook, void** OG, bool EOS)
 
     if (!ProcessRequest)
     {
-        VanityLog("%s: Funktionsanfang von ProcessRequest nicht gefunden", EOS ? "EOS" : "Spiel");
+        NiobiumLog("%s: start of ProcessRequest not found", EOS ? "EOS" : "Game"); // NIOBIUM
         return false;
     }
 _found:
@@ -97,11 +97,11 @@ _found:
         }
     }
 
-    // VANITY: Original pruefte hier faelschlich ProcessRequest statt ProcessRequestVFT und schrieb dann
-    // an Adresse 0 (Absturz in der Umleitung). Jetzt sauber abbrechen.
+    // NIOBIUM: the original wrongly checked ProcessRequest instead of ProcessRequestVFT here and then
+    // wrote to address 0 (crash in the redirect). Now it stops cleanly.
     if (!ProcessRequestVFT)
     {
-        VanityLog("%s: ProcessRequest (0x%llX) steht in keiner VTable", EOS ? "EOS" : "Spiel", (unsigned long long)ProcessRequest);
+        NiobiumLog("%s: ProcessRequest (0x%llX) is in no VTable", EOS ? "EOS" : "Game", (unsigned long long)ProcessRequest);
         return false;
     }
 
@@ -116,7 +116,7 @@ _foundVFT:
 
     VirtualProtect(LPVOID(ProcessRequestVFT), sizeof(void*), oldProt, &oldProt);
 
-    VanityLog("%s: Umleitung eingehaengt (ProcessRequest 0x%llX, VTable-Eintrag 0x%llX)", EOS ? "EOS" : "Spiel",
+    NiobiumLog("%s: redirect hooked (ProcessRequest 0x%llX, VTable entry 0x%llX)", EOS ? "EOS" : "Game", // NIOBIUM
         (unsigned long long)ProcessRequest, (unsigned long long)ProcessRequestVFT);
     return true;
 }
@@ -145,11 +145,11 @@ void Tellurium::Hooks::Init()
         SetConsoleTitleA("Tellurium (https://github.com/plooshi/Tellurium)");
     }
 
-    VanityLog("Start (Fortnite-Hauptversion laut Launcher: %d)", VanityFortniteMajor());
+    NiobiumLog("Start (Fortnite major version from the launcher: %d)", NiobiumFortniteMajor()); // NIOBIUM
 
-    // VANITY: Die Suchen waren Endlosschleifen – auf unbekannten Builds lief ein Kern auf 100 %% und das
-    // Spiel redete unbemerkt mit Epic. Jetzt begrenzt: bei Misserfolg wird protokolliert und das Spiel
-    // beendet, weil es ohne Umleitung nie laufen darf.
+    // NIOBIUM: the searches were endless loops - on unknown builds one core ran at 100 % and the game
+    // quietly talked to Epic. Now they are limited: on failure it is logged and the game is closed,
+    // because it must never run without the redirect.
     constexpr int kMaxTries = 300; // 300 x 200 ms = 60 s
     constexpr static auto ReallocSig = Tellurium::Patchfinder::Pattern<"48 89 5C 24 08 48 89 74 24 10 57 48 83 EC ? 48 8B F1 41 8B D8 48 8B 0D ? ? ? ?">();
     for (int Try = 0; !Tellurium::Unreal::FMemory__Realloc && Try < kMaxTries; ++Try)
@@ -160,7 +160,7 @@ void Tellurium::Hooks::Init()
     }
     if (!Tellurium::Unreal::FMemory__Realloc)
     {
-        VanityLog("FEHLER: FMemory::Realloc nicht gefunden – diese Version kennt die Umleitung nicht. Spiel wird beendet.");
+        NiobiumLog("ERROR: FMemory::Realloc not found - the redirect doesn't know this version. Closing the game."); // NIOBIUM
         TerminateProcess(GetCurrentProcess(), 0xE0000001);
         return;
     }
@@ -185,7 +185,7 @@ void Tellurium::Hooks::Init()
     }
     if (!bHooked)
     {
-        VanityLog("FEHLER: Umleitung konnte nicht eingehaengt werden – diese Version kennt die Umleitung nicht. Spiel wird beendet.");
+        NiobiumLog("ERROR: couldn't hook the redirect - the redirect doesn't know this version. Closing the game."); // NIOBIUM
         TerminateProcess(GetCurrentProcess(), 0xE0000002);
         return;
     }
@@ -195,8 +195,8 @@ void Tellurium::Hooks::Init()
     if (EOSBuf)
     {
         if (!InitializeForModule(uint64_t(EOSBuf), ProcessRequest__EOS, (void**)&Tellurium::Unreal::FCurlHttpRequest::ProcessRequestOG__EOS, true))
-            VanityLog("EOS-SDK vorhanden, aber nicht eingehaengt (unkritisch)");
-        // VANITY: Suchbasis wieder auf das Spiel setzen – sonst suchen spaetere Muster im EOS-Modul.
+            NiobiumLog("EOS SDK found but not hooked (not a problem)"); // NIOBIUM
+        // NIOBIUM: set the search base back to the game - otherwise later patterns would search the EOS module.
         Tellurium::PE::ImageBase = GameBase;
 
         // pushwidget isnt on pre-EOS builds
@@ -274,5 +274,5 @@ void Tellurium::Hooks::Init()
     }
 
     bInit = true;
-    VanityLog("Bereit – Anfragen an Epic-Hosts gehen jetzt an das eigene Backend");
+    NiobiumLog("Ready - requests to Epic hosts now go to your own backend"); // NIOBIUM
 }

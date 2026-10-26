@@ -1,8 +1,8 @@
 <Project>
-  <!-- Gemeinsame Ausgabe aller Projekte: DLLs/Libs nach native\bin\<Konfiguration>\,
-       Zwischendateien getrennt je Projekt nach native\obj\<Projekt>\<Konfiguration>\.
-       Wichtig: $(MSBuildProjectName) statt $(ProjectName) – letzteres ist hier noch leer, dann teilen
-       sich alle Projekte eine vc143.pdb und der parallele Build bricht mit C1041 ab. -->
+  <!-- Shared output of all projects: DLLs/libs go to native\bin\<Configuration>\,
+       intermediate files separately per project to native\obj\<Project>\<Configuration>\.
+       Important: $(MSBuildProjectName) instead of $(ProjectName) – the latter is still empty here, then all
+       projects share one vc143.pdb and the parallel build fails with C1041. -->
   <PropertyGroup>
     <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(MSBuildProjectName)\$(Configuration)\</IntDir>

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Niobium icon, pixel-tuned for exactly 48x48 px -->
+  <defs>
+    <linearGradient id="nb-base" x1="2" y1="2" x2="46" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2B5BFF"/>
+      <stop offset="0.5" stop-color="#5546FF"/>
+      <stop offset="0.85" stop-color="#7A3CFF"/>
+    </linearGradient>
+    <linearGradient id="nb-gold" x1="46" y1="46" x2="29.28" y2="29.28" gradientUnits="userSpaceOnUse">
+      <stop offset="0.14" stop-color="#FFC857" stop-opacity="1"/>
+      <stop offset="0.3" stop-color="#FFC857" stop-opacity="0.72"/>
+      <stop offset="0.56" stop-color="#FF6FA8" stop-opacity="0.26"/>
+      <stop offset="0.9" stop-color="#FF6FA8" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="nb-depth" cx="2" cy="46" r="37.4" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B0738" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#0B0738" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nb-bloom" cx="10.14" cy="8.16" r="30.36" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8FB0FF" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#8FB0FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="nb-sheen" x1="2" y1="2" x2="46" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.20"/>
+      <stop offset="0.40" stop-color="#FFFFFF" stop-opacity="0.07"/>
+      <stop offset="0.405" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="nb-rim" x1="0" y1="2" x2="0" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.42"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="nb-ink" x1="0" y1="14" x2="0" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E6E4FF"/>
+    </linearGradient>
+    <filter id="nb-shadow" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="0.75" stdDeviation="0.94" flood-color="#14095A" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect x="2" y="2" width="44" height="44" rx="9.5" fill="url(#nb-base)"/>
+  <rect x="2" y="2" width="44" height="44" rx="9.5" fill="url(#nb-bloom)"/>
+  <rect x="2" y="2" width="44" height="44" rx="9.5" fill="url(#nb-depth)"/>
+  <rect x="2" y="2" width="44" height="44" rx="9.5" fill="url(#nb-gold)"/>
+  <rect x="2" y="2" width="44" height="44" rx="9.5" fill="url(#nb-sheen)"/>
+  <rect x="2.5" y="2.5" width="43" height="43" rx="9" fill="none" stroke="url(#nb-rim)" stroke-width="1"/>
+  <path d="M6 14H11V34H6ZM18 14H23V34H18ZM6 14H11.64L23 34H17.36ZM25 14H30V34H25ZM25 26.5A8.5 7.5 0 1 1 42 26.5A8.5 7.5 0 1 1 25 26.5ZM30 26.5A3.5 3.2 0 1 0 37 26.5A3.5 3.2 0 1 0 30 26.5Z" fill="url(#nb-ink)" filter="url(#nb-shadow)"/>
+</svg>

@@ -1,10 +1,10 @@
 [package]
-name = "vanity-core"
+name = "niobium-core"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-only"
-description = "Vanity – plattformunabhängige Logik: Versionserkennung, Log-Auswertung, Absturz-Analyse, Profile"
+description = "Niobium – platform-independent logic: version detection, log parsing, crash analysis, profiles, Bubble Builds"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

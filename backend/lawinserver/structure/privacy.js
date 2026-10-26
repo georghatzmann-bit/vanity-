@@ -1,8 +1,8 @@
 const Express = require("express");
-const vanity = require("./vanity.js"); // VANITY: Pfade, Ports und Game-Server-Ziel aus src/main.ts
+const niobium = require("./niobium.js"); // NIOBIUM: paths, ports and game server target from src/main.ts
 const express = Express.Router();
 const fs = require("fs");
-const privacy = vanity.json("responses/privacy.json"); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+const privacy = niobium.json("responses/privacy.json"); // NIOBIUM: path via niobium.js (data folder/resources)
 
 express.get("/fortnite/api/game/v2/privacy/account/:accountId", async (req, res) => {
     privacy.accountId = req.params.accountId;
@@ -14,7 +14,7 @@ express.post("/fortnite/api/game/v2/privacy/account/:accountId", async (req, res
     privacy.accountId = req.params.accountId;
     privacy.optOutOfPublicLeaderboards = req.body.optOutOfPublicLeaderboards;
 
-    vanity.writeFile("responses/privacy.json", JSON.stringify(privacy, null, 2)); // VANITY: Pfad über vanity.js (Daten-Ordner/Ressourcen)
+    niobium.writeFile("responses/privacy.json", JSON.stringify(privacy, null, 2)); // NIOBIUM: path via niobium.js (data folder/resources)
 
     res.json(privacy);
     res.end();

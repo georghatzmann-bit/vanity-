@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Baut die Vanity Menü-Vorschau (echtes F9-Menü ohne Spiel) und rendert alle Reiter als PNG.
-# Braucht: clang-cl + lld-link (LLVM 18), MSVC/SDK-Header+Libs in /opt/xwin (xwin), Wine, Python mit PIL.
-# Aufruf: native/tools/menu-preview/build-and-render.sh <Ausgabeordner>
+# Builds the Niobium menu preview (the real F9 menu without the game) and renders every tab as PNG.
+# Needs: clang-cl + lld-link (LLVM 18), MSVC/SDK headers + libs in /opt/xwin (xwin), Wine, Python with PIL.
+# Usage: native/tools/menu-preview/build-and-render.sh <output folder>
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
@@ -11,13 +11,13 @@ trap 'rm -rf "$WORK"' EXIT
 X=/opt/xwin; CL=/usr/lib/llvm-18/bin/clang-cl; LINK=/usr/lib/llvm-18/bin/lld-link
 mkdir -p "$OUT"
 
-# 1) Kopie des Menü-Codes; ein Header bekommt eine Zugriffs-Lockerung, die nur clang braucht (MSVC nicht).
+# 1) Copy of the menu code; one header gets an access relaxation that only clang needs (MSVC doesn't).
 cp -r "${CLIENT_SRC:-$ROOT/native/client}" "$WORK/client"
 python3 - "$WORK/client/SDK/Containers.h" <<'PY'
 import sys, pathlib
 p = pathlib.Path(sys.argv[1]); s = p.read_text(encoding="utf-8", errors="surrogateescape")
 old = "\t\tprivate:\n\t\t\tSetType Value;"
-assert s.count(old) == 1, "Containers.h hat sich geändert"
+assert s.count(old) == 1, "Containers.h has changed"
 p.write_text(s.replace(old, "\t\tpublic:\n\t\t\tSetType Value;"), encoding="utf-8", errors="surrogateescape")
 PY
 cat "$HERE/gui_preview_hooks.inc" >> "$WORK/client/ATLAS/Private/GUI.cpp"
@@ -30,15 +30,15 @@ INC="-imsvc $X/crt/include -imsvc $X/sdk/include/ucrt -imsvc $X/sdk/include/um -
 FL="--target=x86_64-pc-windows-msvc /std:c++latest /EHsc /MT /O2 -fms-compatibility -fms-extensions -fms-compatibility-version=19.40 -fdelayed-template-parsing -Wno-everything -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH -DUNICODE -D_UNICODE -DNDEBUG -D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR $INC"
 C="$WORK/client"
 cd "$WORK"
-echo "Übersetze das echte Menü (GUI.cpp) …"
+echo "Compiling the real menu (GUI.cpp) ..."
 $CL $FL -I ci -I "$C" -c "$C/ATLAS/Private/GUI.cpp" /Fogui.obj
-# Der Trickshot-Reiter (eigene Datei) ist nur dabei, wenn es ihn schon gibt.
+# The Trickshot tab (its own file) is only included when it exists.
 TS=0; EXTRA=""
-if [ -f "$C/ATLAS/Private/VanityTrickshotTab.cpp" ]; then
+if [ -f "$C/ATLAS/Private/NiobiumTrickshotTab.cpp" ]; then
   TS=1; EXTRA="tab.obj"
-  $CL $FL -I stubpch -I "$C/ATLAS/ImGui" -I "$C" -I "$C/third_party" -c "$C/ATLAS/Private/VanityTrickshotTab.cpp" /Fotab.obj
+  $CL $FL /utf-8 -I stubpch -I "$C/ATLAS/ImGui" -I "$C" -I "$C/third_party" -c "$C/ATLAS/Private/NiobiumTrickshotTab.cpp" /Fotab.obj
 fi
-$CL $FL -I stubpch -I "$C/ATLAS/ImGui" -I "$C" -I "$HERE" -DVANITY_PREVIEW_TRICKSHOT=$TS -c "$HERE/preview_main.cpp" /Fomain.obj
+$CL $FL -I stubpch -I "$C/ATLAS/ImGui" -I "$C" -I "$HERE" -DNIOBIUM_PREVIEW_TRICKSHOT=$TS -c "$HERE/preview_main.cpp" /Fomain.obj
 $CL $FL -I stubpch -I "$C/ATLAS/ImGui" -c "$HERE/softraster.cpp" /Foraster.obj
 for f in imgui imgui_draw imgui_widgets imgui_tables imgui_stdlib; do
   $CL $FL -I stubpch -I "$C/ATLAS/ImGui" -c "$C/ATLAS/ImGui/$f.cpp" /Fo$f.obj
@@ -48,12 +48,12 @@ $LINK /nologo /out:menu-preview.exe /subsystem:console gui.obj $EXTRA main.obj r
   /libpath:libcase /libpath:$X/crt/lib/x86_64 /libpath:$X/sdk/lib/um/x86_64 /libpath:$X/sdk/lib/ucrt/x86_64 \
   user32.lib shell32.lib ole32.lib gdi32.lib
 
-# 2) Hintergrund (nur angedeutet, kein Spielbild) und Parkour-Datei
+# 2) Background (only suggested, no game image) and the parkour file (PARKOURS_JSON = another file)
 python3 "$HERE/make_background.py" "$WORK/background.rgba" 1600 900
-cp "$ROOT/launcher/src/data/parkours.json" "$WORK/parkours.json"
+cp "${PARKOURS_JSON:-$ROOT/launcher/src/data/parkours.json}" "$WORK/parkours.json"
 
-# 3) Unter Wine rendern
-export WINEDEBUG=-all WINEPREFIX="${WINEPREFIX:-$HOME/.wine-vanity-preview}"
+# 3) Render under Wine
+export WINEDEBUG=-all WINEPREFIX="${WINEPREFIX:-$HOME/.wine-niobium-preview}"
 wine menu-preview.exe background.rgba . 2>&1 | grep -v "^wine:" || true
 
 # 4) PPM -> PNG

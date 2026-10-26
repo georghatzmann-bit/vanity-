@@ -1,17 +1,25 @@
 /*
- * Brücke zwischen Oberfläche und Rust-Logik.
- * Im echten Launcher laufen alle Aufrufe über Tauri. In der Browser-Vorschau (pnpm dev im Browser)
- * antwortet ein Platzhalter mit Beispieldaten, damit man das Design anschauen kann.
+ * Bridge between the UI and the Rust logic.
+ * In the real launcher every call goes through Tauri. In the browser preview (pnpm dev in a browser)
+ * a stand-in answers with sample data, so the design can be looked at and screenshotted.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { toast } from "sonner";
+import { bubbleInfoFor, type BubbleBuildsInfo } from "./bubble";
 import { demoBuilds, demoCrashes, demoFriends, demoProfiles } from "./demo-data";
+
+export type { BubbleBuildsInfo, BubbleLevel } from "./bubble";
 
 export const inTauri = isTauri();
 
-// ---- Typen (entsprechen den Rust-Strukturen in launcher/core) ----------------------------
+/** App version shown in the browser preview (the real one comes from tauri.conf.json). */
+export const DEMO_APP_VERSION = "0.1.0";
 
-/** supported = getestet, experimental = ungetestet aber startbar, unsupported = zu alt */
+// ---- Types (match the Rust structs in launcher/core) -------------------------------------
+
+/** supported = tested, experimental = untested but starts, unsupported = too old/new */
 export type Support = "supported" | "experimental" | "unsupported";
 
 export interface BuildInfo {
@@ -23,7 +31,7 @@ export interface BuildInfo {
   path: string;
   binaries: string;
   support: Support;
-  /** Erklärung zur Stufe in einfachen Worten (kommt aus Rust) */
+  /** Plain-words explanation of the level (comes from Rust) */
   supportNote?: string;
   launchArgs: string;
 }
@@ -48,18 +56,30 @@ export interface Friend {
   via: string;
 }
 
+/** The game's redirect only talks to this port, so the backend always runs on it. */
+export const BACKEND_PORT = 3551;
+/** The game server always listens on this port (the launcher can't move it). */
+export const GAME_SERVER_PORT = 7777;
+
 export interface Settings {
   playerName: string;
   launchArgs: string;
   headlessServer: boolean;
+  /** Not used (nothing restarts the server). Kept so saved settings stay compatible. */
   autoRestart: boolean;
+  /** Always BACKEND_PORT – kept for compatibility, not changeable. */
   backendPort: number;
   matchmakerPort: number;
+  /** Always GAME_SERVER_PORT – kept for compatibility, not changeable. */
   gameServerPort: number;
   shareBackendLan: boolean;
   glass: boolean;
   reduceMotion: boolean;
   animatedBackground: boolean;
+  /** Start the player's game in Performance Mode on versions that show the bubble build look. */
+  bubbleBuilds: boolean;
+  /** App version the user last saw (welcome / "What's new"). null or "" = never opened. */
+  lastSeenVersion?: string | null;
 }
 
 export interface Config {
@@ -114,7 +134,7 @@ export interface Toast {
   description: string;
 }
 
-/** Schalter, die das Ingame-Menü (ATLAS-Console-Basis) unter „preferences“ speichert. */
+/** Switches the in-game menu (ATLAS Console based) saves under "preferences". */
 export interface ClientPreferences {
   saveTogglePreferences: boolean;
   slashKey: boolean;
@@ -128,16 +148,16 @@ export interface ClientPreferences {
   respawnsEnabled: boolean;
 }
 
-/** Inhalt von %APPDATA%\Vanity\client.json – Launcher und F9-Menü teilen sich die Datei. */
+/** Contents of %APPDATA%\Niobium\client.json – the launcher and the F9 menu share this file. */
 export interface ClientSettings {
-  /** Taste fürs Menü (Windows-Tastencode), Standard F9 */
+  /** Key for the menu (Windows virtual-key code), default F9 */
   hotkey: number;
-  /** Taste für „schnell beitreten“, Standard F5 */
+  /** Key for "quick join", default F5 */
   joinHotkey: number;
-  /** 0 = Vanity-Konsole, 1 = Original-Unreal-Konsole */
+  /** 0 = Niobium console, 1 = original Unreal console */
   consoleMode: number;
   preferences: ClientPreferences;
-  /** eigene Befehls-Tasten und Makros – werden im Spiel angelegt, hier nur durchgereicht */
+  /** Own command keys and macros – created in the game, only passed through here */
   commands: unknown[];
   macros: unknown[];
 }
@@ -147,18 +167,33 @@ export interface TrickshotPreset {
   commands: string[];
 }
 
+/** Folders the launcher uses (Settings / Logs pages). */
+export interface NiobiumPaths {
+  config: string;
+  logs: string;
+  crashes: string;
+  fortniteLogs: string;
+}
+
+/** Payload of the event "bubble:ini-changed". */
+export interface BubbleIniChanged {
+  path: string;
+}
+
 export const defaultSettings: Settings = {
   playerName: "Player",
   launchArgs: "-d3d11",
   headlessServer: true,
   autoRestart: false,
-  backendPort: 3551,
+  backendPort: BACKEND_PORT,
   matchmakerPort: 80,
-  gameServerPort: 7777,
+  gameServerPort: GAME_SERVER_PORT,
   shareBackendLan: false,
   glass: true,
   reduceMotion: false,
   animatedBackground: true,
+  bubbleBuilds: false,
+  lastSeenVersion: null,
 };
 
 export const defaultClientSettings: ClientSettings = {
@@ -181,18 +216,19 @@ export const defaultClientSettings: ClientSettings = {
   macros: [],
 };
 
-// ---- Platzhalter für die Browser-Vorschau ------------------------------------------------
+// ---- Stand-in for the browser preview ----------------------------------------------------
 
 let demoConfig: Config = {
   configVersion: 1,
-  settings: { ...defaultSettings, playerName: "georg" },
+  // The preview counts as "already seen", so the welcome only shows with ?welcome=1
+  settings: { ...defaultSettings, playerName: "georg", lastSeenVersion: DEMO_APP_VERSION },
   builds: demoBuilds,
   profiles: demoProfiles,
   activeProfileId: demoProfiles[0].id,
   friends: demoFriends,
   trickshotPresets: [
-    { name: "Trickshot-Training", commands: ["parkour sniper", "givetraps", "regen"] },
-    { name: "Hoch in die Luft", commands: ["l 4000"] },
+    { name: "Trickshot training", commands: ["parkour sniper", "givetraps", "regen"] },
+    { name: "Up in the air", commands: ["l 4000"] },
   ],
 };
 let demoClient: ClientSettings = { ...defaultClientSettings };
@@ -215,10 +251,10 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
       return {
         build: { ...demoBuilds[0], path: String(args.path) },
         checks: [
-          { ok: true, text: "FortniteClient-Win64-Shipping.exe gefunden" },
-          { ok: true, text: "Version gelesen: 19.10 (CL-18675304)" },
-          { ok: true, text: "Spieldaten vorhanden (42 .pak-Dateien)" },
-          { ok: true, text: "Version wird unterstützt" },
+          { ok: true, text: "Found FortniteClient-Win64-Shipping.exe" },
+          { ok: true, text: "Version read: 19.10 (CL-18675304)" },
+          { ok: true, text: "Game files are there (42 .pak files)" },
+          { ok: true, text: "This version is supported" },
         ],
         hasAftermath: true,
       } satisfies DetectReport;
@@ -260,7 +296,7 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
       return demoCrashes;
     case "share_addresses":
       return [
-        ["Nur dieser PC", "127.0.0.1:7777"],
+        ["This PC only", "127.0.0.1:7777"],
         ["Tailscale", "100.88.41.3:7777"],
         ["Radmin VPN", "26.120.7.55:7777"],
       ];
@@ -272,23 +308,37 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
     case "set_client_settings":
       demoClient = args.value as ClientSettings;
       return null;
-    // Server-Befehle: In der Vorschau gibt es keinen Server – wir tun so, als wäre alles angekommen.
+    case "bubble_builds_support":
+      return bubbleInfoFor(String(args.version ?? ""));
+    case "reset_performance_mode_ini":
+      console.info("[Preview] reset_performance_mode_ini");
+      return null;
+    case "app_ready":
+      return null;
+    case "pending_log_lines":
+      return [] satisfies LogLine[];
+    // Server commands: there is no server in the preview – we pretend everything arrived.
     case "server_exec":
     case "server_config":
     case "server_start_match":
     case "spawn_bots":
     case "remove_bots":
-      console.info("[Vorschau]", cmd, args);
+      console.info("[Preview]", cmd, args);
       return null;
-    case "vanity_paths":
-      return { config: "%APPDATA%\\Vanity", logs: "%LOCALAPPDATA%\\Vanity\\logs", crashes: "%LOCALAPPDATA%\\FortniteGame\\Saved\\Crashes", fortniteLogs: "%LOCALAPPDATA%\\FortniteGame\\Saved\\Logs" };
+    case "niobium_paths":
+      return {
+        config: "%APPDATA%\\Niobium",
+        logs: "%LOCALAPPDATA%\\Niobium\\logs",
+        crashes: "%LOCALAPPDATA%\\FortniteGame\\Saved\\Crashes",
+        fortniteLogs: "%LOCALAPPDATA%\\FortniteGame\\Saved\\Logs",
+      } satisfies NiobiumPaths;
     default:
-      // Aktionen, die Fortnite brauchen, gibt es in der Vorschau nicht
-      throw new Error("In der Browser-Vorschau nicht verfügbar – nur im echten Launcher unter Windows.");
+      // Anything that needs Fortnite doesn't exist in the preview
+      throw new Error("Not available in the browser preview – only in the real launcher on Windows.");
   }
 }
 
-// ---- Aufrufe ------------------------------------------------------------------------------
+// ---- Calls -------------------------------------------------------------------------------
 
 export const api = {
   getConfig: () => call<Config>("get_config"),
@@ -308,7 +358,16 @@ export const api = {
   getClientSettings: () => call<ClientSettings>("get_client_settings"),
   setClientSettings: (value: ClientSettings) => call<void>("set_client_settings", { value }),
   setTrickshotPresets: (presets: TrickshotPreset[]) => call<Config>("set_trickshot_presets", { presets }),
-  paths: () => call<{ config: string; logs: string; crashes: string; fortniteLogs: string }>("vanity_paths"),
+  paths: () => call<NiobiumPaths>("niobium_paths"),
+
+  /** Can this Fortnite version show Bubble Builds? `{ level, note }` with an English note. */
+  bubbleBuildsSupport: (version: string) => call<BubbleBuildsInfo>("bubble_builds_support", { version }),
+  /** Puts Fortnite's Performance Mode lines back (only after the user clicked "Reset"). */
+  resetPerformanceModeIni: () => call<void>("reset_performance_mode_ini"),
+  /** The UI has drawn its first frame: show the main window and close the splash. */
+  appReady: () => call<void>("app_ready"),
+  /** Launcher log lines from before the UI listened (oldest first). Only the first call returns lines. */
+  pendingLogLines: () => call<LogLine[]>("pending_log_lines"),
 
   hostAndPlay: (profileId: string) => call<void>("host_and_play", { profileId }),
   stopAll: () => call<void>("stop_all"),
@@ -320,24 +379,48 @@ export const api = {
   removeBots: () => call<void>("remove_bots"),
 };
 
-/** Ordner-Auswahl über den System-Dialog. In der Vorschau: Eingabe per Hand. */
+/** Version of the launcher app (from tauri.conf.json). Browser preview: "0.1.0". */
+export async function appVersion(): Promise<string> {
+  if (!inTauri) return DEMO_APP_VERSION;
+  const { getVersion } = await import("@tauri-apps/api/app");
+  return getVersion();
+}
+
+/** Folder picker via the Windows dialog. In the preview: typed in by hand. */
 export async function pickFolder(): Promise<string | null> {
-  if (!inTauri) return window.prompt("Build-Ordner (Vorschau):", "C:\\Users\\georg\\Downloads\\windows-19.10");
+  if (!inTauri) return window.prompt("Build folder (preview):", "C:\\Users\\georg\\Downloads\\windows-19.10");
   const { open } = await import("@tauri-apps/plugin-dialog");
-  const result = await open({ directory: true, multiple: false, title: "Build-Ordner wählen" });
+  const result = await open({ directory: true, multiple: false, title: "Choose your build folder" });
   return typeof result === "string" ? result : null;
 }
 
-/** Öffnet einen Ordner im Explorer. */
+/** Opens a folder in Explorer. Shows a short message if Windows can't open it (e.g. it was deleted). */
 export async function openFolder(path: string): Promise<void> {
   if (!inTauri) return;
-  const { openPath } = await import("@tauri-apps/plugin-opener");
-  await openPath(path);
+  try {
+    await openPath(path);
+  } catch {
+    toast.error("Couldn't open the folder", { description: path });
+  }
 }
 
-// ---- Ereignisse aus Rust ---------------------------------------------------------------------
+// ---- Events from Rust ----------------------------------------------------------------------
 
-export type EventName = "services" | "launch:step" | "log:line" | "toast" | "server:event" | "trickshot" | "detect";
+export type EventName =
+  | "services"
+  | "launch:step"
+  | "log:line"
+  | "toast"
+  | "server:event"
+  | "trickshot"
+  | "detect"
+  | "bubble:ini-changed";
+
+/** Like `onEvent`, but resolves only once the listener is really registered (preview: at once). */
+export async function onEventReady<T>(name: EventName, handler: (payload: T) => void): Promise<() => void> {
+  if (!inTauri) return () => {};
+  return listen<T>(name, (e) => handler(e.payload));
+}
 
 export function onEvent<T>(name: EventName, handler: (payload: T) => void): () => void {
   if (!inTauri) return () => {};
