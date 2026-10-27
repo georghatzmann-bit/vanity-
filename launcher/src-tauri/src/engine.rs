@@ -1030,11 +1030,26 @@ impl Engine {
                 self.spawn_server_event_loop(rx);
                 self.apply_profile_to_server(&link, profile);
                 self.log("launcher", "info", CAT, "Connected to the server's control pipe – commands on, match settings sent", None);
-                self.toast(
-                    "info",
-                    "The server is waiting for you",
-                    "Go to Match Control and press \"Start match\". Then the server loads the map. In the match, the host controls are in the F9 menu (Host).",
-                );
+                // Host & Play starts the match by itself (the pipe runs in order, so the settings
+                // above are in place first). "Start match" on Match Control stays as a fallback.
+                match link.start_match() {
+                    Ok(_) => {
+                        self.log("launcher", "info", CAT, "Match started – the server loads the map now", None);
+                        self.toast(
+                            "info",
+                            "The server loads the map",
+                            "This takes about a minute. When step 7 is green, press Play in your game. On the island, F9 opens the Rift menu.",
+                        );
+                    }
+                    Err(e) => {
+                        self.log("launcher", "warning", CAT, &format!("Couldn't start the match by itself: {e}"), None);
+                        self.toast(
+                            "info",
+                            "The server is waiting for you",
+                            "Go to Match Control and press \"Start match\". Then the server loads the map.",
+                        );
+                    }
+                }
             }
             None => {
                 self.log("launcher", "info", CAT, "No control pipe – the server shows its own window instead", None);
@@ -1046,7 +1061,7 @@ impl Engine {
             }
         }
 
-        // 2) Wait for "listening on port 7777" – starting is done by hand, so wait generously (30 minutes)
+        // 2) Wait for "listening on port 7777" – the match starts by itself above, but "Start match" may be pressed by hand later, so wait generously (30 minutes)
         match self.wait_signal(token, |s| &s.server_listening, Duration::from_secs(1800)) {
             Wait::Cancelled => {}
             Wait::TimedOut => {

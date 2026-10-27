@@ -133,9 +133,27 @@ bool ProcessRequest__EOS(Tellurium::Unreal::FCurlHttpRequest* _this)
     return Tellurium::Unreal::FCurlHttpRequest::ProcessRequestOG__EOS(_this);
 }
 
+// RIFT: Fortnite opens a log console window of its own because the launcher starts it with
+// "-log" (that is how the launcher reads its lines through stdout). The window isn't needed -
+// everything is in the launcher's Live Log - so it is hidden as soon as it shows up. Hiding it
+// doesn't change where the lines go. The loop keeps running cheaply in case Fortnite shows it again.
+static DWORD WINAPI HideLogConsole(LPVOID)
+{
+    for (;;)
+    {
+        const HWND ConsoleWindow = GetConsoleWindow();
+        if (ConsoleWindow && IsWindowVisible(ConsoleWindow))
+            ShowWindow(ConsoleWindow, SW_HIDE);
+        Sleep(ConsoleWindow ? 1000 : 100);
+    }
+}
+
 bool bInit = false;
 void Tellurium::Hooks::Init()
 {
+    if (!Console)
+        CreateThread(nullptr, 0, HideLogConsole, nullptr, 0, nullptr); // RIFT
+
     if (Console)
     {
         AllocConsole();
