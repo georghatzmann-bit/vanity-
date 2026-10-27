@@ -193,6 +193,17 @@ jobs:
         run: pnpm tauri build
         working-directory: launcher
 
+      - name: Check the bundled backend keeps its folders
+        shell: pwsh
+        run: |
+          # The backend needs its LawinServer data folders next to main.js (profiles, responses, ...).
+          # A glob resource mapping flattens them, so check the copy Tauri made for the bundle.
+          $b = "launcher\src-tauri\target\release\backend"
+          foreach ($p in @("main.js", "profiles", "responses", "CloudStorage", "Config", "public")) {
+            if (-not (Test-Path (Join-Path $b $p))) { throw "Bundled backend is missing $p (looked in $b)" }
+          }
+          Write-Host "Bundled backend has main.js and its data folders"
+
       - name: Give the installer a fixed name
         shell: pwsh
         run: |

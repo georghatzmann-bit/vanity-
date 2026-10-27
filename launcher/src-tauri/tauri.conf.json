@@ -80,7 +80,7 @@
     },
     "resources": {
       "resources/dlls/*": "dlls/",
-      "resources/backend/**/*": "backend/",
+      "resources/backend/": "backend/",
       "resources/node/*": "node/"
     }
   }
