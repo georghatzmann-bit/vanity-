@@ -33,43 +33,93 @@ pub struct ServerEvent {
 #[cfg(windows)]
 mod imp {
     use super::*;
-    use std::io::{BufRead, BufReader, Write};
+    use std::io::{Read, Write};
+    use std::os::windows::io::AsRawHandle;
     use std::sync::atomic::{AtomicU64, Ordering};
-    use std::sync::{Arc, Mutex};
+    use std::sync::mpsc::{self, Receiver, TryRecvError};
+    use std::sync::Mutex;
     use std::time::Duration;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::Pipes::PeekNamedPipe;
 
     /// Open connection to the server. For sending commands and receiving events.
+    ///
+    /// One thread does all pipe I/O. A pipe handle opened without overlapped I/O serializes its
+    /// reads and writes: a ReadFile that waits for data would block every WriteFile on the same
+    /// handle (also through `try_clone`). So nobody ever waits in ReadFile: the thread only reads
+    /// what `PeekNamedPipe` says is there, and writes the queued lines in between.
     pub struct ServerLink {
-        writer: Arc<Mutex<std::fs::File>>,
+        outbox: Mutex<mpsc::Sender<String>>,
         next_id: AtomicU64,
+    }
+
+    fn available(file: &std::fs::File) -> Result<u32, ()> {
+        let mut avail = 0u32;
+        // SAFETY: the handle stays valid while `file` lives; only the count is written.
+        unsafe { PeekNamedPipe(HANDLE(file.as_raw_handle()), None, 0, None, Some(&mut avail), None) }
+            .map(|_| avail)
+            .map_err(|_| ())
+    }
+
+    fn io_loop(mut file: std::fs::File, outbox: Receiver<String>, on_event: Sender<ServerEvent>) {
+        let mut pending = Vec::<u8>::new();
+        let mut buf = vec![0u8; 16 * 1024];
+        loop {
+            let mut busy = false;
+            // Send everything that is queued
+            loop {
+                match outbox.try_recv() {
+                    Ok(line) => {
+                        busy = true;
+                        if file.write_all(line.as_bytes()).is_err() {
+                            return;
+                        }
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => return, // the link was dropped
+                }
+            }
+            // Read only what is already there
+            let Ok(n) = available(&file) else { return };
+            if n > 0 {
+                busy = true;
+                let want = (n as usize).min(buf.len());
+                let Ok(got) = file.read(&mut buf[..want]) else { return };
+                if got == 0 {
+                    return;
+                }
+                pending.extend_from_slice(&buf[..got]);
+                while let Some(pos) = pending.iter().position(|&b| b == b'\n') {
+                    let line: Vec<u8> = pending.drain(..=pos).collect();
+                    let text = String::from_utf8_lossy(&line);
+                    let text = text.trim();
+                    if text.is_empty() {
+                        continue;
+                    }
+                    if let Ok(ev) = serde_json::from_str::<ServerEvent>(text) {
+                        if on_event.send(ev).is_err() {
+                            return;
+                        }
+                    }
+                }
+                if pending.len() > 1024 * 1024 {
+                    pending.clear(); // guard against endless lines
+                }
+            }
+            if !busy {
+                std::thread::sleep(Duration::from_millis(15));
+            }
+        }
     }
 
     impl ServerLink {
         /// Tries to connect to the pipe. `on_event` gets every server event.
         /// Returns None if the server isn't there (yet).
         pub fn connect(on_event: Sender<ServerEvent>) -> Option<ServerLink> {
-            let file = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open(PIPE_NAME)
-                .ok()?;
-            let reader_file = file.try_clone().ok()?;
-            std::thread::spawn(move || {
-                let reader = BufReader::new(reader_file);
-                for line in reader.lines() {
-                    let Ok(line) = line else { break };
-                    let line = line.trim();
-                    if line.is_empty() {
-                        continue;
-                    }
-                    if let Ok(ev) = serde_json::from_str::<ServerEvent>(line) {
-                        if on_event.send(ev).is_err() {
-                            break;
-                        }
-                    }
-                }
-            });
-            Some(ServerLink { writer: Arc::new(Mutex::new(file)), next_id: AtomicU64::new(1) })
+            let file = std::fs::OpenOptions::new().read(true).write(true).open(PIPE_NAME).ok()?;
+            let (tx, rx) = mpsc::channel::<String>();
+            std::thread::spawn(move || io_loop(file, rx, on_event));
+            Some(ServerLink { outbox: Mutex::new(tx), next_id: AtomicU64::new(1) })
         }
 
         /// Connects, waiting up to `timeout` for the server.
@@ -91,9 +141,8 @@ mod imp {
             cmd.id = id;
             let mut line = serde_json::to_string(&cmd).map_err(|e| e.to_string())?;
             line.push('\n');
-            let mut w = self.writer.lock().map_err(|_| "Connection busy")?;
-            w.write_all(line.as_bytes()).map_err(|e| format!("Can't reach the server: {e}"))?;
-            w.flush().map_err(|e| e.to_string())?;
+            let tx = self.outbox.lock().map_err(|_| "Connection busy")?;
+            tx.send(line).map_err(|_| "Can't reach the server: the connection was closed".to_string())?;
             Ok(id)
         }
 

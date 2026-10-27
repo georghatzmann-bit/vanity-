@@ -74,15 +74,41 @@ namespace
 
     // ---------------------------------------------------------------- Sending
 
+    // Lines for the launcher. Any thread (also the game thread) only queues them; the pipe
+    // thread writes them. A pipe handle without overlapped I/O serializes reads and writes, so a
+    // WriteFile while the pipe thread waits in ReadFile would block the caller - on the game
+    // thread that froze the server until Unreal's hang detector closed it.
+    std::mutex GOutboxMutex;
+    std::deque<std::string> GOutbox;
+    constexpr size_t kMaxOutbox = 2048;
+
     void WriteLine(const std::string& Line)
     {
-        std::lock_guard<std::mutex> Lock(GWriteMutex);
-        if (GPipe == INVALID_HANDLE_VALUE)
+        if (!GConnected.load(std::memory_order_acquire))
             return;
-        const std::string Data = Line + "\n";
-        DWORD Written = 0;
-        if (!WriteFile(GPipe, Data.data(), (DWORD)Data.size(), &Written, nullptr))
-            SDK::DbgLog("[Rift] Pipe write failed error=%lu\n", GetLastError());
+        std::lock_guard<std::mutex> Lock(GOutboxMutex);
+        if (GOutbox.size() < kMaxOutbox)
+            GOutbox.push_back(Line + "\n");
+    }
+
+    // Pipe thread only.
+    bool FlushOutbox(HANDLE Pipe)
+    {
+        std::deque<std::string> Batch;
+        {
+            std::lock_guard<std::mutex> Lock(GOutboxMutex);
+            Batch.swap(GOutbox);
+        }
+        for (const auto& Data : Batch)
+        {
+            DWORD Written = 0;
+            if (!WriteFile(Pipe, Data.data(), (DWORD)Data.size(), &Written, nullptr))
+            {
+                SDK::DbgLog("[Rift] Pipe write failed error=%lu\n", GetLastError());
+                return false;
+            }
+        }
+        return true;
     }
 
     void Reply(long long Id, bool bOk, const std::string& Message)
@@ -608,9 +634,22 @@ namespace
 
             std::string Buffer;
             char Chunk[4096];
-            DWORD Read = 0;
-            while (ReadFile(Pipe, Chunk, sizeof(Chunk), &Read, nullptr) && Read > 0)
+            for (;;)
             {
+                if (!FlushOutbox(Pipe))
+                    break;
+                DWORD Avail = 0;
+                if (!PeekNamedPipe(Pipe, nullptr, 0, nullptr, &Avail, nullptr))
+                    break; // launcher gone
+                if (Avail == 0)
+                {
+                    Sleep(10);
+                    continue;
+                }
+                DWORD Read = 0;
+                const DWORD Want = Avail < sizeof(Chunk) ? Avail : (DWORD)sizeof(Chunk);
+                if (!ReadFile(Pipe, Chunk, Want, &Read, nullptr) || Read == 0)
+                    break;
                 Buffer.append(Chunk, Read);
                 size_t NewLine;
                 while ((NewLine = Buffer.find('\n')) != std::string::npos)
@@ -634,6 +673,10 @@ namespace
             {
                 std::lock_guard<std::mutex> Lock(GWriteMutex);
                 GPipe = INVALID_HANDLE_VALUE;
+            }
+            {
+                std::lock_guard<std::mutex> Lock(GOutboxMutex);
+                GOutbox.clear();
             }
             FlushFileBuffers(Pipe);
             DisconnectNamedPipe(Pipe);
