@@ -763,6 +763,7 @@ static void InstallWndProc(HWND hWnd)
 
     g_hWnd = hWnd;
     OriginalWndProc = (WNDPROC)SetWindowLongPtrW(g_hWnd, GWLP_WNDPROC, (LONG_PTR)HookedWndProc);
+    AtlasDiagnostics::WriteLine("menu wndproc-installed hwnd=%p ok=%d", hWnd, OriginalWndProc ? 1 : 0); // [Rift]
 }
 
 static void InitImGuiBase(HWND hWnd)
@@ -1519,6 +1520,15 @@ static LRESULT CALLBACK HookedWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
 
     const bool interactiveInput = g_InteractiveInputEnabled.load(std::memory_order_acquire);
     const bool imguiReady = g_ImGuiReady.load(std::memory_order_acquire);
+    // [Rift] The first function-key presses go to the diagnostics log with the menu state.
+    if ((msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && wParam >= VK_F1 && wParam <= VK_F12)
+    {
+        static std::atomic_int s_LoggedFKeys{ 0 };
+        if (s_LoggedFKeys.fetch_add(1, std::memory_order_relaxed) < 6)
+            AtlasDiagnostics::WriteLine("menu key vk=0x%02X imgui-ready=%d interactive=%d own-window=%d foreground=%d",
+                static_cast<unsigned>(wParam), imguiReady ? 1 : 0, interactiveInput ? 1 : 0,
+                hWnd == g_hWnd ? 1 : 0, GetForegroundWindow() == hWnd ? 1 : 0);
+    }
     const bool losingCapture =
         msg == WM_CAPTURECHANGED &&
         reinterpret_cast<HWND>(lParam) != hWnd;
@@ -1798,6 +1808,13 @@ static LRESULT CALLBACK HookedWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
 
 static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
 {
+    // [Rift] One line when the render hook first runs, so a dead F9 menu can be told apart
+    // from "the hook never landed" in client-diagnostics.log.
+    static std::atomic_bool s_LoggedFirstPresent{ false };
+    if (!s_LoggedFirstPresent.exchange(true, std::memory_order_acq_rel))
+        AtlasDiagnostics::WriteLine("menu present-hook first-call swapchain=%p dx12=%d", pSwapChain,
+            IsDX12SwapChain(pSwapChain) ? 1 : 0);
+
     IDXGISwapChain* knownPrimary =
         g_PrimarySwapChain.load(std::memory_order_acquire);
     if (knownPrimary && pSwapChain != knownPrimary)
@@ -1817,6 +1834,7 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
                 !dx12SwapChain && !g_LoggedUnsupportedRenderer)
             {
                 OutputDebugStringW(L"Rift: Present hook landed, but the swap chain is not D3D11 or D3D12.\n");
+                AtlasDiagnostics::WriteLine("menu renderer-unsupported swapchain=%p", pSwapChain); // [Rift]
                 g_LoggedUnsupportedRenderer = true;
             }
         }
@@ -2033,8 +2051,15 @@ static bool InstallDXHook()
 
 static void InstallDXHookThread()
 {
+    int tries = 0;
     while (!InstallDXHook())
+    {
+        if (++tries == 40) // [Rift] 10 s without a render hook: say so once
+            AtlasDiagnostics::WriteLine("menu present-hook still-not-installed tries=%d", tries);
         Sleep(250);
+    }
+    AtlasDiagnostics::WriteLine("menu present-hook installed tries=%d dx12-queue=%d", tries + 1,
+        g_DX12QueueHookInstalled ? 1 : 0); // [Rift]
 }
 
 static bool EnableTournamentNotificationGate()
