@@ -3,6 +3,8 @@
 mod commands;
 mod download;
 mod engine;
+mod firewall;
+mod friends;
 mod pipe;
 mod proc;
 
@@ -113,6 +115,12 @@ pub fn run() {
             commands::host_and_play,
             commands::stop_all,
             commands::join_ip,
+            commands::invite_info,
+            commands::check_join,
+            commands::join_game,
+            commands::firewall_status,
+            commands::firewall_allow,
+            commands::firewall_remove,
             commands::server_exec,
             commands::server_config,
             commands::server_start_match,

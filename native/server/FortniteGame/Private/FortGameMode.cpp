@@ -29,6 +29,7 @@
 #include "../Public/FortVehicleMods.h"
 #include "../Public/PlayerBots_19_10.h" // NIOBIUM: 19.10 AI player bots
 #include "../Public/AIBase.h" // NIOBIUM: shared AI helpers (AI controller check)
+#include <unordered_set>
 
 #include <sstream>
 #include <fstream>
@@ -7241,6 +7242,67 @@ void AFortGameMode::HandleStartingNewPlayer_(UObject* Context, FFrame& Stack)
     return;
 }
 
+namespace
+{
+    // NIOBIUM: "Together vs bots" (FConfiguration::bHumansSameTeam, launcher pipe key
+    // bHumansSameTeam). In team playlists every human player - the host and every joined friend -
+    // goes into one team (the playlist's first team) until it has the team size; AI bots and
+    // target dummies never get that team, so humans are never split by bots that spawned between
+    // two joins. Off (or Solo) = the normal picking below, where every human and every bot in Solo
+    // gets a team of their own.
+    struct FTogetherTeamState
+    {
+        UWorld* World = nullptr;
+        uint8 Team = 0;
+        int32 Humans = 0;
+        std::unordered_set<const void*> Members;
+    };
+
+    FTogetherTeamState GTogetherTeam;
+
+    bool IsHumanController(AFortPlayerControllerAthena* Controller)
+    {
+        return IsSaneObject(Controller) && !AIBase::IsAIController(Controller) &&
+            !PlayerBots1910::IsAIBotController(Controller);
+    }
+
+    void SyncTogetherTeam(const UFortPlaylistAthena* Playlist)
+    {
+        auto World = UWorld::GetWorld();
+        if (GTogetherTeam.World != World)
+        {
+            GTogetherTeam = {};
+            GTogetherTeam.World = World;
+            GTogetherTeam.Team = GetPlaylistFirstTeam(Playlist);
+        }
+    }
+
+    // The humans' team for this controller, or 0 (a bot, or the team is full).
+    uint8 PickTogetherTeam(AFortPlayerControllerAthena* Controller,
+        const UFortPlaylistAthena* Playlist, int32 TeamSize)
+    {
+        SyncTogetherTeam(Playlist);
+        if (!IsHumanController(Controller))
+            return 0;
+        if (GTogetherTeam.Members.count(Controller))
+            return GTogetherTeam.Team;
+        if (GTogetherTeam.Humans >= TeamSize)
+            return 0;
+        GTogetherTeam.Members.insert(Controller);
+        GTogetherTeam.Humans++;
+        SDK::DbgLog("[Teams] together: human %d/%d -> team %u\n", GTogetherTeam.Humans, TeamSize,
+            (unsigned)GTogetherTeam.Team);
+        return GTogetherTeam.Team;
+    }
+
+    bool TogetherTeamActive(const UFortPlaylistAthena* Playlist, int32& OutTeamSize)
+    {
+        OutTeamSize = Playlist && Playlist->HasMaxSquadSize() ? Playlist->MaxSquadSize : 1;
+        return FConfiguration::bHumansSameTeam.load(std::memory_order_acquire) && !bIsLargeTeamGame &&
+            OutTeamSize > 1 && OutTeamSize <= 100;
+    }
+}
+
 bool AFortGameMode::AssignCheatBotIsolatedTeam(AFortGameMode* GameMode,
     AFortPlayerControllerAthena* BotController, AActor* Instigator, uint8& OutTeamIndex)
 {
@@ -7301,6 +7363,15 @@ bool AFortGameMode::AssignCheatBotIsolatedTeam(AFortGameMode* GameMode,
 
     auto Playlist = GetPublishedPlaylist(GameState);
     const uint8 FirstTeam = GetPlaylistFirstTeam(Playlist);
+    // NIOBIUM: "Together vs bots": a target dummy never takes the humans' team, even before the
+    // first human is in it.
+    int32 TogetherTeamSize = 1;
+    if (TogetherTeamActive(Playlist, TogetherTeamSize))
+    {
+        SyncTogetherTeam(Playlist);
+        if (GTogetherTeam.Team)
+            UsedTeams[GTogetherTeam.Team] = true;
+    }
     int32 LastTeamExclusive = 250;
     bool bHasActiveTeamBound = false;
     if (Playlist)
@@ -7851,6 +7922,20 @@ uint8_t AFortGameMode::PickTeam(AFortGameMode* GameMode, uint8_t PreferredTeam,
     {
         CurrentTeam++;
         return ret;
+    }
+
+    // NIOBIUM: "Together vs bots" - humans into one team, everyone else past it (see above).
+    int32 TogetherTeamSize = 1;
+    if (TogetherTeamActive(Playlist, TogetherTeamSize))
+    {
+        if (const uint8 HumanTeam = PickTogetherTeam(Controller, Playlist, TogetherTeamSize))
+            return HumanTeam;
+        if (CurrentTeam == GTogetherTeam.Team)
+        {
+            CurrentTeam++;
+            PlayersOnCurTeam = 0;
+        }
+        ret = CurrentTeam;
     }
 
     printf("Picked team %d %d\n", ret, Playlist ? Playlist->MaxSquadSize : 1);

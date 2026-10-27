@@ -4,6 +4,7 @@ pub mod bots;
 pub mod crash;
 pub mod earlylog;
 pub mod epic;
+pub mod friends;
 pub mod helperprocs;
 pub mod launchargs;
 pub mod livingworld;

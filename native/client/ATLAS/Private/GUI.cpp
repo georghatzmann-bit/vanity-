@@ -3652,19 +3652,147 @@ static void ClearQueuedCommands()
         g_GameThreadCommands.clear();
 }
 
+// [Rift] Why the last "Join" on another PC didn't go out (shown under the field; "" = fine).
+static std::string g_JoinError;
+
+static bool JoinDigits(const std::string& text, size_t maxLen)
+{
+    return !text.empty() && text.size() <= maxLen &&
+        std::all_of(text.begin(), text.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
+}
+
+static bool JoinIsIpv4(const std::string& text)
+{
+    int parts = 0;
+    size_t start = 0;
+    while (true)
+    {
+        const size_t dot = text.find('.', start);
+        const std::string part = text.substr(start, dot == std::string::npos ? std::string::npos : dot - start);
+        if (!JoinDigits(part, 3) || std::stoi(part) > 255 || (part.size() > 1 && part[0] == '0'))
+            return false;
+        parts++;
+        if (dot == std::string::npos)
+            break;
+        start = dot + 1;
+    }
+    return parts == 4 && text != "0.0.0.0";
+}
+
+static bool JoinIsPort(const std::string& text)
+{
+    return JoinDigits(text, 5) && std::stoi(text) >= 1 && std::stoi(text) <= 65535;
+}
+
+// "19.10" -> 1910, "19.1" -> 1910, "4.5" -> 450; 0 = can't tell.
+static long long JoinVersionHundredths(const std::string& version)
+{
+    const size_t dot = version.find('.');
+    const std::string major = version.substr(0, dot);
+    std::string minor = dot == std::string::npos ? "0" : version.substr(dot + 1);
+    minor = minor.substr(0, minor.find('.'));
+    if (!JoinDigits(major, 3) || !JoinDigits(minor, 2))
+        return 0;
+    const long long ma = std::stoll(major);
+    long long mi = std::stoll(minor);
+    if (ma >= 5 && minor.size() == 1)
+        mi *= 10;
+    return ma * 100 + mi;
+}
+
+// [Rift] What was typed into "Join a server": an invite copied in Rift ("RIFT1:100.101.12.7:7777:
+// 19.10:18675304:team4+bots", also inside a longer copied line) or an address ("100.101.12.7",
+// "100.101.12.7:7777"). Out = what "open" gets. False = g_JoinError says why, in plain words.
+static bool ResolveJoinAddress(const char* input, std::string& out)
+{
+    std::string text = input ? input : "";
+    const auto notSpace = [](unsigned char c) { return !std::isspace(c); };
+    text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
+    text.erase(std::find_if(text.rbegin(), text.rend(), notSpace).base(), text.end());
+    if (text.empty())
+    {
+        g_JoinError = "Paste your friend's invite code (or their IP address) first.";
+        return false;
+    }
+
+    std::string upper = text;
+    std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) { return (char)std::toupper(c); });
+    const size_t at = upper.find("RIFT");
+    if (at != std::string::npos)
+    {
+        std::string token = text.substr(at, text.find_first_of(" \t\r\n\"'<>`)]", at) - at);
+        while (!token.empty() && (token.back() == '.' || token.back() == ',' || token.back() == ';'))
+            token.pop_back();
+        std::vector<std::string> parts;
+        std::stringstream stream(token);
+        for (std::string part; std::getline(stream, part, ':');)
+            parts.push_back(part);
+        std::string prefix = parts.empty() ? "" : parts[0];
+        std::transform(prefix.begin(), prefix.end(), prefix.begin(), [](unsigned char c) { return (char)std::toupper(c); });
+        if (prefix != "RIFT" && prefix != "RIFT1")
+        {
+            g_JoinError = prefix.size() > 4 && JoinDigits(prefix.substr(4), 3)
+                ? "This invite comes from a newer Rift. Update Rift, then try again."
+                : "This invite code is broken. Ask your friend to press \"Copy invite\" in Rift again.";
+            return false;
+        }
+        if (parts.size() < 4 || !JoinIsIpv4(parts[1]) || !JoinIsPort(parts[2]))
+        {
+            g_JoinError = "This invite code is incomplete. Ask your friend to press \"Copy invite\" in Rift again.";
+            return false;
+        }
+        // Both PCs need the same Fortnite: a different version can't join (the game would only
+        // fail later with a network error).
+        const long long wanted = JoinVersionHundredths(parts[3]);
+        const long long mine = NiobiumEditRoutes::VersionHundredths(VersionInfo.FortniteVersion);
+        if (wanted >= 500 && mine >= 500 && wanted != mine)
+        {
+            char buf[200];
+            snprintf(buf, sizeof(buf),
+                "This invite is for Fortnite %s, but this game is %.2f. Join from Rift (Servers & Friends) - it starts the right version.",
+                parts[3].c_str(), VersionInfo.FortniteVersion);
+            g_JoinError = buf;
+            return false;
+        }
+        out = parts[1] + ":" + parts[2];
+        return true;
+    }
+
+    std::string ip = text;
+    const size_t colon = text.rfind(':');
+    if (colon != std::string::npos)
+    {
+        ip = text.substr(0, colon);
+        if (!JoinIsPort(text.substr(colon + 1)))
+        {
+            g_JoinError = "The port must be a number from 1 to 65535 (normally 7777).";
+            return false;
+        }
+    }
+    if (!JoinIsIpv4(ip))
+    {
+        g_JoinError = "That isn't an invite code or an IP address. Example: 100.101.12.7";
+        return false;
+    }
+    out = text;
+    return true;
+}
+
 static void JoinSelectedHost()
 {
     if (FGUI::HostType == 0)
     {
+        g_JoinError.clear();
         Exec("open 127.0.0.1");
     }
     else
     {
-        if (FGUI::RemoteIP[0] == '\0')
+        std::string address;
+        if (!ResolveJoinAddress(FGUI::RemoteIP, address))
             return;
-
+        g_JoinError.clear();
         std::string cmd = "open ";
-        cmd += FGUI::RemoteIP;
+        cmd += address;
         Exec(cmd.c_str());
     }
 }
@@ -5704,7 +5832,8 @@ void GUI_Render()
     else
     {
         ImGui::PushItemWidth(hostControlWidth);
-        ImGui::InputTextWithHint("##remoteip", "IP address of the other PC", FGUI::RemoteIP, sizeof(FGUI::RemoteIP));
+        if (ImGui::InputTextWithHint("##remoteip", "Invite code or IP of the other PC", FGUI::RemoteIP, sizeof(FGUI::RemoteIP)))
+            g_JoinError.clear();
         ImGui::PopItemWidth();
 
         ImGui::Spacing();
@@ -5714,7 +5843,15 @@ void GUI_Render()
                     "Join###join_remote", hostControlWidth),
                 ImVec2(hostControlWidth, 0.f)))
             JoinSelectedHost();
-        HoverHint("Only works when an IP address is filled in above.");
+        HoverHint("Paste the invite your friend copied in Rift (RIFT1:...) or their IP address.");
+        if (!g_JoinError.empty())
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.39f, 0.43f, 1.f));
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + (std::max)(40.f, hostControlWidth));
+            ImGui::TextUnformatted(g_JoinError.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+        }
     }
 
     ImGui::Spacing();

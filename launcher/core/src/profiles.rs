@@ -70,6 +70,11 @@ pub struct Profile {
     /// Most bosses and NPCs at once, 1–100 (clamped when sent to the server).
     #[serde(default = "default_living_world_max_ai", rename = "livingWorldMaxAI")]
     pub living_world_max_ai: u32,
+    /// "Together vs bots": every human player (host + friends) goes into one team, up to the
+    /// playlist's team size (Duos/Trios/Squads); bots fill the other teams. Off = "Against each
+    /// other" (normal team picking). Sent as `bHumansSameTeam` (see `bots::server_config_for`).
+    #[serde(default)]
+    pub friends_together: bool,
 }
 
 fn default_bot_count() -> u32 {
@@ -273,6 +278,7 @@ impl Config {
                 bot_skill: BotSkill::Easy,
                 living_world: false,
                 living_world_max_ai: default_living_world_max_ai(),
+                friends_together: false,
             };
             self.active_profile_id = p.id.clone();
             self.profiles.push(p);

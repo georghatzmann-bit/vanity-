@@ -387,6 +387,16 @@ namespace
     {
         if (Key == "bPlayerBots" || Key == "PlayerBotCount" || Key == "PlayerBotTargetELO")
             return ApplyBotConfig(Key, Value, Error);
+        // NIOBIUM: "Together vs bots". Teams are picked while players join, so only before the start.
+        if (Key == "bHumansSameTeam")
+        {
+            if (FConfiguration::bReadyToStart.load(std::memory_order_acquire))
+            {
+                Error = "Team settings take effect next match.";
+                return false;
+            }
+            return SetBool(FConfiguration::bHumansSameTeam, Value, Error);
+        }
         if (Key == "bLivingWorld" || Key == "LivingWorldMaxAI" || Key == "bLivingWorldDump")
             return ApplyLivingWorldConfig(Key, Value, Error);
 

@@ -158,6 +158,8 @@ interface DownloadsState {
   catalog: Catalog | null;
   catalogError: string | null;
   jobs: DownloadJobView[];
+  /** A build to show when "Download a version" opens (e.g. from "Download it" on Servers & Friends). */
+  openKey: string | null;
   loadCatalog: () => Promise<void>;
   /** Starts a download. Returns the reason when Rust refused it (shown under the folder field). */
   start: (build: CatalogBuild, folder: string) => Promise<DownloadError | null>;
@@ -184,6 +186,7 @@ export const useDownloads = create<DownloadsState>()((set, get) => ({
   catalog: null,
   catalogError: null,
   jobs: [],
+  openKey: null,
 
   loadCatalog: async () => {
     if (get().catalog) return;

@@ -33,6 +33,7 @@ import { runDemoLaunch, stopDemoLaunch } from "@/components/LaunchDemoDriver";
 import { api, BACKEND_PORT, GAME_SERVER_PORT, inTauri, type ServiceStatus } from "@/lib/api";
 import { EASE_IN, EASE_OUT } from "@/lib/motion";
 import { activeProfile, buildOf, isStarting, LAUNCH_DONE_STEP, launchSteps, useApp, type PageId } from "@/lib/store";
+import { copyInvite } from "@/lib/friends";
 import { cn } from "@/lib/utils";
 
 const swap = {
@@ -223,6 +224,13 @@ export function StartPage() {
               )}
             </AnimatePresence>
 
+            {services.server !== "stopped" && (
+              <Button variant="secondary" size="sm" onClick={() => void copyInvite()}>
+                <UserPlus />
+                Invite friends
+              </Button>
+            )}
+
             <div className="h-9 max-w-60 text-xs lg:text-right">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.p
@@ -288,7 +296,7 @@ export function StartPage() {
         <Eyebrow className="mb-3">Quick actions</Eyebrow>
         <Stagger className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" delay={0.18}>
           <QuickAction icon={FolderInput} title="Add a build" hint="Choose your Fortnite folder" to="library" onGo={setPage} />
-          <QuickAction icon={UserPlus} title="Join a friend" hint="By IP over Tailscale or Radmin VPN" to="servers" onGo={setPage} />
+          <QuickAction icon={UserPlus} title="Play with friends" hint="Invite a friend or paste their invite" to="servers" onGo={setPage} />
           <QuickAction icon={PanelsTopLeft} title="In-game menu" hint="Edit on release, field of view, keys" to="ingame" onGo={setPage} />
           <QuickAction icon={ScrollText} title="Live log" hint="See what's happening right now" to="logs" onGo={setPage} />
         </Stagger>

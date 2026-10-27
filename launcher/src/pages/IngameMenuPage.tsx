@@ -398,7 +398,7 @@ export function IngameMenuPage() {
                   Join
                 </Button>
               </SettingRow>
-              <SettingRow label="Server at this IP" hint="IP of the other PC, e.g. over Tailscale.">
+              <SettingRow label="Server at this IP" hint="Invite code or IP of the other PC, e.g. over Tailscale.">
                 <Input
                   value={joinIp}
                   onChange={(e) => rememberIp(e.target.value)}

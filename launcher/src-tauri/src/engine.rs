@@ -23,8 +23,9 @@ use niobium_core::profiles::{self, Config, Profile, BACKEND_PORT, GAME_SERVER_PO
 use niobium_core::startgate::{wait_for, Busy, ClosePrompt, StartGate, StartToken, Wait};
 use niobium_core::version::{self, BuildInfo, Support};
 
+use crate::friends::{HostInfoServer, HostInfoState};
 use crate::pipe::{ServerEvent, ServerLink};
-use crate::proc;
+use crate::{firewall, proc};
 
 /// Names of the DLLs (in the resource folder `dlls/`).
 const DLL_REDIRECT: &str = "rift_redirect.dll";
@@ -124,6 +125,8 @@ pub struct Toast {
 struct Instance {
     pid: u32,
     helpers: HelperPids,
+    /// The build it runs (joining a friend checks that it is the host's Fortnite)
+    build_id: String,
 }
 
 #[derive(Default)]
@@ -166,6 +169,18 @@ pub struct Engine {
     port_notes_logged: Mutex<Vec<&'static str>>,
     /// The last "Close Rift?" question and whether the UI showed it (see `on_window_event`).
     close_prompt: Mutex<ClosePrompt>,
+    /// The "Rift host info" endpoint while hosting (see `friends::HostInfoServer`).
+    host_info: Mutex<Option<HostInfoServer>>,
+}
+
+/// How "Join" went (the UI picks its text from it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum JoinStarted {
+    /// Your game was already running: press Play in the lobby.
+    PressPlay,
+    /// Rift is starting your game; press Play once the lobby shows.
+    Starting,
 }
 
 impl Engine {
@@ -180,6 +195,7 @@ impl Engine {
             early_toasts: EarlyLines::new(),
             port_notes_logged: Mutex::new(Vec::new()),
             close_prompt: Mutex::new(ClosePrompt::new()),
+            host_info: Mutex::new(None),
             app,
         }
     }
@@ -420,11 +436,13 @@ impl Engine {
         Ok(())
     }
 
-    /// Sets the matchmaker target in the backend (for joining by IP).
-    fn set_backend_gameserver(&self, ip: &str, port: u16) {
+    /// Sets the matchmaker target in the backend: "Play" in the lobby then goes there.
+    fn set_backend_gameserver(&self, ip: &str, port: u16) -> Result<(), String> {
         let body = serde_json::json!({ "ip": ip, "port": port });
-        let _ = ureq::post(format!("http://127.0.0.1:{BACKEND_PORT}/niobium/gameserver"))
-            .send_json(body);
+        ureq::post(format!("http://127.0.0.1:{BACKEND_PORT}/niobium/gameserver"))
+            .send_json(body)
+            .map(|_| ())
+            .map_err(|e| format!("Rift's backend didn't take the address ({e}). Press Stop all and try again."))
     }
 
     fn set_backend_status(&self, version: &str, hosting: bool, playlist: &str) {
@@ -516,7 +534,7 @@ impl Engine {
             match proc::start_captured(&exe, &args, &env) {
                 Ok(child) => {
                     let slot = if host { &mut r.server } else { &mut r.game };
-                    *slot = Some(Instance { pid: child.id(), helpers: helpers.clone() });
+                    *slot = Some(Instance { pid: child.id(), helpers: helpers.clone(), build_id: build.id.clone() });
                     Ok((child, helpers))
                 }
                 Err(e) => {
@@ -569,6 +587,10 @@ impl Engine {
                         r.link = None;
                     }
                 }
+            }
+            if host {
+                // No server any more: friends' checks get no answer (= not hosting)
+                engine.stop_host_info();
             }
             engine.emit_services();
         });
@@ -739,6 +761,11 @@ impl Engine {
         self.step(token, 0)?;
         self.start_backend(token)?;
         self.set_backend_status(&build.version, true, &profile.playlist);
+        // A "Join" earlier (backend still running) may point the matchmaker at a friend's PC:
+        // "Play" must land on your own server now.
+        if let Err(e) = self.set_backend_gameserver("127.0.0.1", GAME_SERVER_PORT) {
+            self.log("launcher", "warning", CAT, &e, None);
+        }
 
         // Server Fortnite – put a fresh parkour list in place first (the server DLL reads it)
         self.step(token, 1)?;
@@ -751,6 +778,7 @@ impl Engine {
         }
         // The server never gets Bubble Builds (launchargs::build ignores the setting for the host)
         let server_pid = self.launch_instance(token, &build, &profile, true, headless, bubble_builds)?;
+        self.start_host_info(&build);
         self.step(token, 2)?; // the redirect is loaded in launch_instance
         self.emit_services();
 
@@ -923,6 +951,11 @@ impl Engine {
                 // turn commands on again. "Toggle Auto Host" in the server window turns them off otherwise
                 // (GUI.cpp), and friends would get "Commands are currently disabled" on the F9 trickshot buttons.
                 if ev.event == "status" {
+                    let engine = app.state::<Arc<Engine>>();
+                    engine.update_host_info(
+                        ev.rest.get("phase").and_then(|v| v.as_str()),
+                        ev.rest.get("players").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                    );
                     let ready = ev.rest.get("ready").and_then(|v| v.as_bool()).unwrap_or(false);
                     if ready && !was_ready {
                         let engine = app.state::<Arc<Engine>>();
@@ -1269,20 +1302,162 @@ impl Engine {
 
     // --- Joining -------------------------------------------------------------
 
-    pub fn join_ip(&self, addr: &str) -> Result<(), String> {
-        let (ip, port) = split_addr(addr, GAME_SERVER_PORT);
-        // Tell our own backend where to send the player: "Play" in the lobby then goes there
-        // (matchmaking, see backend/lawinserver/structure/matchmaking.js).
-        // No "open" through the server pipe: that runs as a cheat command on your OWN server, which
-        // doesn't know the command – it would only have written the command list into the chat.
-        let token = self.running.lock().unwrap().gate.token();
-        self.start_backend(token).map_err(|e| match e {
-            StartError::Cancelled => "Stopped before the backend was ready.".to_string(),
-            StartError::Failed(e) => e,
-        })?;
-        self.set_backend_gameserver(&ip, port);
-        self.toast("info", "Join", &format!("Press Play in the game – you'll land on {ip}:{port}."));
+    /// Joins a game server at `ip:port` (a friend's, or 127.0.0.1). Your own backend sends "Play"
+    /// there (matchmaking, see backend/lawinserver/structure/matchmaking.js) – the host's backend
+    /// is never needed. If your game isn't running yet, Rift starts it: with `build_id` (the build
+    /// that matches the host), else the active profile's build. Every player logs in to their own
+    /// backend; only the game server's UDP port has to be reachable on the host.
+    /// No "open" through the server pipe: that runs as a cheat command on your OWN server.
+    pub fn join_game(&self, ip: &str, port: u16, build_id: Option<&str>) -> Result<JoinStarted, String> {
+        let (game_build, server_running) = {
+            let r = self.running.lock().unwrap();
+            (r.game.as_ref().map(|g| g.build_id.clone()), r.server.is_some())
+        };
+        if let Some(running) = game_build {
+            if let Some(wanted) = build_id.filter(|w| *w != running) {
+                let cfg = self.config.lock().unwrap();
+                let name = |id: &str| cfg.builds.iter().find(|b| b.id == id).map(|b| b.version.clone()).unwrap_or_else(|| "another version".into());
+                return Err(format!(
+                    "Your game is running Fortnite {}, but your friend plays Fortnite {}. Press Stop all, then join again – Rift starts the right version.",
+                    name(&running),
+                    name(wanted)
+                ));
+            }
+            let token = self.running.lock().unwrap().gate.token();
+            self.start_backend(token).map_err(|e| match e {
+                StartError::Cancelled => "Stopped before the backend was ready.".to_string(),
+                StartError::Failed(e) => e,
+            })?;
+            self.set_backend_gameserver(ip, port)?;
+            self.log("launcher", "info", CAT, &format!("Join: \"Play\" now goes to {ip}:{port}"), None);
+            return Ok(JoinStarted::PressPlay);
+        }
+        if server_running {
+            return Err("Your own server is still starting or running without your game. Press Stop all, then join again.".into());
+        }
+        let token = self.begin_start()?;
+        let (ip, wanted) = (ip.to_string(), build_id.map(String::from));
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            let engine = app.state::<Arc<Engine>>();
+            let result = engine.join_steps(token, &ip, port, wanted.as_deref());
+            let cancelled = {
+                let mut r = engine.running.lock().unwrap();
+                let cancelled = r.gate.is_cancelled(token);
+                if !cancelled {
+                    r.gate.finish(token);
+                }
+                cancelled
+            };
+            match result {
+                Ok(()) => {}
+                Err(StartError::Failed(err)) if !cancelled => {
+                    engine.toast("error", "Couldn't join", &err);
+                    engine.stop_all();
+                }
+                Err(_) => {}
+            }
+        });
+        Ok(JoinStarted::Starting)
+    }
+
+    /// "Join" when your game isn't running: backend → matchmaker target → your game (no server).
+    fn join_steps(&self, token: StartToken, ip: &str, port: u16, build_id: Option<&str>) -> Result<(), StartError> {
+        if cfg!(not(windows)) {
+            return Err("Fortnite can only be started on Windows".into());
+        }
+        let (profile, build, bubble_builds) = {
+            let cfg = self.config.lock().unwrap();
+            let profile = cfg.active_profile().cloned().ok_or("No profile picked – make one in Profiles first")?;
+            let id = build_id.unwrap_or(&profile.build_id).to_string();
+            let build = cfg.builds.iter().find(|b| b.id == id).cloned().ok_or("That build is missing – please add it in the Library")?;
+            (profile, build, cfg.settings.bubble_builds)
+        };
+        self.start_backend(token)?;
+        self.set_backend_status(&build.version, false, "");
+        self.set_backend_gameserver(ip, port)?;
+        self.log("launcher", "info", CAT, &format!("Join: starting your game (Fortnite {}), \"Play\" goes to {ip}:{port}", build.version), None);
+        let bubble = launchargs::bubble_builds_active(false, bubble_builds, &build.version);
+        if bubble {
+            self.gus_prepare(token, &build.version);
+        }
+        let game_pid = self.launch_instance(token, &build, &profile, false, false, bubble_builds)?;
+        if bubble {
+            self.gus_game_started(game_pid);
+        }
+        self.inject_after_login(token, game_pid, false, &build);
+        self.emit_services();
+        self.toast(
+            "info",
+            "Your game is starting",
+            &format!("When the lobby shows, press Play – you'll land in your friend's match ({ip})."),
+        );
         Ok(())
+    }
+
+    // --- Host info for friends -------------------------------------------------
+
+    /// Starts the "Rift host info" endpoint for this hosting session – in the background, and only
+    /// where it can't bring up a Windows Firewall pop-up: when the "Rift host check" rule is there
+    /// ("Allow friends to connect") or the firewall is off for the friends' network. Never on Linux
+    /// /macOS dev machines' public addresses (see `friends::may_listen_on`).
+    fn start_host_info(&self, build: &BuildInfo) {
+        self.stop_host_info();
+        let state = HostInfoState {
+            version: build.version.clone(),
+            cl: build.changelist,
+            server_phase: None,
+            players: 0,
+            port: GAME_SERVER_PORT,
+        };
+        let exe = Path::new(&build.binaries).join(version::SHIPPING_EXE).to_string_lossy().into_owned();
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            let engine = app.state::<Arc<Engine>>();
+            if cfg!(windows) {
+                let best = niobium_core::friends::share_list(&crate::friends::local_interfaces()).into_iter().next();
+                let Some(best) = best else { return };
+                let fw = firewall::status(&exe, &best.ip);
+                if !(fw.check_rule || fw.state == "off") {
+                    engine.log("launcher", "info", CAT, "Friends' check is off: press \"Allow friends to connect\" on Servers & Friends to turn it on.", None);
+                    return;
+                }
+            }
+            let log_app = app.clone();
+            let server = HostInfoServer::start(state, move |line| {
+                log_app.state::<Arc<Engine>>().log("launcher", "info", CAT, &line, None);
+            });
+            // Only keep it while still hosting (a "Stop all" may have come meanwhile)
+            if engine.running.lock().unwrap().server.is_some() {
+                *engine.host_info.lock().unwrap() = Some(server);
+            }
+        });
+    }
+
+    /// Called after "Allow friends to connect": a host session that runs now gets its endpoint.
+    pub fn restart_host_info(&self) {
+        let Some(id) = self.running.lock().unwrap().server.as_ref().map(|s| s.build_id.clone()) else {
+            return;
+        };
+        let build = self.config.lock().unwrap().builds.iter().find(|b| b.id == id).cloned();
+        if let Some(build) = build {
+            self.start_host_info(&build);
+        }
+    }
+
+    fn update_host_info(&self, phase: Option<&str>, players: u32) {
+        if let Some(server) = self.host_info.lock().unwrap().as_ref() {
+            if let Ok(mut s) = server.state.lock() {
+                s.server_phase = phase.map(String::from);
+                s.players = players;
+            }
+        }
+    }
+
+    fn stop_host_info(&self) {
+        if let Some(server) = self.host_info.lock().unwrap().take() {
+            server.stop();
+        }
     }
 
     // --- Stopping ------------------------------------------------------------
@@ -1354,6 +1529,7 @@ impl Engine {
             }
             (instances, backend, was_starting)
         };
+        self.stop_host_info();
         let mut killed = Vec::new();
         for inst in instances.into_iter().flatten() {
             let _ = proc::kill(inst.pid);
@@ -1491,13 +1667,6 @@ fn now_hms() -> String {
     let ms = d.subsec_millis();
     let (h, m, s) = ((secs / 3600) % 24, (secs / 60) % 60, secs % 60);
     format!("{h:02}:{m:02}:{s:02}.{ms:03}")
-}
-
-fn split_addr(addr: &str, default_port: u16) -> (String, u16) {
-    match addr.trim().rsplit_once(':') {
-        Some((ip, port)) => (ip.to_string(), port.parse().unwrap_or(default_port)),
-        None => (addr.trim().to_string(), default_port),
-    }
 }
 
 /// The call is `node.exe main.js` – the exe is node, the argument is the backend file.

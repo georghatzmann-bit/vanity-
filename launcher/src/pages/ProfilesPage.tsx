@@ -18,6 +18,7 @@ import {
   Swords,
   Trash2,
   UserRound,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -37,6 +38,7 @@ import { pageGroup } from "@/components/layout/nav";
 import { useBotsSupport } from "@/hooks/use-bots-support";
 import { BOT_COUNT_MAX, BOT_COUNT_MIN, botSkillLabel, botSkills, botsSupportFor, botsText, clampBotCount } from "@/lib/bots";
 import { classicMatch, playlistLabel, playlists } from "@/lib/demo-data";
+import { soloVariant, teamSize, teamVariant } from "@/lib/friends";
 import { LIVING_WORLD_MAX_MAX, LIVING_WORLD_MAX_MIN, clampLivingWorldMax, livingWorldText } from "@/lib/livingworld";
 import { api, type BotSkill, type BuildInfo, type Profile } from "@/lib/api";
 import { buildFolderName, coverGradient } from "@/lib/builds";
@@ -150,6 +152,7 @@ export function ProfilesPage() {
                       <Fact icon={Gamepad2} label="Build" value={version ? `Fortnite ${version}` : "Missing – edit to pick one"} />
                       <Fact icon={UserRound} label="Player" value={p.playerName} />
                       <Fact icon={ListMusic} label="Playlist" value={playlistLabel(p.playlist)} />
+                      <Fact icon={Users} label="With friends" value={p.friendsTogether && teamSize(p.playlist) > 1 ? "Together, one team" : "Against each other"} />
                       <Fact icon={p.headlessServer ? MonitorOff : Monitor} label="Server" value={p.headlessServer ? "No graphics" : "With a window"} />
                       <Fact icon={Swords} label="Rules" value={rulesText(p)} />
                       <Fact icon={Bot} label="AI bots" value={botsFact(p, build)} />
@@ -281,6 +284,16 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
   });
   const [playerName, setPlayerName] = useState(profile?.playerName ?? config.settings.playerName);
   const [playlist, setPlaylist] = useState(profile?.playlist ?? playlists[0].id);
+  // "With friends": Together = Duos/Trios/Squads with every human in one team; Against each other = Solo
+  const [together, setTogether] = useState(() => Boolean(profile?.friendsTogether) || teamSize(profile?.playlist ?? "") > 1);
+  const pickPlaylist = (id: string) => {
+    setPlaylist(id);
+    setTogether(teamSize(id) > 1);
+  };
+  const pickMode = (t: boolean) => {
+    setTogether(t);
+    setPlaylist((cur) => (t ? teamVariant(cur) : soloVariant(cur)));
+  };
   const [headless, setHeadless] = useState(profile?.headlessServer ?? true);
   // Match rules: a new profile starts as a "Classic match" (like back then)
   const [lategame, setLategame] = useState(profile?.lategame ?? classicMatch.lategame);
@@ -332,6 +345,7 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
       botSkill,
       livingWorld,
       livingWorldMaxAI: clampLivingWorldMax(livingWorldMax),
+      friendsTogether: together && teamSize(playlist) > 1,
     };
     try {
       useApp.getState().setConfig(await (editing ? api.updateProfile(next) : api.addProfile(next)));
@@ -388,7 +402,7 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="p-playlist">Playlist</Label>
-              <Select value={playlist} onValueChange={setPlaylist}>
+              <Select value={playlist} onValueChange={pickPlaylist}>
                 <SelectTrigger id="p-playlist" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -400,6 +414,29 @@ function ProfileForm({ profile, onDone }: { profile: Profile | null; onDone: () 
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label id="p-friends">With friends</Label>
+              <ToggleGroup
+                type="single"
+                value={together ? "together" : "versus"}
+                onValueChange={(v) => v && pickMode(v === "together")}
+                aria-labelledby="p-friends"
+                className="w-full"
+              >
+                <ToggleGroupItem value="versus" className="flex-1">
+                  Against each other
+                </ToggleGroupItem>
+                <ToggleGroupItem value="together" className="flex-1">
+                  Together
+                </ToggleGroupItem>
+              </ToggleGroup>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {together
+                  ? `You and your friends play in one ${playlistLabel(playlist)} team${botsOn ? "; bots fill the other teams" : ""}. Pick Duos, Trios or Squads above for the team size.`
+                  : `Solo: everyone plays for themselves${botsOn ? ", every bot too" : ""}.`}
+                {!botsOk && " Bots: only on 19.10 for now."} Bots, Lategame and the match rules work with both.
+              </p>
             </div>
             <SwitchRow id="p-headless" label="Server with no graphics" hint="Saves performance" checked={headless} onChange={setHeadless} />
           </div>

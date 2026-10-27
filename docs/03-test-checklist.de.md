@@ -550,6 +550,33 @@ deine. Probier es zuerst mit 19.10, dann mit einem anderen Build, den du hast (z
 - [ ] „Bosses & NPCs“ im Profil ausschalten → **Host & Play** → **Start match**: keine Zeile „This match“, keine
       Meldung, keine „Bosses & NPCs“-Zeile von **Rift** im Live Log – das Match ist wie vorher.
 
+## Schritt 16 – Mit einem Freund spielen (zwei PCs)
+
+Du brauchst einen Freund mit Rift und der gleichen Fortnite-Version. Ihr seid beide im gleichen Tailscale- oder
+Radmin-VPN-Netz. Du bist der Host, dein Freund kommt dazu.
+
+- [ ] **Host:** **Profiles** → dein Profil **…** → **Edit**. Unter „Playlist" steht „With friends":
+      **Against each other** (jeder gegen jeden, Solo) oder **Together** (ein Team). Nimm **Together** → die
+      Playlist wird Duos (du kannst auch Trios oder Squads nehmen). Bots und Lategame gehen bei beidem an oder aus.
+      **Save**.
+- [ ] **Host:** **Servers & Friends** → Kasten „Can friends reach me?". Steht dort „Not yet" oder „blocked",
+      drück **Allow friends to connect** → Windows fragt → **Ja**. Jetzt steht dort „Yes". (Bei Nein ändert sich nichts.)
+- [ ] **Host:** **Host & Play**. Auf Home erscheint der Knopf **Invite friends** – drück ihn („Invite copied").
+      Oder **Servers & Friends** → Kasten „Invite friends": dort steht z. B. „Duo together · bots on",
+      „Fortnite 19.10", „Tailscale" und ein Code mit `RIFT1:` → **Copy invite**. Schick die Zeile deinem Freund.
+- [ ] **Freund:** **Servers & Friends** → Kasten „Join a friend" → die ganze Zeile einfügen → **Join**. Erst
+      „Checking …", dann „Host found: Fortnite 19.10" mit „Waiting for players" und „Your game is starting".
+- [ ] **Freund:** Wenn die Lobby da ist, **Play** drücken → du landest in der Lobby vom Host.
+- [ ] **Host:** **Match Control** → **Start match**. Bei **Together** seid ihr im gleichen Team (gleiche Farbe
+      auf der Karte, ihr könnt euch wiederbeleben). Die Bots sind in anderen Teams.
+- [ ] Fehler ausprobieren und die Texte aufschreiben: Freund fügt `hallo` ein („That isn't an invite code …");
+      Host drückt **Stop all**, Freund drückt **Join** („Your friend isn't hosting right now" oder „Can't reach
+      your friend's PC", mit **Join anyway**); Freund ohne diese Version („You need Fortnite …", vielleicht mit
+      **Download it**).
+- [ ] Im Spiel: F9 → Main → „Join a server" → „On another PC" → Einladung einfügen → **Join**. Mit einer anderen
+      Fortnite-Version kommt eine rote Zeile „This invite is for Fortnite …".
+- [ ] **Host:** **Servers & Friends** → **Remove the rule** → Windows fragt → **Ja**. Dann steht dort wieder „Not yet".
+
 ## Andere Versionen testen (ungetestet, aber startbar)
 
 Rift startet jede Version von 1.7 bis 30.x. Für alles außer 19.10 gilt: gleiche Schritte wie oben, nur

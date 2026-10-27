@@ -109,6 +109,11 @@ pub fn server_config_for(profile: &Profile) -> Vec<(&'static str, Value)> {
     out.push(("bPlayerBots", Value::Bool(profile.bots)));
     out.push(("PlayerBotCount", Value::from(clamp_bot_count(profile.bot_count))));
     out.push(("PlayerBotTargetELO", Value::from(profile.bot_skill.target_elo().min(BOT_ELO_MAX))));
+    // "Together vs bots" (see `crate::friends`): only sent when on – the server's default is off
+    // and every server start is fresh.
+    if crate::friends::humans_same_team(profile.friends_together, &profile.playlist) {
+        out.push((crate::friends::HUMANS_SAME_TEAM_KEY, Value::Bool(true)));
+    }
     if profile.living_world {
         out.push(("bLivingWorld", Value::Bool(true)));
         out.push(("LivingWorldMaxAI", Value::from(crate::livingworld::clamp_max_ai(profile.living_world_max_ai))));
@@ -214,6 +219,27 @@ mod tests {
         let json = serde_json::to_value(bots_support("19.10", Some(18675304))).unwrap();
         assert_eq!(json["level"], "experimental");
         assert_eq!(serde_json::to_value(bots_support("5.0", None)).unwrap()["level"], "unavailable");
+    }
+
+    #[test]
+    fn together_key_only_in_team_playlists() {
+        let mut p = profile();
+        p.friends_together = true;
+        p.playlist = "Playlist_DefaultSquad".into();
+        p.living_world = true;
+        let cfg = server_config_for(&p);
+        let keys: Vec<&str> = cfg.iter().map(|(k, _)| *k).collect();
+        // before the Bosses & NPCs keys, which stay last
+        assert_eq!(&keys[keys.len() - 3..], ["bHumansSameTeam", "bLivingWorld", "LivingWorldMaxAI"]);
+        assert_eq!(cfg[keys.len() - 3].1, Value::Bool(true));
+        // Solo has no teams: nothing to send; off: nothing either (the server's default is off)
+        p.playlist = "Playlist_DefaultSolo".into();
+        assert!(!server_config_for(&p).iter().any(|(k, _)| *k == "bHumansSameTeam"));
+        p.playlist = "Playlist_DefaultDuo".into();
+        p.friends_together = false;
+        assert!(!server_config_for(&p).iter().any(|(k, _)| *k == "bHumansSameTeam"));
+        // old profiles without the field load with "Against each other"
+        assert!(!profile().friends_together);
     }
 
     #[test]

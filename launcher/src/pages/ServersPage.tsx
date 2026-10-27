@@ -1,7 +1,29 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, Copy, Gamepad2, LogIn, Network, Plus, Server, Share2, Signal, Trash2, UserRound, Users, Wifi } from "lucide-react";
+import {
+  Check,
+  CircleCheck,
+  Copy,
+  Download,
+  Loader2,
+  LogIn,
+  Network,
+  PackageX,
+  Plus,
+  RefreshCw,
+  Share2,
+  ShieldAlert,
+  ShieldCheck,
+  Trash2,
+  TriangleAlert,
+  UserRound,
+  Users,
+  Wifi,
+  WifiOff,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -10,24 +32,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState, IconTile, PageHeader, PageShell, Panel } from "@/components/common";
 import { Reveal, Skeleton, Stagger } from "@/components/fx";
 import { pageGroup } from "@/components/layout/nav";
-import { api, inTauri, type Friend } from "@/lib/api";
-import { EASE_OUT, SPRING_UI } from "@/lib/motion";
-import { useApp } from "@/lib/store";
+import { api, errorText, GAME_SERVER_PORT, type FirewallStatus, type Friend, type HostInfo, type InviteInfo, type JoinCheck } from "@/lib/api";
+import { useDownloads } from "@/lib/downloads";
+import { joinAfterCheck } from "@/lib/friends";
+import { EASE_OUT } from "@/lib/motion";
+import { activeProfile, previewParam, useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
-
-function isValidAddress(value: string): boolean {
-  const m = value.trim().match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?::(\d{1,5}))?$/);
-  if (!m) return false;
-  const octetsOk = m.slice(1, 5).every((o) => Number(o) <= 255);
-  const portOk = m[5] === undefined || (Number(m[5]) > 0 && Number(m[5]) <= 65535);
-  return octetsOk && portOk;
-}
-
-/** "100.101.12.7" → "100.101.12.7:7777" (without a port, 7777 is used). */
-function withPort(address: string): string {
-  const a = address.trim();
-  return a.includes(":") ? a : `${a}:7777`;
-}
 
 /** Network name of a friend in plain English (older entries may say "Netzwerk"). */
 function viaLabel(via: string): string {
@@ -37,30 +47,8 @@ function viaLabel(via: string): string {
 
 export function ServersPage() {
   const friends = useApp((s) => s.config.friends);
-  const [address, setAddress] = useState("");
   const [addFriendOpen, setAddFriendOpen] = useState(false);
-  const [shares, setShares] = useState<[string, string][] | null>(null);
-  const valid = isValidAddress(address);
-  const showError = address.trim().length > 0 && !valid;
-
-  useEffect(() => {
-    api
-      .shareAddresses()
-      .then(setShares)
-      .catch(() => setShares([]));
-  }, []);
-
-  const join = async (target: string) => {
-    if (!inTauri) {
-      toast("Joining (preview)", { description: target });
-      return;
-    }
-    try {
-      await api.joinIp(target);
-    } catch (e) {
-      toast.error("Couldn't join", { description: String(e) });
-    }
-  };
+  const join = useJoinFlow();
 
   const removeFriend = async (id: string) => {
     const config = await api.removeFriend(id);
@@ -72,66 +60,16 @@ export function ServersPage() {
       <PageHeader
         eyebrow={pageGroup("servers")}
         title="Servers & Friends"
-        description="Play with friends over Tailscale or Radmin VPN. The host shares their VPN IP, you join."
+        description="Play with friends over Tailscale or Radmin VPN. The host copies an invite, the friend pastes it here."
       />
 
-      <Panel icon={LogIn} title="Join by IP" description="Your friend gives you the IP. Without a port, 7777 is used.">
-        <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <form
-            className="flex flex-wrap items-start gap-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (valid) join(withPort(address));
-            }}
-          >
-            <div className="min-w-64 flex-1">
-              <div className="relative">
-                <Network className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-faint" />
-                <Input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g. 100.101.12.7:7777"
-                  aria-label="IP address of the host"
-                  aria-invalid={showError}
-                  className="h-11 pr-10 pl-10 font-mono text-sm"
-                />
-                <AnimatePresence>
-                  {valid && (
-                    <motion.span
-                      key="ok"
-                      initial={{ opacity: 0, scale: 0.4 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.4 }}
-                      transition={SPRING_UI}
-                      className="absolute top-1/2 right-3 flex size-5 -translate-y-1/2 items-center justify-center rounded-full bg-success/15 text-success"
-                    >
-                      <Check className="size-3" strokeWidth={3} />
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </div>
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.p
-                  key={showError ? "bad" : "hint"}
-                  initial={{ opacity: 0, y: -3 }}
-                  animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: EASE_OUT } }}
-                  exit={{ opacity: 0, transition: { duration: 0.1 } }}
-                  className={cn("mt-2 text-xs", showError ? "text-destructive" : "text-muted-foreground")}
-                >
-                  {showError ? "That doesn't look like an IP. Example: 100.101.12.7" : "Tailscale IPs usually start with 100., Radmin IPs with 26."}
-                </motion.p>
-              </AnimatePresence>
-            </div>
-            <Button type="submit" disabled={!valid} className="h-11 px-5">
-              <LogIn />
-              Join
-            </Button>
-          </form>
-          <ConnectionVisual ready={valid} target={valid ? withPort(address) : null} />
-        </div>
-      </Panel>
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <InviteCard />
+        <JoinCard flow={join} />
+      </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
+        <ReachCard />
         <Panel
           icon={Users}
           title="Friends"
@@ -178,7 +116,7 @@ export function ServersPage() {
                         <span className="selectable truncate font-mono">{f.address}</span>
                       </p>
                     </div>
-                    <Button size="sm" variant="secondary" onClick={() => join(withPort(f.address))}>
+                    <Button size="sm" variant="secondary" disabled={join.busy} onClick={() => join.run(f.address)}>
                       <LogIn />
                       Join
                     </Button>
@@ -197,26 +135,6 @@ export function ServersPage() {
             </ul>
           )}
         </Panel>
-
-        <Panel icon={Share2} title="Share your server" description="Give these addresses to friends when you host.">
-          <div className="flex flex-col gap-2">
-            {shares === null ? (
-              [0, 1, 2].map((i) => (
-                <div key={i} className="flex items-center gap-3 rounded-lg surface-subtle px-3 py-2.5">
-                  <Skeleton className="size-8 rounded-lg" />
-                  <Skeleton className="h-3.5 w-24" />
-                  <Skeleton className="ml-auto h-3.5 w-32" />
-                </div>
-              ))
-            ) : (
-              <Stagger className="flex flex-col gap-2" stagger={0.06}>
-                {shares.map(([label, value]) => (
-                  <ShareLine key={value} icon={label === "This PC only" ? Signal : Wifi} label={label} value={value} />
-                ))}
-              </Stagger>
-            )}
-          </div>
-        </Panel>
       </div>
 
       <HowItWorks />
@@ -226,43 +144,370 @@ export function ServersPage() {
   );
 }
 
-/** You ↔ host: the line lights up and a light travels along it once the IP looks right. */
-function ConnectionVisual({ ready, target }: { ready: boolean; target: string | null }) {
+// ---- Host: the invite --------------------------------------------------------------------------
+
+function InviteCard() {
+  const setPage = useApp((s) => s.setPage);
+  const hosting = useApp((s) => s.services.server !== "stopped");
+  const profileKey = useApp((s) => {
+    const p = activeProfile(s.config);
+    return p ? `${p.id}|${p.buildId}|${p.playlist}|${p.friendsTogether}|${p.bots}|${p.lategame}` : "";
+  });
+  const [info, setInfo] = useState<InviteInfo | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const refresh = useCallback(() => {
+    api
+      .inviteInfo()
+      .then(setInfo)
+      .catch((e) => setInfo({ code: null, text: null, summary: "", address: null, others: [], version: null, cl: null, problem: errorText(e), hint: null }));
+  }, []);
+  useEffect(refresh, [refresh, profileKey]);
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(false), 1600);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+
+  const copy = async () => {
+    if (!info?.text) return;
+    try {
+      await navigator.clipboard.writeText(info.text);
+      setCopied(true);
+      toast.success("Invite copied", { description: "Send it to your friend (Discord, WhatsApp …)." });
+    } catch {
+      toast.error("Couldn't copy", { description: "Select the code and copy it by hand." });
+    }
+  };
+
   return (
-    <div aria-hidden className="hidden items-center gap-3 lg:flex">
-      <Node icon={Gamepad2} label="You" lit />
-      <div className="relative h-[3px] flex-1 overflow-hidden rounded-full bg-white/[0.06]">
-        <motion.div
-          className="absolute inset-y-0 left-0 rounded-full bg-brand shadow-[0_0_12px_rgb(139_92_246/0.7)]"
-          initial={false}
-          animate={{ width: ready ? "100%" : "0%" }}
-          transition={{ duration: 0.6, ease: EASE_OUT }}
-        />
-        {ready && (
-          <span className="nb-loop absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/80 to-transparent [animation:nb-beam_1.4s_ease-in-out_infinite]" />
+    <Panel
+      className="min-w-0"
+      icon={Share2}
+      title="Invite friends"
+      description={hosting ? "You're hosting. Send this invite to your friend." : "Send this to your friend, then press Host & Play."}
+      actions={
+        <Button variant="ghost" size="icon-sm" aria-label="Refresh the invite" onClick={refresh}>
+          <RefreshCw />
+        </Button>
+      }
+    >
+      {info === null ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-4 w-56" />
+          <Skeleton className="h-12 w-full rounded-lg" />
+        </div>
+      ) : info.problem || !info.code ? (
+        <Notice tone="warning" icon={TriangleAlert} title="No invite yet" text={info.problem ?? "Something is missing."} />
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge variant="secondary" className="max-w-full whitespace-normal">
+              <Users />
+              {info.summary}
+            </Badge>
+            <Badge variant="secondary">Fortnite {info.version}</Badge>
+            {info.address && (
+              <Badge variant="secondary">
+                <Wifi />
+                {info.address.label}
+              </Badge>
+            )}
+          </div>
+          <div className="flex flex-wrap items-stretch gap-2">
+            <code className="selectable min-w-0 flex-1 rounded-lg surface-subtle px-3 py-2.5 font-mono text-[13px] leading-relaxed break-all text-foreground">
+              {info.code}
+            </code>
+            <Button className="h-auto min-h-11 px-4" onClick={copy}>
+              {copied ? <Check /> : <Copy />}
+              {copied ? "Copied" : "Copy invite"}
+            </Button>
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Your friend pastes it in Rift → Servers &amp; Friends → Join. They need Fortnite {info.version} and the same VPN network.{" "}
+            <button type="button" className="text-violet-text underline-offset-2 hover:underline" onClick={() => setPage("profiles")}>
+              Change the mode
+            </button>
+          </p>
+          {info.hint && <Notice tone="warning" icon={TriangleAlert} text={info.hint} />}
+          {info.others.length > 0 && (
+            <details className="group text-xs text-muted-foreground">
+              <summary className="cursor-pointer select-none hover:text-foreground">Other addresses of this PC</summary>
+              <div className="mt-2 flex flex-col gap-2">
+                {info.others.map((a) => (
+                  <ShareLine key={a.ip} icon={Wifi} label={a.label} value={`${a.ip}:${GAME_SERVER_PORT}`} />
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+// ---- Host: Windows Firewall ----------------------------------------------------------------------
+
+function ReachCard() {
+  const [fw, setFw] = useState<FirewallStatus | null>(null);
+  const [busy, setBusy] = useState<"check" | "allow" | "remove" | null>("check");
+
+  const check = useCallback(() => {
+    setBusy("check");
+    api
+      .firewallStatus()
+      .then(setFw)
+      .catch((e) => setFw({ state: "unknown", network: "", riftRules: false, checkRule: false, detail: errorText(e) }))
+      .finally(() => setBusy(null));
+  }, []);
+  useEffect(check, [check]);
+
+  const change = async (what: "allow" | "remove") => {
+    setBusy(what);
+    try {
+      setFw(await (what === "allow" ? api.firewallAllow() : api.firewallRemove()));
+      toast.success(what === "allow" ? "Friends can connect now" : "Rift's firewall rules removed");
+    } catch (e) {
+      toast.error(what === "allow" ? "Nothing was changed" : "Couldn't remove the rules", { description: errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const good = fw?.state === "allowed" || fw?.state === "off";
+  const canAllow = fw && (fw.state === "blocked" || fw.state === "notAllowed" || fw.state === "unknown");
+
+  return (
+    <Panel
+      className="min-w-0"
+      icon={ShieldCheck}
+      title="Can friends reach me?"
+      description="Windows Firewall must let your friends in when you host."
+      actions={
+        <Button variant="ghost" size="icon-sm" aria-label="Check again" disabled={busy !== null} onClick={check}>
+          <RefreshCw className={cn(busy === "check" && "animate-spin")} />
+        </Button>
+      }
+    >
+      {fw === null ? (
+        <Skeleton className="h-12 w-full rounded-lg" />
+      ) : (
+        <div className="flex flex-col gap-3">
+          <Notice
+            tone={good ? "success" : fw.state === "unsupported" ? "muted" : "warning"}
+            icon={good ? ShieldCheck : ShieldAlert}
+            title={good ? "Yes" : fw.state === "unsupported" ? "Windows only" : fw.state === "unknown" ? "Not sure" : fw.state === "blocked" ? "Blocked" : "Not yet"}
+            text={fw.detail}
+          />
+          {canAllow && (
+            <div className="flex flex-col gap-2 rounded-lg surface-subtle p-3">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                This adds one Windows Firewall rule so friends can join your game (Fortnite, UDP port 7777), plus a small one so
+                their Rift can check your game first (TCP 7777). If a Windows rule blocks this Fortnite, Rift switches it off.
+                Windows asks you first. You can remove it any time.
+              </p>
+              <Button className="self-start" disabled={busy !== null} onClick={() => change("allow")}>
+                <ShieldCheck />
+                {busy === "allow" ? "Waiting for Windows …" : "Allow friends to connect"}
+              </Button>
+            </div>
+          )}
+          {fw.riftRules && (
+            <Button variant="ghost" size="sm" className="self-start" disabled={busy !== null} onClick={() => change("remove")}>
+              <Trash2 />
+              {busy === "remove" ? "Waiting for Windows …" : "Remove the rule"}
+            </Button>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+// ---- Friend: paste, check, join ----------------------------------------------------------------
+
+interface JoinFlow {
+  text: string;
+  setText: (t: string) => void;
+  busy: boolean;
+  check: JoinCheck | null;
+  run: (text: string) => Promise<void>;
+  joinAnyway: () => Promise<void>;
+}
+
+function useJoinFlow(): JoinFlow {
+  const [text, setText] = useState(() => previewParam("join") ?? "");
+  const [busy, setBusy] = useState(false);
+  const [check, setCheck] = useState<JoinCheck | null>(null);
+
+  const run = useCallback(async (input: string) => {
+    setText(input);
+    setBusy(true);
+    setCheck(null);
+    try {
+      const c = await api.checkJoin(input);
+      setCheck(c);
+      if (c.ok) await joinAfterCheck(c);
+    } catch (e) {
+      toast.error("Couldn't check", { description: errorText(e) });
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  // Preview only: ?join=<invite> shows the check result right away (screenshots)
+  useEffect(() => {
+    const t = previewParam("join");
+    if (t) void run(t);
+  }, [run]);
+
+  const joinAnyway = async () => {
+    if (!check) return;
+    setBusy(true);
+    await joinAfterCheck(check);
+    setBusy(false);
+  };
+
+  return { text, setText, busy, check, run, joinAnyway };
+}
+
+function JoinCard({ flow }: { flow: JoinFlow }) {
+  const { text, setText, busy, check, run, joinAnyway } = flow;
+  const setPage = useApp((s) => s.setPage);
+  const canJoin = text.trim().length > 0 && !busy;
+
+  const download = (key: string) => {
+    useDownloads.setState({ openKey: key });
+    setPage("download");
+  };
+
+  return (
+    <Panel className="min-w-0" icon={LogIn} title="Join a friend" description="Paste the invite your friend copied (or just their IP). Rift checks everything first.">
+      <form
+        className="flex flex-wrap items-start gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (canJoin) void run(text);
+        }}
+      >
+        <div className="relative min-w-48 flex-1">
+          <Network className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-faint" />
+          <Input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Invite (RIFT1:…) or IP"
+            aria-label="Invite code or IP address of the host"
+            className="h-11 pl-10 font-mono text-sm"
+          />
+        </div>
+        <Button type="submit" disabled={!canJoin} className="h-11 px-5">
+          {busy ? <Loader2 className="animate-spin" /> : <LogIn />}
+          {busy ? "Checking …" : "Join"}
+        </Button>
+      </form>
+
+      <AnimatePresence mode="wait" initial={false}>
+        {check && (
+          <motion.div
+            key={`${check.status}-${check.ip}`}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0, transition: { duration: 0.25, ease: EASE_OUT } }}
+            exit={{ opacity: 0, transition: { duration: 0.12 } }}
+            className="mt-4"
+          >
+            <CheckResult check={check} busy={busy} onRetry={() => run(text)} onJoinAnyway={joinAnyway} onDownload={download} />
+          </motion.div>
         )}
+      </AnimatePresence>
+    </Panel>
+  );
+}
+
+function CheckResult({
+  check,
+  busy,
+  onRetry,
+  onJoinAnyway,
+  onDownload,
+}: {
+  check: JoinCheck;
+  busy: boolean;
+  onRetry: () => void;
+  onJoinAnyway: () => void;
+  onDownload: (key: string) => void;
+}) {
+  const tone = check.ok ? "success" : check.status === "badInput" ? "danger" : "warning";
+  const icon = check.ok ? CircleCheck : check.status === "wrongVersion" ? PackageX : check.status === "badInput" ? TriangleAlert : WifiOff;
+  const phase = check.host ? hostPhaseText(check.host) : null;
+  return (
+    <div className="flex flex-col gap-3 rounded-lg surface-subtle p-4">
+      <div className="flex items-start gap-3">
+        <IconTile icon={icon} tone={tone} />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">{check.title}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{check.detail}</p>
+          {(check.summary || phase) && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {check.summary && (
+                <Badge variant="secondary">
+                  <Users />
+                  {check.summary}
+                </Badge>
+              )}
+              {phase && <Badge variant="secondary">{phase}</Badge>}
+              {check.ok && check.ip && <Badge variant="secondary" className="font-mono">{check.ip}</Badge>}
+            </div>
+          )}
+        </div>
       </div>
-      <Node icon={Server} label={target ?? "Host"} lit={ready} mono={Boolean(target)} />
+      {!check.ok && (check.downloadKey || check.joinAnyway || check.status !== "badInput") && (
+        <div className="flex flex-wrap gap-2">
+          {check.downloadKey && (
+            <Button size="sm" onClick={() => onDownload(check.downloadKey!)}>
+              <Download />
+              Download it
+            </Button>
+          )}
+          {check.status !== "badInput" && (
+            <Button size="sm" variant="secondary" disabled={busy} onClick={onRetry}>
+              <RefreshCw />
+              Check again
+            </Button>
+          )}
+          {check.joinAnyway && (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={onJoinAnyway}>
+              <LogIn />
+              Join anyway
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function Node({ icon: Icon, label, lit, mono }: { icon: typeof Server; label: string; lit: boolean; mono?: boolean }) {
+function hostPhaseText(host: HostInfo): string {
+  const players = host.players === 1 ? "1 player" : `${host.players} players`;
+  switch (host.phase) {
+    case "starting":
+      return "Server is loading";
+    case "started":
+      return `Match running · ${players}`;
+    case "ended":
+      return "Match over";
+    default:
+      return `Waiting for players · ${players}`;
+  }
+}
+
+function Notice({ tone, icon, title, text }: { tone: "success" | "warning" | "muted"; icon: LucideIcon; title?: string; text: string }) {
   return (
-    <div className="flex w-28 flex-col items-center gap-1.5">
-      <motion.div
-        animate={{ scale: lit ? 1 : 0.94 }}
-        transition={SPRING_UI}
-        className={cn(
-          "flex size-11 items-center justify-center rounded-xl ring-1 transition-[background-color,box-shadow,color] duration-300",
-          lit
-            ? "bg-gradient-to-br from-brand-cyan/30 to-brand-violet/30 text-violet-text ring-brand-violet/40 shadow-[0_0_24px_-6px_rgb(139_92_246/0.7)]"
-            : "bg-white/[0.04] text-faint ring-white/[0.08]",
-        )}
-      >
-        <Icon className="size-5" />
-      </motion.div>
-      <span className={cn("max-w-full truncate text-[11px]", lit ? "text-foreground" : "text-faint", mono && "font-mono")}>{label}</span>
+    <div className="flex items-start gap-3 rounded-lg surface-subtle p-3">
+      <IconTile icon={icon} tone={tone} size="sm" />
+      <div className="min-w-0 text-xs leading-relaxed">
+        {title && <p className="text-sm font-semibold text-foreground">{title}</p>}
+        <p className="text-muted-foreground">{text}</p>
+      </div>
     </div>
   );
 }
@@ -323,8 +568,8 @@ function ShareLine({ icon, label, value }: { icon: typeof Wifi; label: string; v
 
 const howSteps = [
   { title: "Same network", hint: "You both install Tailscale or Radmin VPN and join the same network." },
-  { title: "Host starts", hint: "The host presses Host & Play and shares their VPN IP." },
-  { title: "You join", hint: "Paste the IP above (or pick a saved friend) and press Join." },
+  { title: "Host invites", hint: "The host presses Host & Play, then Copy invite, and sends it to the friend." },
+  { title: "Friend joins", hint: "Paste the invite above and press Join. Rift checks the version and starts the game." },
 ];
 
 function HowItWorks() {

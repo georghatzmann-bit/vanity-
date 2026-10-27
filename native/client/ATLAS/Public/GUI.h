@@ -44,7 +44,7 @@ struct FGUI
     static inline int LogoW = 0, LogoH = 0;
 
     static inline int HostType = 0; // 0 = Local Host, 1 = Remote Host
-    static inline char RemoteIP[64] = "";
+    static inline char RemoteIP[256] = ""; // [Rift] room for a whole copied invite line
 
     static inline std::atomic_int JoinHotkeyVK = VK_F5;
     static inline bool bRebindingJoin = false;

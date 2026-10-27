@@ -518,6 +518,12 @@ public:
     static inline std::atomic_int PlayerBotCount{ 30 };      // 1-99, bots in the match
     static inline std::atomic_int PlayerBotTargetELO{ 500 }; // 0-5000, bot skill rating
 
+    // NIOBIUM: "Together vs bots" (launcher profile, pipe key bHumansSameTeam). In team playlists
+    // (Duos/Trios/Squads) every human player - host and joined friends - goes into one team, up to
+    // the team size; AI bots and target dummies never get that team (FortGameMode.cpp, PickTeam).
+    // Off = normal team picking. Set before the map loads, like the bot keys.
+    static inline std::atomic_bool bHumansSameTeam{ false };
+
     // NIOBIUM: "Living world" - bosses, guards, NPCs and wildlife (FortniteGame/Private/
     // LivingWorld.cpp, LivingWorldSpawner.cpp). Experimental, set by the launcher or the host window
     // before the map loads. Off = nothing changes. On: the game's own Living World (Lager) data is

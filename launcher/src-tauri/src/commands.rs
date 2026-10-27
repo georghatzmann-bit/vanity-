@@ -6,13 +6,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 
-use niobium_core::bots::{self, BotsSupport};
+use niobium_core::bots::{self, BotsLevel, BotsSupport};
+use niobium_core::friends::{self as fr, HostInfo, Invite, JoinTarget, ShareAddress, VersionMatch};
 use niobium_core::crash::{self, CrashReport};
 use niobium_core::launchargs::{self, BubbleBuildsInfo};
 use niobium_core::profiles::{self, Config, Friend, Profile, Settings, TrickshotPreset};
 use niobium_core::version::{self, BuildInfo, DetectReport};
 
-use crate::engine::{Engine, LogLinePayload, Toast};
+use crate::engine::{Engine, JoinStarted, LogLinePayload, Toast};
+use crate::firewall::{self, FirewallStatus};
+use crate::friends::{fetch_host_info, local_interfaces, HostCheckError};
 
 type E<'a> = State<'a, Arc<Engine>>;
 type R<T> = Result<T, String>;
@@ -134,31 +137,302 @@ pub fn list_crashes() -> Vec<CrashReport> {
     crash::list(30)
 }
 
-/// Local IP addresses the host can give to friends. The port is always the fixed game server
-/// port (7777).
+/// Addresses the host can give to friends, best first (VPN before home network), plus "This PC
+/// only". The port is always the fixed game server port (7777).
 #[tauri::command]
 pub fn share_addresses() -> Vec<(String, String)> {
     let port = profiles::GAME_SERVER_PORT;
     let mut out = vec![("This PC only".to_string(), format!("127.0.0.1:{port}"))];
-    if let Ok(addrs) = if_addrs::get_if_addrs() {
-        for a in addrs {
-            if a.is_loopback() {
-                continue;
-            }
-            if let std::net::IpAddr::V4(v4) = a.ip() {
-                let o = v4.octets();
-                let label = if o[0] == 100 {
-                    "Tailscale"
-                } else if o[0] == 26 {
-                    "Radmin VPN"
-                } else {
-                    "Network"
-                };
-                out.push((label.to_string(), format!("{v4}:{port}")));
-            }
+    out.extend(fr::share_list(&local_interfaces()).into_iter().map(|a| (a.label, format!("{}:{port}", a.ip))));
+    out
+}
+
+/// The host's "Invite friends" card.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InviteInfo {
+    /// `RIFT1:…` (None when something is missing, see `problem`)
+    pub code: Option<String>,
+    /// What "Copy invite" copies: summary · Fortnite version · code
+    pub text: Option<String>,
+    /// "Squad together · bots on · Lategame"
+    pub summary: String,
+    pub address: Option<ShareAddress>,
+    pub others: Vec<ShareAddress>,
+    pub version: Option<String>,
+    pub cl: Option<u32>,
+    /// Why there is no invite (no build, no VPN address)
+    pub problem: Option<String>,
+    /// A warning that still allows the invite (home network only)
+    pub hint: Option<String>,
+}
+
+#[tauri::command]
+pub fn invite_info(engine: E) -> InviteInfo {
+    let (profile, build) = {
+        let cfg = engine.config.lock().unwrap();
+        let profile = cfg.active_profile().cloned();
+        let build = profile.as_ref().and_then(|p| cfg.builds.iter().find(|b| b.id == p.build_id).cloned());
+        (profile, build)
+    };
+    let mut list = fr::share_list(&local_interfaces());
+    let mut info = InviteInfo { code: None, text: None, summary: String::new(), address: None, others: vec![], version: None, cl: None, problem: None, hint: None };
+    let (Some(profile), Some(build)) = (profile, build) else {
+        info.problem = Some("Pick a profile with a Fortnite build first (Library → Add a build).".into());
+        return info;
+    };
+    let bots_on = profile.bots && bots::bots_support(&build.version, build.changelist).level == BotsLevel::Experimental;
+    let mode = fr::invite_mode(profile.friends_together, &profile.playlist);
+    info.summary = fr::match_summary(&mode, bots_on, profile.lategame);
+    info.version = Some(build.version.clone());
+    info.cl = build.changelist;
+    if list.is_empty() {
+        info.problem = Some(
+            "No VPN address found. Install Tailscale or Radmin VPN, join the same network as your friend, then press Refresh.".into(),
+        );
+        return info;
+    }
+    let best = list.remove(0);
+    if !best.kind.is_vpn() {
+        info.hint = Some("This is your home network address. It only works for friends in the same house – for friends elsewhere, use Tailscale or Radmin VPN.".into());
+    }
+    let invite = Invite {
+        ip: best.ip.clone(),
+        port: profiles::GAME_SERVER_PORT,
+        version: build.version.clone(),
+        cl: build.changelist,
+        mode: Some(mode),
+        bots: bots_on,
+        lategame: profile.lategame,
+    };
+    info.code = Some(invite.to_code());
+    info.text = Some(invite.share_text());
+    info.address = Some(best);
+    info.others = list;
+    info
+}
+
+/// The friend's check before joining (see `check_join`).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JoinCheck {
+    /// "ready", "starting", "badInput", "wrongVersion", "notHosting", "notReachable", "matchStarted"
+    pub status: String,
+    /// true = join now
+    pub ok: bool,
+    pub title: String,
+    pub detail: String,
+    pub ip: String,
+    pub port: u16,
+    /// The host's Fortnite (from the host's Rift, else from the invite)
+    pub version: Option<String>,
+    pub cl: Option<u32>,
+    /// "Squad together · bots on · Lategame" from the invite ("" for a plain address)
+    pub summary: String,
+    pub host: Option<HostInfo>,
+    /// The Library build to start for this join
+    pub build_id: Option<String>,
+    /// Catalog key when the needed build can be downloaded
+    pub download_key: Option<String>,
+    /// Joining may still work although the check failed (offer "Join anyway")
+    pub join_anyway: bool,
+}
+
+fn fortnite_name(version: &str, cl: Option<u32>) -> String {
+    match cl {
+        Some(cl) => format!("Fortnite {version} (CL {cl})"),
+        None => format!("Fortnite {version}"),
+    }
+}
+
+/// Reads the pasted invite or address, asks the host's Rift (3 s) and looks for the same Fortnite
+/// in the Library – before anything starts. Plain English for every outcome.
+#[tauri::command(async)]
+pub fn check_join(engine: E, text: String) -> JoinCheck {
+    let mut c = JoinCheck {
+        status: "badInput".into(),
+        ok: false,
+        title: String::new(),
+        detail: String::new(),
+        ip: String::new(),
+        port: profiles::GAME_SERVER_PORT,
+        version: None,
+        cl: None,
+        summary: String::new(),
+        host: None,
+        build_id: None,
+        download_key: None,
+        join_anyway: false,
+    };
+    let target = match fr::parse_join_input(&text) {
+        Ok(t) => t,
+        Err(e) => {
+            c.title = "That isn't an invite".into();
+            c.detail = e;
+            return c;
+        }
+    };
+    c.ip = target.ip().to_string();
+    c.port = target.port();
+    if let JoinTarget::Invite(i) = &target {
+        c.version = Some(i.version.clone());
+        c.cl = i.cl;
+        c.summary = i.summary();
+    }
+    if c.ip == "127.0.0.1" {
+        c.status = "ready".into();
+        c.ok = true;
+        c.title = "Your own server".into();
+        c.detail = "Joins the server on this PC.".into();
+        return c;
+    }
+    let host = fetch_host_info(&c.ip);
+    if let Ok(h) = &host {
+        // The host's Rift knows best (the host may have switched builds since copying the invite)
+        c.cl = h.cl.or(if c.version.as_deref().is_some_and(|v| fr::same_version(v, &h.version)) { c.cl } else { None });
+        c.version = Some(h.version.clone());
+        c.port = h.port;
+        c.host = Some(h.clone());
+    }
+    let unreachable = |c: &mut JoinCheck, e: HostCheckError| {
+        c.join_anyway = true;
+        if e == HostCheckError::Refused {
+            c.status = "notHosting".into();
+            c.title = "Your friend isn't hosting right now".into();
+            c.detail = format!("{} answered, but Rift there isn't hosting. Ask your friend to press Host & Play, then check again.", c.ip);
+        } else {
+            c.status = "notReachable".into();
+            c.title = "Can't reach your friend's PC".into();
+            c.detail = format!(
+                "No answer from {}. Check that you're both connected to the same Tailscale or Radmin VPN network, that your friend pressed Host & Play, and that your friend pressed \"Allow friends to connect\" in Rift.",
+                c.ip
+            );
+        }
+    };
+    let Some(version) = c.version.clone() else {
+        // Plain address and no answer: nothing to check the version against
+        if let Err(e) = host {
+            unreachable(&mut c, e);
+            c.detail.push_str(" You can still try to join.");
+        }
+        return c;
+    };
+    let builds = engine.config.lock().unwrap().builds.clone();
+    match fr::match_build(&builds, &version, c.cl) {
+        VersionMatch::Missing => {
+            c.status = "wrongVersion".into();
+            c.download_key = fr::download_key_for(&niobium_core::epic::catalog::catalog(), &version, c.cl);
+            c.title = format!("You need {}", fortnite_name(&version, c.cl));
+            c.detail = format!(
+                "Your friend plays {}. It isn't in your Library yet.{}",
+                fortnite_name(&version, c.cl),
+                if c.download_key.is_some() { " Rift can download it for you." } else { " Ask your friend where they got it, then add it in the Library." }
+            );
+            return c;
+        }
+        VersionMatch::OtherCl { have_cl, .. } => {
+            c.status = "wrongVersion".into();
+            c.download_key = fr::download_key_for(&niobium_core::epic::catalog::catalog(), &version, c.cl);
+            c.title = format!("You need {}", fortnite_name(&version, c.cl));
+            c.detail = format!(
+                "Your friend plays {}, but your {version} is another build{}. Both of you need the exact same build.",
+                fortnite_name(&version, c.cl),
+                have_cl.map(|cl| format!(" (CL {cl})")).unwrap_or_default()
+            );
+            return c;
+        }
+        VersionMatch::Same { build_id, .. } => c.build_id = Some(build_id),
+    }
+    let host = match host {
+        Ok(h) => h,
+        Err(e) => {
+            unreachable(&mut c, e);
+            c.detail.push_str(&format!(" Your {version} matches the invite, so you can still try to join."));
+            return c;
+        }
+    };
+    let players = match host.players {
+        1 => "1 player".to_string(),
+        n => format!("{n} players"),
+    };
+    match host.phase.as_str() {
+        "started" | "ended" => {
+            c.status = "matchStarted".into();
+            c.join_anyway = true;
+            c.title = "The match already started".into();
+            c.detail = "Your friend's match is running, so you may not get in. Ask your friend to start a new match (Stop all, then Host & Play).".into();
+        }
+        "starting" => {
+            c.status = "starting".into();
+            c.ok = true;
+            c.title = format!("Host found: Fortnite {}", host.version);
+            c.detail = format!("Your Fortnite {version} matches. Your friend's server is still loading – press Play once your lobby shows.");
+        }
+        _ => {
+            c.status = "ready".into();
+            c.ok = true;
+            c.title = format!("Host found: Fortnite {}", host.version);
+            c.detail = format!("Your Fortnite {version} matches – joining now ({players} waiting).");
         }
     }
-    out
+    c
+}
+
+/// "Join" (after `check_join`, or "Join anyway"): starts your game if needed, with `build_id`.
+#[tauri::command(async)]
+pub fn join_game(engine: E, ip: String, port: u16, build_id: Option<String>) -> R<JoinStarted> {
+    let target = fr::parse_join_input(&format!("{ip}:{port}"))?;
+    engine.join_game(target.ip(), target.port(), build_id.as_deref())
+}
+
+/// The game file of the active profile's build (for the firewall rule).
+fn active_game_exe(engine: &Engine) -> Result<String, String> {
+    let cfg = engine.config.lock().unwrap();
+    let build = cfg
+        .active_profile()
+        .and_then(|p| cfg.builds.iter().find(|b| b.id == p.build_id))
+        .ok_or("Pick a profile with a Fortnite build first.")?;
+    let exe = std::path::Path::new(&build.binaries).join(version::SHIPPING_EXE);
+    if !exe.is_file() {
+        return Err(format!("{} wasn't found in the build's folder.", version::SHIPPING_EXE));
+    }
+    Ok(exe.to_string_lossy().into_owned())
+}
+
+/// "Can friends reach me?" – read-only.
+#[tauri::command(async)]
+pub fn firewall_status(engine: E) -> FirewallStatus {
+    let exe = match active_game_exe(&engine) {
+        Ok(e) => e,
+        Err(detail) => return FirewallStatus { state: "unknown".into(), detail, ..Default::default() },
+    };
+    let ip = fr::share_list(&local_interfaces()).into_iter().next().map(|a| a.ip);
+    let Some(ip) = ip else {
+        return FirewallStatus {
+            state: "unknown".into(),
+            detail: "No VPN or home network address yet – connect Tailscale or Radmin VPN first.".into(),
+            ..Default::default()
+        };
+    };
+    firewall::status(&exe, &ip)
+}
+
+/// "Allow friends to connect" – only ever on the user's click; Windows asks first (UAC).
+#[tauri::command(async)]
+pub fn firewall_allow(engine: E) -> R<FirewallStatus> {
+    let exe = active_game_exe(&engine)?;
+    firewall::allow(&exe)?;
+    engine.log_line("info", "Windows Firewall: \"Rift game server\" and \"Rift host check\" rules added (Allow friends to connect).");
+    engine.restart_host_info();
+    Ok(firewall_status(engine))
+}
+
+/// "Remove the rule" – only on the user's click; Windows asks first (UAC).
+#[tauri::command(async)]
+pub fn firewall_remove(engine: E) -> R<FirewallStatus> {
+    firewall::remove()?;
+    engine.log_line("info", "Windows Firewall: Rift's rules removed.");
+    Ok(firewall_status(engine))
 }
 
 // --- Actions that start something ---------------------------------------------
@@ -202,9 +476,11 @@ pub fn close_prompt_shown(engine: E, id: u64) {
     engine.close_prompt_shown(id);
 }
 
+/// Join by an address or invite without the check (F9 settings page "Join"): your own build.
 #[tauri::command(async)]
-pub fn join_ip(engine: E, address: String) -> R<()> {
-    engine.join_ip(&address)
+pub fn join_ip(engine: E, address: String) -> R<JoinStarted> {
+    let target = fr::parse_join_input(&address)?;
+    engine.join_game(target.ip(), target.port(), None)
 }
 
 #[tauri::command]

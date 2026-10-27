@@ -188,7 +188,8 @@ When you have tested a version and it works, it goes into `TESTED` and shows "Te
 |---|---|---|
 | 3551/TCP (fixed) | backend | all redirected requests + `/niobium/*` |
 | 80/TCP (can be changed) | backend | matchmaker WebSocket + XMPP |
-| 7777/UDP (fixed) | game server | players connect to the match |
+| 7777/UDP (fixed) | game server | players connect to the match (the only port a friend needs on the host) |
+| 7777/TCP (fixed) | launcher, only while hosting | "Rift host info" for friends' checks, only on VPN/home-network addresses (see [Playing with friends](#playing-with-friends)) |
 
 Only the matchmaker port can be changed (Settings → Network). The other two are fixed, and Settings only
 shows them: the redirect DLL always sends requests to `http://127.0.0.1:3551` (`native/redirect/Options.h`),
@@ -205,7 +206,8 @@ On the first start the backend copies its default data files into `backend-data`
 overwritten). Niobium's `backend-data` is copied over once (see [migration](#moving-over-from-niobium-and-vanity)); Vanity's
 backend data is not.
 Ready when `GET /niobium/health` → `{"ok":true,…}` (the launcher waits up to 20 s).
-`POST /niobium/gameserver {ip,port}` sets the matchmaker target (joining by IP); `POST /niobium/status`
+`POST /niobium/gameserver {ip,port}` sets the matchmaker target (joining a friend; "Host & Play" sets it back to
+`127.0.0.1:7777`, see [Playing with friends](#playing-with-friends)); `POST /niobium/status`
 tells the backend the hosted version and playlist. Details: [`backend/README.md`](../backend/README.md).
 
 ## Starting the launcher
@@ -230,7 +232,9 @@ tells the backend the hosted version and playlist. Details: [`backend/README.md`
 The UI shows seven steps: Backend, Server, Redirect, Login, Your game, Game server, Lobby.
 
 1. **Backend:** start it, wait for `/niobium/health`, then `POST /niobium/status` (name "<player>'s server",
-   hosting, playlist, version).
+   hosting, playlist, version) and `POST /niobium/gameserver` `127.0.0.1:7777` (an earlier "Join" may have pointed
+   "Play" at a friend). After the server Fortnite starts, the [host info](#rift-host-info-src-taurisrcfriendsrs-hostinfoserver)
+   endpoint starts in the background.
 2. **Server:** write `parkours.json` fresh to `%LOCALAPPDATA%\Rift\server\`. Start the server Fortnite:
    helper programs `FortniteLauncher.exe` and `FortniteClient-Win64-Shipping_EAC.exe` paused (they never
    run), then `FortniteClient-Win64-Shipping.exe` with the arguments from `launcher/core/src/launchargs.rs`
@@ -248,7 +252,8 @@ The UI shows seven steps: Backend, Server, Redirect, Login, Your game, Game serv
    away, and `rift_client.dll` 6 s (8 s from 20.00) after its login.
 6. **Game server:** connect to the control pipe (up to 4 minutes) and send the profile's match settings
    in this order: `bEnableCheats` = true, `playlist` (if the profile has one), `bLateGame`, `bInfiniteAmmo`,
-   `bInfiniteMats`, `bPlayerBots`, `PlayerBotCount`, `PlayerBotTargetELO`, and only when the profile has Bosses &
+   `bInfiniteMats`, `bPlayerBots`, `PlayerBotCount`, `PlayerBotTargetELO`, `bHumansSameTeam` only when the
+   profile has "With friends: Together" in a team playlist, and only when the profile has Bosses &
    NPCs on `bLivingWorld`, `LivingWorldMaxAI` (`niobium_core::bots::server_config_for`, see
    [Match rules and AI bots](#match-rules-classic-match-and-ai-bots) and
    [Bosses & NPCs](#bosses--npcs-living-world-experimental)). The live log says "Connected to the
@@ -269,6 +274,110 @@ crash or through "Stop all" – the launcher closes its helpers too (each PID on
 `launcher/core/src/helperprocs.rs`).
 
 "Stop all" closes your game, the server Fortnite (each with its helpers) and the backend.
+
+## Playing with friends
+
+Code: `launcher/core/src/friends.rs` (rules, tested), `launcher/src-tauri/src/friends.rs` (addresses, host info
+endpoint and check), `launcher/src-tauri/src/firewall.rs`, `commands.rs` (`invite_info`, `check_join`,
+`join_game`, `firewall_*`), `engine.rs` (`join_game`, host info), UI `launcher/src/pages/ServersPage.tsx`.
+
+### How it works
+
+1. Both PCs are in the same VPN network (Tailscale, Radmin VPN, ZeroTier, Hamachi) or the same home network.
+2. **Host:** sets the match in the profile (see [Team modes](#team-modes)), presses Host & Play, then **Copy invite**
+   on Servers & Friends (or **Invite friends** on Home while hosting) and sends the line to the friend.
+3. **Friend:** pastes it in Servers & Friends → **Join a friend** and presses Join. Rift checks first (below), then
+   starts the friend's own game with the matching build (or, if it already runs, only points "Play" at the host)
+   and says "When the lobby shows, press Play". The friend's own backend sends "Play" to the host
+   (`POST /niobium/gameserver`); the friend logs in to their own backend. The host's backend is never needed
+   ("Share the backend on your network" can stay off).
+4. In the game: F9 → Main → "Join a server" → "On another PC" takes the same invite (or an IP) and runs
+   `open <ip>:<port>`. A different Fortnite version is refused there with a plain sentence.
+
+What has to be reachable on the host: **UDP 7777** for `FortniteClient-Win64-Shipping.exe` (the game server binds
+to all addresses: the listen URL has no host and Rift passes no `-multihome`). TCP 7777 is only for the optional
+host check. Nothing is needed on the friend's PC (outgoing traffic only).
+
+Both players need the **exact same Fortnite** (version and CL): the server refuses another build. On 26.00+ both
+use Iris. Exception: on 27.11 a friend on another PC always uses Iris, so the Durian playlist (GenericLegacy)
+can't be joined from another PC.
+
+### Addresses (`friends::classify`, `share_list`)
+
+| Kind | Range / how it is told | Order |
+|---|---|---|
+| Tailscale | 100.64.0.0/10 (only this part of 100.x – the rest is the public internet) | 1 |
+| Radmin VPN | 26.0.0.0/8 | 2 |
+| ZeroTier | adapter name contains "ZeroTier" (its ranges look like home networks) | 3 |
+| Hamachi | 25.0.0.0/8 | 4 |
+| Home network | 10/8, 172.16/12, 192.168/16, not on a virtual adapter (vEthernet/WSL, VirtualBox, VMware, Docker …) | 5 |
+
+Loopback, link-local (169.254.x), public internet addresses and virtual adapters are never shown and never
+listened on. The invite uses the first one; a home-network-only invite gets the hint "only works for friends in
+the same house".
+
+### Invite format
+
+`RIFT1:<IPv4>:<UDP port>:<version>:<CL or ->[:<mode>[+bots][+late]]`, e.g.
+`RIFT1:100.101.12.7:7777:19.10:18675304:team4+bots+late`. "Copy invite" copies one line:
+`Squad together · bots on · Lategame · Fortnite 19.10 · RIFT1:…` – Rift and F9 find the code inside any text.
+Mode words: `vs` (Solo, against each other), `team2`/`team3`/`team4` (Duo/Trio/Squad together), `fill2`–`fill4`
+(a team playlist with normal team picking, older profiles). `RIFT:` (no digit) is read as format 1; `RIFT2:` and
+newer get "This invite comes from a newer Rift. Update Rift …"; unknown mode words are ignored.
+
+### The check before joining (`check_join`)
+
+1. Read the input (`friends::parse_join_input`): invite or `ip[:port]` (default 7777). Errors: "Paste your
+   friend's invite code …", "That isn't an invite code or an IP address …", "This invite code is incomplete or
+   broken …", "The port must be a number from 1 to 65535 …".
+2. Ask the host's Rift: `GET http://<ip>:7777/rift-host` (TCP, 3 s connect, 4 s total, no proxy, at most 1 KB).
+3. Version: the host's answer wins, else the invite. `friends::match_build` picks the Library build with the same
+   version and CL (19.1 = 19.10; a build with unknown CL counts). Missing or another CL → "You need Fortnite 19.10
+   (CL 18675304)" with **Download it** when the [download catalog](#build-downloader-download-a-version) has it.
+4. Reachability: connection refused → "Your friend isn't hosting right now"; no answer → "Can't reach your friend's
+   PC" (same VPN network? Host & Play? "Allow friends to connect"?). Both offer **Join anyway** (the game port may
+   work while the check is blocked). Match running → "The match already started". All good → "Host found: Fortnite
+   19.10 · Waiting for players · 1 player" and Rift joins right away.
+
+### Rift host info (`src-tauri/src/friends.rs`, `HostInfoServer`)
+
+Runs from Host & Play until the server Fortnite closes or Stop all. One thread, TCP 7777 on each allowed address
+(new VPN addresses are picked up every 10 s), never 0.0.0.0. Answers only `GET /rift-host` with
+`{"app":"rift","version":"19.10","cl":18675304,"phase":"waiting","players":1,"port":7777}` (phase from the server's
+pipe status: `starting`, `waiting`, `started`, `ended`); anything else gets 404. 2 s read/write limit, 1 KB request
+limit, at most 20 answers per 10 s, no commands, no CORS header. On Windows it only starts when the "Rift host
+check" firewall rule is there or the firewall is off for that network – so it never brings up a Windows pop-up.
+
+### Windows Firewall ("Can friends reach me?", `firewall.rs`)
+
+The check only reads (PowerShell NetSecurity cmdlets, no admin rights): the Windows network type of the invite
+address (Private/Public/Domain), whether that firewall profile is on, and the enabled inbound rules for the
+build's game file that cover UDP 7777 on that profile. A block rule wins over allow rules. States: "Yes"
+(allowed / firewall off), "Not yet" (no rule), "blocked", "Not sure" (couldn't read).
+Windows' own first-run pop-up usually allows only Private networks and adds a block rule for Public ones –
+VPN adapters (Radmin, sometimes Tailscale) are often "Public".
+
+**Allow friends to connect** runs only on that click, through one elevated PowerShell (Windows' UAC prompt). It adds
+to the group "Rift": "Rift game server" (inbound UDP 7777, program = the build's FortniteClient-Win64-Shipping.exe,
+Private + Public) and "Rift host check" (inbound TCP 7777, program = Rift). Inbound block rules for exactly that
+game file are switched off (not deleted); their names go to `%LOCALAPPDATA%\Rift\firewall-rules.json`.
+**Remove the rule** deletes the group "Rift" and switches those block rules back on. Saying No to the UAC prompt →
+"You said No to the Windows prompt – nothing was changed." Rift never changes firewall or network settings by itself.
+
+### Team modes
+
+In the profile, next to Playlist: **With friends: Against each other / Together** (Bots, Lategame and the match
+rules combine freely with both).
+
+- **Against each other** = the Solo version of the playlist: every human and every bot has their own team.
+- **Together** = a team playlist (Duos/Trios/Squads, size from the playlist): the launcher sends `bHumansSameTeam`
+  before the map loads. The server (`FortGameMode.cpp`, `PickTeam`) puts every human (no AI controller, no 19.10
+  player bot) into the playlist's first team until it has the team size; bots and target dummies
+  (`AssignCheatBotIsolatedTeam`) never get that team, so bots spawning between two joins can't split the humans.
+  More humans than the team size go on with normal picking. 50v50 and the 27.11 Durian playlist keep their own
+  picking; on 17.x–18.x the team repair already fills humans one team after another.
+- Bots only exist on 19.10 (CL 18675304) for now; Together still works without them (the UI says
+  "Bots: only on 19.10 for now").
 
 ## Bubble Builds
 
@@ -401,6 +510,7 @@ know the setting "…"."), and the same for numbers out of range:
 | `bPlayerBots` | true/false – Fortnite's own AI bots, only on 19.10-CL-18675304 (see [AI bots](#ai-bots-1910-experimental)). Server default: false |
 | `PlayerBotCount` | number of AI bots. Not refused when out of range: clamped to 1–99. Server default: 30 |
 | `PlayerBotTargetELO` | skill rating of the AI bots. Clamped to 0–5000. Server default: 500 |
+| `bHumansSameTeam` | true/false – "Together vs bots": in team playlists every human goes into one team, bots never (see [Playing with friends](#playing-with-friends)). Only before "Start match" ("Team settings take effect next match."). Server default: false |
 | `bLivingWorld` | true/false – Bosses & NPCs (see [Bosses & NPCs](#bosses--npcs-living-world-experimental)). Server default: false |
 | `LivingWorldMaxAI` | most bosses and NPCs at once. Clamped to 1–100. Server default: 40 |
 
@@ -1175,7 +1285,8 @@ builds. Uninstalling Rift keeps `%APPDATA%\Rift`, the data folders in
 
 Commands: `get_config`, `platform`, `update_settings`, `detect_build`, `add_build`, `remove_build`,
 `add_profile`, `update_profile`, `remove_profile`, `set_active_profile`, `add_friend`, `remove_friend`,
-`list_crashes`, `share_addresses`, `host_and_play`, `stop_all`, `join_ip`, `server_exec`, `server_config`,
+`list_crashes`, `share_addresses`, `host_and_play`, `stop_all`, `join_ip`, `invite_info`, `check_join`, `join_game`,
+`firewall_status`, `firewall_allow`, `firewall_remove` (see [Playing with friends](#playing-with-friends)), `server_exec`, `server_config`,
 `server_start_match`, `spawn_bots`, `remove_bots`, `get_client_settings`, `set_client_settings`,
 `set_trickshot_presets`, `niobium_paths` (`{ config, logs, crashes, fortniteLogs }`), `app_ready`,
 `pending_log_lines`, `bubble_builds_support`, `reset_performance_mode_ini`, `quit_app`, `close_prompt_shown`,
@@ -1196,4 +1307,5 @@ Events: `services`, `launch:step`, `log:line`, `toast`, `server:event`, `tricksh
 New settings keys in `config.json`: `bubbleBuilds` (true/false, default false) and `lastSeenVersion` (text
 or null). New profile keys: `infiniteAmmo`, `infiniteMats`, `bots`, `botCount`, `botSkill` (see
 [Match rules](#match-rules-classic-match)), `livingWorld`, `livingWorldMaxAI` (see
-[Bosses & NPCs](#bosses--npcs-living-world-experimental)).
+[Bosses & NPCs](#bosses--npcs-living-world-experimental)), `friendsTogether` (see
+[Playing with friends](#playing-with-friends)).

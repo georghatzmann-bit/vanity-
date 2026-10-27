@@ -30,6 +30,17 @@ export function DownloadPage() {
   // Start on the first chapter that has something to download (preview: ?season=2-5 opens one)
   useEffect(() => {
     if (!catalog || chapter) return;
+    // "Download it" on Servers & Friends: open the season of the build a friend's invite needs
+    const openKey = useDownloads.getState().openKey;
+    if (openKey) {
+      useDownloads.setState({ openKey: null });
+      const where = findSeason(catalog, openKey);
+      if (where) {
+        setChapter(String(where.chapter.chapter));
+        setTarget({ ...where, key: openKey });
+        return;
+      }
+    }
     const wanted = previewParam("season")?.split("-").map(Number);
     if (wanted && wanted.length === 2) {
       const c = catalog.chapters.find((x) => x.chapter === wanted[0]);

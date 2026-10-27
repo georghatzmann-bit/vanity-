@@ -61,6 +61,11 @@ export interface Profile {
   livingWorld: boolean;
   /** Most bosses and NPCs at once, 1–100. */
   livingWorldMaxAI: number;
+  /**
+   * "Together": in Duos/Trios/Squads every human (host + friends) plays in one team, bots fill the
+   * other teams (server key `bHumansSameTeam`). Off / missing = "Against each other".
+   */
+  friendsTogether?: boolean;
 }
 
 /** How good the AI bots are (Rust maps it to a skill rating: easy 500, normal 1000, hard 2000). */
@@ -84,6 +89,79 @@ export interface LivingWorldEvent {
   reason: string;
   /** Bosses and NPCs in the match so far. */
   spawned: number;
+}
+
+// ---- Playing with friends (match launcher/core/src/friends.rs and src-tauri/src/commands.rs) ----
+
+export type NetKind = "tailscale" | "radmin" | "zeroTier" | "hamachi" | "lan";
+
+export interface ShareAddress {
+  kind: NetKind;
+  /** "Tailscale", "Radmin VPN", "Home network" … */
+  label: string;
+  ip: string;
+  adapter: string;
+}
+
+/** The host's "Invite friends" card. */
+export interface InviteInfo {
+  /** RIFT1:… (null when something is missing – see `problem`) */
+  code: string | null;
+  /** What "Copy invite" copies: summary · Fortnite version · code */
+  text: string | null;
+  /** "Squad together · bots on · Lategame" */
+  summary: string;
+  address: ShareAddress | null;
+  others: ShareAddress[];
+  version: string | null;
+  cl: number | null;
+  problem: string | null;
+  hint: string | null;
+}
+
+/** Answer of the host's Rift (GET /rift-host on TCP 7777). */
+export interface HostInfo {
+  app: "rift";
+  version: string;
+  cl: number | null;
+  phase: "starting" | "waiting" | "started" | "ended";
+  players: number;
+  port: number;
+}
+
+export type JoinCheckStatus = "ready" | "starting" | "badInput" | "wrongVersion" | "notHosting" | "notReachable" | "matchStarted";
+
+/** The friend's check before joining. */
+export interface JoinCheck {
+  status: JoinCheckStatus;
+  /** true = join now */
+  ok: boolean;
+  title: string;
+  detail: string;
+  ip: string;
+  port: number;
+  version: string | null;
+  cl: number | null;
+  summary: string;
+  host: HostInfo | null;
+  /** Library build Rift starts for this join */
+  buildId: string | null;
+  /** Download catalog key when the needed build can be downloaded */
+  downloadKey: string | null;
+  /** The check failed, but joining may still work */
+  joinAnyway: boolean;
+}
+
+/** "pressPlay" = your game already runs; "starting" = Rift starts it now. */
+export type JoinStarted = "pressPlay" | "starting";
+
+export interface FirewallStatus {
+  state: "allowed" | "blocked" | "notAllowed" | "off" | "unknown" | "unsupported";
+  /** "Private", "Public", "Domain" or "" */
+  network: string;
+  riftRules: boolean;
+  checkRule: boolean;
+  detail: string;
 }
 
 export interface Friend {
@@ -447,6 +525,21 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
         ["Tailscale", "100.88.41.3:7777"],
         ["Radmin VPN", "26.120.7.55:7777"],
       ];
+    case "invite_info":
+      return demoInvite();
+    case "check_join":
+      return demoJoinCheck(String(args.text ?? ""));
+    case "join_game":
+    case "join_ip":
+      return "starting" satisfies JoinStarted;
+    case "firewall_status":
+      return demoFirewall;
+    case "firewall_allow":
+      demoFirewall = { state: "allowed", network: "Public", riftRules: true, checkRule: true, detail: "Windows Firewall lets friends reach your game on this Public network." };
+      return demoFirewall;
+    case "firewall_remove":
+      demoFirewall = { ...demoFirewallBlocked };
+      return demoFirewall;
     case "set_trickshot_presets":
       demoConfig = { ...demoConfig, trickshotPresets: (args?.presets ?? []) as TrickshotPreset[] };
       return demoConfig;
@@ -496,6 +589,97 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
   }
 }
 
+// ---- Friends preview (browser only): ?joincheck=ready|wrongVersion|notReachable, ?firewall=allowed ----
+
+function previewQuery(name: string): string | null {
+  try {
+    return new URLSearchParams(window.location.search).get(name);
+  } catch {
+    return null;
+  }
+}
+
+const demoFirewallBlocked: FirewallStatus = {
+  state: "blocked",
+  network: "Public",
+  riftRules: false,
+  checkRule: false,
+  detail: "Windows Firewall blocks this Fortnite on Public networks (often from the Windows pop-up). Friends can't join yet.",
+};
+let demoFirewall: FirewallStatus = previewQuery("firewall") === "allowed"
+  ? { state: "allowed", network: "Public", riftRules: true, checkRule: true, detail: "Windows Firewall lets friends reach your game on this Public network." }
+  : { ...demoFirewallBlocked };
+
+function demoInvite(): InviteInfo {
+  const profile = demoConfig.profiles.find((p) => p.id === demoConfig.activeProfileId) ?? demoConfig.profiles[0];
+  const build = demoConfig.builds.find((b) => b.id === profile?.buildId) ?? demoConfig.builds[0];
+  const size = /squad/i.test(profile?.playlist ?? "") ? 4 : /trio/i.test(profile?.playlist ?? "") ? 3 : /duo/i.test(profile?.playlist ?? "") ? 2 : 1;
+  const mode = size === 1 ? "vs" : profile?.friendsTogether ? `team${size}` : `fill${size}`;
+  const bots = Boolean(profile?.bots) && build?.version === "19.10";
+  const late = Boolean(profile?.lategame);
+  const base = { vs: "Solo against each other", team2: "Duo together", team3: "Trio together", team4: "Squad together", fill2: "Duos", fill3: "Trios", fill4: "Squads" }[mode] ?? "Match";
+  const summary = `${base} · ${bots ? "bots on" : "no bots"}${late ? " · Lategame" : ""}`;
+  const code = `RIFT1:100.88.41.3:7777:${build?.version ?? "19.10"}:${build?.changelist ?? "-"}:${mode}${bots ? "+bots" : ""}${late ? "+late" : ""}`;
+  return {
+    code,
+    text: `${summary} · Fortnite ${build?.version ?? "19.10"} · ${code}`,
+    summary,
+    address: { kind: "tailscale", label: "Tailscale", ip: "100.88.41.3", adapter: "Tailscale" },
+    others: [
+      { kind: "radmin", label: "Radmin VPN", ip: "26.120.7.55", adapter: "Radmin VPN" },
+      { kind: "lan", label: "Home network", ip: "192.168.178.24", adapter: "WLAN" },
+    ],
+    version: build?.version ?? "19.10",
+    cl: build?.changelist ?? null,
+    problem: null,
+    hint: null,
+  };
+}
+
+function demoJoinCheck(text: string): JoinCheck {
+  const kind = previewQuery("joincheck") ?? (/18\.30/.test(text) ? "wrongVersion" : "ready");
+  const base: JoinCheck = {
+    status: "ready",
+    ok: true,
+    title: "Host found: Fortnite 19.10",
+    detail: "Your Fortnite 19.10 matches – joining now (1 player waiting).",
+    ip: "100.101.12.7",
+    port: 7777,
+    version: "19.10",
+    cl: 18675304,
+    summary: "Squad together · bots on · Lategame",
+    host: { app: "rift", version: "19.10", cl: 18675304, phase: "waiting", players: 1, port: 7777 },
+    buildId: demoConfig.builds[0]?.id ?? null,
+    downloadKey: null,
+    joinAnyway: false,
+  };
+  if (!text.trim()) return { ...base, status: "badInput", ok: false, title: "That isn't an invite", detail: "Paste your friend's invite code (or their IP address) first.", host: null, buildId: null };
+  if (kind === "wrongVersion")
+    return {
+      ...base,
+      status: "wrongVersion",
+      ok: false,
+      title: "You need Fortnite 18.30 (CL 17882303)",
+      detail: "Your friend plays Fortnite 18.30 (CL 17882303). It isn't in your Library yet. Rift can download it for you.",
+      version: "18.30",
+      cl: 17882303,
+      host: { app: "rift", version: "18.30", cl: 17882303, phase: "waiting", players: 1, port: 7777 },
+      buildId: null,
+      downloadKey: "18.30-CL-17882303",
+    };
+  if (kind === "notReachable")
+    return {
+      ...base,
+      status: "notReachable",
+      ok: false,
+      title: "Can't reach your friend's PC",
+      detail: "No answer from 100.101.12.7. Check that you're both connected to the same Tailscale or Radmin VPN network, that your friend pressed Host & Play, and that your friend pressed \"Allow friends to connect\" in Rift.",
+      host: null,
+      joinAnyway: true,
+    };
+  return base;
+}
+
 // ---- Calls -------------------------------------------------------------------------------
 
 export const api = {
@@ -536,7 +720,20 @@ export const api = {
   quitApp: () => call<void>("quit_app"),
   /** Tells Rust the "Close Rift?" dialog is on screen (else it closes by itself after a few seconds). */
   closePromptShown: (id: number) => call<void>("close_prompt_shown", { id }),
-  joinIp: (address: string) => call<void>("join_ip", { address }),
+  /** Join by address or invite without the check (your own build). */
+  joinIp: (address: string) => call<JoinStarted>("join_ip", { address }),
+  /** Host: the invite code for the active profile and the best VPN address. */
+  inviteInfo: () => call<InviteInfo>("invite_info"),
+  /** Friend: reads the invite/IP, asks the host's Rift and checks the Library – starts nothing. */
+  checkJoin: (text: string) => call<JoinCheck>("check_join", { text }),
+  /** Friend: joins (starts the game with `buildId` when it isn't running yet). */
+  joinGame: (ip: string, port: number, buildId: string | null) => call<JoinStarted>("join_game", { ip, port, buildId }),
+  /** "Can friends reach me?" (read-only). */
+  firewallStatus: () => call<FirewallStatus>("firewall_status"),
+  /** "Allow friends to connect" – Windows asks first (UAC). Only on the user's click. */
+  firewallAllow: () => call<FirewallStatus>("firewall_allow"),
+  /** "Remove the rule" – Windows asks first (UAC). */
+  firewallRemove: () => call<FirewallStatus>("firewall_remove"),
   serverExec: (text: string) => call<void>("server_exec", { text }),
   serverConfig: (key: string, value: unknown) => call<void>("server_config", { key, value }),
   serverStartMatch: () => call<void>("server_start_match"),
