@@ -21,3 +21,4 @@ Thumbs.db
 
 # Screenshots aus der lokalen Prüfung
 .screenshots/
+dist-send/
