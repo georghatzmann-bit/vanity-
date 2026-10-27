@@ -228,7 +228,9 @@
     <ClInclude Include="FortniteGame\Public\FortPlayerStateAthena.h" />
     <ClInclude Include="FortniteGame\Public\FortPlaylistAthena.h" />
     <ClInclude Include="FortniteGame\Public\AIBase.h" />
+    <ClInclude Include="FortniteGame\Public\AIBase_19_10.h" />
     <ClInclude Include="FortniteGame\Public\LivingWorld.h" />
+    <ClInclude Include="FortniteGame\Public\LivingWorldSpawner.h" />
     <ClInclude Include="FortniteGame\Public\PlayerBots_19_10.h" />
     <ClInclude Include="FortniteGame\Public\FortQuestManager.h" />
     <ClInclude Include="FortniteGame\Public\FortSafeZoneIndicator.h" />
@@ -300,7 +302,9 @@
     <ClCompile Include="FortniteGame\Private\FortWeaponMods.cpp" />
     <ClCompile Include="FortniteGame\Private\FortWeaponRanged.cpp" />
     <ClCompile Include="FortniteGame\Private\AIBase.cpp" />
+    <ClCompile Include="FortniteGame\Private\AIBase_19_10.cpp" />
     <ClCompile Include="FortniteGame\Private\LivingWorld.cpp" />
+    <ClCompile Include="FortniteGame\Private\LivingWorldSpawner.cpp" />
     <ClCompile Include="FortniteGame\Private\PlayerBots_19_10.cpp" />
     <ClCompile Include="ImGui\imgui.cpp" />
     <ClCompile Include="ImGui\imgui_draw.cpp" />

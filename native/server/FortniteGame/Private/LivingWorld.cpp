@@ -11,9 +11,15 @@
 // Safety: all of this runs on the game thread, at most every 500 ms, inside AIBase::Guarded; a
 // fault is counted (AIBase::FFaultCounter) and the part that faulted is off for the rest of the
 // match. Nothing runs unless an AI feature is active (AIBase::IsAnyAIFeatureActive: the 19.10 bot
-// gate passed, or Living world spawns) or bLivingWorldDump is on. The raw switches alone do nothing.
+// gate passed, or Living world spawns), Living world was asked for (LivingWorldSpawner), or
+// bLivingWorldDump is on. The raw switches alone do nothing.
+//
+// Spawning itself ("Lager-lite") lives in LivingWorldSpawner.cpp; this file starts it at
+// "Start match" and ticks it. NPCs (not AI player bots) also drop the loot tiers of their AI loot
+// info on death, through Niobium's loot tables (LivingWorldSpawner::DropLootTiers).
 #include "pch.h"
 #include "../Public/LivingWorld.h"
+#include "../Public/LivingWorldSpawner.h"
 #include "../Public/AIBase.h"
 #include "../Public/FortGameMode.h"
 #include "../Public/FortInventory.h"
@@ -35,8 +41,6 @@
 namespace
 {
     constexpr const char* kTag = "LivingWorld";
-    // What the launcher shows until spawning exists for a version.
-    constexpr const char* kReasonNotBuilt = "not built yet for this version";
 
     constexpr ULONGLONG kPollIntervalMs = 500;
     constexpr ULONGLONG kDumpFallbackDelayMs = 120000; // playlists without a bus
@@ -50,6 +54,7 @@ namespace
     constexpr int32 kMaxEntriesPerInventory = 64;
     constexpr int32 kMaxLoggedDrops = 30;
     constexpr int32 kGamePhaseAircraft = 3; // EAthenaGamePhase::Aircraft
+    constexpr double kNativeDropRadiusCm = 300.0; // pickups this close to a dead NPC = the game dropped
 
     // ------------------------------------------------------------------ Match state
 
@@ -58,6 +63,8 @@ namespace
         TWeakObjectPtr<UObject> Pawn;
         TWeakObjectPtr<UObject> Inventory;
         bool bPlayerBot = false;
+        bool bNPC = false; // a Living world NPC (LivingWorldSpawner::IsNPCController)
+        LivingWorldSpawner::FLootInfo Loot;
     };
 
     struct FMatch
@@ -75,8 +82,6 @@ namespace
 
     FMatch GMatch;
     ULONGLONG GLastPollMs = 0;
-    // Set by the phase that builds spawning (see LivingWorld::IsActive); nothing sets it yet.
-    std::atomic<bool> GLivingWorldActive{ false };
     // Dump lines waiting for the pipe (at most kDumpLinesPerTick per poll). Kept across a world
     // change, so a dump that is still being written finishes.
     std::deque<std::string> GDumpQueue;
@@ -485,7 +490,33 @@ namespace
         AActor* Pawn;
         UObject* Inventory;
         bool bPlayerBot;
+        bool bNPC;
+        LivingWorldSpawner::FLootInfo Loot;
     };
+
+    // Pickups near a place (FortPickup actors), to tell whether the game already dropped something
+    // for a dead NPC.
+    int32 PickupsNear(const FVector& Place, TArray<AActor*>& Pickups, bool& bLoaded)
+    {
+        if (!bLoaded)
+        {
+            bLoaded = true;
+            static const UClass* PickupClass = FindClass("FortPickup");
+            if (PickupClass)
+                Utils::GetAll(PickupClass, Pickups);
+        }
+        int32 Count = 0;
+        for (int32 Index = 0; Index < Pickups.Num(); ++Index)
+        {
+            auto Pickup = Pickups[Index];
+            if (Pickup && AIBase::IsLiveObject(Pickup) &&
+                FVector::Dist(Pickup->K2_GetActorLocation(), Place) < kNativeDropRadiusCm)
+            {
+                ++Count;
+            }
+        }
+        return Count;
+    }
 
     void PollDeathDropsUnsafe(void* RawContext)
     {
@@ -525,13 +556,18 @@ namespace
                 if (auto Inventory = ReadControllerInventory(Controller))
                     Tracked->second.Inventory = TWeakObjectPtr<UObject>(Inventory);
                 Tracked->second.bPlayerBot = IsPlayerBot(Pawn);
+                // Living world NPCs: their loot info, once the game set it.
+                if (!Tracked->second.bNPC && LivingWorldSpawner::IsNPCController(Controller))
+                    Tracked->second.bNPC = true;
+                if (Tracked->second.bNPC && !Tracked->second.Loot.bResolved)
+                    LivingWorldSpawner::ReadLootInfo(Controller, Tracked->second.Loot);
             }
             if (Tracked == GMatch.Tracked.end() || !IsDying(Pawn))
                 continue; // players, uncontrolled actors and living AI
 
             GMatch.Handled.insert(Key);
             Dead.push_back(FDeadAI{ Pawn, const_cast<UObject*>(Tracked->second.Inventory.Get()),
-                Tracked->second.bPlayerBot });
+                Tracked->second.bPlayerBot, Tracked->second.bNPC, Tracked->second.Loot });
             GMatch.Tracked.erase(Tracked);
         }
         Pawns.Free();
@@ -550,6 +586,8 @@ namespace
         // what is still in the inventory and removes it, so an inventory the game emptied gives
         // nothing twice.
         int32 Budget = kMaxPickupsPerPoll;
+        TArray<AActor*> Pickups;
+        bool bPickupsLoaded = false;
         for (const auto& Entry : Dead)
         {
             if (!AIBase::IsLiveObject(Entry.Pawn))
@@ -565,17 +603,46 @@ namespace
                 }
                 continue;
             }
-            if (!Entry.Inventory || Budget <= 0)
+            // A Living world NPC also drops its loot tiers, unless the game already dropped
+            // something there (counted before our own inventory drop).
+            const bool bLootTiers = Entry.bNPC && Entry.Loot.Table && Budget > 0;
+            const int32 NativePickups = bLootTiers
+                ? PickupsNear(Entry.Pawn->K2_GetActorLocation(), Pickups, bPickupsLoaded) : 0;
+            if ((!Entry.Inventory && !bLootTiers) || Budget <= 0)
                 continue;
             const char* Kept = nullptr;
-            const int32 Spawned = DropInventory(Entry.Pawn, Entry.Inventory, Entry.bPlayerBot, Budget, Kept);
-            Budget -= Spawned;
-            ++GMatch.DroppedPawns;
-            if (Kept)
-                LogDrop(PawnClass + " dropped nothing: " + Kept);
+            int32 Spawned = 0;
+            if (Entry.Inventory)
+            {
+                Spawned = DropInventory(Entry.Pawn, Entry.Inventory, Entry.bPlayerBot, Budget, Kept);
+                Budget -= Spawned;
+            }
             else
-                LogDrop(PawnClass + " dropped " + std::to_string(Spawned) + " item(s)");
+                Kept = "it has no inventory";
+            ++GMatch.DroppedPawns;
+            if (!bLootTiers)
+            {
+                if (Kept)
+                    LogDrop(PawnClass + " dropped nothing: " + Kept);
+                else
+                    LogDrop(PawnClass + " dropped " + std::to_string(Spawned) + " item(s)");
+                continue;
+            }
+            const char* NoLoot = nullptr;
+            int32 LootSpawned = 0;
+            if (NativePickups > 0)
+                NoLoot = "the game dropped loot there already";
+            else
+            {
+                LootSpawned = LivingWorldSpawner::DropLootTiers(Entry.Pawn, Entry.Loot, Budget, NoLoot);
+                Budget -= LootSpawned;
+            }
+            LogDrop(PawnClass + " dropped " + std::to_string(Spawned) + " item(s)" +
+                (Kept ? std::string(" (inventory: ") + Kept + ")" : std::string()) + " and " +
+                std::to_string(LootSpawned) + " loot pickup(s)" +
+                (NoLoot ? std::string(" (loot: ") + NoLoot + ")" : std::string()));
         }
+        Pickups.Free();
     }
 
     // ------------------------------------------------------------------ Diagnostic dump
@@ -908,16 +975,18 @@ namespace
 
 bool LivingWorld::IsActive()
 {
-    return GLivingWorldActive.load(std::memory_order_acquire);
+    return LivingWorldSpawner::IsActive();
 }
 
 void LivingWorld::GameThreadTick()
 {
-    // Not the raw switches: bots count once their gate passed, Living world once it spawns.
+    // Not the raw switches: bots count once their gate passed, Living world once it spawns (or was
+    // asked for at "Start match" and this build has an AI spawner).
     const bool bAIActive = AIBase::IsAnyAIFeatureActive();
+    const bool bRequested = LivingWorldSpawner::IsRequested();
     const bool bDumpWanted = FConfiguration::bLivingWorldDump.load(std::memory_order_acquire) ||
         LivingWorld::IsActive();
-    if (!bAIActive && !bDumpWanted && GDumpQueue.empty())
+    if (!bAIActive && !bDumpWanted && !bRequested && GDumpQueue.empty())
         return; // today's behaviour: nothing runs
 
     const ULONGLONG Now = GetTickCount64();
@@ -942,9 +1011,22 @@ void LivingWorld::GameThreadTick()
     auto GameState = AIBase::IsLiveObject(GameMode->GameState) ? GameMode->GameState : nullptr;
     const int32 GamePhase = GameState && GameState->HasGamePhase() ? (int32)GameState->GamePhase : -1;
 
+    // Living world spawning ("Lager-lite"): its own guards, fault counters and rate limits.
+    if (bRequested)
+    {
+        LivingWorldSpawner::FTickInput In;
+        In.World = World;
+        In.GameMode = GameMode;
+        In.GameState = GameState ? static_cast<AFortGameStateAthena*>(GameState) : nullptr;
+        In.GamePhase = GamePhase;
+        In.NowMs = Now;
+        In.GameModeSeenMs = GMatch.GameModeSeenMs;
+        LivingWorldSpawner::Tick(In);
+    }
+
     const double Version = VersionInfo.FortniteVersion;
     const bool bAIVersion = Version >= kFirstAIVersion && Version < kEndAIVersion;
-    if (bAIActive && bAIVersion && !GMatch.bDropUnsupported && !GDropFaults.IsTripped())
+    if (AIBase::IsAnyAIFeatureActive() && bAIVersion && !GMatch.bDropUnsupported && !GDropFaults.IsTripped())
     {
         FPollContext Poll;
         Poll.GamePhase = GamePhase;
@@ -985,20 +1067,13 @@ public:
     InitHooks;
 };
 
-// Runs in Main() after "Start match", when the launcher's settings are final. Spawning is not
-// built yet on any version, so the launcher hears "unavailable" when the switch is on. When
-// spawning exists, it sets GLivingWorldActive (LivingWorld::IsActive) and then calls
+// Runs in Main() after "Start match", when the launcher's settings are final, and before the map
+// loads (on 19.10 the AI base's nav hook must be in before the world is created). The spawner
+// decides what this build can do and tells the launcher ("off", "active" with the reason, or
+// "unavailable"). When it starts spawning it sets LivingWorld::IsActive() and then calls
 // AIBase::EnsureStandaloneCheckOff() before its first spawn request: on 17.00-19.99 an AI that
-// possesses a pawn closes the host 5 s later unless that check is off.
+// possesses a pawn closes the host 5 s later unless that check is off (no spawning if it stays on).
 void FLivingWorldHooks::Hook()
 {
-    if (!FConfiguration::bLivingWorld.load(std::memory_order_acquire))
-    {
-        NiobiumControl::EmitLivingWorld("off", "", 0);
-        return;
-    }
-    const int32 MaxAI = std::clamp(FConfiguration::LivingWorldMaxAI.load(std::memory_order_acquire), 1, 100);
-    AIBase::Logf(kTag, "unavailable: %s (Fortnite %.2f, max AI %d)", kReasonNotBuilt,
-        VersionInfo.FortniteVersion, MaxAI);
-    NiobiumControl::EmitLivingWorld("unavailable", kReasonNotBuilt, 0);
+    LivingWorldSpawner::OnStartMatch();
 }

@@ -31,8 +31,10 @@ namespace NiobiumControl
     // {"event":"playerBots","state":"active"|"unavailable","reason":"<plain English>"}. Thread-safe.
     void EmitPlayerBots(const char* State, const std::string& Reason);
 
-    // "Living world" decision (LivingWorld.cpp), sent once per match at "Start match":
+    // "Living world" state (LivingWorld.cpp, LivingWorldSpawner.cpp): sent at "Start match", again
+    // when spawning starts or fails, and while it runs when the spawned count changed by 5 or more
+    // (at most every 30 s otherwise) or the reason changed:
     // {"event":"livingWorld","state":"active"|"unavailable"|"off","reason":"<plain English>",
-    //  "spawned":N}. Thread-safe.
+    //  "spawned":N}. "active" may carry a reason such as "standing only (...)". Thread-safe.
     void EmitLivingWorld(const char* State, const std::string& Reason, int Spawned);
 }

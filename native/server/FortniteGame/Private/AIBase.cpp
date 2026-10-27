@@ -1009,26 +1009,31 @@ namespace
     }
 
     std::atomic<bool> GStandaloneCheckDone{ false };
+    std::atomic<bool> GStandaloneCheckOff{ false }; // patched, or found already off
 }
 
-void AIBase::EnsureStandaloneCheckOff()
+bool AIBase::EnsureStandaloneCheckOff()
 {
     const double Version = VersionInfo.FortniteVersion;
-    if (Version < 17.00 || Version >= 20.00 || !IsAnyAIFeatureActive())
-        return; // other builds don't have the check (or return at once), and without AI nothing possesses pawns
+    if (Version < 17.00 || Version >= 20.00)
+        return true; // other builds don't have the check (or it returns at once)
+    if (!IsAnyAIFeatureActive())
+        return false; // without AI nothing possesses pawns; nothing is searched yet
     if (GStandaloneCheckDone.exchange(true, std::memory_order_acq_rel))
-        return; // searched (and patched, if it could be) already; the patch stays for the process
+        return GStandaloneCheckOff.load(std::memory_order_acquire); // the patch stays for the process
 
     FStandaloneContext Context;
     if (!Guarded(&NeutraliseStandaloneCheckUnsafe, &Context))
     {
         LogLine("AIBase", "standalone check not found: the search faulted, nothing was changed");
-        return;
+        return false;
     }
-    if (Context.bPatched)
+    if (Context.bPatched || Context.Result.rfind("already off", 0) == 0)
+    {
+        GStandaloneCheckOff.store(true, std::memory_order_release);
         LogLine("AIBase", "standalone check off: " + Context.Result);
-    else if (Context.Result.rfind("already off", 0) == 0)
-        LogLine("AIBase", "standalone check off: " + Context.Result);
-    else
-        LogLine("AIBase", "standalone check " + Context.Result);
+        return true;
+    }
+    LogLine("AIBase", "standalone check " + Context.Result);
+    return false;
 }

@@ -519,8 +519,10 @@ public:
     static inline std::atomic_int PlayerBotTargetELO{ 500 }; // 0-5000, bot skill rating
 
     // NIOBIUM: "Living world" - bosses, guards, NPCs and wildlife (FortniteGame/Private/
-    // LivingWorld.cpp). Experimental, set by the launcher or the host window before the map
-    // loads. Off = nothing changes. No version spawns them yet; the launcher hears "unavailable".
+    // LivingWorld.cpp, LivingWorldSpawner.cpp). Experimental, set by the launcher or the host window
+    // before the map loads. Off = nothing changes. On: the game's own Living World (Lager) data is
+    // spawned by reflection where the build has it (about 14.40-20.x); 19.10 also gets navigation
+    // and brain start from the 19.10 AI base. The launcher hears "active" or "unavailable" + reason.
     static inline std::atomic_bool bLivingWorld{ false };
     static inline std::atomic_int LivingWorldMaxAI{ 40 };    // 1-100, AIs alive at once
     // Writes the one-time "[LivingWorld] dump ..." report even with bots and Living world off.

@@ -16,8 +16,11 @@
 //   FortniteGame/.../FortGameStateAthena.cpp:6-10        -> OnAircraftPhaseStarted (called from our
 //                                                           own StartAircraftPhase hook instead of a
 //                                                           second PlacePlayersInAircraft hook)
-//   FortniteAI/.../AthenaNavSystem.cpp:5-14              -> CreateAndConfigureNavSystemDetour
-//   FortniteAI/.../FortAthenaAISpawnerDataComponent_AIBotCosmeticBase.cpp:5-15 -> GetLoadoutDetour
+//   FortniteAI/.../AthenaNavSystem.cpp:5-14              -> CreateAndConfigureNavSystemDetour and
+//   FortniteAI/.../FortAthenaAISpawnerDataComponent_AIBotCosmeticBase.cpp:5-15 -> GetLoadoutDetour:
+//                                                           both now live in the shared "19.10 AI
+//                                                           base" (AIBase_19_10.cpp) with the build
+//                                                           check, so Living world can use them too
 //   Engine/.../Kismet/MemoryLibrary.h (AllocateNearbyPage, Rel32Swap_Lea) -> AllocateNearPage,
 //                                                           PatchLeaTarget (now in AIBase.cpp,
 //                                                           with the PE, unwind, LEA and layout
@@ -35,8 +38,9 @@
 // rewrites (World, NetDriver, Engine, Object), the backend, and Artemis' storm, inventory and
 // loadout code (Niobium has its own).
 //
-// Safety gate (Gate below): every address is only right for one Fortnite build. Nothing here is
-// hooked or patched unless
+// Safety gate (Gate below): every address is only right for one Fortnite build. The bots first need
+// the 19.10 AI base (AIBase1910::Ensure: build, nav and outfit hooks); nothing here is hooked or
+// patched unless
 //   - the game is 19.10 and its build number (CL, read from the engine version string) is 18675304,
 //   - FortniteClient-Win64-Shipping.exe has the size of Epic's 19.10 file (198,580,704 bytes),
 //   - the reflected layouts of the classes and structs used here match Artemis' 19.10 dump, and
@@ -49,6 +53,7 @@
 #include "pch.h"
 #include "../Public/PlayerBots_19_10.h"
 #include "../Public/AIBase.h"
+#include "../Public/AIBase_19_10.h"
 #include "../Public/FortGameMode.h"
 #include "../Public/FortPlaylistAthena.h"
 #include "../Public/BuildingFoundation.h"
@@ -82,10 +87,8 @@ namespace
     // ------------------------------------------------------------------ The one supported build
 
     constexpr double kFortniteVersion = 19.10;
+    // The build (CL and exe size) is checked by the 19.10 AI base (AIBase1910::CheckBuild).
     constexpr uint64_t kChangelist = 18675304;
-    // FortniteGame/Binaries/Win64/FortniteClient-Win64-Shipping.exe in Epic's manifest of
-    // "++Fortnite+Release-19.10-CL-18675304-Windows" (file SHA-1 e0f0f1fb94edc2268f2a2ada17e4b0d9f120d59c).
-    constexpr uint64_t kShippingExeSize = 198580704ull;
 
     // Addresses (RVAs) from Artemis 48dba08. The same build is confirmed by two other 19.10
     // servers that hook StartNewSafeZonePhase at 0x5FA67BC like Artemis does.
@@ -97,8 +100,7 @@ namespace
         constexpr uint32_t PlayerListFindOrAdd = 0x12E76A0;         // :320
         constexpr uint32_t PlayerListAdd = 0x12E7338;               // :321
         constexpr uint32_t BotMaxSpawnAmountCVar = 0xB1BE974;       // :6
-        constexpr uint32_t CreateAndConfigureNavSystem = 0x1F96F68; // AthenaNavSystem.cpp:13
-        constexpr uint32_t AIBotCosmeticGetLoadout = 0x6A41DE4;     // ..._AIBotCosmeticBase.cpp:14
+        // CreateAndConfigureNavSystem (0x1F96F68) and GetLoadout (0x6A41DE4) moved to AIBase_19_10.cpp.
         constexpr uint32_t AIBotEnterAircraft = 0x5CE165C;          // SDK AFortAthenaAIBotController::EnterAircraft
     }
 
@@ -202,16 +204,12 @@ namespace
     using FWaitForMatchAssignmentReady = void (*)(UObject* Service, void* FlowHandle);
     using FOnPlayerBotSpawned = void (*)(UObject* Service, AActor* Actor, int32 SpawnRequestID,
         double PawnMMR);
-    using FCreateAndConfigureNavSystem = void* (*)(UObject* Config, UObject* World);
-    using FGetLoadout = void (*)(UObject* Component, void* OutLoadout);
     using FEnterAircraft = void (*)(UObject* BotController, AActor* Aircraft);
     using FPlayerListFindOrAdd = __int64 (*)(__int64 Map, int Key);
     using FPlayerListAdd = __int64 (*)(__int64 List, __int64 PlayerState);
 
     FWaitForMatchAssignmentReady GWaitForMatchAssignmentReadyOG = nullptr;
     FOnPlayerBotSpawned GOnPlayerBotSpawnedOG = nullptr;
-    FCreateAndConfigureNavSystem GCreateAndConfigureNavSystemOG = nullptr;
-    FGetLoadout GGetLoadoutOG = nullptr;
 
     // ------------------------------------------------------------------ State
 
@@ -246,9 +244,6 @@ namespace
         int32 NavigationPOIValidList = -1;
         int32 TagQueryTagDictionary = -1;
         int32 GameplayTagSize = 0;
-        int32 LoadoutCharacter = -1;
-        int32 NavConfigAutoSpawnByte = -1;
-        uint8 NavConfigAutoSpawnMask = 0;
         int32 PlayerStateTeamIndex = -1;
         int32 PlayerStateSquadId = -1;
         int32 PlaylistAISettings = -1;
@@ -257,7 +252,6 @@ namespace
         const UClass* ServiceClass = nullptr;
         const UClass* SettingsClass = nullptr;
         const UClass* AIBotControllerClass = nullptr;
-        const UClass* NavConfigClass = nullptr;
         const UClass* PoiVolumeClass = nullptr;
     };
 
@@ -344,7 +338,6 @@ namespace
         L.ServiceClass = FindClass("AthenaAIServicePlayerBots");
         L.SettingsClass = FindClass("AthenaAISettings");
         L.AIBotControllerClass = FindClass("FortAthenaAIBotController");
-        L.NavConfigClass = FindClass("NavigationSystemModuleConfig");
         L.PoiVolumeClass = FindClass("FortPoiVolume");
 
         // UAthenaAIServicePlayerBots (Artemis SDK FortniteGame_classes.hpp:19545, 0xBF0 bytes).
@@ -436,17 +429,8 @@ namespace
             return false;
         }
 
-        // Loadout.Character (GetLoadout) and the nav config bit (CreateAndConfigureNavSystem).
-        if (!CheckLayout(FindStruct("FortAthenaLoadout"), "FortAthenaLoadout", 0,
-                { { "Character", 0x40, 0 } }, Why) ||
-            !CheckLayout(L.NavConfigClass, "NavigationSystemModuleConfig", 0,
-                { { "bAutoSpawnMissingNavData", 0x50, 0x04 } }, Why))
-        {
-            return false;
-        }
-        L.LoadoutCharacter = 0x40;
-        L.NavConfigAutoSpawnByte = 0x50;
-        L.NavConfigAutoSpawnMask = 0x04;
+        // Loadout.Character (GetLoadout) and the nav config bit (CreateAndConfigureNavSystem) are
+        // checked by the 19.10 AI base (AIBase_19_10.cpp).
 
         // Reflected only (no fixed numbers needed): the POI query structs and other fields.
         auto BattleBusPOI = FindStruct("BattleBusPOI");
@@ -785,84 +769,13 @@ namespace
             BotsLog("Error: registering a spawned bot failed");
     }
 
-    // Artemis AthenaNavSystem.cpp:5-9: let the navigation system create the missing nav data the
-    // client build doesn't load, so the bots can walk. The original returns the nav system.
-    void* CreateAndConfigureNavSystemDetour(UObject* Config, UObject* World)
-    {
-        if (GGate.load(std::memory_order_acquire) == (int)EGate::Active && IsLiveObject(Config) &&
-            Config->IsA(GLayout.NavConfigClass))
-        {
-            GetFromOffset<uint8>(Config, GLayout.NavConfigAutoSpawnByte) |= GLayout.NavConfigAutoSpawnMask;
-        }
-        return GCreateAndConfigureNavSystemOG(Config, World);
-    }
-
-    // Artemis FortAthenaAISpawnerDataComponent_AIBotCosmeticBase.cpp:5-11, which replaces the
-    // native version. Niobium calls the game's version first and only fills in one of the default
-    // outfits when bots are active and the game left the outfit empty; otherwise it is untouched.
-    void GetLoadoutDetour(UObject* Component, void* OutLoadout)
-    {
-        GGetLoadoutOG(Component, OutLoadout);
-        if (!OutLoadout || GGate.load(std::memory_order_acquire) != (int)EGate::Active)
-            return;
-        static std::vector<const UObject*> Characters;
-        static bool bLoaded = false;
-        if (!bLoaded)
-        {
-            bLoaded = true;
-            static const wchar_t* const Paths[] = {
-                L"/Game/Athena/Items/Cosmetics/Characters/CID_001_Athena_Commando_F_Default.CID_001_Athena_Commando_F_Default",
-                L"/Game/Athena/Items/Cosmetics/Characters/CID_002_Athena_Commando_F_Default.CID_002_Athena_Commando_F_Default",
-                L"/Game/Athena/Items/Cosmetics/Characters/CID_003_Athena_Commando_F_Default.CID_003_Athena_Commando_F_Default",
-                L"/Game/Athena/Items/Cosmetics/Characters/CID_004_Athena_Commando_F_Default.CID_004_Athena_Commando_F_Default",
-                L"/Game/Athena/Items/Cosmetics/Characters/CID_005_Athena_Commando_M_Default.CID_005_Athena_Commando_M_Default",
-                L"/Game/Athena/Items/Cosmetics/Characters/CID_006_Athena_Commando_M_Default.CID_006_Athena_Commando_M_Default",
-                L"/Game/Athena/Items/Cosmetics/Characters/CID_007_Athena_Commando_M_Default.CID_007_Athena_Commando_M_Default",
-                L"/Game/Athena/Items/Cosmetics/Characters/CID_008_Athena_Commando_M_Default.CID_008_Athena_Commando_M_Default",
-            };
-            auto CharacterClass = FindClass("AthenaCharacterItemDefinition");
-            for (auto Path : Paths)
-            {
-                if (auto Character = CharacterClass ? FindObject(Path, CharacterClass) : nullptr)
-                    Characters.push_back(Character);
-            }
-            BotsLog("%d default outfits for bots", (int)Characters.size());
-        }
-        auto& Character = GetFromOffset<const UObject*>(OutLoadout, GLayout.LoadoutCharacter);
-        if (!Character && !Characters.empty())
-            Character = Characters[(size_t)rand() % Characters.size()];
-    }
+    // CreateAndConfigureNavSystemDetour and GetLoadoutDetour (Artemis AthenaNavSystem.cpp:5-9,
+    // ..._AIBotCosmeticBase.cpp:5-11) live in the 19.10 AI base now (AIBase_19_10.cpp); they act
+    // for the bots once the gate below passed (AIBase1910::AddUser).
 
     // ------------------------------------------------------------------ Gate and hooks
 
-    bool CheckBuild(std::string& Why)
-    {
-        if (!VersionInfo.bExactBuildIdentity || VersionInfo.FortniteChangelist != kChangelist)
-        {
-            Why = "build CL " + std::to_string(VersionInfo.FortniteChangelist) +
-                (VersionInfo.bExactBuildIdentity ? "" : " (not read from the game)") +
-                ", bots need " + std::to_string(kChangelist);
-            return false;
-        }
-
-        wchar_t Path[MAX_PATH * 2] = {};
-        const DWORD Length = GetModuleFileNameW(nullptr, Path, (DWORD)(sizeof(Path) / sizeof(Path[0])));
-        WIN32_FILE_ATTRIBUTE_DATA Attributes{};
-        if (!Length || Length >= sizeof(Path) / sizeof(Path[0]) ||
-            !GetFileAttributesExW(Path, GetFileExInfoStandard, &Attributes))
-        {
-            Why = "the game file can't be checked";
-            return false;
-        }
-        const uint64_t Size = ((uint64_t)Attributes.nFileSizeHigh << 32) | Attributes.nFileSizeLow;
-        if (Size != kShippingExeSize)
-        {
-            Why = "the game file has " + std::to_string(Size) + " bytes, Epic's 19.10 file has " +
-                std::to_string(kShippingExeSize);
-            return false;
-        }
-        return true;
-    }
+    // CheckBuild moved to the 19.10 AI base (AIBase1910::CheckBuild, run by AIBase1910::Ensure).
 
     bool CheckCode(std::string& Why)
     {
@@ -880,7 +793,6 @@ namespace
             { kRva::OnPlayerBotSpawned, "OnPlayerBotSpawned" },
             { kRva::PlayerListFindOrAdd, "the team list lookup" },
             { kRva::PlayerListAdd, "the team list add" },
-            { kRva::CreateAndConfigureNavSystem, "CreateAndConfigureNavSystem" },
             { kRva::AIBotEnterAircraft, "EnterAircraft" },
         };
         for (const auto& Function : Functions)
@@ -888,9 +800,6 @@ namespace
             if (!CheckFunctionStart(Image, Function.Rva, Function.Name, Why))
                 return false;
         }
-        // The game's GetLoadout may be a small stub with no unwind entry (Artemis never calls it).
-        if (!CheckFunctionStart(Image, kRva::AIBotCosmeticGetLoadout, "GetLoadout", Why, true))
-            return false;
         if (!CheckLeaToFunction(Image, kRva::InitializeMMRInfosLea, Why))
             return false;
 
@@ -922,10 +831,6 @@ namespace
                 reinterpret_cast<void**>(&GWaitForMatchAssignmentReadyOG), "WaitForMatchAssignmentReady" },
             { kRva::OnPlayerBotSpawned, reinterpret_cast<void*>(OnPlayerBotSpawnedDetour),
                 reinterpret_cast<void**>(&GOnPlayerBotSpawnedOG), "OnPlayerBotSpawned" },
-            { kRva::CreateAndConfigureNavSystem, reinterpret_cast<void*>(CreateAndConfigureNavSystemDetour),
-                reinterpret_cast<void**>(&GCreateAndConfigureNavSystemOG), "CreateAndConfigureNavSystem" },
-            { kRva::AIBotCosmeticGetLoadout, reinterpret_cast<void*>(GetLoadoutDetour),
-                reinterpret_cast<void**>(&GGetLoadoutOG), "GetLoadout" },
         };
 
         std::vector<LPVOID> Created;
@@ -975,10 +880,12 @@ namespace
             return;
         }
 
+        // The shared 19.10 AI base: build check, nav and outfit hooks (its reasons carry the same
+        // "build doesn't match: " / "layout check failed: " / "code check failed: " prefixes).
         std::string Why;
-        if (!CheckBuild(Why))
+        if (!AIBase1910::Ensure(Why))
         {
-            Disable(kReasonWrongCopy, "build doesn't match: " + Why);
+            Disable(kReasonWrongCopy, Why);
             return;
         }
         if (!CheckLayouts(Why))
@@ -998,6 +905,7 @@ namespace
         }
 
         GGate.store((int)EGate::Active, std::memory_order_release);
+        AIBase1910::AddUser(AIBase1910::UserPlayerBots); // the base's nav and outfit hooks act for bots
         BotsLog("checks passed for 19.10 CL %llu, hooks installed; %d bots, ELO %d",
             (unsigned long long)kChangelist, ClampedBotCount(), ClampedTargetELO());
         // Still in the hook phase, before the map loads: no bot can possess a pawn yet. Needs the

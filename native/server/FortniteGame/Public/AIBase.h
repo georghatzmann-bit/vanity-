@@ -176,5 +176,8 @@ namespace AIBase
     //   - Living world must call it when it starts spawning, after LivingWorld::IsActive() turned
     //     true and before its first spawn request.
     // Logs "[AIBase] standalone check off" or why it was left alone.
-    void EnsureStandaloneCheckOff();
+    // Returns true when an AI may possess a pawn without closing the host: the build has no such
+    // check (before 17.00, 20.00 and later) or the check is off. False on 17.00-19.99 when it could
+    // not be switched off (or no AI feature is active yet): then no AI may be spawned.
+    bool EnsureStandaloneCheckOff();
 }
