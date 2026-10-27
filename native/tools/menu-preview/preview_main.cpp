@@ -13,6 +13,7 @@
 #if NIOBIUM_PREVIEW_TRICKSHOT
 #include "ATLAS/Public/NiobiumTrickshotTab.h"
 #endif
+#include "ATLAS/Public/RiftHostTab.h"
 
 void GUI_Init();
 void GUI_Render();
@@ -27,6 +28,7 @@ void Preview_SetSavedCommands(bool Filled);
 void Preview_SetRebinding(bool Rebinding);
 void Preview_SetEditRoutes(int EorStatus, int RorStatus, int PreStatus, int EorValue, int RorValue, int PreValue);
 void Preview_SetResetBuilds(bool On, int VK, int GameStatus, bool Rebinding, bool MouseError, bool GameConsoleOpen);
+void Preview_NextSession();
 
 #if NIOBIUM_PREVIEW_TRICKSHOT
 static bool g_PreviewInLobby = false;
@@ -60,6 +62,7 @@ int main(int Argc, char** Argv)
 #if NIOBIUM_PREVIEW_TRICKSHOT
     NiobiumTrickshotTab_SetParkourFile(ParkourFile);
     NiobiumTrickshotTab_SetLobbyCheck(&PreviewIsInLobby);
+    RiftHostTab_SetLobbyCheck(&PreviewIsInLobby);
 #endif
 
     SoftRaster Raster(W, H);
@@ -88,13 +91,16 @@ int main(int Argc, char** Argv)
     enum : int { BubbleOff = 0, BubbleWaiting = 1, BubbleActive = 2, BubbleUnavailable = 3, BubblePaused = 4 };
     enum : int { EditDefault = 0, EditHook, EditHookFailed, EditNative1910, EditNative2530, EditNativeStates };
     enum : int { ResetOff = 0, ResetReady, ResetRebind, ResetUnsupported, ResetNoKey, ResetMouseError, ResetChecking, ResetGameConsole };
+    // Host tab: what the server answered to "cheat hoststatus" (HostKeep = leave as it is,
+    // HostWaiting = no answer yet, as right after joining).
+    enum : int { HostKeep = 0, HostActive, HostPreBus, HostJoined, HostWaiting, HostOldVersion };
     struct Shot
     {
         const char* Name; int Tab; bool Menu; bool Console; bool Toast; float Scroll = -1.f;
         double Version = 0.0; const wchar_t* LauncherVersion = L""; bool Es31 = false;
         float SizeW = 0.f; float SizeH = 0.f; unsigned Extra = ExtraNone;
         int Bubble = BubbleOff; int MeshQuality = -1; int MeshLive = -2;
-        int Edit = EditDefault; int Reset = ResetOff;
+        int Edit = EditDefault; int Reset = ResetOff; int Host = HostKeep;
     };
 #if NIOBIUM_PREVIEW_TRICKSHOT
     const Shot Shots[] = {
@@ -117,49 +123,60 @@ int main(int Argc, char** Argv)
         { "f9-1i-main-editing-2530-native", 0, true, false, false, 0.f, 25.30, L"25.30", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditNative2530 },
         { "f9-1k-main-editing-2430-unavailable", 0, true, false, false, 0.f, 24.30, L"24.30", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditNativeStates },
         { "f9-1l-main-editing-1910-small", 0, true, false, false, 0.2f, 19.10, L"19.10", false, 500.f, 320.f, ExtraNone, BubbleOff, -1, -2, EditNative1910 },
-        { "f9-2-commands", 1, true, false, false },
-        { "f9-2b-commands-saved", 1, true, false, false, -1.f, 0.0, L"", false, 0.f, 0.f, ExtraSaved },
-        { "f9-3-options", 2, true, false, false, -1.f, 15.40, L"15.40", true },
-        { "f9-3b-options-bottom", 2, true, false, false, 1.f, 15.40, L"15.40", true, 0.f, 0.f, ExtraRebind },
-        { "f9-3c-options-bubble-off", 2, true, false, false, -1.f, 15.50, L"15.50", false },
-        { "f9-3d-options-bubble-experimental", 2, true, false, false, -1.f, 16.20, L"16.20", true },
-        { "f9-3e-options-bubble-unavailable", 2, true, false, false, -1.f, 12.41, L"12.41", false },
+        // Host tab (index 1): the host in a running match (top, middle, bottom), before the bus,
+        // a joined player, no answer yet, a pre-8.00 server (respawn fixed), the lobby, small window.
+        { "f9-h1-host", 1, true, false, false, -1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetOff, HostActive },
+        { "f9-h1b-host-middle", 1, true, false, false, 0.5f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetOff, HostKeep },
+        { "f9-h1c-host-bottom", 1, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetOff, HostKeep },
+        { "f9-h2-host-before-bus", 1, true, false, false, 0.f, 19.10, L"19.10", false, 580.f, 410.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetOff, HostPreBus },
+        { "f9-h3-host-joined-player", 1, true, false, false, -1.f, 19.10, L"19.10", false, 580.f, 410.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetOff, HostJoined },
+        { "f9-h4-host-waiting", 1, true, false, false, -1.f, 19.10, L"19.10", false, 580.f, 410.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetOff, HostWaiting },
+        { "f9-h5-host-lobby", 1, true, false, false, -1.f, 19.10, L"19.10", false, 580.f, 410.f, ExtraLobby, BubbleOff, -1, -2, EditDefault, ResetOff, HostWaiting },
+        { "f9-h6-host-rules-740", 1, true, false, false, 0.38f, 7.40, L"7.40", false, 580.f, 410.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetOff, HostOldVersion },
+        { "f9-h7-host-small", 1, true, false, false, 0.f, 19.10, L"19.10", false, 500.f, 320.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetOff, HostActive },
+        { "f9-2-commands", 3, true, false, false },
+        { "f9-2b-commands-saved", 3, true, false, false, -1.f, 0.0, L"", false, 0.f, 0.f, ExtraSaved },
+        { "f9-3-options", 4, true, false, false, -1.f, 15.40, L"15.40", true },
+        { "f9-3b-options-bottom", 4, true, false, false, 1.f, 15.40, L"15.40", true, 0.f, 0.f, ExtraRebind },
+        { "f9-3c-options-bubble-off", 4, true, false, false, -1.f, 15.50, L"15.50", false },
+        { "f9-3d-options-bubble-experimental", 4, true, false, false, -1.f, 16.20, L"16.20", true },
+        { "f9-3e-options-bubble-unavailable", 4, true, false, false, -1.f, 12.41, L"12.41", false },
         // 19.x (Chapter 3 Season 1, launcher level "lowMeshes"): on, on but Meshes High, off,
         // Meshes changed during the session (both ways), Meshes not readable.
-        { "f9-3f-options-bubble-19-on", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 0 },
-        { "f9-3g-options-bubble-19-meshes-high", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 1 },
-        { "f9-3h-options-bubble-19-off", 2, true, false, false, -1.f, 19.10, L"19.10", false },
-        { "f9-3i-options-bubble-19-meshes-now-low", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 1, 0 },
-        { "f9-3j-options-bubble-19-meshes-now-high", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 0, 1 },
-        { "f9-3k-options-bubble-19-meshes-unknown", 2, true, false, false, -1.f, 19.10, L"19.10", true },
+        { "f9-3f-options-bubble-19-on", 4, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 0 },
+        { "f9-3g-options-bubble-19-meshes-high", 4, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 1 },
+        { "f9-3h-options-bubble-19-off", 4, true, false, false, -1.f, 19.10, L"19.10", false },
+        { "f9-3i-options-bubble-19-meshes-now-low", 4, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 1, 0 },
+        { "f9-3j-options-bubble-19-meshes-now-high", 4, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 0, 1 },
+        { "f9-3k-options-bubble-19-meshes-unknown", 4, true, false, false, -1.f, 19.10, L"19.10", true },
         // 15.40-16.00 also need Meshes Low (same rows as 19.x).
-        { "f9-3p-options-bubble-1550-meshes-high", 2, true, false, false, -1.f, 15.50, L"15.50", true, 0.f, 0.f, ExtraNone, BubbleOff, 1 },
+        { "f9-3p-options-bubble-1550-meshes-high", 4, true, false, false, -1.f, 15.50, L"15.50", true, 0.f, 0.f, ExtraNone, BubbleOff, 1 },
         // Options > Reset builds: ready with a key, waiting for a new key, the mouse-button message,
         // no key yet, a server without it, checking, a version with Epic's own key, and Fortnite's
         // own console open (keys typed there don't count).
-        { "f9-3l-options-reset-builds-ready", 2, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetReady },
-        { "f9-3m-options-reset-builds-rebind", 2, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetRebind },
-        { "f9-3n-options-reset-builds-mouse", 2, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetMouseError },
-        { "f9-3o-options-reset-builds-nokey", 2, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetNoKey },
-        { "f9-3q-options-reset-builds-unsupported", 2, true, false, false, 1.f, 8.51, L"8.51", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetUnsupported },
-        { "f9-3r-options-reset-builds-checking-small", 2, true, false, false, 0.75f, 19.10, L"19.10", false, 500.f, 320.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetChecking },
-        { "f9-3s-options-reset-builds-epic-37", 2, true, false, false, 1.f, 37.00, L"37.00", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetReady },
-        { "f9-3t-options-reset-builds-game-console", 2, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetGameConsole },
-        { "f9-4-trickshot", 3, true, false, false },
-        { "f9-4b-trickshot-middle", 3, true, false, false, 0.5f },
-        { "f9-4c-trickshot-bottom", 3, true, false, false, 1.f },
-        { "f9-4d-trickshot-lobby", 3, true, false, false, 0.f, 0.0, L"", false, 580.f, 410.f, ExtraLobby },
-        { "f9-5-credits", 4, true, false, false },
+        { "f9-3l-options-reset-builds-ready", 4, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetReady },
+        { "f9-3m-options-reset-builds-rebind", 4, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetRebind },
+        { "f9-3n-options-reset-builds-mouse", 4, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetMouseError },
+        { "f9-3o-options-reset-builds-nokey", 4, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetNoKey },
+        { "f9-3q-options-reset-builds-unsupported", 4, true, false, false, 1.f, 8.51, L"8.51", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetUnsupported },
+        { "f9-3r-options-reset-builds-checking-small", 4, true, false, false, 0.75f, 19.10, L"19.10", false, 500.f, 320.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetChecking },
+        { "f9-3s-options-reset-builds-epic-37", 4, true, false, false, 1.f, 37.00, L"37.00", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetReady },
+        { "f9-3t-options-reset-builds-game-console", 4, true, false, false, 1.f, 19.10, L"19.10", false, 0.f, 0.f, ExtraNone, BubbleOff, -1, -2, EditDefault, ResetGameConsole },
+        { "f9-4-trickshot", 2, true, false, false },
+        { "f9-4b-trickshot-middle", 2, true, false, false, 0.5f },
+        { "f9-4c-trickshot-bottom", 2, true, false, false, 1.f },
+        { "f9-4d-trickshot-lobby", 2, true, false, false, 0.f, 0.0, L"", false, 580.f, 410.f, ExtraLobby },
+        { "f9-5-credits", 5, true, false, false },
         { "f9-6-console", 0, false, true, false },
         // Smallest window the menu allows (500 x 320) and its default size (580 x 410):
         // every text must still fit or wrap.
         { "f9-8-main-small", 0, true, false, false, -1.f, 0.0, L"", false, 500.f, 320.f },
-        { "f9-8b-options-small", 2, true, false, false, -1.f, 16.20, L"16.20", true, 500.f, 320.f },
-        { "f9-8g-options-bubble-19-meshes-high-small", 2, true, false, false, -1.f, 19.10, L"19.10", true, 500.f, 320.f, ExtraNone, BubbleOff, 1 },
-        { "f9-8c-commands-saved-small", 1, true, false, false, 1.f, 0.0, L"", false, 500.f, 320.f, ExtraSaved },
-        { "f9-8d-trickshot-default", 3, true, false, false, -1.f, 0.0, L"", false, 580.f, 410.f },
-        { "f9-8e-options-rebind-small", 2, true, false, false, 1.f, 15.40, L"15.40", true, 500.f, 320.f, ExtraRebind },
-        { "f9-8f-credits-small", 4, true, false, false, -1.f, 0.0, L"", false, 500.f, 320.f },
+        { "f9-8b-options-small", 4, true, false, false, -1.f, 16.20, L"16.20", true, 500.f, 320.f },
+        { "f9-8g-options-bubble-19-meshes-high-small", 4, true, false, false, -1.f, 19.10, L"19.10", true, 500.f, 320.f, ExtraNone, BubbleOff, 1 },
+        { "f9-8c-commands-saved-small", 3, true, false, false, 1.f, 0.0, L"", false, 500.f, 320.f, ExtraSaved },
+        { "f9-8d-trickshot-default", 2, true, false, false, -1.f, 0.0, L"", false, 580.f, 410.f },
+        { "f9-8e-options-rebind-small", 4, true, false, false, 1.f, 15.40, L"15.40", true, 500.f, 320.f, ExtraRebind },
+        { "f9-8f-credits-small", 5, true, false, false, -1.f, 0.0, L"", false, 500.f, 320.f },
         // Last, so the banner doesn't float over the other shots while it fades out.
         { "f9-7-trickshot-banner", 0, false, false, true },
     };
@@ -167,11 +184,11 @@ int main(int Argc, char** Argv)
     const Shot Shots[] = {
         { "f9-1-main", 0, true, false, false },
         { "f9-1c-main-bubble-look", 0, true, false, false, 0.42f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleActive },
-        { "f9-2-commands", 1, true, false, false },
-        { "f9-3-options", 2, true, false, false, -1.f, 15.40, L"15.40", true },
-        { "f9-3f-options-bubble-19-on", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 0 },
-        { "f9-3g-options-bubble-19-meshes-high", 2, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 1 },
-        { "f9-4-credits", 3, true, false, false },
+        { "f9-2-commands", 3, true, false, false },
+        { "f9-3-options", 4, true, false, false, -1.f, 15.40, L"15.40", true },
+        { "f9-3f-options-bubble-19-on", 4, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 0 },
+        { "f9-3g-options-bubble-19-meshes-high", 4, true, false, false, -1.f, 19.10, L"19.10", true, 0.f, 0.f, ExtraNone, BubbleOff, 1 },
+        { "f9-4-credits", 5, true, false, false },
         { "f9-5-console", 0, false, true, false },
     };
 #endif
@@ -212,6 +229,35 @@ int main(int Argc, char** Argv)
 #if NIOBIUM_PREVIEW_TRICKSHOT
         g_PreviewInLobby = (S.Extra & ExtraLobby) != 0;
 #endif
+        if (S.Host != HostKeep)
+        {
+            // Like a new match: the tab forgets the last answer, then gets this one.
+            Preview_NextSession();
+            const wchar_t* Answer = nullptr;
+            switch (S.Host)
+            {
+            case HostActive:
+                Answer = L"[Rift] HOSTSTATE v1 host=1 phase=3 lategame=1 respawn=0 respawnlive=1 ammo=1 mats=0 "
+                         L"storm=0 bots=2 botcount=30 living=1 livingmax=40 mark=1";
+                break;
+            case HostPreBus:
+                Answer = L"[Rift] HOSTSTATE v1 host=1 phase=2 lategame=0 respawn=1 respawnlive=1 ammo=0 mats=0 "
+                         L"storm=0 bots=0 botcount=30 living=0 livingmax=40 mark=0";
+                break;
+            case HostJoined:
+                Answer = L"[Rift] HOSTSTATE v1 host=0 phase=3 lategame=0 respawn=0 respawnlive=1 ammo=0 mats=0 "
+                         L"storm=0 bots=0 botcount=30 living=0 livingmax=40 mark=0";
+                break;
+            case HostOldVersion:
+                Answer = L"[Rift] HOSTSTATE v1 host=1 phase=3 lategame=0 respawn=0 respawnlive=0 ammo=1 mats=1 "
+                         L"storm=1 bots=0 botcount=30 living=0 livingmax=40 mark=2";
+                break;
+            default:
+                break;
+            }
+            if (Answer)
+                RiftHostTab_PushState(Answer, (int)wcslen(Answer));
+        }
         if (S.Console)
         {
             const wchar_t* Lines[] = {

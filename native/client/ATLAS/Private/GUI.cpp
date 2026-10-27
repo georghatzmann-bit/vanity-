@@ -12,6 +12,7 @@
 #include "../Public/Diagnostics.h"
 #include "../Public/Icon.h"
 #include "../Public/NiobiumTrickshotTab.h" // [Rift] Trickshot tab and trickshot banner
+#include "../Public/RiftHostTab.h" // [Rift] Host tab (everything the host controls during a match)
 #include "../Public/BubbleLook.h" // [Rift] Bubble look state (written by the game thread)
 #include "../Public/EditFeatureRoutes.h" // [Rift] EOR/ROR/pre-edits: hook or Fortnite's own setting
 #include "../Public/QuickReset.h" // [Rift] "Reset builds" key and status
@@ -1271,9 +1272,11 @@ static void SectionLabel(const char* label)
     drawList->AddRectFilled(
         pos, end,
         ImGui::GetColorU32(ImGuiCol_FrameBg), 4.f);
-    drawList->AddRectFilled(
-        pos, ImVec2(pos.x + 3.f, end.y),
-        ImGui::GetColorU32(Accent()), 4.f);
+    // [Rift] The bar on the left runs from brand violet into cyan (the rift light), in every tab.
+    drawList->AddRectFilledMultiColor(
+        ImVec2(pos.x, pos.y + 1.f), ImVec2(pos.x + 3.f, end.y - 1.f),
+        ImGui::GetColorU32(Accent()), ImGui::GetColorU32(Accent()),
+        ImGui::GetColorU32(AccentCyan(0.85f)), ImGui::GetColorU32(AccentCyan(0.85f)));
 
     ImGui::SetCursorScreenPos(ImVec2(
         pos.x + 12.f,
@@ -1784,6 +1787,18 @@ static bool LabeledCombo(
     return ImGui::Combo(
         id, value, items, itemCount);
 }
+
+// [Rift] One Rift menu: the sidebar order. Main and the host's match controls first, then the
+// trickshot tools, your own commands, the options and the credits. The tab id is the index.
+enum ERiftMenuTab : int
+{
+    TabMain = 0,
+    TabHost = 1,
+    TabTrickshot = 2,
+    TabCommands = 3,
+    TabOptions = 4,
+    TabCredits = 5,
+};
 
 static bool SidebarTab(const char* label, int index, float height)
 {
@@ -3664,6 +3679,12 @@ static bool NiobiumTabExec(const char* command)
     return true;
 }
 
+// [Rift] The Host tab's status question ("cheat hoststatus") every few seconds: no echo in the log.
+static bool RiftHostTabQuery(const char* command)
+{
+    return Exec(command);
+}
+
 void GUI_Init()
 {
     // [Rift] Never write imgui.ini into the game folder (the working directory of the game).
@@ -5503,16 +5524,34 @@ void GUI_Render()
         const float CloseX = W - CloseSize - 12.f;
         const float BadgeX = CloseX - 12.f - BadgeW;
 
-        ImGui::SameLine(PadL + LogoSize + 8.f);
+        ImGui::SameLine(PadL + LogoSize + 10.f);
         const float TitleY = (TopBarH - ImGui::GetTextLineHeight()) * 0.5f;
         ImGui::SetCursorPosY(TitleY);
-        ImGui::PushStyleColor(ImGuiCol_Text, AccentText()); // [Rift] name in violet-text
-        ImGui::TextUnformatted("Rift");
-        ImGui::PopStyleColor();
-        ImGui::SameLine(0.f, 6.f);
+        {
+            // [Rift] Wordmark "RIFT": wide letter spacing, slightly bold, in the brand's text
+            // gradient (text #F4F4F8 -> violet-text #C4B5FD -> cyan-text #67E8F9).
+            static const char* const kLetters[] = { "R", "I", "F", "T" };
+            static const ImVec4 kLetterColours[] = {
+                ImVec4(0.957f, 0.957f, 0.973f, 1.f), ImVec4(0.863f, 0.835f, 0.984f, 1.f),
+                ImVec4(0.769f, 0.710f, 0.992f, 1.f), ImVec4(0.404f, 0.910f, 0.976f, 1.f)
+            };
+            constexpr float LetterSpacing = 3.f;
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImVec2 start = ImGui::GetCursorScreenPos();
+            float x = start.x;
+            for (int i = 0; i < 4; ++i)
+            {
+                const ImU32 colour = ImGui::GetColorU32(kLetterColours[i]);
+                dl->AddText(ImVec2(x, start.y), colour, kLetters[i]);
+                dl->AddText(ImVec2(x + 1.f, start.y), colour, kLetters[i]);
+                x += ImGui::CalcTextSize(kLetters[i]).x + 1.f + LetterSpacing;
+            }
+            ImGui::Dummy(ImVec2(x - start.x - LetterSpacing, ImGui::GetTextLineHeight()));
+        }
+        ImGui::SameLine(0.f, 10.f);
         ImGui::SetCursorPosY(TitleY);
         ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumMutedText);
-        ImGui::TextUnformatted("| Menu"); // [Rift] was "| Console"
+        ImGui::TextUnformatted("Menu"); // [Rift] was "| Console", then "Rift | Menu"
         ImGui::PopStyleColor();
 
         // [Rift] The version only shows when it fits in front of the key badge
@@ -5554,18 +5593,20 @@ void GUI_Render()
     {
         ImDrawList* fdl = ImGui::GetWindowDrawList();
         const ImU32 line = IM_COL32(36, 36, 58, (int)(fade * 255.f)); // [Rift] border #24243A
-        fdl->AddLine(
+        // [Rift] The rule under the header runs from brand violet into cyan (decoration only).
+        fdl->AddRectFilledMultiColor(
             ImVec2(wp.x, wp.y + TopBarH - 1.f),
-            ImVec2(wp.x + W, wp.y + TopBarH - 1.f),
-            line, 1.f);
+            ImVec2(wp.x + W, wp.y + TopBarH),
+            ImGui::GetColorU32(Accent(0.85f)), ImGui::GetColorU32(AccentCyan(0.70f)),
+            ImGui::GetColorU32(AccentCyan(0.70f)), ImGui::GetColorU32(Accent(0.85f)));
         fdl->AddLine(ImVec2(wp.x + SidebarW, wp.y + TopBarH), ImVec2(wp.x + SidebarW, wp.y + H), line, 1.f);
     }
 
-    // [Rift] Extra "Trickshot" tab (index 3); "Credits" moved to index 4.
-    // The sidebar has room for 6 tabs (minimum height 320 px, 40 px each). Names must fit
-    // the 118 px sidebar. The tab id is the index.
+    // [Rift] One Rift menu (order: ERiftMenuTab). "Host" holds everything the host controls
+    // during a match (the server window is hidden now). The sidebar has room for 6 tabs (minimum
+    // height 320 px, 40 px each). Names must fit the 118 px sidebar. The tab id is the index.
     static const char* kTabs[] = {
-        "Main", "Commands", "Options", "Trickshot", "Credits"
+        "Main", "Host", "Trickshot", "Commands", "Options", "Credits"
     };
     const int kTabCount = (int)(sizeof(kTabs) / sizeof(kTabs[0]));
     const float TabH = 40.f;
@@ -5599,15 +5640,15 @@ void GUI_Render()
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
 
-    if (FGUI::ActiveTab != 1)
+    if (FGUI::ActiveTab != TabCommands)
         FinishSavedCommandEdit(false);
 
     const float ContentPadX = ContentHorizontalInset;
     const float ContentPadTop = 14.f;
-    const bool bCommandsTab = FGUI::ActiveTab == 1;
-    // [Rift] The Trickshot tab is always taller than the window: keep the scrollbar
+    const bool bCommandsTab = FGUI::ActiveTab == TabCommands;
+    // [Rift] The Trickshot and Host tabs are always taller than the window: keep the scrollbar
     // visible so the button widths don't jump.
-    const bool bTrickshotTab = FGUI::ActiveTab == 3;
+    const bool bTrickshotTab = FGUI::ActiveTab == TabTrickshot || FGUI::ActiveTab == TabHost;
     const float ContentChildW =
         (W - SidebarW) - ContentPadX;
     ImGui::SetCursorPos(ImVec2(SidebarW + ContentPadX, TopBarH + ContentPadTop));
@@ -5638,7 +5679,7 @@ void GUI_Render()
 
     switch (FGUI::ActiveTab)
     {
-    case 0: // main tab ([Rift] "Main": plain English texts with grey hints)
+    case TabMain: // main tab ([Rift] "Main": plain English texts with grey hints)
     {
         SectionLabel("Join a server");
         BeginSectionBody();
@@ -5843,7 +5884,7 @@ void GUI_Render()
         ImGui::Dummy(ImVec2(0.f, 8.f)); // [Rift] a little space below the last hint
         break;
     }
-    case 1: // Commands ([Rift] plain English texts with hints)
+    case TabCommands: // Commands ([Rift] plain English texts with hints)
     {
         SectionLabel("New command");
         BeginSectionBody();
@@ -6270,7 +6311,7 @@ void GUI_Render()
         ImGui::Dummy(ImVec2(0.f, 8.f)); // [Rift] a little space at the bottom
         break;
     }
-    case 2: // Config ([Rift] "Options": plain English texts with hints)
+    case TabOptions: // Config ([Rift] "Options": plain English texts with hints)
     {
     // [Rift] Read-only Bubble Builds status first: it is the setting people look up most.
     SectionLabel("Build look");
@@ -6489,7 +6530,24 @@ void GUI_Render()
         ImGui::Dummy(ImVec2(0.f, 8.f));
         break;
     }
-    case 3: // [Rift] Trickshot
+    case TabHost: // [Rift] Host: the match controls of the (hidden) server window
+    {
+        // The content lives in RiftHostTab.cpp; the helpers here are file-static and are passed
+        // in as pointers. Only the player at the server PC gets the controls (the server decides).
+        static const FRiftHostTabHost RiftHost = {
+            &NiobiumTabExec,
+            &RiftHostTabQuery,
+            &SectionLabel,
+            &BeginSectionBody,
+            &EndSectionBody,
+            &Accent,
+            &Client::GetConsoleSessionGeneration
+        };
+        RiftHostTab_Draw(RiftHost, CW);
+        ImGui::Dummy(ImVec2(0.f, 8.f));
+        break;
+    }
+    case TabTrickshot: // [Rift] Trickshot
     {
         // The content lives in NiobiumTrickshotTab.cpp; the helpers here are file-static and
         // are passed in as pointers.
@@ -6505,7 +6563,7 @@ void GUI_Render()
         ImGui::Dummy(ImVec2(0.f, 8.f));
         break;
     }
-    case 4: // Credits ([Rift] was index 3)
+    case TabCredits: // Credits
     {
         // [Rift] The credits themselves stay unchanged (license). Descriptions and the note
         // wrap so they are fully readable even in the smallest window.

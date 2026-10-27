@@ -17,6 +17,7 @@
 #include "../Public/PlaylistHudPatchPolicy.h"
 #include "../Public/TournamentRefreshPolicy.h"
 #include "../Public/NiobiumTrickshotTab.h" // [Rift] trickshot banner (NiobiumToast_Push)
+#include "../Public/RiftHostTab.h" // [Rift] F9 Host tab: the server's "[Rift] HOSTSTATE" answer
 #include "../Public/BubbleLook.h" // [Rift] Bubble look state shared with the menu
 #include "../Public/EditFeatureRoutes.h" // [Rift] EOR/ROR/pre-edits: hook or Fortnite's own setting
 #include "../Public/QuickReset.h" // [Rift] "Reset builds" (client half)
@@ -469,6 +470,12 @@ static void CaptureClientMessage(UObject* context, FFrame& stack, void* result)
 			// [Rift] Reset builds handshake ack ("nbedit:v1:a:<session16>", exact width).
 			if (copied && NiobiumQuickReset::HandleClientMessage(
 				messageCopy, length))
+			{
+				return;
+			}
+			// [Rift] The server's answer to the Host tab's "cheat hoststatus" ("[Rift] HOSTSTATE ...",
+			// every few seconds while the tab is open): private transport, kept out of the console.
+			if (copied && RiftHostTab_PushState(messageCopy, length))
 			{
 				return;
 			}
@@ -13369,6 +13376,7 @@ void Client::Init()
 	g_FrontendActive.store(false, std::memory_order_release);
 	// [Rift] The Trickshot tab shows a short hint while you are in the lobby.
 	NiobiumTrickshotTab_SetLobbyCheck(&Client::IsFrontendActive);
+	RiftHostTab_SetLobbyCheck(&Client::IsFrontendActive); // [Rift] same hint in the Host tab
 
 	if (VersionInfo.FortniteVersion < 24.30)
 	{

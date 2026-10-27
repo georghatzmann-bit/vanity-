@@ -14,7 +14,7 @@ enum class EConsoleMode : int
 
 struct FConfiguration
 {
-	static inline const char* ConsoleVersion = "Rift 0.1 (ATLAS Console v2.1.0)"; // [Rift] keeps the ATLAS credit
+	static inline const char* ConsoleVersion = "Rift 0.1"; // [Rift] the ATLAS credit stays in the Credits tab and README (LICENSE-ATLAS.txt rule 2)
 
 	static inline std::atomic_int ConsoleMode =
 		static_cast<int>(EConsoleMode::Atlas);

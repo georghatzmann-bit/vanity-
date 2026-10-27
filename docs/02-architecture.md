@@ -253,8 +253,10 @@ The UI shows seven steps: Backend, Server, Redirect, Login, Your game, Game serv
    [Match rules and AI bots](#match-rules-classic-match-and-ai-bots) and
    [Bosses & NPCs](#bosses--npcs-living-world-experimental)). The live log says "Connected to the
    server's control pipe – commands on, match settings sent", then the toast "The server is waiting for you".
-   You start the match on "Match Control" ("Start match") or with START SERVER in the server window. The
-   server loads the map only after that, so the bot and Bosses & NPCs settings arrive in time.
+   Last comes `bShowServerWindow` (the launcher setting "Show the server window (for troubleshooting)",
+   `niobium_core::bots::server_window_config`, see [Server window](#server-window-hidden)).
+   You start the match on "Match Control" ("Start match"). The server loads the map only after that, so
+   the bot and Bosses & NPCs settings arrive in time. In the match the host uses F9 → Host.
 7. **Lobby:** as soon as the server log says `IpNetDriver … listening on port` (wait up to 30 minutes),
    the toast "Server ready" appears. Press Play in the game.
 
@@ -370,7 +372,7 @@ Launcher → server:
 |---|---|
 | `{"id":1,"cmd":"exec","text":"startaircraft"}` | runs a cheat command in the game thread – as if the **player at the host PC** (connected through 127.0.0.1; otherwise the first connected player) had typed `cheat startaircraft` (a leading `cheat ` is removed). The same checks apply as in the game. `ok:true` only means "handed over"; what the command answers, that player sees in the game. If nobody is connected yet: `ok:false` with "Nobody is in the game yet. Join the match first, then try again." |
 | `{"id":2,"cmd":"config","key":"bInfiniteAmmo","value":true}` | sets a value of `FConfiguration` (keys below) |
-| `{"id":3,"cmd":"startmatch"}` | like START SERVER in the server window; if the server is already running: `ok:false` ("The server is already running.") |
+| `{"id":3,"cmd":"startmatch"}` | like START SERVER in the (hidden) server window; if the server is already running: `ok:false` ("The server is already running.") |
 | `{"id":4,"cmd":"status"}` | the server answers with `status` (with the same `id`) |
 
 Keys for `config` – exactly the ones `ApplyConfig` knows. Any other key → `ok:false` ("The server doesn't
@@ -395,6 +397,7 @@ know the setting "…"."), and the same for numbers out of range:
 | `SiphonAmount` | 0–200 |
 | `BotHealth` / `BotShield` | 1–1000 / 0–1000 – for target dummies (`bot <n>`) that appear after that |
 | `UseCustomBotNames`, `bAutoGodMode`, `bGliderRedeploy`, `bAutoStartEvent`, `bJoinInProgress` | true/false |
+| `bShowServerWindow` | true/false – shows or hides the (otherwise hidden) server window, see [Server window](#server-window-hidden). Server default: false. The launcher sends it after the match settings and again when the setting changes while a server is connected |
 | `bPlayerBots` | true/false – Fortnite's own AI bots, only on 19.10-CL-18675304 (see [AI bots](#ai-bots-1910-experimental)). Server default: false |
 | `PlayerBotCount` | number of AI bots. Not refused when out of range: clamped to 1–99. Server default: 30 |
 | `PlayerBotTargetELO` | skill rating of the AI bots. Clamped to 0–5000. Server default: 500 |
@@ -450,6 +453,68 @@ Everything the F9 menu and the launcher send goes through Magnesium's `ServerChe
 `bEnableCheats` is on – or when the player comes from the same PC (127.0.0.1) and the playlist isn't
 "Only Up". Otherwise it answers "Commands are currently disabled for this session." That's why the launcher
 turns `bEnableCheats` on (see above). It's your own server, so every player on it may send commands.
+
+The host is the player whose controller is a local player of the server, or who connected from
+127.0.0.1 (`IsCheatCommandHost`). Commands that change the match rules for everyone check this on top:
+`respawns` answers other players "[Rift] Only the host can change respawns." `hoststatus` is read-only and
+answered for everyone (also while commands are off), so the F9 Host tab can tell joined players apart.
+
+### Server window (hidden)
+
+The game server's own window (Magnesium's ImGui window, `native/server/Erbium/Private/GUI.cpp`
+`GUI::Init`) is still created, and its loop still runs every frame: it ticks the auto-host countdown
+(`AutoHosting::TickCountdown`), the post-match shutdown (`AutoHosting::TickPostMatchShutdown`), saves the
+auto-host settings and runs the per-frame code inside the UI (playlist sanitising, loadout picker). The
+game-thread work (`LivingWorld::GameThreadTick`, `PlayerBots1910::GameThreadTick`,
+`NiobiumControl::GameThreadTick`, …) runs from `GUI::SafeZoneMapGameTick` on the server's game thread
+(NetDriver tick), not from this window, so it is not affected.
+
+What changed: the window starts with `SW_HIDE` (no window, no taskbar button). A hidden window's
+`Present` doesn't wait for the screen, so the loop then sleeps to about 60 frames per second, and it never
+skips frames as "occluded" (only a shown window does that, as before). The window appears (with the old
+bring-to-front steps) when
+
+- the launcher sends `bShowServerWindow` = true – the setting **Settings → Game → "Show the server window
+  (for troubleshooting)"** (`Settings.show_server_window`, default off); turning it off hides it again, also
+  while a server runs, or
+- no launcher connected to the control pipe within 30 s after the window was created
+  (`NiobiumControl::HasLauncherConnected`) – a server started by hand would have no other way to start.
+
+Everything the host needs during a match is in the F9 menu's **Host** tab (see
+[In-game menu](#in-game-menu-client-dll)); playlist, Lategame, AI bots and Bosses & NPCs are set in the
+launcher profile / on Match Control before the match.
+
+### Host tab commands
+
+`native/client/ATLAS/Private/RiftHostTab.cpp` sends these as `cheat <command>` (each button shows "Sent: …"
+below its section, like the Trickshot tab):
+
+| Button / switch | Command |
+|---|---|
+| Start the bus (only while everyone waits on the island) | `startaircraft` |
+| Pause storm / Resume storm | `pausesafezone` / `resumesafezone` |
+| Skip to next zone / Start shrinking now | `skipsafezone` / `startshrinksafezone` |
+| Infinite ammo / Infinite materials (switches) | `infiniteammo on\|off` / `infinitemats on\|off` (new optional argument and answer; without it they still toggle) |
+| Respawn (switch; before 8.00 only before the match) | `respawns on\|off` (new, host only; off also clears storm/midzone respawns and keep inventory, like the server window) |
+| Pump shotgun, Assault rifle, Tactical shotgun, Sniper, Small shields, Bandages; item field + Give | `giveitem pump` / `scar` / `tac` / `bolt` / `minis` / `bandages`; `giveitem <name>` |
+| Ammo / Materials / Ammo, materials and traps | `giveammo` / `givemats` / `giveall` |
+| Heal me / Heal everyone | `regen` / `regenall` |
+| Teleport to my map marker (switch) | `mark` |
+| Teleport where I aim / Save this spot / Back to saved spot | `tp` / `s host o` / `w host` |
+| Place a dummy in front of me / Bring dummies to me / Remove all dummies | `targetbot` / `tpbot` / `delbot` |
+
+Read-only in the tab: the match phase, "Lategame: on/off" and the AI rows ("AI bots", "Bosses & NPCs")
+with "Change it / Set these in the launcher profile before the match." No kick, ban or other admin tools.
+
+While the tab is open it sends `cheat hoststatus` every 2.5 s (0.6 s after a change; every 10 s for a
+joined player; every 15 s after three unanswered questions – an older server answers an unknown command
+with its command list), without the "> command" echo. The server answers with one ClientMessage
+`[Rift] HOSTSTATE v1 host=1 phase=3 lategame=0 respawn=0 respawnlive=1 ammo=0 mats=0 storm=0 bots=0
+botcount=30 living=0 livingmax=40 mark=0` (`phase` = `EGSStatus`, `storm` 1 = paused, `bots`/`living`
+0 off / 1 on but not running / 2 running, `mark` 2 = not on this version). `Client.cpp` hands it to
+`RiftHostTab_PushState` and keeps it out of the console. Before any answer the tab says "Asking the
+server...", after 6 s "No answer from the server yet"; `host=0` → "Only the host can use this"; in the
+lobby a short hint. A new match (session generation) forgets the old answer.
 
 ## Rift commands in the game server (`parkour`, `targetbot`)
 
@@ -575,15 +640,19 @@ On/off: pipe key `bTrickshotDetection` (default: on; in the launcher "Match Cont
   presets" (command by command through the pipe).
 - Everything that touches game objects runs in the game thread. Own threads only put commands in a queue.
 - `imgui.ini` is never written (`io.IniFilename = nullptr`), so nothing lands in the game folder.
-- Window title "Rift | Menu", all texts in plain English (`native/client/ATLAS/Private/GUI.cpp`), brand
-  colours (violet accent `#7A3CFF`). Tabs:
+- Header: Rift logo, the "RIFT" wordmark (letter-spaced, text gradient `#F4F4F8` → `#C4B5FD` →
+  `#67E8F9`) and "Menu", a violet-to-cyan rule below it; section headers have a violet-to-cyan bar. All
+  texts in plain English (`native/client/ATLAS/Private/GUI.cpp`), brand colours (violet `#8B5CF6`, cyan
+  `#22D3EE` on `#07070C`). One menu for everything you control while playing; the sidebar order is
+  `ERiftMenuTab` in GUI.cpp. Tabs:
 
 | Tab | Contents |
 |---|---|
 | Main | Join a server, Editing (Edit on release, Reset on release, Disable pre-edits – every version), Graphics (Mobile Builds, Bubble look + Bubble strength, In-game fog, Simpler textures), Movement, Field of view, Respawn, Other |
+| Host | only for the host: Match (start the bus), Storm, Match rules, Items, Health, Teleport, Target dummies, AI status (`ATLAS/Private/RiftHostTab.cpp`, see [Host tab commands](#host-tab-commands)); joined players see "Only the host can use this" |
+| Trickshot | Rift: Load a parkour, Target bot, Gear, Practice (`ATLAS/Private/NiobiumTrickshotTab.cpp`) |
 | Commands | your own commands and command chains, each with its own key |
 | Options | Build look (Bubble Builds status), General (Which console?, Open the console with the … key, Remember my settings), Reset builds (switch, Reset builds key, status), Keys (Change menu key, Change join key, Reset everything) |
-| Trickshot | Rift: Load a parkour, Target bot, Gear, Practice (`ATLAS/Private/NiobiumTrickshotTab.cpp`) |
 | Credits | names Erbium and ATLAS Console; the licence line "Rift is based on ATLAS Console by cipherfps, ralz and contributors." |
 
 - Toggles a version doesn't have are hidden (see [Versions](#versions)).

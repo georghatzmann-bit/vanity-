@@ -115,6 +115,12 @@ export interface Settings {
   animatedBackground: boolean;
   /** Start the player's game in Performance Mode on versions that show the bubble build look. */
   bubbleBuilds: boolean;
+  /**
+   * "Show the server window (for troubleshooting)". The game server's own window is hidden; the
+   * host uses F9 > Host and Match Control. On = the server shows it (pipe key bShowServerWindow).
+   * Older saved settings don't have it (= off).
+   */
+  showServerWindow?: boolean;
   /** App version the user last saw (welcome / "What's new"). null or "" = never opened. */
   lastSeenVersion?: string | null;
 }
@@ -329,6 +335,7 @@ export const defaultSettings: Settings = {
   reduceMotion: false,
   animatedBackground: true,
   bubbleBuilds: false,
+  showServerWindow: false,
   lastSeenVersion: null,
 };
 

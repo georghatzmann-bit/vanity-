@@ -38,6 +38,9 @@ if [ -f "$C/ATLAS/Private/NiobiumTrickshotTab.cpp" ]; then
   TS=1; EXTRA="tab.obj"
   $CL $FL /utf-8 -I stubpch -I "$C/ATLAS/ImGui" -I "$C" -I "$C/third_party" -c "$C/ATLAS/Private/NiobiumTrickshotTab.cpp" /Fotab.obj
 fi
+# The Host tab (its own file, like the Trickshot tab).
+$CL $FL /utf-8 -I stubpch -I "$C/ATLAS/ImGui" -I "$C" -c "$C/ATLAS/Private/RiftHostTab.cpp" /Fohost.obj
+EXTRA="$EXTRA host.obj"
 $CL $FL -I stubpch -I "$C/ATLAS/ImGui" -I "$C" -I "$HERE" -DNIOBIUM_PREVIEW_TRICKSHOT=$TS -c "$HERE/preview_main.cpp" /Fomain.obj
 $CL $FL -I stubpch -I "$C/ATLAS/ImGui" -c "$HERE/softraster.cpp" /Foraster.obj
 for f in imgui imgui_draw imgui_widgets imgui_tables imgui_stdlib; do

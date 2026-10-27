@@ -136,5 +136,9 @@ void Preview_SetRebinding(bool Rebinding)
 bool ATLAS_PrepareReplicationForOpen(const char*, wchar_t*, unsigned __int64) { return true; }
 bool Client::HasReceivedServerCommandList() { return true; }
 bool Client::IsConsoleCaptureReady() { return true; }
-uint64_t Client::GetConsoleSessionGeneration() { return 1; }
+// The "match" the menu thinks it is in; Preview_NextSession starts a new one (the Host tab
+// forgets its last server answer, like after joining a new match).
+static uint64_t g_PreviewSession = 1;
+uint64_t Client::GetConsoleSessionGeneration() { return g_PreviewSession; }
+void Preview_NextSession() { ++g_PreviewSession; }
 uint64_t Client::GetWorldGeneration() { return 1; }

@@ -15,6 +15,10 @@ namespace NiobiumControl
     // Starts the pipe server on its own thread (once, from Main()). Without the launcher nothing happens.
     void Start();
 
+    // True once a launcher has connected to the pipe (stays true after it disconnects). Thread-safe.
+    // GUI.cpp shows the hidden server window when no launcher connected within 30 s.
+    bool HasLauncherConnected();
+
     // Call on the game thread: runs queued commands and sends a status every 2 s.
     void GameThreadTick();
 

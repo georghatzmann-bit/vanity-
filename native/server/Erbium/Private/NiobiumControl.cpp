@@ -32,6 +32,7 @@ namespace
     std::mutex GWriteMutex;
     HANDLE GPipe = INVALID_HANDLE_VALUE; // only touch while holding GWriteMutex
     std::atomic_bool GConnected{ false };
+    std::atomic_bool GEverConnected{ false }; // a launcher connected at least once since the start
     std::atomic_bool GStarted{ false };
     std::atomic_bool GReadySent{ false };
     ULONGLONG GLastStatusMs = 0;
@@ -458,6 +459,8 @@ namespace
         if (Key == "bGliderRedeploy") return SetBool(FConfiguration::bGliderRedeploy, Value, Error);
         if (Key == "bAutoStartEvent") return SetBool(FConfiguration::bAutoStartEvent, Value, Error);
         if (Key == "bJoinInProgress") return SetBool(FConfiguration::bJoinInProgress, Value, Error);
+        // Shows or hides the (otherwise hidden) server window; GUI.cpp applies it on its own thread.
+        if (Key == "bShowServerWindow") return SetBool(FConfiguration::bShowServerWindow, Value, Error);
 
         Error = "The server doesn't know the setting \"" + Key + "\".";
         return false;
@@ -582,6 +585,7 @@ namespace
                 GPipe = Pipe;
             }
             GConnected.store(true, std::memory_order_release);
+            GEverConnected.store(true, std::memory_order_release);
             SDK::DbgLog("[Rift] Launcher connected to the control pipe\n");
 
             {
@@ -641,6 +645,11 @@ namespace NiobiumControl
             CloseHandle(Thread);
         else
             SDK::DbgLog("[Rift] Could not start the pipe thread\n");
+    }
+
+    bool HasLauncherConnected()
+    {
+        return GEverConnected.load(std::memory_order_acquire);
     }
 
     void GameThreadTick()

@@ -94,14 +94,16 @@ Seitenleiste). Erwartete Reihenfolge:
       Das Server-Fortnite läuft **ohne Fenster** (`-nullrhi`). Du siehst es nur im Task-Manager.
 - [ ] Im Server-Log eine Zeile mit `ContinueLoggingIn`, markiert mit **„Logged in“** (Schritt *Login*).
       → Wenn stattdessen „Can't reach the backend“ oder „Build damaged“ kommt: Log an mich schicken.
-- [ ] Kurz danach: „rift_server.dll loaded“ und ein **neues Fenster „Magnesium (FN 19.10, UE 5.0)“**.
-      Das ist das Server-Fenster – es bleibt offen, solange der Server läuft. Nicht schließen.
+- [ ] Kurz danach: „rift_server.dll loaded“. **Es geht kein neues Fenster auf**: Das eigene Fenster des
+      Game-Servers ist jetzt versteckt. Du steuerst das Match über **Match Control** und im Spiel mit
+      **F9 → Host** (Schritt 5). Nur wenn **Settings → Game → „Show the server window (for
+      troubleshooting)“** an ist, erscheint ein Fenster „Magnesium (FN 19.10, UE 5.0)“ (nicht schließen,
+      das beendet den Server).
 - [ ] Gleichzeitig startet **dein Spiel** („Starting your game: …“, Schritt *Your game*) – ein normaler
       Fortnite-Start bis in die Lobby. Melde dich nicht an, es gibt kein Login: Rift meldet dich mit dem
       Spielernamen aus deinem Profil an.
-- [ ] Kurz nach dem Server-Fenster erscheint die Meldung **„The server is waiting for you“** (die
-      Steuer-Pipe steht). Jetzt im Launcher **Match Control** → Reiter **Game** → **Start match** drücken –
-      oder im Server-Fenster unten links **START SERVER**.
+- [ ] Kurz danach erscheint die Meldung **„The server is waiting for you“** (die Steuer-Pipe steht).
+      Jetzt im Launcher **Match Control** → Reiter **Game** → **Start match** drücken.
       Wenn du willst, vorher auf derselben Seite unter „Game mode“ „Mode“ und „Lategame“ einstellen – das
       geht nur vor dem Start.
 - [ ] Nach 1–3 Minuten (Karte lädt): Das Server-Log zeigt `IpNetDriver listening on port 7777`, und die
@@ -125,27 +127,46 @@ anschauen. Dort steht in einfachen Worten, was passiert ist.
 Falls das Spiel keine Verbindung zum Server bekommt: War „Server ready“ schon da? Wenn nicht, warten und
 nochmal Play drücken.
 
-## Schritt 5 – Server-Fenster (Magnesium) kennenlernen
+## Schritt 5 – Host-Steuerung im Spiel (F9 → Host)
 
-Vieles geht auch im Launcher: Seite **Match Control** (Modus, Lategame, Bus, Sturm, Items, Trickshot,
-Target dummies).
-Das Server-Fenster kann mehr (seine Texte kommen von Magnesium):
+Alles, was du beim Spielen steuerst, steckt jetzt in dem einen Rift-Menü. Modus, Lategame, KI-Bots und
+Bosses & NPCs stellst du vor dem Match im Launcher-Profil bzw. auf **Match Control** ein.
 
-- [ ] **Playlist**: Knöpfe wie „Solos“, „Duos“, „Tournament Solos“ (Arena), „Zero Build …“. Vor dem Start
-      wählen, dann das Match starten.
-- [ ] **Late Game** anhaken → Lategame-Modus (Ausrüstung, kleine Zone).
-- [ ] **Bots**: Anzahl eintragen und spawnen; „Use Custom Bot Names“ für eigene Namen.
-- [ ] **Trickshot**: „Enable Trickshot Tab“ anhaken → ein neuer Reiter mit Wegpunkten, Zeitlupe („Toggle
-      Crown Slomo“), „Negate Velocity on Win“, „Auto Reload on Waypoint TP“ und mehr.
-- [ ] **Praktisch zum Testen**: „Infinite Materials“, „Infinite Ammo“, „Infinite Respawns“, „Siphon“.
-- [ ] „Save Settings“ anhaken → die Einstellungen landen in `%LOCALAPPDATA%\Rift\server\`.
+- [ ] Im Match **F9** → Reiter **Host**. Kurz steht dort „Asking the server...“, dann erscheinen die
+      Abschnitte **Match**, **Storm**, **Match rules**, **Items**, **Health**, **Teleport**, **Target
+      dummies** und **AI**.
+- [ ] **Match**: Auf der Insel vor dem Bus steht „Everyone is on the island – the bus hasn't left yet.“
+      (oranger Punkt) → **Start the bus** → alle sitzen im Bus. Danach: „The match is running.“ (grüner
+      Punkt), der Knopf ist grau.
+- [ ] **Storm** (nach dem Bus): **Pause storm** → der Sturm bleibt stehen, der Knopf heißt jetzt „Resume
+      storm“ → drücken → er läuft weiter. **Skip to next zone** → der Kreis schließt sofort. **Start
+      shrinking now** → der Sturm zieht los.
+- [ ] **Match rules**: **Infinite ammo** anhaken → ein ganzes Magazin verschießen, es wird nicht weniger.
+      Haken weg → es wird wieder weniger. Genauso **Infinite materials** (bauen). **Respawn** an → dich
+      eliminieren lassen → du kommst zurück. „Lategame: on/off“ zeigt nur die Profil-Einstellung („Change
+      it in the launcher profile before the match.“).
+- [ ] **Items**: **Pump shotgun**, **Assault rifle**, … geben jeweils dieses Item; `scar` ins Feld tippen
+      → **Give**. **Ammo**, **Materials**, **Ammo, materials and traps** füllen dein Inventar.
+- [ ] **Health**: etwas Schaden nehmen → **Heal me** → volles Leben und Schild. **Heal everyone** macht
+      das für alle Spieler.
+- [ ] **Teleport**: **Teleport to my map marker** anhaken → Markierung auf der Karte setzen → du landest
+      dort. **Teleport where I aim**, **Save this spot** → weglaufen → **Back to saved spot**.
+- [ ] **Target dummies**: **Place a dummy in front of me** → ein Bot steht 30 m vor dir; **Bring dummies
+      to me**, **Remove all dummies**.
+- [ ] **AI**: zeigt „AI bots: on – 30 bots“ oder „off“ und den Zustand von Bosses & NPCs wie im Profil.
+- [ ] Ein Freund, der deinem Server beigetreten ist, öffnet F9 → **Host** → „Only the host can use this“.
+      Die anderen Reiter gehen bei ihm wie vorher.
+- [ ] Nur zur Fehlersuche: **Settings → Game → „Show the server window (for troubleshooting)“** an → das
+      Server-Fenster erscheint (sofort, wenn ein Server läuft). Aus → es verschwindet wieder. Normalerweise
+      aus lassen.
 
 ## Schritt 6 – Ingame-Menü (F9)
 
 Ob die DLL geladen ist, siehst du im Live Log: „rift_client.dll loaded“ (Quelle **Game**).
 
-- [ ] Im Spiel **F9** drücken → das Menü „Rift | Menu“ geht auf, die Maus ist frei.
-      Links stehen fünf Reiter: **Main**, **Commands**, **Options**, **Trickshot**, **Credits**.
+- [ ] Im Spiel **F9** drücken → das Menü geht auf (oben: Rift-Logo, **RIFT** Menu), die Maus ist frei.
+      Links stehen sechs Reiter: **Main**, **Host**, **Trickshot**, **Commands**, **Options**, **Credits**.
+      Abschnitts-Überschriften, Knöpfe und Schalter sehen in jedem Reiter gleich aus.
       Alles ist auf Englisch.
 - [ ] Reiter **Main** → „Editing“: Auf jeder Version stehen dort alle drei Zeilen – „Edit on release“,
       „Reset on release“, „Disable pre-edits“. Jede an- und ausschalten und beim Bearbeiten prüfen.
@@ -173,7 +194,8 @@ Ob die DLL geladen ist, siehst du im Live Log: „rift_client.dll loaded“ (Que
       - Wenn du gerade ein Teil bearbeitest und die Reset-builds-Taste drückst: Nichts Komisches passiert,
         dein Edit läuft einfach weiter.
       - Aus großer Entfernung (mehr als etwa 20 m) probieren: Es passiert nichts.
-      - Im Server-Fenster „Allow Reset Builds Key“ ausschalten → ein neues Match starten → der Status sagt
+      - Settings → „Show the server window (for troubleshooting)“ an, dann im Server-Fenster „Allow Reset
+        Builds Key“ ausschalten → ein neues Match starten → der Status sagt
         „This server can't do it. It needs a Rift server.“
       - Wenn etwas nicht stimmt: die Zeilen mit `[reset-builds]` aus der `stdout.log` des Servers.
 - [ ] Reiter **Trickshot**: Er hat vier Bereiche.
@@ -307,7 +329,7 @@ gehen auf jeder Version, sofort.
 
 ## Schritt 9 – Beenden
 
-- [ ] Home → **Stop all** → Spiel, Server-Fortnite, Server-Fenster und Backend sind weg (Task-Manager: kein
+- [ ] Home → **Stop all** → Spiel, Server-Fortnite (samt Fenster, falls eingeblendet) und Backend sind weg (Task-Manager: kein
       `FortniteClient-Win64-Shipping.exe`, kein `node.exe` von Rift).
 - [ ] Schau im Task-Manager auch nach `FortniteLauncher.exe` und `FortniteClient-Win64-Shipping_EAC.exe`.
       Wenn die noch da sind (angehalten), sag mir bitte Bescheid.
@@ -547,7 +569,7 @@ hast, testest du genauso.
 ## Was ich brauche, wenn etwas nicht klappt
 
 1. **Welcher Schritt** aus dieser Liste (z. B. „Schritt 3, ‚Logged in‘ kommt nicht“).
-2. **Screenshot** vom Launcher (Launch steps + Live Log) und ggf. vom Spiel oder Server-Fenster.
+2. **Screenshot** vom Launcher (Launch steps + Live Log) und ggf. vom Spiel (F9-Menü).
 3. **Logs**: Seite **Live Log** → **Copy** (oder die Dateien aus `%LOCALAPPDATA%\Rift\logs\`; der Knopf
    **Folder** öffnet den Ordner).
 4. Bei einem Fortnite-Absturz: Seite **Crash Analysis** → den neuesten Eintrag → **Copy report**.

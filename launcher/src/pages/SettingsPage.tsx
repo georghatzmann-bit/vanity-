@@ -122,6 +122,17 @@ export function SettingsPage() {
         <SettingRow label="Server with no graphics" hint="The server Fortnite runs without a window and saves performance" htmlFor="set-headless">
           <Switch id="set-headless" checked={settings.headlessServer} onCheckedChange={(v) => update({ headlessServer: v })} />
         </SettingRow>
+        <SettingRow
+          label="Show the server window (for troubleshooting)"
+          hint="Normally hidden: you control the match in the game (F9 → Host) and on Match Control. Only turn this on if something doesn't work"
+          htmlFor="set-server-window"
+        >
+          <Switch
+            id="set-server-window"
+            checked={settings.showServerWindow ?? false}
+            onCheckedChange={(v) => update({ showServerWindow: v })}
+          />
+        </SettingRow>
       </div>
     </Panel>
   );

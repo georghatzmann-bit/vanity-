@@ -127,6 +127,12 @@ pub struct Settings {
     /// Chapter 2 "bubble wrap" build look (see `launchargs::BubbleSupport`). Applies on next launch.
     #[serde(default)]
     pub bubble_builds: bool,
+    /// "Show the server window (for troubleshooting)". The game server's own window (Magnesium) is
+    /// hidden: the host controls the match in the F9 menu ("Host" tab) and on Match Control. On =
+    /// the launcher sends `bShowServerWindow` = true over the control pipe and the window appears
+    /// (see `bots::server_window_config`). Off by default.
+    #[serde(default)]
+    pub show_server_window: bool,
     /// App version the user last saw (first-run welcome / "What's new"). `None` = never opened.
     #[serde(default)]
     pub last_seen_version: Option<String>,
@@ -169,6 +175,7 @@ impl Default for Settings {
             reduce_motion: false,
             animated_background: true,
             bubble_builds: false,
+            show_server_window: false,
             last_seen_version: None,
         }
     }

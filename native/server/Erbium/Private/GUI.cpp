@@ -9218,17 +9218,39 @@ void GUI::Init()
     g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_mainRenderTargetView);
     pBackBuffer->Release();
 
-    ShowWindow(hWnd, SW_SHOWDEFAULT);
-    UpdateWindow(hWnd);
-    DWORD dwMyID = ::GetCurrentThreadId();
-    DWORD dwCurID = ::GetWindowThreadProcessId(hWnd, NULL);
-    AttachThreadInput(dwCurID, dwMyID, TRUE);
-    SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
-    SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
-    SetForegroundWindow(hWnd);
-    SetFocus(hWnd);
-    SetActiveWindow(hWnd);
-    AttachThreadInput(dwCurID, dwMyID, FALSE);
+    // NIOBIUM: the window is created and runs exactly as before (the loop below ticks the auto-host
+    // countdown, the post-match shutdown and the per-frame work inside the UI code), but it stays
+    // hidden: no window, no taskbar button. The host controls the match in the F9 menu ("Host" tab)
+    // and on the launcher's Match Control page. It shows (with the old bring-to-front steps) when
+    // the launcher sends bShowServerWindow = true ("Show the server window (for troubleshooting)")
+    // or when no launcher connected to the control pipe within 30 s (server started by hand).
+    ShowWindow(hWnd, SW_HIDE);
+    bool bServerWindowShown = false;
+    const ULONGLONG ServerWindowCreatedAt = GetTickCount64();
+    const auto ApplyServerWindowVisibility = [&]()
+    {
+        const bool bWantShown = FConfiguration::bShowServerWindow.load(std::memory_order_acquire) ||
+            (!NiobiumControl::HasLauncherConnected() && GetTickCount64() - ServerWindowCreatedAt >= 30000);
+        if (bWantShown == bServerWindowShown)
+            return;
+        bServerWindowShown = bWantShown;
+        if (!bWantShown)
+        {
+            ShowWindow(hWnd, SW_HIDE);
+            return;
+        }
+        ShowWindow(hWnd, SW_SHOWNORMAL);
+        UpdateWindow(hWnd);
+        DWORD dwMyID = ::GetCurrentThreadId();
+        DWORD dwCurID = ::GetWindowThreadProcessId(hWnd, NULL);
+        AttachThreadInput(dwCurID, dwMyID, TRUE);
+        SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+        SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
+        SetForegroundWindow(hWnd);
+        SetFocus(hWnd);
+        SetActiveWindow(hWnd);
+        AttachThreadInput(dwCurID, dwMyID, FALSE);
+    };
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -9322,6 +9344,10 @@ void GUI::Init()
         if (done)
             break;
 
+        // NIOBIUM: hidden server window - show/hide it when the setting changes (see above).
+        const ULONGLONG ServerFrameStart = GetTickCount64();
+        ApplyServerWindowVisibility();
+
         std::string SafeZoneAutoHostError;
         const bool bSafeZoneAutoHostValid = ValidateCustomMovingZoneForStart(SafeZoneAutoHostError);
         if (!bSafeZoneAutoHostValid)
@@ -9347,7 +9373,10 @@ void GUI::Init()
         const int AutoHostCountdownSecondsThisFrame = bAutoHostCountdownThisFrame
                 ? AutoHosting::GetRemainingSeconds() : 0;
 
-        if (g_SwapChainOccluded && g_pSwapChain->Present(0, DXGI_PRESENT_TEST) == DXGI_STATUS_OCCLUDED)
+        // NIOBIUM: only a shown window skips frames while it is covered or minimised. A hidden
+        // window keeps running every frame (paced below), so nothing in the UI code stops.
+        if (bServerWindowShown && g_SwapChainOccluded &&
+            g_pSwapChain->Present(0, DXGI_PRESENT_TEST) == DXGI_STATUS_OCCLUDED)
         {
             Sleep(10);
             continue;
@@ -13394,6 +13423,15 @@ void GUI::Init()
 
         HRESULT hr = g_pSwapChain->Present(1, 0);
         g_SwapChainOccluded = (hr == DXGI_STATUS_OCCLUDED);
+
+        // NIOBIUM: Present doesn't wait for the screen while the window is hidden; keep the loop at
+        // about 60 frames per second, like a shown window.
+        if (!bServerWindowShown)
+        {
+            const ULONGLONG FrameTime = GetTickCount64() - ServerFrameStart;
+            if (FrameTime < 16)
+                Sleep(static_cast<DWORD>(16 - FrameTime));
+        }
     }
 
     AutoHosting::SaveNow(false);

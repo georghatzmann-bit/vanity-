@@ -31,6 +31,7 @@
 #include "../Public/CustomSafeZoneRuntime.h"
 #include <Erbium/Public/NiobiumParkour.h> // NIOBIUM: parkour/targetbot + trickshot detection
 #include "../Public/PlayerBots_19_10.h" // NIOBIUM: 19.10 AI player bots (bus jump)
+#include "../Public/LivingWorld.h" // NIOBIUM: "Bosses & NPCs" state for the F9 Host tab (cheat hoststatus)
 
 #include <d3d11.h>
 #include <sstream>
@@ -19377,6 +19378,51 @@ struct FScopedSyntheticRpcValidation
     }
 };
 
+// NIOBIUM: "on"/"off" argument of the Host tab commands (cheat respawns on, cheat infiniteammo off).
+// 1 = on, 0 = off, -1 = something else.
+static int ParseOnOffArgument(const char* Argument)
+{
+    if (!Argument)
+        return -1;
+    const std::string Value(Argument);
+    if (Value == "on" || Value == "1" || Value == "true")
+        return 1;
+    if (Value == "off" || Value == "0" || Value == "false")
+        return 0;
+    return -1;
+}
+
+// NIOBIUM: "cheat hoststatus" - the F9 menu's Host tab asks for this every few seconds while it is
+// open. One line with a fixed prefix; the Rift client reads it and keeps it out of the console
+// (Client.cpp, RiftHostTab_PushState). Read-only: anyone may ask, only "host=1" unlocks the tab.
+// Fields: host (this player sits at the server PC), phase (EGSStatus), lategame, respawn,
+// respawnlive (respawns can be changed right now), ammo, mats (infinite), storm (1 = paused),
+// bots / living (0 off, 1 on but not running, 2 running) with botcount / livingmax, mark (marker
+// teleport for this player: 0 off, 1 on, 2 not on this version).
+static void SendHostState(AFortPlayerControllerAthena* PlayerController)
+{
+    const int Phase = static_cast<int>(GUI::gsStatus.load(std::memory_order_acquire));
+    const bool bRespawnLive = VersionInfo.FortniteVersion >= 8.00 || Phase < static_cast<int>(Joinable);
+    const int Bots = !FConfiguration::bPlayerBots.load(std::memory_order_acquire) ? 0
+        : (PlayerBots1910::IsActive() ? 2 : 1);
+    const int Living = !FConfiguration::bLivingWorld.load(std::memory_order_acquire) ? 0
+        : (LivingWorld::IsActive() ? 2 : 1);
+    const int Mark = !ServerAddMapMarkerOG ? 2 : (MarkToTeleportPlayers.count(PlayerController) ? 1 : 0);
+
+    wchar_t Line[320];
+    swprintf_s(Line, L"[Rift] HOSTSTATE v1 host=%d phase=%d lategame=%d respawn=%d respawnlive=%d "
+        L"ammo=%d mats=%d storm=%d bots=%d botcount=%d living=%d livingmax=%d mark=%d",
+        IsCheatCommandHost(PlayerController) ? 1 : 0, Phase,
+        FConfiguration::bLateGame.load(std::memory_order_acquire) ? 1 : 0,
+        FConfiguration::bForceRespawns.load(std::memory_order_acquire) ? 1 : 0, bRespawnLive ? 1 : 0,
+        FConfiguration::bInfiniteAmmo.load(std::memory_order_acquire) ? 1 : 0,
+        FConfiguration::bInfiniteMats.load(std::memory_order_acquire) ? 1 : 0,
+        UFortGameStateComponent_BattleRoyaleGamePhaseLogic::GetSafeZonePausedSnapshot() ? 1 : 0,
+        Bots, FConfiguration::PlayerBotCount.load(std::memory_order_acquire),
+        Living, FConfiguration::LivingWorldMaxAI.load(std::memory_order_acquire), Mark);
+    PlayerController->ClientMessage(FString(Line), FName(), 1.f);
+}
+
 void AFortPlayerControllerAthena::ServerCheat(UObject* Context, FFrame& Stack)
 {
     FString Msg;
@@ -19435,8 +19481,8 @@ cheat resumesafezone - Resumes the storm
 cheat pausesafezone - Pauses the storm
 cheat skipsafezone - Skips to the next safe zone
 cheat startshrinksafezone - Starts shrinking the safe zone
-cheat infiniteammo - Toggles infinite ammo
-cheat infinitemats - Toggles infinite materials
+cheat infiniteammo [on | off] - Toggles infinite ammo
+cheat infinitemats [on | off] - Toggles infinite materials
 cheat serversendmessage - Broadcasts a message to all clients in the game
 cheat fly <speed> - Toggles fly mode (with optional speed value)
 cheat ghost <speed> - Toggles no-clip flying (with optional speed value)
@@ -19502,12 +19548,20 @@ cheat spawn <class/path> <s[size] | s[X,Y,Z]> <h[meters]> - Spawns an actor at y
 cheat shortcmds <items/objects> - Lists all short names for cheat give/spawn
 cheat parkour <id | retry | clear | sniper | list> - Trickshot parkour: build, back to start, remove all, sniper, list
 cheat targetbot <hp> <m> - A standing target bot in front of you (default: 50 HP, 30 m)
+cheat respawns [on | off] - Turns respawns on or off (host only)
 )"), FName(), 1);
     }
     else
     {
         auto& command = args[0];
         std::transform(command.begin(), command.end(), command.begin(), tolower);
+        // NIOBIUM: state for the F9 Host tab, answered even while commands are off (read-only).
+        // Before the log line: the tab asks every few seconds while it is open.
+        if (command == "hoststatus")
+        {
+            SendHostState(PlayerController);
+            return;
+        }
         SDK::DbgLog("[Cheat] command received controller=%p command=%s version=%.2f\n",
             (void*)PlayerController, command.c_str(), VersionInfo.FortniteVersion);
 
@@ -19713,10 +19767,26 @@ cheat targetbot <hp> <m> - A standing target bot in front of you (default: 50 HP
                             : L"Unable to eliminate player."), FName(), 1.f);
                 }
             }
-            else if (command == "infiniteammo")
-                FConfiguration::bInfiniteAmmo.store(!FConfiguration::bInfiniteAmmo.load());
-            else if (command == "infinitemats")
-                FConfiguration::bInfiniteMats.store(!FConfiguration::bInfiniteMats.load());
+            // NIOBIUM: optional "on"/"off" (the F9 Host tab sends it) and a short answer; without an
+            // argument it still toggles, as before.
+            else if (command == "infiniteammo" || command == "infinitemats")
+            {
+                const bool bAmmo = command == "infiniteammo";
+                std::atomic_bool& Setting = bAmmo ? FConfiguration::bInfiniteAmmo : FConfiguration::bInfiniteMats;
+                const int Wanted = args.size() >= 2 ? ParseOnOffArgument(args[1].c_str()) : -2;
+                if (Wanted == -1)
+                {
+                    PlayerController->ClientMessage(FString(bAmmo ? L"Usage: cheat infiniteammo [on | off]"
+                        : L"Usage: cheat infinitemats [on | off]"), FName(), 1.f);
+                    return;
+                }
+                const bool bOn = Wanted == -2 ? !Setting.load() : Wanted == 1;
+                Setting.store(bOn);
+                PlayerController->ClientMessage(FString(bAmmo
+                    ? (bOn ? L"[Rift] Infinite ammo is on." : L"[Rift] Infinite ammo is off.")
+                    : (bOn ? L"[Rift] Infinite materials are on." : L"[Rift] Infinite materials are off.")),
+                    FName(), 1.f);
+            }
             else if (command == "demospeed")
             {
                 if (args.size() != 2)
@@ -24039,6 +24109,41 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                 if (!category.empty() && category != "items" && category != "objects")
                     PlayerController->ClientMessage(
                         FString(L"Usage: cheat shortcmds <items/objects>"), FName(), 1.f);
+            }
+            // NIOBIUM: respawns on/off during the match (F9 Host tab), like "Infinite Respawns" in the
+            // server window. Host only. Before 8.00 only before the match (as the window allowed).
+            else if (command == "respawns")
+            {
+                if (!IsCheatCommandHost(PlayerController))
+                {
+                    PlayerController->ClientMessage(FString(L"[Rift] Only the host can change respawns."),
+                        FName(), 1.f);
+                    return;
+                }
+                const int Wanted = args.size() >= 2 ? ParseOnOffArgument(args[1].c_str()) : -2;
+                if (Wanted == -1)
+                {
+                    PlayerController->ClientMessage(FString(L"Usage: cheat respawns [on | off]"), FName(), 1.f);
+                    return;
+                }
+                if (VersionInfo.FortniteVersion < 8.00 &&
+                    GUI::gsStatus.load(std::memory_order_acquire) >= Joinable)
+                {
+                    PlayerController->ClientMessage(FString(L"[Rift] On this version respawns can only be "
+                        L"changed before the match."), FName(), 1.f);
+                    return;
+                }
+                const bool bOn = Wanted == -2 ? !FConfiguration::bForceRespawns.load() : Wanted == 1;
+                FConfiguration::bForceRespawns.store(bOn);
+                if (!bOn)
+                {
+                    // Same as switching "Infinite Respawns" off in the server window.
+                    FConfiguration::PermanentRespawn.store(false);
+                    FConfiguration::bKeepInventory.store(false);
+                    FConfiguration::bMidZoneRespawning.store(false);
+                }
+                PlayerController->ClientMessage(FString(bOn ? L"[Rift] Respawns are on."
+                    : L"[Rift] Respawns are off."), FName(), 1.f);
             }
             // NIOBIUM: trickshot parkours and target bots (Erbium/Private/NiobiumParkour.cpp).
             else if (command == "parkour" || command == "targetbot")

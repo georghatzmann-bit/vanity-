@@ -7,7 +7,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-use crate::profiles::Profile;
+use crate::profiles::{Profile, Settings};
 
 /// How good the bots are. Saved in the profile as "easy" / "normal" / "hard".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
@@ -116,6 +116,17 @@ pub fn server_config_for(profile: &Profile) -> Vec<(&'static str, Value)> {
     out
 }
 
+/// Pipe key of the launcher setting "Show the server window (for troubleshooting)". The server
+/// creates its window hidden (native/server/Erbium/Private/GUI.cpp); `true` shows it, `false` hides it
+/// again. A server that no launcher reached within 30 s shows it by itself.
+pub const SHOW_SERVER_WINDOW_KEY: &str = "bShowServerWindow";
+
+/// The server window setting as a pipe config pair, sent after the match settings and again when
+/// the setting changes while a server is connected.
+pub fn server_window_config(settings: &Settings) -> (&'static str, Value) {
+    (SHOW_SERVER_WINDOW_KEY, Value::Bool(settings.show_server_window))
+}
+
 /// Pipe event `{"event":"playerBots","state":"active"|"unavailable","reason":"…"}` from the server,
 /// forwarded to the UI as the Tauri event `server:playerBots`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -145,6 +156,18 @@ impl PlayerBotsEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn server_window_setting_is_off_by_default_and_sent_as_bool() {
+        let mut settings = Settings::default();
+        assert!(!settings.show_server_window);
+        assert_eq!(server_window_config(&settings), ("bShowServerWindow", Value::Bool(false)));
+        settings.show_server_window = true;
+        assert_eq!(server_window_config(&settings), ("bShowServerWindow", Value::Bool(true)));
+        // Older config files without the field load with the window hidden.
+        let old: Settings = serde_json::from_str("{}").unwrap();
+        assert!(!old.show_server_window);
+    }
 
     fn profile() -> Profile {
         serde_json::from_str(r#"{"id":"p","name":"P","buildId":"b"}"#).unwrap()

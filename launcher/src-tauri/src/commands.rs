@@ -39,9 +39,18 @@ pub fn update_settings(engine: E, settings: Settings) -> R<()> {
     let mut settings = settings;
     // Backend and game server ports are fixed – other values are set back (and noted once in the log)
     let notes = settings.pin_fixed_ports();
-    engine.config.lock().unwrap().settings = settings;
+    let window_changed = {
+        let mut cfg = engine.config.lock().unwrap();
+        let changed = cfg.settings.show_server_window != settings.show_server_window;
+        cfg.settings = settings;
+        changed
+    };
     save(&engine);
     engine.note_fixed_ports(notes);
+    if window_changed {
+        // A running server shows or hides its window right away.
+        engine.apply_server_window_setting();
+    }
     Ok(())
 }
 

@@ -90,14 +90,15 @@ Login, Your game, Game server, Lobby). Also watch the page **Live Log** (in the 
       The server Fortnite runs **without a window** (`-nullrhi`). You only see it in Task Manager.
 - [ ] In the server log, a line with `ContinueLoggingIn`, marked **"Logged in"** (step *Login*).
       → If you get "Can't reach the backend" or "Build damaged" instead: send me the log.
-- [ ] Shortly after: "rift_server.dll loaded" and a **new window "Magnesium (FN 19.10, UE 5.0)"**.
-      That is the server window – it stays open while the server runs. Don't close it.
+- [ ] Shortly after: "rift_server.dll loaded". **No new window opens**: the game server's own window is
+      hidden now. You control the match on **Match Control** and in the game with **F9 → Host** (Step 5).
+      Only with **Settings → Game → "Show the server window (for troubleshooting)"** on, a window
+      "Magnesium (FN 19.10, UE 5.0)" appears (don't close it, that stops the server).
 - [ ] At the same time **your game** starts ("Starting your game: …", step *Your game*) – a normal
       Fortnite start up to the lobby. Don't log in, there is no login: Rift logs you in with the
       player name of your profile.
-- [ ] Shortly after the server window, the pop-up **"The server is waiting for you"** appears (the
-      control pipe is connected). Now go to **Match Control** → tab **Game** → **Start match** – or press
-      **START SERVER** at the bottom left of the server window.
+- [ ] Shortly after, the pop-up **"The server is waiting for you"** appears (the control pipe is
+      connected). Now go to **Match Control** → tab **Game** → **Start match**.
       If you want, set "Mode" and "Lategame" in "Game mode" on the same page first – that only works
       before the start.
 - [ ] After 1–3 minutes (map loading): the server log shows `IpNetDriver listening on port 7777`, and
@@ -120,26 +121,45 @@ Analysis**. It says in plain words what happened.
 If the game can't connect to the server: was "Server ready" already there? If not, wait and press
 Play again.
 
-## Step 5 – Get to know the server window (Magnesium)
+## Step 5 – Host controls in the game (F9 → Host)
 
-A lot also works in the launcher: page **Match Control** (mode, Lategame, bus, storm, items, trickshot,
-target dummies). The server window can do more (its texts come from Magnesium):
+Everything you control while playing is in the one Rift menu now. Mode, Lategame, AI bots and Bosses &
+NPCs are set in the launcher profile / on **Match Control** before the match.
 
-- [ ] **Playlist**: buttons such as "Solos", "Duos", "Tournament Solos" (Arena), "Zero Build …". Pick one
-      before the start, then start the match.
-- [ ] Tick **Late Game** → Lategame mode (loadouts, small zone).
-- [ ] **Bots**: enter a number and spawn them; "Use Custom Bot Names" for your own names.
-- [ ] **Trickshot**: tick "Enable Trickshot Tab" → a new tab with waypoints, slow motion ("Toggle Crown
-      Slomo"), "Negate Velocity on Win", "Auto Reload on Waypoint TP" and more.
-- [ ] **Handy for testing**: "Infinite Materials", "Infinite Ammo", "Infinite Respawns", "Siphon".
-- [ ] Tick "Save Settings" → the settings are saved in `%LOCALAPPDATA%\Rift\server\`.
+- [ ] In the match, press **F9** → tab **Host**. For a moment it says "Asking the server...", then the
+      sections **Match**, **Storm**, **Match rules**, **Items**, **Health**, **Teleport**, **Target
+      dummies** and **AI** appear.
+- [ ] **Match**: on the island before the bus it says "Everyone is on the island – the bus hasn't left
+      yet." (orange dot) → **Start the bus** → everyone is in the bus. Afterwards: "The match is running."
+      (green dot) and the button is grey.
+- [ ] **Storm** (after the bus): **Pause storm** → the storm stops, the button now says "Resume storm" →
+      press it → it moves again. **Skip to next zone** → the circle closes at once. **Start shrinking
+      now** → the storm starts moving.
+- [ ] **Match rules**: tick **Infinite ammo** → shoot a whole magazine, it doesn't go down. Untick → it
+      goes down again. Same with **Infinite materials** (build). **Respawn** on → let yourself be
+      eliminated → you come back. "Lategame: on/off" only shows the profile setting ("Change it in the
+      launcher profile before the match.").
+- [ ] **Items**: **Pump shotgun**, **Assault rifle**, … each give that item; type `scar` into the field
+      → **Give**. **Ammo**, **Materials**, **Ammo, materials and traps** fill up your inventory.
+- [ ] **Health**: take some damage → **Heal me** → full health and shield. **Heal everyone** does it for
+      all players.
+- [ ] **Teleport**: tick **Teleport to my map marker** → place a marker on the map → you land there.
+      **Teleport where I aim**, **Save this spot** → walk away → **Back to saved spot**.
+- [ ] **Target dummies**: **Place a dummy in front of me** → a bot stands 30 m in front of you; **Bring
+      dummies to me**, **Remove all dummies**.
+- [ ] **AI**: shows "AI bots: on – 30 bots" or "off" and the Bosses & NPCs state as set in the profile.
+- [ ] A friend who joined your server opens F9 → **Host** → "Only the host can use this". The other tabs
+      work for them as before.
+- [ ] Troubleshooting only: **Settings → Game → "Show the server window (for troubleshooting)"** on → the
+      server window appears (right away if a server runs). Off → it hides again. Leave it off normally.
 
 ## Step 6 – In-game menu (F9)
 
 Whether the DLL is loaded you can see in the Live Log: "rift_client.dll loaded" (source **Game**).
 
-- [ ] In the game, press **F9** → the menu "Rift | Menu" opens and the mouse is free.
-      On the left there are five tabs: **Main**, **Commands**, **Options**, **Trickshot**, **Credits**.
+- [ ] In the game, press **F9** → the menu opens (header: Rift logo, **RIFT** Menu) and the mouse is free.
+      On the left there are six tabs: **Main**, **Host**, **Trickshot**, **Commands**, **Options**,
+      **Credits**. Section headers, buttons and switches look the same in every tab.
       Everything is in English.
 - [ ] Tab **Main** → "Editing": all three rows are there on every version – "Edit on release",
       "Reset on release", "Disable pre-edits". Switch each one on and off and check it while editing.
@@ -166,7 +186,8 @@ Whether the DLL is loaded you can see in the Live Log: "rift_client.dll loaded" 
       - While you are editing a piece and press the Reset builds key: nothing strange happens, your edit
         just keeps going.
       - Try it from far away (more than about 20 m): nothing happens.
-      - Server window: switch "Allow Reset Builds Key" off → start a new match → the status says "This
+      - Settings → "Show the server window (for troubleshooting)" on, then in the server window switch
+        "Allow Reset Builds Key" off → start a new match → the status says "This
         server can't do it. It needs a Rift server."
       - If something is wrong: the lines with `[reset-builds]` from the server's `stdout.log`.
 - [ ] Tab **Trickshot**: it has four sections.
@@ -300,7 +321,7 @@ work on every version, right away.
 
 ## Step 9 – Stop
 
-- [ ] Home → **Stop all** → game, server Fortnite, server window and backend are gone (Task Manager: no
+- [ ] Home → **Stop all** → game, server Fortnite (and its window, if shown) and backend are gone (Task Manager: no
       `FortniteClient-Win64-Shipping.exe`, no `node.exe` from Rift).
 - [ ] Also look for `FortniteLauncher.exe` and `FortniteClient-Win64-Shipping_EAC.exe` in Task Manager. If
       they are still there (paused), please tell me.
@@ -530,7 +551,7 @@ downloaded in Step 14 is tested the same way.
 ## What I need when something doesn't work
 
 1. **Which step** of this list (e.g. "Step 3, 'Logged in' doesn't come").
-2. **Screenshot** of the launcher (launch steps + Live Log) and, if it helps, of the game or server window.
+2. **Screenshot** of the launcher (launch steps + Live Log) and, if it helps, of the game (F9 menu).
 3. **Logs**: page **Live Log** → **Copy** (or the files from `%LOCALAPPDATA%\Rift\logs\`; the button
    **Folder** opens it).
 4. If Fortnite crashed: page **Crash Analysis** → the newest entry → **Copy report**.

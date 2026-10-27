@@ -528,6 +528,12 @@ public:
     // Writes the one-time "[LivingWorld] dump ..." report even with bots and Living world off.
     static inline std::atomic_bool bLivingWorldDump{ false };
 
+    // NIOBIUM: the server window (GUI.cpp) is created and runs as before, but stays hidden: the host
+    // controls the match in the F9 menu ("Host" tab) and on the launcher's Match Control page.
+    // The launcher sends true (pipe key "bShowServerWindow") when "Show the server window (for
+    // troubleshooting)" is on. Without a launcher (no pipe connection within 30 s) it shows anyway.
+    static inline std::atomic_bool bShowServerWindow{ false };
+
     static inline void SetLateGameEnabled(bool bEnabled)
     {
         bLateGame = bEnabled;

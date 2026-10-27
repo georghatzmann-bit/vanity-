@@ -50,22 +50,30 @@ import { cn } from "@/lib/utils";
 const JOIN_IP_KEY = "niobium.joinIp";
 
 /** Which tab of the F9 preview shows a setting, and the id of its row there. */
+/** Tab ids of the F9 menu (same order as ERiftMenuTab in GUI.cpp). */
+const TAB_MAIN = 0;
+const TAB_HOST = 1;
+const TAB_TRICKSHOT = 2;
+const TAB_COMMANDS = 3;
+const TAB_OPTIONS = 4;
+const TAB_CREDITS = 5;
+type F9Tab = 0 | 1 | 2 | 3 | 4 | 5;
 type Spot = { tab: F9Tab; id: string };
 /** "Always sprint" (sprintByDefault) was removed, so it has no row anywhere. */
 const prefSpot: Record<Exclude<keyof ClientPreferences, "sprintByDefault">, Spot> = {
-  editOnRelease: { tab: 0, id: "eor" },
-  resetOnRelease: { tab: 0, id: "ror" },
-  disablePreEdits: { tab: 0, id: "pre" },
-  mobileBuilds: { tab: 0, id: "mobile" },
-  inGameFog: { tab: 0, id: "fog" },
-  respawnsEnabled: { tab: 0, id: "respawn" },
-  firstPerson: { tab: 0, id: "fp" },
-  slashKey: { tab: 2, id: "slash" },
-  saveTogglePreferences: { tab: 2, id: "remember" },
-  bubbleLook: { tab: 0, id: "bubblelook" },
-  bubbleStrength: { tab: 0, id: "bubblelook" },
-  resetBuilds: { tab: 2, id: "resetbuilds" },
-  resetBuildsKey: { tab: 2, id: "resetkey" },
+  editOnRelease: { tab: TAB_MAIN, id: "eor" },
+  resetOnRelease: { tab: TAB_MAIN, id: "ror" },
+  disablePreEdits: { tab: TAB_MAIN, id: "pre" },
+  mobileBuilds: { tab: TAB_MAIN, id: "mobile" },
+  inGameFog: { tab: TAB_MAIN, id: "fog" },
+  respawnsEnabled: { tab: TAB_MAIN, id: "respawn" },
+  firstPerson: { tab: TAB_MAIN, id: "fp" },
+  slashKey: { tab: TAB_OPTIONS, id: "slash" },
+  saveTogglePreferences: { tab: TAB_OPTIONS, id: "remember" },
+  bubbleLook: { tab: TAB_MAIN, id: "bubblelook" },
+  bubbleStrength: { tab: TAB_MAIN, id: "bubblelook" },
+  resetBuilds: { tab: TAB_OPTIONS, id: "resetbuilds" },
+  resetBuildsKey: { tab: TAB_OPTIONS, id: "resetkey" },
 };
 
 /** The three Editing switches, in menu order, and their row ids in the F9 preview. */
@@ -337,7 +345,7 @@ export function IngameMenuPage() {
                   onChange={(vk) => {
                     if (!keyFree(vk)) return;
                     save({ hotkey: vk });
-                    point({ tab: 2, id: "menukey" });
+                    point({ tab: TAB_OPTIONS, id: "menukey" });
                   }}
                 />
               </SettingRow>
@@ -347,7 +355,7 @@ export function IngameMenuPage() {
                   onChange={(vk) => {
                     if (!keyFree(vk)) return;
                     save({ joinHotkey: vk });
-                    point({ tab: 2, id: "joinkey" });
+                    point({ tab: TAB_OPTIONS, id: "joinkey" });
                   }}
                 />
               </SettingRow>
@@ -366,7 +374,7 @@ export function IngameMenuPage() {
                   value={s.consoleMode}
                   onChange={(i) => {
                     save({ consoleMode: i });
-                    point({ tab: 2, id: "console" });
+                    point({ tab: TAB_OPTIONS, id: "console" });
                   }}
                 />
               </SettingRow>
@@ -580,11 +588,11 @@ function VkCapture({ value, onChange, emptyLabel }: { value: number; onChange: (
 /* -------------------------------------------------------------------------------------------
  * F9 menu preview
  * A copy of the real menu over a hinted game scene. Layout and texts as in
- * native/client/ATLAS/Private/GUI.cpp and NiobiumTrickshotTab.cpp: title bar on top, tabs
- * Main / Commands / Options / Trickshot / Credits on the left, content with grey hints on the right.
+ * native/client/ATLAS/Private/GUI.cpp, RiftHostTab.cpp and NiobiumTrickshotTab.cpp: title bar on
+ * top, tabs Main / Host / Trickshot / Commands / Options / Credits on the left (the order of
+ * ERiftMenuTab in GUI.cpp), content with grey hints on the right.
  * ----------------------------------------------------------------------------------------- */
-const F9_TABS = ["Main", "Commands", "Options", "Trickshot", "Credits"] as const;
-type F9Tab = 0 | 1 | 2 | 3 | 4;
+const F9_TABS = ["Main", "Host", "Trickshot", "Commands", "Options", "Credits"] as const;
 
 interface Flash extends Spot {
   n: number;
@@ -667,11 +675,13 @@ function OverlayPreview({
           transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.15 }}
           className="relative overflow-hidden rounded-lg bg-[#0f0f19]/[0.97] shadow-[0_30px_70px_-24px_rgb(0_0_0/0.95),0_0_0_1px_rgb(139_92_246/0.18)] ring-1 ring-white/[0.06]"
         >
-          {/* Title bar: logo, "Rift | Menu", menu key, close */}
-          <div className="flex items-center gap-2 border-b border-[#24243a] bg-[#07070c] px-3 py-2">
+          {/* Title bar: logo, the "RIFT" wordmark + "Menu", menu key, close; violet-to-cyan rule below */}
+          <div className="relative flex items-center gap-2 bg-[#07070c] px-3 py-2">
+            <span aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,rgb(139_92_246/0.85),rgb(34_211_238/0.7))]" />
             <LogoMark size={20} variant="simple" />
             <p className="text-[11px]">
-              <span className="font-semibold text-violet-text">Rift</span> <span className="text-muted-foreground">| Menu</span>
+              <span className="bg-[linear-gradient(100deg,#f4f4f8_0%,#c4b5fd_55%,#67e8f9_100%)] bg-clip-text font-bold tracking-[0.18em] text-transparent">RIFT</span>{" "}
+              <span className="text-muted-foreground">Menu</span>
             </p>
             <F9Spot id="menukey" className="ml-auto">
               <span className="font-mono text-[10px] text-faint">[{keyName(s.hotkey)}]</span>
@@ -719,11 +729,12 @@ function OverlayPreview({
                     transition={{ duration: 0.22, ease: EASE_OUT }}
                     className="flex min-w-0 flex-col gap-2 p-3 pr-3.5"
                   >
-                    {tab === 0 && <MainTab s={s} version={version} bubble={bubble} bubbleOn={bubbleOn} />}
-                    {tab === 1 && <CommandsTab saved={saved} />}
-                    {tab === 2 && <OptionsTab s={s} bubble={bubble} bubbleOn={bubbleOn} version={version} />}
-                    {tab === 3 && <TrickshotTab />}
-                    {tab === 4 && <CreditsTab />}
+                    {tab === TAB_MAIN && <MainTab s={s} version={version} bubble={bubble} bubbleOn={bubbleOn} />}
+                    {tab === TAB_HOST && <HostTab />}
+                    {tab === TAB_TRICKSHOT && <TrickshotTab />}
+                    {tab === TAB_COMMANDS && <CommandsTab saved={saved} />}
+                    {tab === TAB_OPTIONS && <OptionsTab s={s} bubble={bubble} bubbleOn={bubbleOn} version={version} />}
+                    {tab === TAB_CREDITS && <CreditsTab />}
                   </motion.div>
                 </AnimatePresence>
               </FlashContext.Provider>
@@ -954,6 +965,60 @@ function OptionsTab({
         </F9Spot>
         <F9Buttons labels={["Reset everything"]} />
         <F9Hint text="Careful: resets all toggles and keys and deletes your saved commands." />
+      </F9Body>
+    </>
+  );
+}
+
+/** "Host" tab of the F9 menu (RiftHostTab.cpp): the host's match controls; joined players see a note. */
+function HostTab() {
+  return (
+    <>
+      <F9Hint text="Only the host (the player on the PC that runs the server) gets these. Others see a short note." />
+      <F9Section label="Match" />
+      <F9Body>
+        <F9Status text="Everyone is on the island – the bus hasn't left yet." tone="warning" filled />
+        <F9Button label="Start the bus" primary />
+      </F9Body>
+      <F9Section label="Storm" />
+      <F9Body>
+        <F9Buttons labels={["Pause storm", "Skip to next zone"]} />
+        <F9Button label="Start shrinking now" />
+      </F9Body>
+      <F9Section label="Match rules" />
+      <F9Body>
+        <F9Check id="host-ammo" label="Infinite ammo" on={false} hint="Nobody runs out of ammo. For everyone, right away." />
+        <F9Check id="host-mats" label="Infinite materials" on={false} hint="Building costs nothing. For everyone, right away." />
+        <F9Check id="host-respawn" label="Respawn" on={false} hint="Eliminated players come back after a few seconds." />
+        <F9Status text="Lategame: off" />
+        <F9Hint text="Change it in the launcher profile before the match." />
+      </F9Body>
+      <F9Section label="Items" />
+      <F9Body>
+        <F9Buttons labels={["Pump shotgun", "Assault rifle"]} />
+        <F9Buttons labels={["Tactical shotgun", "Sniper"]} />
+        <F9Buttons labels={["Small shields", "Bandages"]} />
+        <F9Buttons labels={["Ammo", "Materials"]} />
+      </F9Body>
+      <F9Section label="Health" />
+      <F9Body>
+        <F9Buttons labels={["Heal me", "Heal everyone"]} />
+      </F9Body>
+      <F9Section label="Teleport" />
+      <F9Body>
+        <F9Check id="host-mark" label="Teleport to my map marker" on={false} hint="Place a marker on the map – you land right there." />
+        <F9Button label="Teleport where I aim" primary />
+        <F9Buttons labels={["Save this spot", "Back to saved spot"]} />
+      </F9Body>
+      <F9Section label="Target dummies" />
+      <F9Body>
+        <F9Button label="Place a dummy in front of me" primary />
+        <F9Buttons labels={["Bring dummies to me", "Remove all dummies"]} />
+      </F9Body>
+      <F9Section label="AI" />
+      <F9Body>
+        <F9Status text="AI bots and Bosses & NPCs: as set in the profile" />
+        <F9Hint text="Set these in the launcher profile before the match." />
       </F9Body>
     </>
   );

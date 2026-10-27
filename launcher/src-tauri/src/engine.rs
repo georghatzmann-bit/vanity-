@@ -813,12 +813,16 @@ impl Engine {
                 self.toast(
                     "info",
                     "The server is waiting for you",
-                    "Go to Match and press \"Start match\" (or START SERVER in the server window). Then the server loads the map.",
+                    "Go to Match Control and press \"Start match\". Then the server loads the map. In the match, the host controls are in the F9 menu (Host).",
                 );
             }
             None => {
-                self.log("launcher", "info", CAT, "No control pipe – use the server's own window", None);
-                self.toast("info", "Server window", "In the server window, pick a playlist and press START SERVER.");
+                self.log("launcher", "info", CAT, "No control pipe – the server shows its own window instead", None);
+                self.toast(
+                    "info",
+                    "Server window",
+                    "The launcher couldn't reach the server, so the server opens its own window. Pick a playlist there and press START SERVER.",
+                );
             }
         }
 
@@ -992,6 +996,16 @@ impl Engine {
                 }
             }
         }
+        // The server window stays hidden unless "Show the server window (for troubleshooting)" is on.
+        let (key, value) = bots::server_window_config(&self.config.lock().unwrap().settings);
+        let _ = link.set_config(key, value);
+    }
+
+    /// Settings changed: a connected server shows or hides its window right away. Without a
+    /// server nothing happens; the next start sends the setting with the match settings.
+    pub fn apply_server_window_setting(&self) {
+        let (key, value) = bots::server_window_config(&self.config.lock().unwrap().settings);
+        let _ = self.server_config(key, value);
     }
 
     // --- Bubble Builds: Fortnite's settings file (GameUserSettings.ini) --------------------
