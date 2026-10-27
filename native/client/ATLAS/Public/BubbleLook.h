@@ -106,14 +106,14 @@ namespace NiobiumBubbleLook
             FindCommandLineSwitch(commandLine, L"-FeatureLevelES3_1") != nullptr;
     }
 
-    // Epic's own bubbles are really on: started in Performance Mode, on a Supported or LowMeshes
-    // version, and Meshes was Low when this session started. Then Bubble look pauses (it would only
-    // blur them more). startMeshQuality: -1 unknown, 0 Low, 1+ High.
+    // Epic's own bubbles are really on: started in Performance Mode, on a Supported version, and
+    // Meshes was Low when this session started. Then Bubble look pauses (it would only blur them
+    // more). startMeshQuality: -1 unknown, 0 Low, 1+ High.
+    // LowMeshes versions (Chapter 3) don't count: there Performance Mode with Low meshes only makes
+    // builds a bit whiter, not the real bubble look (tested on 19.10), so Bubble look stays on.
     inline bool EpicBubblesOn(ELevel level, bool featureLevelES31, int startMeshQuality)
     {
-        return featureLevelES31 &&
-            (level == ELevel::Supported || level == ELevel::LowMeshes) &&
-            startMeshQuality == 0;
+        return featureLevelES31 && level == ELevel::Supported && startMeshQuality == 0;
     }
 
     // The Meshes setting exists from 15.40 on.

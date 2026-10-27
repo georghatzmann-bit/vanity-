@@ -6093,6 +6093,16 @@ void* SelectReset(void* a1)
 {
 	void* result = SelectResetOG(a1);
 
+	// [Rift] The first calls go to the diagnostics log: on Chapter 3 builds the byte search may
+	// pick a neighbouring function, and this line shows whether the reset key really lands here.
+	static std::atomic_int s_SelectResetCalls{ 0 };
+	const int call = s_SelectResetCalls.fetch_add(1, std::memory_order_relaxed) + 1;
+	if (call <= 5)
+		AtlasDiagnostics::WriteLine("edit-hooks select-reset called n=%d ror=%d hook-active=%d complete=%p",
+			call, FConfiguration::bROREnabled ? 1 : 0,
+			NiobiumEditRoutes::IsHookRouteActive(NiobiumEditRoutes::EFeature::ResetOnRelease) ? 1 : 0,
+			reinterpret_cast<void*>(CompleteBuildingEditInteraction));
+
 	if (FConfiguration::bROREnabled &&
 		NiobiumEditRoutes::IsHookRouteActive(NiobiumEditRoutes::EFeature::ResetOnRelease))
 		SafeCompleteBuildingEditInteraction();
