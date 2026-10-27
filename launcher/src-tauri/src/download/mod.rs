@@ -226,11 +226,11 @@ impl Downloads {
             fs::rename(&tmp, &path)
         })();
         if let Err(e) = result {
-            eprintln!("[Niobium] Couldn't save the download list: {e}");
+            eprintln!("[Rift] Couldn't save the download list: {e}");
         }
     }
 
-    /// For "Close Niobium?": e.g. `["Download (18.30)"]`.
+    /// For "Close Rift?": e.g. `["Download (18.30)"]`.
     pub fn running_names(&self) -> Vec<String> {
         self.jobs
             .lock()
@@ -241,7 +241,7 @@ impl Downloads {
             .collect()
     }
 
-    /// Niobium is closing: running downloads stop where they are (Resume continues next time).
+    /// Rift is closing: running downloads stop where they are (Resume continues next time).
     pub fn pause_all(&self) {
         for j in self.jobs.lock().unwrap().iter() {
             if j.state == JobState::Running {
@@ -416,7 +416,7 @@ impl Meter {
     }
 }
 
-/// Niobium's own folders – never downloaded into.
+/// Rift's own folders – never downloaded into.
 fn own_dirs(app: &AppHandle) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf)) {
@@ -432,7 +432,7 @@ fn own_dirs(app: &AppHandle) -> Vec<PathBuf> {
 fn delete_files(folder: &Path) {
     let manifest = journal::read_saved_manifest(folder).and_then(|b| Manifest::parse(&b).ok());
     if let Err(e) = install::delete_download(folder, manifest.as_ref()) {
-        eprintln!("[Niobium] Couldn't delete the downloaded files: {e}");
+        eprintln!("[Rift] Couldn't delete the downloaded files: {e}");
     }
 }
 
@@ -485,7 +485,7 @@ fn job_steps(app: &AppHandle, key: &str, folder: &Path, control: &Control, progr
     };
     if let Err(e) = install::install(&job, &plan, &cdn, control, progress, &InstallOptions::default(), &notice) {
         // Stopped before anything was written (a missing chunk, Pause while checking): leave none
-        // of the folders made just now behind (e.g. D:\Niobium\Builds\<key> and its parents)
+        // of the folders made just now behind (e.g. D:\Rift\Builds\<key> and its parents)
         if journal::read_job(folder).is_none() {
             disk::remove_empty_dirs(&created);
         }
@@ -517,15 +517,15 @@ pub fn catalog_list() -> Catalog {
     catalog::catalog()
 }
 
-/// `<fixed drive with the most free space>:\Niobium\Builds\<version>-CL-<cl>`
-/// (`<drive>:\Niobium Builds\<key>` if Niobium itself is installed in `<drive>:\Niobium`.)
+/// `<fixed drive with the most free space>:\Rift\Builds\<version>-CL-<cl>`
+/// (`<drive>:\Rift Builds\<key>` if Rift itself is installed in `<drive>:\Rift`.)
 #[tauri::command]
 pub fn default_download_folder(app: AppHandle, key: String) -> Result<String, String> {
     catalog::find_build(&key).ok_or_else(|| DownloadError::unknown_build().message)?;
     let mut path = disk::default_folder(&key);
     if own_dirs(&app).iter().any(|d| folder::is_inside(&path, d)) {
         if let Some(drive_root) = path.ancestors().nth(3) {
-            path = drive_root.join("Niobium Builds").join(&key);
+            path = drive_root.join("Rift Builds").join(&key);
         }
     }
     Ok(path.to_string_lossy().into_owned())

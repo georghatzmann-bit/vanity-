@@ -28,7 +28,7 @@ export function TitleBar() {
     <header data-tauri-drag-region className="relative z-30 flex h-10 shrink-0 items-center justify-between pl-4">
       <div data-tauri-drag-region className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         <span data-tauri-drag-region className="font-medium text-foreground/70">
-          Niobium
+          Rift
         </span>
         <ChevronRight data-tauri-drag-region className="size-3.5 text-faint" />
         <span data-tauri-drag-region className="relative inline-flex h-4 min-w-24 items-center overflow-hidden">

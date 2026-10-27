@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 type Source = LogLine["source"];
 type Level = LogLine["level"];
 
-const sourceLabel: Record<Source, string> = { game: "Game", server: "Server", backend: "Backend", launcher: "Niobium" };
+const sourceLabel: Record<Source, string> = { game: "Game", server: "Server", backend: "Backend", launcher: "Rift" };
 
 /**
  * Topics: lines of our own server DLL get their own category (Rust `logparse.rs`, `tagged_line`):
@@ -113,7 +113,7 @@ export function LogsPage() {
         eyebrow={pageGroup("logs")}
         title={pageLabel("logs")}
         icon={ScrollText}
-        description="Everything the game, the server, the backend and Niobium write right now. Niobium spots important lines and marks them."
+        description="Everything the game, the server, the backend and Rift write right now. Rift spots important lines and marks them."
         actions={
           <>
             <Button variant="secondary" size="sm" onClick={openLogs}>

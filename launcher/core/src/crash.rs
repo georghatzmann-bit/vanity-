@@ -206,33 +206,35 @@ fn explain(lower: &str, module_lower: &str, module: &str) -> Explanation {
             severity: "medium",
             what: "Fortnite crashed in an NVIDIA file.",
             cause: "The file GFSDK_Aftermath_Lib.dll in the build doesn't work well with the old game.".into(),
-            todo: todo(&["In Niobium go to Library → your build → \"Rename Aftermath file\" (Niobium asks first)."]),
+            todo: todo(&["In Rift go to Library → your build → \"Rename Aftermath file\" (Rift asks first)."]),
         };
     }
     let access_violation = lower.contains("access_violation") || lower.contains("access violation");
-    let (title, what, cause, steps): (&str, &str, String, Vec<&str>) = if module_lower.contains("niobium_client") {
-        ("Crash in the in-game menu", "Fortnite was closed – the error came from the Niobium in-game menu (F9).",
+    // Our DLLs were called niobium_*.dll before the rename to Rift; older crash reports still name them so.
+    let own = |dll: &str| module_lower.contains(&format!("rift_{dll}")) || module_lower.contains(&format!("niobium_{dll}"));
+    let (title, what, cause, steps): (&str, &str, String, Vec<&str>) = if own("client") {
+        ("Crash in the in-game menu", "Fortnite was closed – the error came from the Rift in-game menu (F9).",
          "The menu touched something in the game that is built differently in this version.".into(),
          vec!["Copy the report and send it to the developer – then the menu can be fixed.", "Until then, turn off the in-game menu in Settings."])
-    } else if module_lower.contains("niobium_server") {
+    } else if own("server") {
         ("Crash in the game server", "The server Fortnite was closed – the error came from the game server.",
          "The game server (based on Magnesium) has a bug in this situation.".into(),
          vec!["Copy the report and send it to the developer.", "Try again with another playlist or without Lategame."])
-    } else if module_lower.contains("niobium_redirect") {
+    } else if own("redirect") {
         ("Crash in the redirect", "Fortnite was closed while starting – the error came from the redirect DLL.",
          "The redirect can't find the right spot in this build.".into(),
          vec!["Copy the report and send it to the developer."])
     } else if module_lower.contains("console.dll") || module_lower.contains("atlas") || module_lower.contains("magnesium") || module_lower.contains("tellurium") {
-        ("Crash in a DLL that isn't from Niobium", "Fortnite was closed – the error came from an extra DLL that isn't part of Niobium.",
+        ("Crash in a DLL that isn't from Rift", "Fortnite was closed – the error came from an extra DLL that isn't part of Rift.",
          format!("The DLL \"{module}\" doesn't fit this Fortnite version or steps in at the wrong moment."),
-         vec!["Stop using this DLL together with Niobium.", "Niobium already brings every DLL it needs."])
+         vec!["Stop using this DLL together with Rift.", "Rift already brings every DLL it needs."])
     } else if access_violation {
         ("Memory access error", "Fortnite closed all of a sudden.",
          "A part of the game tried to read data that isn't there (any more). This happens more often with old builds.".into(),
          vec!["Start again – it often works the second time.", "If it always happens at the same spot: copy the report and send it to the developer."])
     } else {
         ("Unknown crash", "Fortnite closed unexpectedly.",
-         "Niobium doesn't know this error yet.".into(),
+         "Rift doesn't know this error yet.".into(),
          vec!["Copy the report and send it to the developer."])
     };
     Explanation { title, severity: if access_violation { "high" } else { "medium" }, what, cause, todo: steps.iter().map(|s| s.to_string()).collect() }
@@ -257,7 +259,7 @@ kernel32.dll!BaseThreadInitThunk()</CallStack>
     fn explains_foreign_console_dll() {
         let r = analyze("x", "C:\\Crashes\\x", 0, XML, "");
         assert_eq!(r.version, "19.40");
-        assert_eq!(r.title, "Crash in a DLL that isn't from Niobium");
+        assert_eq!(r.title, "Crash in a DLL that isn't from Rift");
         assert!(r.likely_cause.contains("console.dll"));
         assert_eq!(r.callstack.len(), 3);
         assert_eq!(r.severity, "high");
@@ -271,11 +273,14 @@ kernel32.dll!BaseThreadInitThunk()</CallStack>
 
     #[test]
     fn explains_own_client() {
-        let xml = XML.replace("console.dll", "niobium_client.dll");
+        let xml = XML.replace("console.dll", "rift_client.dll");
         let r = analyze("z", "f", 0, &xml, "");
         assert_eq!(r.title, "Crash in the in-game menu");
-        let xml = XML.replace("console.dll", "niobium_redirect.dll");
+        let xml = XML.replace("console.dll", "rift_redirect.dll");
         assert_eq!(analyze("z", "f", 0, &xml, "").title, "Crash in the redirect");
+        // a crash report from before the rename (Niobium) still counts as our own DLL
+        let xml = XML.replace("console.dll", "niobium_server.dll");
+        assert_eq!(analyze("z", "f", 0, &xml, "").title, "Crash in the game server");
         assert!(analyze("z", "f", 0, "", "").what_to_do.iter().all(|s| s.is_ascii()));
     }
 
@@ -288,7 +293,7 @@ kernel32.dll!BaseThreadInitThunk()</CallStack>
 
     #[test]
     fn lists_folders() {
-        let dir = std::env::temp_dir().join(format!("niobium-crash-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rift-crash-{}", std::process::id()));
         let c = dir.join("UECC-Windows-ABC");
         fs::create_dir_all(&c).unwrap();
         fs::write(c.join("CrashContext.runtime-xml"), XML).unwrap();

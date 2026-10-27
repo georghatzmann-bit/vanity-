@@ -197,13 +197,13 @@ export interface ClientPreferences {
   resetBuildsKey?: number;
 }
 
-/** Contents of %APPDATA%\Niobium\client.json – the launcher and the F9 menu share this file. */
+/** Contents of %APPDATA%\Rift\client.json – the launcher and the F9 menu share this file. */
 export interface ClientSettings {
   /** Key for the menu (Windows virtual-key code), default F9 */
   hotkey: number;
   /** Key for "quick join", default F5 */
   joinHotkey: number;
-  /** 0 = Niobium console, 1 = original Unreal console */
+  /** 0 = Rift console, 1 = original Unreal console */
   consoleMode: number;
   preferences: ClientPreferences;
   /** Own command keys and macros – created in the game, only passed through here */
@@ -455,7 +455,7 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
     case "catalog_list":
       return demoCatalog;
     case "default_download_folder":
-      return `D:\\Niobium\\Builds\\${String(args.key)}`;
+      return `D:\\Rift\\Builds\\${String(args.key)}`;
     case "pending_toasts":
       return [];
     case "app_ready":
@@ -478,8 +478,8 @@ function demo(cmd: string, args: Record<string, unknown> = {}): unknown {
       return null;
     case "niobium_paths":
       return {
-        config: "%APPDATA%\\Niobium",
-        logs: "%LOCALAPPDATA%\\Niobium\\logs",
+        config: "%APPDATA%\\Rift",
+        logs: "%LOCALAPPDATA%\\Rift\\logs",
         crashes: "%LOCALAPPDATA%\\FortniteGame\\Saved\\Crashes",
         fortniteLogs: "%LOCALAPPDATA%\\FortniteGame\\Saved\\Logs",
       } satisfies NiobiumPaths;
@@ -527,7 +527,7 @@ export const api = {
   stopAll: () => call<void>("stop_all"),
   /** Stops everything (game, game server, backend, helpers) and then closes the launcher. */
   quitApp: () => call<void>("quit_app"),
-  /** Tells Rust the "Close Niobium?" dialog is on screen (else it closes by itself after a few seconds). */
+  /** Tells Rust the "Close Rift?" dialog is on screen (else it closes by itself after a few seconds). */
   closePromptShown: (id: number) => call<void>("close_prompt_shown", { id }),
   joinIp: (address: string) => call<void>("join_ip", { address }),
   serverExec: (text: string) => call<void>("server_exec", { text }),
@@ -547,7 +547,7 @@ export const api = {
   /** Stops it (a running one stops within seconds) and forgets it; `deleteFiles` removes only the build's files. */
   downloadCancel: (key: string, deleteFiles: boolean) => call<void>("download_cancel", { key, deleteFiles }),
   downloadStatus: () => call<DownloadJob[]>("download_status"),
-  /** `<drive with the most free space>:\Niobium\Builds\<key>` */
+  /** `<drive with the most free space>:\Rift\Builds\<key>` */
   defaultDownloadFolder: (key: string) => call<string>("default_download_folder", { key }),
 };
 

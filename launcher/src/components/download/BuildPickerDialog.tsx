@@ -69,7 +69,7 @@ function PickerBody({ target, onDone, onCancel }: { target: PickerTarget; onDone
   const [key, setKey] = useState<string | null>(firstFree?.key ?? null);
   const build = season.builds.find((b) => b.key === key) ?? null;
 
-  /** null = use Niobium's default folder for the picked build */
+  /** null = use Rift's default folder for the picked build */
   const [customParent, setCustomParent] = useState<string | null>(null);
   const [folder, setFolder] = useState("");
   const [edited, setEdited] = useState(false);
@@ -242,7 +242,7 @@ function PickerBody({ target, onDone, onCancel }: { target: PickerTarget; onDone
       {!tested && (
         <p className="-mt-2 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0 text-faint" />
-          Experimental: nobody has played this version with Niobium yet. It may not start or may have bugs.
+          Experimental: nobody has played this version with Rift yet. It may not start or may have bugs.
         </p>
       )}
 
@@ -257,7 +257,7 @@ function PickerBody({ target, onDone, onCancel }: { target: PickerTarget; onDone
               setFolder(e.target.value);
               setError(null);
             }}
-            placeholder="D:\Niobium\Builds\…"
+            placeholder="D:\Rift\Builds\…"
             className="font-mono text-xs"
             aria-invalid={Boolean(error)}
             disabled={!build}
@@ -293,7 +293,7 @@ function PickerBody({ target, onDone, onCancel }: { target: PickerTarget; onDone
       </div>
 
       <DialogFooter className="items-center pt-1">
-        <p className="mr-auto hidden text-[11px] text-faint sm:block">First Niobium checks that Epic still has every file.</p>
+        <p className="mr-auto hidden text-[11px] text-faint sm:block">First Rift checks that Epic still has every file.</p>
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>

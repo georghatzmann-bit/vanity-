@@ -1,4 +1,4 @@
-//! Niobium – launcher logic.
+//! Rift – launcher logic.
 
 mod commands;
 mod download;
@@ -14,15 +14,15 @@ use tauri::{Emitter, Manager, RunEvent, Window, WindowEvent};
 /// If that never happens (UI error), it is shown after this time anyway.
 const SPLASH_SAFETY_NET: Duration = Duration::from_secs(8);
 
-/// "Close Niobium?" must show within this time (the UI answers `close_prompt_shown`). If it
-/// doesn't (page error, WebView crashed or hangs), Niobium stops everything and quits by itself –
+/// "Close Rift?" must show within this time (the UI answers `close_prompt_shown`). If it
+/// doesn't (page error, WebView crashed or hangs), Rift stops everything and quits by itself –
 /// the window has no frame of its own, so it could never be closed otherwise.
 const CLOSE_PROMPT_TIMEOUT: Duration = Duration::from_secs(4);
 
 /// Closing the main window (title bar X, Alt+F4, taskbar): if something still runs or starts,
-/// the window stays open and the UI asks "Close Niobium?" (event `app:close-requested`); its
+/// the window stays open and the UI asks "Close Rift?" (event `app:close-requested`); its
 /// "Stop & close" calls `quit_app`. With nothing running it closes at once – the exit handler in
-/// `run` still makes sure the backend is stopped. If the UI never shows the question, Niobium
+/// `run` still makes sure the backend is stopped. If the UI never shows the question, Rift
 /// stops everything and quits after `CLOSE_PROMPT_TIMEOUT`.
 fn on_window_event(window: &Window, event: &WindowEvent) {
     let WindowEvent::CloseRequested { api, .. } = event else { return };
@@ -33,7 +33,7 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
     let Some(engine) = app.try_state::<Arc<engine::Engine>>() else { return };
     // None = `quit_app` already stopped everything
     let Some(mut running) = engine.close_check() else { return };
-    // a running build download is paused when Niobium closes (Resume continues next time)
+    // a running build download is paused when Rift closes (Resume continues next time)
     if let Some(downloads) = app.try_state::<Arc<download::Downloads>>() {
         running.extend(downloads.running_names());
     }
@@ -54,7 +54,7 @@ fn on_window_event(window: &Window, event: &WindowEvent) {
         std::thread::sleep(CLOSE_PROMPT_TIMEOUT);
         let engine = handle.state::<Arc<engine::Engine>>();
         if engine.close_prompt_unanswered(id) && engine.close_check().is_some() {
-            eprintln!("[Niobium] The close question didn't show – stopping everything and closing.");
+            eprintln!("[Rift] The close question didn't show – stopping everything and closing.");
             engine.shutdown();
             handle.exit(0);
         }
@@ -67,7 +67,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Niobium used to be called Vanity: copy old settings over once, before the config is read.
+            // Rift used to be called Niobium (and Vanity before that): copy old settings over once, before the config is read.
             let migration = engine::migrate_from_vanity();
             // Put the parkour list in place for the server DLL and the F9 menu (errors don't matter)
             engine::write_parkour_file(None);
@@ -138,9 +138,9 @@ pub fn run() {
             download::default_download_folder,
         ])
         .build(tauri::generate_context!())
-        .expect("Niobium couldn't start");
+        .expect("Rift couldn't start");
     app.run(|handle, event| {
-        // Safety net: however Niobium ends, nothing it started keeps running
+        // Safety net: however Rift ends, nothing it started keeps running
         // (Fortnite, the game server, their helpers, the backend).
         if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
             if let Some(engine) = handle.try_state::<Arc<engine::Engine>>() {

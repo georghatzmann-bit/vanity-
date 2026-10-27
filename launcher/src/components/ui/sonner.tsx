@@ -9,7 +9,7 @@ import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 /*
  * Toasts: dark glass with a coloured edge and a tinted icon tile (styles in index.css, ".nb-toast").
- * Niobium is always dark – so no theme switching.
+ * Rift is always dark – so no theme switching.
  */
 const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
   return (

@@ -13,7 +13,7 @@ import { openExternal } from "@/lib/window";
 import { cn } from "@/lib/utils";
 
 /*
- * About & Credits: Niobium itself, then everyone whose work it uses.
+ * About & Credits: Rift itself, then everyone whose work it uses.
  * The credit list comes from src/lib/demo-data.ts; the few libraries below are also listed in
  * THIRD_PARTY_NOTICES.md and are added here when the shared list doesn't have them yet.
  */
@@ -47,18 +47,18 @@ function allCredits(): { group: string; items: Credit[] }[] {
 const groups = allCredits();
 const creditCount = groups.reduce((n, g) => n + g.items.length, 0);
 
-/** Look per group: the projects Niobium is built on get big cards, libraries get compact rows. */
+/** Look per group: the projects Rift is built on get big cards, libraries get compact rows. */
 function groupStyle(group: string, index: number): { icon: LucideIcon; big: boolean; hint: string } {
   if (/built on|source/i.test(group) || index === 0) {
-    return { icon: Layers, big: true, hint: "Niobium uses source code from these projects. Thank you!" };
+    return { icon: Layers, big: true, hint: "Rift uses source code from these projects. Thank you!" };
   }
   if (/inspired|read only/i.test(group)) {
     return { icon: Lightbulb, big: false, hint: "Read to learn from – no code taken." };
   }
-  return { icon: BookOpen, big: false, hint: "Open-source building blocks used across Niobium." };
+  return { icon: BookOpen, big: false, hint: "Open-source building blocks used across Rift." };
 }
 
-/** Projects named after chemical elements, like Niobium – shown as periodic-table tiles. */
+/** Projects named after chemical elements – shown as periodic-table tiles. */
 const elements: Record<string, { symbol: string; number: number }> = {
   magnesium: { symbol: "Mg", number: 12 },
   erbium: { symbol: "Er", number: 68 },
@@ -86,7 +86,7 @@ export function AboutPage() {
     <PageShell>
       <PageHeader
         title="About & Credits"
-        description="Niobium stands on the shoulders of many open-source projects. Here's who made what."
+        description="Rift stands on the shoulders of many open-source projects. Here's who made what."
       />
 
       <HeroCard />
@@ -95,7 +95,7 @@ export function AboutPage() {
         <div>
           <Eyebrow>Credits</Eyebrow>
           <h2 className="mt-1.5 text-xl font-semibold tracking-tight">
-            <NumberTicker value={creditCount} /> projects make Niobium possible
+            <NumberTicker value={creditCount} /> projects make Rift possible
           </h2>
         </div>
         <p className="max-w-sm text-xs text-muted-foreground">Click a project to open its website. License texts are listed in THIRD_PARTY_NOTICES.md in the source code.</p>
@@ -106,7 +106,7 @@ export function AboutPage() {
       ))}
 
       <Reveal className="pt-2 text-center text-[11px] text-faint">
-        Niobium is not affiliated with or endorsed by Epic Games. “Fortnite” is a trademark of Epic Games, Inc.
+        Rift is not affiliated with or endorsed by Epic Games. “Fortnite” is a trademark of Epic Games, Inc.
       </Reveal>
     </PageShell>
   );
@@ -126,9 +126,9 @@ function HeroCard() {
               <LogoMark size={96} variant="rich" glow />
             </motion.div>
             <div className="min-w-0">
-              <Wordmark height={36} title="Niobium" className="text-foreground" />
+              <Wordmark height={36} title="Rift" className="text-foreground" />
               <p className="mt-2.5 text-sm text-muted-foreground">
-                <GradientText variant="brand" className="font-semibold">NiobiumFN</GradientText> — old seasons, new shine.
+                <GradientText variant="brand" className="font-semibold">RiftFN</GradientText> — Step back into any season.
               </p>
               <div className="mt-3.5 flex flex-wrap gap-2">
                 <Badge variant="brand" className="tabular-nums">Version {version}</Badge>
@@ -149,11 +149,11 @@ function HeroCard() {
               click.
             </p>
             <p>
-              Niobium's in-game menu is based on <span className="font-medium text-foreground">ATLAS Console by cipherfps, ralz and contributors</span>.
+              Rift's in-game menu is based on <span className="font-medium text-foreground">ATLAS Console by cipherfps, ralz and contributors</span>.
             </p>
             <p className="flex items-center gap-1.5 text-xs">
               <Scale className="size-3.5 shrink-0" />
-              License: GPL-3.0. Niobium is not affiliated with Epic Games.
+              License: GPL-3.0. Rift is not affiliated with Epic Games.
             </p>
           </div>
           <Button variant="secondary" onClick={() => openExternal(SOURCE_URL)}>
@@ -167,10 +167,9 @@ function HeroCard() {
   );
 }
 
-/** Nb next to the elements its base projects are named after. */
+/** The Rift mark next to the elements its base projects are named after. */
 function ElementFamily() {
   const family = [
-    { symbol: "Nb", number: 41, name: "Niobium", own: true },
     { symbol: "Mg", number: 12, name: "Magnesium" },
     { symbol: "Te", number: 52, name: "Tellurium" },
     { symbol: "Er", number: 68, name: "Erbium" },
@@ -178,39 +177,52 @@ function ElementFamily() {
   return (
     <div className="flex flex-col gap-2.5">
       <Stagger stagger={0.07} delay={0.25} className="flex gap-2">
+        <RiftTile />
         {family.map((e) => (
           <ElementTile key={e.symbol} {...e} />
         ))}
       </Stagger>
-      <p className="text-[11px] text-faint">Named like the projects it's built on.</p>
+      <p className="text-[11px] text-faint">Built on projects named after elements.</p>
     </div>
   );
 }
 
-function ElementTile({ symbol, number, name, own = false, size = "md" }: { symbol: string; number: number; name: string; own?: boolean; size?: "sm" | "md" }) {
+const tileMotion = {
+  hidden: { opacity: 0, y: 10, scale: 0.9 },
+  show: { opacity: 1, y: 0, scale: 1, transition: SPRING_PLAYFUL },
+};
+
+/** Rift's own tile: the logo in the brand colours, the same size as an element tile. */
+function RiftTile() {
   return (
     <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 10, scale: 0.9 },
-        show: { opacity: 1, y: 0, scale: 1, transition: SPRING_PLAYFUL },
-      }}
+      variants={tileMotion}
+      whileHover={{ y: -3 }}
+      transition={SPRING_UI}
+      title="Rift"
+      className="relative flex size-[68px] shrink-0 flex-col items-center justify-between overflow-hidden rounded-xl bg-white/[0.04] bg-[radial-gradient(closest-side,rgb(139_92_246/0.35),transparent)] p-2 shadow-[0_10px_30px_-10px_rgb(139_92_246/0.8),inset_0_1px_0_rgb(255_255_255/0.12)] ring-1 ring-brand-violet/40"
+    >
+      <LogoMark size={36} className="relative" />
+      <span className="relative truncate text-[9px] leading-none font-medium text-violet-text">Rift</span>
+    </motion.div>
+  );
+}
+
+function ElementTile({ symbol, number, name, size = "md" }: { symbol: string; number: number; name: string; size?: "sm" | "md" }) {
+  return (
+    <motion.div
+      variants={tileMotion}
       whileHover={{ y: -3 }}
       transition={SPRING_UI}
       title={`${name} · element ${number}`}
       className={cn(
-        "relative flex shrink-0 flex-col justify-between overflow-hidden rounded-xl ring-1",
+        "relative flex shrink-0 flex-col justify-between overflow-hidden rounded-xl bg-white/[0.04] text-foreground ring-1 ring-white/[0.08]",
         size === "md" ? "size-[68px] p-2" : "size-12 p-1.5",
-        own
-          ? "bg-brand text-white shadow-[0_10px_30px_-10px_rgb(139_92_246/0.8),inset_0_1px_0_rgb(255_255_255/0.25)] ring-white/20"
-          : "bg-white/[0.04] text-foreground ring-white/[0.08]",
       )}
     >
-      {own && <span aria-hidden className="absolute -right-3 -bottom-3 size-8 rounded-full bg-[radial-gradient(closest-side,rgb(34_211_238/0.7),transparent)]" />}
-      <span className={cn("relative font-mono leading-none tabular-nums", size === "md" ? "text-[10px]" : "text-[9px]", own ? "text-white/80" : "text-muted-foreground")}>
-        {number}
-      </span>
+      <span className={cn("relative font-mono leading-none text-muted-foreground tabular-nums", size === "md" ? "text-[10px]" : "text-[9px]")}>{number}</span>
       <span className={cn("relative leading-none font-bold tracking-tight", size === "md" ? "text-xl" : "text-base")}>{symbol}</span>
-      {size === "md" && <span className={cn("relative truncate text-[9px] leading-none", own ? "text-white/75" : "text-faint")}>{name}</span>}
+      {size === "md" && <span className="relative truncate text-[9px] leading-none text-faint">{name}</span>}
     </motion.div>
   );
 }

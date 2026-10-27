@@ -42,7 +42,7 @@ export function CrashesPage() {
         eyebrow={pageGroup("crashes")}
         title={pageLabel("crashes")}
         icon={Bug}
-        description="When Fortnite crashes, Niobium reads the crash report and explains in plain words what happened and what you can do."
+        description="When Fortnite crashes, Rift reads the crash report and explains in plain words what happened and what you can do."
         actions={
           <Button variant="secondary" size="sm" onClick={load}>
             <RefreshCw className={cn(loading && "animate-spin")} />

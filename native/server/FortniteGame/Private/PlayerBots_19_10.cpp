@@ -1,7 +1,7 @@
 // NIOBIUM: Fortnite's own AI player bots ("Phoebe") on Fortnite 19.10, build CL 18675304 only.
 //
 // Ported from NotTacs/Artemis (https://github.com/NotTacs/Artemis, commit 48dba08 of 25 Oct 2026),
-// GPL-3.0, by NotTacs and contributors. Niobium is GPL-3.0 as well. Credited in
+// GPL-3.0, by NotTacs and contributors. Rift is GPL-3.0 as well. Credited in
 // THIRD_PARTY_NOTICES.md. Where each part comes from (Artemis path -> function here):
 //   FortniteAI/.../AthenaAIServicePlayerBots.cpp:8-29    -> GetPlaylistMaxPlayerCount
 //   FortniteAI/.../AthenaAIServicePlayerBots.cpp:31-108  -> CalculateSpawnAmountAndSkill (our count)
@@ -30,13 +30,13 @@
 //   FortniteGame/.../FortGameModeAthena.cpp:72-76, 98-99 -> FortGameMode.cpp SpawnDefaultPawnFor:
 //                                                           AI bots only get their pawn, none of
 //                                                           the player set-up (IsAIBotController)
-// Other Niobium files that call in here: FortGameMode.cpp (SetupPlaylist, FinishWorldInitialization,
+// Other Rift files that call in here: FortGameMode.cpp (SetupPlaylist, FinishWorldInitialization,
 // StartAircraftPhase, SpawnDefaultPawnFor), FortPlayerControllerAthena.cpp (ServerAttemptAircraftJump_:
 // AI bots use the game's own bus jump), GUI.cpp (GameThreadTick), NiobiumControl.cpp (the launcher's
 // bPlayerBots / PlayerBotCount / PlayerBotTargetELO and the "playerBots" event).
 // Not ported on purpose: the KickPlayer / ValidatePlayer / StoreGameSessionID patches, the engine
 // rewrites (World, NetDriver, Engine, Object), the backend, and Artemis' storm, inventory and
-// loadout code (Niobium has its own).
+// loadout code (Rift has its own).
 //
 // Safety gate (Gate below): every address is only right for one Fortnite build. The bots first need
 // the 19.10 AI base (AIBase1910::Ensure: build, nav and outfit hooks); nothing here is hooked or
@@ -510,7 +510,7 @@ namespace
         return Playlist->HasMaxPlayers() ? Playlist->MaxPlayers : 0;
     }
 
-    // Artemis :31-108, with Niobium's bot count instead of "max players minus humans".
+    // Artemis :31-108, with Rift's bot count instead of "max players minus humans".
     void CalculateSpawnAmountAndSkill(UObject* Service)
     {
         auto& Flags = GetFromOffset<uint8>(Service, kServiceSpawnFlagsByte);
@@ -562,7 +562,7 @@ namespace
         BotsLog("spawn amount: %d bots (max players %d, humans %d)", Count, MaxPlayers, Humans);
     }
 
-    // Artemis :110-124, with Niobium's target ELO.
+    // Artemis :110-124, with Rift's target ELO.
     void UseFailSafeMMRInfo(UObject* Service, float TargetELO, const char* Why)
     {
         BotsLog("using the fallback spawn info (%s), ELO %d", Why, (int)TargetELO);
@@ -582,7 +582,7 @@ namespace
     }
 
     // Artemis :126-238. The game's own version is stripped; Artemis swaps the LEA that hands its
-    // address to the service. Niobium uses the PlayerBotTargetELO from the launcher both to pick
+    // address to the service. Rift uses the PlayerBotTargetELO from the launcher both to pick
     // the MMR bracket and as the skill of every bot.
     void InitializeMMRInfosUnsafe(UObject* Service)
     {
@@ -672,7 +672,7 @@ namespace
             BotsLog("Error: setting up the bot skill failed");
     }
 
-    // Artemis :240-265, without the wait for a matchmaking backend: Niobium knows its humans.
+    // Artemis :240-265, without the wait for a matchmaking backend: Rift knows its humans.
     void PrepareMatchAssignmentUnsafe(UObject* Service)
     {
         RememberService(Service);
@@ -695,7 +695,7 @@ namespace
         GWaitForMatchAssignmentReadyOG(Service, FlowHandle);
     }
 
-    // Artemis :312-328: put the bot in the game state's team and squad lists. Niobium also adds
+    // Artemis :312-328: put the bot in the game state's team and squad lists. Rift also adds
     // the bot's controller to GameMode->AliveBots (if the game didn't), which our victory,
     // player-count and targeting code reads.
     void RegisterSpawnedBotUnsafe(UObject* Service, AActor* Actor)

@@ -1,30 +1,30 @@
-# niobium_client.dll – in-game menu
+# rift_client.dll – in-game menu
 
 The in-game menu (F9) comes from **ATLAS Console** (https://github.com/Ralzify/ATLAS-Client),
 © ralz, cipherfps and contributors, licence: *ATLAS Console Attribution License v1.0* (see `LICENSE-ATLAS.txt`).
 ATLAS Console is itself built on the **Erbium** SDK (GPL-3.0, `LICENSE-Erbium.txt`) and **Memcury** (MIT, `LICENSE-Memcury.txt`).
 
-> Niobium is based on ATLAS Console by cipherfps, ralz and contributors.
+> Rift is based on ATLAS Console by cipherfps, ralz and contributors.
 
-## What Niobium changed
+## What Rift changed
 
-Every change in the files is marked with `// [Niobium]`.
+Every change in the files is marked with `// [Rift]`.
 
-| Area | Original | Niobium |
+| Area | Original | Rift |
 |---|---|---|
-| Settings | `%APPDATA%\ATLAS\console.json` | `%APPDATA%\Niobium\client.json` |
-| Diagnostics log | `%APPDATA%\ATLAS\diagnostics.log` | `%LOCALAPPDATA%\Niobium\logs\client-diagnostics.log` |
+| Settings | `%APPDATA%\ATLAS\console.json` | `%APPDATA%\Rift\client.json` |
+| Diagnostics log | `%APPDATA%\ATLAS\diagnostics.log` | `%LOCALAPPDATA%\Rift\logs\client-diagnostics.log` |
 | MinHook | prebuilt `minhook.lib` | built from source, project `native/minhook` |
-| Visible names | "ATLAS" | "Niobium" (title bar "Niobium \| Menu"), with ATLAS Console named in the "Credits" tab |
-| Project file | `ATLAS.vcxproj` | `client.vcxproj` (static runtime, shared output folder, target name `niobium_client`) |
+| Visible names | "ATLAS" | "Rift" (title bar "Rift \| Menu"), with ATLAS Console named in the "Credits" tab |
+| Project file | `ATLAS.vcxproj` | `client.vcxproj` (static runtime, shared output folder, target name `rift_client`) |
 | Tabs | Main, Commands, Config, Credits | **Main, Commands, Options, Trickshot, Credits**. "Trickshot" is new (new files `ATLAS/Private/NiobiumTrickshotTab.cpp` and `ATLAS/Public/NiobiumTrickshotTab.h`) |
 | Texts | English | Plain, short English with a grey hint under each toggle. `GUI.cpp` stays pure ASCII (it is built without `/utf-8`): the few special characters come from the UTF-8 macros `NB_DASH` (en dash) and `NB_NBSP` (no-break space) |
-| Colours | ATLAS blue `#00A2CE` | Niobium brand colours (violet accent `#7A3CFF`, backgrounds `#0A0B12` / `#11131C`, see `docs/brand.md`) |
+| Colours | ATLAS blue `#00A2CE` | Rift brand colours (violet accent `#7A3CFF`, backgrounds `#0A0B12` / `#11131C`, see `docs/brand.md`) |
 | Bubble Builds | – | Read-only status row in "Options" (see below) |
 | Bubble look | – | "Bubble look" switch + "Bubble strength" slider in "Main" → "Graphics" (see below; new header `ATLAS/Public/BubbleLook.h`, runtime in `Client.cpp`) |
 | Editing | three switches, each only below a fixed version | always shown; each switch uses exactly one route per version: our hook, or Fortnite's own setting (see below; new header `ATLAS/Public/EditFeatureRoutes.h`) |
-| Reset builds | – | aim at an edited build and press your own key (Options → "Reset builds"; client half, needs the Niobium server; new files `ATLAS/Public/QuickReset.h`, `ATLAS/Private/QuickReset.cpp`) |
-| Server messages | console only | also a Trickshot banner for messages that start with `[Niobium] TRICKSHOT` (marked in `Client.cpp`) |
+| Reset builds | – | aim at an edited build and press your own key (Options → "Reset builds"; client half, needs the Rift server; new files `ATLAS/Public/QuickReset.h`, `ATLAS/Private/QuickReset.cpp`) |
+| Server messages | console only | also a Trickshot banner for messages that start with `[Rift] TRICKSHOT` (marked in `Client.cpp`) |
 | `imgui.ini` | written next to the game | never written (`io.IniFilename = nullptr`) |
 
 Not changed: game logic (respawns, FOV, console, hotkeys, Arena HUD, hotfix reload). Edit on
@@ -49,7 +49,7 @@ Tabs in the F9 menu (names as shown in the game):
   - "Reset builds": the switch, "Reset builds key [none]" and a status line (see below)
   - "Keys": Change menu key (F9), Change join key (F5), Reset everything
 - **Trickshot:** four sections:
-  - "Load a parkour": one card per course from `%LOCALAPPDATA%\Niobium\server\parkours.json` (written by
+  - "Load a parkour": one card per course from `%LOCALAPPDATA%\Rift\server\parkours.json` (written by
     the launcher) with a "Load" button; below that "Start over" and "Clear everything"
   - "Target bot": sliders "Health" (1–200) and "Distance" (5–100 m), "Place bot in front of me",
     "Remove all bots", "Bring bots to me"
@@ -57,9 +57,9 @@ Tabs in the F9 menu (names as shown in the game):
   - "Practice": Save spot, Back to spot, Launch me up, Slow motion, Low/Normal gravity,
     Invincible, Pause/Resume storm
 
-  Every button sends a `cheat …` command to the Niobium server (`parkour …`, `targetbot …` and existing
+  Every button sends a `cheat …` command to the Rift server (`parkour …`, `targetbot …` and existing
   Magnesium commands; the list is in `docs/02-architecture.md`). "Save spot" / "Back to spot" use the
-  waypoint name `niobium`, the same one as the launcher's match page. In the lobby the tab shows a hint at the top.
+  waypoint name `rift`, the same one as the launcher's match page. In the lobby the tab shows a hint at the top.
 - **Credits:** names Erbium and ATLAS Console (with a link)
 - **Console:** F8 – commands, history, tab completion, `/give`, `/startaircraft`, `/god`
 - **Trickshot banner:** a big "TRICKSHOT!" at the top centre of the screen for 3.5 s, also when the
@@ -157,10 +157,10 @@ Each of the three switches uses exactly one route per game process
 ### Reset builds (Options → "Reset builds")
 
 Aim at one of your edited builds and press your Reset builds key: it goes back to normal without
-opening edit mode. This is the client half; the Niobium server does the reset.
+opening edit mode. This is the client half; the Rift server does the reset.
 
 - Off and without a key by default (`"resetBuilds"`, `"resetBuildsKey"` in `client.json`). Never the
-  left or right mouse button, never a key Niobium already uses (menu, join, console, saved commands).
+  left or right mouse button, never a key Rift already uses (menu, join, console, saved commands).
   The key is never swallowed and never goes through the command/macro binds, so Fortnite still gets it.
 - WndProc only stamps the press, and not while F9, our console or Fortnite's own console is open.
   Unreal keeps its console state to itself, so it is followed from the keys that reach the game
@@ -174,14 +174,14 @@ opening edit mode. This is the client half; the Niobium server does the reset.
   can't be read on either side counts as "not yours".
 - Wire format (plain ASCII, lowercase hex, via `ServerCheat` with `ProcessEvent`, never a console
   `cheat …`): hello `nbedit:v1:h:<session16>` (28 chars, up to 5 times, 1.5 s apart, only while the
-  switch is on and a key is set; an old Niobium server answers with its command list, which stops the
+  switch is on and a key is set; an old Rift server answers with its command list, which stops the
   hellos for that match; turning the switch off and on again, or picking another key, asks once
   more), ack from the server through `ClientMessage`
   `nbedit:v1:a:<session16>` (hidden from the console), then per reset two RPCs back to back:
   `ServerCheat("nbedit:v1:r:<session16>:<seq8>")` and
   `ServerEditBuildingActor(Target, Target->Class, 0, false)`.
 - Status: `Ready.`, `Pick a key first.`, `Join a match to use it.`, `Checking the server...`,
-  `This server can't do it. It needs a Niobium server.`, `Not available on this version.` and the
+  `This server can't do it. It needs a Rift server.`, `Not available on this version.` and the
   key-conflict lines. From 37.00 (Epic's own "Reset Building" key) the row is replaced by a hint.
 - Debug probe (never sends): `"resetBuildsProbe": true` in `"preferences"` logs what the targeting
   sees twice a second and why a press was ignored.

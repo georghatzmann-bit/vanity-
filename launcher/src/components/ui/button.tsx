@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
 
 /*
- * Niobium buttons. default = brand gradient (the main action), secondary = glass,
+ * Rift buttons. default = brand gradient (the main action), secondary = glass,
  * outline = hairline, ghost = text only, destructive = red, link = violet text.
  * All press to 97 % and show a violet focus ring for keyboard users.
  */

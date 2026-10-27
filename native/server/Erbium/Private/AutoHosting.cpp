@@ -578,7 +578,7 @@ namespace AutoHosting
                 return {};
             }
 
-            return fs::path(LocalAppData) / L"Niobium" / L"server" / L"auto_hosting.json"; // NIOBIUM: own data folder
+            return fs::path(LocalAppData) / L"Rift" / L"server" / L"auto_hosting.json"; // NIOBIUM: own data folder
         }
 
         nlohmann::json CapturePreferences()

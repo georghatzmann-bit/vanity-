@@ -1,7 +1,7 @@
 //! Trickshot parkours: the ready-made courses from `launcher/src/data/parkours.json`.
 //!
 //! The file is built into the launcher. At start and right before every server start the launcher
-//! writes it to `%LOCALAPPDATA%\Niobium\server\parkours.json`. The server DLL (command
+//! writes it to `%LOCALAPPDATA%\Rift\server\parkours.json`. The server DLL (command
 //! "cheat parkour <id>") and the F9 menu ("Trickshot" tab) read it there.
 //!
 //! `validate` checks the shape of the file. The test below checks the real file with it, so a typo
@@ -44,12 +44,12 @@ pub const MAX_HEIGHT_METERS: f64 = 300.0;
 /// them right away or stand in the way. Only the launcher checks this – the server builds whatever is in the file.
 pub const MIN_START_CLEARANCE_METERS: f64 = 3.0;
 
-/// `%LOCALAPPDATA%\Niobium\server` – the server DLL and the F9 menu read from here.
+/// `%LOCALAPPDATA%\Rift\server` – the server DLL and the F9 menu read from here.
 pub fn server_dir() -> Option<PathBuf> {
     dirs::data_local_dir().map(|d| d.join(crate::profiles::APP_DIR).join("server"))
 }
 
-/// Target file `%LOCALAPPDATA%\Niobium\server\parkours.json`.
+/// Target file `%LOCALAPPDATA%\Rift\server\parkours.json`.
 pub fn server_file() -> Option<PathBuf> {
     server_dir().map(|d| d.join(FILE_NAME))
 }
@@ -485,7 +485,7 @@ mod tests {
 
     #[test]
     fn writing_creates_folders_and_overwrites() {
-        let dir = std::env::temp_dir().join(format!("niobium-parkour-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rift-parkour-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let path = dir.join("server").join(FILE_NAME);
         write_atomic(&path, "old").unwrap();

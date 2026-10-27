@@ -1,6 +1,6 @@
-// [Niobium] Modified version. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
+// [Rift] Modified version. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
 // (c) ralz, cipherfps and contributors, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
-// Niobium changes: data paths, visible names/credit, MinHook via project reference.
+// Rift changes: data paths, visible names/credit, MinHook via project reference.
 #include "pch.h"
 #include "../Public/Client.h"
 #include "../Public/Configuration.h"
@@ -612,7 +612,7 @@ bool ATLAS_PrepareReplicationForOpen(
 
     _snwprintf_s(
         Error, ErrorCapacity, _TRUNCATE,
-        L"Could not configure the client replication transport. Restart Niobium and try again."); // [Niobium]
+        L"Could not configure the client replication transport. Restart Rift and try again."); // [Rift]
     return false;
 }
 
@@ -715,7 +715,7 @@ static HWND CreateDummyWindow()
     return CreateWindowExW(
         0,
         wc.lpszClassName,
-        L"Niobium", // [Niobium] hidden helper window
+        L"Rift", // [Rift] hidden helper window
         WS_OVERLAPPEDWINDOW,
         0,
         0,
@@ -980,7 +980,7 @@ static void DX12SrvDescriptorAlloc(ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTO
         }
     }
 
-    OutputDebugStringW(L"Niobium: DX12 SRV descriptor heap exhausted.\n");
+    OutputDebugStringW(L"Rift: DX12 SRV descriptor heap exhausted.\n");
     *outCpuHandle = {};
     *outGpuHandle = {};
 }
@@ -1063,7 +1063,7 @@ static bool InitDX12(IDXGISwapChain* pSwapChain)
     {
         if (!g_LoggedDX12QueueWait)
         {
-            OutputDebugStringW(L"Niobium: DX12 swap chain detected; waiting for command queue capture.\n");
+            OutputDebugStringW(L"Rift: DX12 swap chain detected; waiting for command queue capture.\n");
             g_LoggedDX12QueueWait = true;
         }
         return false;
@@ -1816,7 +1816,7 @@ static HRESULT __stdcall HookedPresent(IDXGISwapChain* pSwapChain, UINT SyncInte
             if (!InitDX11(pSwapChain) && !InitDX12(pSwapChain) &&
                 !dx12SwapChain && !g_LoggedUnsupportedRenderer)
             {
-                OutputDebugStringW(L"Niobium: Present hook landed, but the swap chain is not D3D11 or D3D12.\n");
+                OutputDebugStringW(L"Rift: Present hook landed, but the swap chain is not D3D11 or D3D12.\n");
                 g_LoggedUnsupportedRenderer = true;
             }
         }
@@ -2114,7 +2114,7 @@ void Main()
     // mid-session FreeLibrary can safely tear those threads down.
     if (!PinAtlasModule())
     {
-        OutputDebugStringW(L"Niobium: Could not pin the module; initialization was stopped.\n");
+        OutputDebugStringW(L"Rift: Could not pin the module; initialization was stopped.\n");
         return;
     }
 

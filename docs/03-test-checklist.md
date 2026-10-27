@@ -1,10 +1,10 @@
 # Test checklist – full version
 
-This is how you test Niobium with your real Fortnite 19.10. Please go **in this order**. For every
+This is how you test Rift with your real Fortnite 19.10. Please go **in this order**. For every
 point that doesn't work: a screenshot + the log (see "What I need" at the end).
 
-Niobium used to be called Vanity. If you had Vanity installed, Niobium takes over your settings by
-itself – this checklist tells you what to look for.
+Rift used to be called Niobium (and Vanity before that). If you had Niobium or Vanity installed, Rift
+takes over your settings by itself – this checklist tells you what to look for.
 
 A German copy of this list is in [`03-test-checklist.de.md`](03-test-checklist.de.md).
 
@@ -16,18 +16,18 @@ what these steps are for.
 ## Download
 
 Direct link (always the latest build):
-**https://github.com/georghatzmann-bit/vanity-/releases/download/niobium-test/Niobium-Setup.exe**
+**https://github.com/georghatzmann-bit/vanity-/releases/download/rift-test/Rift-Setup.exe**
 
 Windows may say "Windows protected your PC", because the installer isn't signed → **More info** →
 **Run anyway**. It only installs for your Windows user, without admin rights. If your antivirus blocks
-the DLLs: add `%LOCALAPPDATA%\Niobium` as an exception (Niobium installs into this folder and also keeps
+the DLLs: add `%LOCALAPPDATA%\Rift` as an exception (Rift installs into this folder and also keeps
 its logs and server data there). All OG launchers need this, because the DLLs are loaded into Fortnite.
 
 ## Before you start
 
-- Close Reboot Launcher, the old Vanity launcher and Fortnite completely (Task Manager: no
+- Close Reboot Launcher, the old Niobium or Vanity launcher and Fortnite completely (Task Manager: no
   `FortniteClient-Win64-Shipping.exe`).
-- Is port 80 free? If Skype, IIS or something else uses it, set Niobium → **Settings** → **Network** →
+- Is port 80 free? If Skype, IIS or something else uses it, set Rift → **Settings** → **Network** →
   **Matchmaker port** to e.g. 8080.
 - **Backend port** shows 3551 and **Game server port** 7777. Both are fixed (the DLLs always use them),
   so you can't change them.
@@ -36,40 +36,40 @@ its logs and server data there). All OG launchers need this, because the DLLs ar
 
 ## Step 0 – Install
 
-- [ ] Start `Niobium-Setup.exe`. First a small dark Niobium card fades in and out.
-- [ ] Then the dark installer: "Welcome to Niobium", with the logo on the left. **Next** → leave the folder
+- [ ] Start `Rift-Setup.exe`. First a small dark Rift card fades in and out.
+- [ ] Then the dark installer: "Welcome to Rift", with the logo on the left. **Next** → leave the folder
       as it is → **Install**.
-- [ ] Only if you had Vanity installed: the installer removes the old Vanity program quietly – you don't
-      have to do anything. Afterwards the Start menu has "Niobium" and no "Vanity" any more. Your Vanity
-      settings are not deleted.
+- [ ] Only if you had Niobium or Vanity installed: the installer removes the old program quietly – you
+      don't have to do anything. Afterwards the Start menu has "Rift" and no "Niobium" or "Vanity" any
+      more. Your old settings are not deleted.
 - [ ] After installing, the Finish page comes up by itself: "You're ready to drop.", with the checkboxes
-      "Create desktop shortcut" and **"Launch Niobium now"** and the link "Source code and help (GitHub)".
+      "Create desktop shortcut" and **"Launch Rift now"** and the link "Source code and help (GitHub)".
       On Windows 11 the title bar of the installer is dark, too.
-- [ ] Leave "Launch Niobium now" ticked → **Finish**.
+- [ ] Leave "Launch Rift now" ticked → **Finish**.
 
 ## Step 1 – First start
 
-- [ ] A small card with the Niobium logo, "old seasons, new shine." and a moving line appears in the
+- [ ] A small card with the Rift logo, "Step back into any season." and a moving line appears in the
       middle of the screen. Shortly after, the big window opens and the card goes away (at the latest after
       8 seconds).
-- **If you used Vanity before:**
-  - [ ] A card **"What's new"** appears: "Vanity is now Niobium", "Bubble Builds", "A fresh look",
+- **If you used Niobium (or Vanity) before:**
+  - [ ] A card **"What's new"** appears: "Niobium is now Rift", "Bubble Builds", "A fresh look",
         "Everything in English" → **Got it**.
   - [ ] **Library** still has your 19.10 build. **Profiles** still has your profiles (the profile
         "Standard" is now called "Default").
-  - [ ] **Live Log**, source **Niobium**: a line "Copied your settings from Vanity to Niobium (…). The old
-        Vanity folders were left as they are."
-- **If Niobium is new on this PC:**
-  - [ ] A full-window welcome: "Welcome to Niobium" → **Let's set it up** → "What should we call you?"
+  - [ ] **Live Log**, source **Rift**: a line "Copied your settings from Niobium to Rift (…). The old
+        Niobium folders were left as they are." (or "from Vanity", if you only had Vanity)
+- **If Rift is new on this PC:**
+  - [ ] A full-window welcome: "Welcome to Rift" → **Let's set it up** → "What should we call you?"
         (3–16 letters or numbers) → **Next** → "Add your Fortnite build" → **Browse** → your 19.10 folder →
         **Check** → **Add build** → "You're all set" → **Let's go**.
   - [ ] Doing it later is fine too: **Skip setup** (top right) closes the welcome.
-- [ ] Close Niobium and open it again → no welcome and no "What's new" any more.
+- [ ] Close Rift and open it again → no welcome and no "What's new" any more.
 - [ ] Everything you see is in English, also the buttons and pop-up messages.
 
 ## Step 2 – Add a build (without starting Fortnite)
 
-Skip this if you added the build in the welcome or it came over from Vanity.
+Skip this if you added the build in the welcome or it came over from Niobium or Vanity.
 
 - [ ] **Library** → **Add a build** → **Browse** → `C:\Users\georg\Downloads\windows-19.10` → **Check**.
 - [ ] Four green ticks: "Found FortniteClient-Win64-Shipping.exe", "Version: 19.10 (CL-18675304)",
@@ -78,7 +78,7 @@ Skip this if you added the build in the welcome or it came over from Vanity.
 - [ ] **Add build** → a card appears with "Tested" and "Active". Its row "Bubble Builds" shows "—"
       (19.10 has no Bubble Builds). The profile "Default" was created by itself (page **Profiles**).
 - [ ] On the card, **Open folder** → Explorer opens the build folder.
-- [ ] Close Niobium and open it again → the build and the profile are still there.
+- [ ] Close Rift and open it again → the build and the profile are still there.
 
 ## Step 3 – Host & Play: backend and server
 
@@ -90,10 +90,10 @@ Login, Your game, Game server, Lobby). Also watch the page **Live Log** (in the 
       The server Fortnite runs **without a window** (`-nullrhi`). You only see it in Task Manager.
 - [ ] In the server log, a line with `ContinueLoggingIn`, marked **"Logged in"** (step *Login*).
       → If you get "Can't reach the backend" or "Build damaged" instead: send me the log.
-- [ ] Shortly after: "niobium_server.dll loaded" and a **new window "Magnesium (FN 19.10, UE 5.0)"**.
+- [ ] Shortly after: "rift_server.dll loaded" and a **new window "Magnesium (FN 19.10, UE 5.0)"**.
       That is the server window – it stays open while the server runs. Don't close it.
 - [ ] At the same time **your game** starts ("Starting your game: …", step *Your game*) – a normal
-      Fortnite start up to the lobby. Don't log in, there is no login: Niobium logs you in with the
+      Fortnite start up to the lobby. Don't log in, there is no login: Rift logs you in with the
       player name of your profile.
 - [ ] Shortly after the server window, the pop-up **"The server is waiting for you"** appears (the
       control pipe is connected). Now go to **Match Control** → tab **Game** → **Start match** – or press
@@ -132,20 +132,20 @@ target dummies). The server window can do more (its texts come from Magnesium):
 - [ ] **Trickshot**: tick "Enable Trickshot Tab" → a new tab with waypoints, slow motion ("Toggle Crown
       Slomo"), "Negate Velocity on Win", "Auto Reload on Waypoint TP" and more.
 - [ ] **Handy for testing**: "Infinite Materials", "Infinite Ammo", "Infinite Respawns", "Siphon".
-- [ ] Tick "Save Settings" → the settings are saved in `%LOCALAPPDATA%\Niobium\server\`.
+- [ ] Tick "Save Settings" → the settings are saved in `%LOCALAPPDATA%\Rift\server\`.
 
 ## Step 6 – In-game menu (F9)
 
-Whether the DLL is loaded you can see in the Live Log: "niobium_client.dll loaded" (source **Game**).
+Whether the DLL is loaded you can see in the Live Log: "rift_client.dll loaded" (source **Game**).
 
-- [ ] In the game, press **F9** → the menu "Niobium | Menu" opens and the mouse is free.
+- [ ] In the game, press **F9** → the menu "Rift | Menu" opens and the mouse is free.
       On the left there are five tabs: **Main**, **Commands**, **Options**, **Trickshot**, **Credits**.
       Everything is in English.
 - [ ] Tab **Main** → "Editing": all three rows are there on every version – "Edit on release",
       "Reset on release", "Disable pre-edits". Switch each one on and off and check it while editing.
       On 19.10, "Edit on release" and "Disable pre-edits" say "Uses Fortnite's own … setting": then
       Fortnite's own setting (Settings → Game) changes too – check that it shows the same. "Reset on
-      release" uses Niobium's own code on 19.10 (no such line under it). If a row is grey, a screenshot please.
+      release" uses Rift's own code on 19.10 (no such line under it). If a row is grey, a screenshot please.
 - [ ] Tab **Main** → "Field of view": move the slider "Degrees (normal: 80)" → the picture changes at once.
       "Back to 80" sets it back to normal.
 - [ ] **F8** → console; type `fov 110` → Enter.
@@ -167,7 +167,7 @@ Whether the DLL is loaded you can see in the Live Log: "niobium_client.dll loade
         just keeps going.
       - Try it from far away (more than about 20 m): nothing happens.
       - Server window: switch "Allow Reset Builds Key" off → start a new match → the status says "This
-        server can't do it. It needs a Niobium server."
+        server can't do it. It needs a Rift server."
       - If something is wrong: the lines with `[reset-builds]` from the server's `stdout.log`.
 - [ ] Tab **Trickshot**: it has four sections.
       - "Load a parkour": one card per course (name, easy/medium/hard, short description, button
@@ -183,9 +183,9 @@ Whether the DLL is loaded you can see in the Live Log: "niobium_client.dll loade
       spot. After every click, the section shows "Sent: …" for a moment.
 - [ ] The same spot works from the launcher too: "Save spot" in F9, then **Match Control** → tab
       **Trickshot** → "Spot & gear" → **Back to spot** → you are back at the spot.
-- [ ] Tab **Credits**: at the bottom it says "Niobium is based on ATLAS Console by cipherfps, ralz and
+- [ ] Tab **Credits**: at the bottom it says "Rift is based on ATLAS Console by cipherfps, ralz and
       contributors."
-- [ ] Your settings are saved in `%APPDATA%\Niobium\client.json`.
+- [ ] Your settings are saved in `%APPDATA%\Rift\client.json`.
 
 ## Step 7 – Test the trickshot parkours
 
@@ -193,7 +193,7 @@ A parkour is a ready-made trickshot course: a platform in the air, jump objects 
 stand still. Test it in a Solo match. You must already stand on the island – not in the lobby, not in
 the bus.
 
-The server's answers appear in the console (**F8**). They start with "[Niobium]".
+The server's answers appear in the console (**F8**). They start with "[Rift]".
 
 - [ ] **Load:** **F9** → tab **Trickshot** → at "First Jump" click **Load**.
       Or in the launcher: **Match Control** → tab **Trickshot** → card "First Jump" → **Load**.
@@ -206,7 +206,7 @@ The server's answers appear in the console (**F8**). They start with "[Niobium]"
         (depending on the version a stack of tyres or a bouncy umbrella).
       - 40 m in front of you a bot stands on a single tile. It doesn't move and has 50 health, no shield.
       - You have a sniper in your inventory.
-      - The console says: "[Niobium] "First Jump" is ready! Built: 10 floors, 1 jump objects, 1 target bots."
+      - The console says: "[Rift] "First Jump" is ready! Built: 10 floors, 1 jump objects, 1 target bots."
 - [ ] **Trickshot:** run onto the trampoline and hit the bot while you are in the air.
       → At the top centre of the screen a big **TRICKSHOT!** appears, below it your name and the distance
       in metres (for about 3.5 seconds). At the same time the launcher shows "TRICKSHOT! <your name>".
@@ -215,13 +215,13 @@ The server's answers appear in the console (**F8**). They start with "[Niobium]"
       banner" → **Banner on** must be on.
 - [ ] **Start over** (in F9 or in the launcher): you stand at the start again and look forward.
       Health and shield are full, the weapons are loaded. If you eliminated the bot, it is back.
-      The console says: "[Niobium] Back at the start of "First Jump". Full health, weapons reloaded. …"
+      The console says: "[Rift] Back at the start of "First Jump". Full health, weapons reloaded. …"
 - [ ] **Target bot:** F9 → Trickshot → "Target bot": Health 50, Distance 30 m → **Place bot in front of me**
       (in the launcher the button is called **Place bot**).
       → A bot appears exactly in your view direction, 30 m away, at your height, on a tile.
-      The console says: "[Niobium] Target bot is 30 m in front of you (50 health). Remove it: parkour clear"
+      The console says: "[Rift] Target bot is 30 m in front of you (50 health). Remove it: parkour clear"
 - [ ] **Clear everything** (in F9 or in the launcher): platforms, trampoline and all target bots are gone –
-      also the bot from "Place bot in front of me". The console says: "[Niobium] Removed … pieces and …
+      also the bot from "Place bot in front of me". The console says: "[Rift] Removed … pieces and …
       target bots."
       Careful: if you stand on the platform at that moment, you fall down.
 - [ ] Feel free to load the other courses too, e.g. "Geyser Shot" or "Ground Course".
@@ -234,14 +234,14 @@ The server's answers appear in the console (**F8**). They start with "[Niobium]"
   Then send a screenshot from above at an angle: in the Trickshot tab press "Launch me up", then look down.
   Write which way the tiles moved – left, right, forward or back (as you look at the start) – and roughly
   how far: half a tile (about 2.5 m) or a whole one (about 5 m). Plus the Fortnite version.
-  Why: Niobium must know at which point Fortnite "holds" a floor tile. That was only checked with real
+  Why: Rift must know at which point Fortnite "holds" a floor tile. That was only checked with real
   builds from 10.40. Your picture shows whether it is right in your version too.
-- **An object is missing.** The console then says for example "[Niobium] Not in this version (left out):
+- **An object is missing.** The console then says for example "[Rift] Not in this version (left out):
   Trampoline." Send exactly this line and the Fortnite version. Then I look for a replacement that exists
   in your version.
 - **Another message**, for example "None of the listed sniper rifles exist in this version.",
   "… jump objects couldn't be placed.", "… target bots couldn't spawn." or "The parkour list is missing.
-  Please start the game from the Niobium launcher.": copy the line or take a photo of it.
+  Please start the game from the Rift launcher.": copy the line or take a photo of it.
 
 ## Step 8 – Bubble Builds (15.40 – 16.00, and as an experiment on 19.10)
 
@@ -250,7 +250,7 @@ Performance Mode on Fortnite 15.40 – 16.00. On 15.30 and 16.10 – 16.40 it is
 not show up). On **19.x** it is also "Experimental": Performance Mode plus **Meshes: Low** – close to the
 old look, not the same. You can't switch it while playing – it applies on the next launch.
 
-With Bubble Builds on, Niobium changes three lines in Fortnite's own settings file for this one game and
+With Bubble Builds on, Rift changes three lines in Fortnite's own settings file for this one game and
 **puts them back by itself afterwards** (you agreed to that). Before you start, please make a copy of
 `%LOCALAPPDATA%\FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini` (for example on the desktop),
 so you can compare it at the end.
@@ -266,7 +266,7 @@ so you can compare it at the end.
       - "Bubble Builds on: starting in Performance Mode (-FeatureLevelES31)"
       - The line "Starting your game: …" contains `-FeatureLevelES31`; the line "Starting the server
         Fortnite: …" does **not**.
-- [ ] While the game runs there is a file `%LOCALAPPDATA%\Niobium\gus-backup.json`.
+- [ ] While the game runs there is a file `%LOCALAPPDATA%\Rift\gus-backup.json`.
 - [ ] In the game the graphics are simpler. In a match, build a few walls and floors → while they go up,
       they look whiter and more see-through. Screenshot please.
 - [ ] **F9** → **Options** → "Build look": "Bubble Builds: On (Performance Mode, Meshes Low)" with a green dot.
@@ -275,8 +275,8 @@ so you can compare it at the end.
 - [ ] Compare `GameUserSettings.ini` with your copy: the lines `bPreferFeatureLevelES31`,
       `PreferredFeatureLevel` and `MeshQuality` are like before. (Other lines Fortnite itself saved during
       the game, such as the last played time, may differ – that's normal.)
-- [ ] **Crash test (optional):** Host & Play with Bubble Builds on → while the game runs, end `Niobium.exe`
-      in Task Manager → close Fortnite too → start Niobium again → the Live Log says the settings were put
+- [ ] **Crash test (optional):** Host & Play with Bubble Builds on → while the game runs, end `Rift.exe`
+      in Task Manager → close Fortnite too → start Rift again → the Live Log says the settings were put
       back.
 - [ ] Switch Bubble Builds off → **Host & Play** again → no `-FeatureLevelES31` and no "Backed up …" line
       in the log; F9 → Options says "Bubble Builds: Off – turn it on in the launcher, then restart the game."
@@ -301,10 +301,10 @@ work on every version, right away.
 ## Step 9 – Stop
 
 - [ ] Home → **Stop all** → game, server Fortnite, server window and backend are gone (Task Manager: no
-      `FortniteClient-Win64-Shipping.exe`, no `node.exe` from Niobium).
+      `FortniteClient-Win64-Shipping.exe`, no `node.exe` from Rift).
 - [ ] Also look for `FortniteLauncher.exe` and `FortniteClient-Win64-Shipping_EAC.exe` in Task Manager. If
       they are still there (paused), please tell me.
-- [ ] **Host & Play** again → it works a second time without restarting Niobium.
+- [ ] **Host & Play** again → it works a second time without restarting Rift.
 
 ## Step 10 – Match rules ("Classic match")
 
@@ -395,7 +395,7 @@ test and send me the size.
 - [ ] **Live Log**, type `bots` in the search. Expected while the map loads:
       - "checks passed for 19.10 CL 18675304, hooks installed; 30 bots, ELO 500",
       - "service set up, 30 bots, ELO 500 (playlist …)",
-      - source **Niobium**: "AI bots are on for this match."
+      - source **Rift**: "AI bots are on for this match."
       Later, for example: "bot service started", "spawn amount: 30 bots (…)", "1 bots spawned",
       "10 bots spawned", "cached … POI volumes and … foundations".
 - [ ] **If bots are off:** a pop-up "AI bots are off for this match" with the reason (e.g. "Bots aren't
@@ -418,7 +418,7 @@ test and send me the size.
 
 ## Step 14 – Download a version (optional – 18.30 needs about 50 GB and 2 hours, Chapter 5 up to 120 GB)
 
-Niobium can download some old builds. The file list comes from a public GitHub archive, and every game file
+Rift can download some old builds. The file list comes from a public GitHub archive, and every game file
 comes straight from Epic's own download servers – never from re-uploads. Epic has deleted parts of many old
 seasons, so those can't be downloaded. **Chapter 3 Season 1 (19.10) is one of them** – your 19.10 keeps
 working. **New:** Chapter 3 Seasons 3 and 4, all of Chapter 4 (with Season OG) and Chapter 5 Seasons 1–3
@@ -446,7 +446,7 @@ working. **New:** Chapter 3 Seasons 3 and 4, all of Chapter 4 (with Season OG) a
       says "7 builds · from 40.1 GB".
 - [ ] Click **Season 8** → a window "Chapter 2 · Season 8". The newest build is at the top: "18.30", with
       "41.1 GB download · 45.4 GB on disk · about 1 h 50 min at 50 Mbit/s" and "Experimental". "Download to" is
-      already filled in (e.g. `D:\Niobium\Builds\18.30-CL-17882303`), below it "Needs about 47.5 GB free on
+      already filled in (e.g. `D:\Rift\Builds\18.30-CL-17882303`), below it "Needs about 47.5 GB free on
       that drive."
 - [ ] **Folder checks** (each time: type the folder into "Download to" and press **Download 18.30** – the red
       text appears under the field, nothing starts):
@@ -468,8 +468,8 @@ working. **New:** Chapter 3 Seasons 3 and 4, all of Chapter 4 (with Season OG) a
       785". A small progress pill shows in the sidebar, also on other pages ("Checking at Epic, a few minutes").
 - [ ] **Pause** → "Pausing…" → "Paused – everything downloaded so far is kept." → **Resume** → it continues
       (first a short "Check at Epic" again, then the percent goes on from where it was).
-- [ ] Close Niobium while it downloads → "Close Niobium?" lists "Download (18.30)" → **Stop & close**. Open
-      Niobium → **Library** → **Download a version** → the card says "Paused" → **Resume** → it continues.
+- [ ] Close Rift while it downloads → "Close Rift?" lists "Download (18.30)" → **Stop & close**. Open
+      Rift → **Library** → **Download a version** → the card says "Paused" → **Resume** → it continues.
 - [ ] **Cancel** → "Cancel the download of 18.30?" – "Delete the downloaded files? If you keep them,
       downloading 18.30 into the same folder again continues where it stopped." → **Keep files**. Start 18.30
       again into the same folder → it continues instead of starting over.
@@ -503,22 +503,22 @@ other build you have (e.g. one from Step 14).
         version"), and one pop-up "Bosses & NPCs aren't available this match", or
       - green "Active" or "Active · N spawned".
 - [ ] **Live Log** → click the filter **Bosses & NPCs** (next to Info/Warning/Error). You see the server's
-      `[LivingWorld]` lines (shown without the tag, category "livingWorld"), and from source **Niobium** one line
+      `[LivingWorld]` lines (shown without the tag, category "livingWorld"), and from source **Rift** one line
       like "Bosses & NPCs aren't available: …" or "Bosses & NPCs are on: N spawned." → **Copy** and send me these
       lines. Click **Bosses & NPCs** again to see everything.
 - [ ] Only if the chip said "Active": in the game, write down what you see. Do bosses, guards or animals show
       up? Where? Any freezes or crashes?
 - [ ] When the match is over, the row "This match" goes away.
 - [ ] Switch "Bosses & NPCs" off in the profile → **Host & Play** → **Start match**: no row "This match", no
-      pop-up, no "Bosses & NPCs" line from **Niobium** in the Live Log – the match is as before.
+      pop-up, no "Bosses & NPCs" line from **Rift** in the Live Log – the match is as before.
 
 ## Testing other versions (untested, but they start)
 
-Niobium starts every version from 1.7 to 30.x. For everything except 19.10: the same steps as above,
+Rift starts every version from 1.7 to 30.x. For everything except 19.10: the same steps as above,
 only the build card shows "Untested" and the log has a note. If it doesn't work, these three files matter:
 
-- `%LOCALAPPDATA%\Niobium\logs\redirect.log` – was the redirect in place? ("Ready - …" or a line with "ERROR:")
-- `%LOCALAPPDATA%\Niobium\logs\client-diagnostics.log` – did the in-game menu start?
+- `%LOCALAPPDATA%\Rift\logs\redirect.log` – was the redirect in place? ("Ready - …" or a line with "ERROR:")
+- `%LOCALAPPDATA%\Rift\logs\client-diagnostics.log` – did the in-game menu start?
 - `<build>\FortniteGame\Binaries\Win64\stdout.log` and the folder `MagnesiumCrashes` next to it – what the
   game server says.
 
@@ -531,10 +531,10 @@ downloaded in Step 14 is tested the same way.
 
 1. **Which step** of this list (e.g. "Step 3, 'Logged in' doesn't come").
 2. **Screenshot** of the launcher (launch steps + Live Log) and, if it helps, of the game or server window.
-3. **Logs**: page **Live Log** → **Copy** (or the files from `%LOCALAPPDATA%\Niobium\logs\`; the button
+3. **Logs**: page **Live Log** → **Copy** (or the files from `%LOCALAPPDATA%\Rift\logs\`; the button
    **Folder** opens it).
 4. If Fortnite crashed: page **Crash Analysis** → the newest entry → **Copy report**.
-5. For trickshot things: the lines from the console (**F8**) that start with "[Niobium]".
+5. For trickshot things: the lines from the console (**F8**) that start with "[Rift]".
 6. For Bubble Builds: a screenshot of your builds in the game, the "Starting your game: …" line and the
    lines with "graphics settings" or "Meshes".
 7. For Reset builds: a screenshot of F9 → Options → "Reset builds" and the `[reset-builds]` lines from

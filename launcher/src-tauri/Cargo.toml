@@ -1,7 +1,7 @@
 [package]
 name = "niobium-launcher"
 version = "0.1.0"
-description = "Niobium – launcher for OG Fortnite private servers"
+description = "Rift – launcher for OG Fortnite private servers"
 authors = ["Georg Hatzmann"]
 license = "GPL-3.0-only"
 edition = "2021"

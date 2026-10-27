@@ -1,4 +1,4 @@
-// Niobium menu preview (Windows program, runs under Wine or on Windows):
+// Rift menu preview (Windows program, runs under Wine or on Windows):
 // starts the real F9 menu (GUI.cpp unchanged, plus appended preview functions) without the game,
 // draws every tab with the software renderer and saves PPM images.
 #include <windows.h>
@@ -215,10 +215,10 @@ int main(int Argc, char** Argv)
         if (S.Console)
         {
             const wchar_t* Lines[] = {
-                L"[Niobium] Connected to your server.",
-                L"[Niobium] Parkour \"First Jump\" is ready: floor, 1 trampoline, 1 target bot (50 HP).",
-                L"[Niobium] You're at the start. Your sniper is in your inventory.",
-                L"[Niobium] TRICKSHOT! georg – 128 m",
+                L"[Rift] Connected to your server.",
+                L"[Rift] Parkour \"First Jump\" is ready: floor, 1 trampoline, 1 target bot (50 HP).",
+                L"[Rift] You're at the start. Your sniper is in your inventory.",
+                L"[Rift] TRICKSHOT! georg – 128 m",
             };
             for (const wchar_t* Line : Lines)
                 GUI_QueueConsoleOutput(Line, (int)wcslen(Line));
@@ -226,7 +226,7 @@ int main(int Argc, char** Argv)
 #if NIOBIUM_PREVIEW_TRICKSHOT
         if (S.Toast)
         {
-            const wchar_t* Msg = L"[Niobium] TRICKSHOT! georg – 128 m";
+            const wchar_t* Msg = L"[Rift] TRICKSHOT! georg – 128 m";
             NiobiumToast_Push(Msg, (int)wcslen(Msg));
         }
 #endif

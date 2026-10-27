@@ -45,7 +45,7 @@ impl UreqTransport {
             // up to 32 requests at once to the same CDN host: keep their connections open
             .max_idle_connections(64)
             .max_idle_connections_per_host(32)
-            .user_agent(format!("Niobium/{}", env!("CARGO_PKG_VERSION")));
+            .user_agent(format!("Rift/{}", env!("CARGO_PKG_VERSION")));
         #[cfg(windows)]
         let builder = {
             use ureq::tls::{RootCerts, TlsConfig, TlsProvider};

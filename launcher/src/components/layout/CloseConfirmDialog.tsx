@@ -13,7 +13,7 @@ import { useApp } from "@/lib/store";
 /**
  * Asked when the window should close (X, Alt+F4, taskbar) while something still runs or starts
  * (event "app:close-requested"). "Stop & close" stops the game, the game server, the backend and
- * the helpers, then closes Niobium. "Cancel" keeps everything running.
+ * the helpers, then closes Rift. "Cancel" keeps everything running.
  * Browser preview: open it with ?closeconfirm=1, or with the X while a preview start runs.
  */
 export function CloseConfirmDialog() {
@@ -25,7 +25,7 @@ export function CloseConfirmDialog() {
   const running = request?.running ?? [];
 
   // Tell Rust the question is on screen. Without this answer (page error, WebView hangs) Rust
-  // stops everything and closes Niobium by itself, so the window can always be closed.
+  // stops everything and closes Rift by itself, so the window can always be closed.
   const requestId = request?.id;
   useEffect(() => {
     if (requestId === undefined) return;
@@ -40,12 +40,12 @@ export function CloseConfirmDialog() {
       if (!inTauri) {
         // Nothing closes in the browser preview, so say what would happen
         stopDemoLaunch();
-        toast("Everything stopped (preview)", { description: "In the real launcher, Niobium closes now." });
+        toast("Everything stopped (preview)", { description: "In the real launcher, Rift closes now." });
         setBusy(false);
         dismiss();
       }
     } catch (e) {
-      toast.error("Couldn't close Niobium", { description: String(e) });
+      toast.error("Couldn't close Rift", { description: String(e) });
       setBusy(false);
     }
   };
@@ -57,7 +57,7 @@ export function CloseConfirmDialog() {
           <div className="mb-2 flex size-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-violet/30 to-brand-violet/5 text-violet-text ring-1 ring-brand-violet/30">
             <Power className="size-5" />
           </div>
-          <DialogTitle>Close Niobium?</DialogTitle>
+          <DialogTitle>Close Rift?</DialogTitle>
           <DialogDescription>This also stops your game, the game server and the backend.</DialogDescription>
         </DialogHeader>
 

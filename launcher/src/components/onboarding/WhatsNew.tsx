@@ -7,7 +7,7 @@ import { useApp } from "@/lib/store";
 
 /** What changed in this version (shown once after an update). Keep it short and plain. */
 const changes = [
-  { icon: Sparkles, title: "Vanity is now Niobium", text: "New name, new logo – your builds, profiles and settings came along." },
+  { icon: Sparkles, title: "Niobium is now Rift", text: "New name, new logo – your builds, profiles and settings came along." },
   { icon: Bubbles, title: "Bubble Builds", text: "The see-through build look from Chapter 2 Seasons 5–6. Turn it on in Settings." },
   { icon: Palette, title: "A fresh look", text: "A smoother launcher with new animations. Calmer? Settings → Reduce motion." },
   { icon: Languages, title: "Everything in English", text: "The launcher, the installer and the F9 menu." },

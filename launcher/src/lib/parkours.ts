@@ -1,7 +1,7 @@
 /*
  * Trickshot parkours from src/data/parkours.json.
  * The same file is built into the launcher (Rust, include_str!) and written at start to
- * %LOCALAPPDATA%\Niobium\server\parkours.json – the server and the F9 menu read it there.
+ * %LOCALAPPDATA%\Rift\server\parkours.json – the server and the F9 menu read it there.
  */
 import raw from "@/data/parkours.json";
 

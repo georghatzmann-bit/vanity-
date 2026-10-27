@@ -1,5 +1,5 @@
-// [Niobium] Shared state for "Bubble look" (F9 > Main > Graphics) and the Bubble Builds status
-// row (F9 > Options). Niobium code, GPL-3.0 like the rest of Niobium.
+// [Rift] Shared state for "Bubble look" (F9 > Main > Graphics) and the Bubble Builds status
+// row (F9 > Options). Rift code, GPL-3.0 like the rest of Rift.
 //
 // The game thread (Client.cpp, MaintainBubbleLook) writes these values about once per second;
 // the menu (GUI.cpp, render thread) only reads them. Plain atomics, no UObject pointers, so

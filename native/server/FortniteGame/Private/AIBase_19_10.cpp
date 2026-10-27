@@ -1,4 +1,4 @@
-// NIOBIUM: the "19.10 AI base" (see FortniteGame/Public/AIBase_19_10.h). Niobium is GPL-3.0.
+// NIOBIUM: the "19.10 AI base" (see FortniteGame/Public/AIBase_19_10.h). Rift is GPL-3.0.
 //
 // Where the parts come from:
 //   - CheckBuild, the nav hook (CreateAndConfigureNavSystemDetour) and the GetLoadout hook
@@ -6,7 +6,7 @@
 //     (https://github.com/NotTacs/Artemis, GPL-3.0, commit 48dba08) in PlayerBots_19_10.cpp:
 //       FortniteAI/.../AthenaNavSystem.cpp:5-14  -> CreateAndConfigureNavSystemDetour, kRva below
 //       FortniteAI/.../FortAthenaAISpawnerDataComponent_AIBotCosmeticBase.cpp:5-15 -> GetLoadoutDetour
-//     and moved here so Living world can use them without the bots. Niobium's change: AI
+//     and moved here so Living world can use them without the bots. Rift's change: AI
 //     characters and bosses whose cosmetic component is a CosmeticLoadout keep their own outfit
 //     (its reflected CosmeticLoadout is copied into empty fields); the default outfits are only for
 //     the AI player bots ("Phoebe").
@@ -196,7 +196,7 @@ namespace
     }
 
     // Artemis FortAthenaAISpawnerDataComponent_AIBotCosmeticBase.cpp:5-11, which replaces the
-    // native version. Niobium calls the game's version first. Then:
+    // native version. Rift calls the game's version first. Then:
     //   - a CosmeticLoadout component (AI characters, bosses) fills what the game left empty from
     //     its own CosmeticLoadout, so they keep their own outfit;
     //   - only while the AI player bots run, an AI still without an outfit gets one of the default

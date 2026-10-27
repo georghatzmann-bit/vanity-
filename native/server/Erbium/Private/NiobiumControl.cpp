@@ -1,4 +1,4 @@
-// NIOBIUM: control pipe for the launcher - Niobium's own code (GPL-3.0). See NiobiumControl.h.
+// NIOBIUM: control pipe for the launcher - Rift's own code (GPL-3.0). See NiobiumControl.h.
 #include "pch.h"
 #include "../Public/NiobiumControl.h"
 #include "../Public/Configuration.h"
@@ -81,7 +81,7 @@ namespace
         const std::string Data = Line + "\n";
         DWORD Written = 0;
         if (!WriteFile(GPipe, Data.data(), (DWORD)Data.size(), &Written, nullptr))
-            SDK::DbgLog("[Niobium] Pipe write failed error=%lu\n", GetLastError());
+            SDK::DbgLog("[Rift] Pipe write failed error=%lu\n", GetLastError());
     }
 
     void Reply(long long Id, bool bOk, const std::string& Message)
@@ -281,7 +281,7 @@ namespace
         const int Selected = Found ? (int)Found->Value : (int)Playlist::Custom;
         GUI::SelectedPlaylist = Selected;
         GUI::PublishSelectedPlaylist(Selected);
-        SDK::DbgLog("[Niobium] Playlist set: %ls\n", GPlaylistStorage.c_str());
+        SDK::DbgLog("[Rift] Playlist set: %ls\n", GPlaylistStorage.c_str());
         return true;
     }
 
@@ -538,7 +538,7 @@ namespace
             AutoHosting::CancelCountdown();
             AutoHosting::SaveNow(true);
             FConfiguration::bReadyToStart.store(true, std::memory_order_release);
-            SDK::DbgLog("[Niobium] Start requested by the launcher\n");
+            SDK::DbgLog("[Rift] Start requested by the launcher\n");
             Reply(Id, true, "Server is starting. Loading the map...");
             return;
         }
@@ -564,7 +564,7 @@ namespace
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1, 64 * 1024, 64 * 1024, 0, nullptr);
             if (Pipe == INVALID_HANDLE_VALUE)
             {
-                SDK::DbgLog("[Niobium] CreateNamedPipe failed error=%lu\n", GetLastError());
+                SDK::DbgLog("[Rift] CreateNamedPipe failed error=%lu\n", GetLastError());
                 Sleep(3000);
                 continue;
             }
@@ -582,7 +582,7 @@ namespace
                 GPipe = Pipe;
             }
             GConnected.store(true, std::memory_order_release);
-            SDK::DbgLog("[Niobium] Launcher connected to the control pipe\n");
+            SDK::DbgLog("[Rift] Launcher connected to the control pipe\n");
 
             {
                 json Hello;
@@ -625,7 +625,7 @@ namespace
             DisconnectNamedPipe(Pipe);
             CloseHandle(Pipe);
             GReadySent.store(false, std::memory_order_release);
-            SDK::DbgLog("[Niobium] Launcher disconnected - waiting for a new connection\n");
+            SDK::DbgLog("[Rift] Launcher disconnected - waiting for a new connection\n");
         }
     }
 }
@@ -640,7 +640,7 @@ namespace NiobiumControl
         if (Thread)
             CloseHandle(Thread);
         else
-            SDK::DbgLog("[Niobium] Could not start the pipe thread\n");
+            SDK::DbgLog("[Rift] Could not start the pipe thread\n");
     }
 
     void GameThreadTick()
@@ -707,7 +707,7 @@ namespace NiobiumControl
         }
         catch (...)
         {
-            SDK::DbgLog("[Niobium] Could not send the trickshot event\n");
+            SDK::DbgLog("[Rift] Could not send the trickshot event\n");
         }
     }
 
@@ -725,7 +725,7 @@ namespace NiobiumControl
         }
         catch (...)
         {
-            SDK::DbgLog("[Niobium] Could not send the playerBots event\n");
+            SDK::DbgLog("[Rift] Could not send the playerBots event\n");
         }
     }
 
@@ -744,7 +744,7 @@ namespace NiobiumControl
         }
         catch (...)
         {
-            SDK::DbgLog("[Niobium] Could not send the livingWorld event\n");
+            SDK::DbgLog("[Rift] Could not send the livingWorld event\n");
         }
     }
 }

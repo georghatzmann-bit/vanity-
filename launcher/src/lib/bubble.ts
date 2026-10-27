@@ -28,8 +28,8 @@ export const bubbleText = {
   lowMeshesHint:
     "Chapter 3 version: starts the game in Performance Mode with Meshes set to Low. Builds look whiter and more see-through while they go up, like 'bubble wrap' builds. The whole game has lower graphics. Applies on next launch.",
   /** What happens to Fortnite's own settings file (GameUserSettings.ini) around the game. */
-  settingsNoteMeshes: "For the game, Niobium sets Fortnite's Meshes setting to Low. Your Fortnite settings are put back when the game closes.",
-  settingsNotePerformance: "If Fortnite saves Performance Mode as your default, Niobium puts it back when the game closes.",
+  settingsNoteMeshes: "For the game, Rift sets Fortnite's Meshes setting to Low. Your Fortnite settings are put back when the game closes.",
+  settingsNotePerformance: "If Fortnite saves Performance Mode as your default, Rift puts it back when the game closes.",
   /** Second half of the "not available" note: where Bubble Builds work instead. */
   unavailableWhere:
     "Bubble Builds work on 15.40 – 16.00, and as an experiment on Chapter 3 Season 1 (19.x). On other versions, try Bubble look in the F9 menu.",
@@ -55,7 +55,7 @@ export function isExperimentalLevel(level: BubbleLevel | null | undefined): bool
   return level === "experimental" || level === "lowMeshes";
 }
 
-/** The look also needs Fortnite's Meshes on Low (Niobium sets it for the game): 15.40 – 16.00 and 19.x. */
+/** The look also needs Fortnite's Meshes on Low (Rift sets it for the game): 15.40 – 16.00 and 19.x. */
 export function needsLowMeshes(level: BubbleLevel | null | undefined): boolean {
   return level === "supported" || level === "lowMeshes";
 }

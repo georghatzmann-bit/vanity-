@@ -1,4 +1,4 @@
-# Niobium backend
+# Rift backend
 
 The backend is a small server on your own PC. It answers the old Fortnite build instead of the
 real Epic servers: login, locker, shop, settings and matchmaking. It **never** talks to Epic –
@@ -13,7 +13,7 @@ PRO100KatYT), licensed under the **GPL-3.0**. It sits almost unchanged in the `l
 Every change is marked in the code with `// NIOBIUM:` and listed in
 [`lawinserver/NIOBIUM_CHANGES.md`](lawinserver/NIOBIUM_CHANGES.md). Thanks to Lawin for the work!
 
-Only `src/` (TypeScript) comes from Niobium itself: settings from environment variables, the
+Only `src/` (TypeScript) comes from Rift itself: settings from environment variables, the
 `/niobium` endpoints, the logging and the start.
 
 ## Folders
@@ -35,7 +35,7 @@ backend/
 | `NIOBIUM_BACKEND_PORT` | `3551` | HTTP port for every request of the game and `/niobium/*` |
 | `NIOBIUM_MATCHMAKER_PORT` | `80` | port for the matchmaker and XMPP (WebSocket) |
 | `NIOBIUM_BIND` | `127.0.0.1` | `0.0.0.0` if others in the network should reach it |
-| `NIOBIUM_DATA_DIR` | `%LOCALAPPDATA%\Niobium\backend-data` (Linux/macOS: `~/.niobium/backend`) | everything that changes goes here |
+| `NIOBIUM_DATA_DIR` | `%LOCALAPPDATA%\Rift\backend-data` (Linux/macOS: `~/.rift/backend`) | everything that changes goes here |
 | `NIOBIUM_GAMESERVER` | `127.0.0.1:7777` | where the matchmaker sends the players (`ip:port`) |
 
 If a variable is invalid (e.g. port `abc`), the backend stops with a message and exit code 1.
@@ -67,14 +67,14 @@ Everything else (shop data, news, pictures, hotfixes) is only read and stays nex
 - POST only with `Content-Type: application/json` (otherwise `415`) – so no other website in the
   browser can change the target.
 - Wrong values → `400` with `{ "ok": false, "error": "…" }`.
-- `name` in the status is "Niobium" until the launcher sets it ("<player>'s server").
+- `name` in the status is "Rift" until the launcher sets it ("<player>'s server").
 - `version` in the status is the Fortnite version of the hosted game (set by the launcher, empty by default).
 - `gameServer` in the status is always the current matchmaker target. `POST /niobium/status` may set it
   too (`"gameServer": { "ip", "port" }` or `"ip:port"`).
 - For `POST /niobium/gameserver`, `port` is optional (default `7777`).
 
 Every request is one line on stdout, e.g. `[HTTP] GET /niobium/health → 200`
-(without `?…`; if the client stops early: `→ aborted`). Own messages start with `[Niobium]`.
+(without `?…`; if the client stops early: `→ aborted`). Own messages start with `[Rift]`.
 
 ## Build, test, start
 

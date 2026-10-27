@@ -1,7 +1,7 @@
-// [Niobium] "Reset builds" (F9 > Options): aim at one of your edited builds, press your own key,
-// and the piece goes back to its unedited form without opening edit mode. Niobium code, GPL-3.0.
+// [Rift] "Reset builds" (F9 > Options): aim at one of your edited builds, press your own key,
+// and the piece goes back to its unedited form without opening edit mode. Rift code, GPL-3.0.
 //
-// Client half only. The Niobium server does the actual reset; this side picks the target from
+// Client half only. The Rift server does the actual reset; this side picks the target from
 // the game's own TargetedBuilding on the game thread and sends two RPCs back to back:
 //   1. ServerCheat("nbedit:v1:r:<session16>:<seq8>")            (the "arm" message)
 //   2. ServerEditBuildingActor(Target, Target->Class, 0, false)  (the server gets the exact actor)
@@ -324,7 +324,7 @@ namespace NiobiumQuickReset
     bool HandleClientMessage(const wchar_t* text, int length) noexcept;
 
     // True while a hello is out and not acked yet. Client.cpp then reports a server command list
-    // (an old Niobium server answers an unknown command with its help text) through
+    // (an old Rift server answers an unknown command with its help text) through
     // NoteCommandListReply, and the hellos stop for this world: one help text, not five.
     bool IsWaitingForAck() noexcept;
     void NoteCommandListReply() noexcept;

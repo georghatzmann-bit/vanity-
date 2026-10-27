@@ -1,5 +1,6 @@
 //! What a download has finished so far, so it can continue after Pause, a lost connection or a
-//! closed launcher. Lives in the build folder: `<folder>\.niobium-download\`.
+//! closed launcher. Lives in the build folder: `<folder>\.rift-download\` (a download that Niobium
+//! started keeps its `.niobium-download\` folder, see [`state_dir`]).
 //!
 //! - `job.json` – which build this folder belongs to (catalog key + manifest SHA-1).
 //! - `manifest` – the verified manifest, so resuming and deleting work without the internet.
@@ -12,7 +13,9 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-pub const STATE_DIR: &str = ".niobium-download";
+pub const STATE_DIR: &str = ".rift-download";
+/// The same folder from before the rename to Rift (Niobium). Only used if it is already there.
+pub const LEGACY_STATE_DIR: &str = ".niobium-download";
 const JOB_FILE: &str = "job.json";
 const MANIFEST_FILE: &str = "manifest";
 const JOURNAL_FILE: &str = "journal.jsonl";
@@ -49,8 +52,23 @@ pub struct Journal {
     needs_newline: bool,
 }
 
+/// `<root>\.rift-download`. A download Niobium started before the rename keeps using its
+/// `.niobium-download` folder (as long as there is no `.rift-download`), so it can still go on and be
+/// deleted like any other.
 pub fn state_dir(root: &Path) -> PathBuf {
-    root.join(STATE_DIR)
+    let dir = root.join(STATE_DIR);
+    if !dir.exists() {
+        let legacy = root.join(LEGACY_STATE_DIR);
+        if legacy.is_dir() {
+            return legacy;
+        }
+    }
+    dir
+}
+
+/// True for the name of the downloader's own folder (also the one from before the rename).
+pub fn is_state_dir_name(name: &std::ffi::OsStr) -> bool {
+    name == STATE_DIR || name == LEGACY_STATE_DIR
 }
 
 /// `job.json` of an earlier download in this folder (None if there is none or it's unreadable).
@@ -177,9 +195,30 @@ mod tests {
     use super::*;
 
     fn temp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("niobium-journal-{name}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("rift-journal-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         d
+    }
+
+    #[test]
+    fn download_started_by_niobium_keeps_its_folder() {
+        let root = temp("legacy");
+        assert_eq!(state_dir(&root), root.join(".rift-download"));
+        // Niobium wrote the notes of an unfinished download into `.niobium-download`
+        let job = JobInfo { key: "19.10-CL-18675304".into(), manifest_sha1: "abc".into() };
+        let legacy = root.join(LEGACY_STATE_DIR);
+        fs::create_dir_all(&legacy).unwrap();
+        fs::write(legacy.join(JOB_FILE), serde_json::to_vec(&job).unwrap()).unwrap();
+        assert_eq!(state_dir(&root), legacy);
+        assert_eq!(read_job(&root), Some(job));
+        assert!(Journal::open_existing(&root).unwrap().is_some());
+        assert!(is_state_dir_name(std::ffi::OsStr::new(".niobium-download")));
+        assert!(is_state_dir_name(std::ffi::OsStr::new(".rift-download")));
+        assert!(!is_state_dir_name(std::ffi::OsStr::new("FortniteGame")));
+        // once the new folder exists, it wins
+        fs::create_dir_all(root.join(STATE_DIR)).unwrap();
+        assert_eq!(state_dir(&root), root.join(STATE_DIR));
+        fs::remove_dir_all(&root).ok();
     }
 
     #[test]

@@ -1,6 +1,6 @@
-// [Niobium] Modified version. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
+// [Rift] Modified version. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
 // (c) ralz, cipherfps and contributors, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
-// Niobium changes: data paths, visible names/credit, MinHook via project reference.
+// Rift changes: data paths, visible names/credit, MinHook via project reference.
 #pragma once
 
 #include <Windows.h>
@@ -15,17 +15,17 @@ namespace AtlasDiagnostics
     inline std::wstring GetPath()
     {
         wchar_t appData[MAX_PATH]{};
-        // [Niobium] Logs live next to the other Niobium logs: %LOCALAPPDATA%\Niobium\logs
+        // [Rift] Logs live next to the other Rift logs: %LOCALAPPDATA%\Rift\logs
         if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData)))
         {
-            std::wstring directory = std::wstring(appData) + L"\\Niobium";
+            std::wstring directory = std::wstring(appData) + L"\\Rift";
             CreateDirectoryW(directory.c_str(), nullptr);
             directory += L"\\logs";
             CreateDirectoryW(directory.c_str(), nullptr);
             return directory + L"\\client-diagnostics.log";
         }
 
-        return L"niobium-client-diagnostics.log";
+        return L"rift-client-diagnostics.log";
     }
 
     inline HANDLE GetFileHandle()

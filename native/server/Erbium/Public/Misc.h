@@ -44,7 +44,7 @@ namespace LoadoutManager
         char path[MAX_PATH];
         if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, path)))
         {
-            std::string fullPath = std::string(path) + "\\Niobium\\server\\loadouts"; // NIOBIUM: own data folder
+            std::string fullPath = std::string(path) + "\\Rift\\server\\loadouts"; // NIOBIUM: own data folder
             std::filesystem::create_directories(fullPath);
             return fullPath;
         }

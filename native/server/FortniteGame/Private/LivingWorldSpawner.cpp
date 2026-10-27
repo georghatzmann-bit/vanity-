@@ -1,5 +1,5 @@
 // NIOBIUM: "Lager-lite" - Living world spawning (see FortniteGame/Public/LivingWorldSpawner.h).
-// Niobium's own code (GPL-3.0).
+// Rift's own code (GPL-3.0).
 //
 // Credits (ideas and structure; no code is copied):
 //   - Jeremy1926/Velora (MIT), dfa12c2, Velora/FortniteGame/Plugins/GameFeatures/Lager/Source/
@@ -28,7 +28,7 @@
 //      every point provider of the map (patrol path providers, Living World volumes, static
 //      providers, the manager's own lists) with its FiltersTags. Any of this missing -> "unavailable".
 //   3. Plan (a budget of tag-query calls per poll): events by priority bucket - bosses, guards,
-//      creatures, characters, others (vehicles are left to Niobium's own vehicle spawner) - each
+//      creatures, characters, others (vehicles are left to Rift's own vehicle spawner) - each
 //      matched to free point providers through BlueprintGameplayTagLibrary.DoesContainerMatchTagQuery
 //      (ProcessEvent); instances = min(event MaxCount, category budget, places), all within
 //      LivingWorldMaxAI.
@@ -774,7 +774,7 @@ namespace
         Wildlife = 2,
         Character = 3,
         Other = 4,
-        Skip = 5, // vehicles (Niobium's vehicle spawner owns them)
+        Skip = 5, // vehicles (Rift's vehicle spawner owns them)
     };
 
     const char* BucketName(EBucket Bucket)

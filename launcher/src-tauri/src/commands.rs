@@ -20,7 +20,7 @@ type R<T> = Result<T, String>;
 fn save(engine: &Engine) {
     let cfg = engine.config.lock().unwrap();
     if let Err(e) = profiles::save(&cfg) {
-        eprintln!("[Niobium] Couldn't save the settings: {e}");
+        eprintln!("[Rift] Couldn't save the settings: {e}");
     }
 }
 
@@ -178,16 +178,16 @@ pub fn stop_all(engine: E) -> R<()> {
     Ok(())
 }
 
-/// "Stop & close" in the "Close Niobium?" dialog: stops everything like "Stop all" (incl. helpers
-/// and the backend), then quits Niobium.
+/// "Stop & close" in the "Close Rift?" dialog: stops everything like "Stop all" (incl. helpers
+/// and the backend), then quits Rift.
 #[tauri::command(async)]
 pub fn quit_app(app: AppHandle, engine: E) {
     engine.shutdown();
     app.exit(0);
 }
 
-/// The UI shows "Close Niobium?" (question `id` from `app:close-requested`). Without this answer
-/// Niobium stops everything and closes by itself after a few seconds.
+/// The UI shows "Close Rift?" (question `id` from `app:close-requested`). Without this answer
+/// Rift stops everything and closes by itself after a few seconds.
 #[tauri::command]
 pub fn close_prompt_shown(engine: E, id: u64) {
     engine.close_prompt_shown(id);
@@ -242,7 +242,7 @@ fn default_client_settings() -> serde_json::Value {
     serde_json::json!({
         "hotkey": 120,       // F9 – menu
         "joinHotkey": 116,   // F5 – quick join
-        "consoleMode": 0,    // 0 = Niobium console, 1 = original Unreal console
+        "consoleMode": 0,    // 0 = Rift console, 1 = original Unreal console
         "preferences": {
             "saveTogglePreferences": true, "slashKey": true,
             "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": true,
@@ -337,7 +337,7 @@ pub fn show_main_window(app: &AppHandle) {
     if let Some(splash) = app.get_webview_window("splash") {
         let _ = splash.close();
     }
-    // Log lines from the start (e.g. the note about copied Vanity settings) wait for the UI to
+    // Log lines from the start (e.g. the note about settings copied from Niobium) wait for the UI to
     // fetch them with `pending_log_lines`. Safety net if it never does: send them as events later.
     let handle = app.clone();
     std::thread::spawn(move || {
@@ -349,7 +349,7 @@ pub fn show_main_window(app: &AppHandle) {
 }
 
 /// Launcher log lines written before the UI listened to "log:line" (e.g. "Copied your settings
-/// from Vanity to Niobium …", "Backend port is fixed at 3551 …"), oldest first. The UI calls this
+/// from Niobium to Rift …", "Backend port is fixed at 3551 …"), oldest first. The UI calls this
 /// once, right after its "log:line" listener is registered. From then on every line comes as a
 /// "log:line" event; later calls return an empty list.
 #[tauri::command]

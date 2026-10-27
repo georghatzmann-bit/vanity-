@@ -1,12 +1,12 @@
-// NIOBIUM: trickshot parkours, target bots and trickshot detection - Niobium's own code (GPL-3.0),
+// NIOBIUM: trickshot parkours, target bots and trickshot detection - Rift's own code (GPL-3.0),
 // not part of Magnesium. See NiobiumParkour.h.
 //
-// The parkours live in %LOCALAPPDATA%\Niobium\server\parkours.json (written by the launcher, same file
+// The parkours live in %LOCALAPPDATA%\Rift\server\parkours.json (written by the launcher, same file
 // as launcher/src/data/parkours.json). All values there are metres relative to the player:
 // at = [forward, right, up]. One floor tile is 5.12 m.
 //
 // Steps of "parkour <id>" (on the game thread, from ServerCheat):
-//   1. remove the old Niobium parkour
+//   1. remove the old Rift parkour
 //   2. round the view direction to 90 degrees, feet F = player - 90 cm + height
 //   3. start floor (w x d tiles) around F, then jump objects (+ their own floors), then target bots on a floor each
 //   4. put the player on the start, facing forward, give a sniper rifle, remember the start
@@ -165,12 +165,12 @@ namespace
         return "\"" + Text + "\"";
     }
 
-    // One line to one player, always starting with "[Niobium] ".
+    // One line to one player, always starting with "[Rift] ".
     void Say(AFortPlayerControllerAthena* PlayerController, const std::string& Utf8)
     {
         if (!PlayerController)
             return;
-        const std::wstring Wide = L"[Niobium] " + Widen(Utf8);
+        const std::wstring Wide = L"[Rift] " + Widen(Utf8);
         PlayerController->ClientMessage(FString(Wide.c_str()), FName(), 1.f);
     }
 
@@ -591,7 +591,7 @@ namespace
         const DWORD Length = GetEnvironmentVariableW(L"LOCALAPPDATA", Buffer, (DWORD)(sizeof(Buffer) / sizeof(Buffer[0])));
         if (Length == 0 || Length >= sizeof(Buffer) / sizeof(Buffer[0]))
             return L"";
-        return std::wstring(Buffer, Length) + L"\\Niobium\\server\\parkours.json";
+        return std::wstring(Buffer, Length) + L"\\Rift\\server\\parkours.json";
     }
 
     bool ReadWholeFile(const std::wstring& Path, std::string& Out)
@@ -791,7 +791,7 @@ namespace
         std::string Text;
         if (!ReadWholeFile(ParkourFilePath(), Text))
         {
-            Say(Controller, "The parkour list is missing. Please start the game from the Niobium launcher.");
+            Say(Controller, "The parkour list is missing. Please start the game from the Rift launcher.");
             return false;
         }
         bool bParsed = false;
@@ -805,7 +805,7 @@ namespace
         }
         if (!bParsed)
         {
-            Say(Controller, "The parkour list is broken. Restart the Niobium launcher to write it again.");
+            Say(Controller, "The parkour list is broken. Restart the Rift launcher to write it again.");
             return false;
         }
         if (Out.Parkours.empty())
@@ -977,7 +977,7 @@ namespace
                 Ground.Z = GBase.Z;
         }
 
-        // Remove the old Niobium parkour first.
+        // Remove the old Rift parkour first.
         {
             FClearResult Ignored;
             ClearSet(GParkourSpawned, Ignored);
@@ -1121,7 +1121,7 @@ namespace
             SaySniperResult(Controller, GiveSniper(Controller, File.Snipers));
         Say(Controller, "Again: parkour retry | Remove all: parkour clear");
 
-        SDK::DbgLog("[Niobium] parkour %s built: floors=%d objects=%d bots=%d missingKinds=%d\n", Parkour->Id.c_str(),
+        SDK::DbgLog("[Rift] parkour %s built: floors=%d objects=%d bots=%d missingKinds=%d\n", Parkour->Id.c_str(),
             Floors, Objects, Bots, (int)MissingLabels.size());
     }
 
@@ -1280,11 +1280,11 @@ namespace
         if (VictimName.empty())
             VictimName = "Opponent";
 
-        // "[Niobium] TRICKSHOT! <killer> \u2013 <metres> m" (en dash). The F9 menu shows its banner for
-        // messages that start with L"[Niobium] TRICKSHOT".
-        SayToEveryone(L"[Niobium] TRICKSHOT! " + Widen(KillerName) + L" \u2013 " + std::to_wstring(Meters) + L" m");
+        // "[Rift] TRICKSHOT! <killer> \u2013 <metres> m" (en dash). The F9 menu shows its banner for
+        // messages that start with L"[Rift] TRICKSHOT".
+        SayToEveryone(L"[Rift] TRICKSHOT! " + Widen(KillerName) + L" \u2013 " + std::to_wstring(Meters) + L" m");
         NiobiumControl::EmitTrickshot(KillerName, VictimName, Meters);
-        SDK::DbgLog("[Niobium] Trickshot: %s -> %s (%d m)\n", KillerName.c_str(), VictimName.c_str(), Meters);
+        SDK::DbgLog("[Rift] Trickshot: %s -> %s (%d m)\n", KillerName.c_str(), VictimName.c_str(), Meters);
     }
 }
 
@@ -1328,7 +1328,7 @@ namespace NiobiumParkour
         }
         catch (...)
         {
-            SDK::DbgLog("[Niobium] parkour: caught an unexpected error\n");
+            SDK::DbgLog("[Rift] parkour: caught an unexpected error\n");
             Say(PlayerController, "Something went wrong. Please try again.");
         }
     }
@@ -1352,7 +1352,7 @@ namespace NiobiumParkour
         }
         catch (...)
         {
-            SDK::DbgLog("[Niobium] targetbot: caught an unexpected error\n");
+            SDK::DbgLog("[Rift] targetbot: caught an unexpected error\n");
             Say(PlayerController, "Something went wrong. Please try again.");
         }
     }
@@ -1369,7 +1369,7 @@ namespace NiobiumParkour
         }
         catch (...)
         {
-            SDK::DbgLog("[Niobium] Trickshot detection: caught an unexpected error\n");
+            SDK::DbgLog("[Rift] Trickshot detection: caught an unexpected error\n");
         }
     }
 }

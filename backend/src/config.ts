@@ -60,9 +60,9 @@ export function defaultDataDir(): string {
   if (process.platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
     // Not "backend": that is where the installer puts the backend itself (see engine.rs).
-    return path.join(localAppData, "Niobium", "backend-data");
+    return path.join(localAppData, "Rift", "backend-data");
   }
-  return path.join(os.homedir(), ".niobium", "backend");
+  return path.join(os.homedir(), ".rift", "backend");
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig {

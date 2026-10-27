@@ -16,10 +16,10 @@
 #include "../Public/ArenaVisualTracePolicy.h"
 #include "../Public/PlaylistHudPatchPolicy.h"
 #include "../Public/TournamentRefreshPolicy.h"
-#include "../Public/NiobiumTrickshotTab.h" // [Niobium] trickshot banner (NiobiumToast_Push)
-#include "../Public/BubbleLook.h" // [Niobium] Bubble look state shared with the menu
-#include "../Public/EditFeatureRoutes.h" // [Niobium] EOR/ROR/pre-edits: hook or Fortnite's own setting
-#include "../Public/QuickReset.h" // [Niobium] "Reset builds" (client half)
+#include "../Public/NiobiumTrickshotTab.h" // [Rift] trickshot banner (NiobiumToast_Push)
+#include "../Public/BubbleLook.h" // [Rift] Bubble look state shared with the menu
+#include "../Public/EditFeatureRoutes.h" // [Rift] EOR/ROR/pre-edits: hook or Fortnite's own setting
+#include "../Public/QuickReset.h" // [Rift] "Reset builds" (client half)
 
 #include <array>
 #include <atomic>
@@ -36,7 +36,7 @@ static std::atomic_bool g_ClientMessageCaptureInstalled = false;
 static std::atomic_bool g_ClientMessageCaptureEnabled = true;
 static std::atomic_bool g_ServerCommandListReceived = false;
 static std::atomic_uint64_t g_ConsoleSessionGeneration = 0;
-// [Niobium] World changes seen by the client tick (the menu resets toggle-only commands on it).
+// [Rift] World changes seen by the client tick (the menu resets toggle-only commands on it).
 static std::atomic_uint64_t g_WorldGeneration = 0;
 static std::atomic_uint32_t g_ClientMessageTextOffset = UINT32_MAX;
 static std::atomic_bool g_FrontendActive = false;
@@ -95,7 +95,7 @@ static ULONGLONG g_NextFrontendSelectionHookResolveAt = 0;
 static thread_local bool g_FrontendTournamentRefreshDispatchActive = false;
 static thread_local unsigned g_FrontendSelectionRebindDepth = 0;
 static std::atomic<DWORD> g_ClientGameThreadId = 0;
-// [Niobium] Last world / local controller the client tick saw, for the per-frame Reset builds
+// [Rift] Last world / local controller the client tick saw, for the per-frame Reset builds
 // pump. Game thread only (written by ClientGameThreadTick, read by HookedGetMaxTickRate).
 static UWorld* g_QuickResetWorld = nullptr;
 static AFortPlayerControllerAthena* g_QuickResetController = nullptr;
@@ -419,7 +419,7 @@ static void CaptureClientMessage(UObject* context, FFrame& stack, void* result)
 		fabs(VersionInfo.FortniteVersion - 27.11) < 0.001 &&
 		g_DurianPhaseSyncInstalled.load(std::memory_order_acquire);
 	const bool shouldInspectArenaBridge = SupportsArenaRuntime();
-	// [Niobium] The trickshot banner needs the message in both console modes. The bridge
+	// [Rift] The trickshot banner needs the message in both console modes. The bridge
 	// handlers below check their own conditions; their behaviour stays the same.
 	const bool shouldInspectNiobiumToast = true;
 
@@ -466,13 +466,13 @@ static void CaptureClientMessage(UObject* context, FFrame& stack, void* result)
 			{
 				return;
 			}
-			// [Niobium] Reset builds handshake ack ("nbedit:v1:a:<session16>", exact width).
+			// [Rift] Reset builds handshake ack ("nbedit:v1:a:<session16>", exact width).
 			if (copied && NiobiumQuickReset::HandleClientMessage(
 				messageCopy, length))
 			{
 				return;
 			}
-			// [Niobium] An old Niobium server answers the Reset builds hello (an unknown cheat
+			// [Rift] An old Rift server answers the Reset builds hello (an unknown cheat
 			// command there) with its command list: stop the remaining hellos. The text itself
 			// still reaches the console as before.
 			if (copied && length > 0 &&
@@ -489,9 +489,9 @@ static void CaptureClientMessage(UObject* context, FFrame& stack, void* result)
 			{
 				return;
 			}
-			// [Niobium] "[Niobium] TRICKSHOT! <player> - <metres> m" from the server -> big banner.
+			// [Rift] "[Rift] TRICKSHOT! <player> - <metres> m" from the server -> big banner.
 			// The message then carries on unchanged (console and game).
-			static constexpr wchar_t niobiumTrickshotPrefix[] = L"[Niobium] TRICKSHOT";
+			static constexpr wchar_t niobiumTrickshotPrefix[] = L"[Rift] TRICKSHOT";
 			static constexpr int niobiumTrickshotPrefixLength =
 				static_cast<int>(_countof(niobiumTrickshotPrefix) - 1);
 			if (copied && shouldInspectNiobiumToast &&
@@ -577,7 +577,7 @@ static bool TryInstallClientMessageCapture(UObject* playerController)
 	return true;
 }
 
-// [Niobium] /Script/FortniteGame.FortPlayerController, found once (native class, never unloaded).
+// [Rift] /Script/FortniteGame.FortPlayerController, found once (native class, never unloaded).
 // Looked up again at most every 2 s while it can't be found.
 static const UClass* ResolveFortPlayerControllerClass()
 {
@@ -621,7 +621,7 @@ static AFortPlayerControllerAthena* GetLocalFortPlayerController()
 	if (LocalPlayers.Num() <= 0 || !LocalPlayers[0])
 		return nullptr;
 
-	// [Niobium] Free camera (toggledebugcamera) replaces the local player's controller with a
+	// [Rift] Free camera (toggledebugcamera) replaces the local player's controller with a
 	// DebugCameraController, which is not a FortPlayerController. Never hand that out as one.
 	// If the class can't be resolved at all, keep the old behaviour (no check).
 	UObject* controller = LocalPlayers[0]->PlayerController;
@@ -5975,7 +5975,7 @@ static void HookedDurianPhaseActivate(
 		phaseIndex, phaseActor, sequenceTimeOffset);
 }
 
-// [Niobium] CompleteBuildingEditInteraction crashed once and was switched off: every feature
+// [Rift] CompleteBuildingEditInteraction crashed once and was switched off: every feature
 // that relied on it through our hook now shows "Couldn't be set up on this version." in F9
 // instead of a switch that silently does nothing.
 static void MarkEditCompletionHooksFailed()
@@ -6068,7 +6068,7 @@ static uintptr_t FindCompleteBuildingEditInteraction()
 	return 0;
 }
 
-// [Niobium] Second guard: the detours only add anything while their feature really uses the
+// [Rift] Second guard: the detours only add anything while their feature really uses the
 // hook route (EditFeatureRoutes.h). Where Fortnite's own setting is used they just call the
 // original, so our hook and Epic's setting never act together.
 void* SelectEdit(void* a1)
@@ -6126,7 +6126,7 @@ static AActor* FindHighlightedPlacedBuilding(
 	return nullptr;
 }
 
-// [Niobium] Shared with Reset builds (QuickReset.cpp): the real placed piece behind a preview.
+// [Rift] Shared with Reset builds (QuickReset.cpp): the real placed piece behind a preview.
 AActor* Niobium_FindHighlightedPlacedBuilding(AFortPlayerControllerAthena* playerController)
 {
 	if (!IsLiveUObject(playerController))
@@ -8726,7 +8726,7 @@ static void ApplyClientPlaylistConfiguration(
 			Playlist->RespawnTime.Value =
 				(float)FConfiguration::RespawnTime;
 		}
-		// [Niobium] Only where the property exists (it may be missing on the oldest builds; a
+		// [Rift] Only where the property exists (it may be missing on the oldest builds; a
 		// missing offset would write one byte in front of the object).
 		if (Playlist->HasRespawnType())
 			Playlist->RespawnType = 1;
@@ -11774,7 +11774,7 @@ static void ProcessDurianPhaseSync(UWorld* world)
 }
 
 // =============================================================================================
-// [Niobium] Bubble look (F9 > Main > Graphics) and the read-only Bubble Builds probe.
+// [Rift] Bubble look (F9 > Main > Graphics) and the read-only Bubble Builds probe.
 //
 // Bubble look lowers the detail of the four build "blueprint" textures, which draw the
 // see-through part of builds (placement preview, building up, damage). It only changes one
@@ -11859,7 +11859,7 @@ struct FBubbleLookRuntime
 	int ProbePerformanceMode = -1000;
 	bool ProbeLoggedProperties = false;
 	const UObject* FortKismetLibraryDefault = nullptr;
-	// [Niobium] -FeatureLevelES31 on the command line (read once, for the pause rule).
+	// [Rift] -FeatureLevelES31 on the command line (read once, for the pause rule).
 	bool CommandLineChecked = false;
 	bool FeatureLevelES31 = false;
 };
@@ -11960,7 +11960,7 @@ static bool WriteBubbleTextureLodBias(UObject* texture, uint32 offset, int32 val
 }
 
 // Calls a reflected getter that takes nothing and returns one plain value of returnSize bytes
-// (checked against the function's parameters first). Game thread only. [Niobium] Shared by
+// (checked against the function's parameters first). Game thread only. [Rift] Shared by
 // Bubble look and the native edit settings (MaintainNativeEditSettings).
 static bool CallReflectedGetterUnsafe(
 	const UObject* target, const char* functionName, uint32 returnSize, void* output)
@@ -12001,7 +12001,7 @@ static bool CallReflectedGetter(
 	}
 }
 
-// [Niobium] A reflected function with exactly one 1-byte input parameter (a bool setter such as
+// [Rift] A reflected function with exactly one 1-byte input parameter (a bool setter such as
 // SetEditConfirmOnReleaseEnabled) and nothing else: no return value, no out parameter.
 // offset receives where the parameter sits in the call buffer. Game thread only.
 static bool CheckReflectedBoolSetterUnsafe(UFunction* function, uint32* offset)
@@ -12301,7 +12301,7 @@ static void MaintainBubbleLook(ULONGLONG now, bool inMatch)
 	const int32 strength = NiobiumBubbleLook::SanitizeStrength(
 		FConfiguration::BubbleStrength.load(std::memory_order_acquire));
 
-	// [Niobium] Started in Performance Mode by the launcher (-FeatureLevelES31)? Read once.
+	// [Rift] Started in Performance Mode by the launcher (-FeatureLevelES31)? Read once.
 	if (!g_BubbleLook.CommandLineChecked)
 	{
 		g_BubbleLook.CommandLineChecked = true;
@@ -12335,7 +12335,7 @@ static void MaintainBubbleLook(ULONGLONG now, bool inMatch)
 		}
 	}
 
-	// [Niobium] Pause rule: while Epic's own Bubble Builds are really on (Performance Mode, a
+	// [Rift] Pause rule: while Epic's own Bubble Builds are really on (Performance Mode, a
 	// Supported or LowMeshes version, Meshes Low at session start), Bubble look puts the original
 	// values back and changes nothing: it would only blur them more.
 	const bool paused = wanted && NiobiumBubbleLook::EpicBubblesOn(
@@ -12532,7 +12532,7 @@ static void MaintainBubbleLook(ULONGLONG now, bool inMatch)
 }
 
 // ---------------------------------------------------------------------------------------------
-// [Niobium] Fortnite's own edit settings (EditFeatureRoutes.h, "Native" route).
+// [Rift] Fortnite's own edit settings (EditFeatureRoutes.h, "Native" route).
 //
 // From 11.00 (Edit on release), 15.20 (Disable pre-edits) and 24.30 (Reset on release) the F9 row
 // drives Epic's own setting on UFortClientSettingsRecord instead of our hook. Epic's value is the
@@ -12904,14 +12904,14 @@ static UWorld* ClientGameThreadTick()
 	ProcessDurianPhaseSync(world);
 
 	const ULONGLONG now = GetTickCount64();
-	// [Niobium] Bubble look + probe: game thread only, about once per second.
+	// [Rift] Bubble look + probe: game thread only, about once per second.
 	MaintainBubbleLook(now,
 		!frontendActive && IsLiveUObject(world) && IsLiveUObject(playerController) &&
 			!IsFrontendWorld(world));
-	// [Niobium] Fortnite's own edit settings (native routes): game thread only, once per second
+	// [Rift] Fortnite's own edit settings (native routes): game thread only, once per second
 	// or right after an F9 click.
 	MaintainNativeEditSettings(now, world);
-	// [Niobium] What the per-frame Reset builds pump works with (checked again every frame).
+	// [Rift] What the per-frame Reset builds pump works with (checked again every frame).
 	g_QuickResetWorld = world;
 	g_QuickResetController = playerController;
 	g_QuickResetFrontend = frontendActive || IsFrontendWorld(world);
@@ -13073,7 +13073,7 @@ static float HookedGetMaxTickRate(
 		AtlasHotfixReload::GameThreadTick(world);
 	}
 
-	// [Niobium] Reset builds: every frame, so a key press is handled right away and edit mode is
+	// [Rift] Reset builds: every frame, so a key press is handled right away and edit mode is
 	// sampled each frame. Uses the world/controller the client tick last saw (checked inside).
 	NiobiumQuickReset::GameThreadPump(
 		g_QuickResetWorld, g_QuickResetController, g_QuickResetFrontend,
@@ -13298,7 +13298,7 @@ static bool InstallGameThreadPump()
 	return true;
 }
 
-// [Niobium] Reads the first byte of a hook target and the byte before it (SEH only; no C++
+// [Rift] Reads the first byte of a hook target and the byte before it (SEH only; no C++
 // objects in this function, see IsPlausibleEditHookTarget).
 static bool LooksLikeFunctionStartUnsafeRead(uintptr_t addr)
 {
@@ -13318,7 +13318,7 @@ static bool LooksLikeFunctionStartUnsafeRead(uintptr_t addr)
 	}
 }
 
-// [Niobium] A target from the 3-byte edit search that looks like a real function start: inside
+// [Rift] A target from the 3-byte edit search that looks like a real function start: inside
 // .text, executable, not padding itself, and either 16-byte aligned (MSVC's usual function
 // alignment) or right after int3/ret/nop padding. Never an exact proof, but it turns a match in
 // the middle of an instruction into "not installed" instead of a hook on random code.
@@ -13335,7 +13335,7 @@ static bool IsPlausibleEditHookTarget(uintptr_t addr)
 	return LooksLikeFunctionStartUnsafeRead(addr);
 }
 
-// [Niobium] Creates and enables one edit hook on its own (no MH_ALL_HOOKS), checking both
+// [Rift] Creates and enables one edit hook on its own (no MH_ALL_HOOKS), checking both
 // results. On failure the hook is removed again and the original pointer cleared.
 template <typename TOriginal>
 static bool InstallEditHook(const char* name, uintptr_t target, void* detour, TOriginal& original)
@@ -13367,7 +13367,7 @@ static bool InstallEditHook(const char* name, uintptr_t target, void* detour, TO
 void Client::Init()
 {
 	g_FrontendActive.store(false, std::memory_order_release);
-	// [Niobium] The Trickshot tab shows a short hint while you are in the lobby.
+	// [Rift] The Trickshot tab shows a short hint while you are in the lobby.
 	NiobiumTrickshotTab_SetLobbyCheck(&Client::IsFrontendActive);
 
 	if (VersionInfo.FortniteVersion < 24.30)
@@ -13427,7 +13427,7 @@ void Client::Init()
 
 		uintptr_t CompleteAddr = FindCompleteBuildingEditInteraction();
 
-		// [Niobium] The byte search only matches 3 bytes, so check every target before hooking:
+		// [Rift] The byte search only matches 3 bytes, so check every target before hooking:
 		// inside .text, a plausible function start, and all four different. A failed check
 		// means no hook and the F9 row says "Couldn't be set up on this version".
 		const auto plausible = [&](uintptr_t addr, uintptr_t a, uintptr_t b, uintptr_t c) -> bool
@@ -13488,7 +13488,7 @@ void Client::Init()
 		}
 	}
 
-	// [Niobium] Every feature whose version uses Fortnite's own setting waits for the game
+	// [Rift] Every feature whose version uses Fortnite's own setting waits for the game
 	// thread to find it (MaintainNativeEditSettings). Hooks are never installed for those.
 	for (int index = 0; index < NiobiumEditRoutes::FeatureCount; ++index)
 	{

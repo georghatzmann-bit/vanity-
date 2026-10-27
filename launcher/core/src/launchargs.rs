@@ -105,7 +105,7 @@ pub fn bubble_builds_support(version: &str) -> BubbleBuildsInfo {
 }
 
 /// Rules that depend on the Fortnite version. Worked out from the version number, so every
-/// version can start – even ones nobody has tested with Niobium yet.
+/// version can start – even ones nobody has tested with Rift yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VersionRules {
     pub major: u32,

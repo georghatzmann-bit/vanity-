@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn join_and_length() {
-        let root = Path::new("D:/Niobium/Builds/18.30-CL-17882303");
+        let root = Path::new("D:/Rift/Builds/18.30-CL-17882303");
         let p = safe_join(root, "FortniteGame/Content/Paks/a.pak").unwrap();
         assert!(p.ends_with("FortniteGame/Content/Paks/a.pak"));
         assert!(p.starts_with(root));

@@ -7,7 +7,7 @@
 class Utils {
     static inline void* _NpFH = nullptr;
 public:
-    // [Niobium] Returns MinHook's result, so callers can check it (it was ignored before).
+    // [Rift] Returns MinHook's result, so callers can check it (it was ignored before).
     template <class _Ot = void*>
     static MH_STATUS Hook(uint64_t _Ptr, void* _Detour, _Ot& _Orig = _NpFH)
     {

@@ -1,4 +1,4 @@
-# Niobium's changes to LawinServer
+# Rift's changes to LawinServer
 
 Source: <https://github.com/Lawin0129/LawinServer>, commit `70414917f57187cba1f22190f696f3a4ffbcd058`
 (16 Oct 2026, "Added the new Grave Feather hero and new questline"). Licence: GPL-3.0, see `LICENSE`.
@@ -6,7 +6,8 @@ Authors: Lawin0129 (Lawin) and PRO100KatYT. Thank you, Lawin!
 
 Every change in the code is marked with `// NIOBIUM:` (in `config.ini` with `# NIOBIUM:`).
 For blocks of several lines the marker is in the comment line above.
-(Niobium used to be called Vanity; the markers were `// VANITY:` back then.)
+(Rift used to be called Niobium, and before that Vanity. The markers kept the name `NIOBIUM:` from the
+Niobium days; under Vanity they were `// VANITY:`.)
 
 ## Not taken over
 
@@ -45,7 +46,7 @@ For blocks of several lines the marker is in the comment line above.
 - `path.join(__dirname, "..", "Config", "config.ini")` (and similar) → `niobium.file("Config/config.ini")`
 
 **Why:** LawinServer read data relative to the module folder and wrote relative to the working folder.
-Niobium bundles everything into one file with esbuild (`dist/main.js`) – there `require` would build the
+Rift bundles everything into one file with esbuild (`dist/main.js`) – there `require` would build the
 JSON files in (profiles could never be reloaded) and `__dirname` would point to the wrong folder.
 Also, all written data has to land in the data folder (`NIOBIUM_DATA_DIR`), not in the program folder.
 
@@ -89,7 +90,7 @@ Also, all written data has to land in the data folder (`NIOBIUM_DATA_DIR`), not 
 
 ### `Config/config.ini`
 
-- Note in the `[GameServer]` section: `ip`/`port` are not used by Niobium
+- Note in the `[GameServer]` section: `ip`/`port` are not used by Rift
   (the target comes from `NIOBIUM_GAMESERVER` / `POST /niobium/gameserver`).
 
 ## Unchanged

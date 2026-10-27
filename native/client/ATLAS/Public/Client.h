@@ -25,7 +25,7 @@ public:
     static bool IsConsoleCaptureReady();
     static bool HasReceivedServerCommandList();
     static uint64_t GetConsoleSessionGeneration();
-    // [Niobium] Counts world changes seen by the client tick (match start, map change, lobby).
+    // [Rift] Counts world changes seen by the client tick (match start, map change, lobby).
     static uint64_t GetWorldGeneration();
     static bool IsFrontendActive();
 };

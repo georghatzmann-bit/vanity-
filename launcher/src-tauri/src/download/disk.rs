@@ -16,7 +16,7 @@ fn env_dirs(names: &[&str]) -> Vec<PathBuf> {
 pub fn folder_facts(folder: &Path, own_dirs: Vec<PathBuf>) -> FolderFacts {
     let journal_key = journal::read_job(folder).map(|j| j.key);
     let has_other_files = fs::read_dir(folder)
-        .map(|rd| rd.flatten().any(|e| e.file_name() != journal::STATE_DIR))
+        .map(|rd| rd.flatten().any(|e| !journal::is_state_dir_name(&e.file_name())))
         .unwrap_or(false);
     FolderFacts {
         folder: folder.to_path_buf(),
@@ -31,7 +31,7 @@ pub fn folder_facts(folder: &Path, own_dirs: Vec<PathBuf>) -> FolderFacts {
 
 /// Creates the folder (if needed) and writes + deletes a tiny test file.
 /// Returns the folders this call created, deepest first (e.g. `…\Builds\<key>`, `…\Builds`,
-/// `D:\Niobium`), so they can be removed again if the download stops before writing anything.
+/// `D:\Rift`), so they can be removed again if the download stops before writing anything.
 pub fn write_probe(folder: &Path) -> io::Result<Vec<PathBuf>> {
     let created: Vec<PathBuf> = folder
         .ancestors()
@@ -40,7 +40,7 @@ pub fn write_probe(folder: &Path) -> io::Result<Vec<PathBuf>> {
         .collect();
     let result = (|| {
         fs::create_dir_all(folder)?;
-        let probe = folder.join(".niobium-write-test");
+        let probe = folder.join(".rift-write-test");
         fs::write(&probe, b"ok")?;
         fs::remove_file(&probe)
     })();
@@ -129,7 +129,7 @@ fn volume_facts(_folder: &Path) -> Option<VolumeFacts> {
     None
 }
 
-/// `<fixed drive with the most free space>:\Niobium\Builds\<key>` (FAT drives are skipped).
+/// `<fixed drive with the most free space>:\Rift\Builds\<key>` (FAT drives are skipped).
 #[cfg(windows)]
 pub fn default_folder(key: &str) -> PathBuf {
     use windows::Win32::Storage::FileSystem::GetLogicalDrives;
@@ -144,10 +144,10 @@ pub fn default_folder(key: &str) -> PathBuf {
         .filter(|v| !v.file_system.to_ascii_uppercase().starts_with("FAT"))
         .max_by_key(|v| v.free_bytes);
     let letter = best.map(|v| v.letter).unwrap_or_else(|| "C:".into());
-    PathBuf::from(format!("{letter}\\")).join("Niobium").join("Builds").join(key)
+    PathBuf::from(format!("{letter}\\")).join("Rift").join("Builds").join(key)
 }
 
 #[cfg(not(windows))]
 pub fn default_folder(key: &str) -> PathBuf {
-    dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join("Niobium").join("Builds").join(key)
+    dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join("Rift").join("Builds").join(key)
 }

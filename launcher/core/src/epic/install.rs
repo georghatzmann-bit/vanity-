@@ -844,7 +844,7 @@ mod tests {
     }
 
     fn temp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("niobium-install-{name}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("rift-install-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         d
     }
@@ -1099,7 +1099,7 @@ mod tests {
         fs::write(root.join("FortniteGame/mine.txt"), b"keep").unwrap();
         delete_download(&root, Some(&b.manifest)).unwrap();
         assert_eq!(fs::read(root.join("FortniteGame/mine.txt")).unwrap(), b"keep");
-        assert!(!root.join(".niobium-download").exists());
+        assert!(!root.join(".rift-download").exists());
         assert!(!root.join("FortniteGame/Binaries").exists());
         fs::remove_file(root.join("FortniteGame/mine.txt")).unwrap();
         delete_download(&root, Some(&b.manifest)).unwrap();
@@ -1148,7 +1148,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(300));
             c2.cancel();
         });
-        let plan = Plan::new(&b.manifest, Path::new("/nonexistent-niobium"), None);
+        let plan = Plan::new(&b.manifest, Path::new("/nonexistent-rift"), None);
         let err = precheck(&b.manifest, &plan, &slow, &control, &Progress::new(), &opts()).unwrap_err();
         t.join().unwrap();
         assert_eq!(err, InstallError::Stopped(StopReason::Cancel));

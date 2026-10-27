@@ -1,4 +1,4 @@
-// NIOBIUM: "Reset builds" (server half) - Niobium's own code (GPL-3.0), not part of Magnesium.
+// NIOBIUM: "Reset builds" (server half) - Rift's own code (GPL-3.0), not part of Magnesium.
 //
 // The player aims at one of their edited builds and presses their own key in the F9 menu. The
 // piece goes back to its unedited form without opening edit mode. The F9 client picks the target

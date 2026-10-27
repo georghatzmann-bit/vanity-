@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the Niobium menu preview (the real F9 menu without the game) and renders every tab as PNG.
+# Builds the Rift menu preview (the real F9 menu without the game) and renders every tab as PNG.
 # Needs: clang-cl + lld-link (LLVM 18), MSVC/SDK headers + libs in /opt/xwin (xwin), Wine, Python with PIL.
 # Usage: native/tools/menu-preview/build-and-render.sh <output folder>
 set -euo pipefail
@@ -53,7 +53,7 @@ python3 "$HERE/make_background.py" "$WORK/background.rgba" 1600 900
 cp "${PARKOURS_JSON:-$ROOT/launcher/src/data/parkours.json}" "$WORK/parkours.json"
 
 # 3) Render under Wine
-export WINEDEBUG=-all WINEPREFIX="${WINEPREFIX:-$HOME/.wine-niobium-preview}"
+export WINEDEBUG=-all WINEPREFIX="${WINEPREFIX:-$HOME/.wine-rift-preview}"
 wine menu-preview.exe background.rgba . 2>&1 | grep -v "^wine:" || true
 
 # 4) PPM -> PNG

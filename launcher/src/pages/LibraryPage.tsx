@@ -57,7 +57,7 @@ export function LibraryPage() {
       <PageHeader
         eyebrow={pageGroup("library")}
         title="Library"
-        description="Your Fortnite builds. When you add one, Niobium finds the version and checks if it's supported."
+        description="Your Fortnite builds. When you add one, Rift finds the version and checks if it's supported."
         actions={
           <>
             <Button variant="secondary" onClick={() => setPage("download")}>
@@ -98,7 +98,7 @@ export function LibraryPage() {
 
       <Panel
         title="Which versions work"
-        description="Niobium starts every version from 1.7 to 30.x – Chapter 1 to Chapter 5 Season 3. Only 19.10 is tested so far; the others are untested, but every part is built for them. The game server doesn't know newer versions yet."
+        description="Rift starts every version from 1.7 to 30.x – Chapter 1 to Chapter 5 Season 3. Only 19.10 is tested so far; the others are untested, but every part is built for them. The game server doesn't know newer versions yet."
       >
         <Stagger className="relative flex flex-col gap-2" inView stagger={0.05}>
           {/* the chapter line on the left */}
@@ -311,7 +311,7 @@ function AddTile({ big, onClick }: { big: boolean; onClick: () => void }) {
       <div className="min-w-0">
         <p className="text-sm font-semibold text-foreground">{big ? "Add your first build" : "Add a build folder"}</p>
         <p className="mt-1 text-xs">
-          Choose the folder that contains "FortniteGame".{big ? " Niobium only reads it – nothing in it is changed." : ""}
+          Choose the folder that contains "FortniteGame".{big ? " Rift only reads it – nothing in it is changed." : ""}
         </p>
       </div>
     </GlowCard>

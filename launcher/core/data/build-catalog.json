@@ -1,5 +1,5 @@
 {
-  "_about": "Builds Niobium can download. Manifests: polynite/fn-releases (fallback VastBlast/FortniteManifestArchive, only where it has the same file), pinned by SHA-1. Game files: Epic's own CDN only. Only builds that were complete on Epic's CDN when checked (2026-10-26: HEAD sample; for 21.x-30.x also every chunk of the game exe and of Binaries/, and every chunk of 21.50, 22.40 and 27.11) and that the game server is meant to run. 44 builds: 13.x-18.x and 21.x-30.x. Seasons: status used when no build is offered; about = one content line for the card. Never anything from 31.00 on.",
+  "_about": "Builds Rift can download. Manifests: polynite/fn-releases (fallback VastBlast/FortniteManifestArchive, only where it has the same file), pinned by SHA-1. Game files: Epic's own CDN only. Only builds that were complete on Epic's CDN when checked (2026-10-26: HEAD sample; for 21.x-30.x also every chunk of the game exe and of Binaries/, and every chunk of 21.50, 22.40 and 27.11) and that the game server is meant to run. 44 builds: 13.x-18.x and 21.x-30.x. Seasons: status used when no build is offered; about = one content line for the card. Never anything from 31.00 on.",
   "checkedOn": "2026-10-26",
   "seasons": [
     {

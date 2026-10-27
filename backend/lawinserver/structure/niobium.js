@@ -1,12 +1,12 @@
 // NIOBIUM: new file, not part of LawinServer.
-// One place for everything Niobium changes in LawinServer: data folder, resource folder,
+// One place for everything Rift changes in LawinServer: data folder, resource folder,
 // ports, bind address and the matchmaker's game server target.
 // src/main.ts calls configure() BEFORE any other LawinServer module is loaded.
 //
 // LawinServer originally loaded/saved data like this:
 //   read:  require("./../profiles/athena.json")      (relative to the module, cached by require)
 //   write: fs.writeFileSync("./profiles/athena.json") (relative to the working folder)
-// Niobium replaces that with json("profiles/athena.json") and writeFile("profiles/athena.json", …).
+// Rift replaces that with json("profiles/athena.json") and writeFile("profiles/athena.json", …).
 // Both resolve the path with file(): writable files (WRITABLE) live in the data folder,
 // everything else is only read and stays in the resource folder (next to dist/main.js).
 

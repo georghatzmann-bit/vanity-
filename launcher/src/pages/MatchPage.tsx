@@ -928,9 +928,9 @@ function TrickshotTab() {
 
         <Panel title="Spot & gear" icon={MapPin} description="Save a spot, jump back, refill.">
           <Rows>
-            {/* Same waypoint name as the F9 menu ("cheat s niobium o"), so both use one saved spot */}
-            <SmallAction icon={MapPin} label="Save spot" hint="Remembers where you're standing." onRun={() => exec("s niobium o", "Save spot", sent("Save spot"))} />
-            <SmallAction icon={Undo2} label="Back to spot" hint="Takes you straight back to the saved spot." onRun={() => exec("w niobium", "Back to spot", sent("Back to spot"))} />
+            {/* Same waypoint name as the F9 menu ("cheat s rift o"), so both use one saved spot */}
+            <SmallAction icon={MapPin} label="Save spot" hint="Remembers where you're standing." onRun={() => exec("s rift o", "Save spot", sent("Save spot"))} />
+            <SmallAction icon={Undo2} label="Back to spot" hint="Takes you straight back to the saved spot." onRun={() => exec("w rift", "Back to spot", sent("Back to spot"))} />
             <SmallAction icon={ArrowUpFromLine} label="Launch up" hint="Shoots you straight up into the air." onRun={() => exec("l 2500", "Launch up", sent("Launch up"))} />
             <SmallAction
               icon={BoxIcon}

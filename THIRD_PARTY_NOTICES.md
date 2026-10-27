@@ -1,6 +1,6 @@
 # Third-party projects and licences
 
-Niobium (which used to be called Vanity) is licensed under the GPL-3.0. This file lists every project
+Rift (which used to be called Niobium, and before that Vanity) is licensed under the GPL-3.0. This file lists every project
 that code, data or ideas come from. Where code was taken over, it also says which files are affected,
 and the original licence text sits in the matching folder.
 
@@ -22,13 +22,13 @@ and the original licence text sits in the matching folder.
 
 | Project | Author | Licence | What for |
 |---|---|---|---|
-| [Magnesium](https://github.com/Ralzify/Magnesium) | Ploosh, ralz, cipher | BSD-3-Clause | base of the game server `niobium_server.dll` (`native/server/`: bots, trickshot, Lategame) |
+| [Magnesium](https://github.com/Ralzify/Magnesium) | Ploosh, ralz, cipher | BSD-3-Clause | base of the game server `rift_server.dll` (`native/server/`: bots, trickshot, Lategame) |
 | [Erbium](https://github.com/plooshi/Erbium) | Ploosh | GPL-3.0 | base of Magnesium; SDK of the in-game menu |
 | [Artemis](https://github.com/NotTacs/Artemis) | NotTacs and contributors | GPL-3.0 | Fortnite's own AI player bots on 19.10 (CL 18675304): bot count and skill, bot service setup, POI caches, nav data, bus boarding, bot outfits and the 19.10 addresses, ported from commit 48dba08 (25 Oct 2026) into `native/server/FortniteGame/Private/PlayerBots_19_10.cpp` (the file header maps every part to its Artemis source); the near-page and LEA helpers now live in `native/server/FortniteGame/Private/AIBase.cpp`, the build check and the nav and outfit detours in `AIBase_19_10.cpp`, plus the AI-bot branch of `SpawnDefaultPawnFor` in `FortGameMode.cpp` |
 | [Velora](https://github.com/Jeremy1926/Velora) | Jeremy1926 | MIT | methods only, rewritten (no code copied): switching off the game-internal standalone check on 17.00–19.x (commit 67ffac0, `FortPlayerPawnAthena.cpp:25-33`; owner approved, private server only) in `AIBase.cpp`; dropping a dead AI's inventory (dfa12c2, `FortAthenaAIBotController.cpp:383-438`) in `LivingWorld.cpp`; Living World (Lager) category/event/provider logic (`FortAthenaLivingWorldManager.cpp:1180-1275, 1277-1440, 1458-1478`, `PatrolPathPointProvider.cpp:109-129`), the brain-start flag (commit 9674d54, `FortServerBotManagerAthena.cpp:146-183`) and AI inventory setup (`FortAthenaAIBotController.cpp:98-160`) in `LivingWorldSpawner.cpp` and `AIBase_19_10.cpp` (all under `native/server/FortniteGame/Private/`) |
 | [Cubed](https://github.com/andr1ww/Cubed) | andr1ww | GPL-3.0 | idea only (commit 72905b1, `AthenaAISystem.cpp:5-41`): spawning AI on patrol paths by their tag, as the fallback in `native/server/FortniteGame/Private/LivingWorldSpawner.cpp` |
-| [Tellurium](https://github.com/plooshi/Tellurium) | Ploosh | BSD-3-Clause | base of the redirect `niobium_redirect.dll` (`native/redirect/`) |
-| [ATLAS Console / ATLAS-Client](https://github.com/Ralzify/ATLAS-Client) | ralz, cipherfps and contributors | ATLAS Console Attribution License v1.0 (`native/client/LICENSE-ATLAS.txt`) | base of the in-game menu `niobium_client.dll` (`native/client/`). **Niobium is based on ATLAS Console by cipherfps, ralz and contributors.** Changes: see `native/client/README.md` |
+| [Tellurium](https://github.com/plooshi/Tellurium) | Ploosh | BSD-3-Clause | base of the redirect `rift_redirect.dll` (`native/redirect/`) |
+| [ATLAS Console / ATLAS-Client](https://github.com/Ralzify/ATLAS-Client) | ralz, cipherfps and contributors | ATLAS Console Attribution License v1.0 (`native/client/LICENSE-ATLAS.txt`) | base of the in-game menu `rift_client.dll` (`native/client/`). **Rift is based on ATLAS Console by cipherfps, ralz and contributors.** Changes: see `native/client/README.md` |
 | [MinHook](https://github.com/TsudaKageyu/minhook) | Tsuda Kageyu | BSD-2-Clause | function hooks (`native/third_party/minhook/`, built from source) |
 | [Dear ImGui](https://github.com/ocornut/imgui) | Omar Cornut | MIT | menus in the game and in the server window (the copies that came with Magnesium in `native/server/ImGui/` and with ATLAS Console in `native/client/ATLAS/ImGui/`, version 1.92.4) |
 | [Memcury](https://github.com/kem0x/Memcury) | Kareem Olim | MIT | pattern search in memory |
@@ -38,15 +38,15 @@ and the original licence text sits in the matching folder.
 
 | Project | Author | Licence | What for |
 |---|---|---|---|
-| [Legendary](https://github.com/derrod/legendary) | Rodney (derrod) and contributors | GPL-3.0-or-later (used under GPL-3.0, which fits Niobium's GPL-3.0-only) | Epic's manifest formats (binary and JSON), the chunk format and Epic's rolling hash, rewritten in Rust from `legendary/models/manifest.py`, `json_manifest.py`, `chunk.py` and `utils/rolling_hash.py` into `manifest.rs`, `manifest_bin.rs`, `manifest_json.rs` and `chunk.rs` (each file header names its Legendary source); the test files in `fixtures.rs` follow Legendary's `write` methods |
+| [Legendary](https://github.com/derrod/legendary) | Rodney (derrod) and contributors | GPL-3.0-or-later (used under GPL-3.0, which fits Rift's GPL-3.0-only) | Epic's manifest formats (binary and JSON), the chunk format and Epic's rolling hash, rewritten in Rust from `legendary/models/manifest.py`, `json_manifest.py`, `chunk.py` and `utils/rolling_hash.py` into `manifest.rs`, `manifest_bin.rs`, `manifest_json.rs` and `chunk.rs` (each file header names its Legendary source); the test files in `fixtures.rs` follow Legendary's `write` methods |
 
-Data the downloader fetches while it runs (nothing of it ships with Niobium):
+Data the downloader fetches while it runs (nothing of it ships with Rift):
 
 | Source | What |
 |---|---|
-| [polynite/fn-releases](https://github.com/polynite/fn-releases) | public archive of Epic's own manifest files (the file list of a build). Niobium downloads one manifest when you start a download and only accepts it if its SHA-1 is the one pinned in `launcher/core/data/build-catalog.json` |
+| [polynite/fn-releases](https://github.com/polynite/fn-releases) | public archive of Epic's own manifest files (the file list of a build). Rift downloads one manifest when you start a download and only accepts it if its SHA-1 is the one pinned in `launcher/core/data/build-catalog.json` |
 | [VastBlast/FortniteManifestArchive](https://github.com/VastBlast/FortniteManifestArchive) | the same, as a fallback – only for builds where its file is byte-identical (same pinned SHA-1) |
-| Epic Games' download servers (`fastly-download.epicgames.com`, `epicgames-download1.akamaized.net`, `download.epicgames.com`, `cloudflare.epicgamescdn.com`) | every game file. Niobium never downloads builds from re-uploads or mirrors |
+| Epic Games' download servers (`fastly-download.epicgames.com`, `epicgames-download1.akamaized.net`, `download.epicgames.com`, `cloudflare.epicgamescdn.com`) | every game file. Rift never downloads builds from re-uploads or mirrors |
 
 ## Launcher
 
@@ -69,5 +69,5 @@ Data the downloader fetches while it runs (nothing of it ships with Niobium):
 
 | Project | Author | Licence | What for |
 |---|---|---|---|
-| [Inter](https://rsms.me/inter) | Rasmus Andersson | SIL Open Font License 1.1 | the "41" in the logo and the "Niobium" wordmark are outlines drawn from Inter Display Bold. No font file ships. See `docs/brand.md` |
+| [Inter](https://rsms.me/inter) | Rasmus Andersson | SIL Open Font License 1.1 | the "41" in the logo and the "Rift" wordmark are outlines drawn from Inter Display Bold. No font file ships. See `docs/brand.md` |
 | [NSIS](https://nsis.sourceforge.io) with the AdvSplash plug-in | NSIS contributors | zlib/libpng licence | the Windows installer and its fading splash screen (`launcher/src-tauri/windows/hooks.nsh`) |

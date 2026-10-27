@@ -20,6 +20,6 @@ constexpr bool ManualMapping = false; // if you're using EAC & a manual mapper, 
 constexpr bool FixMemLeak = true; // memory leak fix
 
 // NIOBIUM: safety limit - only modes that redirect everything to your own backend.
-// The Hybrid/Dev modes partly talk to Epic's real servers and are not allowed in Niobium.
+// The Hybrid/Dev modes partly talk to Epic's real servers and are not allowed in Rift.
 static_assert(URLSet == Default || URLSet == All,
-              "Niobium only allows Default or All (own backend only), not Hybrid/Dev.");
+              "Rift only allows Default or All (own backend only), not Hybrid/Dev.");

@@ -1,7 +1,7 @@
 /* Small helpers for showing a build the same way on every page. */
 import { parseVersionNumber } from "./bubble";
 
-/** Each chapter gets its own slant of the anodised-niobium colours (Tailwind gradient stops). */
+/** Each chapter gets its own slant of the Rift colours (Tailwind gradient stops). */
 export function coverGradient(version: string): string {
   const major = parseVersionNumber(version)?.[0] ?? 0;
   if (major <= 10) return "from-brand-cyan/55 via-[#155e75]/45 to-brand-violet/20"; // Chapter 1

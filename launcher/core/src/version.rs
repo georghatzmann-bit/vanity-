@@ -54,7 +54,7 @@ pub struct BuildInfo {
     pub launch_args: String,
 }
 
-/// How well Niobium knows a version.
+/// How well Rift knows a version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Support {
@@ -212,7 +212,7 @@ pub fn support_note(version: &str) -> String {
         return "Can't read the version".into();
     };
     if v < MIN_VERSION {
-        return format!("Too old – Niobium needs at least {}.{}", MIN_VERSION.0, MIN_VERSION.1);
+        return format!("Too old – Rift needs at least {}.{}", MIN_VERSION.0, MIN_VERSION.1);
     }
     if v >= SERVER_MAX_EXCLUSIVE {
         return format!(
@@ -530,7 +530,7 @@ mod tests {
 
     #[test]
     fn detects_fake_build_folder() {
-        let dir = std::env::temp_dir().join(format!("niobium-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rift-test-{}", std::process::id()));
         let bin = dir.join("FortniteGame/Binaries/Win64");
         let paks = dir.join("FortniteGame/Content/Paks");
         fs::create_dir_all(&bin).unwrap();

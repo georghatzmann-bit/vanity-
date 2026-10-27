@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * State and actions for adding a build folder: pick → check → add.
- * Niobium only reads the folder – nothing in it is changed.
+ * Rift only reads the folder – nothing in it is changed.
  */
 export function useBuildImport(onAdded?: (build: BuildInfo) => void) {
   const [path, setPathState] = useState("");
@@ -107,7 +107,7 @@ export function ImportBuildForm({ state, className }: { state: BuildImport; clas
             >
               <ScanSearch className="size-6 text-faint" />
               <p className="max-w-xs text-xs text-muted-foreground">
-                Pick the folder of your Fortnite build. Niobium finds the game file and reads the version.
+                Pick the folder of your Fortnite build. Rift finds the game file and reads the version.
               </p>
             </motion.div>
           )}
@@ -179,7 +179,7 @@ export function ImportBuildDialog({ open, onOpenChange }: { open: boolean; onOpe
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add a build</DialogTitle>
-          <DialogDescription>Choose the folder of your build. Niobium only reads it – nothing in the folder is changed.</DialogDescription>
+          <DialogDescription>Choose the folder of your build. Rift only reads it – nothing in the folder is changed.</DialogDescription>
         </DialogHeader>
         <ImportBuildForm state={state} />
         <DialogFooter>

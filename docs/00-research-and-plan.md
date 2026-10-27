@@ -1,7 +1,7 @@
 # Phase 0 – Research and plan
 
 > This is the plan from 23 October 2026, when the project was still called **Vanity**. It was renamed
-> to **Niobium** on 26 October 2026. Some details turned out differently in the end (for example the
+> to **Niobium** on 26 October 2026 and to **Rift** on 27 October 2026. Some details turned out differently in the end (for example the
 > backend uses Express from LawinServer instead of Fastify, and the folders under `native/` are
 > `redirect/`, `server/` and `client/`). The current state is in
 > [`02-architecture.md`](02-architecture.md).
@@ -124,7 +124,7 @@ if you ever publish the launcher, the source code must come with it. All sources
 `THIRD_PARTY_NOTICES.md` and into a "Credits" area in the launcher.
 
 (What happened later: the in-game menu *is* based on ATLAS Console after all, with the required
-notice "Niobium is based on ATLAS Console by cipherfps, ralz and contributors." in the Credits tab and in
+notice "Rift is based on ATLAS Console by cipherfps, ralz and contributors." in the Credits tab and in
 `THIRD_PARTY_NOTICES.md`; the backend uses LawinServer's code directly.)
 
 ### Prebuilt binaries in the projects (we do NOT take them)
@@ -150,7 +150,7 @@ notice "Niobium is based on ATLAS Console by cipherfps, ralz and contributors." 
 - **Version switches instead of crashes.** Every feature in the menu/server has a list of the versions
   it is checked on. Unchecked = greyed out instead of a crash.
 - **Change nothing outside the project without asking.** The launcher keeps its own data in
-  `%APPDATA%\Niobium` (back then `%APPDATA%\Vanity`). It only touches the build folder and Reboot's
+  `%APPDATA%\Rift` (back then `%APPDATA%\Vanity`, later `%APPDATA%\Niobium`). It only touches the build folder and Reboot's
   settings after asking (e.g. renaming `GFSDK_Aftermath_Lib.dll`, which Reboot deletes without asking).
 
 ### Folder structure (as planned)
@@ -224,5 +224,5 @@ All four points were confirmed like this:
 2. **Erbium as the base** of the game server, Magnesium features on purpose with credit.
 3. **Launch method like all OG launchers** (helper processes paused, placeholder token), with the safety
    limits from section 3 (only old builds, only our own backend).
-4. **Name: Vanity.** → Renamed to **Niobium** on 26 Oct 2026 (element 41, symbol Nb; see
-   [`brand.md`](brand.md)). The repository keeps the name `vanity-`.
+4. **Name: Vanity.** → Renamed to **Niobium** on 26 Oct 2026 (element 41, symbol Nb), then to **Rift**
+   on 27 Oct 2026 (see [`brand.md`](brand.md)). The repository keeps the name `vanity-`.

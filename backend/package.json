@@ -2,7 +2,7 @@
   "name": "niobium-backend",
   "private": true,
   "version": "0.1.0",
-  "description": "Local Fortnite backend for Niobium (based on LawinServer, GPL-3.0)",
+  "description": "Local Fortnite backend for Rift (based on LawinServer, GPL-3.0)",
   "license": "GPL-3.0-only",
   "type": "commonjs",
   "scripts": {

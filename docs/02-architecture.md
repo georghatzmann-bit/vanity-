@@ -3,35 +3,45 @@
 This file is the contract between the launcher, the backend and the game DLLs. Whoever changes an
 interface changes it here too.
 
-Niobium used to be called **Vanity**. Every name below is the new one; the section
-[Moving over from Vanity](#moving-over-from-vanity) says what happens to old data.
+Rift used to be called **Niobium**, and before that **Vanity**. Every name below is the new one; the
+section [Moving over from Niobium and Vanity](#moving-over-from-niobium-and-vanity) says what happens to
+old data.
 
 ## Names
 
 | What | Value |
 |---|---|
-| Display name | Niobium (long form: "NiobiumFN — old seasons, new shine.") – brand rules in [`brand.md`](brand.md) |
-| Lowercase id | `niobium` |
-| Game DLLs | `niobium_redirect.dll`, `niobium_server.dll`, `niobium_client.dll` (MSBuild `TargetName`) |
-| Visual Studio solution | `native/Niobium.sln` |
+| Display name | Rift (long form: "RiftFN — Step back into any season.") – brand rules in [`brand.md`](brand.md) |
+| Lowercase id | `rift` |
+| Game DLLs | `rift_redirect.dll`, `rift_server.dll`, `rift_client.dll` (MSBuild `TargetName`) |
+| Visual Studio solution | `native/Rift.sln` |
 | Control pipe of the game server | `\\.\pipe\niobium-server` |
-| Tauri app | productName `Niobium`, identifier `dev.niobium.launcher`, main binary `Niobium.exe`, window title "Niobium" |
-| Packages | npm `niobium-launcher` (launcher), `niobium-backend` (backend); Cargo `niobium-launcher` (library `niobium_launcher_lib`) and `niobium-core` |
+| Tauri app | productName `Rift`, identifier `dev.rift.launcher`, main binary `Rift.exe`, window title "Rift" |
+| Packages (internal, unchanged) | npm `niobium-launcher` (launcher), `niobium-backend` (backend); Cargo `niobium-launcher` (library `niobium_launcher_lib`) and `niobium-core` |
 | Backend environment variables | `NIOBIUM_BACKEND_PORT`, `NIOBIUM_MATCHMAKER_PORT`, `NIOBIUM_BIND`, `NIOBIUM_DATA_DIR`, `NIOBIUM_GAMESERVER` |
 | Backend routes | `/niobium/health`, `/niobium/status`, `/niobium/gameserver` |
 | Login | `-AUTH_LOGIN=<name>@niobium.local`, `-AUTH_PASSWORD=niobium` |
 | Version hint for the DLLs | launch argument `-niobiumversion=<version>`, e.g. `-niobiumversion=19.10` |
-| Chat and console prefix | `[Niobium] ` (with the space) |
-| Markers in vendored code | `// NIOBIUM:` (server, redirect, LawinServer), `// [Niobium]` (in-game menu) |
-| CI | release tag `niobium-test`, release name "Niobium – test build", installer `Niobium-Setup.exe`, artifacts `niobium-backend-dist`, `niobium-dlls`, `niobium-installer` |
+| Chat and console prefix | `[Rift] ` (with the space) |
+| Markers in vendored code | `// NIOBIUM:` (server, redirect, LawinServer), `// [Rift]` (in-game menu) |
+| CI | release tag `rift-test`, release name "Rift – test build", installer `Rift-Setup.exe`, artifacts `rift-backend-dist`, `rift-dlls`, `rift-installer` |
 
 The GitHub repository itself is still called `vanity-`.
+
+**Internal names stay "niobium" on purpose.** They are never shown to players, and the launcher, the
+backend and the DLLs already agree on them, so they were not renamed to Rift (for compatibility): the
+control pipe `\\.\pipe\niobium-server`, the backend environment variables `NIOBIUM_*`, the routes
+`/niobium/*`, the login domain `@niobium.local` (and password), the launch argument `-niobiumversion`, the
+`nbedit:v1` wire format of "Reset builds", the CSS variables `--nb-*`, the key names in `client.json` and
+`config.json`, the `[NiobiumLoot]` log tag, the package/crate names above, the `// NIOBIUM:` code markers
+and code symbols and file names such as `NiobiumControl` or `niobium.js`. A download folder that Niobium
+started keeps its `.niobium-download\` notes (new ones use `.rift-download\`).
 
 ## Folders
 
 ```
 launcher/core/            Rust logic without a window (version, logs, crashes, profiles, launch arguments,
-                          parkours, Bubble Builds INI check, Vanity migration, AI bot settings in
+                          parkours, Bubble Builds INI check, Niobium/Vanity migration, AI bot settings in
                           src/bots.rs, the build downloader in src/epic/) – testable everywhere
 launcher/core/data/build-catalog.json   the builds "Download a version" offers (manifest ids and SHA-1s)
 launcher/src-tauri/       Tauri app: windows, processes, loading DLLs, backend, server pipe, downloads
@@ -41,12 +51,12 @@ launcher/src/             React UI
 launcher/splash.html      the splash window (no scripts)
 launcher/src/data/parkours.json   the ready-made trickshot parkours (one file for the UI, Rust, server and F9 menu)
 backend/                  backend (Node 22 + TypeScript), based on LawinServer → backend/dist/
-native/                   C++ (/std:c++latest), Visual Studio 2022 (v143), x64 – one solution: native/Niobium.sln
+native/                   C++ (/std:c++latest), Visual Studio 2022 (v143), x64 – one solution: native/Rift.sln
   third_party/minhook     MinHook (BSD-2) as source → static library (project "minhook")
   third_party/imgui       Dear ImGui v1.93.0 (MIT) as source – not used by the projects right now
-  redirect/               redirect, based on Tellurium (BSD-3)        → niobium_redirect.dll
-  server/                 game server, based on Magnesium (BSD-3)      → niobium_server.dll
-  client/                 in-game menu F9, based on ATLAS Console      → niobium_client.dll
+  redirect/               redirect, based on Tellurium (BSD-3)        → rift_redirect.dll
+  server/                 game server, based on Magnesium (BSD-3)      → rift_server.dll
+  client/                 in-game menu F9, based on ATLAS Console      → rift_client.dll
   client/third_party/nlohmann   JSON for Modern C++ 3.11.2 (MIT), unchanged copy of server/json.hpp
   scripts/check-build.sh  test compile on Linux (clang-cl + MSVC headers from /opt/xwin)
   tools/menu-preview/     renders screenshots of the F9 menu without the game
@@ -60,50 +70,61 @@ resource folder under `dlls/`, the backend under `backend/main.js` and Node unde
 
 | Path | Contents |
 |---|---|
-| `%APPDATA%\Niobium\config.json` | settings, profiles, builds, friends, trickshot presets (only the launcher writes it) |
-| `%APPDATA%\Niobium\client.json` | settings of the in-game menu (the launcher's "In-game Menu" page and the F9 menu both read and write it) |
-| `%APPDATA%\Niobium\downloads.json` | unfinished build downloads (build key and folder), so they come back as "Paused" after a restart |
-| `<download folder>\.niobium-download\` | the downloader's notes for that folder: `job.json`, `manifest`, `journal.jsonl`, `progress.json` (see [Build downloader](#build-downloader-download-a-version)). It stays in the folder after the download |
-| `%LOCALAPPDATA%\Niobium\backend-data\` | data of the backend (locker, profiles, `Config\config.ini`, friends list) |
-| `%LOCALAPPDATA%\Niobium\server\` | everything the game server writes (`auto_hosting.json`, `loadouts`, `Maps`, `trickshots`) |
-| `%LOCALAPPDATA%\Niobium\server\parkours.json` | trickshot parkours – the launcher writes it, the game server and the F9 menu read it (see below) |
-| `%LOCALAPPDATA%\Niobium\gus-backup.json` | only while a game with Bubble Builds runs: the original lines of Fortnite's `GameUserSettings.ini` that Niobium changed for this game (see [Bubble Builds](#bubble-builds)). Deleted once they are back |
-| `%LOCALAPPDATA%\Niobium\logs\` | logs of the DLLs: `redirect.log` (redirect), `client-diagnostics.log` (in-game menu). The game server writes `stdout.log` in the build's `FortniteGame\Binaries\Win64` folder |
-| `%LOCALAPPDATA%\Niobium\` (program files) | the installer's default install folder (Tauri, "current user" mode) is this same folder. The installer puts `Niobium.exe`, `backend\`, `dlls\` and `node\` there; an update replaces them and uninstalling deletes them, so nothing the launcher or backend writes goes into those folders |
+| `%APPDATA%\Rift\config.json` | settings, profiles, builds, friends, trickshot presets (only the launcher writes it) |
+| `%APPDATA%\Rift\client.json` | settings of the in-game menu (the launcher's "In-game Menu" page and the F9 menu both read and write it) |
+| `%APPDATA%\Rift\downloads.json` | unfinished build downloads (build key and folder), so they come back as "Paused" after a restart |
+| `<download folder>\.rift-download\` | the downloader's notes for that folder: `job.json`, `manifest`, `journal.jsonl`, `progress.json` (see [Build downloader](#build-downloader-download-a-version)). It stays in the folder after the download |
+| `%LOCALAPPDATA%\Rift\backend-data\` | data of the backend (locker, profiles, `Config\config.ini`, friends list) |
+| `%LOCALAPPDATA%\Rift\server\` | everything the game server writes (`auto_hosting.json`, `loadouts`, `Maps`, `trickshots`) |
+| `%LOCALAPPDATA%\Rift\server\parkours.json` | trickshot parkours – the launcher writes it, the game server and the F9 menu read it (see below) |
+| `%LOCALAPPDATA%\Rift\gus-backup.json` | only while a game with Bubble Builds runs: the original lines of Fortnite's `GameUserSettings.ini` that Rift changed for this game (see [Bubble Builds](#bubble-builds)). Deleted once they are back |
+| `%LOCALAPPDATA%\Rift\logs\` | logs of the DLLs: `redirect.log` (redirect), `client-diagnostics.log` (in-game menu). The game server writes `stdout.log` in the build's `FortniteGame\Binaries\Win64` folder |
+| `%LOCALAPPDATA%\Rift\` (program files) | the installer's default install folder (Tauri, "current user" mode) is this same folder. The installer puts `Rift.exe`, `backend\`, `dlls\` and `node\` there; an update replaces them and uninstalling deletes them, so nothing the launcher or backend writes goes into those folders |
 
-Niobium changes nothing in the folder of a build you add yourself and nothing in other launchers'
+Rift changes nothing in the folder of a build you add yourself and nothing in other launchers'
 folders. The one file outside its own folders it may touch is Fortnite's own `GameUserSettings.ini` –
 only with Bubble Builds on, only three lines, with a backup first, and they are put back after the game
 (see [Bubble Builds](#bubble-builds)). The build
 downloader writes only into the folder you pick for a download: the build's own files and
-`.niobium-download\`.
+`.rift-download\`.
 
-## Moving over from Vanity
+## Moving over from Niobium and Vanity
 
-`launcher/core/src/migrate.rs`, called once at every launcher start (`lib.rs`, before the config is read):
+`launcher/core/src/migrate.rs`, called once at every launcher start (`lib.rs`, before the config is read).
+For each item it uses the newest old name that has it: Niobium first, Vanity only if there is no Niobium
+copy of that item.
 
-- If `%APPDATA%\Niobium\config.json` is missing and `%APPDATA%\Vanity\config.json` exists, it copies
-  `config.json` and `client.json` over (`client.json` only if the Niobium one doesn't exist yet).
-- If `%LOCALAPPDATA%\Niobium\server` is missing and `%LOCALAPPDATA%\Vanity\server` exists, it copies that
-  folder's files over (sub-folders too, but no folder called `logs`).
-- It never overwrites and never deletes anything. The old Vanity folders stay as they are.
-  `%LOCALAPPDATA%\Vanity\backend` (the old locker) and `%LOCALAPPDATA%\Vanity\logs` are not copied.
-- If something was copied, the live log gets one line (source "Niobium") once the window is shown, e.g.
-  "Copied your settings from Vanity to Niobium (config.json and client.json, 3 server setting files).
-  The old Vanity folders were left as they are."
-- If `config.json` came over and has no `lastSeenVersion`, it gets `lastSeenVersion = "vanity"`. So the
-  UI shows the short "What's new" card ("Vanity is now Niobium") instead of the full welcome.
+- If `%APPDATA%\Rift\config.json` is missing and `%APPDATA%\Niobium\config.json` (or else
+  `%APPDATA%\Vanity\config.json`) exists, it copies `config.json` and `client.json` from that folder
+  (`client.json` only if the Rift one doesn't exist yet). In the same run – and only then – a left-over
+  `gus-backup.json` of that old name comes along, so Rift still puts Fortnite's settings back after a
+  crash; it is never copied a second time.
+- If `%LOCALAPPDATA%\Rift\server` is missing and `%LOCALAPPDATA%\Niobium\server` (or else the Vanity one)
+  exists, it copies that folder's files over (sub-folders too, but no folder called `logs`).
+- If `%LOCALAPPDATA%\Rift\backend-data` is missing and `%LOCALAPPDATA%\Niobium\backend-data` exists, it
+  copies it (accounts, lockers, settings of the backend; no `logs`).
+- It never overwrites and never deletes anything. The old folders stay as they are. Logs, builds,
+  `downloads.json` and the old program files are not copied (the config keeps the full paths of the
+  builds, so builds in an old folder keep working). `%LOCALAPPDATA%\Vanity\backend` (Vanity's old
+  locker) is not copied either.
+- If something was copied, the live log gets one line (source "Rift") once the window is shown, e.g.
+  "Copied your settings from Niobium to Rift (config.json and client.json, 3 server setting files,
+  12 backend files). The old Niobium folders were left as they are."
+- If `config.json` came over and has no `lastSeenVersion`, it gets `lastSeenVersion = "vanity"` (the
+  marker keeps that value, so configs Niobium marked still work). So the UI shows the short "What's new"
+  card ("Niobium is now Rift") instead of the full welcome. A Niobium config that has a last-seen version
+  shows "What's new" anyway as soon as the version differs.
 - Every time the config is loaded (`Config::refresh_after_load`), each build's season and support note
   are worked out again (old German notes go away), and texts the old launcher wrote itself become English:
   profile `p-standard` "Standard" → "Default", "Normales Match auf deinem eigenen Server" → "A normal match
   on your own server", "Eigenes Profil" → "Custom profile", tags "Turnier Solo/Duos" → "Tournament
   Solo/Duos", friend network "Netzwerk" → "Other". Names you typed yourself stay.
 
-The installer also removes an old Vanity *program* install (see [Installer](#installer)).
+The installer also removes an old Niobium or Vanity *program* install (see [Installer](#installer)).
 
 ## Versions
 
-Niobium starts **every version from 1.7 to 30.x** (Chapter 1 to Chapter 5 Season 3). The limits come
+Rift starts **every version from 1.7 to 30.x** (Chapter 1 to Chapter 5 Season 3). The limits come
 from the source code of the parts, not from guesses – researched in Reboot Launcher, Erbium/Magnesium,
 Tellurium, ATLAS Console and LawinServer (October 2026):
 
@@ -147,14 +168,14 @@ Arena from 8.20, Zero Build and Arena Zero Build from 20.00, Playground from 4.5
 its button only up to 11.30). The server refuses a playlist that is too new for the build, with a note.
 
 In-game menu per version: "Edit on release", "Reset on release" and "Disable pre-edits" are shown on
-every version. Below the version where Epic's own setting works on PC, Niobium's hook does the work; from
+every version. Below the version where Epic's own setting works on PC, Rift's hook does the work; from
 that version on the F9 switch changes Epic's own setting instead – never both at once (see
 [Edit routes](#edit-routes-edit-on-release-reset-on-release-disable-pre-edits)). "Free camera" up to 10.40;
 field of view, first person, target info, "Respawn after you die", "Bubble look", the console and the
 "Trickshot" tab on every version. Other toggles a version doesn't have are simply hidden. "Always sprint" was
 removed: it is off for everyone, and an old `"sprintByDefault": true` in client.json is ignored.
 
-The redirect writes `%LOCALAPPDATA%\Niobium\logs\redirect.log`: which pattern matched, whether the
+The redirect writes `%LOCALAPPDATA%\Rift\logs\redirect.log`: which pattern matched, whether the
 redirect is in place ("Ready - requests to Epic hosts now go to your own backend"), whether the
 memory-leak fix ran. If a version doesn't fit, the line starts with `ERROR:` and the game is closed; the
 launcher looks for that word and explains it ("The redirect doesn't fit this version").
@@ -179,26 +200,27 @@ writes one note per port in the live log ("Backend port is fixed at 3551 …").
 
 Start: `node.exe <resources>\backend\main.js` with `NIOBIUM_BACKEND_PORT`, `NIOBIUM_MATCHMAKER_PORT`,
 `NIOBIUM_BIND` (`0.0.0.0` when "Share the backend on your network" is on, otherwise `127.0.0.1`),
-`NIOBIUM_DATA_DIR` (`%LOCALAPPDATA%\Niobium\backend-data`) and `NIOBIUM_GAMESERVER` (`127.0.0.1:7777`).
+`NIOBIUM_DATA_DIR` (`%LOCALAPPDATA%\Rift\backend-data`) and `NIOBIUM_GAMESERVER` (`127.0.0.1:7777`).
 On the first start the backend copies its default data files into `backend-data` (existing files are never
-overwritten). Vanity's backend data is not copied over.
+overwritten). Niobium's `backend-data` is copied over once (see [migration](#moving-over-from-niobium-and-vanity)); Vanity's
+backend data is not.
 Ready when `GET /niobium/health` → `{"ok":true,…}` (the launcher waits up to 20 s).
 `POST /niobium/gameserver {ip,port}` sets the matchmaker target (joining by IP); `POST /niobium/status`
 tells the backend the hosted version and playlist. Details: [`backend/README.md`](../backend/README.md).
 
 ## Starting the launcher
 
-1. `lib.rs` runs the [Vanity migration](#moving-over-from-vanity), writes `parkours.json` (see below) and
+1. `lib.rs` runs the [Niobium/Vanity migration](#moving-over-from-niobium-and-vanity), writes `parkours.json` (see below) and
    loads the config.
 2. Two windows (`tauri.conf.json`): `main` (1280 × 800, no frame, **starts hidden**) and `splash`
    (`splash.html`, 440 × 300, centred, no frame, transparent, no shadow, not resizable, always on top,
-   not in the taskbar, doesn't take focus). The splash shows the logo, "Niobium", "old seasons, new
+   not in the taskbar, doesn't take focus). The splash shows the logo, "Rift", "old seasons, new
    shine." and a loading line; it has no scripts.
 3. The UI loads the config. Two animation frames later (or after 200 ms, whichever comes first) it calls
    the Tauri command `app_ready`: that shows and focuses `main` and closes the splash. Only the first call
    does anything. If the UI never calls it, Rust does it after 8 s as a safety net. In the browser demo
    (no Tauri) nothing of this happens.
-4. First run (`settings.lastSeenVersion`): empty → the full-window **welcome** ("Welcome to Niobium" →
+4. First run (`settings.lastSeenVersion`): empty → the full-window **welcome** ("Welcome to Rift" →
    "What should we call you?" → "Add your Fortnite build" → "You're all set"; "Skip setup" at the top);
    different from the app version → the short **"What's new"** card. Both end with `update_settings`,
    which stores the app version in `lastSeenVersion`.
@@ -209,21 +231,21 @@ The UI shows seven steps: Backend, Server, Redirect, Login, Your game, Game serv
 
 1. **Backend:** start it, wait for `/niobium/health`, then `POST /niobium/status` (name "<player>'s server",
    hosting, playlist, version).
-2. **Server:** write `parkours.json` fresh to `%LOCALAPPDATA%\Niobium\server\`. Start the server Fortnite:
+2. **Server:** write `parkours.json` fresh to `%LOCALAPPDATA%\Rift\server\`. Start the server Fortnite:
    helper programs `FortniteLauncher.exe` and `FortniteClient-Win64-Shipping_EAC.exe` paused (they never
    run), then `FortniteClient-Win64-Shipping.exe` with the arguments from `launcher/core/src/launchargs.rs`
    (`-AUTH_LOGIN=<player name from Settings>@niobium.local`, `-nosplash -nosound`, `-nullrhi` when
    "Server with no graphics" is on, always `-log` and `-niobiumversion=<version>`), environment
    `OPENSSL_ia32cap=~0x20000000`. The server never gets Bubble Builds.
-3. **Redirect:** load `niobium_redirect.dll` **right away**. The DLL waits by itself until Fortnite's HTTP
+3. **Redirect:** load `rift_redirect.dll` **right away**. The DLL waits by itself until Fortnite's HTTP
    part is there. If the DLL is missing or can't be loaded, the process is closed and the start stops.
 4. **Login:** in the background, wait for the login line in the server log (`[UOnlineAccountCommon::ContinueLoggingIn]`
    with `(Completed)`, at most 3 minutes – then it loads anyway), wait 3 s (0 s on 5.x/6.x) and load
-   `niobium_server.dll`. **The DLL waits by itself** until engine and world are ready (Magnesium does this
+   `rift_server.dll`. **The DLL waits by itself** until engine and world are ready (Magnesium does this
    in `SDK::Init`).
 5. **Your game:** at the same time, start the player's Fortnite (no `-nullrhi`, with the profile's
    arguments, e.g. `-d3d11`, and with [Bubble Builds](#bubble-builds) if they are on), the redirect right
-   away, and `niobium_client.dll` 6 s (8 s from 20.00) after its login.
+   away, and `rift_client.dll` 6 s (8 s from 20.00) after its login.
 6. **Game server:** connect to the control pipe (up to 4 minutes) and send the profile's match settings
    in this order: `bEnableCheats` = true, `playlist` (if the profile has one), `bLateGame`, `bInfiniteAmmo`,
    `bInfiniteMats`, `bPlayerBots`, `PlayerBotCount`, `PlayerBotTargetELO`, and only when the profile has Bosses &
@@ -237,7 +259,7 @@ The UI shows seven steps: Backend, Server, Redirect, Login, Your game, Game serv
    the toast "Server ready" appears. Press Play in the game.
 
 Logs: the launcher reads stdout/stderr of every instance (that's why `-log`) and shows it in the live
-log. The DLLs also write to `%LOCALAPPDATA%\Niobium\logs\`. If Fortnite closes in the first 4 minutes,
+log. The DLLs also write to `%LOCALAPPDATA%\Rift\logs\`. If Fortnite closes in the first 4 minutes,
 the launcher checks `redirect.log` for an `ERROR` line of that process and explains it.
 
 Each Fortnite comes with two paused helper programs (step 2). When that Fortnite closes – by itself, after a
@@ -254,7 +276,7 @@ removed it in 16.10; it came back briefly in 16.20 – 16.40 and was fixed in 16
 while playing – the renderer is picked when the game starts.
 
 On **19.x** (Chapter 3 Season 1) players got a similar look with Performance Mode plus **Meshes: Low**:
-builds look whiter and more see-through while they go up. Niobium offers that as "experimental". It is
+builds look whiter and more see-through while they go up. Rift offers that as "experimental". It is
 close to the old look, not the same. For every other version there is **"Bubble look"** in the F9 menu
 (Main → Graphics): it lowers the detail of the four build blueprint textures (`BluePrintTexture02`,
 `BluePrintTexture04`, `BlueprintTextureMetal`, `BrickBlueprintTexture`), only on your PC, right away,
@@ -295,11 +317,11 @@ With the setting off, the arguments are exactly the same as without the feature 
 
 Fortnite saves Performance Mode and Meshes in
 `%LOCALAPPDATA%\FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini` – a file every build
-shares. With Bubble Builds on, Niobium changes it for one game and puts it back afterwards (agreed with
+shares. With Bubble Builds on, Rift changes it for one game and puts it back afterwards (agreed with
 Georg: "Ja, mit Zurücksetzen"):
 
 1. **Backup first.** Before the first Fortnite of a start (the server Fortnite reads the same file), the
-   launcher writes `%LOCALAPPDATA%\Niobium\gus-backup.json`: the file path and, for each line, the original
+   launcher writes `%LOCALAPPDATA%\Rift\gus-backup.json`: the file path and, for each line, the original
    line or "absent", plus whether its section existed:
    - `bPreferFeatureLevelES31` and `PreferredFeatureLevel` in `[D3DRHIPreference]`;
    - `MeshQuality` in `[PerformanceMode]` – only on `supported` and `lowMeshes` versions.
@@ -314,7 +336,7 @@ Georg: "Ja, mit Zurücksetzen"):
    - when the player's game has closed and no other Fortnite runs any more (the server may also save
      the file, so it waits for that one too);
    - when a start fails before the game launches;
-   - when Niobium is closed during a game;
+   - when Rift is closed during a game;
    - after a launcher crash: on the next start, before anything else – or, if Fortnite still runs, as
      soon as every Fortnite has closed.
 5. If an old Fortnite is still running at a new start, the launcher waits up to 5 s (Stop all cancels the
@@ -402,7 +424,7 @@ What the launcher sends:
   `bAutoReloadOnWaypointTP`, `BotHealth`,
   `BotShield`; as `exec` the commands of the buttons (`startaircraft`, `pausesafezone`, `resumesafezone`,
   `skipsafezone`, `give …`, `givetoall …`, `parkour …`, `targetbot …`, `bot <n>`, `tpbot`, `delbot`,
-  `demospeed …`, `gravity …`, `god`, `s niobium o`, `w niobium`, `l 2500`, `givetraps`, `giveammo`, `regen`)
+  `demospeed …`, `gravity …`, `god`, `s rift o`, `w rift`, `l 2500`, `givetraps`, `giveammo`, `regen`)
   and your own presets (a leading `cheat ` or `/` is left out).
 
 Server → launcher:
@@ -415,7 +437,7 @@ Server → launcher:
 | `{"event":"status","phase":"joinable","ready":true,"players":1,"lategame":false,"playlist":"/Game/…","port":7777}` | every 2 s. `phase`: `notReady`, `ready`, `joinable`, `started`, `ended`. `ready` = the start was triggered |
 | `{"event":"trickshot","player":"georg","victim":"Bot 3","meters":87}` | trickshot spotted (see below). The launcher shows the toast "TRICKSHOT! georg" with "on Bot 3 · 87 m" |
 | `{"event":"matchEnd"}` | match over – launcher toast "Match over"; the UI forgets this match's AI bots and Bosses & NPCs answers |
-| `{"event":"playerBots","state":"active","reason":""}` or `{"event":"playerBots","state":"unavailable","reason":"Bots aren't available for this copy of 19.10."}` | only when the profile has AI bots on: the server's decision for this match (see [AI bots](#ai-bots-1910-experimental)). The launcher writes "AI bots are on for this match." or "AI bots are off: <reason>" in the live log (source Niobium, category `bots`) and sends the Tauri event `server:playerBots` `{ state, reason }`; for "unavailable" the UI shows the toast "AI bots are off for this match" with the reason |
+| `{"event":"playerBots","state":"active","reason":""}` or `{"event":"playerBots","state":"unavailable","reason":"Bots aren't available for this copy of 19.10."}` | only when the profile has AI bots on: the server's decision for this match (see [AI bots](#ai-bots-1910-experimental)). The launcher writes "AI bots are on for this match." or "AI bots are off: <reason>" in the live log (source Rift, category `bots`) and sends the Tauri event `server:playerBots` `{ state, reason }`; for "unavailable" the UI shows the toast "AI bots are off for this match" with the reason |
 | `{"event":"livingWorld","state":"unavailable","reason":"not built yet for this version","spawned":0}` (`state` also "off", later "active") | how Bosses & NPCs go this match, sent at "Start match" (see [Bosses & NPCs](#bosses--npcs-living-world-experimental)). Today the server only sends "unavailable" (switch on) or "off" (switch off). The launcher forwards it (and any later update) as the Tauri event `server:livingWorld` `{ state, reason, spawned }`; "off" gets no log line and shows nothing |
 
 Unknown commands → `reply` with `ok:false` ("Unknown command "…"."). The pipe threads never touch game
@@ -429,18 +451,18 @@ Everything the F9 menu and the launcher send goes through Magnesium's `ServerChe
 "Only Up". Otherwise it answers "Commands are currently disabled for this session." That's why the launcher
 turns `bEnableCheats` on (see above). It's your own server, so every player on it may send commands.
 
-## Niobium commands in the game server (`parkour`, `targetbot`)
+## Rift commands in the game server (`parkour`, `targetbot`)
 
-Code: `native/server/Erbium/Private/NiobiumParkour.cpp` (Niobium's own code), hooked into `ServerCheat`
+Code: `native/server/Erbium/Private/NiobiumParkour.cpp` (Rift's own code), hooked into `ServerCheat`
 (marked with `NIOBIUM:`). Typed as `cheat parkour …` (console, F9 buttons) or sent through the pipe as
 `exec`. Everything runs in the game thread and errors are caught ("Something went wrong. Please try
-again."). The answers are English `ClientMessage`s with "[Niobium] " in front, sent to the player who sent
+again."). The answers are English `ClientMessage`s with "[Rift] " in front, sent to the player who sent
 the command. Without a character (e.g. on the bus or eliminated): "You need your character for this. Wait
 until you're in the game."
 
 | Command | Effect |
 |---|---|
-| `parkour <id>` | builds the parkour from `parkours.json` around you: clear the old Niobium parkour → round your view direction to 90° → start platform `height` m above your feet → jump objects (with their own platform if given) → target bots, each on its own platform → put you on the start (looking forward) → give the first sniper from `snipers` the version knows. If you still stand on the old start, it builds from the old ground height (otherwise every new parkour would end up higher). Answer: ""First Jump" is ready! Built: 10 floors, 1 jump objects, 1 target bots." |
+| `parkour <id>` | builds the parkour from `parkours.json` around you: clear the old Rift parkour → round your view direction to 90° → start platform `height` m above your feet → jump objects (with their own platform if given) → target bots, each on its own platform → put you on the start (looking forward) → give the first sniper from `snipers` the version knows. If you still stand on the old start, it builds from the old ground height (otherwise every new parkour would end up higher). Answer: ""First Jump" is ready! Built: 10 floors, 1 jump objects, 1 target bots." |
 | `parkour retry` | back to the start, looking forward, full health and shield, weapons reloaded; eliminated target bots of this parkour come back ("Back at the start of "…". Full health, weapons reloaded. …") |
 | `parkour clear` | removes all platforms, objects and target bots – also those from `targetbot` ("Removed N pieces and M target bots." or "Nothing to remove.") |
 | `parkour sniper` | only gives the sniper |
@@ -464,13 +486,13 @@ Details:
 - Other answers you may see: "Not in this version (left out): Trampoline.", "N jump objects couldn't be
   placed.", "N target bots couldn't spawn.", "None of the listed sniper rifles exist in this version.",
   "This version can't build floors, so this parkour doesn't work here.", "The parkour list is missing.
-  Please start the game from the Niobium launcher."
+  Please start the game from the Rift launcher."
 
 ## Trickshot parkours (`parkours.json`)
 
 One file for everything: `launcher/src/data/parkours.json`. It is built into the launcher (Rust:
 `include_str!` in `launcher/core/src/parkours.rs`, UI: `launcher/src/lib/parkours.ts`). The launcher writes it
-at its own start and right before every server start to `%LOCALAPPDATA%\Niobium\server\parkours.json` – fresh
+at its own start and right before every server start to `%LOCALAPPDATA%\Rift\server\parkours.json` – fresh
 every time, safely through a helper file that is then renamed. If that fails, it only shows in the log.
 
 - Game server: reads the file again for every `parkour …` (at most 2 MB, UTF-8, BOM allowed).
@@ -530,7 +552,7 @@ builds the rest.
 modes too). It's a trickshot when the shooter is a real player (not a bot, a real connection, not
 themselves) and their character is in the air right now (jumping, falling or skydiving). Then:
 
-- every player gets the `ClientMessage` "[Niobium] TRICKSHOT! <name> – <metres> m" (en dash; metres =
+- every player gets the `ClientMessage` "[Rift] TRICKSHOT! <name> – <metres> m" (en dash; metres =
   distance from shooter to victim). The F9 menu turns it into the banner (see below);
 - the launcher gets `{"event":"trickshot","player":…,"victim":…,"meters":N}`;
 - the same victim is reported only once within 1.5 s.
@@ -540,20 +562,20 @@ On/off: pipe key `bTrickshotDetection` (default: on; in the launcher "Match Cont
 
 ## In-game menu (client DLL)
 
-- On load it reads `%APPDATA%\Niobium\client.json` and writes changes back. Format (taken over from ATLAS
+- On load it reads `%APPDATA%\Rift\client.json` and writes changes back. Format (taken over from ATLAS
   Console; the launcher writes the same): `{ "hotkey": 120, "joinHotkey": 116, "consoleMode": 0,
   "preferences": { "editOnRelease": true, "resetOnRelease": true, "disablePreEdits": true, "respawnsEnabled": true,
   "firstPerson": false, "sprintByDefault": false, "inGameFog": true, "mobileBuilds": false, "slashKey": true,
   "saveTogglePreferences": true, "bubbleLook": false, "bubbleStrength": 5, "resetBuilds": false,
   "resetBuildsKey": 0 }, "commands": [], "macros": [] }` (keys = Windows VK codes; `consoleMode` 0 =
-  Niobium console, 1 = original Unreal console). `sprintByDefault` stays in the file only so old files still
+  Rift console, 1 = original Unreal console). `sprintByDefault` stays in the file only so old files still
   load: "Always sprint" was removed, the launcher always writes `false` and the menu ignores the key.
   Trickshot presets are **not** in here but in the launcher's `config.json` (`trickshotPresets`). You make them
   on the "In-game Menu" page → "Trickshot presets" and run them on "Match Control" → "Trickshot" → "Your
   presets" (command by command through the pipe).
 - Everything that touches game objects runs in the game thread. Own threads only put commands in a queue.
 - `imgui.ini` is never written (`io.IniFilename = nullptr`), so nothing lands in the game folder.
-- Window title "Niobium | Menu", all texts in plain English (`native/client/ATLAS/Private/GUI.cpp`), brand
+- Window title "Rift | Menu", all texts in plain English (`native/client/ATLAS/Private/GUI.cpp`), brand
   colours (violet accent `#7A3CFF`). Tabs:
 
 | Tab | Contents |
@@ -561,11 +583,11 @@ On/off: pipe key `bTrickshotDetection` (default: on; in the launcher "Match Cont
 | Main | Join a server, Editing (Edit on release, Reset on release, Disable pre-edits – every version), Graphics (Mobile Builds, Bubble look + Bubble strength, In-game fog, Simpler textures), Movement, Field of view, Respawn, Other |
 | Commands | your own commands and command chains, each with its own key |
 | Options | Build look (Bubble Builds status), General (Which console?, Open the console with the … key, Remember my settings), Reset builds (switch, Reset builds key, status), Keys (Change menu key, Change join key, Reset everything) |
-| Trickshot | Niobium: Load a parkour, Target bot, Gear, Practice (`ATLAS/Private/NiobiumTrickshotTab.cpp`) |
-| Credits | names Erbium and ATLAS Console; the licence line "Niobium is based on ATLAS Console by cipherfps, ralz and contributors." |
+| Trickshot | Rift: Load a parkour, Target bot, Gear, Practice (`ATLAS/Private/NiobiumTrickshotTab.cpp`) |
+| Credits | names Erbium and ATLAS Console; the licence line "Rift is based on ATLAS Console by cipherfps, ralz and contributors." |
 
 - Toggles a version doesn't have are hidden (see [Versions](#versions)).
-- Console: **F8**. In the Niobium console also `VK_OEM_3` (US keyboard `~`, German keyboard Ö) and – when
+- Console: **F8**. In the Rift console also `VK_OEM_3` (US keyboard `~`, German keyboard Ö) and – when
   "Open the console with the … key" is on – `VK_OEM_2` (US `/`, German `#`); then it opens with "/" already typed.
 - Host features are sent by the menu as `cheat <command>` to the server (see "Who may send cheat commands?").
 
@@ -581,7 +603,7 @@ toggle in "Main" works on every version, right away.
 
 `native/client/ATLAS/Public/EditFeatureRoutes.h`. Each feature takes exactly **one** route per game:
 
-| Feature | Niobium's hook | Fortnite's own setting | Note |
+| Feature | Rift's hook | Fortnite's own setting | Note |
 |---|---|---|---|
 | Edit on release | below 11.00 | from 11.00 ("Confirm Edit on Release"; from 24.30 "Auto Confirm Edits" = Edit) | 10.x has the setting only for mobile, so it is never written there |
 | Disable pre-edits | below 15.20 | from 15.20 ("Disable Pre-Edits") | 15.10's option only reset edits when you left build mode |
@@ -605,7 +627,7 @@ Fortnite's Keyboard Controls.
 - **Client** (`ATLAS/Private/QuickReset.cpp`, `Public/QuickReset.h`): F9 → Options → "Reset builds"
   (switch, off at first), "Reset builds key [<key>]" (no key at first; not the left or right mouse button),
   status: "Join a match to use it." / "Checking the server..." / "Ready." / "This server can't do it. It
-  needs a Niobium server." / "Not available on this version." / "Close the original console first (Esc)."
+  needs a Rift server." / "Not available on this version." / "Close the original console first (Esc)."
   A key that is also a menu, join, console or command key is refused. Keys typed into a console never count.
 - **Server** (`Erbium/Private/QuickReset.cpp`, `Public/QuickReset.h`): host switch "Allow Reset Builds Key"
   in the server window (on by default).
@@ -633,7 +655,7 @@ The buttons in the "Trickshot" tab:
 | Remove all bots / Bring bots to me | `cheat delbot` / `cheat tpbot` |
 | Give sniper / Give launch pads | `cheat parkour sniper` / `cheat givetraps` |
 | Refill ammo / Refill health | `cheat giveammo` / `cheat regen` |
-| Save spot / Back to spot | `cheat s niobium o` / `cheat w niobium` (the same waypoint name as on "Match Control", so a spot saved in one place works from the other) |
+| Save spot / Back to spot | `cheat s rift o` / `cheat w rift` (the same waypoint name as on "Match Control", so a spot saved in one place works from the other) |
 | Launch me up | `cheat l 2500` |
 | Slow motion (toggle) | on: `cheat demospeed 0.5`, off: `cheat demospeed 1` |
 | Low gravity / Normal gravity | `cheat gravity 0.4` / `cheat gravity 1` |
@@ -642,12 +664,12 @@ The buttons in the "Trickshot" tab:
 
 After a click, the line under the section (on "Load": in the card) shows "Sent: …" for a moment – or "Can't do
 that right now – are you in a match?" when the command couldn't be sent. The server's real answer is in the
-console (setting "Niobium console"). The menu remembers "Slow motion" and "Storm" itself; in a new match they
+console (setting "Rift console"). The menu remembers "Slow motion" and "Storm" itself; in a new match they
 go back to "off". In the lobby a hint at the top says the buttons only work in a match ("You're still in the
 lobby. Start a match first – then these buttons work.").
 
 **Trickshot banner:** `Client.cpp` looks at every `ClientMessage` (in both console modes). If it starts with
-`[Niobium] TRICKSHOT`, `NiobiumToast_Draw` (every frame, also with the menu closed) shows a big gold
+`[Rift] TRICKSHOT`, `NiobiumToast_Draw` (every frame, also with the menu closed) shows a big gold
 "TRICKSHOT!" at the top centre and below it the rest of the first line (name and metres), for 3.5 s. The
 message itself still goes to the console unchanged.
 
@@ -655,7 +677,7 @@ message itself still goes to the console unchanged.
 
 Library → **Download a version** (a button at the top next to "Add a build", and a tile under the "Add a
 build" tile). It downloads an old Fortnite build and adds it to the Library like "Add a build" does. Only
-builds that Epic still has **completely** and that Niobium's game server is meant to run are offered.
+builds that Epic still has **completely** and that Rift's game server is meant to run are offered.
 
 Code: `launcher/core/src/epic/` (formats, checks, the download engine – tested with `cargo test`),
 `launcher/src-tauri/src/download/` (commands, HTTP, Windows drive facts), UI `launcher/src/pages/DownloadPage.tsx`,
@@ -677,7 +699,7 @@ ported from Legendary (GPL-3.0-or-later, see [`THIRD_PARTY_NOTICES.md`](../THIRD
   over HTTPS, without a login, tried in this order and rotated on every retry:
   `fastly-download.epicgames.com`, `epicgames-download1.akamaized.net`, `download.epicgames.com`,
   `cloudflare.epicgamescdn.com` (`epic/cdn.rs`, `CDN_HOSTS`). Redirects are never followed, so no other host
-  is ever contacted. Niobium never uses re-uploads or mirrors of builds.
+  is ever contacted. Rift never uses re-uploads or mirrors of builds.
 - On Windows, HTTPS uses Windows' own TLS and certificate store (ureq with native-tls).
 
 ### What it offers (`launcher/core/data/build-catalog.json`, checked on 26 Oct 2026)
@@ -713,7 +735,7 @@ random chunks all still exist (21.00-CL-20548557 passed 50 of 50 random chunks, 
 gone). So every chunk of the shipping exe of all 92 builds 21.00–30.40 was checked (64 complete); then 36 of them
 got 400 random chunks, up to 600 chunks no neighbouring build uses, every chunk under `Binaries/` and up to 600
 chunks no other complete build uses – all present. 21.50-CL-21657658, 22.40-CL-23070899 and 27.11-CL-29739262
-were checked chunk by chunk (38,240, 38,720 and 82,973 chunks, all present). The manifests parse with Niobium's
+were checked chunk by chunk (38,240, 38,720 and 82,973 chunks, all present). The manifests parse with Rift's
 own parser (binary, feature level 17 or 21, not encrypted, version and CL as in the catalog, longest path 106
 characters). Left out because exe chunks are gone: every 21.00, 22.00 and 23.10 build, most other 21.x–23.x
 builds and 24.01-CL-24757023. The downloader still checks every chunk before it writes anything, so a chunk Epic deletes later only
@@ -736,7 +758,7 @@ whose status says "available" shows it (test `season_without_builds_is_not_offer
 
 The text above the cards (once per reason, Rust `NOTE_NOT_FROM_EPIC` / `NOTE_NOT_OFFERED_YET`):
 "Epic has deleted part of the files for this season, so no download can get it complete. If you already have
-this version on your PC, it keeps working. Add it with 'Add a build'." and "Niobium's game server isn't ready
+this version on your PC, it keeps working. Add it with 'Add a build'." and "Rift's game server isn't ready
 for this season yet, so it isn't offered." The cards themselves say "Epic deleted some of its files." or "The
 game server isn't ready for it yet."
 
@@ -758,14 +780,14 @@ The UI shows four steps: **Check at Epic**, **Download**, **Check files**, **Add
    download from the archive (3 tries per archive). SHA-1 check, then parse (binary or JSON format; encrypted
    manifests and format 22 and newer are refused). The version and CL inside must match the catalog entry.
 2. **Folder checks** (`epic/folder.rs`; the drive facts come from the Windows API in `download/disk.rs`), in
-   this order: path longer than 100 characters → `PATH_TOO_LONG`; inside Niobium's own install folder →
+   this order: path longer than 100 characters → `PATH_TOO_LONG`; inside Rift's own install folder →
    `OWN_FOLDER`; under Program Files or Windows → `WRITE_FAILED`; under OneDrive → `ONEDRIVE`; a network drive
    or `\\server\share` → `NETWORK_DRIVE`; FAT, FAT16 or FAT32 → `FAT32`; other files in the folder (and no
    unfinished download of this build) or an unfinished download of another build → `NOT_EMPTY`; less free
    space than the bytes still to write + 2 GiB → `NOT_ENOUGH_SPACE`. Then a write test (the folder is created,
-   `.niobium-write-test` is written and deleted). `download_start` already runs the same checks with the full
+   `.rift-write-test` is written and deleted). `download_start` already runs the same checks with the full
    size, so a bad folder is refused before the download starts, and its text shows under the folder field.
-   Default folder: `<fixed drive with the most free space, no FAT>:\Niobium\Builds\<version>-CL-<cl>`.
+   Default folder: `<fixed drive with the most free space, no FAT>:\Rift\Builds\<version>-CL-<cl>`.
 3. **Check at Epic:** a HEAD request for every chunk still needed, 32 at a time ("Checking that Epic still has
    every file… (a few minutes)" – about 1 minute for a 40 GB build, a few minutes for the 100+ GB builds of
    28.x–30.x). The first chunk Epic no longer has (404 from two hosts) stops everything with
@@ -788,7 +810,7 @@ The UI shows four steps: **Check at Epic**, **Download**, **Check files**, **Add
    button on the card uses a profile of that build (or makes a "Classic match" profile called "Fortnite 18.30"),
    makes it active and goes to Home.
 
-### Pause, resume, cancel, closing Niobium
+### Pause, resume, cancel, closing Rift
 
 - **Pause:** every worker stops between chunks; a chunk still arriving is dropped (the body is read in 64 KB
   pieces and Pause is checked between them). Everything written stays. A connection that sends nothing at all
@@ -798,44 +820,44 @@ The UI shows four steps: **Check at Epic**, **Download**, **Check files**, **Add
   and "Check at Epic" only covers the chunks still needed. Starting the same build again into a folder that
   has its unfinished download does the same.
 - Only **one download runs at a time** ("Another version is downloading. Pause it first, then start this one.").
-- Unfinished downloads (running, paused, stopped by an error) are kept in `%APPDATA%\Niobium\downloads.json`.
-  Closing Niobium pauses a running download ("Close Niobium?" lists it as "Download (18.30)"); after the next
+- Unfinished downloads (running, paused, stopped by an error) are kept in `%APPDATA%\Rift\downloads.json`.
+  Closing Rift pauses a running download ("Close Rift?" lists it as "Download (18.30)"); after the next
   start it is back as **Paused**.
 - **Cancel** asks "Delete the downloaded files?"; **Keep files** is the default. **Delete files** removes only the
-  build's own files (finished and `.part`), `.niobium-download\` and the folders that are empty afterwards –
+  build's own files (finished and `.part`), `.rift-download\` and the folders that are empty afterwards –
   nothing else. A finished build is never deleted from here.
 
 ### Error codes and texts (`epic/errors.rs`, shown as they are)
 
 | Code | Text |
 |---|---|
-| `MANIFEST_UNAVAILABLE` | "Niobium couldn't get the file list for this version. Check your internet connection and try again later." |
-| `MANIFEST_MISMATCH` | "The file list for this version isn't what Niobium expects, so nothing was downloaded. Please update Niobium." |
+| `MANIFEST_UNAVAILABLE` | "Rift couldn't get the file list for this version. Check your internet connection and try again later." |
+| `MANIFEST_MISMATCH` | "The file list for this version isn't what Rift expects, so nothing was downloaded. Please update Rift." |
 | `CHUNKS_MISSING` | "Epic no longer has all the files for this version, so it can't be downloaded. Nothing was downloaded. Pick another version, or add a copy you already have with 'Add a build'." |
 | `EPIC_BLOCKED` | "Epic's download servers refused the download. Nothing is wrong with your PC. Please try again later." |
-| `NETWORK` | "The connection to Epic's download servers dropped. Press Resume and Niobium continues where it stopped." |
+| `NETWORK` | "The connection to Epic's download servers dropped. Press Resume and Rift continues where it stopped." |
 | `NOT_ENOUGH_SPACE` | "There isn't enough free space on drive D:. This version needs 47.5 GB and 12.3 GB is free. Free up space or pick another folder." ("this drive" when the letter is unknown) |
 | `FAT32` | "Drive E: can't hold files bigger than 4 GB (FAT32). Pick a folder on another drive." |
 | `ONEDRIVE` | "This folder is synced by OneDrive. Pick a folder outside OneDrive, or it will try to upload the whole game (up to about 120 GB)." |
 | `NOT_EMPTY` | "This folder already has other files in it. Pick an empty folder." |
-| `WRITE_FAILED` | "Niobium can't write to this folder. Pick another one (not inside Program Files)." |
+| `WRITE_FAILED` | "Rift can't write to this folder. Pick another one (not inside Program Files)." |
 | `VERIFY_FAILED` | "A downloaded file was still damaged. Please try again later." |
-| `IMPORT_FAILED` | "The download finished, but Niobium couldn't recognise the version in the folder." |
+| `IMPORT_FAILED` | "The download finished, but Rift couldn't recognise the version in the folder." |
 | `NETWORK_DRIVE` | "This folder is on a network drive. Pick a folder on a drive inside your PC." |
-| `PATH_TOO_LONG` | "This folder's path is too long. Pick a shorter one, like D:\Niobium\Builds." |
-| `OWN_FOLDER` | "This folder belongs to Niobium itself. Pick another one." |
+| `PATH_TOO_LONG` | "This folder's path is too long. Pick a shorter one, like D:\Rift\Builds." |
+| `OWN_FOLDER` | "This folder belongs to Rift itself. Pick another one." |
 | `ALREADY_RUNNING` | "This version is already downloading." |
 | `ANOTHER_RUNNING` | "Another version is downloading. Pause it first, then start this one." |
-| `UNKNOWN_BUILD` | "Niobium can't download this version." |
+| `UNKNOWN_BUILD` | "Rift can't download this version." |
 
 When files of the build are already in the folder (it has a journal), three codes use other texts
 (`after_files_written`; `filesKept: true` in the event):
 
 - `CHUNKS_MISSING`: "Epic no longer has all the files for this version, so the download can't be finished.
   Remove it to free the space, then pick another version or add a copy you already have with 'Add a build'."
-- `MANIFEST_MISMATCH`: "The file list for this version isn't what Niobium expects, so the download can't go on.
-  Please update Niobium."
-- `WRITE_FAILED`: "Niobium couldn't write to the download folder. Free up space on the drive or close programs
+- `MANIFEST_MISMATCH`: "The file list for this version isn't what Rift expects, so the download can't go on.
+  Please update Rift."
+- `WRITE_FAILED`: "Rift couldn't write to the download folder. Free up space on the drive or close programs
   that use the folder, then press Resume."
 
 The error card shows a short title (`errorTitle` in `downloads.ts`) above the text and the buttons that fit:
@@ -947,7 +969,7 @@ Control → "Target dummies", command `bot <n>`), which stand still and work on 
    reads `AliveBots`.
 
 Not ported on purpose: Artemis' `KickPlayer` / `ValidatePlayer` / `StoreGameSessionID` patches, its engine
-rewrites, its backend, and its storm, inventory and loadout code (Niobium has its own).
+rewrites, its backend, and its storm, inventory and loadout code (Rift has its own).
 
 **Log lines:** every `[PlayerBots] …` line goes to the server's stdout handle, so it shows in the live log
 (source Server, category `bots`, without the tag). Lines with "disabled", "failed", "fail:", "unavailable", "not
@@ -988,7 +1010,7 @@ Code: `launcher/core/src/livingworld.rs`, `bots.rs` (`server_config_for`), `prof
   Tauri event `server:livingWorld` `{ state, reason, spawned }` on every event. The server sends one at "Start
   match": today "unavailable" (switch on) or "off" (switch off); "active" comes once a season is built, and if
   the server sends more (e.g. with a new `spawned`), the chip follows.
-  - Live log (source Niobium, category `livingWorld`): a line only when the switch is on and the state or the
+  - Live log (source Rift, category `livingWorld`): a line only when the switch is on and the state or the
     reason changed within the match: "Bosses & NPCs aren't available: <reason>" (warning), later "Bosses &
     NPCs are on: 12 spawned." (or "… are on for this match." while 0). "off" never gets a line. After `matchEnd`
     the next match gets its own line.
@@ -1034,7 +1056,7 @@ player controller (`FortInventory.cpp`, `RemoveWeaponAbilities`). AI bots are no
 
 Before, on 11.00 and newer the floor loot spots (`Tiered_Athena_FloorLoot_Warmup_C`, `Tiered_Athena_FloorLoot_01_C`)
 were removed without spawning anything (inherited from Erbium). Now, on 11.00+ builds whose game mode has no
-`OnPlaylistLootTablesAppliedDelegate` (19.x, e.g. 19.10), every spot is rolled once with Niobium's loot tables
+`OnPlaylistLootTablesAppliedDelegate` (19.x, e.g. 19.10), every spot is rolled once with Rift's loot tables
 right after the loot setup, then removed. A spot that was already rolled – also an empty "nothing here" roll – is
 not rolled again, so a few empty spots are normal. Builds that still have that event keep the old path (the game
 spawns its floor loot itself); below 11.00 nothing changed.
@@ -1057,8 +1079,8 @@ To send it: Live Log → search "loot" → Copy.
 ## Installer
 
 Tauri's NSIS installer (`tauri.conf.json` → `bundle.windows.nsis`): install mode "current user" (no admin
-rights; default folder `%LOCALAPPDATA%\Niobium`), English only, no language picker, LZMA compression, the
-Niobium icon for installer and uninstaller, `windows/assets/header.bmp` (150 × 57) and
+rights; default folder `%LOCALAPPDATA%\Rift`), English only, no language picker, LZMA compression, the
+Rift icon for installer and uninstaller, `windows/assets/header.bmp` (150 × 57) and
 `windows/assets/sidebar.bmp` (164 × 314), and the hooks in `windows/hooks.nsh`:
 
 - dark look: background `#0A0B12`, text `#F2F3F8`, classic controls so the Finish page checkboxes use the
@@ -1066,17 +1088,19 @@ Niobium icon for installer and uninstaller, `windows/assets/header.bmp` (150 × 
 - before the wizard a fading splash (`windows/assets/splash.bmp`, AdvSplash, magenta `#FF00FF` is see-through;
   not for `/P` passive or `/UPDATE` runs);
 - a dark title bar on Windows 11 (installer and uninstaller; harmless on Windows 10);
-- English texts: "Welcome to Niobium", "You're ready to drop.", the checkbox "Launch Niobium now" and the link
+- English texts: "Welcome to Rift", "You're ready to drop.", the checkbox "Launch Rift now" and the link
   "Source code and help (GitHub)" → https://github.com/georghatzmann-bit/vanity-;
 - after installing it goes straight to the Finish page (`SetAutoClose`);
-- **old Vanity install:** if the uninstall entry `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Vanity`
-  exists, the installer runs the old `uninstall.exe` silently first ("Removing the old Vanity launcher...").
-  That only removes Vanity's program files and shortcuts; the folder is removed only if it is empty, so
-  settings, server data and logs stay for the [migration](#moving-over-from-vanity).
+- **old Niobium or Vanity install:** for each of the old names (macro `REMOVE_OLD_LAUNCHER` in `hooks.nsh`,
+  first Vanity, then Niobium): if the uninstall entry
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\<old name>` exists, the installer runs the old
+  `uninstall.exe` silently first ("Removing the old Niobium launcher..."). That only removes the old
+  program files and shortcuts; the folder is removed only if it is empty, so settings, server data,
+  backend data, logs and builds stay for the [migration](#moving-over-from-niobium-and-vanity).
 
 The images are 24-bit uncompressed BMPs with a 40-byte header and no alpha; the workflow checks this before it
-builds. Uninstalling Niobium keeps `%APPDATA%\Niobium`, the data folders in
-`%LOCALAPPDATA%\Niobium` (`backend-data`, `server`, `logs`) and your Fortnite builds.
+builds. Uninstalling Rift keeps `%APPDATA%\Rift`, the data folders in
+`%LOCALAPPDATA%\Rift` (`backend-data`, `server`, `logs`) and your Fortnite builds.
 
 ## UI ↔ Rust (Tauri commands and events)
 
@@ -1090,7 +1114,7 @@ Commands: `get_config`, `platform`, `update_settings`, `detect_build`, `add_buil
 [build downloader](#build-downloader-download-a-version): `catalog_list`, `download_start`, `download_pause`,
 `download_resume`, `download_cancel`, `download_status`, `default_download_folder`.
 
-Early log lines: lines the launcher writes while it starts (e.g. "Copied your settings from Vanity …" or a
+Early log lines: lines the launcher writes while it starts (e.g. "Copied your settings from Niobium …" or a
 fixed-port note) come before the UI listens, so a `log:line` event then would be lost. They wait in Rust
 (`launcher/core/src/earlylog.rs`, at most 500). The UI calls `pending_log_lines` once, right after its
 `log:line` listener is registered, and puts them before newer lines; from then on every line comes as an

@@ -11,7 +11,7 @@ const mainPage = path.resolve(root, "index.html");
 // the whole app inside the small splash window, so a missing file stops the build.
 const splashPage = path.resolve(root, "splash.html");
 if (!fs.existsSync(splashPage)) {
-  throw new Error("[niobium] launcher/splash.html is missing – the splash window in tauri.conf.json needs it.");
+  throw new Error("[rift] launcher/splash.html is missing – the splash window in tauri.conf.json needs it.");
 }
 
 // Tauri expects a fixed port and should not watch the Rust files.

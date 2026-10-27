@@ -165,7 +165,7 @@ export interface LogoMarkProps {
   variant?: LogoVariant;
   /** Soft violet/cyan glow behind the mark that slowly breathes (stays still when motion is reduced). */
   glow?: boolean;
-  /** Accessible name. Leave it out when text next to the logo already says "Niobium". */
+  /** Accessible name. Leave it out when text next to the logo already says "Rift". */
   title?: string;
 }
 
@@ -215,7 +215,7 @@ export interface WordmarkProps {
 }
 
 /** "RIFT" in the brand lettering. Uses the current text colour. */
-export function Wordmark({ className, height, title = "Niobium" }: WordmarkProps) {
+export function Wordmark({ className, height, title = "Rift" }: WordmarkProps) {
   return (
     <svg
       viewBox={WORDMARK_VIEWBOX}
@@ -236,18 +236,18 @@ export interface LogoProps {
   /** Mark size in px; the wordmark scales with it. */
   size?: number;
   glow?: boolean;
-  /** Show "old seasons, new shine." under the name. */
+  /** Show "Step back into any season." under the name. */
   tagline?: boolean;
 }
 
 /** Mark + wordmark lock-up, e.g. for the splash, welcome and about screens. */
 export function Logo({ className, size = 40, glow = false, tagline = false }: LogoProps) {
   return (
-    <span className={cn("inline-flex items-center", className)} style={{ gap: size * 0.3 }} role="img" aria-label="Niobium">
+    <span className={cn("inline-flex items-center", className)} style={{ gap: size * 0.3 }} role="img" aria-label="Rift">
       <LogoMark size={size} glow={glow} />
       <span className="flex flex-col" style={{ gap: size * 0.12 }}>
         <Wordmark height={size * 0.42} title="" className="text-foreground" />
-        {tagline && <span className="text-xs text-muted-foreground">old seasons, new shine.</span>}
+        {tagline && <span className="text-xs text-muted-foreground">Step back into any season.</span>}
       </span>
     </span>
   );

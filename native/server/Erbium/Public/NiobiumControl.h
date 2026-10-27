@@ -1,4 +1,4 @@
-// NIOBIUM: control pipe for the launcher - Niobium's own code (GPL-3.0), not part of Magnesium.
+// NIOBIUM: control pipe for the launcher - Rift's own code (GPL-3.0), not part of Magnesium.
 //
 // The launcher connects to \\.\pipe\niobium-server and sends one JSON command per line
 // ({"id":1,"cmd":"exec","text":"startaircraft"}, {"cmd":"config","key":"playlist","value":"solo"},

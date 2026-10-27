@@ -1,10 +1,10 @@
-// NIOBIUM: shared base for Niobium's AI work (AI player bots, "Living world" bosses and NPCs).
+// NIOBIUM: shared base for Rift's AI work (AI player bots, "Living world" bosses and NPCs).
 //
-// Niobium's own code (GPL-3.0), on Magnesium (BSD-3) / Erbium (GPL-3.0). Moved here from
+// Rift's own code (GPL-3.0), on Magnesium (BSD-3) / Erbium (GPL-3.0). Moved here from
 // PlayerBots_19_10.cpp, whose gate tooling was ported from NotTacs/Artemis (GPL-3.0, commit
 // 48dba08): AllocateNearPage / PatchLeaTarget follow Artemis Engine/.../Kismet/MemoryLibrary.h
 // (AllocateNearbyPage, Rel32Swap_Lea). The PE/unwind checks, layout checks, string anchor, SEH
-// helpers and fault counters are Niobium's own. The standalone-check patch follows the idea of
+// helpers and fault counters are Rift's own. The standalone-check patch follows the idea of
 // Jeremy1926/Velora (MIT), commit 67ffac0, Velora/FortniteGame/Source/FortniteGame/Private/Athena/
 // FortPlayerPawnAthena.cpp:25-33, rewritten for this code base (no Velora code is copied; Velora
 // uses its own Anchor/Zydis scanner, this uses MinHook's hde64 length disassembler).

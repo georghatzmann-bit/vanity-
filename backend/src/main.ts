@@ -1,4 +1,4 @@
-// Niobium backend: entry point.
+// Rift backend: entry point.
 // Reads the settings from environment variables, prepares the data folder, puts the
 // /niobium endpoints in front of LawinServer and starts HTTP (NIOBIUM_BACKEND_PORT) and
 // XMPP + matchmaker (NIOBIUM_MATCHMAKER_PORT).
@@ -15,7 +15,7 @@ declare const __NIOBIUM_VERSION__: string | undefined;
 const VERSION = typeof __NIOBIUM_VERSION__ === "string" ? __NIOBIUM_VERSION__ : "dev";
 
 function log(message: string): void {
-  console.log(`[Niobium] ${message}`);
+  console.log(`[Rift] ${message}`);
 }
 
 function pathOf(req: Request): string {
@@ -35,17 +35,17 @@ function requestLog(req: Request, res: Response, next: NextFunction): void {
 function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   const status = (err as { status?: unknown }).status;
   const code = typeof status === "number" && status >= 400 && status < 600 ? status : 500;
-  if (code >= 500) console.error(`[Niobium] Error at ${req.method} ${pathOf(req)}:`, err);
+  if (code >= 500) console.error(`[Rift] Error at ${req.method} ${pathOf(req)}:`, err);
   if (res.headersSent) {
     // The answer is already on its way (e.g. an error after res.json) – just finish it cleanly
     if (!res.writableEnded) res.end();
     return;
   }
   res.status(code).json({
-    errorCode: code >= 500 ? "errors.com.niobium.internal_error" : "errors.com.niobium.bad_request",
-    errorMessage: code >= 500 ? "Internal error in the Niobium backend" : String((err as Error).message ?? err),
+    errorCode: code >= 500 ? "errors.com.rift.internal_error" : "errors.com.rift.bad_request",
+    errorMessage: code >= 500 ? "Internal error in the Rift backend" : String((err as Error).message ?? err),
     numericErrorCode: code,
-    originatingService: "niobium",
+    originatingService: "rift",
     intent: "prod",
   });
 }
@@ -60,7 +60,7 @@ function main(): void {
   try {
     config = loadConfig();
   } catch (err) {
-    console.error(`[Niobium] ${err instanceof ConfigError ? err.message : String(err)}`);
+    console.error(`[Rift] ${err instanceof ConfigError ? err.message : String(err)}`);
     process.exit(1);
   }
 
@@ -80,7 +80,7 @@ function main(): void {
   // request), everything else is only logged, so the backend keeps running.
   forwardAsyncErrors();
   process.on("unhandledRejection", (reason) => {
-    console.error("[Niobium] Unhandled error:", reason);
+    console.error("[Rift] Unhandled error:", reason);
   });
 
   const app = express();
@@ -103,7 +103,7 @@ function main(): void {
   const server = http.createServer(app);
   server.on("error", (err: NodeJS.ErrnoException) => {
     const reason = err.code === "EADDRINUSE" ? "is already in use" : `doesn't work (${err.code ?? err.message})`;
-    console.error(`[Niobium] HTTP port ${config.bind}:${config.httpPort} ${reason}`);
+    console.error(`[Rift] HTTP port ${config.bind}:${config.httpPort} ${reason}`);
     process.exit(1);
   });
 

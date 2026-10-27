@@ -1,7 +1,7 @@
 //! Log lines from before the UI listens.
 //!
 //! The launcher writes some lines while it starts (e.g. "Copied your settings from Vanity to
-//! Niobium …"), before the UI has subscribed to the live log. A Tauri event sent then is lost.
+//! Rift …"), before the UI has subscribed to the live log. A Tauri event sent then is lost.
 //! So lines are kept here until the UI asks for them once (`pending_log_lines`); after that
 //! every line goes straight to the UI.
 

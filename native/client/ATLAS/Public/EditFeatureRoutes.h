@@ -1,5 +1,5 @@
-// [Niobium] Edit on release, Reset on release and Disable pre-edits on every Fortnite version,
-// without ever running our hook and Epic's own setting together. Niobium code, GPL-3.0.
+// [Rift] Edit on release, Reset on release and Disable pre-edits on every Fortnite version,
+// without ever running our hook and Epic's own setting together. Rift code, GPL-3.0.
 //
 // Each feature takes exactly one "route" per game process:
 //   Hook        - our detour does the work (old versions). Epic's setting is never touched.

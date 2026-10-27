@@ -105,7 +105,7 @@ export const demoProfiles: Profile[] = [
 
 /** Playlists the game server knows (short name → label). */
 export const playlists = [
-  // Names the game server (niobium_server.dll) knows – see docs/02-architecture.md, control pipe
+  // Names the game server (rift_server.dll) knows – see docs/02-architecture.md, control pipe
   { id: "Playlist_DefaultSolo", label: "Solo" },
   { id: "Playlist_DefaultDuo", label: "Duos" },
   { id: "Playlist_Trios", label: "Trios" },
@@ -133,20 +133,20 @@ export type DemoLogLine = Omit<LogLine, "time">;
 
 /** Roughly what a launch looks like – only for the browser preview. */
 export const demoLogScript: DemoLogLine[] = [
-  { source: "launcher", level: "info", category: "Niobium", message: "Profile \"Standard\" loaded – build 19.10 (CL-18675304)" },
+  { source: "launcher", level: "info", category: "Rift", message: "Profile \"Standard\" loaded – build 19.10 (CL-18675304)" },
   { source: "backend", level: "info", category: "Backend", message: "Backend listening on 127.0.0.1:3551" },
-  { source: "launcher", level: "info", category: "Niobium", message: "Starting the server Fortnite: -nullrhi -nosplash -nosound" },
+  { source: "launcher", level: "info", category: "Rift", message: "Starting the server Fortnite: -nullrhi -nosplash -nosound" },
   { source: "server", level: "info", category: "LogInit", message: "Build: ++Fortnite+Release-19.10-CL-18675304" },
-  { source: "launcher", level: "info", category: "Niobium", message: "Redirect loaded" },
+  { source: "launcher", level: "info", category: "Rift", message: "Redirect loaded" },
   { source: "server", level: "info", category: "LogOnlineAccount", message: "[UOnlineAccountCommon::ContinueLoggingIn] (Completed)", detected: "Login detected" },
-  { source: "server", level: "info", category: "Niobium", message: "niobium_server.dll loaded" },
+  { source: "server", level: "info", category: "Rift", message: "rift_server.dll loaded" },
   { source: "server", level: "warning", category: "LogStreaming", message: "Package /Game/Athena/Artemis/Maps/… took 3.2s to load" },
   { source: "server", level: "info", category: "LogNet", message: "GameNetDriver IpNetDriver listening on port 7777", detected: "Server ready" },
-  { source: "launcher", level: "info", category: "Niobium", message: "Starting your game: -d3d11" },
+  { source: "launcher", level: "info", category: "Rift", message: "Starting your game: -d3d11" },
   { source: "game", level: "info", category: "LogD3D11RHI", message: "Chosen D3D11 Adapter: 0" },
   { source: "backend", level: "info", category: "Backend", message: "GET /fortnite/api/v2/versioncheck/Windows → 200" },
   { source: "game", level: "info", category: "LogOnlineAccount", message: "[UOnlineAccountCommon::ContinueLoggingIn] (Completed)", detected: "Login detected" },
-  { source: "game", level: "info", category: "Niobium", message: "niobium_client.dll loaded – press F9 for the menu" },
+  { source: "game", level: "info", category: "Rift", message: "rift_client.dll loaded – press F9 for the menu" },
   { source: "game", level: "error", category: "LogParty", message: "Failed to connect to XMPP – party features limited" },
   { source: "backend", level: "info", category: "Backend", message: "Matchmaker: player queued → 127.0.0.1:7777" },
   { source: "server", level: "info", category: "LogNet", message: "Join succeeded: georg" },
@@ -164,9 +164,9 @@ export const demoCrashes: CrashReport[] = [
     version: "19.40",
     title: "Crash in a third-party DLL",
     severity: "high",
-    whatHappened: "Fortnite closed – the error came from an extra DLL that isn't part of Niobium.",
+    whatHappened: "Fortnite closed – the error came from an extra DLL that isn't part of Rift.",
     likelyCause: "The DLL \"console.dll\" doesn't match this Fortnite version or runs at the wrong moment.",
-    whatToDo: ["Stop using this DLL together with Niobium.", "Niobium brings every DLL it needs."],
+    whatToDo: ["Stop using this DLL together with Rift.", "Rift brings every DLL it needs."],
     technical: [["Error", "EXCEPTION_ACCESS_VIOLATION reading address 0x0000000000000038"], ["Module", "console.dll"]],
     callstack: ["console.dll!UnknownFunction []", "FortniteClient-Win64-Shipping.exe!UConsole::ConsoleCommand()"],
   },
@@ -197,11 +197,11 @@ export const credits: { group: string; items: Credit[] }[] = [
   {
     group: "Built on (source code used)",
     items: [
-      { name: "Magnesium", author: "Ploosh, ralz, cipher", license: "BSD-3-Clause", url: "https://github.com/Ralzify/Magnesium", use: "Base of the game server (niobium_server.dll)" },
+      { name: "Magnesium", author: "Ploosh, ralz, cipher", license: "BSD-3-Clause", url: "https://github.com/Ralzify/Magnesium", use: "Base of the game server (rift_server.dll)" },
       { name: "Erbium / ErbiumClient", author: "Ploosh", license: "GPL-3.0", url: "https://github.com/plooshi/Erbium", use: "Base of Magnesium; parts of the in-game menu" },
-      { name: "Tellurium", author: "Ploosh", license: "BSD-3-Clause", url: "https://github.com/plooshi/Tellurium", use: "Base of the redirect (niobium_redirect.dll)" },
+      { name: "Tellurium", author: "Ploosh", license: "BSD-3-Clause", url: "https://github.com/plooshi/Tellurium", use: "Base of the redirect (rift_redirect.dll)" },
       { name: "LawinServer", author: "Lawin0129", license: "GPL-3.0", url: "https://github.com/Lawin0129/LawinServer", use: "Base of the backend" },
-      { name: "ATLAS Console", author: "cipherfps, ralz and contributors", license: "ATLAS Console Attribution License v1.0", url: "https://github.com/Ralzify/ATLAS-Client", use: "Base of the in-game menu (niobium_client.dll) – Niobium's menu is based on ATLAS Console" },
+      { name: "ATLAS Console", author: "cipherfps, ralz and contributors", license: "ATLAS Console Attribution License v1.0", url: "https://github.com/Ralzify/ATLAS-Client", use: "Base of the in-game menu (rift_client.dll) – Rift's menu is based on ATLAS Console" },
     ],
   },
   {
@@ -234,7 +234,7 @@ export const credits: { group: string; items: Credit[] }[] = [
 export const seasonNotes = {
   notFromEpic:
     "Epic has deleted part of the files for this season, so no download can get it complete. If you already have this version on your PC, it keeps working. Add it with 'Add a build'.",
-  notOfferedYet: "Niobium's game server isn't ready for this season yet, so it isn't offered.",
+  notOfferedYet: "Rift's game server isn't ready for this season yet, so it isn't offered.",
 } as const;
 
 const GB = 1e9;

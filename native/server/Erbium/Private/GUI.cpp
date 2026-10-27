@@ -4471,7 +4471,7 @@ namespace SafeZoneMap
             if (SUCCEEDED(SHGetFolderPathW(
                     nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, localAppData)))
             {
-                result = std::wstring(localAppData) + L"\\Niobium\\server\\Maps"; // NIOBIUM: own data folder
+                result = std::wstring(localAppData) + L"\\Rift\\server\\Maps"; // NIOBIUM: own data folder
             }
             else
             {
@@ -7202,7 +7202,7 @@ namespace TrickshotManager
         if (FAILED(SHGetFolderPathA(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, Path)))
             return {};
 
-        fs::path Directory = fs::path(Path) / "Niobium" / "server" / "trickshots"; // NIOBIUM: own data folder
+        fs::path Directory = fs::path(Path) / "Rift" / "server" / "trickshots"; // NIOBIUM: own data folder
         std::error_code Error;
         fs::create_directories(Directory, Error);
         return Error ? fs::path{} : Directory;

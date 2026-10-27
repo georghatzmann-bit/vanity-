@@ -1,4 +1,4 @@
-// [Niobium] New file (GPL-3.0, part of Niobium): the "Trickshot" tab in the F9 menu and the
+// [Rift] New file (GPL-3.0, part of Rift): the "Trickshot" tab in the F9 menu and the
 // trickshot banner. Deliberately without pch.h, SDK or game headers, so a preview tool can
 // compile this file on Linux with plain ImGui and render screenshots.
 // This file stays plain ASCII because GUI.cpp and Client.cpp are built without /utf-8.
@@ -37,11 +37,11 @@ void NiobiumTrickshotTab_SetLobbyCheck(bool (*IsInLobby)());
 void NiobiumTrickshotTab_Draw(const FNiobiumTabHost& Host, float ContentWidth);
 
 // Optional: a different parkour file (preview tool). nullptr or "" = default path
-// %LOCALAPPDATA%\Niobium\server\parkours.json. Call from the render thread only.
+// %LOCALAPPDATA%\Rift\server\parkours.json. Call from the render thread only.
 void NiobiumTrickshotTab_SetParkourFile(const wchar_t* Path);
 
 // Remembers a message for the banner. Thread-safe, never blocks (try_lock),
-// may be called from the game thread. Text starts with "[Niobium] TRICKSHOT" -> big
+// may be called from the game thread. Text starts with "[Rift] TRICKSHOT" -> big
 // "TRICKSHOT!" and below it the rest of the first line (player and metres).
 void NiobiumToast_Push(const wchar_t* Text, int Length);
 

@@ -1,4 +1,4 @@
-//! Settings, profiles, builds and friends – saved in `%APPDATA%\Niobium\config.json`.
+//! Settings, profiles, builds and friends – saved in `%APPDATA%\Rift\config.json`.
 //!
 //! All state lives in one file. It is written to a temporary file first and then renamed,
 //! so an interrupted write can't break the file.
@@ -19,7 +19,7 @@ pub const PORT_GAMESERVER_DEFAULT: u16 = 7777;
 pub const BACKEND_PORT: u16 = PORT_BACKEND_DEFAULT;
 
 /// The game server always listens on this port. The server DLL takes its port from its own
-/// settings (`%LOCALAPPDATA%\Niobium\server\auto_hosting.json`, default 7777), never from the
+/// settings (`%LOCALAPPDATA%\Rift\server\auto_hosting.json`, default 7777), never from the
 /// launcher – so the matchmaker must send players to 7777.
 pub const GAME_SERVER_PORT: u16 = PORT_GAMESERVER_DEFAULT;
 
@@ -339,12 +339,13 @@ pub fn config_dir() -> PathBuf {
 }
 
 /// Folder name of the app's own data (in `%APPDATA%` and `%LOCALAPPDATA%`).
-pub const APP_DIR: &str = "Niobium";
+pub const APP_DIR: &str = "Rift";
 
-/// Folder name the app used before it was renamed to Niobium (only read, for the one-time migration).
-pub const LEGACY_APP_DIR: &str = "Vanity";
+/// Folder names the app used before it was called Rift, newest first: "Niobium", and before that
+/// "Vanity". Only read, for the one-time migration (see `crate::migrate`).
+pub const OLD_APP_DIRS: [&str; 2] = ["Niobium", "Vanity"];
 
-/// `%LOCALAPPDATA%\Niobium` – logs, server settings and backend data.
+/// `%LOCALAPPDATA%\Rift` – logs, server settings and backend data.
 pub fn local_dir() -> PathBuf {
     dirs::data_local_dir().unwrap_or_else(|| PathBuf::from(".")).join(APP_DIR)
 }
@@ -440,7 +441,7 @@ mod tests {
 
     #[test]
     fn save_and_load_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("niobium-cfg-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rift-cfg-{}", std::process::id()));
         let path = dir.join("config.json");
         let mut c = Config::default();
         c.settings.player_name = "georg".into();
@@ -507,7 +508,7 @@ mod tests {
           "friends": [ { "id": "f1", "name": "Max", "address": "1.2.3.4:7777", "via": "Netzwerk" },
                        { "id": "f2", "name": "Lena", "address": "100.1.1.1:7777", "via": "Tailscale" } ]
         }"#;
-        let dir = std::env::temp_dir().join(format!("niobium-vanity-cfg-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rift-vanity-cfg-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("config.json");
         fs::write(&path, old).unwrap();
@@ -641,7 +642,7 @@ mod tests {
 
     #[test]
     fn profile_with_bots_survives_save_and_load() {
-        let dir = std::env::temp_dir().join(format!("niobium-bots-cfg-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rift-bots-cfg-{}", std::process::id()));
         let path = dir.join("config.json");
         let mut c = Config::default();
         c.upsert_build(build("19.10-18675304"));
@@ -656,7 +657,7 @@ mod tests {
 
     #[test]
     fn broken_file_does_not_crash() {
-        let dir = std::env::temp_dir().join(format!("niobium-broken-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rift-broken-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("config.json");
         fs::write(&path, b"not json {{{").unwrap();

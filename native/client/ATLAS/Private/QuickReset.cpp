@@ -1,5 +1,5 @@
-// [Niobium] "Reset builds", client half: handshake, target choice and the two RPCs.
-// Niobium code, GPL-3.0. Wire format and rules: ../Public/QuickReset.h.
+// [Rift] "Reset builds", client half: handshake, target choice and the two RPCs.
+// Rift code, GPL-3.0. Wire format and rules: ../Public/QuickReset.h.
 //
 // Everything here runs on the game thread only (the GetMaxTickRate pump in Client.cpp, every
 // frame). WndProc only stamps NiobiumQuickReset::PendingPressAt. Every reflected lookup checks the
@@ -726,7 +726,7 @@ namespace
 				GHelpReplySession.load(std::memory_order_acquire) == GState.Session;
 			if (helpReply)
 			{
-				// An old Niobium server: it answered the hello with its command list. No more
+				// An old Rift server: it answered the hello with its command list. No more
 				// hellos for this world (each one would print the whole list again).
 				GState.HelloAttempts = kMaxHelloAttempts;
 				GState.NextHelloAt = 0;

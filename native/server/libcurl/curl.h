@@ -1,6 +1,6 @@
 // NIOBIUM: stand-in for libcurl.
 //
-// Magnesium only uses curl for Discord webhooks and one telemetry function. Niobium needs neither
+// Magnesium only uses curl for Discord webhooks and one telemetry function. Rift needs neither
 // and must not open any connection to the outside. Instead of removing the many call sites,
 // curl is replaced with no-op functions: `curl_easy_init` returns `nullptr`, so every real send
 // function bails out right away. Nothing is sent, nothing is linked.

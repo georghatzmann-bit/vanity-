@@ -1,4 +1,4 @@
-// NIOBIUM: shared base for Niobium's AI work. Credits and the rules for this file are at the top
+// NIOBIUM: shared base for Rift's AI work. Credits and the rules for this file are at the top
 // of FortniteGame/Public/AIBase.h:
 //   - PE / unwind / LEA / layout checks and logging: moved unchanged from PlayerBots_19_10.cpp.
 //   - AllocateNearPage, PatchLeaTarget: Artemis (GPL-3.0, 48dba08) Engine/.../Kismet/

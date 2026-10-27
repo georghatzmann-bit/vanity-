@@ -1,5 +1,5 @@
 /*
- * Niobium effects and motion building blocks. Import from "@/components/fx".
+ * Rift effects and motion building blocks. Import from "@/components/fx".
  * All of them respect "Reduce motion" (app option + Windows setting) and pause with the window.
  */
 export { PageTransition, Reveal, Stagger, type RevealProps, type StaggerProps } from "./reveal";

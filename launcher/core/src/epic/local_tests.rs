@@ -79,7 +79,7 @@ impl Transport for Curl {
     }
 
     fn get(&self, url: &str, max_bytes: u64, _stop: &AtomicBool) -> Result<Vec<u8>, NetError> {
-        let tmp = std::env::temp_dir().join(format!("niobium-curl-{}-{}", std::process::id(), TMP.fetch_add(1, Ordering::SeqCst)));
+        let tmp = std::env::temp_dir().join(format!("rift-curl-{}-{}", std::process::id(), TMP.fetch_add(1, Ordering::SeqCst)));
         let out = Command::new("curl")
             .args(["-sS", "-o"])
             .arg(&tmp)
@@ -125,7 +125,7 @@ fn real_download_from_epic() {
     no_sha.sha1 = None;
     cdn.fetch_chunk(&m.chunk_path(&m.chunks[0]), &no_sha, &stop).expect("chunk checks out by rolling hash");
 
-    let root = std::env::temp_dir().join(format!("niobium-real-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("rift-real-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let plan = Plan::new(&m, &root, None);
     let job = InstallJob { manifest: &m, manifest_bytes: &bytes, root: &root, job: JobInfo { key: "22.40-CL-23070899".into(), manifest_sha1: super::sha1_hex(&bytes) } };

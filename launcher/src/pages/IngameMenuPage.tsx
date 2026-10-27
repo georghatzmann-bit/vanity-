@@ -75,7 +75,7 @@ const EDIT_FEATURES: { feature: EditFeature; spot: string }[] = [
   { feature: "disablePreEdits", spot: "pre" },
 ];
 
-/** Keys Niobium already uses (menu, join, saved commands) – the Reset builds key must differ. */
+/** Keys Rift already uses (menu, join, saved commands) – the Reset builds key must differ. */
 function takenKeys(s: ClientSettings) {
   return { menuKey: s.hotkey, joinKey: s.joinHotkey, commandKeys: savedCommands(s).map((e) => e.vk).filter((vk) => vk > 0) };
 }
@@ -359,10 +359,10 @@ export function IngameMenuPage() {
 
           <Panel title="Console" icon={SquareTerminal} description="Type commands for your own server in the game, e.g. “/god”.">
             <div className="flex flex-col divide-y divide-white/[0.05]">
-              <SettingRow label="Which console?" hint="Niobium: knows shortcuts like /god. Original: the normal Unreal console.">
+              <SettingRow label="Which console?" hint="Rift: knows shortcuts like /god. Original: the normal Unreal console.">
                 <Segmented
                   id="console-mode"
-                  options={["Niobium", "Original"]}
+                  options={["Rift", "Original"]}
                   value={s.consoleMode}
                   onChange={(i) => {
                     save({ consoleMode: i });
@@ -372,7 +372,7 @@ export function IngameMenuPage() {
               </SettingRow>
               <SettingRow
                 label="Open the console with the # key"
-                hint="The # key (/ on US keyboards) opens the console with / already typed – then just type god. Only with the Niobium console."
+                hint="The # key (/ on US keyboards) opens the console with / already typed – then just type god. Only with the Rift console."
               >
                 <Switch checked={s.preferences.slashKey} onCheckedChange={(v) => pref({ slashKey: v })} />
               </SettingRow>
@@ -476,7 +476,7 @@ export function IngameMenuPage() {
                   Save
                 </Button>
               </div>
-              {/* Only commands the Niobium server really knows (the same as the buttons on the Match Control page) */}
+              {/* Only commands the Rift server really knows (the same as the buttons on the Match Control page) */}
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Examples: <Cmd>l 2500</Cmd> = launch up · <Cmd>giveammo</Cmd> = ammo · <Cmd>regen</Cmd> = full health · <Cmd>givetraps</Cmd> = launch pads and
                 other traps · <Cmd>god</Cmd> = invincible on/off
@@ -667,11 +667,11 @@ function OverlayPreview({
           transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.15 }}
           className="relative overflow-hidden rounded-lg bg-[#0f0f19]/[0.97] shadow-[0_30px_70px_-24px_rgb(0_0_0/0.95),0_0_0_1px_rgb(139_92_246/0.18)] ring-1 ring-white/[0.06]"
         >
-          {/* Title bar: logo, "Niobium | Menu", menu key, close */}
+          {/* Title bar: logo, "Rift | Menu", menu key, close */}
           <div className="flex items-center gap-2 border-b border-[#24243a] bg-[#07070c] px-3 py-2">
             <LogoMark size={20} variant="simple" />
             <p className="text-[11px]">
-              <span className="font-semibold text-violet-text">Niobium</span> <span className="text-muted-foreground">| Menu</span>
+              <span className="font-semibold text-violet-text">Rift</span> <span className="text-muted-foreground">| Menu</span>
             </p>
             <F9Spot id="menukey" className="ml-auto">
               <span className="font-mono text-[10px] text-faint">[{keyName(s.hotkey)}]</span>
@@ -768,7 +768,7 @@ function MainTab({
       </F9Body>
       <F9Section label="Editing" />
       <F9Body>
-        {/* One route per version (EditFeatureRoutes.h): Niobium's switch, or Fortnite's own setting */}
+        {/* One route per version (EditFeatureRoutes.h): Rift's switch, or Fortnite's own setting */}
         {EDIT_FEATURES.map(({ feature, spot }) =>
           editRoute(feature, version) === "hook" ? (
             <F9Check key={feature} id={spot} label={editText[feature].label} on={p[feature]} hint={editText[feature].hookHint} />
@@ -918,14 +918,14 @@ function OptionsTab({
       <F9Section label="General" />
       <F9Body>
         <F9Spot id="console">
-          <F9Combo label="Which console?" value={s.consoleMode === 0 ? "Niobium console" : "Original console (Unreal)"} />
+          <F9Combo label="Which console?" value={s.consoleMode === 0 ? "Rift console" : "Original console (Unreal)"} />
         </F9Spot>
-        <F9Hint text="Open the console with F8. The Niobium console knows shortcuts like /god." />
+        <F9Hint text="Open the console with F8. The Rift console knows shortcuts like /god." />
         <F9Check
           id="slash"
           label="Open the console with the # key"
           on={p.slashKey}
-          hint="It opens with / already typed – then just type god and press Enter. Only with the Niobium console."
+          hint="It opens with / already typed – then just type god and press Enter. Only with the Rift console."
         />
         <F9Check id="remember" label="Remember my settings" on={p.saveTogglePreferences} hint="Off = every toggle is back to normal the next time you start the game." />
       </F9Body>
@@ -1020,13 +1020,13 @@ function CreditsTab() {
       <div className="flex items-center gap-3">
         <LogoMark size={34} variant="simple" />
         <div>
-          <p className="font-semibold text-violet-text">Niobium</p>
+          <p className="font-semibold text-violet-text">Rift</p>
           <p className="text-muted-foreground">In-game menu</p>
         </div>
       </div>
       <p className="mt-3 text-[10px] font-semibold tracking-wide text-violet-text/85">CREDITS</p>
       <div className="mb-1 h-px bg-brand-violet/40" />
-      <F9Hint text="Niobium is built on these projects. Thank you! Click a name to open its page in your browser." />
+      <F9Hint text="Rift is built on these projects. Thank you! Click a name to open its page in your browser." />
       {/* The credits themselves stay as in the original (ATLAS Console license) */}
       <p className="pt-1">
         <span className="font-medium text-violet-text">Erbium</span> <span className="text-muted-foreground">- Base of the project</span>
@@ -1035,7 +1035,7 @@ function CreditsTab() {
         <span className="font-medium text-violet-text">ATLAS Console</span>{" "}
         <span className="text-muted-foreground">- Base of this in-game menu (cipherfps, ralz and contributors)</span>
       </p>
-      <p className="pt-4 text-[10px] text-faint">Niobium is based on ATLAS Console by cipherfps, ralz and contributors.</p>
+      <p className="pt-4 text-[10px] text-faint">Rift is based on ATLAS Console by cipherfps, ralz and contributors.</p>
     </div>
   );
 }

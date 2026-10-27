@@ -64,7 +64,7 @@ function parseStatusBody(body: unknown): Partial<ServerStatus> {
 
 export function createNiobiumRouter(options: NiobiumApiOptions): Router {
   const router = express.Router();
-  const status: ServerStatus = { name: "Niobium", hosting: false, playlist: "", players: 0, maxPlayers: 0, version: "" };
+  const status: ServerStatus = { name: "Rift", hosting: false, playlist: "", players: 0, maxPlayers: 0, version: "" };
   const fullStatus = () => ({ ...status, gameServer: options.getGameServer() });
 
   // Only from this computer. Also only with Content-Type application/json: that way another
@@ -114,7 +114,7 @@ export function createNiobiumRouter(options: NiobiumApiOptions): Router {
 
   // Don't pass unknown /niobium paths on to LawinServer.
   router.use("/niobium", (_req, res) => {
-    res.status(404).json({ ok: false, error: "unknown Niobium endpoint" });
+    res.status(404).json({ ok: false, error: "unknown Rift endpoint" });
   });
 
   router.use((err: unknown, req: Request, res: Response, next: NextFunction): void => {

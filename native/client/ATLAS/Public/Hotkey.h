@@ -1,6 +1,6 @@
-// [Niobium] Modified version. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
+// [Rift] Modified version. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
 // (c) ralz, cipherfps and contributors, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
-// Niobium changes: data paths, visible names/credit, MinHook via project reference.
+// Rift changes: data paths, visible names/credit, MinHook via project reference.
 #pragma once
 
 #include <Windows.h>
@@ -52,18 +52,18 @@ namespace HotkeyPersist
         bool ResetOnRelease = true;
         bool DisablePreEdits = true;
         bool MobileBuilds = false;
-        // [Niobium] Bubble look (F9 > Main > Graphics). Older files without these keys load as
+        // [Rift] Bubble look (F9 > Main > Graphics). Older files without these keys load as
         // off / strength 5. BubbleProbe is a debug switch: only written when it is on.
         bool BubbleLook = false;
         int BubbleStrength = 5;
         bool BubbleProbe = false;
         bool InGameFog = true;
         bool FirstPerson = false;
-        // [Niobium] "Always sprint" was removed. client.json keeps its
+        // [Rift] "Always sprint" was removed. client.json keeps its
         // "sprintByDefault" key (always written as false), and an old
         // "true" in it is ignored.
         bool RespawnsEnabled = true;
-        // [Niobium] "Reset builds" (F9 > Options): off and without a key by default. The key is
+        // [Rift] "Reset builds" (F9 > Options): off and without a key by default. The key is
         // never the left or right mouse button (those load as "none"). ResetBuildsProbe is a
         // debug switch: only written when it is on.
         bool ResetBuilds = false;
@@ -71,7 +71,7 @@ namespace HotkeyPersist
         bool ResetBuildsProbe = false;
     };
 
-    // [Niobium] Reset builds key from client.json: 1-254, never the left (1) or right (2) mouse
+    // [Rift] Reset builds key from client.json: 1-254, never the left (1) or right (2) mouse
     // button (they shoot and aim). Anything else is "none" (0).
     inline int SanitizeResetBuildsKey(int vk)
     {
@@ -103,11 +103,11 @@ namespace HotkeyPersist
         wchar_t path[MAX_PATH]{};
         if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, path)))
         {
-            std::wstring dir = std::wstring(path) + L"\\Niobium"; // [Niobium] %APPDATA%\Niobium\client.json
+            std::wstring dir = std::wstring(path) + L"\\Rift"; // [Rift] %APPDATA%\Rift\client.json
             CreateDirectoryW(dir.c_str(), nullptr);
             return dir + L"\\client.json";
         }
-        return L"niobium-client.json";
+        return L"rift-client.json";
     }
 
     inline std::string ReadFileContents()
@@ -512,7 +512,7 @@ namespace HotkeyPersist
         // stays off, even when an old file still says true.
         preferences.RespawnsEnabled = ParseBoolField(
             object, "respawnsEnabled", preferences.RespawnsEnabled);
-        // [Niobium] Reset builds. "resetBuilds" never matches "resetBuildsKey" (closing quote).
+        // [Rift] Reset builds. "resetBuilds" never matches "resetBuildsKey" (closing quote).
         preferences.ResetBuilds = ParseBoolField(
             object, "resetBuilds", preferences.ResetBuilds);
         preferences.ResetBuildsKey = SanitizeResetBuildsKey(ParseIntField(

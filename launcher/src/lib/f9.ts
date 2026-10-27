@@ -17,17 +17,17 @@ export function versionHundredths(version: string | null | undefined): number {
 // ---- Editing: each switch uses exactly one route per version ----------------------------------
 
 export type EditFeature = "editOnRelease" | "resetOnRelease" | "disablePreEdits";
-/** hook = Niobium does it (old versions, the switch in client.json); native = Fortnite's own setting. */
+/** hook = Rift does it (old versions, the switch in client.json); native = Fortnite's own setting. */
 export type EditRoute = "hook" | "native";
 
-/** First version (hundredths) where Fortnite's own setting is used instead of Niobium's (EpicSettingSince). */
+/** First version (hundredths) where Fortnite's own setting is used instead of Rift's (EpicSettingSince). */
 export const EPIC_SETTING_SINCE: Record<EditFeature, number> = {
   editOnRelease: 1100,
   resetOnRelease: 2430,
   disablePreEdits: 1520,
 };
 
-/** Same as PlannedRoute in EditFeatureRoutes.h. An unknown version keeps Niobium's own way. */
+/** Same as PlannedRoute in EditFeatureRoutes.h. An unknown version keeps Rift's own way. */
 export function editRoute(feature: EditFeature, version: string | null | undefined): EditRoute {
   const v = versionHundredths(version);
   return v < EPIC_SETTING_SINCE[feature] ? "hook" : "native";
@@ -75,7 +75,7 @@ export function freeCameraAvailable(version: string | null | undefined): boolean
 
 // ---- Reset builds (F9 > Options) --------------------------------------------------------------
 
-/** From this version on Fortnite has its own "Reset Building" key, so Niobium's is off (QuickReset.h). */
+/** From this version on Fortnite has its own "Reset Building" key, so Rift's is off (QuickReset.h). */
 export const EPIC_RESET_BUILDING_SINCE = 3700;
 
 export function epicOwnsResetBuilding(version: string | null | undefined): boolean {
@@ -92,7 +92,7 @@ export const resetBuildsText = {
   hint: "Aim at one of your edited builds and press your Reset builds key. It goes back to normal without opening edit mode. Editing and resetting the normal way still works.",
   keyLabel: "Reset builds key",
   keyTip: "Tip: use the same key you use for Reset in Fortnite. Fortnite still gets the key, so pick one that does nothing else outside edit mode.",
-  serverNote: "Works on Niobium servers.",
+  serverNote: "Works on Rift servers.",
   epicOwns: "This Fortnite version has its own Reset Building key. Set it in Fortnite: Settings > Keyboard Controls.",
   mouseRefused: "The left and right mouse buttons can't be used here: they shoot and aim.",
   keyTaken: "That key is already used for something else.",

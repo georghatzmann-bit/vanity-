@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Niobium",
-  "mainBinaryName": "Niobium",
+  "productName": "Rift",
+  "mainBinaryName": "Rift",
   "version": "0.1.0",
-  "identifier": "dev.niobium.launcher",
+  "identifier": "dev.rift.launcher",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -15,7 +15,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Niobium",
+        "title": "Rift",
         "width": 1280,
         "height": 800,
         "minWidth": 1024,
@@ -29,7 +29,7 @@
       },
       {
         "label": "splash",
-        "title": "Niobium",
+        "title": "Rift",
         "url": "splash.html",
         "width": 440,
         "height": 300,
@@ -55,7 +55,7 @@
     "publisher": "Georg Hatzmann",
     "category": "Game",
     "shortDescription": "Launcher for OG Fortnite private servers",
-    "copyright": "© 2026 Niobium · GPL-3.0",
+    "copyright": "© 2026 Rift · GPL-3.0",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

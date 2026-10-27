@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Niobium parkours: ready-made trickshot courses built from jump objects. All values are in metres relative to you: x = forward (where you look), y = right, z = up. For each object the server uses the first name your Fortnite version knows.",
+  "about": "Rift parkours: ready-made trickshot courses built from jump objects. All values are in metres relative to you: x = forward (where you look), y = right, z = up. For each object the server uses the first name your Fortnite version knows.",
   "kinds": {
     "trampoline": { "label": "Trampoline", "summon": ["tire", "umbrella"] },
     "launcher": { "label": "Launcher", "summon": ["geyser", "airvent", "ufobouncer"] },

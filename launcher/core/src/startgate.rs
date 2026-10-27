@@ -1,4 +1,4 @@
-//! Cancelling a start, and closing Niobium cleanly.
+//! Cancelling a start, and closing Rift cleanly.
 //!
 //! "Host & Play" runs many steps one after the other, and some of them wait a long time (backend
 //! ready, login seen in the log, server control pipe, game server listening). "Stop all" must stop
@@ -6,17 +6,17 @@
 //!
 //! - [`StartGate`] lives next to the running processes (behind the same lock). Every start step and
 //!   every process start checks its [`StartToken`] there first. "Stop all" cancels all tokens.
-//!   Closing Niobium closes the gate for good: no token is valid any more.
+//!   Closing Rift closes the gate for good: no token is valid any more.
 //! - [`wait_for`] is the one wait loop: it ends when the thing is ready, the time is up, or the
 //!   start was cancelled.
-//! - [`Busy`] lists what still runs, for the "Close Niobium?" question.
+//! - [`Busy`] lists what still runs, for the "Close Rift?" question.
 //! - [`ClosePrompt`] notices when the UI never shows that question (page error, WebView crashed or
-//!   hangs): then Niobium stops everything and quits by itself, so it can always be closed.
+//!   hangs): then Rift stops everything and quits by itself, so it can always be closed.
 
 use std::time::{Duration, Instant};
 
 /// Proof that a start (or a single action like "Join") still counts.
-/// It turns invalid with the next "Stop all" or when Niobium closes.
+/// It turns invalid with the next "Stop all" or when Rift closes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StartToken(u64);
 
@@ -27,7 +27,7 @@ pub struct StartGate {
     generation: u64,
     /// The "Host & Play" start that is still running (its generation), if any.
     in_progress: Option<u64>,
-    /// Niobium is closing: nothing may start any more.
+    /// Rift is closing: nothing may start any more.
     closed: bool,
 }
 
@@ -43,7 +43,7 @@ impl StartGate {
     }
 
     /// "Host & Play" begins: marks a start in progress and returns its token.
-    /// While Niobium is closing, the token is cancelled right away.
+    /// While Rift is closing, the token is cancelled right away.
     pub fn begin(&mut self) -> StartToken {
         if !self.closed {
             self.in_progress = Some(self.generation);
@@ -51,7 +51,7 @@ impl StartGate {
         StartToken(self.generation)
     }
 
-    /// True once "Stop all" ran after the token was made, or Niobium is closing.
+    /// True once "Stop all" ran after the token was made, or Rift is closing.
     pub fn is_cancelled(&self, token: StartToken) -> bool {
         self.closed || token.0 != self.generation
     }
@@ -76,7 +76,7 @@ impl StartGate {
         self.in_progress.take().is_some()
     }
 
-    /// Niobium is closing: cancels everything and lets nothing start any more.
+    /// Rift is closing: cancels everything and lets nothing start any more.
     /// Returns true if a start was still in progress.
     pub fn close(&mut self) -> bool {
         self.closed = true;
@@ -132,7 +132,7 @@ pub struct Busy {
 }
 
 impl Busy {
-    /// Plain names for the "Close Niobium?" question, e.g. `["Your game", "Game server", "Backend"]`.
+    /// Plain names for the "Close Rift?" question, e.g. `["Your game", "Game server", "Backend"]`.
     /// Empty = nothing runs, the window may close right away.
     pub fn names(&self) -> Vec<String> {
         let mut out = Vec::new();
@@ -152,7 +152,7 @@ impl Busy {
     }
 }
 
-/// The "Close Niobium?" question. Rust blocks the close and asks the UI; the UI says when it
+/// The "Close Rift?" question. Rust blocks the close and asks the UI; the UI says when it
 /// shows the question. If it never does, Rust closes anyway (after stopping everything).
 #[derive(Debug, Default)]
 pub struct ClosePrompt {
@@ -182,7 +182,7 @@ impl ClosePrompt {
     }
 
     /// True if `id` is still the latest question and the UI never showed it
-    /// (then Niobium stops everything and quits).
+    /// (then Rift stops everything and quits).
     pub fn unanswered(&self, id: u64) -> bool {
         id == self.last && !self.shown
     }

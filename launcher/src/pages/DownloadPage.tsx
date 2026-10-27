@@ -59,7 +59,7 @@ export function DownloadPage() {
       <PageHeader
         eyebrow="Library"
         title="Download a version"
-        description="Niobium gets every game file straight from Epic's own download servers. Pick a chapter, then a season."
+        description="Rift gets every game file straight from Epic's own download servers. Pick a chapter, then a season."
         actions={
           <Button variant="ghost" onClick={() => setPage("library")}>
             <ArrowLeft />

@@ -21,7 +21,7 @@ didn't start anything yet. Fortnite, the backend and the DLLs came from phase 2 
 5. Windows may say "Windows protected your PC", because the installer isn't signed →
    **More info** → **Run anyway**. It only installs for your user, without admin rights.
 
-Today the installer is called `Niobium-Setup.exe` and has a direct link – see `03-test-checklist.md`.
+Today the launcher is called Rift; its installer `Rift-Setup.exe` has a direct link – see `03-test-checklist.md`.
 
 **Way B – build it yourself:** see `README.md` → "Build it yourself".
 

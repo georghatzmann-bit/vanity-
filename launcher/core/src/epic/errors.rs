@@ -49,14 +49,14 @@ impl DownloadError {
     pub fn manifest_unavailable() -> Self {
         err(
             MANIFEST_UNAVAILABLE,
-            "Niobium couldn't get the file list for this version. Check your internet connection and try again later.",
+            "Rift couldn't get the file list for this version. Check your internet connection and try again later.",
         )
     }
 
     pub fn manifest_mismatch() -> Self {
         err(
             MANIFEST_MISMATCH,
-            "The file list for this version isn't what Niobium expects, so nothing was downloaded. Please update Niobium.",
+            "The file list for this version isn't what Rift expects, so nothing was downloaded. Please update Rift.",
         )
     }
 
@@ -77,7 +77,7 @@ impl DownloadError {
     pub fn network() -> Self {
         err(
             NETWORK,
-            "The connection to Epic's download servers dropped. Press Resume and Niobium continues where it stopped.",
+            "The connection to Epic's download servers dropped. Press Resume and Rift continues where it stopped.",
         )
     }
 
@@ -111,7 +111,7 @@ impl DownloadError {
     }
 
     pub fn write_failed() -> Self {
-        err(WRITE_FAILED, "Niobium can't write to this folder. Pick another one (not inside Program Files).")
+        err(WRITE_FAILED, "Rift can't write to this folder. Pick another one (not inside Program Files).")
     }
 
     /// A file was still damaged after it was downloaded a second time.
@@ -120,7 +120,7 @@ impl DownloadError {
     }
 
     pub fn import_failed() -> Self {
-        err(IMPORT_FAILED, "The download finished, but Niobium couldn't recognise the version in the folder.")
+        err(IMPORT_FAILED, "The download finished, but Rift couldn't recognise the version in the folder.")
     }
 
     pub fn network_drive() -> Self {
@@ -128,11 +128,11 @@ impl DownloadError {
     }
 
     pub fn path_too_long() -> Self {
-        err(PATH_TOO_LONG, "This folder's path is too long. Pick a shorter one, like D:\\Niobium\\Builds.")
+        err(PATH_TOO_LONG, "This folder's path is too long. Pick a shorter one, like D:\\Rift\\Builds.")
     }
 
     pub fn own_folder() -> Self {
-        err(OWN_FOLDER, "This folder belongs to Niobium itself. Pick another one.")
+        err(OWN_FOLDER, "This folder belongs to Rift itself. Pick another one.")
     }
 
     pub fn already_running() -> Self {
@@ -144,7 +144,7 @@ impl DownloadError {
     }
 
     pub fn unknown_build() -> Self {
-        err(UNKNOWN_BUILD, "Niobium can't download this version.")
+        err(UNKNOWN_BUILD, "Rift can't download this version.")
     }
 
     /// The same error when files of the build are already in the folder (it has a journal):
@@ -158,11 +158,11 @@ impl DownloadError {
             ),
             MANIFEST_MISMATCH => err(
                 MANIFEST_MISMATCH,
-                "The file list for this version isn't what Niobium expects, so the download can't go on. Please update Niobium.",
+                "The file list for this version isn't what Rift expects, so the download can't go on. Please update Rift.",
             ),
             WRITE_FAILED => err(
                 WRITE_FAILED,
-                "Niobium couldn't write to the download folder. Free up space on the drive or close programs that use the folder, then press Resume.",
+                "Rift couldn't write to the download folder. Free up space on the drive or close programs that use the folder, then press Resume.",
             ),
             _ => self,
         }
@@ -198,7 +198,7 @@ mod tests {
         assert_eq!(json["code"], "NETWORK");
         assert_eq!(
             json["message"],
-            "The connection to Epic's download servers dropped. Press Resume and Niobium continues where it stopped."
+            "The connection to Epic's download servers dropped. Press Resume and Rift continues where it stopped."
         );
     }
 

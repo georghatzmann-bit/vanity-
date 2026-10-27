@@ -59,7 +59,7 @@ const errorTitles: Record<string, string> = {
   IMPORT_FAILED: "Couldn't add it to the Library",
   NETWORK_DRIVE: "This folder is on a network drive",
   PATH_TOO_LONG: "This folder's path is too long",
-  OWN_FOLDER: "This is Niobium's own folder",
+  OWN_FOLDER: "This is Rift's own folder",
   ALREADY_RUNNING: "Already downloading",
   ANOTHER_RUNNING: "Another download is running",
   UNKNOWN_BUILD: "Can't download this version",
@@ -526,7 +526,7 @@ const demo = {
     // Same checks and texts as Rust's folder rules (preview: E: is a FAT32 stick, F: is full)
     const f = folder.trim();
     if (!/^[a-z]:\\/i.test(f) || /\\program files/i.test(f)) {
-      throw { code: "WRITE_FAILED", message: "Niobium can't write to this folder. Pick another one (not inside Program Files)." };
+      throw { code: "WRITE_FAILED", message: "Rift can't write to this folder. Pick another one (not inside Program Files)." };
     }
     if (/^e:/i.test(f)) {
       throw { code: "FAT32", message: "Drive E: can't hold files bigger than 4 GB (FAT32). Pick a folder on another drive." };
@@ -554,7 +554,7 @@ const demo = {
   resume(key: string) {
     const r = demo.runs.get(key);
     const build = r?.build ?? demo.find(key);
-    if (!build) throw { code: "UNKNOWN_BUILD", message: "Niobium can't download this version." };
+    if (!build) throw { code: "UNKNOWN_BUILD", message: "Rift can't download this version." };
     const job = useDownloads.getState().jobs.find((j) => j.key === key);
     demo.run(r ?? { build, folder: job?.folder ?? "", phase: "downloading", done: job?.progress.bytesDone ?? 0, files: job?.progress.filesDone ?? 0 });
   },
@@ -589,7 +589,7 @@ const demo = {
     const builds = catalogBuilds(demoCatalog);
     const pick = (key: string) => builds.find((b) => b.key === key) ?? builds[0];
     const b1830 = pick("18.30-CL-17882303");
-    const folder = (b: CatalogBuild) => `D:\\Niobium\\Builds\\${b.key}`;
+    const folder = (b: CatalogBuild) => `D:\\Rift\\Builds\\${b.key}`;
     const job = (b: CatalogBuild, state: DownloadState, p: Partial<DownloadProgress>, error: DownloadError | null = null): DownloadJobView => ({
       key: b.key,
       version: b.version,
@@ -621,7 +621,7 @@ const demo = {
       upsert(
         job(b1830, "error", { bytesDone: b1830.downloadBytes * 0.63, filesDone: 474 }, {
           code: "NETWORK",
-          message: "The connection to Epic's download servers dropped. Press Resume and Niobium continues where it stopped.",
+          message: "The connection to Epic's download servers dropped. Press Resume and Rift continues where it stopped.",
         }),
       );
     } else if (kind === "chunks") {

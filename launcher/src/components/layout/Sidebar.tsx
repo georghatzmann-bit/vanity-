@@ -37,7 +37,7 @@ export function Sidebar() {
       <button
         type="button"
         onClick={() => setPage("start")}
-        aria-label="Niobium – Home"
+        aria-label="Rift – Home"
         className={cn(
           "group relative flex items-center gap-3 rounded-xl pb-5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
           wide ? "px-2" : "justify-center",
@@ -55,7 +55,7 @@ export function Sidebar() {
         {wide && (
           <span className="flex min-w-0 flex-col items-start gap-1">
             <Wordmark height={17} title="" className="text-foreground" />
-            <span className="text-[11px] leading-none text-muted-foreground">old seasons, new shine.</span>
+            <span className="text-[11px] leading-none text-muted-foreground">Step back into any season.</span>
           </span>
         )}
       </button>

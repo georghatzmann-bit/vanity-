@@ -56,7 +56,7 @@ export function StartPage() {
   const busy = running || done;
   /** "Stop all" / "Cancel start" was clicked and Rust is still stopping things. */
   const [stopping, setStopping] = useState(false);
-  // Untested builds start too (Rust only warns); only versions Niobium can't start are blocked
+  // Untested builds start too (Rust only warns); only versions Rift can't start are blocked
   const canStart = Boolean(build) && build?.support !== "unsupported";
 
   /** A click on "Host & Play" is being handled (a double click must not start twice). */
@@ -149,20 +149,20 @@ export function StartPage() {
               </div>
             ) : (
               <p className="mt-4 max-w-md text-sm text-muted-foreground">
-                Add your Fortnite folder in the Library (for example 19.10). Niobium finds the version for you.
+                Add your Fortnite folder in the Library (for example 19.10). Rift finds the version for you.
               </p>
             )}
 
             {build?.support === "experimental" && (
               <p className="mt-3 inline-flex items-center gap-2 text-xs text-warning">
                 <FlaskConical className="size-3.5" />
-                Untested version – Niobium will try anyway.
+                Untested version – Rift will try anyway.
               </p>
             )}
             {build?.support === "unsupported" && (
               <p className="mt-3 inline-flex items-center gap-2 text-xs text-destructive">
                 <CircleSlash className="size-3.5" />
-                Niobium can't start this version. Pick another profile or build.
+                Rift can't start this version. Pick another profile or build.
               </p>
             )}
 

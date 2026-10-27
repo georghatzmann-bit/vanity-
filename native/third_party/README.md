@@ -7,6 +7,6 @@
 
 Taken over unchanged. No prebuilt .lib or .dll files – everything is built from this source code.
 
-Note: the projects in `Niobium.sln` don't use `imgui/` right now. The game server and the in-game menu
+Note: the projects in `Rift.sln` don't use `imgui/` right now. The game server and the in-game menu
 build the ImGui 1.92.4 copies that came with Magnesium (`native/server/ImGui/`) and ATLAS Console
 (`native/client/ATLAS/ImGui/`).

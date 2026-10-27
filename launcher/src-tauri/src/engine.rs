@@ -27,12 +27,12 @@ use crate::pipe::{ServerEvent, ServerLink};
 use crate::proc;
 
 /// Names of the DLLs (in the resource folder `dlls/`).
-const DLL_REDIRECT: &str = "niobium_redirect.dll";
-const DLL_SERVER: &str = "niobium_server.dll";
-const DLL_CLIENT: &str = "niobium_client.dll";
+const DLL_REDIRECT: &str = "rift_redirect.dll";
+const DLL_SERVER: &str = "rift_server.dll";
+const DLL_CLIENT: &str = "rift_client.dll";
 
 /// Tauri event when the user wants to close the main window while something still runs
-/// (payload [`CloseRequest`]). The UI asks "Close Niobium?" and calls `quit_app` on "Stop & close".
+/// (payload [`CloseRequest`]). The UI asks "Close Rift?" and calls `quit_app` on "Stop & close".
 pub const EVENT_CLOSE_REQUESTED: &str = "app:close-requested";
 
 /// Tauri event when the server says whether AI bots run this match (payload
@@ -44,7 +44,7 @@ pub const EVENT_PLAYER_BOTS: &str = "server:playerBots";
 pub const EVENT_LIVING_WORLD: &str = "server:livingWorld";
 
 /// Category of the launcher's own log lines in the live log.
-const CAT: &str = "Niobium";
+const CAT: &str = "Rift";
 
 /// The one log line when "Stop all" (or closing) ends a start that was still running.
 const START_CANCELLED: &str = "Start cancelled.";
@@ -54,7 +54,7 @@ const GUS_PUT_BACK: &str = "Fortnite's graphics settings were put back.";
 
 /// Payload of [`EVENT_CLOSE_REQUESTED`]: what still runs, in plain words
 /// (e.g. `["Your game", "Game server", "Backend"]`), and the question's number. The UI answers
-/// `close_prompt_shown(id)` once the dialog is on screen; without that answer Niobium closes anyway.
+/// `close_prompt_shown(id)` once the dialog is on screen; without that answer Rift closes anyway.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CloseRequest {
@@ -164,7 +164,7 @@ pub struct Engine {
     early_toasts: EarlyLines<Toast>,
     /// Fixed-port notes already written to the live log (each only once per run).
     port_notes_logged: Mutex<Vec<&'static str>>,
-    /// The last "Close Niobium?" question and whether the UI showed it (see `on_window_event`).
+    /// The last "Close Rift?" question and whether the UI showed it (see `on_window_event`).
     close_prompt: Mutex<ClosePrompt>,
 }
 
@@ -229,7 +229,7 @@ impl Engine {
         Ok(())
     }
 
-    /// True once "Stop all" ran after `token` was made (or Niobium is closing).
+    /// True once "Stop all" ran after `token` was made (or Rift is closing).
     fn is_cancelled(&self, token: StartToken) -> bool {
         self.running.lock().unwrap().gate.is_cancelled(token)
     }
@@ -254,7 +254,7 @@ impl Engine {
         self.toast(kind, title, description);
     }
 
-    /// A launcher line in the live log (category "Niobium").
+    /// A launcher line in the live log (category "Rift").
     pub fn log_line(&self, level: &str, message: &str) {
         self.log("launcher", level, CAT, message, None);
     }
@@ -265,7 +265,7 @@ impl Engine {
         let mut cfg = self.config.lock().unwrap();
         cfg.upsert_build(build);
         if let Err(e) = profiles::save(&cfg) {
-            eprintln!("[Niobium] Couldn't save the settings: {e}");
+            eprintln!("[Rift] Couldn't save the settings: {e}");
         }
         id
     }
@@ -278,9 +278,9 @@ impl Engine {
         }
     }
 
-    /// After the Vanity → Niobium copy: writes the one log line for the live log (it waits until
-    /// the UI fetches it, see `pending_log_lines`) and, if the launcher config came over, marks it
-    /// so the UI shows "What's new" (Vanity is now Niobium) instead of the first-run welcome.
+    /// After the Niobium/Vanity → Rift copy: writes the one log line for the live log (it waits
+    /// until the UI fetches it, see `pending_log_lines`) and, if the launcher config came over, marks
+    /// it so the UI shows "What's new" (Niobium is now Rift) instead of the first-run welcome.
     pub fn after_migration(&self, report: &niobium_core::migrate::MigrationReport) {
         if let Some(line) = report.summary() {
             self.log("launcher", "info", CAT, &line, None);
@@ -289,7 +289,7 @@ impl Engine {
             let mut cfg = self.config.lock().unwrap();
             if niobium_core::migrate::mark_as_from_vanity(&mut cfg) {
                 if let Err(e) = profiles::save(&cfg) {
-                    eprintln!("[Niobium] Couldn't save the copied settings: {e}");
+                    eprintln!("[Rift] Couldn't save the copied settings: {e}");
                 }
             }
         }
@@ -304,7 +304,7 @@ impl Engine {
             let notes = cfg.settings.pin_fixed_ports();
             if !notes.is_empty() {
                 if let Err(e) = profiles::save(&cfg) {
-                    eprintln!("[Niobium] Couldn't save the settings: {e}");
+                    eprintln!("[Rift] Couldn't save the settings: {e}");
                 }
             }
             notes
@@ -377,13 +377,13 @@ impl Engine {
                 return Ok(());
             }
         }
-        let node = self.node_exe().ok_or("node.exe is missing from the launcher – please reinstall Niobium")?;
-        let main = self.backend_main().ok_or("The backend is missing from the launcher – please reinstall Niobium")?;
+        let node = self.node_exe().ok_or("node.exe is missing from the launcher – please reinstall Rift")?;
+        let main = self.backend_main().ok_or("The backend is missing from the launcher – please reinstall Rift")?;
         let cfg = self.config.lock().unwrap();
         let s = &cfg.settings;
         let bind = if s.share_backend_lan { "0.0.0.0" } else { "127.0.0.1" };
         // Not "backend": the installer puts the backend's own files there (the install folder is
-        // %LOCALAPPDATA%\Niobium too), so an update or uninstall would reset or delete the locker.
+        // %LOCALAPPDATA%\Rift too), so an update or uninstall would reset or delete the locker.
         let data_dir = self.data_local().join("backend-data");
         // Backend and game server ports are fixed (the redirect DLL and the server DLL decide them);
         // only the matchmaker port comes from the settings.
@@ -461,7 +461,7 @@ impl Engine {
         bubble_builds: bool,
     ) -> Result<u32, StartError> {
         if build.support == Support::Unsupported {
-            return Err(format!("Niobium can't start version {} ({})", build.version, version::support_note(&build.version)).into());
+            return Err(format!("Rift can't start version {} ({})", build.version, version::support_note(&build.version)).into());
         }
         if build.support == Support::Experimental {
             self.log("launcher", "warning", CAT, &format!("Version {} is untested – trying anyway", build.version), None);
@@ -682,7 +682,7 @@ impl Engine {
     pub fn begin_start(&self) -> Result<StartToken, String> {
         let mut r = self.running.lock().unwrap();
         if r.gate.is_closed() {
-            return Err("Niobium is closing.".into());
+            return Err("Rift is closing.".into());
         }
         if r.gate.in_progress() {
             return Err("A start is already running.".into());
@@ -996,9 +996,9 @@ impl Engine {
 
     // --- Bubble Builds: Fortnite's settings file (GameUserSettings.ini) --------------------
     //
-    // The user allowed Niobium to change this shared file for Bubble Builds, as long as the original
+    // The user allowed Rift to change this shared file for Bubble Builds, as long as the original
     // values come back by themselves. Before the start the exact lines are backed up to
-    // %LOCALAPPDATA%\Niobium\gus-backup.json (see `niobium_core::perfmode`); after the game they are
+    // %LOCALAPPDATA%\Rift\gus-backup.json (see `niobium_core::perfmode`); after the game they are
     // put back and the backup is deleted. A backup left over from a crash is put back at the next start.
 
     /// At launcher start, before anything else touches the file: put back a backup that is still
@@ -1212,7 +1212,7 @@ impl Engine {
                     "launcher",
                     "warning",
                     CAT,
-                    "Niobium's backup of Fortnite's graphics settings couldn't be read. Nothing was changed.",
+                    "Rift's backup of Fortnite's graphics settings couldn't be read. Nothing was changed.",
                     None,
                 );
                 true
@@ -1223,7 +1223,7 @@ impl Engine {
                     "launcher",
                     "warning",
                     CAT,
-                    &format!("Couldn't put Fortnite's graphics settings back ({e}). Niobium tries again when it starts next time."),
+                    &format!("Couldn't put Fortnite's graphics settings back ({e}). Rift tries again when it starts next time."),
                     None,
                 );
                 false
@@ -1280,7 +1280,7 @@ impl Engine {
         self.stop_everything(false);
     }
 
-    /// Closing Niobium: like "Stop all", and nothing may start any more afterwards. Sends nothing
+    /// Closing Rift: like "Stop all", and nothing may start any more afterwards. Sends nothing
     /// to the UI (it is closing). Safe to call more than once (`quit_app`, then again on exit).
     pub fn shutdown(&self) {
         self.stop_everything(true);
@@ -1288,7 +1288,7 @@ impl Engine {
 
     /// For closing the window (runs on the main thread, so it never waits for the lock):
     /// `None` once `shutdown` ran (the window may close), else what still runs or starts in plain
-    /// words for "Close Niobium?" (empty = nothing, close at once).
+    /// words for "Close Rift?" (empty = nothing, close at once).
     pub fn close_check(&self) -> Option<Vec<String>> {
         let r = match self.running.try_lock() {
             Ok(r) => r,
@@ -1310,7 +1310,7 @@ impl Engine {
         )
     }
 
-    /// A close was blocked and "Close Niobium?" is sent to the UI: returns the question's number.
+    /// A close was blocked and "Close Rift?" is sent to the UI: returns the question's number.
     pub fn ask_close(&self) -> u64 {
         self.close_prompt.lock().unwrap().ask()
     }
@@ -1350,7 +1350,7 @@ impl Engine {
             let _ = proc::kill(pid);
         }
         if closing {
-            // Bubble Builds: the watcher thread ends with Niobium, so put Fortnite's settings back
+            // Bubble Builds: the watcher thread ends with Rift, so put Fortnite's settings back
             // now – once the games are really gone. Otherwise the next start does it.
             if perfmode::backup_path().exists() {
                 let gone = wait_for(Duration::from_secs(5), Duration::from_millis(100), || false, || {
@@ -1369,7 +1369,7 @@ impl Engine {
     }
 }
 
-/// Writes the built-in parkour list to `%LOCALAPPDATA%\Niobium\server\parkours.json`
+/// Writes the built-in parkour list to `%LOCALAPPDATA%\Rift\server\parkours.json`
 /// (server DLL: "cheat parkour …", F9 menu: "Trickshot" tab). Errors only go to the log.
 pub fn write_parkour_file(engine: Option<&Engine>) {
     match niobium_core::parkours::write_for_server() {
@@ -1382,15 +1382,17 @@ pub fn write_parkour_file(engine: Option<&Engine>) {
             let text = format!("Couldn't write the parkour list: {e}");
             match engine {
                 Some(engine) => engine.log("launcher", "warning", CAT, &text, None),
-                None => eprintln!("[Niobium] {text}"),
+                None => eprintln!("[Rift] {text}"),
             }
         }
     }
 }
 
-/// Niobium used to be called Vanity: copies `%APPDATA%\Vanity\config.json` (+ client.json) and
-/// `%LOCALAPPDATA%\Vanity\server` over once, if the Niobium places are still empty. Never deletes
-/// anything. Returns what happened if something was copied (see `Engine::after_migration`).
+/// Rift used to be called Niobium (and Vanity before that): copies `config.json` (+ client.json),
+/// the `server` and `backend-data` folders and a left-over `gus-backup.json` from
+/// `%APPDATA%\Niobium` / `%LOCALAPPDATA%\Niobium` (or the Vanity ones) over once, if the Rift places
+/// are still empty (details in `niobium_core::migrate`). Never deletes anything. Returns what
+/// happened if something was copied (see `Engine::after_migration`).
 pub fn migrate_from_vanity() -> Option<niobium_core::migrate::MigrationReport> {
     let paths = niobium_core::migrate::MigrationPaths::for_this_user()?;
     let report = niobium_core::migrate::migrate(&paths);
@@ -1398,7 +1400,7 @@ pub fn migrate_from_vanity() -> Option<niobium_core::migrate::MigrationReport> {
         return None;
     }
     if let Some(line) = report.summary() {
-        eprintln!("[Niobium] {line}");
+        eprintln!("[Rift] {line}");
     }
     Some(report)
 }

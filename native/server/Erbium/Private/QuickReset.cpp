@@ -1,4 +1,4 @@
-// NIOBIUM: "Reset builds" (server half) - Niobium's own code (GPL-3.0), not part of Magnesium.
+// NIOBIUM: "Reset builds" (server half) - Rift's own code (GPL-3.0), not part of Magnesium.
 // See ../Public/QuickReset.h for the wire format and the rules.
 #include "pch.h"
 

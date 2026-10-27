@@ -2,7 +2,7 @@
 
 The launcher was called "Vanity", then "Niobium". From now on it is **Rift**: like the rifts in Fortnite, it is a portal back to the old seasons.
 
-> **Status:** the logo, colours and all visual assets are Rift already. The names in text, ids, data folders and DLL names (`Niobium`, `niobium`, `--nb-*` CSS variables, `[Niobium]` code tags) are renamed in the next step. Until then the UI still says "Niobium" next to the new logo.
+> **Status:** everything players see is Rift: logo, colours, texts, the `[Rift]` chat/console prefix, the data folders (`%APPDATA%\Rift`, `%LOCALAPPDATA%\Rift`) and the DLLs (`rift_*.dll`). A few internal names that players never see keep "niobium" for compatibility (pipe, backend env vars and routes, login domain, `--nb-*` CSS variables, …) – see [`02-architecture.md`](02-architecture.md#names).
 
 ## Name
 

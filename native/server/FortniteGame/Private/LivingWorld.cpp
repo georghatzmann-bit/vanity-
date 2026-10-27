@@ -1,4 +1,4 @@
-// NIOBIUM: "Living world" plumbing (see FortniteGame/Public/LivingWorld.h). Niobium's own code
+// NIOBIUM: "Living world" plumbing (see FortniteGame/Public/LivingWorld.h). Rift's own code
 // (GPL-3.0).
 //
 // The AI death drop follows the logic of Jeremy1926/Velora (MIT), Velora/FortniteGame/Source/
@@ -16,7 +16,7 @@
 //
 // Spawning itself ("Lager-lite") lives in LivingWorldSpawner.cpp; this file starts it at
 // "Start match" and ticks it. NPCs (not AI player bots) also drop the loot tiers of their AI loot
-// info on death, through Niobium's loot tables (LivingWorldSpawner::DropLootTiers).
+// info on death, through Rift's loot tables (LivingWorldSpawner::DropLootTiers).
 #include "pch.h"
 #include "../Public/LivingWorld.h"
 #include "../Public/LivingWorldSpawner.h"

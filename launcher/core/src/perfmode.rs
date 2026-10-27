@@ -3,11 +3,11 @@
 //! Bubble Builds start the player's game with `-FeatureLevelES31` (Performance Mode). On 15.40 – 16.00
 //! and 19.x the look also needs Fortnite's "Meshes" setting on Low (`[PerformanceMode] MeshQuality=0`).
 //! Both live in `%LOCALAPPDATA%\FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini`, a file
-//! that every build (and live Fortnite) shares. The user allowed Niobium to change it for Bubble
+//! that every build (and live Fortnite) shares. The user allowed Rift to change it for Bubble
 //! Builds, as long as the original values come back by themselves after the game.
 //!
 //! So before the launch the launcher writes a backup of exactly the lines it may change (or that
-//! Fortnite may change because of Performance Mode) to `%LOCALAPPDATA%\Niobium\gus-backup.json`:
+//! Fortnite may change because of Performance Mode) to `%LOCALAPPDATA%\Rift\gus-backup.json`:
 //! the file path and, for each line, the line as it was or "absent", and whether its section was
 //! there. Only then it sets `MeshQuality=0` (the line is added if it is missing, so the look never
 //! rests on Fortnite's unknown default). After the game it puts exactly these lines back (a line
@@ -38,10 +38,10 @@ pub const PREFERRED_FEATURE_LEVEL: IniKey = IniKey { section: "D3DRHIPreference"
 /// Fortnite's "Meshes" setting in Performance Mode: 0 = Low, 1 = High.
 pub const MESH_QUALITY: IniKey = IniKey { section: "PerformanceMode", key: "MeshQuality" };
 
-/// Every line Niobium may ever back up and put back. Nothing outside this list is ever written.
+/// Every line Rift may ever back up and put back. Nothing outside this list is ever written.
 pub const ALLOWED_KEYS: [IniKey; 3] = [PREFER_ES31, PREFERRED_FEATURE_LEVEL, MESH_QUALITY];
 
-/// File name of the backup in `%LOCALAPPDATA%\Niobium`.
+/// File name of the backup in `%LOCALAPPDATA%\Rift`.
 pub const BACKUP_FILE: &str = "gus-backup.json";
 /// Format version of the backup file.
 pub const BACKUP_FORMAT: u32 = 1;
@@ -53,12 +53,12 @@ pub fn game_user_settings_path() -> Option<PathBuf> {
     })
 }
 
-/// `%LOCALAPPDATA%\Niobium\gus-backup.json`
+/// `%LOCALAPPDATA%\Rift\gus-backup.json`
 pub fn backup_path() -> PathBuf {
     crate::profiles::local_dir().join(BACKUP_FILE)
 }
 
-/// The lines Niobium backs up for one launch: always the two Performance Mode lines, plus
+/// The lines Rift backs up for one launch: always the two Performance Mode lines, plus
 /// `MeshQuality` when the version needs Meshes on Low (15.40 – 16.00 and 19.x).
 pub fn keys_for(low_meshes: bool) -> Vec<IniKey> {
     let mut keys = vec![PREFER_ES31, PREFERRED_FEATURE_LEVEL];
@@ -84,7 +84,7 @@ pub struct SavedLine {
     pub section: String,
     pub key: String,
     pub original: Original,
-    /// Whether its `[section]` was in the file before the launch. If not (Niobium or Fortnite added
+    /// Whether its `[section]` was in the file before the launch. If not (Rift or Fortnite added
     /// it), the header is removed again when the section is empty after the restore. Missing in the
     /// JSON = true, so a header is never removed by mistake.
     #[serde(default = "section_existed_default")]
@@ -108,7 +108,7 @@ pub struct Backup {
 }
 
 impl Backup {
-    /// Only lines Niobium may touch, each line really is its own key, and the path is a
+    /// Only lines Rift may touch, each line really is its own key, and the path is a
     /// GameUserSettings.ini. Anything else is treated as a broken backup and never applied.
     pub fn is_valid(&self) -> bool {
         let file_ok = self
@@ -231,12 +231,12 @@ pub fn prepare(ini: &Path, backup: &Path, low_meshes: bool, id: &str) -> io::Res
         Err(e) => return Err(e),
     };
     let Some((text, encoding)) = decode_exact(&bytes) else {
-        return Ok(Prepared::Skipped("Fortnite's settings file has an unusual text format, so Niobium leaves it alone.".into()));
+        return Ok(Prepared::Skipped("Fortnite's settings file has an unusual text format, so Rift leaves it alone.".into()));
     };
 
     let keys = keys_for(low_meshes);
     if keys.iter().any(|k| is_ambiguous(&text, *k)) {
-        return Ok(Prepared::Skipped("Fortnite's settings file lists one of these settings twice, so Niobium leaves it alone.".into()));
+        return Ok(Prepared::Skipped("Fortnite's settings file lists one of these settings twice, so Rift leaves it alone.".into()));
     }
     let lines = keys
         .iter()
@@ -526,7 +526,7 @@ fn write_ini(path: &Path, text: &str, encoding: Encoding) -> io::Result<()> {
 /// Writes via a temporary file next to it and renames, so nobody ever reads half a file.
 fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let mut tmp_name = path.file_name().map(|n| n.to_os_string()).unwrap_or_default();
-    tmp_name.push(".niobium.tmp");
+    tmp_name.push(".rift.tmp");
     let tmp = path.with_file_name(tmp_name);
     fs::write(&tmp, bytes)?;
     if let Err(e) = fs::rename(&tmp, path) {
@@ -608,7 +608,7 @@ mod tests {
 
     /// A fresh, empty folder for one test.
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("niobium-perfmode-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rift-perfmode-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -665,7 +665,7 @@ mod tests {
     #[test]
     fn restores_exactly_the_remembered_lines() {
         let before = wanted_of(BEFORE, true);
-        // Niobium set Meshes to Low; the game then saved ES3.1 as default, added a line and changed
+        // Rift set Meshes to Low; the game then saved ES3.1 as default, added a line and changed
         // another setting too
         let after = BEFORE
             .replace("MeshQuality=1", "MeshQuality=0")

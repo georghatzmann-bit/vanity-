@@ -1,9 +1,9 @@
-// [Niobium] Modified version. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
+// [Rift] Modified version. Original: ATLAS Console (https://github.com/Ralzify/ATLAS-Client),
 // (c) ralz, cipherfps and contributors, ATLAS Console Attribution License v1.0 (LICENSE-ATLAS.txt).
-// Niobium changes: data paths, visible names/credit, MinHook via project reference,
+// Rift changes: data paths, visible names/credit, MinHook via project reference,
 // all visible menu texts in plain English with short hints, brand colours, Bubble Builds
 // status row, Bubble look switch, Editing rows by route (hook or Fortnite's own setting),
-// Reset builds switch and key (all marked with [Niobium]).
+// Reset builds switch and key (all marked with [Rift]).
 #include "pch.h"
 #include "../Public/GUI.h"
 #include "../Public/Hotkey.h"
@@ -11,10 +11,10 @@
 #include "../Public/Client.h"
 #include "../Public/Diagnostics.h"
 #include "../Public/Icon.h"
-#include "../Public/NiobiumTrickshotTab.h" // [Niobium] Trickshot tab and trickshot banner
-#include "../Public/BubbleLook.h" // [Niobium] Bubble look state (written by the game thread)
-#include "../Public/EditFeatureRoutes.h" // [Niobium] EOR/ROR/pre-edits: hook or Fortnite's own setting
-#include "../Public/QuickReset.h" // [Niobium] "Reset builds" key and status
+#include "../Public/NiobiumTrickshotTab.h" // [Rift] Trickshot tab and trickshot banner
+#include "../Public/BubbleLook.h" // [Rift] Bubble look state (written by the game thread)
+#include "../Public/EditFeatureRoutes.h" // [Rift] EOR/ROR/pre-edits: hook or Fortnite's own setting
+#include "../Public/QuickReset.h" // [Rift] "Reset builds" key and status
 #include "../ImGui/imgui.h"
 #include "../ImGui/imgui_internal.h"
 #include "../ImGui/imgui_stdlib.h"
@@ -45,29 +45,29 @@ extern bool ATLAS_PrepareReplicationForOpen(
     wchar_t* error,
     size_t errorCapacity);
 
-// [Niobium] Brand accent violet #8B5CF6 (was the ATLAS accent #00A2CE), pressed #7C3AED.
+// [Rift] Brand accent violet #8B5CF6 (was the ATLAS accent #00A2CE), pressed #7C3AED.
 #define ACCENT_R 0.545f
 #define ACCENT_G 0.361f
 #define ACCENT_B 0.965f
 
 static ImVec4 Accent(float a = 1.f) { return ImVec4(ACCENT_R, ACCENT_G, ACCENT_B, a); }
 static ImVec4 AccentDk(float a = 1.f) { return ImVec4(0.486f, 0.227f, 0.929f, a); }
-// [Niobium] Second brand accent, neon cyan #22D3EE: thin light only (the active-tab indicator),
+// [Rift] Second brand accent, neon cyan #22D3EE: thin light only (the active-tab indicator),
 // never a fill behind text.
 static ImVec4 AccentCyan(float a = 1.f) { return ImVec4(0.133f, 0.827f, 0.933f, a); }
-// [Niobium] Accent for text and thin glyphs: violet-text #C4B5FD (10.3:1 on the menu background;
+// [Rift] Accent for text and thin glyphs: violet-text #C4B5FD (10.3:1 on the menu background;
 // plain violet is too dark for small text).
 static ImVec4 AccentText(float a = 1.f) { return ImVec4(0.769f, 0.710f, 0.992f, a); }
-// [Niobium] Brand text #F4F4F8, text-muted #A6A6BC (hints and other secondary text people need
+// [Rift] Brand text #F4F4F8, text-muted #A6A6BC (hints and other secondary text people need
 // to read, 8.0:1) and text-faint #80809A (captions, key labels, disabled text only, 5.0:1).
 static const ImVec4 kNiobiumText(0.957f, 0.957f, 0.973f, 1.f);
 static const ImVec4 kNiobiumHintText(0.651f, 0.651f, 0.737f, 1.f);
 static const ImVec4 kNiobiumMutedText(0.502f, 0.502f, 0.604f, 1.f);
-// [Niobium] Brand backgrounds: bg #07070C (top bar, sidebar), surface #0F0F19 (window),
+// [Rift] Brand backgrounds: bg #07070C (top bar, sidebar), surface #0F0F19 (window),
 // surface-raised #161624 (fields, buttons).
 static const ImVec4 kNiobiumBg(0.027f, 0.027f, 0.047f, 1.f);
 
-// [Niobium] GUI.cpp is built without /utf-8 and stays plain ASCII. The few non-ASCII characters
+// [Rift] GUI.cpp is built without /utf-8 and stays plain ASCII. The few non-ASCII characters
 // of the menu texts are UTF-8 bytes (what ImGui expects) in their own literals that the compiler
 // glues onto the neighbouring ones, e.g. "Off " NB_DASH " on". For wide L"..." texts (console)
 // use Unicode escapes instead (backslash, "u", four hex digits, e.g. 2013 for the en dash).
@@ -158,7 +158,7 @@ static bool g_FocusMenuWindow = false;
 static bool g_MenuWindowFocused = false;
 static ULONGLONG g_BindErrorUntil = 0;
 static std::string g_BindError;
-// [Niobium] Which key button the bind error belongs to (0 = the menu/join/command keys,
+// [Rift] Which key button the bind error belongs to (0 = the menu/join/command keys,
 // 1 = the Reset builds key), so the Options tab shows it only once, next to the right button.
 static int g_BindErrorOwner = 0;
 static constexpr unsigned int SettingCommandMobileBuilds = 1u << 0;
@@ -173,13 +173,13 @@ static std::atomic_uint g_PendingSettingCommandMask = 0;
 // UE exposes them as toggle-only commands.
 static std::mutex g_SettingCommandMutex;
 static unsigned int g_AppliedToggleSettingMask = 0;
-// [Niobium] Mobile Builds and fog are only sent when they change something. These remember that
-// Niobium itself set a non-neutral console value in this game process (console values outlive a
+// [Rift] Mobile Builds and fog are only sent when they change something. These remember that
+// Rift itself set a non-neutral console value in this game process (console values outlive a
 // map change), so switching back sends the neutral value only to undo our own change. Guarded by
 // g_SettingCommandMutex.
 static bool g_MobileBuildsValueSet = false;
 static bool g_FogValueSet = false;
-// [Niobium] World (Client::GetWorldGeneration) the toggle-only commands were applied in.
+// [Rift] World (Client::GetWorldGeneration) the toggle-only commands were applied in.
 static uint64_t g_ToggleSettingWorld = 0;
 
 static constexpr size_t kMaximumConsoleLines = 2048;
@@ -258,7 +258,7 @@ static bool StartsWithInsensitive(const std::string& value, const std::string& p
 
 static EConsoleLineKind ClassifyConsoleOutput(const std::string& text)
 {
-    if (StartsWithInsensitive(text, "[Niobium]"))
+    if (StartsWithInsensitive(text, "[Rift]"))
         return EConsoleLineKind::System;
 
     static const char* kErrorWords[] = {
@@ -368,9 +368,9 @@ static void DrainConsoleOutput()
     const unsigned int dropped = g_ConsoleDroppedMessages.exchange(0, std::memory_order_acq_rel);
     if (dropped > 0)
     {
-        // [Niobium] plain English
+        // [Rift] plain English
         char message[128]{};
-        snprintf(message, sizeof(message), "[Niobium] Skipped %u message%s so the game stays smooth.",
+        snprintf(message, sizeof(message), "[Rift] Skipped %u message%s so the game stays smooth.",
             dropped, dropped == 1 ? "" : "s");
         AppendConsoleLine(EConsoleLineKind::System, message);
     }
@@ -460,7 +460,7 @@ static const char* VKName(int vk)
 {
     static char buf[32];
 
-    // [Niobium] Friendly key names (display only, never saved).
+    // [Rift] Friendly key names (display only, never saved).
     switch (vk)
     {
     case VK_LBUTTON: return "Mouse 1";
@@ -489,7 +489,7 @@ static const char* VKName(int vk)
 
     if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9)
     {
-        snprintf(buf, sizeof(buf), "Num %d", vk - VK_NUMPAD0); // [Niobium] same as in the launcher
+        snprintf(buf, sizeof(buf), "Num %d", vk - VK_NUMPAD0); // [Rift] same as in the launcher
         return buf;
     }
 
@@ -506,7 +506,7 @@ static const char* VKName(int vk)
 
 static const char* BindName(int vk)
 {
-    return (vk > 0 && vk <= 254) ? VKName(vk) : "none"; // [Niobium] was "UNBOUND"
+    return (vk > 0 && vk <= 254) ? VKName(vk) : "none"; // [Rift] was "UNBOUND"
 }
 
 // Saved command hotkeys are actions owned by ATLAS. Keep an atomic lookup for
@@ -586,7 +586,7 @@ static HotkeyPersist::UserPreferences CaptureUserPreferences()
     preferences.RespawnsEnabled =
         FConfiguration::bForceRespawns.load(
             std::memory_order_acquire);
-    // [Niobium] Reset builds (Options). The probe is a debug switch like bubbleProbe.
+    // [Rift] Reset builds (Options). The probe is a debug switch like bubbleProbe.
     preferences.ResetBuilds =
         FConfiguration::bResetBuilds.load(
             std::memory_order_acquire);
@@ -647,17 +647,17 @@ void GUI_LoadUserPreferences()
     preferences.SaveTogglePreferences =
         savedPreferences.SaveTogglePreferences;
     ApplyUserPreferences(preferences);
-    // [Niobium] The Bubble look probe is a debug switch, not a toggle: it follows the file
+    // [Rift] The Bubble look probe is a debug switch, not a toggle: it follows the file
     // even when "Remember my settings" is off.
     FConfiguration::bBubbleProbe.store(
         savedPreferences.BubbleProbe, std::memory_order_release);
     FConfiguration::bResetBuildsProbe.store(
         savedPreferences.ResetBuildsProbe, std::memory_order_release);
 
-    // [Niobium] Only send what changes something: Mobile Builds when it is on, fog when it is
+    // [Rift] Only send what changes something: Mobile Builds when it is on, fog when it is
     // off. A console value outranks Fortnite's own graphics presets for the whole session, so
     // the neutral values ("r.StaticMeshLODDistanceScale 1", "r.Fog 1") are never sent at
-    // startup any more; they are only sent to undo a value Niobium set itself.
+    // startup any more; they are only sent to undo a value Rift set itself.
     unsigned int commandMask = 0;
     if (preferences.MobileBuilds)
         commandMask |= SettingCommandMobileBuilds;
@@ -687,7 +687,7 @@ static bool TogglePreferencePersistenceCheckbox()
 {
     bool value = FConfiguration::bSaveTogglePreferences.load(
         std::memory_order_acquire);
-    // [Niobium] Plain English label; the ImGui id stays fixed ("###save_toggles").
+    // [Rift] Plain English label; the ImGui id stays fixed ("###save_toggles").
     if (!ImGui::Checkbox("Remember my settings###save_toggles", &value))
         return false;
 
@@ -865,7 +865,7 @@ void FGUI::ResetAll()
     FGUI::MacroDraftSteps.clear();
     RefreshExclusiveCommandHotkeys();
 
-    // [Niobium] Keep the hidden Bubble look probe switch; everything else goes back to default.
+    // [Rift] Keep the hidden Bubble look probe switch; everything else goes back to default.
     HotkeyPersist::UserPreferences savedDefaults = defaults;
     savedDefaults.BubbleProbe = FConfiguration::bBubbleProbe.load(
         std::memory_order_acquire);
@@ -1196,16 +1196,16 @@ static void PushStyle()
     auto C = [](float r, float g, float b, float a = 1.f) { return ImVec4(r, g, b, a); };
     ImVec4* col = s.Colors;
 
-    // [Niobium] brand surface #0F0F19 (was #11151f)
+    // [Rift] brand surface #0F0F19 (was #11151f)
     col[ImGuiCol_WindowBg] = C(0.059f, 0.059f, 0.098f, 1.f);
     col[ImGuiCol_ChildBg] = C(0.059f, 0.059f, 0.098f, 1.f);
     col[ImGuiCol_PopupBg] = C(0.059f, 0.059f, 0.098f, 0.98f);
-    col[ImGuiCol_Border] = C(0.141f, 0.141f, 0.227f, 1.f); // [Niobium] border #24243A
+    col[ImGuiCol_Border] = C(0.141f, 0.141f, 0.227f, 1.f); // [Rift] border #24243A
     col[ImGuiCol_BorderShadow] = C(0.f, 0.f, 0.f, 0.f);
-    col[ImGuiCol_FrameBg] = C(0.086f, 0.086f, 0.141f, 1.f); // [Niobium] surface-raised #161624
+    col[ImGuiCol_FrameBg] = C(0.086f, 0.086f, 0.141f, 1.f); // [Rift] surface-raised #161624
     col[ImGuiCol_FrameBgHovered] = C(0.118f, 0.118f, 0.188f, 1.f);
     col[ImGuiCol_FrameBgActive] = C(0.141f, 0.141f, 0.227f, 1.f);
-    col[ImGuiCol_TitleBg] = kNiobiumBg; // [Niobium] brand bg #07070C
+    col[ImGuiCol_TitleBg] = kNiobiumBg; // [Rift] brand bg #07070C
     col[ImGuiCol_TitleBgActive] = kNiobiumBg;
     col[ImGuiCol_TitleBgCollapsed] = C(0.027f, 0.027f, 0.047f, 0.9f);
     col[ImGuiCol_ScrollbarBg] = C(0.027f, 0.027f, 0.047f, 0.f);
@@ -1215,7 +1215,7 @@ static void PushStyle()
     col[ImGuiCol_CheckMark] = Accent();
     col[ImGuiCol_SliderGrab] = Accent();
     col[ImGuiCol_SliderGrabActive] = AccentDk();
-    col[ImGuiCol_Button] = C(0.086f, 0.086f, 0.141f, 1.f); // [Niobium] surface-raised #161624
+    col[ImGuiCol_Button] = C(0.086f, 0.086f, 0.141f, 1.f); // [Rift] surface-raised #161624
     col[ImGuiCol_ButtonHovered] = Accent(0.18f);
     col[ImGuiCol_ButtonActive] = Accent(0.32f);
     col[ImGuiCol_Header] = Accent(0.14f);
@@ -1232,7 +1232,7 @@ static void PushStyle()
     col[ImGuiCol_TabActive] = C(0.086f, 0.086f, 0.141f, 1.f);
     col[ImGuiCol_TabUnfocused] = col[ImGuiCol_Tab];
     col[ImGuiCol_TabUnfocusedActive] = col[ImGuiCol_TabActive];
-    col[ImGuiCol_Text] = kNiobiumText; // [Niobium] brand text #F4F4F8
+    col[ImGuiCol_Text] = kNiobiumText; // [Rift] brand text #F4F4F8
     col[ImGuiCol_TextDisabled] = kNiobiumMutedText;
     col[ImGuiCol_PlotLines] = Accent();
     col[ImGuiCol_PlotLinesHovered] = Accent();
@@ -1301,7 +1301,7 @@ static void EndSectionBody()
     ImGui::Unindent(SectionBodyIndent);
 }
 
-// [Niobium] Building blocks for the short hints (same style as in the Trickshot tab).
+// [Rift] Building blocks for the short hints (same style as in the Trickshot tab).
 
 // Grey sentence that says what a toggle or button does. Wraps at "width".
 // underCheckbox: right below a checkbox, indented to line up with its label.
@@ -1359,7 +1359,7 @@ static const char* FitLabel(const char* longLabel, const char* shortLabel, float
 }
 
 // ---------------------------------------------------------------------------------------------
-// [Niobium] Bubble Builds status (read-only).
+// [Rift] Bubble Builds status (read-only).
 // Bubble Builds is the see-through "bubble wrap" build look of Chapter 2 Seasons 5-6. It only
 // exists in Performance Mode (the ES3.1 renderer). The launcher turns it on by starting the game
 // client with -FeatureLevelES31. It can't be switched while playing, so the menu only reports
@@ -1500,7 +1500,7 @@ static void DrawBubbleBuildsStatus(float width)
     else if (featureLevelES31 &&
         (level == EBubbleBuildsLevel::LowMeshes || level == EBubbleBuildsLevel::Supported))
     {
-        // [Niobium] 15.40-16.00 and 19.x: the bubbles also need the game's own Meshes setting on
+        // [Rift] 15.40-16.00 and 19.x: the bubbles also need the game's own Meshes setting on
         // Low. It only applies after a restart, so the row follows the value this session
         // started with and only mentions a later change (both read by the game thread,
         // Client.cpp; -1 = not read yet / unknown).
@@ -1601,9 +1601,9 @@ static bool LabeledSliderInt(
         ImGuiSliderFlags_AlwaysClamp);
 }
 
-static bool IsGameThreadDispatcherReady(); // [Niobium] defined with the game-thread mailbox below
+static bool IsGameThreadDispatcherReady(); // [Rift] defined with the game-thread mailbox below
 
-// [Niobium] One row of the Main > Editing section, drawn by its route (EditFeatureRoutes.h).
+// [Rift] One row of the Main > Editing section, drawn by its route (EditFeatureRoutes.h).
 // Hook: the checkbox is our client.json switch, as before. Native: the checkbox shows Fortnite's
 // own value (read by the game thread about once a second) and a click asks the game thread to
 // change it there; nothing is written at startup. Unavailable: greyed out with the reason.
@@ -1686,7 +1686,7 @@ static void DrawEditFeatureRow(
     ImGui::Unindent(indent);
 }
 
-// [Niobium] Status and "Bubble strength" slider under the "Bubble look" checkbox (Main tab),
+// [Rift] Status and "Bubble strength" slider under the "Bubble look" checkbox (Main tab),
 // indented to line up with the checkbox label. The game thread reports the state
 // (NiobiumBubbleLook::State); this only reads it.
 static void DrawBubbleLookControls(float width)
@@ -1714,7 +1714,7 @@ static void DrawBubbleLookControls(float width)
     }
     else if (state == NiobiumBubbleLook::EState::Paused)
     {
-        // [Niobium] Epic's own Bubble Builds are on (Performance Mode, Meshes Low): the game
+        // [Rift] Epic's own Bubble Builds are on (Performance Mode, Meshes Low): the game
         // thread put the original values back. No slider: nothing is changed while paused.
         StatusDotRow("Paused: Bubble Builds are already on. Bubble look would only blur them more.",
             kNiobiumMutedText, false, innerWidth);
@@ -1754,7 +1754,7 @@ static void DrawBubbleLookControls(float width)
         SaveUserPreferences();
     ControlHint("Higher = softer bubbles.", innerWidth);
     {
-        // [Niobium] Experimental Bubble Builds versions in Performance Mode: Epic's look may be
+        // [Rift] Experimental Bubble Builds versions in Performance Mode: Epic's look may be
         // partly there, so Bubble look adds to it.
         const wchar_t* commandLine =
             g_BubbleBuildsCommandLine ? g_BubbleBuildsCommandLine() : nullptr;
@@ -1803,7 +1803,7 @@ static bool SidebarTab(const char* label, int index, float height)
     else if (hovered)
         dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), ImGui::GetColorU32(Accent(0.05f)));
 
-    ImVec4 textCol = active ? AccentText() : ImVec4(0.56f, 0.56f, 0.66f, 1.f); // [Niobium] violet-text
+    ImVec4 textCol = active ? AccentText() : ImVec4(0.56f, 0.56f, 0.66f, 1.f); // [Rift] violet-text
     if (!active && hovered) textCol = ImVec4(0.82f, 0.82f, 0.90f, 1.f);
 
     const ImVec2 ts = ImGui::CalcTextSize(label);
@@ -2725,7 +2725,7 @@ static bool ExecuteConsoleCommandWithReturnedOutput(
             "console-return-path invoke-failed target=%p",
             reinterpret_cast<void*>(native));
         QueueCommandError(
-            L"[Niobium] Error: the command could not run."); // [Niobium]
+            L"[Rift] Error: the command could not run."); // [Rift]
         // The native call may already have performed part or all of the
         // command before faulting. Treat it as consumed so the Kismet fallback
         // cannot execute a state-changing command twice.
@@ -2758,7 +2758,7 @@ static bool ExecuteConsoleCommandWithReturnedOutput(
             output.NumElements,
             output.MaxElements);
         QueueCommandError(
-            L"[Niobium] The command ran, but the game's reply could not be read."); // [Niobium]
+            L"[Rift] The command ran, but the game's reply could not be read."); // [Rift]
         return true;
     }
 
@@ -2811,7 +2811,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     {
         AtlasDiagnostics::WriteLine("command-skip no-world command=%s", cmd);
         if (showConsoleErrors)
-            QueueCommandError(L"[Niobium] Not right now \u2013 wait until you are in the game."); // [Niobium]
+            QueueCommandError(L"[Rift] Not right now \u2013 wait until you are in the game."); // [Rift]
         return false;
     }
 
@@ -2820,7 +2820,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     {
         AtlasDiagnostics::WriteLine("command-skip no-player command=%s", cmd);
         if (showConsoleErrors)
-            QueueCommandError(L"[Niobium] Not right now \u2013 your character isn't there yet."); // [Niobium]
+            QueueCommandError(L"[Rift] Not right now \u2013 your character isn't there yet."); // [Rift]
         return false;
     }
 
@@ -2828,7 +2828,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     if (len <= 1)
     {
         if (showConsoleErrors)
-            QueueCommandError(L"[Niobium] The command has a character that can't be used."); // [Niobium]
+            QueueCommandError(L"[Rift] The command has a character that can't be used."); // [Rift]
         return false;
     }
 
@@ -2836,7 +2836,7 @@ static bool ExecNow(const char* cmd, bool showConsoleErrors = true)
     if (MultiByteToWideChar(CP_UTF8, 0, cmd, -1, wide.data(), len) != len)
     {
         if (showConsoleErrors)
-            QueueCommandError(L"[Niobium] The command could not be read."); // [Niobium]
+            QueueCommandError(L"[Rift] The command could not be read."); // [Rift]
         return false;
     }
     wide.resize(static_cast<size_t>(len - 1));
@@ -3095,7 +3095,7 @@ static bool TryApplyPendingSettingCommand()
     std::unique_lock<std::mutex> commandLock(
         g_SettingCommandMutex);
 
-    // [Niobium] Free camera and Target info only exist as toggle commands, so the menu keeps an
+    // [Rift] Free camera and Target info only exist as toggle commands, so the menu keeps an
     // "applied" bit for them. A new world (match start, map change, back to the lobby) starts
     // without either, so forget the old bits and show both as off again. Otherwise the next
     // click could flip the wrong way. (Free camera swaps the local controller inside the same
@@ -3134,7 +3134,7 @@ static bool TryApplyPendingSettingCommand()
     char commandBuffer[64]{};
     bool toggleCommand = false;
     bool toggleDesired = false;
-    // [Niobium] Which "value set" flag a successful command changes (Mobile Builds / fog).
+    // [Rift] Which "value set" flag a successful command changes (Mobile Builds / fog).
     bool* valueSetFlag = nullptr;
     bool valueSetAfter = false;
     while (mask != 0 && !command)
@@ -3160,7 +3160,7 @@ static bool TryApplyPendingSettingCommand()
             }
             else
             {
-                // Never set by Niobium: leave the game's own value alone.
+                // Never set by Rift: leave the game's own value alone.
                 g_PendingSettingCommandMask.fetch_and(
                     ~bit, std::memory_order_acq_rel);
                 mask &= ~bit;
@@ -3654,7 +3654,7 @@ static void JoinSelectedHost()
     }
 }
 
-// [Niobium] Helper for the Trickshot tab (NiobiumTrickshotTab.cpp). A sent command shows up as
+// [Rift] Helper for the Trickshot tab (NiobiumTrickshotTab.cpp). A sent command shows up as
 // "> command" in the console log, just like with the "Run" buttons.
 static bool NiobiumTabExec(const char* command)
 {
@@ -3666,7 +3666,7 @@ static bool NiobiumTabExec(const char* command)
 
 void GUI_Init()
 {
-    // [Niobium] Never write imgui.ini into the game folder (the working directory of the game).
+    // [Rift] Never write imgui.ini into the game folder (the working directory of the game).
     // Every window already uses NoSavedSettings; this also stops ImGui from ever trying.
     ImGui::GetIO().IniFilename = nullptr;
     AtlasDiagnostics::BeginSession(FConfiguration::ConsoleVersion);
@@ -3881,7 +3881,7 @@ static bool IsAtlasOwnedHotkey(int vk)
             IsExclusiveCommandHotkey(vk));
 }
 
-// [Niobium] Reset builds: what a key-down does to Fortnite's own (Unreal) console, which keeps
+// [Rift] Reset builds: what a key-down does to Fortnite's own (Unreal) console, which keeps
 // its state to itself (QuickReset.h, NextGameConsoleState). WndProc thread; key-downs that reach
 // the game only. With "Which console?" = Fortnite's, F8 (sent on as `) and ` open and cycle it.
 static NiobiumQuickReset::EGameConsoleKey ClassifyGameConsoleKey(int vk)
@@ -3890,7 +3890,7 @@ static NiobiumQuickReset::EGameConsoleKey ClassifyGameConsoleKey(int vk)
     if (vk == VK_F8 || vk == VK_OEM_3)
         return IsAtlasConsoleSelected() ? EGameConsoleKey::Other : EGameConsoleKey::ConsoleKey;
     if (IsAtlasOwnedHotkey(vk))
-        return EGameConsoleKey::Other; // Niobium keeps it; the game never sees it
+        return EGameConsoleKey::Other; // Rift keeps it; the game never sees it
     switch (vk)
     {
     case VK_ESCAPE:
@@ -3960,10 +3960,10 @@ void GUI_QueueInputMessage(UINT message, WPARAM wParam, LPARAM lParam)
         return;
     }
 
-    // [Niobium] Reset builds: only stamps the press time; the game thread decides what to do.
+    // [Rift] Reset builds: only stamps the press time; the game thread decides what to do.
     // The key is never swallowed (the game still gets it) and doesn't count while the menu or
     // a console (ours or Fortnite's) is open, while a key is being picked, or when the key is a
-    // menu/join/console key or one Niobium already owns.
+    // menu/join/console key or one Rift already owns.
     if (vk > 0)
     {
         const bool overlayVisible = GUI_IsOverlayVisible();
@@ -4067,7 +4067,7 @@ static int PollBindKey(const InputPressCounts& presses)
     return 0;
 }
 
-// [Niobium] message = plain text for the menu, reason = the unchanged reason for the
+// [Rift] message = plain text for the menu, reason = the unchanged reason for the
 // diagnostics log (stays as in ATLAS so logs remain comparable).
 static void SetBindError(const char* message, const char* reason, int owner = 0)
 {
@@ -4078,22 +4078,22 @@ static void SetBindError(const char* message, const char* reason, int owner = 0)
         reason ? reason : "That key is already in use.");
 }
 
-// [Niobium] Messages when assigning a key (text for the menu + reason for the log).
+// [Rift] Messages when assigning a key (text for the menu + reason for the log).
 static constexpr const char* kBindTakenText =
     "That key is already used for something else.";
 static constexpr const char* kBindTakenReason =
-    "That key is already assigned to another Niobium action.";
+    "That key is already assigned to another Rift action.";
 static constexpr const char* kBindReservedText =
     "The menu, join and console keys can't be used here.";
 static constexpr const char* kBindReservedReason =
     "Menu, Join, and console keys are reserved.";
-// [Niobium] Reset builds key: never the left or right mouse button.
+// [Rift] Reset builds key: never the left or right mouse button.
 static constexpr const char* kBindMouseText =
     "The left and right mouse buttons can't be used here: they shoot and aim.";
 static constexpr const char* kBindMouseReason =
     "reset-builds key rejected: left/right mouse button";
 
-// [Niobium] The Reset builds key while that feature is on (0 = none). Other key buttons can't
+// [Rift] The Reset builds key while that feature is on (0 = none). Other key buttons can't
 // take it, so one press never means two things.
 static int ActiveResetBuildsKey()
 {
@@ -4192,8 +4192,8 @@ void GUI_HandleInput(bool windowActive)
         return;
     }
 
-    // [Niobium] Reset builds key: never the left/right mouse button, never a key that already
-    // does something in Niobium (menu, join, console, saved commands). Saved in client.json like
+    // [Rift] Reset builds key: never the left/right mouse button, never a key that already
+    // does something in Rift (menu, join, console, saved commands). Saved in client.json like
     // the other switches (while "Remember my settings" is on).
     if (FGUI::bRebindingResetBuilds)
     {
@@ -4496,7 +4496,7 @@ static bool FinishSavedCommandEdit(bool keepOpenOnInvalid)
 
     const std::string command =
         TrimCommand(g_SavedCommandEdit.Draft);
-    // [Niobium] Short messages, shown below the input field only.
+    // [Rift] Short messages, shown below the input field only.
     const char* error = nullptr;
     if (command.empty())
         error = "The command can't be empty.";
@@ -4619,7 +4619,7 @@ static void RenderSavedCommandEditor(float width)
             ESavedCommandEditTarget::MacroDelay;
     if (editingDelay)
     {
-        ImGui::TextUnformatted("    Wait"); // [Niobium] was "wait"
+        ImGui::TextUnformatted("    Wait"); // [Rift] was "wait"
         ImGui::SameLine(0.f, 6.f);
         ImGui::SetNextItemWidth((std::min)(100.f, width));
     }
@@ -4895,7 +4895,7 @@ static bool SubmitConsoleCommand()
 
     if (raw.size() > kMaximumConsoleCommandLength)
     {
-        AppendConsoleLine(EConsoleLineKind::Error, "[Niobium] That command is too long " NB_DASH " please make it shorter."); // [Niobium]
+        AppendConsoleLine(EConsoleLineKind::Error, "[Rift] That command is too long " NB_DASH " please make it shorter."); // [Rift]
         g_ConsoleUi.FocusInput = true;
         return false;
     }
@@ -4903,7 +4903,7 @@ static bool SubmitConsoleCommand()
     const std::string command = NormalizeConsoleCommand(raw);
     if (command.empty())
     {
-        AppendConsoleLine(EConsoleLineKind::Error, "[Niobium] Type a command after the /, for example /god"); // [Niobium]
+        AppendConsoleLine(EConsoleLineKind::Error, "[Rift] Type a command after the /, for example /god"); // [Rift]
         g_ConsoleUi.FocusInput = true;
         return false;
     }
@@ -4914,9 +4914,9 @@ static bool SubmitConsoleCommand()
             EConsoleLineKind::Error,
             g_GameThreadDispatcherReady.load(
                 std::memory_order_acquire)
-                // [Niobium] plain English
-                ? "[Niobium] Too many commands at once " NB_DASH " this one wasn't sent. Wait a moment."
-                : "[Niobium] Commands don't work yet " NB_DASH " wait until the game has finished loading.");
+                // [Rift] plain English
+                ? "[Rift] Too many commands at once " NB_DASH " this one wasn't sent. Wait a moment."
+                : "[Rift] Commands don't work yet " NB_DASH " wait until the game has finished loading.");
         g_ConsoleUi.FocusInput = true;
         return false;
     }
@@ -5025,7 +5025,7 @@ static void DrawConsoleHistoryPopup(
 static bool RenderConsoleCommandInput(
     float rightPadding, float frameOpacity)
 {
-    // [Niobium] The button width follows the label, so nothing gets cut off.
+    // [Rift] The button width follows the label, so nothing gets cut off.
     const char* clearLabel = "Clear##console_logs";
     const float clearButtonWidth = (std::max)(
         62.f,
@@ -5422,7 +5422,7 @@ void GUI_Render()
     const float consoleFade = s_ConsoleFade * s_ConsoleFade * (3.f - 2.f * s_ConsoleFade);
     const float surfaceFade = (std::max)(menuFade, consoleFade);
 
-    // [Niobium] Trickshot banner: every frame, even when the menu and the console are closed.
+    // [Rift] Trickshot banner: every frame, even when the menu and the console are closed.
     NiobiumToast_Draw();
 
     if (surfaceFade <= 0.f)
@@ -5481,7 +5481,7 @@ void GUI_Render()
     {
         ImGui::GetWindowDrawList()->AddRectFilled(
             wp, ImVec2(wp.x + W, wp.y + TopBarH),
-            ImGui::GetColorU32(kNiobiumBg), // [Niobium] brand bg #07070C
+            ImGui::GetColorU32(kNiobiumBg), // [Rift] brand bg #07070C
             ImGui::GetStyle().WindowRounding, ImDrawFlags_RoundCornersTop);
 
         const float LogoSize = 30.f;
@@ -5506,16 +5506,16 @@ void GUI_Render()
         ImGui::SameLine(PadL + LogoSize + 8.f);
         const float TitleY = (TopBarH - ImGui::GetTextLineHeight()) * 0.5f;
         ImGui::SetCursorPosY(TitleY);
-        ImGui::PushStyleColor(ImGuiCol_Text, AccentText()); // [Niobium] name in violet-text
-        ImGui::TextUnformatted("Niobium");
+        ImGui::PushStyleColor(ImGuiCol_Text, AccentText()); // [Rift] name in violet-text
+        ImGui::TextUnformatted("Rift");
         ImGui::PopStyleColor();
         ImGui::SameLine(0.f, 6.f);
         ImGui::SetCursorPosY(TitleY);
         ImGui::PushStyleColor(ImGuiCol_Text, kNiobiumMutedText);
-        ImGui::TextUnformatted("| Menu"); // [Niobium] was "| Console"
+        ImGui::TextUnformatted("| Menu"); // [Rift] was "| Console"
         ImGui::PopStyleColor();
 
-        // [Niobium] The version only shows when it fits in front of the key badge
+        // [Rift] The version only shows when it fits in front of the key badge
         // (narrow windows used to draw it under the badge).
         const float VersionX = ImGui::GetItemRectMax().x - wp.x + 8.f;
         if (VersionX + ImGui::CalcTextSize(FConfiguration::ConsoleVersion).x + 12.f <= BadgeX)
@@ -5553,7 +5553,7 @@ void GUI_Render()
     // child cannot paint over its left segment.
     {
         ImDrawList* fdl = ImGui::GetWindowDrawList();
-        const ImU32 line = IM_COL32(36, 36, 58, (int)(fade * 255.f)); // [Niobium] border #24243A
+        const ImU32 line = IM_COL32(36, 36, 58, (int)(fade * 255.f)); // [Rift] border #24243A
         fdl->AddLine(
             ImVec2(wp.x, wp.y + TopBarH - 1.f),
             ImVec2(wp.x + W, wp.y + TopBarH - 1.f),
@@ -5561,7 +5561,7 @@ void GUI_Render()
         fdl->AddLine(ImVec2(wp.x + SidebarW, wp.y + TopBarH), ImVec2(wp.x + SidebarW, wp.y + H), line, 1.f);
     }
 
-    // [Niobium] Extra "Trickshot" tab (index 3); "Credits" moved to index 4.
+    // [Rift] Extra "Trickshot" tab (index 3); "Credits" moved to index 4.
     // The sidebar has room for 6 tabs (minimum height 320 px, 40 px each). Names must fit
     // the 118 px sidebar. The tab id is the index.
     static const char* kTabs[] = {
@@ -5572,7 +5572,7 @@ void GUI_Render()
     const float TabsTop = 12.f;
 
     ImGui::SetCursorPos(ImVec2(0.f, TopBarH));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, kNiobiumBg); // [Niobium] brand bg #07070C (was #0e1118)
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, kNiobiumBg); // [Rift] brand bg #07070C (was #0e1118)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
     ImGui::BeginChild("##sidebar", ImVec2(SidebarW, H - TopBarH), false, ImGuiWindowFlags_NoScrollbar);
     {
@@ -5593,7 +5593,7 @@ void GUI_Render()
         const float indY = sbPos.y + s_IndicatorY;
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImVec2(sbPos.x, indY - 9.f), ImVec2(sbPos.x + 3.f, indY + 9.f),
-            ImGui::GetColorU32(AccentCyan()), 2.f); // [Niobium] cyan indicator next to the violet tab tint
+            ImGui::GetColorU32(AccentCyan()), 2.f); // [Rift] cyan indicator next to the violet tab tint
     }
     ImGui::EndChild();
     ImGui::PopStyleVar();
@@ -5605,7 +5605,7 @@ void GUI_Render()
     const float ContentPadX = ContentHorizontalInset;
     const float ContentPadTop = 14.f;
     const bool bCommandsTab = FGUI::ActiveTab == 1;
-    // [Niobium] The Trickshot tab is always taller than the window: keep the scrollbar
+    // [Rift] The Trickshot tab is always taller than the window: keep the scrollbar
     // visible so the button widths don't jump.
     const bool bTrickshotTab = FGUI::ActiveTab == 3;
     const float ContentChildW =
@@ -5615,12 +5615,12 @@ void GUI_Render()
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, fade);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.f, 6.f));
-    const ImGuiWindowFlags ContentFlags = (bCommandsTab || bTrickshotTab) ? ImGuiWindowFlags_AlwaysVerticalScrollbar : ImGuiWindowFlags_None; // [Niobium] + Trickshot
+    const ImGuiWindowFlags ContentFlags = (bCommandsTab || bTrickshotTab) ? ImGuiWindowFlags_AlwaysVerticalScrollbar : ImGuiWindowFlags_None; // [Rift] + Trickshot
     ImGui::BeginChild("##content",
         ImVec2(ContentChildW, (H - TopBarH) - ContentPadTop - 12.f), false,
         ContentFlags);
     {
-        // [Niobium] Every tab shares this child window, so a new tab starts at the top
+        // [Rift] Every tab shares this child window, so a new tab starts at the top
         // instead of inheriting the scroll position of the tab before.
         static int s_LastContentTab = -1;
         if (s_LastContentTab != FGUI::ActiveTab)
@@ -5638,7 +5638,7 @@ void GUI_Render()
 
     switch (FGUI::ActiveTab)
     {
-    case 0: // main tab ([Niobium] "Main": plain English texts with grey hints)
+    case 0: // main tab ([Rift] "Main": plain English texts with grey hints)
     {
         SectionLabel("Join a server");
         BeginSectionBody();
@@ -5686,7 +5686,7 @@ void GUI_Render()
     }
     EndSectionBody();
 
-    // [Niobium] Always shown now. Each row uses exactly one route on this version
+    // [Rift] Always shown now. Each row uses exactly one route on this version
     // (EditFeatureRoutes.h): our hook on old versions, Fortnite's own setting where Epic has one,
     // or greyed out with the reason. Menu and hooks use the same version rule.
     {
@@ -5731,7 +5731,7 @@ void GUI_Render()
         SettingCommandMobileBuilds);
     ControlHint("Draws builds and the world with less detail, like on phones. Works on every version, right away.", CW, true);
 
-    // [Niobium] Bubble look: the game thread lowers the detail of the four build blueprint
+    // [Rift] Bubble look: the game thread lowers the detail of the four build blueprint
     // textures (Client.cpp, MaintainBubbleLook). Saved in client.json like Mobile Builds.
     PersistentCheckbox(
         "Bubble look###bubble_look",
@@ -5840,10 +5840,10 @@ void GUI_Render()
     ControlHint("Shows info about whatever you are aiming at.", CW, true);
     EndSectionBody();
 
-        ImGui::Dummy(ImVec2(0.f, 8.f)); // [Niobium] a little space below the last hint
+        ImGui::Dummy(ImVec2(0.f, 8.f)); // [Rift] a little space below the last hint
         break;
     }
-    case 1: // Commands ([Niobium] plain English texts with hints)
+    case 1: // Commands ([Rift] plain English texts with hints)
     {
         SectionLabel("New command");
         BeginSectionBody();
@@ -5998,7 +5998,7 @@ void GUI_Render()
             }
         }
         HoverHint("Puts the command (or all steps) into \"Your commands\" below.");
-        DrawBindError(CW); // [Niobium] was only visible in the "Options" tab before
+        DrawBindError(CW); // [Rift] was only visible in the "Options" tab before
 
         EndSectionBody();
         SectionLabel("Your commands");
@@ -6267,12 +6267,12 @@ void GUI_Render()
         }
         EndSectionBody();
 
-        ImGui::Dummy(ImVec2(0.f, 8.f)); // [Niobium] a little space at the bottom
+        ImGui::Dummy(ImVec2(0.f, 8.f)); // [Rift] a little space at the bottom
         break;
     }
-    case 2: // Config ([Niobium] "Options": plain English texts with hints)
+    case 2: // Config ([Rift] "Options": plain English texts with hints)
     {
-    // [Niobium] Read-only Bubble Builds status first: it is the setting people look up most.
+    // [Rift] Read-only Bubble Builds status first: it is the setting people look up most.
     SectionLabel("Build look");
     BeginSectionBody();
     DrawBubbleBuildsStatus(CW);
@@ -6283,7 +6283,7 @@ void GUI_Render()
     int consoleMode =
         FConfiguration::ConsoleMode.load(std::memory_order_acquire);
     const char* consoleModeItems[] = {
-        "Niobium console", "Original console (Unreal)"
+        "Rift console", "Original console (Unreal)"
     };
     if (LabeledCombo(
             "Which console?", "##console_mode", &consoleMode,
@@ -6302,7 +6302,7 @@ void GUI_Render()
         if (consoleMode == static_cast<int>(EConsoleMode::Unreal))
             CloseConsoleSurface();
     }
-    ControlHint("Open the console with F8. The Niobium console knows shortcuts like /god.", CW);
+    ControlHint("Open the console with F8. The Rift console knows shortcuts like /god.", CW);
 
     {
         // The key has a different name on different keyboards (German usually "#", US "/"),
@@ -6312,13 +6312,13 @@ void GUI_Render()
             "Open the console with the %s key###slash_key", VKName(VK_OEM_2));
         PersistentCheckbox(
             slashLabel, FConfiguration::bSlashKeyEnabled);
-        ControlHint("It opens with / already typed " NB_DASH " then just type god and press Enter. Only with the Niobium console.", CW, true);
+        ControlHint("It opens with / already typed " NB_DASH " then just type god and press Enter. Only with the Rift console.", CW, true);
     }
     TogglePreferencePersistenceCheckbox();
     ControlHint("Off = every toggle is back to normal the next time you start the game.", CW, true);
     EndSectionBody();
 
-    // [Niobium] Reset builds (QuickReset.h): aim at an edited build, press your own key, it goes
+    // [Rift] Reset builds (QuickReset.h): aim at an edited build, press your own key, it goes
     // back to normal without edit mode. The game thread does the work; this only shows state.
     SectionLabel("Reset builds");
     BeginSectionBody();
@@ -6396,7 +6396,7 @@ void GUI_Render()
             }
             else if (gameStatus == EStatus::Unsupported)
             {
-                statusText = "This server can't do it. It needs a Niobium server.";
+                statusText = "This server can't do it. It needs a Rift server.";
                 statusColour = kNiobiumWarning;
             }
             else if (gameStatus == EStatus::NotOnVersion)
@@ -6475,7 +6475,7 @@ void GUI_Render()
         HoverHint("This key joins the server picked in \"Main\" when the menu is closed.");
     }
 
-    DrawBindError(CW); // [Niobium] same message, now wrapped at the button width
+    DrawBindError(CW); // [Rift] same message, now wrapped at the button width
 
     if (ImGui::Button("Reset everything###reset_all", ImVec2(CW, 0.f)))
     {
@@ -6489,7 +6489,7 @@ void GUI_Render()
         ImGui::Dummy(ImVec2(0.f, 8.f));
         break;
     }
-    case 3: // [Niobium] Trickshot
+    case 3: // [Rift] Trickshot
     {
         // The content lives in NiobiumTrickshotTab.cpp; the helpers here are file-static and
         // are passed in as pointers.
@@ -6505,9 +6505,9 @@ void GUI_Render()
         ImGui::Dummy(ImVec2(0.f, 8.f));
         break;
     }
-    case 4: // Credits ([Niobium] was index 3)
+    case 4: // Credits ([Rift] was index 3)
     {
-        // [Niobium] The credits themselves stay unchanged (license). Descriptions and the note
+        // [Rift] The credits themselves stay unchanged (license). Descriptions and the note
         // wrap so they are fully readable even in the smallest window.
         const float creditsWrapX =
             ImGui::GetCursorPosX() + CW + SectionBodyIndent;
@@ -6531,12 +6531,12 @@ void GUI_Render()
 
         ImGui::BeginGroup();
         ImGui::PushStyleColor(ImGuiCol_Text, AccentText());
-        ImGui::TextUnformatted("Niobium");
+        ImGui::TextUnformatted("Rift");
         ImGui::PopStyleColor();
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.54f, 0.56f, 0.62f, 1.f));
         {
-            // [Niobium] "In-game menu - version", wrapped instead of cut off at the edge
+            // [Rift] "In-game menu - version", wrapped instead of cut off at the edge
             char subtitle[160];
             snprintf(subtitle, sizeof(subtitle), "In-game menu  " NB_DASH "  %s", FConfiguration::ConsoleVersion);
             ImGui::PushTextWrapPos(creditsWrapX);
@@ -6552,8 +6552,8 @@ void GUI_Render()
         ImGui::PopStyleColor();
         rule();
 
-        // [Niobium] short explanation for the page
-        ControlHint("Niobium is built on these projects. Thank you! Click a name to open its page in your browser.",
+        // [Rift] short explanation for the page
+        ControlHint("Rift is built on these projects. Thank you! Click a name to open its page in your browser.",
             creditsWrapX - ImGui::GetCursorPosX());
         ImGui::Spacing();
 
@@ -6572,12 +6572,12 @@ void GUI_Render()
         ImGui::SameLine(0.f, 8.f);
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.58f, 0.60f, 0.66f, 1.f));
-        ImGui::PushTextWrapPos(creditsWrapX); // [Niobium] wrap instead of cutting off
+        ImGui::PushTextWrapPos(creditsWrapX); // [Rift] wrap instead of cutting off
         ImGui::TextUnformatted("- Base of the project");
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
 
-        // [Niobium] Visible credit as required by the ATLAS Console Attribution License.
+        // [Rift] Visible credit as required by the ATLAS Console Attribution License.
         ImGui::PushStyleColor(ImGuiCol_Text, AccentText(0.95f));
         ImGui::TextUnformatted("ATLAS Console");
         ImGui::PopStyleColor();
@@ -6593,7 +6593,7 @@ void GUI_Render()
         ImGui::SameLine(0.f, 8.f);
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.58f, 0.60f, 0.66f, 1.f));
-        ImGui::PushTextWrapPos(creditsWrapX); // [Niobium] wrap instead of cutting off
+        ImGui::PushTextWrapPos(creditsWrapX); // [Rift] wrap instead of cutting off
         ImGui::TextUnformatted("- Base of this in-game menu (cipherfps, ralz and contributors)");
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
@@ -6601,8 +6601,8 @@ void GUI_Render()
         ImGui::Dummy(ImVec2(0.f, 18.f));
         ImGui::PushStyleColor(
             ImGuiCol_Text, ImVec4(0.42f, 0.44f, 0.50f, 1.f));
-        ImGui::PushTextWrapPos(creditsWrapX); // [Niobium] wrap instead of cutting off
-        ImGui::TextUnformatted("Niobium is based on ATLAS Console by cipherfps, ralz and contributors.");
+        ImGui::PushTextWrapPos(creditsWrapX); // [Rift] wrap instead of cutting off
+        ImGui::TextUnformatted("Rift is based on ATLAS Console by cipherfps, ralz and contributors.");
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
 

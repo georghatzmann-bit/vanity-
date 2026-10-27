@@ -41,7 +41,7 @@ pub struct FolderFacts {
     pub onedrive_roots: Vec<PathBuf>,
     /// Program Files, Windows.
     pub protected_roots: Vec<PathBuf>,
-    /// Niobium's own install folder (never downloaded into).
+    /// Rift's own install folder (never downloaded into).
     pub own_dirs: Vec<PathBuf>,
 }
 
@@ -136,7 +136,7 @@ mod tests {
             volume: drive("NTFS", 500_000_000_000, DriveKind::Fixed),
             onedrive_roots: vec![r"C:\Users\Georg\OneDrive".into()],
             protected_roots: vec![r"C:\Program Files".into(), r"C:\Program Files (x86)".into(), r"C:\Windows".into()],
-            own_dirs: vec![r"C:\Users\Georg\AppData\Local\Niobium".into()],
+            own_dirs: vec![r"C:\Users\Georg\AppData\Local\Rift".into()],
             ..FolderFacts::default()
         }
     }
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn a_good_folder_passes() {
-        assert!(check_folder(&facts(r"D:\Niobium\Builds\18.30-CL-17882303"), KEY, NEED).is_ok());
+        assert!(check_folder(&facts(r"D:\Rift\Builds\18.30-CL-17882303"), KEY, NEED).is_ok());
         assert!(check_folder(&facts(r"D:\Games\Fortnite 18.30"), KEY, NEED).is_ok());
         // exFAT can hold big files
         let mut f = facts(r"E:\Builds\18.30");
@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn space() {
-        let mut f = facts(r"D:\Niobium\Builds\18.30");
+        let mut f = facts(r"D:\Rift\Builds\18.30");
         f.volume = drive("NTFS", 12_300_000_000, DriveKind::Fixed);
         let e = check_folder(&f, KEY, NEED).unwrap_err();
         assert_eq!(e.code, errors::NOT_ENOUGH_SPACE);
@@ -199,9 +199,9 @@ mod tests {
         assert_eq!(code(check_folder(&facts(r"C:\Windows\Temp\x"), KEY, NEED)), errors::WRITE_FAILED);
         // "Program Files Games" is not "Program Files"
         assert!(check_folder(&facts(r"C:\Program Files Games\x"), KEY, NEED).is_ok());
-        assert_eq!(code(check_folder(&facts(r"C:\Users\Georg\AppData\Local\Niobium\Builds"), KEY, NEED)), errors::OWN_FOLDER);
-        assert_eq!(code(check_folder(&facts(r"C:\Users\Georg\AppData\Local\Niobium"), KEY, NEED)), errors::OWN_FOLDER);
-        assert!(check_folder(&facts(r"C:\Users\Georg\AppData\Local\NiobiumBuilds"), KEY, NEED).is_ok());
+        assert_eq!(code(check_folder(&facts(r"C:\Users\Georg\AppData\Local\Rift\Builds"), KEY, NEED)), errors::OWN_FOLDER);
+        assert_eq!(code(check_folder(&facts(r"C:\Users\Georg\AppData\Local\Rift"), KEY, NEED)), errors::OWN_FOLDER);
+        assert!(check_folder(&facts(r"C:\Users\Georg\AppData\Local\RiftBuilds"), KEY, NEED).is_ok());
     }
 
     #[test]

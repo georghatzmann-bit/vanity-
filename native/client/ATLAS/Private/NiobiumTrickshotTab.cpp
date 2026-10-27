@@ -1,4 +1,4 @@
-// [Niobium] New file (GPL-3.0, part of Niobium): the "Trickshot" tab in the F9 menu and the
+// [Rift] New file (GPL-3.0, part of Rift): the "Trickshot" tab in the F9 menu and the
 // trickshot banner.
 //
 // Deliberately without pch.h and without SDK/game headers: only ImGui, the standard library,
@@ -109,18 +109,18 @@ namespace
         if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, localAppData)) &&
             localAppData[0] != L'\0')
         {
-            return std::filesystem::path(localAppData) / L"Niobium" / L"server" / L"parkours.json";
+            return std::filesystem::path(localAppData) / L"Rift" / L"server" / L"parkours.json";
         }
 
         wchar_t environment[MAX_PATH]{};
         const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", environment, MAX_PATH);
         if (length > 0 && length < MAX_PATH)
-            return std::filesystem::path(environment) / L"Niobium" / L"server" / L"parkours.json";
+            return std::filesystem::path(environment) / L"Rift" / L"server" / L"parkours.json";
 
         return std::filesystem::path(L"parkours.json");
 #else
         if (const char* localAppData = std::getenv("LOCALAPPDATA"); localAppData && *localAppData)
-            return std::filesystem::path(localAppData) / "Niobium" / "server" / "parkours.json";
+            return std::filesystem::path(localAppData) / "Rift" / "server" / "parkours.json";
         return std::filesystem::path("parkours.json");
 #endif
     }
@@ -651,8 +651,8 @@ namespace
         else
         {
             Hint(g_Parkours.State == EParkourFileState::Broken
-                    ? "The parkour list is broken – restart the server from the Niobium launcher."
-                    : "No parkours found – start the server from the Niobium launcher.",
+                    ? "The parkour list is broken – restart the server from the Rift launcher."
+                    : "No parkours found – start the server from the Rift launcher.",
                 Width);
         }
 
@@ -695,11 +695,11 @@ namespace
         ImGui::SetCursorPosX(rightColumnX);
         ImGui::TextUnformatted("Distance");
         ImGui::SetNextItemWidth(half);
-        ImGui::SliderInt("##niobium_bot_health", &g_Tab.BotHealth, 1, 200, "%d", ImGuiSliderFlags_AlwaysClamp);
+        ImGui::SliderInt("##rift_bot_health", &g_Tab.BotHealth, 1, 200, "%d", ImGuiSliderFlags_AlwaysClamp);
         Tooltip("How much health the bot has. Ctrl + click: type a number.");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(half);
-        ImGui::SliderInt("##niobium_bot_distance", &g_Tab.BotDistance, 5, 100, "%d m", ImGuiSliderFlags_AlwaysClamp);
+        ImGui::SliderInt("##rift_bot_distance", &g_Tab.BotDistance, 5, 100, "%d m", ImGuiSliderFlags_AlwaysClamp);
         Tooltip("How far in front of you the bot stands. Ctrl + click: type a number.");
 
         g_Tab.BotHealth = (std::max)(1, (std::min)(200, g_Tab.BotHealth));
@@ -798,16 +798,16 @@ namespace
         FButtonSpec back;
         back.Label = "Back to spot";
         back.Tooltip = "Takes you straight back to the saved spot.";
-        // The waypoint name "niobium" is shared with the launcher's match page (MatchPage.tsx),
+        // The waypoint name "rift" is shared with the launcher's match page (MatchPage.tsx),
         // so a spot saved there can be reached from here and the other way round. Change both
         // together. "s"/"w" are Magnesium's waypoint cheats; the phrase is just a free name.
         switch (DrawButtonPair(Host, save, back, Width))
         {
         case 1:
-            Send(Host, SectionPractice, "cheat s niobium o", "Save spot");
+            Send(Host, SectionPractice, "cheat s rift o", "Save spot");
             break;
         case 2:
-            Send(Host, SectionPractice, "cheat w niobium", "Back to spot");
+            Send(Host, SectionPractice, "cheat w rift", "Back to spot");
             break;
         default:
             break;
@@ -817,7 +817,7 @@ namespace
         launch.Label = "Launch me up";
         launch.Tooltip = "Shoots you straight up into the air.";
         FButtonSpec slowMotion;
-        slowMotion.Label = g_Tab.SlowMotion ? "Slow motion: on###niobium_slowmo" : "Slow motion: off###niobium_slowmo";
+        slowMotion.Label = g_Tab.SlowMotion ? "Slow motion: on###rift_slowmo" : "Slow motion: off###rift_slowmo";
         slowMotion.Tooltip = "The whole match runs at half speed. Click again for normal speed.";
         slowMotion.Active = g_Tab.SlowMotion;
         switch (DrawButtonPair(Host, launch, slowMotion, Width))
@@ -865,7 +865,7 @@ namespace
         god.Label = "Invincible on/off";
         god.Tooltip = "Click once: you take no damage. Click again: back to normal.";
         FButtonSpec storm;
-        storm.Label = g_Tab.StormPaused ? "Resume storm###niobium_storm" : "Pause storm###niobium_storm";
+        storm.Label = g_Tab.StormPaused ? "Resume storm###rift_storm" : "Pause storm###rift_storm";
         storm.Tooltip = "Pauses the storm or lets it move again.";
         storm.Active = g_Tab.StormPaused;
         switch (DrawButtonPair(Host, god, storm, Width))
@@ -978,7 +978,7 @@ namespace
         return Text.substr(first, last - first + 1);
     }
 
-    // "[Niobium] TRICKSHOT! player – 87 m" -> title "TRICKSHOT!", subtitle "player – 87 m".
+    // "[Rift] TRICKSHOT! player – 87 m" -> title "TRICKSHOT!", subtitle "player – 87 m".
     void BuildToastText(const wchar_t* Text, int Length)
     {
         // An en dash from a server built without /utf-8 arrives as "â€“".
@@ -988,7 +988,7 @@ namespace
             repaired.replace(found, 3, 1, static_cast<wchar_t>(0x2013));
 
         std::string message = Trim(WideToUtf8(repaired.c_str(), static_cast<int>(repaired.size())));
-        static const char niobiumPrefix[] = "[Niobium]";
+        static const char niobiumPrefix[] = "[Rift]";
         if (message.compare(0, sizeof(niobiumPrefix) - 1, niobiumPrefix) == 0)
             message = Trim(message.substr(sizeof(niobiumPrefix) - 1));
 

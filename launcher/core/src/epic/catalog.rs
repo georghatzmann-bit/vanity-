@@ -1,6 +1,6 @@
-//! The list of builds Niobium can download (`launcher/core/data/build-catalog.json`).
+//! The list of builds Rift can download (`launcher/core/data/build-catalog.json`).
 //!
-//! Only builds that were complete on Epic's CDN when checked AND that Niobium's game server is
+//! Only builds that were complete on Epic's CDN when checked AND that Rift's game server is
 //! meant to run are listed (13.x–18.x and 21.x–30.x). Seasons Epic has deleted parts of are marked
 //! "notFromEpic"; a season the server isn't ready for would be "notOfferedYet" (none right now).
 //! Nothing from 31.00 on is ever offered (the game server refuses those builds, and the live game
@@ -36,7 +36,7 @@ pub enum Badge {
 /// Card text for a season Epic has deleted files of.
 pub const NOTE_NOT_FROM_EPIC: &str = "Epic has deleted part of the files for this season, so no download can get it complete. If you already have this version on your PC, it keeps working. Add it with 'Add a build'.";
 /// Card text for a season the game server isn't ready for.
-pub const NOTE_NOT_OFFERED_YET: &str = "Niobium's game server isn't ready for this season yet, so it isn't offered.";
+pub const NOTE_NOT_OFFERED_YET: &str = "Rift's game server isn't ready for this season yet, so it isn't offered.";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -166,7 +166,7 @@ pub fn builtin() -> &'static CatalogFile {
     static CACHE: OnceLock<CatalogFile> = OnceLock::new();
     CACHE.get_or_init(|| {
         parse(CATALOG_JSON).unwrap_or_else(|e| {
-            eprintln!("[Niobium] build-catalog.json is broken: {e}");
+            eprintln!("[Rift] build-catalog.json is broken: {e}");
             CatalogFile { checked_on: String::new(), seasons: vec![], builds: vec![] }
         })
     })

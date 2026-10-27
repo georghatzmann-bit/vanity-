@@ -1,4 +1,4 @@
-// NIOBIUM: "Living world" (bosses, guards, NPCs, wildlife) - Niobium's own code (GPL-3.0).
+// NIOBIUM: "Living world" (bosses, guards, NPCs, wildlife) - Rift's own code (GPL-3.0).
 //
 // This file holds the parts every version shares:
 //   - the launcher event {"event":"livingWorld","state":"active"|"unavailable"|"off",...} at

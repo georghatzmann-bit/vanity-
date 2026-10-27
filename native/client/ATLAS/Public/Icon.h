@@ -1,6 +1,6 @@
 #pragma once
 
-// [Niobium] Rift logo (simple vortex mark, 512x512 PNG) instead of the ATLAS logo.
+// [Rift] Rift logo (simple vortex mark, 512x512 PNG) instead of the ATLAS logo.
 // Same format as the original: the PNG file as a byte array, decoded with stb_image in GUI.cpp.
 // Source: launcher/assets/app-icon-simple.svg (see docs/brand.md).
 static const unsigned char Icon[]

@@ -27,7 +27,7 @@ const result = await build({
   external: ["bufferutil", "utf-8-validate"],
   define: { __NIOBIUM_VERSION__: JSON.stringify(pkg.version) },
   banner: {
-    js: `// Niobium Backend ${pkg.version} – contains LawinServer by Lawin0129 (GPL-3.0), see LICENSE and THIRD_PARTY_LICENSES.txt`,
+    js: `// Rift Backend ${pkg.version} – contains LawinServer by Lawin0129 (GPL-3.0), see LICENSE and THIRD_PARTY_LICENSES.txt`,
   },
   legalComments: "eof",
   // express/lib/view.js loads template engines dynamically; LawinServer uses none.
@@ -44,7 +44,7 @@ for (const dir of DATA_DIRS) {
 // with "type": "module".
 fs.writeFileSync(path.join(dist, "package.json"), `${JSON.stringify({ private: true, type: "commonjs" }, null, 2)}\n`);
 
-// Licences: Niobium and LawinServer are GPL-3.0; plus the licence texts of every built-in npm package.
+// Licences: Rift and LawinServer are GPL-3.0; plus the licence texts of every built-in npm package.
 fs.copyFileSync(path.join(lawin, "LICENSE"), path.join(dist, "LICENSE"));
 
 const packages = new Map();
@@ -69,7 +69,7 @@ const sections = [...packages.values()]
 fs.writeFileSync(
   path.join(dist, "THIRD_PARTY_LICENSES.txt"),
   [
-    `Niobium Backend ${pkg.version}`,
+    `Rift Backend ${pkg.version}`,
     "",
     "Contains LawinServer (https://github.com/Lawin0129/LawinServer) by Lawin0129 and",
     "PRO100KatYT, licensed under the GNU General Public License v3.0 (see LICENSE).",

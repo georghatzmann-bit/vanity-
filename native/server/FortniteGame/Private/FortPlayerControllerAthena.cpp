@@ -19357,7 +19357,7 @@ bool Niobium_RemoveSpawnedBot(AFortPlayerControllerAthena* BotController)
 // buttons are often clicked.
 static void Niobium_TellNoPawn(AFortPlayerControllerAthena* PlayerController)
 {
-    PlayerController->ClientMessage(FString(L"[Niobium] Can't do that right now. You don't have a "
+    PlayerController->ClientMessage(FString(L"[Rift] Can't do that right now. You don't have a "
         L"character (on the bus or eliminated?)."), FName(), 1.f);
 }
 // NIOBIUM: end
@@ -19428,7 +19428,7 @@ void AFortPlayerControllerAthena::ServerCheat(UObject* Context, FFrame& Stack)
     if (args.size() == 0)
     {
     _help:
-        // NIOBIUM: the last two help lines (parkour, targetbot) are Niobium commands, see NiobiumParkour.cpp.
+        // NIOBIUM: the last two help lines (parkour, targetbot) are Rift commands, see NiobiumParkour.cpp.
         PlayerController->ClientMessage(FString(LR"(
 cheat startaircraft - Starts the battle bus
 cheat resumesafezone - Resumes the storm
@@ -19534,7 +19534,7 @@ cheat targetbot <hp> <m> - A standing target bot in front of you (default: 50 HP
                     // without a bus; answer instead of calling through a null pointer.
                     if (!GamePhaseLogic)
                     {
-                        PlayerController->ClientMessage(FString(L"[Niobium] The bus can't start right now. "
+                        PlayerController->ClientMessage(FString(L"[Rift] The bus can't start right now. "
                             L"Try again in a moment."), FName(), 1.f);
                         return;
                     }
@@ -19577,7 +19577,7 @@ cheat targetbot <hp> <m> - A standing target bot in front of you (default: 50 HP
                         ? UFortGameStateComponent_BattleRoyaleGamePhaseLogic::Get(UWorld::GetWorld()) : nullptr;
                     if (!GamePhaseLogic)
                     {
-                        PlayerController->ClientMessage(FString(L"[Niobium] Can't do that right now. "
+                        PlayerController->ClientMessage(FString(L"[Rift] Can't do that right now. "
                             L"There is no storm here."), FName(), 1.f);
                         return;
                     }
@@ -19731,7 +19731,7 @@ cheat targetbot <hp> <m> - A standing target bot in front of you (default: 50 HP
                 if (!TryParseCommandFloat(std::string(args[1].c_str()), DemoSpeed) || DemoSpeed < 0.1f ||
                     DemoSpeed > 10.f)
                 {
-                    PlayerController->ClientMessage(FString(L"[Niobium] Type a number from 0.1 to 10, "
+                    PlayerController->ClientMessage(FString(L"[Rift] Type a number from 0.1 to 10, "
                         L"like demospeed 0.5 (slow motion) or demospeed 1 (normal)."), FName(), 1.f);
                     return;
                 }
@@ -20257,7 +20257,7 @@ cheat targetbot <hp> <m> - A standing target bot in front of you (default: 50 HP
                 // NIOBIUM: stof accepts "inf" and "nan", which would break the movement physics.
                 if (!std::isfinite(Multiplier))
                 {
-                    PlayerController->ClientMessage(FString(L"[Niobium] That's not a valid number."), FName(), 1.f);
+                    PlayerController->ClientMessage(FString(L"[Rift] That's not a valid number."), FName(), 1.f);
                     return;
                 }
 
@@ -21529,7 +21529,7 @@ cheat targetbot <hp> <m> - A standing target bot in front of you (default: 50 HP
                         : L"Spawned " + std::to_wstring(SpawnedCount) +
                             L" of " + std::to_wstring(Count) +
                             L" bots; first failure: " + FirstFailure + L".";
-                    // NIOBIUM: the parkour builder reports failed target bots itself ("[Niobium] ...").
+                    // NIOBIUM: the parkour builder reports failed target bots itself ("[Rift] ...").
                     if (!GNiobiumQuietBotSpawn)
                         CallerController->ClientMessage(FString(FailureMessage.c_str()), FName(), 1.f);
                 }
@@ -22238,7 +22238,7 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                 if (!std::isfinite(X) || !std::isfinite(Y) || !std::isfinite(Z))
                 {
                     PlayerController->ClientMessage(
-                        FString(L"[Niobium] Those aren't valid numbers."), FName(), 1.f);
+                        FString(L"[Rift] Those aren't valid numbers."), FName(), 1.f);
                     return;
                 }
 
@@ -22274,7 +22274,7 @@ cheat nuke <projectile/path> <s[size]> <h[meters]> <nodmg> <player name> - Spawn
                 if (!TryParseCommandFloat(std::string(args[1].c_str()), VelocityMultiplier))
                 {
                     PlayerController->ClientMessage(
-                        FString(L"[Niobium] That's not a valid number."), FName(), 1.f);
+                        FString(L"[Rift] That's not a valid number."), FName(), 1.f);
                     return;
                 }
 

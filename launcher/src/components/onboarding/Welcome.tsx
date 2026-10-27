@@ -67,7 +67,7 @@ export function Welcome() {
     <motion.div
       role="dialog"
       aria-modal="true"
-      aria-label="Welcome to Niobium"
+      aria-label="Welcome to Rift"
       className="absolute inset-x-0 top-10 bottom-0 z-40 flex flex-col overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -149,7 +149,7 @@ export function Welcome() {
               <StepFrame
                 icon={FolderCheck}
                 title="Add your Fortnite build"
-                hint="Pick the folder of a build you own (1.7 – 30.x). Niobium only reads it – nothing inside is changed."
+                hint="Pick the folder of a build you own (1.7 – 30.x). Rift only reads it – nothing inside is changed."
               >
                 {config.builds.length > 0 && !build.report && (
                   <div className="mb-4 flex flex-col gap-2">
@@ -272,7 +272,7 @@ function IntroStep({ onNext }: { onNext: () => void }) {
         variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_OUT } } }}
         className="mt-10 text-4xl font-semibold tracking-tight"
       >
-        Welcome to <GradientText>Niobium</GradientText>
+        Welcome to <GradientText>Rift</GradientText>
       </motion.h1>
       <motion.p
         variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_OUT } } }}
@@ -322,7 +322,7 @@ function ReadyStep({ name, hasBuild, onGo, onBack }: { name: string; hasBuild: b
       </h2>
       <p className="mt-3 max-w-md text-[15px] leading-relaxed text-muted-foreground">
         {hasBuild
-          ? "Press Host & Play on Home to start. In the game, F9 opens the Niobium menu."
+          ? "Press Host & Play on Home to start. In the game, F9 opens the Rift menu."
           : "Add a build in the Library whenever you're ready. Then press Host & Play on Home."}
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">

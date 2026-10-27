@@ -1,4 +1,4 @@
-// Niobium menu preview: draws ImGui output (ImDrawData) in software into an RGBA image.
+// Rift menu preview: draws ImGui output (ImDrawData) in software into an RGBA image.
 // Only for screenshots outside the game - in the game DirectX 11/12 draws the same triangles.
 #pragma once
 #include "imgui.h"

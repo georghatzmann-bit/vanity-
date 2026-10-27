@@ -114,7 +114,7 @@ export function SettingsPage() {
       <div className={rows}>
         <SettingRow
           label="Launch arguments"
-          hint="Added to every launch. -d3d11 is recommended up to Chapter 5; from 33.00 Niobium leaves it out by itself"
+          hint="Added to every launch. -d3d11 is recommended up to Chapter 5; from 33.00 Rift leaves it out by itself"
           htmlFor="set-args"
         >
           <Input id="set-args" defaultValue={settings.launchArgs} onBlur={(e) => update({ launchArgs: e.target.value })} className="h-8 w-40 font-mono text-xs" />
@@ -144,9 +144,9 @@ export function SettingsPage() {
     </Panel>
   );
   const data = (
-    <Panel icon={HardDrive} title="Data" description="Where Niobium keeps its own files.">
-      <SettingRow label="Location" hint="Settings, profiles and logs of Niobium">
-        <span className="font-mono text-xs text-muted-foreground">%APPDATA%\Niobium</span>
+    <Panel icon={HardDrive} title="Data" description="Where Rift keeps its own files.">
+      <SettingRow label="Location" hint="Settings, profiles and logs of Rift">
+        <span className="font-mono text-xs text-muted-foreground">%APPDATA%\Rift</span>
         <Button variant="secondary" size="sm" onClick={() => paths && openFolder(paths.config)}>
           <FolderOpen />
           Open
@@ -158,9 +158,9 @@ export function SettingsPage() {
     <Panel icon={ShieldCheck} title="Safety" description="These limits are built in.">
       <ul className="flex flex-col gap-3">
         {[
-          "Only builds you own: Niobium starts every version from 1.7 to 30.x; 19.10 is tested.",
+          "Only builds you own: Rift starts every version from 1.7 to 30.x; 19.10 is tested.",
           "Every request goes to your own backend, never to Epic's real servers.",
-          "Nothing outside Niobium is changed without asking you.",
+          "Nothing outside Rift is changed without asking you.",
         ].map((text) => (
           <li key={text} className="flex gap-3 text-sm">
             <Lock className="mt-0.5 size-4 shrink-0 text-violet-text/70" />
@@ -175,7 +175,7 @@ export function SettingsPage() {
     <PageShell>
       <PageHeader
         title="Settings"
-        description="Basic settings for Niobium. Anything that should differ per profile, you set under Profiles."
+        description="Basic settings for Rift. Anything that should differ per profile, you set under Profiles."
       />
 
       <BubbleBuildsCard on={settings.bubbleBuilds} onChange={(v) => update({ bubbleBuilds: v })} />

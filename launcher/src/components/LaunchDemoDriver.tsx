@@ -44,7 +44,7 @@ export function stopDemoLaunch(): boolean {
     pushLog({
       source: "launcher",
       level: "info",
-      category: "Niobium",
+      category: "Rift",
       message: "Start cancelled.",
       time: now.toLocaleTimeString("en-GB", { hour12: false }) + "." + String(now.getMilliseconds()).padStart(3, "0"),
     });

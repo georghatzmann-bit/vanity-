@@ -1,5 +1,5 @@
 
-// ===== Appended only for the Niobium menu preview (not part of the game build) =====
+// ===== Appended only for the Rift menu preview (not part of the game build) =====
 void Preview_SetState(int Tab, bool Menu, bool Console)
 {
     FGUI::ActiveTab = Tab;

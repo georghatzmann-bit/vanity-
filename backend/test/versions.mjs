@@ -71,7 +71,7 @@ function request(method, url, ua, { headers = {}, form, body } = {}) {
   });
 }
 
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "niobium-versions-"));
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "rift-versions-"));
 const env = {
   NIOBIUM_BACKEND_PORT: String(await freePort()),
   NIOBIUM_MATCHMAKER_PORT: String(await freePort()),

@@ -104,7 +104,7 @@ function request(method, url, { headers = {}, body, form } = {}) {
 }
 
 async function startServer(env, label) {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "niobium-cwd-")); // any working folder
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "rift-cwd-")); // any working folder
   const child = spawn(process.execPath, [MAIN], {
     cwd,
     env: { ...process.env, ...env },
@@ -179,7 +179,7 @@ function listFiles(dir) {
 
 // ---------------------------------------------------------------- Run
 
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "niobium-data-"));
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "rift-data-"));
 const distAthena = path.join(ROOT, "dist", "profiles", "athena.json");
 const distAthenaHash = sha1(distAthena);
 const distFilesBefore = listFiles(path.join(ROOT, "dist")).length;
@@ -507,7 +507,7 @@ try {
   });
 
   await check("after restart: no default files copied again", async () => {
-    assert(s2.lines.some((l) => l.startsWith("[Niobium] Data folder:") && !l.includes("copied")), s2.lines.find((l) => l.includes("Data folder")) ?? "line missing");
+    assert(s2.lines.some((l) => l.startsWith("[Rift] Data folder:") && !l.includes("copied")), s2.lines.find((l) => l.includes("Data folder")) ?? "line missing");
   });
 
   await check("dist/ unchanged (every write went to the data folder)", async () => {

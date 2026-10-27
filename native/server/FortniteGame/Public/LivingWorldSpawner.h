@@ -1,5 +1,5 @@
 // NIOBIUM: "Lager-lite" - Living world spawning (bosses, guards, creatures, characters) from the
-// game's own Living World data, by reflection only. Niobium's own code (GPL-3.0); structure after
+// game's own Living World data, by reflection only. Rift's own code (GPL-3.0); structure after
 // Jeremy1926/Velora (MIT) Plugins/GameFeatures/Lager (see LivingWorldSpawner.cpp for credits).
 //
 // What it does, once per match (details at the top of LivingWorldSpawner.cpp):
@@ -66,7 +66,7 @@ namespace LivingWorldSpawner
     bool ReadLootInfo(const UObject* Controller, FLootInfo& Out);
 
     // Drops the loot tiers of every row entry with bShouldDropLootOnDeath at the dead pawn, through
-    // Niobium's loot tables like PickLootDrops (tier-group redirect, the pawn's gameplay tags as
+    // Rift's loot tables like PickLootDrops (tier-group redirect, the pawn's gameplay tags as
     // OptionalLootTags; an entry's OptionalTagQuery must match the pawn's tags). Returns the number
     // of pickups; OutWhy says why none were dropped. At most Budget pickups.
     int32 DropLootTiers(AActor* Pawn, const FLootInfo& Info, int32 Budget, const char*& OutWhy);
