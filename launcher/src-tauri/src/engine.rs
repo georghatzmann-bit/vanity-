@@ -223,7 +223,7 @@ impl Engine {
     // --- Paths ---------------------------------------------------------------
 
     fn resources(&self) -> Option<PathBuf> {
-        self.app.path().resource_dir().ok()
+        self.app.path().resource_dir().ok().map(|p| plain_path(&p))
     }
 
     fn dll_path(&self, name: &str) -> Option<PathBuf> {
@@ -1896,4 +1896,26 @@ fn backend_healthy(port: u16) -> bool {
 #[allow(dead_code)]
 fn detection_label(d: Detection) -> &'static str {
     d.label()
+}
+
+/// Removes Windows' `\\?\` prefix (`\\?\C:\…` → `C:\…`). Tauri's resource folder can come with it,
+/// and Node.js can't resolve its main script from such a path ("EISDIR: … lstat 'C:'").
+/// `\\?\UNC\…` network paths are left as they are.
+fn plain_path(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    match s.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC\\") => PathBuf::from(rest),
+        _ => p.to_path_buf(),
+    }
+}
+
+#[cfg(test)]
+mod plain_path_tests {
+    use super::*;
+    #[test]
+    fn strips_verbatim_prefix() {
+        assert_eq!(plain_path(Path::new(r"\\?\C:\Users\g\Rift")), PathBuf::from(r"C:\Users\g\Rift"));
+        assert_eq!(plain_path(Path::new(r"C:\Rift")), PathBuf::from(r"C:\Rift"));
+        assert_eq!(plain_path(Path::new(r"\\?\UNC\srv\x")), PathBuf::from(r"\\?\UNC\srv\x"));
+    }
 }
