@@ -51,10 +51,23 @@ Function un.NiobiumGuiInit
 FunctionEnd
 
 ; ---------- Install hooks ----------
+; End every program that still runs from an old install folder - the old launcher and its backend
+; node.exe - so it doesn't keep port 3551 busy and its files can be removed. Only processes whose
+; program file is inside that folder are ended; nothing else is touched. The folder goes to
+; PowerShell through an environment variable (no quoting trouble with odd folder names); CIM gives
+; the full program path even from this 32-bit installer.
+!macro END_PROCESSES_IN_FOLDER DIR
+  System::Call 'Kernel32::SetEnvironmentVariable(t "RIFT_OLD_DIR", t "${DIR}") i'
+  nsExec::Exec '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$d = [IO.Path]::GetFullPath($$env:RIFT_OLD_DIR).TrimEnd([char]92) + [char]92; Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith($$d, [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"'
+  Pop $R7
+  System::Call 'Kernel32::SetEnvironmentVariable(t "RIFT_OLD_DIR", p 0) i'
+!macroend
+
 ; Rift used to be called "Niobium", and before that "Vanity". If one of those old launchers is
 ; installed (its uninstall entry exists), remove it quietly so it isn't installed twice. Its uninstaller
 ; only removes its own program files and shortcuts - never settings, server data, backend data or
 ; builds (Rift copies settings over on its first start; the old folders stay as they are).
+
 !macro REMOVE_OLD_LAUNCHER OLDNAME
   ReadRegStr $R9 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${OLDNAME}" "UninstallString"
   ${If} $R9 != ""
@@ -73,6 +86,13 @@ FunctionEnd
     ${If} $R8 != ""
     ${AndIf} $R8 != $INSTDIR
     ${AndIf} ${FileExists} "$R8\uninstall.exe"
+      ; only for a folder named like the old app (never e.g. a whole %LOCALAPPDATA%)
+      ${GetFileName} "$R8" $R6
+      ${If} $R6 == "${OLDNAME}"
+        DetailPrint "Closing the old ${OLDNAME} launcher and its backend..."
+        !insertmacro END_PROCESSES_IN_FOLDER "$R8"
+        Sleep 500
+      ${EndIf}
       DetailPrint "Removing the old ${OLDNAME} launcher..."
       ; /S = silent, _?= = run in place so ExecWait really waits
       ExecWait '"$R8\uninstall.exe" /S _?=$R8' $R7

@@ -5,6 +5,7 @@ mod download;
 mod engine;
 mod firewall;
 mod friends;
+mod netports;
 mod pipe;
 mod proc;
 

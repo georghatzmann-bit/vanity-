@@ -593,12 +593,29 @@ KI-Bots nur auf 19.10 (CL-18675304). Bei Trickshot-Parkours kann es je nach Vers
 eins, sagt der Server das in der Konsole (siehe Schritt 7). Einen Build, den du in Schritt 14 heruntergeladen
 hast, testest du genauso.
 
+## Wenn beim Schritt Backend „Couldn't start“ kommt
+
+Bevor das Backend startet, prüft Rift Port 3551 und den Matchmaker-Port (Settings → Network, Standard 80).
+
+- **„Closed an old backend that was still running (Niobium).“** im Live Log: Ein Backend des alten
+  Niobium/Vanity (oder eines früheren Rift) hielt den Port noch. Rift hat es selbst beendet und macht weiter –
+  nichts zu tun.
+- **„Port 3551 is used by <Programm> (<Pfad>). Close it – …“**: Ein anderes Programm belegt den Backend-Port
+  (zum Beispiel Reboot Launcher oder ein anderes Fortnite-Backend). Dieses Programm schließen (Task-Manager),
+  dann wieder **Host & Play** drücken. Fremde Programme beendet Rift nie selbst.
+- **„Port 80 is used by <Programm>. Change the matchmaker port in Settings → Network.“** (eine Warnung): Das
+  Backend nimmt diesmal selbst einen freien Port (das Live Log sagt, welchen); dauerhaft hilft ein anderer
+  Matchmaker-Port, z. B. 8080.
+- **„The backend stopped (exit code N): <Zeile>“**: Das Backend hat sich beim Start beendet; die Zeile nach dem
+  Doppelpunkt ist sein eigener Fehler. Alle Backend-Zeilen stehen im Live Log (Quelle *Backend*) und in
+  `%LOCALAPPDATA%\Rift\logs\backend.log` – diese Datei bitte mitschicken.
+
 ## Was ich brauche, wenn etwas nicht klappt
 
 1. **Welcher Schritt** aus dieser Liste (z. B. „Schritt 3, ‚Logged in‘ kommt nicht“).
 2. **Screenshot** vom Launcher (Launch steps + Live Log) und ggf. vom Spiel (F9-Menü).
-3. **Logs**: Seite **Live Log** → **Copy** (oder die Dateien aus `%LOCALAPPDATA%\Rift\logs\`; der Knopf
-   **Folder** öffnet den Ordner).
+3. **Logs**: Seite **Live Log** → **Copy** (oder die Dateien aus `%LOCALAPPDATA%\Rift\logs\`, darunter
+   `backend.log`; der Knopf **Folder** öffnet den Ordner).
 4. Bei einem Fortnite-Absturz: Seite **Crash Analysis** → den neuesten Eintrag → **Copy report**.
 5. Bei Trickshot-Sachen: die Zeilen aus der Konsole (**F8**), die mit „[Rift]“ beginnen.
 6. Bei Bubble Builds: ein Screenshot deiner Bauten im Spiel, die Zeile „Starting your game: …“ und die Zeilen

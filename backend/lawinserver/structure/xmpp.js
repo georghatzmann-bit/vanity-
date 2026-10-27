@@ -12,6 +12,7 @@ const wss = new WebSocket({ port: port, host: niobium.settings.bindAddress }, ()
 wss.on("error", (err) => {
     console.log("XMPP and Matchmaker \x1b[31mFAILED\x1b[0m to start hosting.", `(port ${port}: ${err.code || err.message})`); // NIOBIUM: print the port and the reason
 })
+module.exports = wss; // NIOBIUM: src/lawin.ts waits for "listening" or "error"
 
 
 global.Clients = [];

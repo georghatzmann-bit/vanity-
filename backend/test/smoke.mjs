@@ -518,6 +518,49 @@ try {
 
   await s2.stop();
 
+  // Matchmaker port taken + a damaged data file (e.g. copied over from an old Niobium install)
+  {
+    const blocker = net.createServer();
+    const takenPort = await freePort();
+    await new Promise((r) => blocker.listen(takenPort, "127.0.0.1", r));
+    fs.writeFileSync(path.join(dataDir, "responses", "friendslist.json"), "");
+    const env4 = { ...env, NIOBIUM_BACKEND_PORT: String(await freePort()), NIOBIUM_MATCHMAKER_PORT: String(takenPort) };
+    console.log(`\nServer 4 (matchmaker port ${takenPort} taken, damaged friendslist.json): HTTP ${env4.NIOBIUM_BACKEND_PORT}`);
+    const s4 = await startServer(env4, "Server 4");
+    servers.push(s4);
+
+    await check("matchmaker port taken → free port, logged, health + serviceUrl use it", async () => {
+      const line = s4.lines.find((l) => l.includes(`Matchmaker port 127.0.0.1:${takenPort} is already in use – using port`));
+      assert(line, `log line missing:\n${s4.lines.join("\n")}`);
+      const used = Number(/using port (\d+)/.exec(line)[1]);
+      assert(used !== takenPort && used > 0, `port ${used}`);
+      eq((await request("GET", `${s4.base}/niobium/health`)).json().matchmakerPort, used, "health matchmakerPort");
+      const ticket = await request("GET", `${s4.base}/fortnite/api/game/v2/matchmakingservice/ticket/player/${ACCOUNT}?bucketId=1:0:EU:playlist_defaultsolo`);
+      eq(ticket.json().serviceUrl, `ws://127.0.0.1:${used}`, "serviceUrl");
+      const ini = await request("GET", `${s4.base}/fortnite/api/cloudstorage/system/DefaultEngine.ini`, { headers: { "User-Agent": UA } });
+      assert(ini.text.includes(`ServerPort=${used}`), "XMPP ServerPort in DefaultEngine.ini");
+    });
+
+    await check("damaged friendslist.json → kept as .broken, default put back, backend runs", async () => {
+      assert(fs.existsSync(path.join(dataDir, "responses", "friendslist.json.broken")), ".broken missing");
+      JSON.parse(fs.readFileSync(path.join(dataDir, "responses", "friendslist.json"), "utf8"));
+      assert(s4.lines.some((l) => l.includes("friendslist.json was damaged")), "log line missing");
+    });
+
+    await s4.stop();
+
+    await check("HTTP port taken → exit code 1, last stderr line names the port", async () => {
+      const env5 = { ...env, NIOBIUM_BACKEND_PORT: String(takenPort), NIOBIUM_MATCHMAKER_PORT: String(await freePort()) };
+      const child = spawn(process.execPath, [MAIN], { env: { ...process.env, ...env5 }, stdio: ["ignore", "ignore", "pipe"] });
+      let stderr = "";
+      child.stderr.on("data", (d) => (stderr += d));
+      const code = await new Promise((r) => child.on("exit", r));
+      eq(code, 1, "exit code");
+      eq(stderr.trim().split("\n").pop(), `[Rift] HTTP port 127.0.0.1:${takenPort} is already in use`, "last stderr line");
+    });
+    blocker.close();
+  }
+
   // Access from the network: POST only from 127.0.0.1
   const lanIp = Object.values(os.networkInterfaces())
     .flat()

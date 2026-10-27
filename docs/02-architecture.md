@@ -205,7 +205,16 @@ Start: `node.exe <resources>\backend\main.js` with `NIOBIUM_BACKEND_PORT`, `NIOB
 On the first start the backend copies its default data files into `backend-data` (existing files are never
 overwritten). Niobium's `backend-data` is copied over once (see [migration](#moving-over-from-niobium-and-vanity)); Vanity's
 backend data is not.
-Ready when `GET /niobium/health` → `{"ok":true,…}` (the launcher waits up to 20 s).
+The matchmaker/XMPP port starts first, then HTTP, so `GET /niobium/health` → `{"ok":true,"version":…,"matchmakerPort":…}`
+only answers once both listen (the launcher waits up to 20 s). If the matchmaker port is taken, the backend
+uses a free port the system picks and says so ("Matchmaker port 127.0.0.1:80 is already in use – using port …
+instead"): the game learns that port only from the backend (matchmaking ticket `serviceUrl`, XMPP `ServerPort` in
+the `DefaultEngine.ini` hotfix), so nothing else has to change. A taken HTTP port or any other start error ends
+the backend with exit code 1 and one `[Rift] …` line on stderr. A damaged JSON file in `backend-data`
+(e.g. an empty `friendslist.json`) is kept as `<name>.broken` and the bundled default is put back.
+The launcher starts `node.exe` with stdout/stderr piped: every line goes to the live log (source *backend*) and to
+`%LOCALAPPDATA%\Rift\logs\backend.log` (moved to `backend.old.log` above 2 MB). node.exe is put into a Windows job
+object that ends it when Rift ends – also when Rift crashes; "Stop all" and closing Rift end it and wait until it is gone.
 `POST /niobium/gameserver {ip,port}` sets the matchmaker target (joining a friend; "Host & Play" sets it back to
 `127.0.0.1:7777`, see [Playing with friends](#playing-with-friends)); `POST /niobium/status`
 tells the backend the hosted version and playlist. Details: [`backend/README.md`](../backend/README.md).
@@ -231,7 +240,17 @@ tells the backend the hosted version and playlist. Details: [`backend/README.md`
 
 The UI shows seven steps: Backend, Server, Redirect, Login, Your game, Game server, Lobby.
 
-1. **Backend:** start it, wait for `/niobium/health`, then `POST /niobium/status` (name "<player>'s server",
+1. **Backend:** first the port check (`niobium_core::ports`, `src-tauri/src/netports.rs`): if port 3551 or the
+   matchmaker port can't be listened on, Rift looks up the owner (`GetExtendedTcpTable`, `netstat -ano` as a
+   fallback). A `node.exe` inside a Rift, Niobium or Vanity install folder (`%LOCALAPPDATA%\<name>`, this
+   Rift's folder, or the folder in `HKCU\Software\Georg Hatzmann\<name>`) is a leftover backend: it is closed
+   ("Closed an old backend that was still running (Niobium).") and the start goes on. Any other program is
+   left alone: on 3551 the start stops with "Port 3551 is used by <name> (<path>). Close it – for example Reboot
+   Launcher or another Fortnite backend – and press Host & Play again."; on the matchmaker port it is only a
+   warning ("… Change the matchmaker port in Settings → Network."), because the backend picks a free port.
+   Then the log says "Starting the backend …" with the node.exe and main.js paths, and Rift waits for
+   `/niobium/health`. If the backend ends during the wait, the wait stops at once and the toast says
+   "The backend stopped (exit code N): <its own error line>". After that, `POST /niobium/status` (name "<player>'s server",
    hosting, playlist, version) and `POST /niobium/gameserver` `127.0.0.1:7777` (an earlier "Join" may have pointed
    "Play" at a friend). After the server Fortnite starts, the [host info](#rift-host-info-src-taurisrcfriendsrs-hostinfoserver)
    endpoint starts in the background.
@@ -1272,8 +1291,10 @@ Rift icon for installer and uninstaller, `windows/assets/header.bmp` (150 × 57)
 - after installing it goes straight to the Finish page (`SetAutoClose`);
 - **old Niobium or Vanity install:** for each of the old names (macro `REMOVE_OLD_LAUNCHER` in `hooks.nsh`,
   first Vanity, then Niobium): if the uninstall entry
-  `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\<old name>` exists, the installer runs the old
-  `uninstall.exe` silently first ("Removing the old Niobium launcher..."). That only removes the old
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\<old name>` exists, the installer first ends
+  every process whose program file is inside that old folder (the old launcher and its backend `node.exe`, so
+  they don't keep port 3551 busy; only if the folder is named like the old app; macro `END_PROCESSES_IN_FOLDER`,
+  PowerShell + `Win32_Process`), then runs the old `uninstall.exe` silently ("Removing the old Niobium launcher..."). That only removes the old
   program files and shortcuts; the folder is removed only if it is empty, so settings, server data,
   backend data, logs and builds stay for the [migration](#moving-over-from-niobium-and-vanity).
 

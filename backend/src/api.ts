@@ -26,6 +26,8 @@ const MAX_STRING = 200;
 
 export interface NiobiumApiOptions {
   version: string;
+  /** the port the matchmaker/XMPP really listens on (may differ from NIOBIUM_MATCHMAKER_PORT) */
+  getMatchmakerPort?(): number;
   getGameServer(): GameServerTarget;
   setGameServer(target: GameServerTarget): void;
 }
@@ -89,7 +91,7 @@ export function createNiobiumRouter(options: NiobiumApiOptions): Router {
   };
 
   router.get("/niobium/health", publicRead, (_req, res) => {
-    res.json({ ok: true, version: options.version });
+    res.json({ ok: true, version: options.version, matchmakerPort: options.getMatchmakerPort?.() });
   });
 
   router.get("/niobium/status", publicRead, (_req, res) => {

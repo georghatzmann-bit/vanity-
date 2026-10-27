@@ -33,7 +33,19 @@ export function createLawinApp(): Express {
   return lawin.createApp();
 }
 
-/** Starts XMPP + the matchmaker WebSocket (listens on niobium.settings.matchmakerPort). */
-export function startXmppAndMatchmaker(): void {
-  require("../lawinserver/structure/xmpp.js");
+interface Listening {
+  once(event: "listening", listener: () => void): unknown;
+  once(event: "error", listener: (err: NodeJS.ErrnoException) => void): unknown;
+}
+
+/**
+ * Starts XMPP + the matchmaker WebSocket on niobium.settings.matchmakerPort.
+ * Resolves once it listens; rejects with the listen error (e.g. code EADDRINUSE).
+ */
+export function startXmppAndMatchmaker(): Promise<void> {
+  const wss = require("../lawinserver/structure/xmpp.js") as Listening;
+  return new Promise((resolve, reject) => {
+    wss.once("listening", resolve);
+    wss.once("error", reject);
+  });
 }

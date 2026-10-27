@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, TryLockError};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
+use niobium_core::backendlog::{self, RotatingLog, Tail};
 use niobium_core::bots::{self, PlayerBotsEvent};
 use niobium_core::earlylog::EarlyLines;
 use niobium_core::helperprocs::HelperPids;
@@ -19,13 +20,14 @@ use niobium_core::launchargs;
 use niobium_core::livingworld::LivingWorldEvent;
 use niobium_core::logparse::{self, Detection};
 use niobium_core::perfmode::{self, MeshChange, Prepared, Restored};
+use niobium_core::ports::{self, PortRole};
 use niobium_core::profiles::{self, Config, Profile, BACKEND_PORT, GAME_SERVER_PORT};
 use niobium_core::startgate::{wait_for, Busy, ClosePrompt, StartGate, StartToken, Wait};
 use niobium_core::version::{self, BuildInfo, Support};
 
 use crate::friends::{HostInfoServer, HostInfoState};
 use crate::pipe::{ServerEvent, ServerLink};
-use crate::{firewall, proc};
+use crate::{firewall, netports, proc};
 
 /// Names of the DLLs (in the resource folder `dlls/`).
 const DLL_REDIRECT: &str = "rift_redirect.dll";
@@ -147,6 +149,24 @@ pub struct Signals {
     pub server_login: AtomicBool,
     pub server_listening: AtomicBool,
     pub game_login: AtomicBool,
+}
+
+/// The running backend's output and end (see `Engine::watch_backend`).
+#[derive(Default)]
+struct BackendWatch {
+    /// The last lines of its output
+    tail: Mutex<Tail>,
+    /// `Some(exit code)` once it ended and its output is read to the end
+    ended: Mutex<Option<Option<i32>>>,
+}
+
+impl BackendWatch {
+    fn ended(&self) -> Option<Option<i32>> {
+        *self.ended.lock().unwrap()
+    }
+    fn reason(&self) -> Option<String> {
+        self.tail.lock().unwrap().reason()
+    }
 }
 
 pub struct Engine {
@@ -398,6 +418,7 @@ impl Engine {
         let cfg = self.config.lock().unwrap();
         let s = &cfg.settings;
         let bind = if s.share_backend_lan { "0.0.0.0" } else { "127.0.0.1" };
+        let matchmaker_port = s.matchmaker_port;
         // Not "backend": the installer puts the backend's own files there (the install folder is
         // %LOCALAPPDATA%\Rift too), so an update or uninstall would reset or delete the locker.
         let data_dir = self.data_local().join("backend-data");
@@ -406,34 +427,205 @@ impl Engine {
         let port = BACKEND_PORT;
         let env = vec![
             ("NIOBIUM_BACKEND_PORT".into(), port.to_string()),
-            ("NIOBIUM_MATCHMAKER_PORT".into(), s.matchmaker_port.to_string()),
+            ("NIOBIUM_MATCHMAKER_PORT".into(), matchmaker_port.to_string()),
             ("NIOBIUM_BIND".into(), bind.to_string()),
             ("NIOBIUM_DATA_DIR".into(), data_dir.to_string_lossy().into_owned()),
             ("NIOBIUM_GAMESERVER".into(), format!("127.0.0.1:{GAME_SERVER_PORT}")),
         ];
         drop(cfg);
 
-        self.spawn_guarded(token, |r| {
+        // A backend of an old Rift/Niobium/Vanity still holding a port is closed; anything else is named
+        self.free_backend_ports(bind, matchmaker_port)?;
+
+        let log_path = self.data_local().join("logs").join("backend.log");
+        let watch = self.spawn_guarded(token, |r| {
             // Checked again under the lock: a Join and a start at the same time start only one backend
             if r.backend_pid.is_some_and(proc::is_running) {
-                return Ok(());
+                return Ok(None);
             }
             self.log("backend", "info", CAT, "Starting the backend …", None);
-            let pid = proc::start(&main_as_node_arg(&node), &node_args(&main), &env, false, false)
-                .or_else(|_| proc::start(&node, &node_args(&main), &env, false, false))?;
+            self.log("backend", "info", CAT, &format!("node: {}  backend: {}", node.display(), main.display()), None);
+            // stdout and stderr go to the live log and logs\backend.log (see `watch_backend`)
+            let child = proc::start_captured(&node, &node_args(&main), &env)?;
+            let pid = child.id();
             r.backend_pid = Some(pid);
-            Ok(())
+            // Ends with Rift, even if Rift crashes or is ended in Task Manager
+            if let Err(e) = proc::end_with_launcher(pid) {
+                eprintln!("[Rift] {e}");
+            }
+            Ok(Some(self.watch_backend(child, &log_path, &node, &main)))
         })?;
 
-        // Wait until it reports "healthy" (up to 20 s)
-        match wait_for(Duration::from_secs(20), Duration::from_millis(400), || self.is_cancelled(token), || backend_healthy(port)) {
+        // Wait until it reports "healthy" (up to 20 s) – or stop at once if it ends
+        let ended = || watch.as_ref().is_some_and(|w| w.ended().is_some());
+        match wait_for(Duration::from_secs(20), Duration::from_millis(250), || self.is_cancelled(token), || {
+            ended() || backend_healthy(port)
+        }) {
             Wait::Ready => {}
             Wait::Cancelled => return Err(StartError::Cancelled),
-            Wait::TimedOut => return Err("The backend didn't start (is the port already in use?)".into()),
+            Wait::TimedOut => {
+                let last = watch.as_ref().and_then(|w| w.reason());
+                return Err(match last {
+                    Some(line) => format!("The backend didn't get ready within 20 seconds. Its last line: {line}"),
+                    None => "The backend didn't get ready within 20 seconds and wrote nothing – see logs\\backend.log in %LOCALAPPDATA%\\Rift.".into(),
+                }
+                .into());
+            }
+        }
+        if let Some(w) = &watch {
+            if let Some(code) = w.ended() {
+                return Err(backendlog::stopped_message(code, w.reason().as_deref()).into());
+            }
         }
         self.log("backend", "info", "Backend", &format!("Backend is listening on 127.0.0.1:{port}"), None);
         self.emit_services();
         Ok(())
+    }
+
+    /// Before the backend starts: if the backend port or the matchmaker port is taken, a `node.exe`
+    /// from one of our own install folders (an old Rift, Niobium or Vanity backend) is closed. Any
+    /// other program is left alone: on the backend port the start stops with a message naming it; on
+    /// the matchmaker port it is only a warning (the backend then picks a free port by itself).
+    fn free_backend_ports(&self, bind: &str, matchmaker_port: u16) -> Result<(), String> {
+        if cfg!(not(windows)) {
+            return Ok(());
+        }
+        let checks = [(BACKEND_PORT, PortRole::Backend), (matchmaker_port, PortRole::Matchmaker)];
+        if checks.iter().all(|(port, _)| netports::can_listen(bind, *port)) {
+            return Ok(());
+        }
+        let local = self.data_local().parent().map(Path::to_path_buf).unwrap_or_default();
+        let installs = netports::install_dirs(&local, self.resources());
+        let mut closed: Vec<u32> = Vec::new();
+        for (port, role) in checks {
+            if netports::can_listen(bind, port) {
+                continue;
+            }
+            let mut others = Vec::new();
+            let mut closed_here = false;
+            for pid in ports::pids_on_port(&netports::listeners(), port) {
+                if closed.contains(&pid) {
+                    closed_here = true;
+                    continue;
+                }
+                let owner = netports::owner(pid);
+                match owner.path.as_deref().and_then(|p| ports::our_backend_install(p, &installs)) {
+                    Some(install) if proc::kill(pid).is_ok() => {
+                        closed.push(pid);
+                        closed_here = true;
+                        self.log("launcher", "info", CAT, &ports::closed_old_backend_message(install), None);
+                    }
+                    _ => others.push(owner),
+                }
+            }
+            // A closed process lets go of its port a moment later
+            let wait = if closed_here { Duration::from_secs(3) } else { Duration::ZERO };
+            if wait_for(wait, Duration::from_millis(100), || false, || netports::can_listen(bind, port)) == Wait::Ready {
+                continue;
+            }
+            let message = ports::busy_message(port, role, others.first());
+            match role {
+                PortRole::Backend => return Err(message),
+                PortRole::Matchmaker => self.log("launcher", "warning", CAT, &message, None),
+            }
+        }
+        Ok(())
+    }
+
+    /// Reads the backend's stdout and stderr: every line goes to the live log (source "backend") and
+    /// to `logs\backend.log`; the last lines are kept for the message when it stops. When it ends
+    /// while Rift still counts on it (not "Stop all"), the live log says so with its exit code.
+    fn watch_backend(&self, mut child: std::process::Child, log_path: &Path, node: &Path, main: &Path) -> Arc<BackendWatch> {
+        use std::io::{BufRead, BufReader};
+        let watch = Arc::new(BackendWatch::default());
+        let file = match RotatingLog::open(log_path, backendlog::MAX_LOG_BYTES) {
+            Ok(mut f) => {
+                let _ = f.write_line(&format!(
+                    "--- {} Starting the backend: {} {} ---",
+                    utc_now(),
+                    node.display(),
+                    main.display()
+                ));
+                Some(f)
+            }
+            Err(e) => {
+                self.log("launcher", "warning", CAT, &format!("Couldn't write {}: {e}", log_path.display()), None);
+                None
+            }
+        };
+        let file = Arc::new(Mutex::new(file));
+        let pid = child.id();
+        let mut readers = Vec::new();
+        let streams: [(bool, Option<Box<dyn std::io::Read + Send>>); 2] = [
+            (false, child.stdout.take().map(|o| Box::new(o) as Box<dyn std::io::Read + Send>)),
+            (true, child.stderr.take().map(|e| Box::new(e) as Box<dyn std::io::Read + Send>)),
+        ];
+        for (stderr, stream) in streams {
+            let Some(stream) = stream else { continue };
+            let (app, watch, file) = (self.app.clone(), watch.clone(), file.clone());
+            readers.push(std::thread::spawn(move || {
+                let mut reader = BufReader::new(stream);
+                let mut buf = Vec::new();
+                loop {
+                    buf.clear();
+                    match reader.read_until(b'\n', &mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(_) => {}
+                    }
+                    let line = backendlog::strip_ansi(String::from_utf8_lossy(&buf).trim_end());
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+                    watch.tail.lock().unwrap().push(stderr, &line);
+                    if let Some(f) = file.lock().unwrap().as_mut() {
+                        let _ = f.write_line(&format!("[{}]{} {line}", now_hms(), if stderr { " !" } else { "" }));
+                    }
+                    let (level, category, message) = backendlog::split_line(stderr, &line);
+                    let _ = app.emit(
+                        "log:line",
+                        LogLinePayload {
+                            source: "backend".into(),
+                            level: level.into(),
+                            category: category.into(),
+                            message,
+                            detected: None,
+                            time: now_hms(),
+                        },
+                    );
+                }
+            }));
+        }
+        let (app, watch_end) = (self.app.clone(), watch.clone());
+        std::thread::spawn(move || {
+            let code = child.wait().ok().and_then(|s| s.code());
+            // The pipes end with the process; read them to the end so the last line is there
+            for r in readers {
+                let _ = r.join();
+            }
+            // Keep the process handle open (like `proc::start`): Windows can't give this PID to
+            // another process while Rift runs, so a later kill never hits a stranger.
+            std::mem::forget(child);
+            let reason = watch_end.reason();
+            if let Some(f) = file.lock().unwrap().as_mut() {
+                let code = code.map_or("no exit code".to_string(), |c| format!("exit code {c}"));
+                let _ = f.write_line(&format!("--- {} The backend ended ({code}) ---", utc_now()));
+            }
+            if let Some(engine) = app.try_state::<Arc<Engine>>() {
+                engine.backend_ended(pid, code, reason);
+            }
+            *watch_end.ended.lock().unwrap() = Some(code);
+        });
+        watch
+    }
+
+    /// The backend process ended. After "Stop all" or while closing (its PID is no longer in
+    /// `running`) that is expected; otherwise the live log says why.
+    fn backend_ended(&self, pid: u32, code: Option<i32>, reason: Option<String>) {
+        if self.running.lock().unwrap().backend_pid != Some(pid) {
+            return;
+        }
+        self.log("backend", "error", CAT, &backendlog::stopped_message(code, reason.as_deref()), None);
+        self.emit_services();
     }
 
     /// Sets the matchmaker target in the backend: "Play" in the lobby then goes there.
@@ -1537,7 +1729,13 @@ impl Engine {
             killed.push(inst.pid);
         }
         if let Some(pid) = backend {
+            // node.exe must really be gone, or the next start finds port 3551 taken. (If Rift itself
+            // crashes, the job from `proc::end_with_launcher` ends it.)
             let _ = proc::kill(pid);
+            let gone = wait_for(Duration::from_secs(2), Duration::from_millis(50), || false, || !proc::is_running(pid));
+            if gone != Wait::Ready && !closing {
+                self.log("launcher", "warning", CAT, &format!("The backend (node.exe, process {pid}) didn't close – Rift closes it at the next start."), None);
+            }
         }
         if closing {
             // Bubble Builds: the watcher thread ends with Rift, so put Fortnite's settings back
@@ -1673,8 +1871,14 @@ fn now_hms() -> String {
 fn node_args(main: &Path) -> Vec<String> {
     vec![main.to_string_lossy().into_owned()]
 }
-fn main_as_node_arg(node: &Path) -> PathBuf {
-    node.to_path_buf()
+
+/// Date and time for `backend.log` (UTC, no extra library).
+fn utc_now() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default();
+    backendlog::utc_stamp(secs)
 }
 
 /// One check whether the backend says "healthy". Short time limit, so "Stop all" isn't kept waiting.

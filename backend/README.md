@@ -40,7 +40,9 @@ backend/
 
 If a variable is invalid (e.g. port `abc`), the backend stops with a message and exit code 1.
 The same happens when the HTTP port is already taken. If only the matchmaker port is taken, the
-backend keeps running and writes `XMPP and Matchmaker FAILED to start hosting. (port 80: EADDRINUSE)`.
+backend uses a free port the system picks and writes `[Rift] Matchmaker port 127.0.0.1:80 is already in use – using
+port … instead`; the game gets that port from the backend (matchmaking `serviceUrl`, XMPP `ServerPort` in the
+`DefaultEngine.ini` hotfix). The matchmaker starts before HTTP, so `/niobium/health` answers only once both listen.
 
 ## Data folder
 
@@ -58,7 +60,7 @@ Everything else (shop data, news, pictures, hotfixes) is only read and stays nex
 
 | Method + path | Who may call it | Answer |
 |---|---|---|
-| `GET /niobium/health` | everyone | `{ "ok": true, "version": "0.1.0" }` |
+| `GET /niobium/health` | everyone | `{ "ok": true, "version": "0.1.0", "matchmakerPort": 80 }` (the port the matchmaker really uses) |
 | `GET /niobium/status` | everyone | `{ "name", "hosting", "playlist", "players", "maxPlayers", "version", "gameServer": { "ip", "port" } }` |
 | `POST /niobium/status` | only 127.0.0.1 / ::1 | sets single fields from above, answers with the new status |
 | `POST /niobium/gameserver` | only 127.0.0.1 / ::1 | `{ "ip": "100.101.12.7", "port": 7777 }` – change the matchmaker target right away |

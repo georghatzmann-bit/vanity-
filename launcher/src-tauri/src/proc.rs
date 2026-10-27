@@ -118,6 +118,44 @@ mod imp {
         }
     }
 
+    /// Ties a process to Rift: it is put into a job that Windows closes when Rift ends – also when
+    /// Rift crashes or is ended in Task Manager – and closing the job ends the process. Used for the
+    /// backend, so no node.exe is left holding port 3551.
+    pub fn end_with_launcher(pid: u32) -> ProcResult<()> {
+        use std::sync::OnceLock;
+        use windows::Win32::System::JobObjects::{
+            AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
+            JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        };
+        use windows::Win32::System::Threading::{PROCESS_SET_QUOTA, PROCESS_TERMINATE};
+        // One job for Rift's whole run; its handle is never closed (Windows closes it with Rift)
+        static JOB: OnceLock<Option<isize>> = OnceLock::new();
+        let job = JOB.get_or_init(|| unsafe {
+            let job = CreateJobObjectW(None, PCWSTR::null()).ok()?;
+            let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &info as *const _ as *const std::ffi::c_void,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            )
+            .ok()?;
+            Some(job.0 as isize)
+        });
+        let Some(job) = *job else {
+            return Err("Couldn't create a job object".into());
+        };
+        unsafe {
+            let process = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, false, pid)
+                .map_err(|e| format!("Can't reach process {pid}: {e}"))?;
+            let r = AssignProcessToJobObject(HANDLE(job as *mut std::ffi::c_void), process);
+            let _ = CloseHandle(process);
+            r.map_err(|e| format!("Couldn't tie process {pid} to Rift: {e}"))
+        }
+    }
+
     /// Pauses or resumes a process (via ntdll).
     pub fn set_suspended(pid: u32, suspend: bool) -> ProcResult<()> {
         #[link(name = "ntdll")]
@@ -267,6 +305,9 @@ mod imp {
         Err("Only available on Windows".into())
     }
     pub fn set_suspended(_: u32, _: bool) -> ProcResult<()> {
+        Err("Only available on Windows".into())
+    }
+    pub fn end_with_launcher(_: u32) -> ProcResult<()> {
         Err("Only available on Windows".into())
     }
     pub fn is_running(_: u32) -> bool {

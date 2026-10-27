@@ -573,12 +573,28 @@ start yet; AI bots only on 19.10 (CL-18675304). For trickshot parkours there may
 depending on the version – if one is missing, the server says so in the console (see Step 7). A build you
 downloaded in Step 14 is tested the same way.
 
+## If the Backend step says "Couldn't start"
+
+Before the backend starts, Rift checks port 3551 and the matchmaker port (Settings → Network, default 80).
+
+- **"Closed an old backend that was still running (Niobium)."** in the Live Log: a backend of the old
+  Niobium/Vanity (or an earlier Rift) still held the port. Rift closed it by itself and goes on – nothing to do.
+- **"Port 3551 is used by <program> (<path>). Close it – …"**: another program holds the backend port (for
+  example Reboot Launcher or another Fortnite backend). Close that program (Task Manager), then press
+  **Host & Play** again. Rift never closes other programs by itself.
+- **"Port 80 is used by <program>. Change the matchmaker port in Settings → Network."** (a warning): the
+  backend uses a free port by itself this time (the Live Log says which); to fix it for good, set another
+  matchmaker port, e.g. 8080.
+- **"The backend stopped (exit code N): <line>"**: the backend ended while starting; the line after the colon
+  is its own error. All backend lines are in the Live Log (source *Backend*) and in
+  `%LOCALAPPDATA%\Rift\logs\backend.log` – send me that file.
+
 ## What I need when something doesn't work
 
 1. **Which step** of this list (e.g. "Step 3, 'Logged in' doesn't come").
 2. **Screenshot** of the launcher (launch steps + Live Log) and, if it helps, of the game (F9 menu).
-3. **Logs**: page **Live Log** → **Copy** (or the files from `%LOCALAPPDATA%\Rift\logs\`; the button
-   **Folder** opens it).
+3. **Logs**: page **Live Log** → **Copy** (or the files from `%LOCALAPPDATA%\Rift\logs\`, among them
+   `backend.log`; the button **Folder** opens it).
 4. If Fortnite crashed: page **Crash Analysis** → the newest entry → **Copy report**.
 5. For trickshot things: the lines from the console (**F8**) that start with "[Rift]".
 6. For Bubble Builds: a screenshot of your builds in the game, the "Starting your game: …" line and the

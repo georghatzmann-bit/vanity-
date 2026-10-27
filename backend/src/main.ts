@@ -9,6 +9,7 @@ import { forwardAsyncErrors } from "./async-errors";
 import { ConfigError, loadConfig, type BackendConfig } from "./config";
 import { findResourceDir, prepareDataDir } from "./data";
 import { createLawinApp, niobium, startXmppAndMatchmaker } from "./lawin";
+import { chooseMatchmakerPort, describeProblem } from "./ports";
 import { createStubRouter } from "./stubs";
 
 declare const __NIOBIUM_VERSION__: string | undefined;
@@ -16,6 +17,12 @@ const VERSION = typeof __NIOBIUM_VERSION__ === "string" ? __NIOBIUM_VERSION__ : 
 
 function log(message: string): void {
   console.log(`[Rift] ${message}`);
+}
+
+/** One clear line on stderr (the launcher shows the last one when the backend stops), then exit 1. */
+function fail(message: string): never {
+  console.error(`[Rift] ${message}`);
+  process.exit(1);
 }
 
 function pathOf(req: Request): string {
@@ -55,13 +62,12 @@ function urlHost(bind: string): string {
   return bind.includes(":") ? `[${bind}]` : bind;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   let config: BackendConfig;
   try {
     config = loadConfig();
   } catch (err) {
-    console.error(`[Rift] ${err instanceof ConfigError ? err.message : String(err)}`);
-    process.exit(1);
+    fail(err instanceof ConfigError ? err.message : String(err));
   }
 
   const resourceDir = findResourceDir(__dirname);
@@ -89,6 +95,7 @@ function main(): void {
   app.use(
     createNiobiumRouter({
       version: VERSION,
+      getMatchmakerPort: () => niobium.settings.matchmakerPort,
       getGameServer: () => ({ ...niobium.settings.gameServer }),
       setGameServer: (target) => {
         niobium.setGameServer(target.ip, target.port);
@@ -100,17 +107,36 @@ function main(): void {
   app.use(createLawinApp());
   app.use(errorHandler);
 
+  // Matchmaker + XMPP first, so /niobium/health only answers once everything listens. If the port is
+  // taken, a free one is used: the game gets the port from the backend's own answers (matchmaking
+  // ticket, DefaultEngine.ini hotfix), never from its own files.
+  const wanted = config.matchmakerPort;
+  const choice = await chooseMatchmakerPort(wanted, config.bind);
+  if (choice.problem !== null) {
+    log(
+      `Matchmaker port ${config.bind}:${wanted} ${describeProblem(choice.problem)} – using port ${choice.port} instead. ` +
+        "To choose the port yourself, change the matchmaker port in Settings → Network.",
+    );
+    niobium.configure({ matchmakerPort: choice.port });
+  }
+  try {
+    await startXmppAndMatchmaker();
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code ?? String((err as Error).message ?? err);
+    fail(
+      `Matchmaker port ${config.bind}:${niobium.settings.matchmakerPort} ${describeProblem(code)}. ` +
+        "Change the matchmaker port in Settings → Network.",
+    );
+  }
+
   const server = http.createServer(app);
   server.on("error", (err: NodeJS.ErrnoException) => {
-    const reason = err.code === "EADDRINUSE" ? "is already in use" : `doesn't work (${err.code ?? err.message})`;
-    console.error(`[Rift] HTTP port ${config.bind}:${config.httpPort} ${reason}`);
-    process.exit(1);
+    fail(`HTTP port ${config.bind}:${config.httpPort} ${describeProblem(err.code ?? err.message)}`);
   });
 
   server.listen(config.httpPort, config.bind, () => {
     log(`Backend ${VERSION} is running on http://${urlHost(config.bind)}:${config.httpPort} (bind ${config.bind})`);
-    log(`Matchmaker target: ${config.gameServer.ip}:${config.gameServer.port}`);
-    startXmppAndMatchmaker();
+    log(`Matchmaker + XMPP on port ${niobium.settings.matchmakerPort}, target: ${config.gameServer.ip}:${config.gameServer.port}`);
   });
 
   const stop = (): void => {
@@ -122,4 +148,9 @@ function main(): void {
   process.on("SIGTERM", stop);
 }
 
-main();
+// Any error while starting (resource folder, data folder, a damaged data file …) ends in one clear
+// line instead of a bare stack trace, so the launcher can show why.
+main().catch((err: unknown) => {
+  if (err instanceof Error && err.stack) console.error(err.stack);
+  fail(err instanceof Error ? err.message : String(err));
+});

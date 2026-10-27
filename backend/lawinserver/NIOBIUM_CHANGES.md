@@ -65,6 +65,8 @@ Also, all written data has to land in the data folder (`NIOBIUM_DATA_DIR`), not 
   `niobium.settings.bindAddress` (`NIOBIUM_BIND`).
   **Why:** the port can be changed, and by default it only listens on 127.0.0.1 instead of every network card.
 - The error message at start names the port and the reason (e.g. `EADDRINUSE`).
+- `module.exports = wss`. **Why:** `src/lawin.ts` waits for `listening`/`error`, so the backend only reports
+  "healthy" once the matchmaker listens (and picks a free port first if the wanted one is taken, see `src/ports.ts`).
 
 ### `structure/matchmaking.js`
 
