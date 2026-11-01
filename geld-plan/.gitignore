@@ -1,0 +1,4 @@
+# Echte Kundenlisten und Demos nicht ins Repo (Daten echter Betriebe)
+kunden-*.csv
+demos/
+__pycache__/

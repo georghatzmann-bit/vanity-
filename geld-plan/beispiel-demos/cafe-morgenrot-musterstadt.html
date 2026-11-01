@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Café Morgenrot – Café in Musterstadt (Entwurf)</title>
+<style>
+:root { --akzent: #8a5a3b; --dunkel: #271c16; --hell: #faf5ef; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #1f2328; background: #fff; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.entwurf { background: #111; color: #fff; font-size: 13px; text-align: center; padding: 8px 12px; }
+.entwurf a { color: #ffd479; }
+header { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,.92);
+  backdrop-filter: blur(8px); border-bottom: 1px solid #eee; }
+.nav { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; gap: 12px; }
+.logo { font-weight: 800; font-size: 18px; letter-spacing: -.02em; color: var(--dunkel); }
+.logo span { color: var(--akzent); }
+.btn { display: inline-flex; align-items: center; gap: 8px; background: var(--akzent); color: #fff;
+  text-decoration: none; font-weight: 700; padding: 12px 20px; border-radius: 999px; border: 0;
+  box-shadow: 0 6px 20px -8px var(--akzent); white-space: nowrap; }
+.btn.klein { padding: 9px 16px; font-size: 14px; }
+.btn.hell { background: #fff; color: var(--dunkel); box-shadow: none; }
+.hero { background: var(--dunkel); background:
+  radial-gradient(1200px 500px at 85% -10%, color-mix(in srgb, var(--akzent) 45%, transparent), transparent 60%),
+  radial-gradient(700px 400px at 0% 110%, color-mix(in srgb, var(--akzent) 30%, transparent), transparent 60%),
+  var(--dunkel); color: #fff; }
+.hero-in { max-width: 1080px; margin: 0 auto; padding: 84px 20px 92px; }
+.tag { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: #fff; opacity: .9; color: color-mix(in srgb, var(--akzent) 35%, #fff); margin-bottom: 14px; }
+.hero h1 { font-size: clamp(34px, 6vw, 60px); line-height: 1.08; letter-spacing: -.03em; max-width: 14ch; }
+.hero p { font-size: clamp(17px, 2.2vw, 20px); opacity: .85; max-width: 46ch; margin: 18px 0 30px; }
+.knoepfe { display: flex; flex-wrap: wrap; gap: 12px; }
+section { padding: 72px 20px; }
+.innen { max-width: 1080px; margin: 0 auto; }
+h2 { font-size: clamp(26px, 4vw, 36px); letter-spacing: -.02em; color: var(--dunkel); margin-bottom: 8px; }
+.unterzeile { color: #5b6470; margin-bottom: 32px; }
+.raster { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.karte { background: #fff; border: 1px solid #eceef1; border-radius: 18px; padding: 22px;
+  transition: transform .15s ease, box-shadow .15s ease; }
+.karte:hover { transform: translateY(-3px); box-shadow: 0 14px 30px -18px rgba(0,0,0,.35); }
+.icon { font-size: 28px; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 14px;
+  background: var(--hell); margin-bottom: 14px; }
+.karte h3 { font-size: 18px; color: var(--dunkel); }
+.karte p { color: #5b6470; font-size: 15px; }
+.preis { display: inline-block; margin-top: 10px; font-weight: 800; color: var(--akzent); }
+.grau { background: var(--hell); }
+.zwei { display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; align-items: start; }
+.ueber p { font-size: 18px; color: #3a414a; }
+.vorteile { list-style: none; margin-top: 22px; display: grid; gap: 10px; }
+.vorteile li::before { content: "✓"; color: var(--akzent); font-weight: 900; margin-right: 10px; }
+.box { background: #fff; border-radius: 18px; padding: 24px; border: 1px solid #eceef1; }
+.box h3 { display: flex; align-items: center; gap: 8px; color: var(--dunkel); margin-bottom: 12px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 0; border-bottom: 1px dashed #e3e6ea; font-size: 15px; }
+th { font-weight: 600; color: #3a414a; width: 45%; }
+.zeile { display: flex; align-items: center; gap: 10px; text-decoration: none; padding: 10px 0; font-weight: 600; }
+.zeile svg { color: var(--akzent); flex: none; }
+.hinweis { font-size: 13px; color: #7a828c; margin-top: 10px; }
+.mitte { text-align: center; }
+.band { background: var(--akzent); color: #fff; text-align: center; }
+.band h2 { color: #fff; }
+.band p { opacity: .9; margin-bottom: 24px; }
+footer { background: var(--dunkel); color: rgba(255,255,255,.7); font-size: 14px; padding: 28px 20px; }
+footer .innen { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; }
+footer a { color: rgba(255,255,255,.85); }
+.mobil-cta { display: none; }
+@media (max-width: 760px) {
+  .zwei { grid-template-columns: 1fr; }
+  .nav .btn { display: none; }
+  .hero-in { padding: 60px 20px 70px; }
+  section { padding: 56px 20px; }
+  .mobil-cta { display: flex; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 20;
+    justify-content: center; }
+  body { padding-bottom: 76px; }
+}
+</style>
+</head>
+<body>
+<div class="entwurf">Entwurf von Dein Name – unverbindlich und kostenlos erstellt für Café Morgenrot · Kontakt: <a href="tel:06600000000">0660 0000000</a></div>
+<header><div class="nav">
+  <div class="logo">Café Morgenrot<span>.</span></div>
+  <a class="btn klein" href="#kontakt"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Tisch reservieren</a>
+</div></header>
+
+<section class="hero" style="padding:0"><div class="hero-in">
+  <div class="tag">Café · Musterstadt</div>
+  <h1>Ihr Café in Musterstadt</h1>
+  <p>Guter Kaffee, hausgemachte Kuchen und Zeit zum Durchatmen.</p>
+  <div class="knoepfe">
+    <a class="btn" href="#kontakt"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Tisch reservieren</a>
+    <a class="btn hell" href="#kontakt"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>So finden Sie uns</a>
+  </div>
+</div></section>
+
+<section id="leistungen"><div class="innen">
+  <h2>Unsere Leistungen</h2>
+  <p class="unterzeile">Was wir für Sie tun können.</p>
+  <div class="raster"><article class="karte"><div class="icon">☕</div><h3>Kaffeespezialitäten</h3><p>Von Espresso bis Cappuccino</p></article><article class="karte"><div class="icon">🥐</div><h3>Frühstück</h3><p>Süß oder herzhaft</p></article><article class="karte"><div class="icon">🍰</div><h3>Kuchen &amp; Torten</h3><p>Hausgemacht</p></article><article class="karte"><div class="icon">🥪</div><h3>Kleine Speisen</h3><p>Für den Hunger zwischendurch</p></article><article class="karte"><div class="icon">🎂</div><h3>Torten auf Bestellung</h3><p>Für Ihren besonderen Tag</p></article><article class="karte"><div class="icon">🎁</div><h3>Gutscheine</h3><p>Ideal zum Verschenken</p></article></div>
+  
+</div></section>
+
+<section class="grau"><div class="innen zwei">
+  <div class="ueber">
+    <h2>Über uns</h2>
+    <p>Café Morgenrot ist der Platz für Ihre Pause. Frisch gebrühter Kaffee, hausgemachte Mehlspeisen und eine gemütliche Atmosphäre – allein oder mit Freunden.</p>
+    <ul class="vorteile">
+      <li>Persönliche Beratung</li>
+      <li>Direkt in Musterstadt</li>
+      <li>Faire, transparente Preise</li>
+    </ul>
+  </div>
+  <div class="box" id="zeiten">
+    <h3><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Öffnungszeiten</h3>
+    <table><tr><th>Mo–Fr</th><td>08:00–18:00</td></tr><tr><th>Sa</th><td>08:00–12:00</td></tr></table>
+    <p class="hinweis">Platzhalter – wird mit Ihren echten Zeiten ersetzt.</p>
+  </div>
+</div></section>
+
+<section id="kontakt"><div class="innen zwei">
+  <div>
+    <h2>Kontakt</h2>
+    <p class="unterzeile">Rufen Sie an oder kommen Sie einfach vorbei.</p>
+    <div class="zeile"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Telefonnummer folgt</span></div>
+    <a class="zeile" href="https://www.google.com/maps/search/?api=1&amp;query=Caf%C3%A9%20Morgenrot%20Hauptplatz%201%2C%201234%20Musterstadt" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Hauptplatz 1, 1234 Musterstadt</span></a>
+  </div>
+  <div class="box">
+    <h3><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Anfahrt</h3>
+    <p>Hauptplatz 1, 1234 Musterstadt</p>
+    <p style="margin-top:14px"><a class="btn klein" href="https://www.google.com/maps/search/?api=1&amp;query=Caf%C3%A9%20Morgenrot%20Hauptplatz%201%2C%201234%20Musterstadt" target="_blank" rel="noopener">Route planen</a></p>
+    <p class="hinweis">Die Karte öffnet sich erst nach Klick – ohne Tracking auf dieser Seite.</p>
+  </div>
+</div></section>
+
+<section class="band"><div class="innen">
+  <h2>Wir freuen uns auf Sie!</h2>
+  <p>Café Morgenrot – Café in Musterstadt</p>
+  <a class="btn hell" href="#kontakt"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Tisch reservieren</a>
+</div></section>
+
+<footer><div class="innen">
+  <div>© Café Morgenrot</div>
+  <div><a href="#" title="Wird bei Freischaltung ergänzt">Impressum</a> · <a href="#" title="Wird bei Freischaltung ergänzt">Datenschutz</a></div>
+</div></footer>
+
+<div class="mobil-cta"><a class="btn" href="#kontakt"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Tisch reservieren</a></div>
+</body>
+</html>

@@ -1,0 +1,7 @@
+name,branche,strasse,hausnummer,plz,ort,telefon,oeffnungszeiten
+Salon Sonnenschein,friseur,Musterstraße,12,1234,Musterstadt,+43 1 2345678,Tu-Fr 09:00-18:00; Sa 08:00-13:00
+Autowerkstatt Huber,werkstatt,Industriestraße,3,1234,Musterstadt,+43 1 7654321,Mo-Th 07:30-17:00; Fr 07:30-13:00
+Café Morgenrot,cafe,Hauptplatz,1,1234,Musterstadt,,
+Gasthaus Zur Linde,restaurant,Kirchengasse,7,1234,Musterstadt,+43 1 1112223,"Mo-Fr 11:00-14:30, Sa 11:00-22:00; Su off"
+Blumen Flora,blumen,Marktplatz,4,1234,Musterstadt,+43 1 5556667,Mo-Fr 08:00-18:00; Sa 08:00-12:00
+Beauty Lounge Mia,kosmetik,Bahnhofstraße,20,1234,Musterstadt,+43 660 1234567,Mo-Fr 09:00-19:00
