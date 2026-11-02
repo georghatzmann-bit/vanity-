@@ -14,6 +14,7 @@ Phoenix merkt sich vor dem Reset, welche Apps und Spiele auf deinem PC sind – 
 | **Zwei Sicherungs-Arten** | *Nur Apps & Spiele* oder *Apps + Einstellungen*: zusätzlich Monitore (Hauptmonitor, Hz, Auflösung, Drehung, Anordnung, Skalierung), Dunkelmodus, Taskleiste, Explorer, Maus, Spielmodus, Energiesparplan, Zeitzone. Keine Tweaks, keine Dateien. |
 | **Einrichten** – Monitore & Windows | Nach dem Reset (oder jederzeit über die Startseite): Hauptmonitor per Klick, Hz/Auflösung/Drehung wählen, „Alle auf max. Hz“. Wie in Windows wird nach 15 Sekunden automatisch zurückgesetzt, wenn du nicht „Behalten“ klickst. |
 | **Pakete** – ohne Sicherung | *Basic* (Monitore + Grund-Einstellungen), *Premium* (+ Chrome, Discord, Spotify, 7-Zip, VLC, PowerToys, Laufzeiten, Profi-Einstellungen, Grafiktreiber-Hinweis, VELOX), *Gaming* (+ Steam, Epic, OBS, Afterburner, HWiNFO, Ultimative Leistung und deine Spiele zum Anhaken). |
+| **Virus-Reset** | Anleitung für eine komplett saubere Windows-11-Neuinstallation nach einem Virus. Die Schritte vor dem Reset macht Phoenix mit dir (Sicherung, Windows-ISO, Rufus); die Anleitung landet zusätzlich als offline lesbare HTML-Datei auf dem zweiten USB-Stick. |
 | **VELOX Tweaker** | Steckt in Phoenix und wird mit einer Windows-Abfrage installiert. |
 
 Installiert wird über **winget**, den offiziellen Paketmanager von Windows. Phoenix lädt also nur Original-Installer der Hersteller.

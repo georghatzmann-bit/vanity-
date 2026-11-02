@@ -60,6 +60,13 @@ export default {
       h('span', h('b', 'Keine Sicherung?'), ' Pakete: Basic, Premium, Gaming'),
       icon('arrow-right'),
     );
+    const resetQuick = h(
+      'button.home__quick',
+      { type: 'button', onClick: () => go('reset'), onPointerenter: () => ctx.sound.play('hover') },
+      icon('alert'),
+      h('span', h('b', 'Virus?'), ' Sauber neu installieren'),
+      icon('arrow-right'),
+    );
     const setupQuick = h(
       'button.home__quick',
       { type: 'button', onClick: () => go('setup'), onPointerenter: () => ctx.sound.play('hover') },
@@ -84,7 +91,7 @@ export default {
       'div.screen__inner.home',
       h('section.home__hero', heroCopy, emblemSlot),
       h('section.home__actions', h('div', { dataset: { stagger: '' } }, backupCard), h('div', { dataset: { stagger: '' } }, restoreCard)),
-      h('footer.home__foot', { dataset: { stagger: '' } }, quick, setupQuick, machineChip),
+      h('footer.home__foot', { dataset: { stagger: '' } }, quick, setupQuick, resetQuick, machineChip),
     );
     container.append(inner);
 

@@ -136,6 +136,9 @@ function registerIpc(getWin) {
   handle('extras:list', () => backend.listExtras());
   handle('extras:install', (id) => backend.installExtra(requireString(id, 'Programm', 40)));
 
+  handle('reset:guide', () => backend.getResetGuide());
+  handle('reset:saveGuide', (root) => backend.saveResetGuide(requireString(root, 'Laufwerk', 260)));
+
   // --- misc ---------------------------------------------------------------
   handle('shell:open', (url) => openExternalSafe(url));
   handle('shell:showItem', (file) => {

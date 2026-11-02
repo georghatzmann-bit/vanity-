@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('phoenix', {
   settings: { capture: invoke('settings:capture'), defs: invoke('settings:defs'), apply: invoke('settings:apply') },
   displays: { suggest: invoke('displays:suggest'), apply: invoke('displays:apply') },
   extras: { list: invoke('extras:list'), install: invoke('extras:install') },
+  reset: { guide: invoke('reset:guide'), saveGuide: invoke('reset:saveGuide') },
   shell: { open: invoke('shell:open'), showItem: invoke('shell:showItem') },
   clipboard: { write: invoke('clipboard:write') },
   log: { export: invoke('log:export') },

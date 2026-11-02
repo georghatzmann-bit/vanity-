@@ -251,6 +251,20 @@ export function createMockApi() {
         return { ok: true };
       },
     },
+    reset: {
+      guide: async () => ({
+        phases: { before: 'Vor dem Reset – macht Phoenix mit dir', install: 'Die Installation', after: 'Nach dem Reset' },
+        steps: [
+          { id: 'backup', phase: 'before', title: 'Sicherung machen – nur die App-Liste', text: 'Nur die Liste, keine Programme.', action: 'backup' },
+          { id: 'iso', phase: 'before', title: 'Windows 11 herunterladen', text: 'Offizielle ISO von Microsoft.', action: 'link:windows' },
+          { id: 'save', phase: 'before', title: 'Anleitung auf den zweiten Stick legen', text: 'Als HTML-Datei.', action: 'save' },
+          { id: 'clean', phase: 'install', title: 'Sauber installieren', text: 'Alle Partitionen der Systemplatte löschen.', action: null },
+          { id: 'passwords', phase: 'after', title: 'Passwörter ändern', text: 'An einem sauberen Gerät.', action: null },
+        ],
+        links: { windows: 'https://www.microsoft.com/de-de/software-download/windows11', rufus: 'https://rufus.ie/de/' },
+      }),
+      saveGuide: async (root) => ({ path: `${root}Phoenix\\Phoenix-Virus-Reset.html` }),
+    },
     shell: { open: async () => true, showItem: async () => true },
     clipboard: {
       write: async (text) => {

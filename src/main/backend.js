@@ -13,6 +13,7 @@ const games = require('./games/launch');
 
 const settings = require('./settings');
 const extras = require('./settings/extras');
+const resetGuide = require('./reset/guide');
 
 module.exports = {
   getMachineInfo: () => hardware.getMachineInfo(),
@@ -41,4 +42,6 @@ module.exports = {
   applyDisplays: (entries) => settings.applyDisplays(entries),
   listExtras: async () => extras.listExtras(),
   installExtra: (id) => extras.installExtra(id),
+  getResetGuide: async () => resetGuide.getGuide(),
+  saveResetGuide: async (root) => resetGuide.saveGuide(root),
 };

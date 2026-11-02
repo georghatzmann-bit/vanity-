@@ -26,8 +26,9 @@ import games from './screens/games.js';
 import done from './screens/done.js';
 import setup from './screens/setup.js';
 import packages from './screens/packages.js';
+import reset from './screens/reset.js';
 
-const SCREENS = { boot, home, backup, restore, select, install, games, done, setup, packages };
+const SCREENS = { boot, home, backup, restore, select, install, games, done, setup, packages, reset };
 const params = new URLSearchParams(location.search);
 
 /** ?effects=low / ?sound=0 / ?volume=0.3 – session-only overrides for dev & screenshots. */
