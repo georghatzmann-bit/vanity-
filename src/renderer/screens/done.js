@@ -237,6 +237,8 @@ export default {
     };
 
     const buttons = [];
+    const doneProfile = store.get('profile');
+    const wantsSetup = !!(doneProfile && (doneProfile.settings || (doneProfile.extras && doneProfile.extras.length)));
     const mainAction = h('div.dn__action.dn__action--main');
     if (v.games.length) {
       const names = v.games.map((g) => g.title && cleanTitle(g.title)).filter(Boolean);
@@ -244,6 +246,10 @@ export default {
       const gamesBtn = Button({ label: 'Weiter zu deinen Spielen', icon: 'gamepad', iconRight: 'arrow-right', variant: 'primary', size: 'xl', onClick: () => router.go('games', {}, { transition: 'warp' }) });
       buttons.push(gamesBtn);
       mainAction.append(gamesBtn, h('p.dn__hint', `${list} – PHOENIX öffnet die Installation direkt im Launcher.`));
+    } else if (wantsSetup) {
+      const setupBtn = Button({ label: 'Monitore & Einstellungen', icon: 'monitor', iconRight: 'arrow-right', variant: 'primary', size: 'xl', onClick: () => router.go('setup', {}, { transition: 'warp' }) });
+      buttons.push(setupBtn);
+      mainAction.append(setupBtn, h('p.dn__hint', 'Letzter Schritt: Hauptmonitor, Hz, Drehung und deine Windows-Einstellungen.'));
     } else {
       const homeBtn = Button({ label: 'Zur Startseite', icon: 'arrow-left', variant: 'primary', size: 'lg', onClick: goHome });
       buttons.push(homeBtn);
@@ -253,7 +259,12 @@ export default {
     const logBtn = Button({ label: 'Protokoll speichern', icon: 'file', variant: 'secondary', autoLoading: true, onClick: saveLog });
     buttons.push(logBtn);
     const secondary = h('div.dn__action-row', h('div.dn__action', logBtn, h('p.dn__hint', 'Alle Details als Textdatei – praktisch für den Support.')));
-    if (v.games.length) {
+    if (wantsSetup && v.games.length) {
+      const setupBtn = Button({ label: 'Monitore & Einstellungen', icon: 'monitor', variant: 'secondary', onClick: () => router.go('setup', {}, { transition: 'warp' }) });
+      buttons.push(setupBtn);
+      secondary.append(h('div.dn__action', setupBtn, h('p.dn__hint', 'Hauptmonitor, Hz, Drehung, Windows-Einstellungen.')));
+    }
+    if (v.games.length || wantsSetup) {
       const homeBtn = Button({ label: 'Zur Startseite', icon: 'arrow-left', variant: 'ghost', onClick: goHome });
       buttons.push(homeBtn);
       secondary.append(h('div.dn__action', homeBtn, h('p.dn__hint', 'Spiele später? Geht jederzeit.')));

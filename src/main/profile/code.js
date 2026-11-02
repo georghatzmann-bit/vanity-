@@ -23,6 +23,8 @@ function toMinimal(profile) {
       if (g.platform === 'steam') return ['s', g.title, g.appId];
       return ['o', g.title];
     }),
+    s: p.settings || undefined,
+    x: p.extras && p.extras.length ? p.extras : undefined,
   };
 }
 
@@ -39,7 +41,7 @@ function fromMinimal(min) {
     if (g[0] === 's') return { platform: 'steam', title: g[1], appId: g[2] };
     return { platform: 'other', title: g[1] };
   });
-  return normalize({ createdAt: min.d, machine: { hostname: min.h || '' }, apps, games, unmatched: [] });
+  return normalize({ createdAt: min.d, machine: { hostname: min.h || '' }, apps, games, unmatched: [], settings: min.s, extras: min.x });
 }
 
 /** Profile -> "PHX1-..." */

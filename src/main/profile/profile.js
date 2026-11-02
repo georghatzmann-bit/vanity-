@@ -3,12 +3,15 @@
 const fs = require('fs');
 const path = require('path');
 const catalog = require('../catalog');
+const { normalizeSettings } = require('../settings/normalize');
 
 const FORMAT = 'phoenix-profile';
 const VERSION = 1;
 const EXT = '.phoenix.json';
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9.+_\-]{0,127}$/;
 const MAX_ICON = 64 * 1024;
+const PACKAGES = ['basic', 'premium', 'gaming'];
+const EXTRA_IDS = ['velox'];
 
 const str = (v, max = 200) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max) : '');
 const num = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : undefined);
@@ -122,6 +125,9 @@ function normalize(input) {
     apps,
     games,
     unmatched,
+    ...(normalizeSettings(input.settings) ? { settings: normalizeSettings(input.settings) } : {}),
+    ...(PACKAGES.includes(input.package) ? { package: input.package } : {}),
+    ...(Array.isArray(input.extras) ? { extras: input.extras.filter((e) => EXTRA_IDS.includes(e)).slice(0, 8) } : {}),
   };
 }
 

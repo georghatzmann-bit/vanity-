@@ -67,6 +67,8 @@ export default {
     let scanRun = 0;
     let scanning = false;
     let profileRev = 0;
+    let settingsP = Promise.resolve(null);
+    let lastChoice = null;
     let lastPhaseIdx = -1;
     let elapsedTimer = 0;
     let startedAt = 0;
@@ -241,6 +243,8 @@ export default {
       syncTop();
       startClock();
 
+      // monitors + Windows settings are read alongside; the save step asks whether to keep them
+      settingsP = api.settings ? api.settings.capture().catch(() => null) : Promise.resolve(null);
       let result;
       try {
         result = await api.scan.run();
@@ -384,9 +388,35 @@ export default {
       },
     });
 
-    function goSave() {
-      const profile = store.get('profile');
-      if (!profile) return;
+    async function goSave() {
+      const base = store.get('profile');
+      if (!base) return;
+      const choice = await modal.open({
+        title: 'Was soll gesichert werden?',
+        subtitle: 'Deine eigenen Dateien werden nie gesichert.',
+        icon: 'shield',
+        content: h(
+          'div.bk-mode',
+          h('p', h('b', 'Nur Apps & Spiele'), ' – die Liste deiner Programme, wie bisher.'),
+          h('p', h('b', 'Apps + Einstellungen'), ' – zusätzlich Monitore (Hauptmonitor, Hz, Auflösung, Drehung, Anordnung, Skalierung), Dunkelmodus, Taskleiste, Explorer, Maus, Spielmodus, Energiesparplan und Zeitzone. Keine Tweaks.'),
+        ),
+        actions: [
+          { label: 'Nur Apps & Spiele', variant: 'secondary', value: 'apps' },
+          { label: 'Apps + Einstellungen', variant: 'primary', icon: 'check', value: 'all' },
+        ],
+      }).closed;
+      if (!choice || disposed) return;
+      const { settings: _old, ...rest } = base;
+      let profile = rest;
+      if (choice === 'all') {
+        const captured = await settingsP;
+        if (disposed) return;
+        if (captured) profile = { ...rest, settings: captured };
+        else ctx.toast.warn('Einstellungen nicht lesbar', 'Gesichert werden nur Apps und Spiele.');
+      }
+      if (choice !== lastChoice) profileRev++;
+      lastChoice = choice;
+      store.set('profile', profile);
       save.prepare(profile, profileRev);
       fx.pulse(0.8);
       switchPhase('save');

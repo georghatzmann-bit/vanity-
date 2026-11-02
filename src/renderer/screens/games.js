@@ -159,11 +159,17 @@ export default {
       );
     }
 
+    // after the games: monitors & Windows settings when the backup or package brought some
+    function nextScreen() {
+      const p = store.get('profile');
+      return p && (p.settings || (p.extras && p.extras.length)) ? 'setup' : 'home';
+    }
+
     function goHome() {
       if (leaving) return;
       leaving = true;
       router.resetHistory();
-      router.go('home', {}, { transition: 'warp' });
+      router.go(nextScreen(), {}, { transition: 'warp' });
     }
 
     function renderState(node) {
@@ -574,7 +580,7 @@ export default {
       }
       if (!alive) return;
       router.resetHistory();
-      router.go('home', {}, { transition: 'warp' });
+      router.go(nextScreen(), {}, { transition: 'warp' });
     }
 
     // ---- start ---------------------------------------------------------------------------------

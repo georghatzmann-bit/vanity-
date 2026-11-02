@@ -191,6 +191,7 @@ async function cancelInstall() {
 }
 
 module.exports = {
+  ...require('./settings'),
   getMachineInfo: async () => MACHINE,
   getWingetStatus: async () => ({ available: true, version: '1.12.350', path: 'C:\\Users\\Georg\\AppData\\Local\\Microsoft\\WindowsApps\\winget.exe', ok: true, minVersion: '1.6.0' }),
   ensureWinget,

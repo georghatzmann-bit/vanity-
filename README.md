@@ -11,7 +11,10 @@ Phoenix merkt sich vor dem Reset, welche Apps und Spiele auf deinem PC sind – 
 |---|---|
 | **Sichern** – vor dem Reset | Phoenix liest alle installierten Apps, Spiele (Steam, Epic) und deine Hardware aus und speichert das als kleines Profil: auf dem USB-Stick, einer zweiten Festplatte, in OneDrive oder als Wiederherstellungs-Code zum Kopieren. Du musst nichts auswählen – es wird alles gesichert. |
 | **Wiederherstellen** – nach dem Reset | Phoenix findet dein Profil von selbst (USB-Stick, Laufwerke, Desktop, Downloads, OneDrive). Du hakst an, was zurück soll – Phoenix installiert es still im Hintergrund, mit Live-Fortschritt. |
-| **Schnell-Setup** – ohne Profil | Für einen frischen PC: aus einer geprüften Liste beliebter Programme auswählen und alles in einem Rutsch installieren. |
+| **Zwei Sicherungs-Arten** | *Nur Apps & Spiele* oder *Apps + Einstellungen*: zusätzlich Monitore (Hauptmonitor, Hz, Auflösung, Drehung, Anordnung, Skalierung), Dunkelmodus, Taskleiste, Explorer, Maus, Spielmodus, Energiesparplan, Zeitzone. Keine Tweaks, keine Dateien. |
+| **Einrichten** – Monitore & Windows | Nach dem Reset (oder jederzeit über die Startseite): Hauptmonitor per Klick, Hz/Auflösung/Drehung wählen, „Alle auf max. Hz“. Wie in Windows wird nach 15 Sekunden automatisch zurückgesetzt, wenn du nicht „Behalten“ klickst. |
+| **Pakete** – ohne Sicherung | *Basic* (Monitore + Grund-Einstellungen), *Premium* (+ Chrome, Discord, Spotify, 7-Zip, VLC, PowerToys, Laufzeiten, Profi-Einstellungen, Grafiktreiber-Hinweis, VELOX), *Gaming* (+ Steam, Epic, OBS, Afterburner, HWiNFO, Ultimative Leistung und deine Spiele zum Anhaken). |
+| **VELOX Tweaker** | Steckt in Phoenix und wird mit einer Windows-Abfrage installiert. |
 
 Installiert wird über **winget**, den offiziellen Paketmanager von Windows. Phoenix lädt also nur Original-Installer der Hersteller.
 
@@ -64,7 +67,8 @@ Nach einem Reset kann **Smart App Control** aktiv sein. Im Modus *Auswertung* bl
 | **Spiele** (Steam, Epic Games …) | **Über die Launcher:** Phoenix installiert Steam/Epic und öffnet für jedes Spiel die Installationsseite im Launcher. Der Download läuft dort, nach deiner Anmeldung. |
 | Grafiktreiber | **Hinweis:** Phoenix kennt deine Grafikkarte und schlägt die passende Hersteller-App (NVIDIA App / AMD) vor. |
 | **Eigene Dateien** (Dokumente, Bilder, Spielstände außerhalb der Cloud) | **Nein** – vorher selbst sichern (OneDrive, externe Festplatte). |
-| **Einstellungen, Passwörter, Lizenzen, Logins** | **Nein** – Apps starten wie frisch installiert. Passwörter im Browser-Konto synchronisieren, Lizenzschlüssel notieren. |
+| **Windows-Einstellungen & Monitore** | **Ja**, bei der Sicherungs-Art *Apps + Einstellungen* (Schritt „Monitore & Einstellungen“ am Ende). Volle Hz-Zahlen gibt es erst mit Grafiktreiber – danach „Monitore anwenden“ einfach nochmal klicken. |
+| **App-Einstellungen, Passwörter, Lizenzen, Logins** | **Nein** – Apps starten wie frisch installiert. Passwörter im Browser-Konto synchronisieren, Lizenzschlüssel notieren. |
 
 ---
 

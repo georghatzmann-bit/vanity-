@@ -55,9 +55,16 @@ export default {
     const machineChip = h('div.home__machine', { hidden: true });
     const quick = h(
       'button.home__quick',
-      { type: 'button', onClick: () => go('select', 'slide'), onPointerenter: () => ctx.sound.play('hover') },
+      { type: 'button', onClick: () => go('packages'), onPointerenter: () => ctx.sound.play('hover') },
       icon('zap'),
-      h('span', h('b', 'Keine Sicherung?'), ' Starte mit beliebten Apps'),
+      h('span', h('b', 'Keine Sicherung?'), ' Pakete: Basic, Premium, Gaming'),
+      icon('arrow-right'),
+    );
+    const setupQuick = h(
+      'button.home__quick',
+      { type: 'button', onClick: () => go('setup'), onPointerenter: () => ctx.sound.play('hover') },
+      icon('monitor'),
+      h('span', h('b', 'Monitore & Windows'), ' jetzt einrichten'),
       icon('arrow-right'),
     );
 
@@ -77,7 +84,7 @@ export default {
       'div.screen__inner.home',
       h('section.home__hero', heroCopy, emblemSlot),
       h('section.home__actions', h('div', { dataset: { stagger: '' } }, backupCard), h('div', { dataset: { stagger: '' } }, restoreCard)),
-      h('footer.home__foot', { dataset: { stagger: '' } }, quick, machineChip),
+      h('footer.home__foot', { dataset: { stagger: '' } }, quick, setupQuick, machineChip),
     );
     container.append(inner);
 

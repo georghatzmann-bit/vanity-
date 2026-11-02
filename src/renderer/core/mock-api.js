@@ -63,6 +63,21 @@ function emitter() {
   };
 }
 
+const mockModes = (w, h, rates) => rates.map((hz) => ({ w, h, hz })).concat([{ w: 1920, h: 1080, hz: 60 }]);
+const MOCK_DISPLAYS = [
+  { device: '\\\\.\\DISPLAY1', name: '24G2W1G4', monitorId: 'AOC2402', width: 1920, height: 1080, hz: 60, rotation: 90, x: 0, y: 0, primary: true, modes: mockModes(1920, 1080, [60, 144, 165]) },
+  { device: '\\\\.\\DISPLAY2', name: 'LG ULTRAGEAR', monitorId: 'GSM5B7F', width: 2560, height: 1440, hz: 60, rotation: 0, x: 1080, y: 0, primary: false, modes: mockModes(2560, 1440, [60, 120, 144]) },
+];
+const MOCK_DEFS = [
+  { id: 'theme', group: 'Aussehen', label: 'Farbmodus', kind: 'choice', choices: [['dark', 'Dunkel'], ['light', 'Hell']] },
+  { id: 'taskbarAlign', group: 'Taskleiste', label: 'Taskleisten-Symbole', kind: 'choice', choices: [['left', 'Links'], ['center', 'Mitte']] },
+  { id: 'fileExt', group: 'Explorer', label: 'Dateiendungen anzeigen', kind: 'bool' },
+  { id: 'mouseAccel', group: 'Maus & Tastatur', label: 'Zeigerbeschleunigung', kind: 'bool' },
+  { id: 'mouseSpeed', group: 'Maus & Tastatur', label: 'Zeigergeschwindigkeit', kind: 'range', min: 1, max: 20 },
+  { id: 'gameMode', group: 'Gaming', label: 'Spielmodus', kind: 'bool' },
+  { id: 'power', group: 'System', label: 'Energiesparplan', kind: 'choice', choices: [['balanced', 'Ausbalanciert'], ['high', 'Höchstleistung'], ['ultimate', 'Ultimative Leistung']] },
+];
+
 export function createMockApi() {
   const bus = emitter();
   const saved = [];
@@ -211,6 +226,30 @@ export function createMockApi() {
     games: {
       launchers: async () => ({ epic: { installed: true }, steam: { installed: true } }),
       install: async (game) => ({ ok: true, uri: game.platform === 'steam' ? `steam://install/${game.appId}` : `com.epicgames.launcher://apps/${game.appName}?action=install` }),
+    },
+    settings: {
+      capture: async () => ({ displays: MOCK_DISPLAYS.map(({ modes, device, ...e }) => e), prefs: { theme: 'dark', taskbarAlign: 'left', mouseAccel: false, power: 'high' }, dpi: [] }),
+      defs: async () => MOCK_DEFS,
+      apply: async (values) => {
+        await sleep(600);
+        return { results: Object.keys(values || {}).map((id) => ({ id, ok: true, error: '' })) };
+      },
+    },
+    displays: {
+      suggest: async ({ maximize } = {}) => ({
+        entries: MOCK_DISPLAYS.map((d) => (maximize ? { ...d, hz: Math.max(...d.modes.filter((m) => m.w === d.width).map((m) => m.hz)) } : { ...d })),
+      }),
+      apply: async () => {
+        await sleep(800);
+        return { ok: true, restart: false, previous: MOCK_DISPLAYS.map(({ modes, name, ...e }) => e) };
+      },
+    },
+    extras: {
+      list: async () => [{ id: 'velox', name: 'VELOX Tweaker', version: '1.3.0', desc: 'Dein PC-Tweaker mit Presets, KI-Analyse und Sicherung jeder Änderung', available: true }],
+      install: async () => {
+        await sleep(1200);
+        return { ok: true };
+      },
     },
     shell: { open: async () => true, showItem: async () => true },
     clipboard: {

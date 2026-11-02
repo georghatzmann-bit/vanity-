@@ -124,6 +124,18 @@ function registerIpc(getWin) {
   handle('games:launchers', () => backend.detectLaunchers());
   handle('games:install', (game, mode) => backend.installGame(game, mode));
 
+  // --- settings / monitors / own programs ----------------------------------
+  handle('settings:capture', () => backend.captureSettings());
+  handle('settings:defs', () => backend.settingsDefs());
+  handle('settings:apply', (values, dpi) => backend.applyPrefs(values && typeof values === 'object' ? values : {}, Array.isArray(dpi) ? dpi : []));
+  handle('displays:suggest', (opts) => backend.suggestDisplays(opts && typeof opts === 'object' ? opts : {}));
+  handle('displays:apply', (entries) => {
+    if (!Array.isArray(entries) || !entries.length || entries.length > 16) throw new Error('Keine Monitore übergeben.');
+    return backend.applyDisplays(entries);
+  });
+  handle('extras:list', () => backend.listExtras());
+  handle('extras:install', (id) => backend.installExtra(requireString(id, 'Programm', 40)));
+
   // --- misc ---------------------------------------------------------------
   handle('shell:open', (url) => openExternalSafe(url));
   handle('shell:showItem', (file) => {

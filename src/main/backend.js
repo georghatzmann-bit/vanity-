@@ -11,6 +11,9 @@ const paths = require('./util/paths');
 const queue = require('./install/queue');
 const games = require('./games/launch');
 
+const settings = require('./settings');
+const extras = require('./settings/extras');
+
 module.exports = {
   getMachineInfo: () => hardware.getMachineInfo(),
   getWingetStatus: () => locate.getStatus(),
@@ -31,4 +34,11 @@ module.exports = {
   isInstallRunning: () => queue.isRunning(),
   detectLaunchers: () => games.detectLaunchers(),
   installGame: (game, mode) => games.installGame(game, mode),
+  captureSettings: () => settings.capture(),
+  settingsDefs: async () => settings.defs(),
+  applyPrefs: (values, dpi) => settings.applyPrefs(values, dpi),
+  suggestDisplays: (opts) => settings.suggestDisplays(opts),
+  applyDisplays: (entries) => settings.applyDisplays(entries),
+  listExtras: async () => extras.listExtras(),
+  installExtra: (id) => extras.installExtra(id),
 };
