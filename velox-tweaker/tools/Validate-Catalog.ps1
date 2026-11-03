@@ -1,7 +1,8 @@
 ﻿<#
 .SYNOPSIS
   Strict validation of the VELOX data files (data/categories.json, data/tweaks/*.json,
-  data/presets.json, data/detweak.json) against docs/ARCHITECTURE.md sections 3-5.
+  data/presets.json, data/detweak.json, data/bios/recommendations.json) against docs/ARCHITECTURE.md
+  sections 3-5 and "BIOS-Optimierer".
 
 .EXAMPLE
   pwsh tools/Validate-Catalog.ps1                 # validate everything, exit 1 on errors
@@ -511,6 +512,163 @@ if (Test-Path $detFile) {
     }
 } elseif (-not $AllowMissing) { Add-Err $detFile 'missing' }
 
+# ---------------------------------------------------------------- BIOS recommendations
+# data/bios/recommendations.json (core/Bios.ps1, docs/ARCHITECTURE.md "BIOS-Optimierer"). The website's
+# phone page copies the file, so the texts follow the same rules as the app's.
+$biosFile = Join-Path (Join-Path $DataDir 'bios') 'recommendations.json'
+$BiosVendors = @('asus', 'msi', 'gigabyte', 'asrock', 'generic')
+$BiosNeeds = @('secureBoot', 'tpm', 'vbs', 'uefi')
+$BiosCpuTags = @('ryzen', 'x3d', 'x3d-locked', 'x3d-tunable', 'x3d-dual', 'ryzen-tunable', 'am5', 'raptor-lake', 'intel-k')
+$BiosGpuTags = @('rebar-capable')
+# fact -> the values core/Bios.ps1 ConvertTo-VxBiosFacts can produce
+$BiosFacts = @{
+    'ram.profile' = @('on', 'off', 'unknown'); 'ram.dualChannel' = @('yes', 'no', 'unknown'); 'gpu.rebar' = @('on', 'off', 'unknown')
+    'firmware.mode' = @('uefi', 'legacy', 'unknown'); 'firmware.csm' = @('on', 'off', 'unknown'); 'firmware.secureBoot' = @('on', 'off', 'unknown')
+    'tpm.state' = @('on', 'off', 'old', 'unknown'); 'virtualization.advice' = @('needed', 'nocost', 'optional', 'unknown')
+    'bitlocker.state' = @('on', 'off', 'suspended', 'unknown')
+}
+# warning ids core/Bios.ps1 Get-VxBiosReport has a rule for
+$BiosWarningIds = @('legacy-boot', 'intel-microcode', 'bios-old', 'bitlocker', 'vbs-fps', 'laptop', 'vendor-unknown', 'not-admin')
+
+function Test-BiosText([string]$where, $value, [int]$max, [switch]$Optional) {
+    if ($null -eq $value -or [string]::IsNullOrWhiteSpace([string]$value)) { if (-not $Optional) { Add-Err $where 'text missing' }; return }
+    if (-not ($value -is [string])) { Add-Err $where 'must be a string'; return }
+    if ($value.Length -gt $max) { Add-Err $where "longer than $max characters ($($value.Length))" }
+    if ($value -match '[<>]') { Add-Err $where 'no HTML / angle brackets in texts' }
+    if ($value.Contains('"')) { Add-Err $where 'use German quotes „…“, not "' }
+    if ($value -match '\s$|^\s') { Add-Err $where 'leading/trailing whitespace' }
+}
+
+function Test-BiosSteps([string]$where, $steps, [switch]$NeedAny) {
+    if ($steps -is [System.Array]) {
+        if ($steps.Count -lt 1 -or $steps.Count -gt 6) { Add-Err $where 'needs 1-6 steps' }
+        $i = 0
+        foreach ($x in $steps) { Test-BiosText "$where[$i]" $x 220; $i++ }
+        return
+    }
+    if ($null -eq $steps -or -not ($steps -is [System.Management.Automation.PSCustomObject])) { Add-Err $where 'steps must be an array or { any, amd, intel }'; return }
+    $keys = @($steps.PSObject.Properties.Name)
+    foreach ($k in $keys) {
+        if (@('any', 'amd', 'intel') -notcontains $k) { Add-Err $where "unknown platform '$k' (any|amd|intel)"; continue }
+        $list = @(Get-Prop $steps $k)
+        if ($list.Count -lt 1 -or $list.Count -gt 6) { Add-Err "$where.$k" 'needs 1-6 steps' }
+        $i = 0
+        foreach ($x in $list) { Test-BiosText "$where.$k[$i]" $x 220; $i++ }
+    }
+    if (-not (($keys -contains 'amd') -and ($keys -contains 'intel')) -and -not ($keys -contains 'any')) { Add-Err $where "a platform list needs both 'amd' and 'intel', or 'any'" }
+    if ($NeedAny -and $keys -notcontains 'any') { Add-Err $where "the generic steps need an 'any' list for other CPUs" }
+}
+
+if (-not $File -and (Test-Path -LiteralPath $biosFile)) {
+    $bd = Read-JsonFile $biosFile
+    if ($null -ne $bd) {
+        $bw = 'bios/recommendations.json'
+        if ((Get-Prop $bd 'version') -ne 1) { Add-Err $bw 'version must be 1 (the link format version, docs/ARCHITECTURE.md)' }
+        $sl = Get-Prop $bd 'statusLabels'
+        foreach ($k in @('o', 't', 'u')) { Test-BiosText "$bw statusLabels.$k" (Get-Prop $sl $k) 40 }
+        $rl = Get-Prop $bd 'riskLabels'
+        foreach ($k in @('safe', 'moderate')) { Test-BiosText "$bw riskLabels.$k" (Get-Prop $rl $k) 20 }
+        if (Has-Prop $rl 'risky') { Add-Err $bw 'no risky BIOS recommendations (riskLabels.risky)' }
+        $gen = Get-Prop $bd 'general'
+        foreach ($k in @('pathNote', 'intro', 'saveNote')) { Test-BiosText "$bw general.$k" (Get-Prop $gen $k) 300 }
+        if ([string](Get-Prop $gen 'recoveryUrl') -ne 'https://aka.ms/myrecoverykey') { Add-Err $bw 'general.recoveryUrl must be https://aka.ms/myrecoverykey' }
+        $ven = Get-Prop $bd 'vendors'
+        foreach ($v in $BiosVendors) {
+            $vo = Get-Prop $ven $v
+            if ($null -eq $vo) { Add-Err $bw "vendors.$v missing"; continue }
+            foreach ($k in @('name', 'biosKey', 'advanced', 'save', 'help')) { Test-BiosText "$bw vendors.$v.$k" (Get-Prop $vo $k) 160 }
+        }
+        if ($null -ne $ven) { foreach ($k in @($ven.PSObject.Properties.Name)) { if ($BiosVendors -notcontains $k) { Add-Err $bw "unknown vendor '$k'" } } }
+        $codes = @{}
+        foreach ($g in @(Get-Prop $bd 'games')) {
+            $gw = "$bw games $($g.code)"
+            if ([string](Get-Prop $g 'code') -notmatch '^[a-z0-9]{3}$') { Add-Err $gw 'code must be 3 characters a-z0-9' }
+            elseif ($codes.ContainsKey('g:' + $g.code)) { Add-Err $gw 'duplicate game code' } else { $codes['g:' + $g.code] = 1 }
+            Test-BiosText "$gw name" (Get-Prop $g 'name') 40
+            $needs = @(Get-Prop $g 'needs')
+            if ($needs.Count -eq 0) { Add-Err $gw 'needs must name at least one feature' }
+            foreach ($n in $needs) { if ($BiosNeeds -notcontains [string]$n) { Add-Err $gw "unknown need '$n'" } }
+            $match = @(Get-Prop $g 'match') + @(Get-Prop $g 'services')
+            if (@($match | Where-Object { $_ }).Count -eq 0) { Add-Err $gw 'match or services needed' }
+            foreach ($m in @(Get-Prop $g 'match')) { if ([string]$m -ne ([string]$m).ToLowerInvariant() -or [string]::IsNullOrWhiteSpace([string]$m)) { Add-Err $gw "match '$m' must be lower case and non-empty" } }
+        }
+        $ids = @{}
+        $items = @(Get-Prop $bd 'items')
+        if ($items.Count -eq 0) { Add-Err $bw 'items must be a non-empty array' }
+        foreach ($it in $items) {
+            $iw = "$bw items $($it.id)"
+            if ([string](Get-Prop $it 'id') -notmatch '^[a-z0-9]+(-[a-z0-9]+)*$') { Add-Err $iw 'id must be lower-case words with -' }
+            elseif ($ids.ContainsKey([string]$it.id)) { Add-Err $iw 'duplicate id' } else { $ids[[string]$it.id] = 1 }
+            if ([string](Get-Prop $it 'code') -notmatch '^[a-z]{2}$') { Add-Err $iw 'code must be two letters a-z (link format)' }
+            elseif ($codes.ContainsKey('i:' + $it.code)) { Add-Err $iw "duplicate code '$($it.code)'" } else { $codes['i:' + $it.code] = 1 }
+            if (@('core', 'optional') -notcontains [string](Get-Prop $it 'section')) { Add-Err $iw 'section must be core|optional' }
+            if (@('safe', 'moderate') -notcontains [string](Get-Prop $it 'risk')) { Add-Err $iw 'risk must be safe|moderate (never risky)' }
+            if (-not (Test-IsInt (Get-Prop $it 'impact')) -or [int](Get-Prop $it 'impact') -lt 1 -or [int](Get-Prop $it 'impact') -gt 3) { Add-Err $iw 'impact must be 1..3' }
+            Test-BiosText "$iw title" (Get-Prop $it 'title') 70
+            Test-BiosText "$iw why" (Get-Prop $it 'why') 400
+            Test-BiosText "$iw info" (Get-Prop $it 'info') 500 -Optional
+            $when = Get-Prop $it 'when'
+            if ($null -ne $when) {
+                foreach ($k in @($when.PSObject.Properties.Name)) {
+                    $val = Get-Prop $when $k
+                    switch ($k) {
+                        'formFactor' { if (@('desktop', 'laptop') -notcontains [string]$val) { Add-Err $iw 'when.formFactor must be desktop|laptop' } }
+                        'cpuVendor' { if (@('amd', 'intel') -notcontains [string]$val) { Add-Err $iw 'when.cpuVendor must be amd|intel' } }
+                        'cpuTags' { foreach ($x in @($val)) { if ($BiosCpuTags -notcontains [string]$x) { Add-Err $iw "unknown cpu tag '$x'" } } }
+                        'gpuTags' { foreach ($x in @($val)) { if ($BiosGpuTags -notcontains [string]$x) { Add-Err $iw "unknown gpu tag '$x'" } } }
+                        'ramType' { foreach ($x in @($val)) { if (@('DDR3', 'DDR4', 'DDR5') -notcontains [string]$x) { Add-Err $iw "unknown RAM type '$x'" } } }
+                        default { Add-Err $iw "unknown when condition '$k'" }
+                    }
+                }
+            }
+            $chk = Get-Prop $it 'check'
+            if ($null -ne $chk) {
+                $fact = [string](Get-Prop $chk 'fact')
+                if (-not $BiosFacts.ContainsKey($fact)) { Add-Err $iw "check.fact '$fact' is not a known fact" }
+                else {
+                    foreach ($k in @('ok', 'todo')) { foreach ($x in @(Get-Prop $chk $k)) { if ($BiosFacts[$fact] -notcontains [string]$x) { Add-Err $iw "check.$k value '$x' is not a value of $fact" } } }
+                    if (@(Get-Prop $chk 'ok').Count -eq 0) { Add-Err $iw 'check.ok must name at least one value' }
+                }
+            }
+            $feat = Get-Prop $it 'feature'
+            if ($null -ne $feat -and $BiosNeeds -notcontains [string]$feat) { Add-Err $iw "unknown feature '$feat'" }
+            if ((Has-Prop $it 'direction') -and @('on', 'off') -notcontains [string](Get-Prop $it 'direction')) { Add-Err $iw 'direction must be on|off' }
+            $steps = Get-Prop $it 'steps'
+            if ($null -eq $steps -or -not (Has-Prop $steps 'generic')) { Add-Err $iw 'steps.generic missing (fallback for every vendor)' }
+            else {
+                foreach ($k in @($steps.PSObject.Properties.Name)) {
+                    if ($BiosVendors -notcontains $k) { Add-Err $iw "steps for unknown vendor '$k'"; continue }
+                    $gs = Get-Prop $steps $k
+                    if ($k -eq 'generic') { Test-BiosSteps "$iw steps.generic" $gs -NeedAny:(-not ($gs -is [System.Array])) } else { Test-BiosSteps "$iw steps.$k" $gs }
+                }
+            }
+            foreach ($v in @(Get-Prop $it 'verified')) {
+                if ($BiosVendors -notcontains [string]$v -or [string]$v -eq 'generic') { Add-Err $iw "verified: unknown vendor '$v'" }
+                elseif (-not (Has-Prop $steps ([string]$v))) { Add-Err $iw "verified vendor '$v' has no own steps" }
+            }
+            if (-not (Has-Prop $it 'verified')) { Add-Err $iw "'verified' missing (list the vendors whose menu path was checked, [] if none)" }
+            $st = Get-Prop $it 'statusText'
+            if ($null -ne $st) { foreach ($k in @($st.PSObject.Properties.Name)) { if (@('o', 't', 'u') -notcontains $k) { Add-Err $iw "statusText.${k}: only o|t|u" } else { Test-BiosText "$iw statusText.$k" (Get-Prop $st $k) 40 } } }
+        }
+        foreach ($w in @(Get-Prop $bd 'warnings')) {
+            $ww = "$bw warnings $($w.id)"
+            if ($BiosWarningIds -notcontains [string](Get-Prop $w 'id')) { Add-Err $ww 'unknown warning id (core/Bios.ps1 Get-VxBiosReport has no rule for it)' }
+            elseif ($codes.ContainsKey('w:' + $w.id)) { Add-Err $ww 'duplicate warning id' } else { $codes['w:' + $w.id] = 1 }
+            if ([string](Get-Prop $w 'code') -notmatch '^[a-z]{2}$') { Add-Err $ww 'code must be two letters a-z' }
+            elseif ($codes.ContainsKey('wc:' + $w.code)) { Add-Err $ww "duplicate warning code '$($w.code)'" } else { $codes['wc:' + $w.code] = 1 }
+            if (@('bad', 'warn', 'info') -notcontains [string](Get-Prop $w 'severity')) { Add-Err $ww 'severity must be bad|warn|info' }
+            Test-BiosText "$ww title" (Get-Prop $w 'title') 70
+            Test-BiosText "$ww text" (Get-Prop $w 'text') 600
+            $tw = Get-Prop $w 'tweak'
+            if ($null -ne $tw -and $AllTweaks.Count -gt 0 -and -not $AllTweaks.ContainsKey([string]$tw)) { Add-Err $ww "tweak '$tw' is not in the catalog" }
+        }
+        foreach ($id in $BiosWarningIds) { if (-not $codes.ContainsKey('w:' + $id)) { Add-Err $bw "warning '$id' missing (core/Bios.ps1 shows it)" } }
+    }
+} elseif (-not $File -and -not $AllowMissing -and ((Resolve-Path -LiteralPath $DataDir).Path -eq (Resolve-Path -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) 'data')).Path)) {
+    # the app's own data folder must have it; a test catalog (tests/fixtures/data) borrows the app's file
+    Add-Err $biosFile 'missing'
+}
+
 # ---------------------------------------------------------------- report
 $total = $AllTweaks.Count
 if (-not $Quiet) {
@@ -518,6 +676,8 @@ if (-not $Quiet) {
 }
 foreach ($e in $script:Errors) { Write-Host $e -ForegroundColor Red }
 $risky = @($AllTweaks.Values | Where-Object { $_.risk -eq 'risky' }).Count
-Write-Host ("Catalog: {0} tweaks in {1} files, {2} risky - {3} error(s), {4} warning(s)" -f $total, (@($others + $files)).Count, $risky, $script:Errors.Count, $script:Warnings.Count)
+$biosNote = ''
+if (Get-Variable -Name bd -ErrorAction SilentlyContinue) { if ($null -ne $bd) { $biosNote = (', {0} BIOS items' -f @(Get-Prop $bd 'items').Count) } }
+Write-Host ("Catalog: {0} tweaks in {1} files, {2} risky{5} - {3} error(s), {4} warning(s)" -f $total, (@($others + $files)).Count, $risky, $script:Errors.Count, $script:Warnings.Count, $biosNote)
 if ($script:Errors.Count -gt 0) { exit 1 }
 exit 0

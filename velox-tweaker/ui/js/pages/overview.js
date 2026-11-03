@@ -27,6 +27,10 @@ export function describeProfile(p) {
   const ramObj = p.ram && typeof p.ram === 'object' ? p.ram : {};
   const ramGB = pick(p.ramGB, ramObj.totalGB, ramObj.gb, p.memoryGB, typeof p.ram === 'number' ? p.ram : null);
   const ramSpeed = pick(ramObj.speedMHz, ramObj.speedMhz, ramObj.speed, p.ramSpeedMhz, p.ramSpeed);
+  const ramConf = pick(ramObj.configuredMHz, null);
+  // running below what the modules can do = the RAM profile (XMP / EXPO) is off (core/Bios.ps1)
+  const ramSlow = ramObj.profile === 'off' || (ramConf && ramSpeed && ramSpeed > ramConf + 100);
+  const ramSpeedText = ramConf && ramSpeed && ramSpeed > ramConf + 100 ? ramConf + ' von ' + ramSpeed + ' MHz' : (ramConf || ramSpeed) ? (ramConf || ramSpeed) + ' MHz' : null;
   const disks = Array.isArray(p.disks) ? p.disks : Array.isArray(p.drives) ? p.drives : [];
   const sys = disks.find(d => d && (d.system || d.isSystem)) || disks[0] || {};
   const diskType = String(pick(p.systemDisk, sys.media, sys.type, sys.mediaType, '') || '').toLowerCase();
@@ -44,7 +48,7 @@ export function describeProfile(p) {
   return [
     { key: 'cpu', icon: 'cpu', label: 'Prozessor', value: cpuName, sub: [cores && cores + ' Kerne', threads && threads + ' Threads'].filter(Boolean).join(' · ') || ' ' },
     { key: 'gpu', icon: 'gpu', label: 'Grafikkarte', value: gpu.name || 'Unbekannt', sub: [gpu.vramGB ? gpu.vramGB + ' GB VRAM' : null, gpus.length > 1 ? '+' + (gpus.length - 1) + ' weitere' : null, gpu.driver ? 'Treiber ' + gpu.driver : null].filter(Boolean).join(' · ') || ' ' },
-    { key: 'ram', icon: 'ram', label: 'Arbeitsspeicher', value: ramGB ? fmtNumber(Number(ramGB)) + ' GB' + (ramObj.type ? ' ' + ramObj.type : '') : 'Unbekannt', sub: [ramSpeed ? ramSpeed + ' MHz' : null, ramObj.modules ? ramObj.modules + (ramObj.modules === 1 ? ' Modul' : ' Module') : null].filter(Boolean).join(' · ') || ' ' },
+    { key: 'ram', icon: 'ram', label: 'Arbeitsspeicher', value: ramGB ? fmtNumber(Number(ramGB)) + ' GB' + (ramObj.type && ramObj.type !== 'unknown' ? ' ' + ramObj.type : '') : 'Unbekannt', sub: [ramSpeedText, ramSlow ? 'RAM-Profil aus' : null, ramObj.modules ? ramObj.modules + (ramObj.modules === 1 ? ' Modul' : ' Module') : null].filter(Boolean).join(' · ') || ' ', warn: !!ramSlow },
     { key: 'disk', icon: 'drive', label: 'Systemlaufwerk', value: diskType === 'ssd' || diskType === 'nvme' ? (sys.bus === 'nvme' ? 'NVMe-SSD' : 'SSD') : diskType === 'hdd' ? 'Festplatte (HDD)' : (diskName || 'Unbekannt'), sub: [diskType ? diskName : null, freeGB !== undefined && freeGB !== null ? fmtNumber(Number(freeGB), 0) + ' GB frei' : null].filter(Boolean).join(' · ') || ' ' },
     { key: 'os', icon: 'windows', label: 'Windows', value: osName, sub: [osVer, build && 'Build ' + build].filter(Boolean).join(' · ') || ' ' },
     { key: 'display', icon: 'monitor', label: 'Bildschirm', value: hz ? hz + ' Hz' : 'Unbekannt', sub: [res, maxHz && hz && maxHz > hz ? 'kann ' + maxHz + ' Hz' : null].filter(Boolean).join(' · ') || ' ', warn: !!(maxHz && hz && maxHz > hz + 5) }
@@ -164,6 +168,32 @@ export default {
       sysShown = true;
     }
 
+    // ---------- mainboard, BIOS and RAM profile -> BIOS page
+    const biosStrip = h('button', { class: 'card clickable bios-strip spot', type: 'button', 'data-testid': 'overview-bios', hidden: true });
+    biosStrip.addEventListener('click', () => ctx.navigate('bios'));
+    function fillBios() {
+      const p = ctx.state.profile || {};
+      const b = p.board;
+      clear(biosStrip);
+      biosStrip.hidden = !b;
+      if (!b) return;
+      const r = p.ram || {};
+      const prof = r.profile === 'on' ? h('span', { class: 'is-ok', text: 'RAM-Profil an' })
+        : r.profile === 'off' ? h('span', { class: 'is-warn', text: 'RAM-Profil aus' + (r.configuredMHz && r.speedMHz > r.configuredMHz + 100 ? ' – ' + r.configuredMHz + ' statt ' + r.speedMHz + ' MHz' : '') })
+          : h('span', { text: 'RAM-Profil unklar' });
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(b.biosDate || ''));
+      append(biosStrip,
+        h('span', { class: 'bios-strip-icon' }, icon('board', 20)),
+        h('span', { class: 'bios-strip-text' },
+          h('span', { class: 'bios-strip-label', text: 'Mainboard & BIOS' }),
+          h('span', { class: 'bios-strip-value', 'data-testid': 'overview-board', text: [b.vendorName, b.model].filter(Boolean).join(' ') || 'Unbekannt' }),
+          h('span', { class: 'bios-strip-sub' },
+            h('span', { 'data-testid': 'overview-bios-version', text: 'BIOS ' + (b.biosVersion || '?') + (m ? ' vom ' + m[3] + '.' + m[2] + '.' + m[1] : '') }),
+            h('span', { 'data-testid': 'overview-ram-profile' }, prof),
+            b.firmware === 'legacy' ? h('span', { class: 'is-warn', text: 'Legacy-Start (CSM)' }) : null)),
+        h('span', { class: 'bios-strip-go' }, h('span', { text: 'BIOS-Check öffnen' }), icon('arrowRight', 15)));
+    }
+
     // ---------- stats
     const statActive = h('span', { class: 'stat-num', text: '0' });
     const statActiveOf = h('span', { class: 'stat-of' });
@@ -241,22 +271,24 @@ export default {
       tile('stack', 'Preset anwenden', 'Fertige Pakete für Gaming, Esport, Laptop …', 'presets'),
       tile('undo', 'Detweak', 'Tweaks anderer Tools sauber zurücksetzen', 'detweak'),
       tile('broom', 'Reinigung', 'Temp-Dateien und Caches löschen', 'cleanup'),
-      tile('gamepad', 'Spiele boosten', 'Priorität und Grafikkarte pro Spiel', 'games'));
+      tile('gamepad', 'Spiele boosten', 'Priorität und Grafikkarte pro Spiel', 'games'),
+      tile('board', 'BIOS-Check', 'Was du im BIOS für deine Spiele einstellen solltest', 'bios'));
 
     append(el, 
       hero,
       h('div', { class: 'section-head' }, h('div', {}, h('h2', { class: 'section-title', text: 'Dein System' }), h('p', { class: 'section-desc', text: 'Erkannt beim letzten Scan. VELOX wählt passende Tweaks automatisch danach aus.' })),
         scanBadge),
       sysGrid,
+      biosStrip,
       stats,
       h('div', { class: 'split' },
         h('section', { class: 'card pad-24' }, h('div', { class: 'card-head' }, h('h2', { class: 'section-title', text: 'Wichtigste Befunde' }), ctx.cache.advisor ? button({ label: 'Alle ansehen', size: 'sm', variant: 'ghost', iconRight: 'arrowRight', onClick: () => ctx.navigate('advisor') }) : null), findBox),
         h('section', { class: 'card pad-24' }, h('div', { class: 'card-head' }, h('h2', { class: 'section-title', text: 'Schnellzugriff' })), tiles)));
     stagger(el, ':scope > *');
 
-    fillHero(); fillSys(); fillStats(); fillFindings(); fillBackup();
+    fillHero(); fillSys(); fillBios(); fillStats(); fillFindings(); fillBackup();
     ctx.on('statuses', fillStats);
-    ctx.on('state', () => { fillSys(); fillStats(); fillScanBadge(); fillCta(); });
+    ctx.on('state', () => { fillSys(); fillBios(); fillStats(); fillScanBadge(); fillCta(); });
     ctx.on('scanning', () => { fillSys(); fillScanBadge(); });
     ctx.on('advisor', () => { fillHero(); fillFindings(); });
     ctx.on('pending', fillCta);

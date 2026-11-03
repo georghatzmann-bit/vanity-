@@ -1,0 +1,23 @@
+{
+  "comment": "Fake PC: MSI B650 + Ryzen 7 7800X3D + Radeon RX 7800 XT, DDR5-6000 with EXPO on, current BIOS, WSL installed, Battlefield 6 (needs VBS).",
+  "now": "2026-11-01",
+  "admin": true,
+  "chassis": "desktop",
+  "baseBoard": { "Manufacturer": "Micro-Star International Co., Ltd.", "Product": "MAG B650 TOMAHAWK WIFI (MS-7D75)" },
+  "computerSystem": { "Manufacturer": "Micro-Star International Co., Ltd.", "Model": "MS-7D75", "HypervisorPresent": true },
+  "bios": { "Manufacturer": "American Megatrends International, LLC.", "SMBIOSBIOSVersion": "1.J0", "ReleaseDate": "20250610000000.000000+000" },
+  "processor": { "Name": "AMD Ryzen 7 7800X3D 8-Core Processor", "Manufacturer": "AuthenticAMD", "VirtualizationFirmwareEnabled": false },
+  "memory": [
+    { "Capacity": 17179869184, "Speed": 4800, "ConfiguredClockSpeed": 6000, "SMBIOSMemoryType": 34, "DeviceLocator": "DIMMA2", "BankLabel": "P0 CHANNEL A", "PartNumber": "CMH32GX5M2B6000C30", "Manufacturer": "Corsair" },
+    { "Capacity": 17179869184, "Speed": 4800, "ConfiguredClockSpeed": 6000, "SMBIOSMemoryType": 34, "DeviceLocator": "DIMMB2", "BankLabel": "P0 CHANNEL B", "PartNumber": "CMH32GX5M2B6000C30", "Manufacturer": "Corsair" }
+  ],
+  "gpus": [ { "Name": "AMD Radeon RX 7800 XT", "PNPDeviceID": "PCI\\VEN_1002&DEV_747E" }, { "Name": "AMD Radeon(TM) Graphics", "PNPDeviceID": "PCI\\VEN_1002&DEV_164E" } ],
+  "firmwareType": "uefi",
+  "secureBoot": 1,
+  "tpm": { "present": true, "enabled": true, "activated": true, "specVersion": "2.0, 0, 1.59", "manufacturer": "AMD" },
+  "deviceGuard": { "vbs": 2, "services": [2] },
+  "vmUse": ["WSL"],
+  "bitlocker": { "none": true },
+  "services": [],
+  "games": ["battlefield 6 bf6.exe", "counter-strike 2 cs2.exe"]
+}

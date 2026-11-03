@@ -1,0 +1,19 @@
+{
+  "comment": "Fake PC: an older Dell desktop in legacy (CSM) boot, one RAM module, GTX 1060, VELOX without admin rights (TPM and BitLocker not readable).",
+  "now": "2026-11-01",
+  "admin": false,
+  "chassis": "desktop",
+  "baseBoard": { "Manufacturer": "Dell Inc.", "Product": "0J37VM" },
+  "computerSystem": { "Manufacturer": "Dell Inc.", "Model": "XPS 8930", "HypervisorPresent": false },
+  "bios": { "Manufacturer": "Dell Inc.", "SMBIOSBIOSVersion": "1.1.21", "ReleaseDate": "2021-02-10" },
+  "processor": { "Name": "Intel(R) Core(TM) i7-8700 CPU @ 3.20GHz", "Manufacturer": "GenuineIntel", "VirtualizationFirmwareEnabled": true },
+  "memory": [
+    { "Capacity": 8589934592, "Speed": 2666, "ConfiguredClockSpeed": 2666, "SMBIOSMemoryType": 26, "DeviceLocator": "DIMM1", "BankLabel": "", "PartNumber": "HMA81GU6CJR8N-VK", "Manufacturer": "SK Hynix" }
+  ],
+  "gpus": [ { "Name": "NVIDIA GeForce GTX 1060 6GB", "PNPDeviceID": "PCI\\VEN_10DE&DEV_1C03" } ],
+  "nvidiaSmi": "    BAR1 Memory Usage\n        Total                             : 256 MiB\n",
+  "firmwareType": "bios",
+  "vmUse": [],
+  "services": [],
+  "games": []
+}

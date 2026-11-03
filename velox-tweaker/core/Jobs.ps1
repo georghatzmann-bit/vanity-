@@ -7,7 +7,7 @@
 function Get-VxJobTypes {
     return @('scan', 'apply', 'revert', 'restorepoint', 'restore', 'detweak-scan', 'detweak', 'advisor', 'claude', 'ai', 'ai-status',
         'clean-scan', 'run-action', 'startup-list', 'startup-set', 'games-detect', 'game-boost', 'pick-file',
-        'explorer-restart', 'reboot', 'restorepoint-list', 'restorepoint-clean')
+        'explorer-restart', 'reboot', 'restorepoint-list', 'restorepoint-clean', 'bios-scan', 'bios-reboot')
 }
 
 # Jobs that change the system (after them a cached Detweak scan is stale).
@@ -16,7 +16,7 @@ function Get-VxMutatingJobTypes {
 }
 
 function Get-VxCoreNames {
-    return @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Clean', 'Jobs')
+    return @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Clean', 'Bios', 'Jobs')
 }
 
 function Get-VxCoreFiles {
@@ -330,6 +330,8 @@ function Invoke-VxJobBody {
             'pick-file' { $r = Invoke-VxPickFileJob $p }
             'explorer-restart' { $r = Invoke-VxExplorerRestartJob $p }
             'reboot' { $r = Invoke-VxRebootJob $p }
+            'bios-scan' { $r = Invoke-VxBiosScanJob $p }
+            'bios-reboot' { $r = Invoke-VxBiosRebootJob $p }
             default { throw ("Unbekannter Job-Typ '{0}'" -f $job.type) }
         }
         try { Complete-VxPowerChanges } catch { Write-VxLog 'warn' ('Energieplan konnte nicht neu aktiviert werden: ' + $_.Exception.Message) }

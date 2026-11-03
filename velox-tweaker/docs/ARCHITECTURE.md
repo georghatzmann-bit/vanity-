@@ -38,6 +38,7 @@ velox-tweaker/
     Extras.ps1            startup manager, game booster, file picker
     Clean.ps1             Reinigung: clean-scan / run-action, allow-list, junction-safe walk, long-running tools
                           (DISM, SFC, CHKDSK, Datenträgerbereinigung) with live percent, timeout, cancel, skip (§3a)
+    Bios.ps1              BIOS-Optimierer: read-only firmware/hardware facts, checklist from data/bios, "Neustart ins BIOS" (§7a)
     Jobs.ps1              background job runner: one reused worker runspace, one job at a time
     Server.ps1            HttpListener, routing, auth, static files
   data/
@@ -45,15 +46,18 @@ velox-tweaker/
     tweaks/<category>.json  catalog, one file per category (schema §3)
     presets.json          presets (§4)
     detweak.json          foreign-tweak reset list (§5)
+    bios/recommendations.json  BIOS checklist texts + rules (§7a); the website copies it for the phone page
   ui/
     index.html
-    css/app.css, css/games.css (Spiele page), css/cleanup.css (Reinigung page)
-    js/app.js, js/api.js, js/ui.js (components), js/icons.js, js/ai.js (KI providers), js/splash.js (start sequence), js/pages/<page>.js
+    css/app.css, css/games.css (Spiele page), css/cleanup.css (Reinigung page), css/bios.css (BIOS page + its print view)
+    js/app.js, js/api.js, js/ui.js (components), js/icons.js, js/ai.js (KI providers), js/splash.js (start sequence),
+    js/qr.js (QR encoder, MIT, §7a), js/pages/<page>.js
     brand/                copies of ../brand/ (tools/sync-brand.mjs): intro, sound, tokens, wordmarks, icon
   tests/
     Run-Tests.ps1         backend tests (pwsh 7 on Linux AND Windows PowerShell 5.1) — simulate mode
-    fixtures/             small fixture catalog + fake profiles + fake Claude responses + claude-cli (fake Claude Code CLI) + games/pc (fake PC for the game detection) + clean/ (New-CleanFixture.ps1 = fake PC for the Reinigung, fake-tool.ps1 = fake DISM/SFC output)
+    fixtures/             small fixture catalog + fake profiles + fake Claude responses + claude-cli (fake Claude Code CLI) + games/pc (fake PC for the game detection) + clean/ (New-CleanFixture.ps1 = fake PC for the Reinigung, fake-tool.ps1 = fake DISM/SFC output) + bios/ (fake PCs for the BIOS page, §7a)
     ui/run-ui-tests.mjs   Playwright end-to-end tests against `Velox.ps1 -Simulate -NoBrowser`
+    ui/qr-decode.mjs, ui/qr-selftest.mjs   independent QR decoder + encoder check (§7a); ui/bios-sample.json = backend output the mock serves
     native/               installer UI tests (Chromium, mocked bridge) + Velox.ps1 -HostPid contract (§11)
   tools/
     Validate-Catalog.ps1  strict schema validation of data/ (used by tests, run it after every edit)
@@ -553,6 +557,8 @@ mixed; `custom` a value is neither (set by another tool); `na` not applicable/no
 | `pick-file` | `{}` | `{ path }` (native dialog; `null` when cancelled or in simulate mode off Windows) |
 | `explorer-restart` | `{}` | `{ ok }` - ends this session's Explorer; Windows restarts it. Only if it is not back after 15 s, the backend starts `explorer.exe` with the desktop Explorer's token taken beforehand (`CreateProcessWithTokenW`: not elevated, outside VELOX.exe's job object), never with `Start-Process`; without a token the job fails with Task-Manager instructions. |
 | `reboot` | `{}` | `{ ok }` (`shutdown /r /t 10`; simulate: logged only) |
+| `bios-scan` | `{}` | `biosReport` (§7a) - read-only; also refreshes `state.profile.board` / `ram.profile` |
+| `bios-reboot` | `{ suspendBitLocker }` | `{ ok, simulated, bitlockerPaused }` - `shutdown /r /fw /t 10` (§7a); simulate: logged only |
 
 `goal` ∈ `gaming`, `competitive`, `balanced`, `privacy`, `laptop`, `streaming`, `fivem`.
 
@@ -625,9 +631,160 @@ Off Windows — or in Testmodus with `VELOX_GAMES_FIXTURE` set — the detection
 `tests/fixtures/games/pc` (`system.json` = registry, processes, Appx; `C/`, `D/` = drives), with
 generated placeholder art (no real logos).
 
-Only one mutating job runs at a time (409 otherwise). Read-only jobs (`scan`, `clean-scan`,
+Only one mutating job runs at a time (409 otherwise). Read-only jobs (`scan`, `clean-scan`, `bios-scan`,
 `detweak-scan`, `advisor`, `claude`, `ai`, `ai-status`, `startup-list`, `games-detect`) are also serialized for simplicity.
 Every job that changes something writes a journal **before** each change (§8).
+
+### 7a. BIOS-Optimierer (`bios-scan`, `bios-reboot`, core/Bios.ps1, ui/js/pages/bios.js)
+
+The BIOS page tells the user what to set in the BIOS for this PC and its games, marks what is already
+set, gives the steps per mainboard vendor, and can restart the PC straight into the BIOS. **VELOX never
+writes anything to the BIOS / firmware.** The only system actions are `shutdown /r /fw /t 10` and,
+when the user leaves the box ticked, pausing BitLocker for exactly one start (`DisableKeyProtectors`
+with `DisableCount 1`). A `bios` test checks the source for any other write.
+
+**Pipeline** (all in core/Bios.ps1): `Get-VxBiosRaw` (this PC, or a fixture PC) → `ConvertTo-VxBiosFacts`
+(every heuristic, pure, unit-tested) → `Get-VxBiosReport` (applicability, status, warnings, summary).
+
+| Reading | Source on Windows | Reliability |
+|---|---|---|
+| Mainboard vendor + model | `Win32_BaseBoard` (`Win32_ComputerSystem` when it says "Default string") | good; vendor normalised to `asus`/`msi`/`gigabyte`/`asrock`/`generic` |
+| BIOS vendor, version, date, age | `Win32_BIOS` (`SMBIOSBIOSVersion`, `ReleaseDate`) | good |
+| UEFI vs. legacy | `GetFirmwareType` (kernel32, Add-Type C# 5) | exact |
+| Secure Boot | `HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\State` `UEFISecureBootEnabled` (no admin needed) | exact; CSM counts as "off" only when Secure Boot is on (else "unbekannt") |
+| CPU, X3D, Raptor Lake | `Win32_Processor.Name` → tags `x3d-locked` (5000 X3D), `x3d-tunable`, `x3d-dual`, `am5`, `ryzen-tunable`, `raptor-lake` (13./14. gen desktop), `intel-k` | good (name based, mobile suffixes excluded) |
+| RAM profile (XMP/EXPO/D.O.C.P.) | `Win32_PhysicalMemory` `Speed` vs. `ConfiguredClockSpeed`, speed in the part number (G.Skill, Corsair, Kingston, Crucial, …) | `off`/high when `Speed` > configured; `off`/medium from the part number; `on` when configured > JEDEC base (DDR4 2666, DDR5 4800); everything at base speed with nothing better known = `unknown` (honest: only the BIOS knows) |
+| Dual channel | module count + channel letters in `DeviceLocator`/`BankLabel` (`DIMM_A2`, `ChannelA`, `Controller0-ChannelA`, `P0 CHANNEL A`, `DDR5_B2`) | 1 module = `no`; ≥ 2 channels = `yes`; same channel = `no`; unreadable names = `unknown` |
+| Resizable BAR | NVIDIA: `nvidia-smi -q -d MEMORY` BAR1 total > 256 MiB = on, 256 = off; legacy boot = off | NVIDIA only; AMD/Intel = `unknown` ("im BIOS prüfen") |
+| Above 4G Decoding | not readable | instructions only (part of the ReBAR item) |
+| TPM | `Win32_Tpm` (admin) | exact with admin; `kind` firmware (AMD/INTC) / discrete; without admin `unknown` |
+| VBS / HVCI / hypervisor | `Win32_DeviceGuard`, `Win32_ComputerSystem.HypervisorPresent`, `Win32_Processor.VirtualizationFirmwareEnabled` (false while a hypervisor runs) | good |
+| Who needs virtualization | VirtualBox, VMware, BlueStacks, LDPlayer, Nox, MEmu, Docker, Android emulator (files), WSL (`HKCU\…\Lxss`), Hyper-V (`vmms` service) | good for the usual ones |
+| BitLocker on C: | `Win32_EncryptableVolume` (admin): protection on = `on`, off but encrypted = `suspended` | exact with admin; without admin `unknown` |
+| Games that need Secure Boot / TPM / VBS | the game library (`games-detect`, 5-min cache) + services `vgc` (Vanguard), `FACEIT` | as good as the game detection |
+
+Fixture PCs (`tests/fixtures/bios/*.json`, same field names as the CIM classes): `asus-5800x3d`
+(default for `-SimProfile desktop`, matches the simulated desktop profile), `msi-7800x3d`,
+`gigabyte-14900k`, `asrock-9800x3d-bitlocker`, `dell-legacy` (legacy boot, no admin),
+`laptop-intel` (default for `-SimProfile laptop`). They are used off Windows, or with
+`$VxCtx.BiosFixture` (tests) / `VELOX_BIOS_FIXTURE` (Testmodus only; name or path). A fixture's
+`now` makes the BIOS age deterministic; its `games` list replaces the game library.
+
+**Recommendations** (`data/bios/recommendations.json`, validated by `tools/Validate-Catalog.ps1`): `items[]`
+with `id`, 2-letter `code` (link format), `section` `core` (counted in "X von Y passen schon") or
+`optional` (tuning, situational), `title`, `why`, `info`, `risk` `safe`|`moderate` (never risky - and
+no item ever tells the user to raise a voltage), `impact`, `when` (`formFactor`, `cpuVendor`, `cpuTags`,
+`gpuTags`, `ramType`; not matching → `hidden` with a German reason), `check { fact, ok[], todo[] }`
+(anything else, or no check → `unknown`), `feature` + `direction` (games that need the feature mark the
+item `neededBy`, a missing one becomes `priority: high`), `steps` per vendor (`generic` required; a list,
+or `{ any, amd, intel }`), `verified` (vendors whose menu path was checked against vendor docs - only
+those show no "Menünamen können je nach BIOS-Version anders heißen"), optional `statusText`.
+`warnings[]` (fixed ids, each has a rule in `Get-VxBiosReport`): `legacy-boot`, `intel-microcode`
+(Raptor Lake + BIOS before 2024-10, microcode 0x12B), `bios-old` (≥ 24 months; the risk note says how to
+update safely), `bitlocker`, `vbs-fps` (not when a detected game needs VBS), `laptop`, `vendor-unknown`,
+`not-admin`. `games[]`: `code`, `name`, `needs` (`secureBoot`, `tpm`, `vbs`, `uefi`), `match` (lower-case
+parts of name/exe), `services`.
+
+```text
+biosReport = { facts, vendor, cpuVendor, scanned, durationMs,
+               items:[ { id, code, section, status:"ok"|"todo"|"unknown", priority:"normal"|"high", neededBy:[game names], note } ],
+               hidden:[ { id, reason } ], warnings:[ { id, code, severity, detail, tweak? } ],
+               summary:{ ok, todo, unknown, total },            // core items only
+               games:[ { code, name, needs } ],
+               reboot:{ available, reason, bitlocker:"on"|"off"|"suspended"|"unknown", recoveryUrl },
+               texts:  recommendations.json without when/check/feature/direction }
+profile.board = { vendor, vendorName, model, biosVersion, biosDate, firmware }; profile.ram.profile / profileConfidence
+```
+
+**UI** (ui/js/pages/bios.js, css/bios.css): hero with "X von Y passen schon", *Neustart ins BIOS* (the one
+primary button; disabled with the reason when the PC boots legacy / VELOX has no admin rights), *Aufs
+Handy*, *Drucken*; system cards (board, BIOS, CPU, RAM, GPU, start & security); "Passt dein PC?" (the
+warnings; BitLocker links aka.ms/myrecoverykey); the checklist (open items first) with status chip, risk
+badge, "Wichtig für Valorant" and the expandable steps for the vendor + CPU platform; "Optional"; a
+`<details>` with the items that do not fit. *Neustart ins BIOS* asks first; with BitLocker on the dialog
+shows where the recovery key is and offers "BitLocker für diesen einen Neustart pausieren (empfohlen)"
+(ticked). *Drucken* = `window.print()`; the print stylesheet (only while the BIOS page is shown) prints
+black on white with every step expanded and the QR code in the header. The Übersicht shows board, BIOS
+version and RAM profile under the system cards and links here.
+
+**QR code**: `ui/js/qr.js` - own encoder (byte mode, versions 1-40, L/M/Q/H, ISO mask penalty), the
+algorithm after Project Nayuki's QR Code generator (MIT, credited in the file); rendered as one SVG path
+(dark on bone, colours from CSS - CSP stays strict). Tests: `tests/ui/qr-selftest.mjs` decodes the codes
+of a second, independent encoder (Kazuhiko Arase's, MIT, shipped with npm as `qrcode-terminal`) with the
+independent decoder `tests/ui/qr-decode.mjs`, then requires `qr.js` to produce the bit-identical matrix
+for the same version and mask, then round-trips every level and versions 1-40; the UI test screenshots
+the rendered code and decodes the pixels back to the link.
+
+#### BIOS checklist link format
+
+The QR code opens `VELOX_SITE` (the one constant in ui/js/pages/bios.js:
+`https://georghatzmann-bit.github.io/vanity-/bios.html`, the website's checklist page `website/bios.html` on GitHub Pages - change it there if the
+site moves) with the checklist **in the URL fragment**.
+Browsers never send the fragment to a server; the phone page must read it with JavaScript only and
+never send it anywhere (no analytics, no fetch, no query string). Only short codes and statuses travel;
+all texts come from `data/bios/recommendations.json`, which the website keeps as a byte-identical copy
+(`website/assets/data/bios/recommendations.json`; its test fails when they differ - copy it after every change).
+
+The fragment is `application/x-www-form-urlencoded` - read it with
+`new URLSearchParams(location.hash.slice(1))`; values are `encodeURIComponent`-encoded, keys are single
+letters, unknown keys and codes are ignored (forward compatible):
+
+| key | required | value |
+|---|---|---|
+| `v` | yes | `1` - the format version (= `version` in recommendations.json) |
+| `p` | yes | `asus` \| `msi` \| `gigabyte` \| `asrock` \| `generic` → `vendors[p]`, `items[].steps[p]` (fallback `generic`) |
+| `c` | yes | `amd` \| `intel` \| `other` → the `amd` / `intel` / `any` list inside a step object |
+| `s` | yes | dot-separated `<code><status>` in display order; status `o` passt schon, `t` fehlt, `u` unbekannt – im BIOS prüfen; items that do not fit the PC are left out |
+| `w` | no | dot-separated warning codes ("Passt dein PC?") |
+| `g` | no | dot-separated game codes ("Wichtig für …") |
+| `b` | no | mainboard model, ≤ 48 chars, display only (textContent) |
+| `i` | no | BIOS version, ≤ 24 chars, display only |
+| `d` | no | BIOS date `YYYYMMDD`, display only |
+
+The whole URL stays ≤ 300 characters (VELOX drops `d`, then `i`, then `b` when it would not), so the
+code stays small (byte mode, error correction M). Steps of an item:
+`list = items[i].steps[p] || steps.generic`; an object → `list[c] || list.any`, falling back to the same
+in `steps.generic`. When `p` is not in `items[i].verified`, show `general.pathNote` under the steps. The
+section (core / optional) comes from the JSON; "X von Y passen schon" counts the `core` items of `s`
+with `o`. Statuses: `statusLabels`, overridden per item by `statusText`. Texts are plain German - render
+with `textContent`.
+
+Example (the fixture PC `asus-5800x3d`):
+
+```text
+https://georghatzmann-bit.github.io/vanity-/bios.html#v=1&p=asus&c=amd&s=sbt.rpt.csu.dco.rbo.tpo.xlu.ctu.vtu.fcu&w=bo.bl.vb&g=val&b=ROG%20STRIX%20B550-F%20GAMING&i=2803&d=20220312
+```
+
+Codes (the `bios` backend test checks that every code of the JSON is listed here):
+
+| code | item / warning / game |
+|---|---|
+| `rp` | `ram-profile` - RAM-Profil an (XMP / EXPO) |
+| `dc` | `dual-channel` - RAM im Dual-Channel |
+| `rb` | `rebar` - Resizable BAR an (mit Above 4G Decoding) |
+| `cs` | `uefi-csm` - CSM aus (reiner UEFI-Modus) |
+| `sb` | `secure-boot` - Secure Boot an |
+| `tp` | `tpm` - TPM 2.0 an |
+| `ib` | `intel-baseline` - Intel-Standardwerte (13./14. Generation) |
+| `po` | `amd-pbo` - Curve Optimizer für Ryzen (optional) |
+| `xl` | `x3d-locked` - 5800X3D & Co.: nur sanft undervolten (optional) |
+| `mc` | `amd-mcr` - Memory Context Restore (optional) |
+| `ct` | `c-states` - C-States nur bei Rucklern (optional) |
+| `vt` | `virtualization` - SVM / VT-x nur aus, wenn nie gebraucht (optional) |
+| `fc` | `fan-curve` - Lüfterkurve (optional) |
+| `lg` | warning `legacy-boot` |
+| `im` | warning `intel-microcode` |
+| `bo` | warning `bios-old` |
+| `bl` | warning `bitlocker` |
+| `vb` | warning `vbs-fps` |
+| `lp` | warning `laptop` |
+| `vu` | warning `vendor-unknown` |
+| `ad` | warning `not-admin` |
+| `val` | Valorant |
+| `lol` | League of Legends |
+| `fct` | FACEIT |
+| `bf6` | Battlefield 6 |
+| `cod` | Call of Duty |
 
 ---
 
@@ -909,7 +1066,7 @@ instead of glossy: ink and bone, one signal colour, hairlines, mono readouts.
   Testmodus / Neustart nötig); content max 1180 px; sticky bottom bar for staged changes
   ("3 Änderungen · Verwerfen · Anwenden"). Works down to 900×600.
 - **Pages**: Übersicht (dashboard), Tweaks (category tabs + search + risk filter), Presets,
-  KI-Optimierer (Claude Code / Claude API / Groq / Smart-Analyse), Detweak, Spiele (game booster), Reinigung (scan → grouped list with sizes → Schnell / Gründlich / Alles → live progress per item, repair tools with duration note and live percent on the card; both without the modal overlay, the page re-attaches to a running job),
+  KI-Optimierer (Claude Code / Claude API / Groq / Smart-Analyse), Detweak, Spiele (game booster), BIOS (§7a), Reinigung (scan → grouped list with sizes → Schnell / Gründlich / Alles → live progress per item, repair tools with duration note and live percent on the card; both without the modal overlay, the page re-attaches to a running job),
   Apps (autostart + bloatware), Sicherungen (backups/journal), Einstellungen.
 - Every option has one grey line of explanation. Empty states explain what to do. Every action gives
   feedback (toast). Risk badges with text ("Sicher", "Mittel", "Riskant"). Risky tweaks need a confirm

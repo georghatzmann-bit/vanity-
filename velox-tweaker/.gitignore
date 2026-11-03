@@ -5,3 +5,4 @@ native/**/obj/
 native/**/bin/
 tests/native/screenshots/
 dist/obj/
+website/tests/screenshots/

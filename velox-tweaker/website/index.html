@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>VELOX – der kostenlose PC-Tweaker für Windows 10 und 11</title>
+<meta name="description" content="VELOX macht Windows 10 und 11 schneller, ruhiger und privater: 472 erklärte Tweaks, fertige Presets, KI-Optimierer, Detweak, Spiele-Boost, Reinigung – und jede Änderung lässt sich rückgängig machen. Kostenlos.">
+<meta name="theme-color" content="#0C0D0F">
+<link rel="canonical" href="https://georghatzmann-bit.github.io/vanity-/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="de_DE">
+<meta property="og:site_name" content="VELOX">
+<meta property="og:title" content="VELOX – der kostenlose PC-Tweaker für Windows">
+<meta property="og:description" content="472 erklärte Tweaks, Presets, KI-Optimierer und Detweak. Jede Änderung gesichert, alles rückgängig. Kostenlos.">
+<meta property="og:url" content="https://georghatzmann-bit.github.io/vanity-/">
+<meta property="og:image" content="https://georghatzmann-bit.github.io/vanity-/assets/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Der VELOX-Schriftzug auf dunklem Grund">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="brand/app-icon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icons/app-icon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icons/app-icon-256.png">
+<link rel="stylesheet" href="brand/tokens.css">
+<link rel="stylesheet" href="brand/intro.css">
+<link rel="stylesheet" href="assets/css/site.css">
+<script src="assets/js/theme.js"></script>
+<script src="assets/js/config.js" defer></script>
+<script src="assets/js/site.js" defer></script>
+<script src="assets/js/hero.js" type="module"></script>
+</head>
+<body>
+<svg class="visually-hidden" aria-hidden="true" focusable="false">
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 13 9 5 9-5"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9L11 3Z"/><path d="M18.5 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-gamepad" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10.5v4M5 12.5h4M15 11h.01M18 14h.01"/></symbol>
+  <symbol id="i-broom" viewBox="0 0 24 24"><path d="M15.5 3 11 12"/><path d="M7 12h8l1.5 9h-11L7 12Z"/><path d="M9.5 16l-.5 5M12.5 16l.5 5"/></symbol>
+  <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx=".5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5.5c0 4.4 3 8 7 9.5 4-1.5 7-5.1 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></symbol>
+  <symbol id="i-vol-on" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+  <symbol id="i-vol-off" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></symbol>
+  <symbol id="i-replay" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6L3.5 8.5"/><path d="M3.5 3.5v5h5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5 2.5 20h19L12 3.5Z"/><path d="M12 10v4M12 17h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/><path d="M7.5 15h9"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6L3.5 8.5"/><path d="M3.5 3.5v5h5M12 8v4l3 2"/></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M17 21h4v-4M14 21v-3"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+  <symbol id="i-journal" viewBox="0 0 24 24"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16.5 6.5l3 3"/></symbol>
+</svg>
+
+<a class="skip-link" href="#main">Zum Inhalt springen</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand-link" href="./" aria-label="VELOX – zur Startseite">
+      <img class="on-dark" src="brand/wordmark-small.svg" alt="VELOX" width="68" height="16">
+      <img class="on-light" src="brand/wordmark-small-light.svg" alt="VELOX" width="68" height="16">
+    </a>
+    <nav class="nav" id="site-nav" aria-label="Hauptmenü">
+      <ul>
+        <li><a href="#funktionen">Funktionen</a></li>
+        <li><a href="#vergleich">Vergleich</a></li>
+        <li><a href="#sicherheit">Sicherheit</a></li>
+        <li><a href="#download">Download</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#changelog">Neu</a></li>
+      </ul>
+    </nav>
+    <div class="header-actions">
+      <button class="icon-btn theme-btn" type="button" data-theme-toggle aria-label="Helles Design einschalten">
+        <svg class="icon i-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+        <svg class="icon i-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+      </button>
+      <a class="btn btn-primary btn-sm header-cta header-cta-sm" href="#download">Download</a>
+      <button class="icon-btn menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menü öffnen">
+        <svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <!-- ============================================================ hero -->
+  <div class="hero-shell">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-stage" id="hero-stage" aria-label="VELOX-Startanimation">
+        <img class="hero-fallback" src="brand/wordmark.svg" alt="" width="850" height="200">
+      </div>
+      <div class="hero-body">
+        <div>
+          <p class="eyebrow">Kostenloser PC-Tweaker für Windows 10 und 11</p>
+          <h1 id="hero-title"><span>Mach Windows schneller.</span> <span>Und jederzeit rückgängig.</span></h1>
+          <p class="hero-lead">VELOX stellt deinen PC <strong>fürs Spielen und Arbeiten</strong> ein: 472 Tweaks mit Erklärung, fertige Presets, eine KI, die sich deinen PC ansieht – und vor jeder Änderung eine Sicherung.</p>
+          <div class="cta-row">
+            <a class="btn btn-primary btn-lg" href="https://github.com/georghatzmann-bit/vanity-/raw/claude/new-session-apxmkj/velox-tweaker/dist/VeloxSetup.exe" data-velox="download">
+              <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
+              Kostenlos herunterladen
+            </a>
+            <a class="btn btn-lg" href="#funktionen">Was VELOX kann</a>
+          </div>
+          <p class="cta-note"><span>Version <span data-velox="version">1.4.0</span></span><span>Windows 10 und 11</span><span data-velox="size">rund 1,4 MB</span><span>ohne Konto</span></p>
+        </div>
+        <div class="intro-panel">
+          <p><strong>Das ist die echte Startanimation.</strong>So begrüßt dich VELOX bei jedem Start. Mit Ton wirkt sie erst richtig – dein Browser spielt ihn aber erst nach einem Klick ab.</p>
+          <div class="intro-controls">
+            <button class="btn sound-btn" id="intro-sound" type="button" data-on="false">
+              <svg class="icon icon-sm i-vol-on" aria-hidden="true"><use href="#i-vol-on"/></svg>
+              <svg class="icon icon-sm i-vol-off" aria-hidden="true"><use href="#i-vol-off"/></svg>
+              <span data-label>Mit Ton abspielen</span>
+            </button>
+            <button class="btn" id="intro-replay" type="button">
+              <svg class="icon icon-sm" aria-hidden="true"><use href="#i-replay"/></svg>
+              Nochmal
+            </button>
+          </div>
+          <p class="intro-hint" id="intro-hint" aria-live="polite">Esc überspringt die Animation.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================ facts -->
+  <section class="facts" aria-label="VELOX in Zahlen">
+    <div class="wrap">
+      <dl>
+        <div class="fact"><dt>Tweaks in 16 Kategorien</dt><dd data-count="tweaks">472</dd></div>
+        <div class="fact"><dt>fertige Presets</dt><dd data-count="presets">9</dd></div>
+        <div class="fact"><dt>Stellen, die Detweak prüft</dt><dd data-count="detweak">636</dd></div>
+        <div class="fact"><dt>kostenlos, ohne Abo</dt><dd>0&nbsp;€</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ============================================================ showcase -->
+  <div class="wrap showcase">
+    <figure class="shot reveal">
+      <button class="shot-frame" type="button" data-full="assets/img/overview-1360.webp" aria-label="Screenshot vergrößern: Übersicht">
+        <img src="assets/img/overview-1360.webp" srcset="assets/img/overview-760.webp 760w, assets/img/overview-1360.webp 1360w" sizes="(max-width: 1120px) 100vw, 1080px" width="1360" height="612" alt="VELOX-Übersicht mit Leistungs-Score 87 von 100 und erkannter Hardware" decoding="async" fetchpriority="low">
+        <span class="zoom-hint"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-expand"/></svg>Vergrößern</span>
+      </button>
+      <figcaption>Die Übersicht: dein PC auf einen Blick – Score, Hardware und der nächste sinnvolle Schritt. Alle Bilder auf dieser Seite sind echte Aufnahmen aus VELOX (im Testmodus).</figcaption>
+    </figure>
+  </div>
+
+  <!-- ============================================================ features -->
+  <section class="section" id="funktionen" aria-labelledby="funktionen-title">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Funktionen</p>
+        <h2 id="funktionen-title">Ein Werkzeug statt zehn Anleitungen.</h2>
+        <p>Von einzelnen Schaltern bis zum fertigen Plan: Du siehst vorher, was sich ändert, und holst jederzeit den alten Stand zurück.</p>
+      </div>
+
+      <ul class="tiles">
+        <li class="tile"><a href="#tweaks"><span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg></span><h3>Tweaks</h3><p>472 Schalter, jeder mit Erklärung und Risiko-Stufe.</p><span class="tile-more">Ansehen <svg class="icon icon-sm" aria-hidden="true"><use href="#i-arrow"/></svg></span></a></li>
+        <li class="tile"><a href="#presets"><span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg></span><h3>Presets</h3><p>9 fertige Pakete – von „Sicherer Boost“ bis „Esport“.</p><span class="tile-more">Ansehen <svg class="icon icon-sm" aria-hidden="true"><use href="#i-arrow"/></svg></span></a></li>
+        <li class="tile"><a href="#ki"><span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg></span><h3>KI-Optimierer</h3><p>Ein Plan mit Begründung – mit Claude, Groq oder offline.</p><span class="tile-more">Ansehen <svg class="icon icon-sm" aria-hidden="true"><use href="#i-arrow"/></svg></span></a></li>
+        <li class="tile"><a href="#detweak"><span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-undo"/></svg></span><h3>Detweak</h3><p>Setzt Tweaks anderer Tools sauber auf Standard zurück.</p><span class="tile-more">Ansehen <svg class="icon icon-sm" aria-hidden="true"><use href="#i-arrow"/></svg></span></a></li>
+        <li class="tile"><a href="#spiele"><span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-gamepad"/></svg></span><h3>Spiele</h3><p>Findet deine Spiele und boostet jedes einzeln.</p><span class="tile-more">Ansehen <svg class="icon icon-sm" aria-hidden="true"><use href="#i-arrow"/></svg></span></a></li>
+        <li class="tile"><a href="#reinigung"><span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-broom"/></svg></span><h3>Reinigung</h3><p>Erst messen, dann löschen. Dazu DISM und SFC mit Live-Prozent.</p><span class="tile-more">Ansehen <svg class="icon icon-sm" aria-hidden="true"><use href="#i-arrow"/></svg></span></a></li>
+        <li class="tile"><a href="#bios"><span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-chip"/></svg></span><h3>BIOS-Optimierer <span class="badge-new">Neu</span></h3><p>Zeigt, was du im BIOS einstellen kannst – als Checkliste aufs Handy.</p><span class="tile-more">Ansehen <svg class="icon icon-sm" aria-hidden="true"><use href="#i-arrow"/></svg></span></a></li>
+        <li class="tile"><a href="#sicherungen"><span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg></span><h3>Sicherungen</h3><p>Jede Änderung protokolliert, alles rückgängig.</p><span class="tile-more">Ansehen <svg class="icon icon-sm" aria-hidden="true"><use href="#i-arrow"/></svg></span></a></li>
+      </ul>
+
+      <!-- Tweaks -->
+      <article class="feature" id="tweaks" aria-labelledby="tweaks-title">
+        <div class="feature-text reveal">
+          <p class="eyebrow">01 · Tweaks</p>
+          <h3 id="tweaks-title">472 Tweaks. Jeder erklärt.</h3>
+          <p>Jeder Schalter sagt dir in einfachen Worten, <strong>was er macht, was du davon hast und was dabei wegfällt</strong>. Dazu die Risiko-Stufe – und für Profis der genaue Wert in der Registry, vorher und nachher.</p>
+          <ul class="checks">
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>16 Kategorien <span>– von Gaming &amp; FPS über Netzwerk &amp; Ping bis Datenschutz</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Suche und Filter <span>nach Risiko, Status und Wirkung</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Erst vormerken, dann gesammelt anwenden <span>– mit Liste aller Änderungen</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Passt ein Tweak nicht zu deinem PC, <span>sagt VELOX es dir</span></li>
+          </ul>
+          <div class="riskbar" role="group" aria-label="Risiko-Stufen im Katalog">
+            <div class="riskbar-track" aria-hidden="true"><span class="s"></span><span class="m"></span><span class="r"></span></div>
+            <div class="riskbar-legend">
+              <span class="risk risk-safe"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-shield"/></svg>Sicher <span class="mono" data-count="safe">291</span></span>
+              <span class="risk risk-mid"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-info"/></svg>Mittel <span class="mono" data-count="moderate">171</span></span>
+              <span class="risk risk-high"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-alert"/></svg>Riskant <span class="mono" data-count="risky">10</span></span>
+            </div>
+          </div>
+          <p class="note"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-info"/></svg><span><strong>Mittel</strong> heißt: Es gibt einen Nachteil, und der steht dabei – zum Beispiel „Drucken geht danach nicht mehr“. <strong>Riskant</strong> heißt: Sicherheit oder Stabilität gegen Leistung. Diese Tweaks brauchen deine ausdrückliche Bestätigung.</span></p>
+        </div>
+        <figure class="shot reveal">
+          <button class="shot-frame" type="button" data-full="assets/img/tweaks-1360.webp" aria-label="Screenshot vergrößern: Tweaks">
+            <img src="assets/img/tweaks-1360.webp" srcset="assets/img/tweaks-760.webp 760w, assets/img/tweaks-1360.webp 1360w" sizes="(max-width: 900px) 100vw, 680px" width="1360" height="845" loading="lazy" decoding="async" alt="Tweaks-Seite: der Schalter „Spielmodus fest an“ mit Erklärung, Risiko „Sicher“ und den Registry-Werten vorher und nachher">
+            <span class="zoom-hint"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-expand"/></svg>Vergrößern</span>
+          </button>
+        </figure>
+      </article>
+
+      <!-- Presets -->
+      <article class="feature flip" id="presets" aria-labelledby="presets-title">
+        <div class="feature-text reveal">
+          <p class="eyebrow">02 · Presets</p>
+          <h3 id="presets-title">Ein Klick, alles passend eingestellt.</h3>
+          <p>Neun fertige Pakete für typische Ziele. Vor dem Anwenden siehst du <strong>jede einzelne Änderung</strong>, und die Zahl auf der Karte zeigt, was sich bei dir wirklich ändert.</p>
+          <div class="pill-row">
+            <span class="pill"><strong>Sicherer Boost</strong></span>
+            <span class="pill"><strong>Gaming Max</strong></span>
+            <span class="pill"><strong>Esport / Low Latency</strong></span>
+            <span class="pill"><strong>Laptop &amp; Akku</strong></span>
+            <span class="pill"><strong>Datenschutz</strong></span>
+            <span class="pill"><strong>Streamer</strong></span>
+            <span class="pill"><strong>FiveM / GTA V</strong></span>
+            <span class="pill"><strong>Aufräumen</strong></span>
+            <span class="pill"><strong>Ultimate</strong></span>
+          </div>
+          <p class="note"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-shield"/></svg><span>Riskante Tweaks sind in <strong>keinem</strong> Preset. Und jede Beschreibung sagt ehrlich, was wegfällt – bei „Gaming Max“ zum Beispiel die Clips über die Game Bar.</span></p>
+        </div>
+        <figure class="shot reveal">
+          <button class="shot-frame" type="button" data-full="assets/img/presets-1360.webp" aria-label="Screenshot vergrößern: Presets">
+            <img src="assets/img/presets-1360.webp" srcset="assets/img/presets-760.webp 760w, assets/img/presets-1360.webp 1360w" sizes="(max-width: 900px) 100vw, 680px" width="1360" height="712" loading="lazy" decoding="async" alt="Presets-Seite mit den Karten Sicherer Boost, Gaming Max, Esport, Laptop &amp; Akku, Datenschutz und Streamer">
+            <span class="zoom-hint"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-expand"/></svg>Vergrößern</span>
+          </button>
+        </figure>
+      </article>
+
+      <!-- KI -->
+      <article class="feature" id="ki" aria-labelledby="ki-title">
+        <div class="feature-text reveal">
+          <p class="eyebrow">03 · KI-Optimierer</p>
+          <h3 id="ki-title">Ein Plan für genau deinen PC.</h3>
+          <p>Der KI-Optimierer schaut sich Hardware, Windows-Einstellungen und dein Ziel an und schlägt einen <strong>Plan mit Begründung</strong> vor. Er findet auch Dinge, die kein Tweak löst – etwa einen Bildschirm, der nur mit 60 Hz läuft. Du entscheidest, was angewendet wird.</p>
+          <dl class="specs">
+            <div><dt>Claude Code</dt><dd>empfohlen<small>mit deinem Claude-Abo (Pro oder Max), keine Extrakosten</small></dd></div>
+            <div><dt>Claude API</dt><dd>eigener API-Key<small>ein paar Cent pro Analyse beim Anbieter</small></dd></div>
+            <div><dt>Groq</dt><dd>kostenloser Key<small>sehr schnell, etwas einfachere Vorschläge</small></dd></div>
+            <div><dt>Smart-Analyse</dt><dd>offline<small>kostenlos, ohne Einrichtung, in Sekunden</small></dd></div>
+          </dl>
+          <p class="note"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-lock"/></svg><span>An eine Online-KI gehen nur <strong>Hardware-Daten und welche Tweaks aktiv sind</strong> – keine Namen, keine Dateien. VELOX prüft jeden Vorschlag: erfundene, unpassende oder riskante Tweaks fliegen raus.</span></p>
+        </div>
+        <figure class="shot reveal">
+          <button class="shot-frame" type="button" data-full="assets/img/advisor-1360.webp" aria-label="Screenshot vergrößern: KI-Optimierer">
+            <img src="assets/img/advisor-1360.webp" srcset="assets/img/advisor-760.webp 760w, assets/img/advisor-1360.webp 1360w" sizes="(max-width: 900px) 100vw, 680px" width="1360" height="780" loading="lazy" decoding="async" alt="KI-Optimierer: Score 53 jetzt, 87 mit Plan, darunter Befunde wie „Bildschirm läuft nur mit 60 Hz“ und „Arbeitsspeicher läuft nur mit 2133 MHz“">
+            <span class="zoom-hint"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-expand"/></svg>Vergrößern</span>
+          </button>
+        </figure>
+      </article>
+
+      <!-- Detweak -->
+      <article class="feature flip" id="detweak" aria-labelledby="detweak-title">
+        <div class="feature-text reveal">
+          <p class="eyebrow">04 · Detweak</p>
+          <h3 id="detweak-title">Erst aufräumen, was andere Tools verstellt haben.</h3>
+          <p>Viele PCs haben schon Tweaks von anderen Programmen drauf – oft alte Tipps, die heute eher bremsen. Detweak findet sie und setzt sie <strong>sauber auf Windows-Standard</strong> zurück.</p>
+          <ul class="checks">
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Prüft <span class="num" data-count="detweak">636</span> bekannte Stellen <span>– Registry, Dienste, geplante Aufgaben und Boot-Einstellungen</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Links der aktuelle Wert, rechts der Standard <span>– du wählst, was zurückgesetzt wird</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Deine VELOX-Tweaks bleiben <span>unangetastet</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Danach auf Wunsch direkt <span>ein Preset oder den KI-Plan anwenden</span></li>
+          </ul>
+        </div>
+        <figure class="shot reveal">
+          <button class="shot-frame" type="button" data-full="assets/img/detweak-1360.webp" aria-label="Screenshot vergrößern: Detweak">
+            <img src="assets/img/detweak-1360.webp" srcset="assets/img/detweak-760.webp 760w, assets/img/detweak-1360.webp 1360w" sizes="(max-width: 900px) 100vw, 680px" width="1360" height="668" loading="lazy" decoding="async" alt="Detweak: 3 Fremd-Tweaks gefunden, zum Beispiel „SysMain (Superfetch) aus“ – jetzt Deaktiviert, Standard Automatisch">
+            <span class="zoom-hint"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-expand"/></svg>Vergrößern</span>
+          </button>
+        </figure>
+      </article>
+
+      <!-- Spiele -->
+      <article class="feature" id="spiele" aria-labelledby="spiele-title">
+        <div class="feature-text reveal">
+          <p class="eyebrow">05 · Spiele</p>
+          <h3 id="spiele-title">Deine Spiele, erkannt und einzeln geboostet.</h3>
+          <p>VELOX findet Spiele aus <strong>Steam, Epic, GOG, Ubisoft, EA, Battle.net, Riot, Xbox/Game Pass, Rockstar, FiveM, Minecraft und Roblox</strong> – oder du gibst den Pfad zur .exe selbst an.</p>
+          <ul class="checks">
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Hohe CPU-Priorität <span>– Vorrang vor Hintergrund-Programmen</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Grafikkarte: Höchstleistung <span>– immer die schnellste nutzen</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Vollbild-Optimierung aus <span>– echtes Vollbild, weniger Verzögerung</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Jeder Schalter wirkt nur für dieses Spiel <span>und ist gesichert wie alles andere</span></li>
+          </ul>
+        </div>
+        <figure class="shot reveal">
+          <button class="shot-frame" type="button" data-full="assets/img/games-1360.webp" aria-label="Screenshot vergrößern: Spiele">
+            <img src="assets/img/games-1360.webp" srcset="assets/img/games-760.webp 760w, assets/img/games-1360.webp 1360w" sizes="(max-width: 900px) 100vw, 680px" width="1360" height="795" loading="lazy" decoding="async" alt="Spiele-Seite: 21 Spiele aus 14 Quellen gefunden, Karten für Counter-Strike 2, FiveM und Fortnite mit Boost-Schaltern">
+            <span class="zoom-hint"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-expand"/></svg>Vergrößern</span>
+          </button>
+        </figure>
+      </article>
+
+      <!-- Reinigung -->
+      <article class="feature flip" id="reinigung" aria-labelledby="reinigung-title">
+        <div class="feature-text reveal">
+          <p class="eyebrow">06 · Reinigung</p>
+          <h3 id="reinigung-title">Erst messen, dann löschen.</h3>
+          <p>VELOX zeigt dir vorher, wie viel Platz frei wird – nach Bereichen getrennt. Du wählst den Umfang: <strong>Schnell, Gründlich oder Alles</strong>.</p>
+          <ul class="checks">
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg><span class="num" data-count="cleanup">37</span> Reinigungsziele <span>– Temp-Dateien, Browser- und App-Caches, Shader-Caches, Update-Reste, Absturzberichte</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Nur Cache <span>– Logins, Cookies, Verlauf und Passwörter bleiben</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Papierkorb, Windows.old &amp; Co. <span>nur mit deinem Häkchen</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Laufende Programme <span>werden übersprungen</span></li>
+          </ul>
+          <p class="note"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-clock"/></svg><span><strong><span data-count="repair">14</span> Reparatur-Werkzeuge</strong> – DISM, SFC, CHKDSK, Netzwerk-Reset und mehr – mit Live-Prozent. DISM und SFC dauern oft 5–30 Minuten; der PC bleibt dabei benutzbar.</span></p>
+        </div>
+        <figure class="shot reveal">
+          <button class="shot-frame" type="button" data-full="assets/img/cleanup-1360.webp" aria-label="Screenshot vergrößern: Reinigung">
+            <img src="assets/img/cleanup-1360.webp" srcset="assets/img/cleanup-760.webp 760w, assets/img/cleanup-1360.webp 1360w" sizes="(max-width: 900px) 100vw, 680px" width="1360" height="880" loading="lazy" decoding="async" alt="Reinigung: Umfang Schnell, Gründlich oder Alles, darunter die Liste, was gelöscht werden kann, mit Größe pro Bereich">
+            <span class="zoom-hint"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-expand"/></svg>Vergrößern</span>
+          </button>
+        </figure>
+      </article>
+
+      <!-- BIOS -->
+      <article class="feature" id="bios" aria-labelledby="bios-title">
+        <div class="feature-text reveal">
+          <p class="eyebrow">07 · BIOS-Optimierer <span class="badge-new">Neu</span></p>
+          <h3 id="bios-title">Die Einstellungen, an die Windows nicht rankommt.</h3>
+          <p>Manche Bremsen sitzen im BIOS – zum Beispiel ein Arbeitsspeicher, der ohne XMP- oder EXPO-Profil langsamer läuft, als er kann. VELOX liest dein Mainboard aus und zeigt dir, <strong>was du dort einstellen kannst und warum</strong>.</p>
+          <ul class="checks">
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Erkennt Mainboard, BIOS-Version, CPU und Arbeitsspeicher</li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Zeigt, was schon passt <span>und was noch fehlt</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Checkliste aufs Handy per QR-Code <span>– abhaken, während du im BIOS bist</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Die Handy-Seite läuft nur in deinem Browser <span>– kein Konto, kein Server, keine Daten an uns</span></li>
+          </ul>
+          <p class="note"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-info"/></svg><span>VELOX verändert dein BIOS <strong>nicht selbst</strong> – du stellst die Werte ein, die Checkliste zeigt dir, wo. Der BIOS-Optimierer ist neu in Version 1.4.0.</span></p>
+          <div class="cta-row">
+            <a class="btn" href="bios.html#v=1&amp;p=asus&amp;c=amd&amp;s=rpt.dcu.rbo.csu.sbt.tpo.xlu.vtu.fcu&amp;w=bo.bl.vb&amp;g=val.fct&amp;b=ROG%20STRIX%20B550-F%20GAMING&amp;i=2803&amp;d=20220312">
+              <svg class="icon icon-sm" aria-hidden="true"><use href="#i-phone"/></svg>
+              Beispiel-Checkliste ansehen
+            </a>
+          </div>
+        </div>
+        <div class="phone-wrap reveal">
+          <div class="qr-card" aria-hidden="true">
+            <svg class="icon" viewBox="0 0 24 24"><use href="#i-qr"/></svg>
+            QR-Code in VELOX scannen – die Checkliste öffnet sich auf dem Handy.
+          </div>
+          <div class="phone">
+            <img src="assets/img/bios-phone.webp" width="390" height="800" loading="lazy" decoding="async" alt="Die BIOS-Checkliste auf dem Handy: Mainboard ROG STRIX B550-F GAMING, erledigte und offene Punkte zum Abhaken">
+          </div>
+        </div>
+      </article>
+
+      <!-- Sicherungen -->
+      <article class="feature flip" id="sicherungen" aria-labelledby="sicherungen-title">
+        <div class="feature-text reveal">
+          <p class="eyebrow">08 · Sicherungen</p>
+          <h3 id="sicherungen-title">Alles rückgängig. Wirklich alles, was geht.</h3>
+          <p>VELOX speichert vor jeder Änderung den alten Wert. Mit <strong>„Wiederherstellen“</strong> kommt genau dieser Stand zurück – pro Sicherung, mit einem Klick.</p>
+          <ul class="checks">
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Windows-Wiederherstellungspunkt <span>vor der ersten Änderung</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Jede Änderung im Protokoll <span>– vorher, nachher, wann</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Gilt für Tweaks, Presets, Detweak <span>und Spiele-Boosts</span></li>
+            <li><svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Überzählige VELOX-Wiederherstellungspunkte <span>räumt VELOX auf – deine eigenen bleiben</span></li>
+          </ul>
+          <p class="note"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-info"/></svg><span>Ehrlich gesagt: Gelöschte Dateien aus der Reinigung und entfernte vorinstallierte Apps kommen nicht über VELOX zurück. Das steht vorher dran – als <strong>„Nicht umkehrbar“</strong>.</span></p>
+        </div>
+        <figure class="shot reveal">
+          <button class="shot-frame" type="button" data-full="assets/img/backups-1360.webp" aria-label="Screenshot vergrößern: Sicherungen">
+            <img src="assets/img/backups-1360.webp" srcset="assets/img/backups-760.webp 760w, assets/img/backups-1360.webp 1360w" sizes="(max-width: 900px) 100vw, 680px" width="1360" height="680" loading="lazy" decoding="async" alt="Sicherungen: eine aufgeklappte Sicherung zeigt drei Registry-Werte mit Vorher und Nachher und den Knopf „Wiederherstellen“">
+            <span class="zoom-hint"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-expand"/></svg>Vergrößern</span>
+          </button>
+        </figure>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============================================================ comparison -->
+  <section class="section" id="vergleich" aria-labelledby="vergleich-title">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Vergleich</p>
+        <h2 id="vergleich-title">Selbst machen oder VELOX?</h2>
+        <p>Alles, was VELOX macht, kannst du auch von Hand machen. Die Frage ist nur, wie lange es dauert – und ob du danach noch weißt, was du geändert hast.</p>
+      </div>
+      <table class="compare reveal">
+        <caption class="visually-hidden">Vergleich: Windows selbst einstellen oder mit VELOX</caption>
+        <thead>
+          <tr><th scope="col">Thema</th><th scope="col">Selbst machen</th><th scope="col" class="col-velox"><span>Mit VELOX</span></th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Zeit</th>
+            <td><span class="cmp-label">Selbst machen</span>Anleitungen lesen, Registry-Pfade suchen, jeden Wert einzeln setzen – schnell ein ganzer Abend.</td>
+            <td class="col-velox"><span class="cmp-label">Mit VELOX</span>Preset wählen, Änderungen ansehen, anwenden – ein paar Minuten.</td>
+          </tr>
+          <tr>
+            <th scope="row">Windows-Tweaks</th>
+            <td><span class="cmp-label">Selbst machen</span>Du musst selbst wissen, welcher Tipp noch stimmt. Viele alte Foren-Tweaks schaden heute eher.</td>
+            <td class="col-velox"><span class="cmp-label">Mit VELOX</span>472 geprüfte Einträge, jeder mit Erklärung, Risiko-Stufe und dem genauen Wert.</td>
+          </tr>
+          <tr>
+            <th scope="row">BIOS</th>
+            <td><span class="cmp-label">Selbst machen</span>Handbuch suchen und Begriffe wie XMP, EXPO oder Resizable BAR selbst zuordnen.</td>
+            <td class="col-velox"><span class="cmp-label">Mit VELOX</span>Zeigt, was bei deinem Mainboard fehlt – als Checkliste aufs Handy. Einstellen musst du es trotzdem selbst.</td>
+          </tr>
+          <tr>
+            <th scope="row">Sicherheit &amp; Rückgängig</th>
+            <td><span class="cmp-label">Selbst machen</span>Nur, wenn du dir jeden alten Wert aufschreibst.</td>
+            <td class="col-velox"><span class="cmp-label">Mit VELOX</span>Wiederherstellungspunkt zuerst, jede Änderung protokolliert, ein Klick zurück.</td>
+          </tr>
+          <tr>
+            <th scope="row">Alte Tweaks anderer Tools</th>
+            <td><span class="cmp-label">Selbst machen</span>Was frühere Programme verstellt haben, findest du kaum wieder.</td>
+            <td class="col-velox"><span class="cmp-label">Mit VELOX</span>Detweak prüft 636 bekannte Stellen und setzt sie auf Standard zurück.</td>
+          </tr>
+          <tr>
+            <th scope="row">Kosten</th>
+            <td><span class="cmp-label">Selbst machen</span>0 € – aber viel Zeit.</td>
+            <td class="col-velox"><span class="cmp-label">Mit VELOX</span>0 € – kein Abo, kein Konto. Nur die Claude API kostet ein paar Cent, wenn du sie nutzt.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="honest reveal">
+        <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+        <div>
+          <h3>Was VELOX nicht kann</h3>
+          <p>Kein Tool macht aus alter Hardware einen neuen PC. Wie viel du merkst, hängt davon ab, wie dein Windows vorher eingestellt war. Deshalb versprechen wir dir keine FPS-Zahlen – der KI-Optimierer zeigt dir stattdessen, was bei <em>deinem</em> PC wirklich bremst.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ safety -->
+  <section class="section" id="sicherheit" aria-labelledby="sicherheit-title">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Sicherheit</p>
+        <h2 id="sicherheit-title">Gebaut, damit nichts kaputtgeht.</h2>
+        <p>VELOX ändert Windows-Einstellungen. Das soll nie heißen, dass du danach Angst vor deinem PC haben musst.</p>
+      </div>
+      <ul class="grid-3">
+        <li class="card reveal"><div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#i-history"/></svg></div><h3>Wiederherstellungspunkt zuerst</h3><p>Vor der ersten Änderung legt VELOX einen Windows-Wiederherstellungspunkt an. Ist der Computerschutz aus, sagt VELOX es dir.</p></li>
+        <li class="card reveal"><div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#i-journal"/></svg></div><h3>Jede Änderung protokolliert</h3><p>Alter Wert, neuer Wert, Zeitpunkt. „Wiederherstellen“ spielt das Protokoll rückwärts ab – bis genau der alte Stand wieder da ist.</p></li>
+        <li class="card reveal"><div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></div><h3>Risiko an jedem Schalter</h3><p>Sicher, Mittel oder Riskant – immer mit Wort und Symbol, nie nur als Farbe. Bei Mittel und Riskant steht der konkrete Nachteil dabei.</p></li>
+        <li class="card reveal"><div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg></div><h3>Riskantes nie im Preset</h3><p>Riskante Tweaks sind in keinem Preset und werden nie automatisch gewählt – auch nicht von der KI. Du musst sie ausdrücklich bestätigen.</p></li>
+        <li class="card reveal"><div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#i-ban"/></svg></div><h3>Gefährliches ist gar nicht drin</h3><p>Defender aus, Firewall aus, Updates komplett aus oder den Store löschen: So etwas ist in VELOX nicht eingebaut.</p></li>
+        <li class="card reveal"><div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#i-flask"/></svg></div><h3>Testmodus zum Reinschauen</h3><p>Im Testmodus siehst du deinen echten PC, aber VELOX ändert nichts. Ideal, um erst mal in Ruhe zu schauen.</p></li>
+      </ul>
+      <div class="split">
+        <div class="card reveal"><div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg></div><h3>Läuft nur auf deinem PC</h3><p>Die Oberfläche läuft lokal (127.0.0.1) und ist mit einem Zufalls-Schlüssel geschützt. Kein Konto, keine Anmeldung. Ohne Online-KI bleibt alles auf deinem PC.</p></div>
+        <div class="card reveal"><div class="card-icon"><svg class="icon" aria-hidden="true"><use href="#i-key"/></svg></div><h3>Schlüssel bleiben verschlüsselt</h3><p>API-Keys für die KI speichert VELOX verschlüsselt mit Windows-Bordmitteln, nur für dein Benutzerkonto. Sie tauchen nie in der Oberfläche oder in Logs auf.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ download -->
+  <section class="section" id="download" aria-labelledby="download-title">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Download</p>
+        <h2 id="download-title">In zwei Minuten installiert.</h2>
+        <p>Eine einzige Datei, <span data-velox="size">rund 1,4 MB</span>. Updates installierst du genauso – deine Einstellungen und Sicherungen bleiben.</p>
+      </div>
+      <div class="download-card reveal">
+        <div class="download-main">
+          <h3>So geht’s</h3>
+          <ol class="steps">
+            <li>
+              <h4>VeloxSetup.exe herunterladen</h4>
+              <p>Über den Knopf unten. Dein Browser fragt vielleicht nach, ob du die Datei behalten willst – ja.</p>
+            </li>
+            <li>
+              <h4>Doppelklick auf VeloxSetup.exe</h4>
+              <p>Zeigt Windows „Der Computer wurde durch Windows geschützt“? Das kommt, weil das Setup nicht digital signiert ist.</p>
+              <div class="smartscreen">
+                Klick dann auf:
+                <div class="smartscreen-path"><span class="ui-chip">Weitere Informationen</span><svg class="icon icon-sm" aria-hidden="true"><use href="#i-arrow"/></svg><span class="ui-chip">Trotzdem ausführen</span></div>
+              </div>
+            </li>
+            <li>
+              <h4>Mit „Ja“ bestätigen und installieren</h4>
+              <p>Die Frage „Möchten Sie zulassen, dass …“ mit <strong>Ja</strong> beantworten, dann <strong>Installieren</strong>. Unter „Optionen“ kannst du Ordner und Verknüpfungen ändern.</p>
+            </li>
+            <li>
+              <h4>VELOX starten</h4>
+              <p>Ab jetzt über das VELOX-Symbol auf dem Desktop oder im Startmenü. Nur mal schauen? Nimm <strong>VELOX Testmodus</strong> – der ändert nichts.</p>
+            </li>
+          </ol>
+          <div class="download-cta">
+            <a class="btn btn-primary btn-lg" href="https://github.com/georghatzmann-bit/vanity-/raw/claude/new-session-apxmkj/velox-tweaker/dist/VeloxSetup.exe" data-velox="download">
+              <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
+              Kostenlos herunterladen
+            </a>
+            <p>Version <span class="mono" data-velox="version">1.4.0</span> · <a href="#changelog">Was ist neu?</a></p>
+          </div>
+        </div>
+        <div class="download-side">
+          <h3>Systemvoraussetzungen</h3>
+          <dl class="specs">
+            <div><dt>Windows</dt><dd>Windows 11 oder Windows 10 ab Version 1803</dd></div>
+            <div><dt>.NET Framework</dt><dd>4.7.2 oder neuer<small>ist bei Windows 10 ab 1803 und bei Windows 11 schon dabei</small></dd></div>
+            <div><dt>WebView2</dt><dd>Microsoft Edge WebView2<small>bei Windows 11 dabei – fehlt sie, lädt das Setup sie selbst nach</small></dd></div>
+            <div><dt>Rechte</dt><dd>Administrator<small>VELOX ändert Windows-Einstellungen, dafür fragt Windows nach</small></dd></div>
+            <div><dt>Download</dt><dd><span data-velox="size">rund 1,4 MB</span>, eine Datei</dd></div>
+            <div><dt>Preis</dt><dd>kostenlos</dd></div>
+          </dl>
+          <p class="note"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-info"/></svg><span>Entfernen: Windows-Einstellungen → Apps → VELOX → Deinstallieren.</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ FAQ -->
+  <section class="section" id="faq" aria-labelledby="faq-title">
+    <div class="wrap">
+      <div class="section-head center">
+        <p class="eyebrow">FAQ</p>
+        <h2 id="faq-title">Häufige Fragen</h2>
+      </div>
+      <div class="faq">
+        <details>
+          <summary>Ist VELOX sicher?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p>VELOX ist so gebaut, dass du nichts kaputt machen kannst, ohne es zu merken: Vor der ersten Änderung gibt es einen Windows-Wiederherstellungspunkt, jede Änderung landet im Protokoll und lässt sich zurückspielen, und jeder Schalter zeigt sein Risiko.</p>
+            <p>Dinge, die Windows kaputt machen oder dich ungeschützt lassen – Defender aus, Firewall aus, Updates komplett aus, Store löschen – sind gar nicht erst eingebaut. Riskante Tweaks sind in keinem Preset und brauchen deine Bestätigung.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Kostet VELOX etwas?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p><strong>Nein.</strong> VELOX ist kostenlos – ohne Abo, ohne Konto, ohne Testphase. Kosten können nur entstehen, wenn du im KI-Optimierer die <strong>Claude API</strong> mit eigenem Key nutzt (ein paar Cent pro Analyse beim Anbieter). Claude Code läuft über dein bestehendes Claude-Abo, Groq und die Smart-Analyse sind kostenlos.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Kann ich alles rückgängig machen?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p>Alle Einstellungen ja: Unter <strong>Sicherungen</strong> findest du jede Änderung mit dem alten Wert und holst ihn mit „Wiederherstellen“ zurück. Zusätzlich gibt es den Windows-Wiederherstellungspunkt.</p>
+            <p>Zwei Ausnahmen, die vorher als „Nicht umkehrbar“ markiert sind: Dateien, die die Reinigung gelöscht hat, und vorinstallierte Apps, die du entfernt hast. Die meisten dieser Apps kannst du aber über den Microsoft Store wieder installieren.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Bekomme ich Probleme mit Anti-Cheat (Vanguard, FACEIT, EasyAntiCheat)?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p>VELOX greift nicht in Spiele ein: Es spritzt nichts in Spiele, liest keinen Spielspeicher und läuft nicht im Spiel mit. Es ändert Windows-Einstellungen – genau die, die du auch selbst ändern könntest.</p>
+            <p><strong>Wichtig:</strong> Riot Vanguard (Valorant) und FACEIT können Windows-Schutzfunktionen wie Speicher-Integrität, VBS oder CFG voraussetzen. Die Tweaks, die diese abschalten, sind in VELOX als <strong>Riskant</strong> markiert, stehen mit genau dieser Warnung da und sind in keinem Preset. Spielst du solche Spiele, lass sie aus. Eine Garantie für jedes Anti-Cheat der Welt kann niemand geben.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Warum braucht VELOX Administrator-Rechte?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p>Viele Einstellungen – Dienste, Energieplan, systemweite Registry-Werte, Wiederherstellungspunkte – darf unter Windows nur ein Administrator ändern. Deshalb fragt Windows beim Start nach. Die Oberfläche selbst läuft nur auf deinem PC und ist von außen nicht erreichbar.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Was schickt der KI-Optimierer ins Internet?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p>Mit der <strong>Smart-Analyse</strong>: gar nichts, sie läuft offline. Mit einer Online-KI (Claude oder Groq) gehen nur <strong>Hardware-Daten und die Liste, welche Tweaks aktiv sind</strong> an den gewählten Anbieter – ohne Benutzer-, Computer- oder Netzwerknamen und ohne Dateien.</p>
+            <p>Claude Code startet VELOX ohne Admin-Rechte, ohne Werkzeuge und ohne Zugriff auf deine Dateien. Jeder Vorschlag der KI wird von VELOX noch einmal geprüft.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Warum warnt Windows beim Start des Setups?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p>Das Setup ist nicht digital signiert. Windows SmartScreen warnt bei solchen Dateien, solange sie noch nicht oft heruntergeladen wurden. Klick auf <strong>Weitere Informationen</strong> und dann auf <strong>Trotzdem ausführen</strong>. Lade VELOX nur von dieser Seite oder aus dem offiziellen GitHub-Projekt herunter.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Bringt VELOX mehr FPS?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p>Das hängt von deinem PC ab – deshalb nennen wir keine Zahlen. Am meisten bringt es, wenn Windows vorher ungünstig eingestellt war: Bildschirm auf 60 Hz statt 144 Hz, Arbeitsspeicher ohne XMP/EXPO, Energiesparplan, viel Hintergrund-Ballast. Auf einem schon gut eingestellten PC ändert sich weniger. Der KI-Optimierer zeigt dir vorher, was bei dir bremst.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Funktioniert VELOX auch auf Laptops?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p>Ja. Es gibt ein eigenes Preset „Laptop &amp; Akku“, und Tweaks, die auf Laptops schaden würden, schlägt VELOX dort nicht vor. Desktop-Presets wie „Ultimate“ sind ausdrücklich nur für Desktop-PCs gedacht – das steht auch dabei.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Ich habe schon andere Tweaker benutzt. Ist das ein Problem?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p>Nein, genau dafür gibt es <strong>Detweak</strong>: Es findet, was andere Tools verstellt haben, zeigt dir den aktuellen Wert und den Windows-Standard und setzt auf Wunsch alles sauber zurück – gesichert wie jede andere Änderung. Danach kannst du direkt ein Preset anwenden.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Wie bekomme ich Updates – und wie werde ich VELOX wieder los?<span class="plus" aria-hidden="true"></span></summary>
+          <div class="answer">
+            <p>Update: neue VeloxSetup.exe herunterladen, starten, <strong>Aktualisieren</strong> klicken. Einstellungen und Sicherungen bleiben. Entfernen: Windows-Einstellungen → Apps → VELOX → Deinstallieren. Willst du vorher deine Änderungen loswerden, stell sie unter „Sicherungen“ wieder her.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ changelog -->
+  <section class="section" id="changelog" aria-labelledby="changelog-title">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Changelog</p>
+        <h2 id="changelog-title">Was ist neu?</h2>
+        <p>Jede Version in einfachen Worten.</p>
+      </div>
+      <ol class="changelog">
+        <li class="release latest reveal">
+          <div class="release-meta"><span class="ver">1.4.0</span><time datetime="2026-11-03">3. November 2026</time></div>
+          <div>
+            <h3>BIOS-Optimierer</h3>
+            <ul>
+              <li>Neue Seite „BIOS“: VELOX liest Mainboard, BIOS-Version, CPU, RAM und Grafikkarte aus und zeigt, was im BIOS schon passt – zum Beispiel ob dein RAM-Profil (XMP/EXPO) an ist.</li>
+              <li>Für jede Einstellung der Weg durchs BIOS deiner Mainboard-Marke, abgestimmt auf deine Spiele (Valorant, FACEIT &amp; Co.).</li>
+              <li>Checkliste per QR-Code aufs Handy, Druckansicht und „Neustart ins BIOS“ mit BitLocker-Hinweis. VELOX verändert dein BIOS nie selbst.</li>
+            </ul>
+          </div>
+        </li>
+        <li class="release reveal">
+          <div class="release-meta"><span class="ver">1.3.0</span><time datetime="2026-10-07">7. Oktober 2026</time></div>
+          <div>
+            <h3>Zündung: die neue Startanimation</h3>
+            <ul>
+              <li>Längere Startanimation mit Licht und Ton – bei jedem Start. Unter Einstellungen wählst du Lang, Kurz oder Aus.</li>
+              <li>Das Setup schließt die Installation mit einer kurzen Animation ab.</li>
+              <li>Flüssiger auf schwächeren PCs: Das Licht wird im Hintergrund gezeichnet und schaltet bei Bedarf automatisch einen Gang zurück.</li>
+            </ul>
+          </div>
+        </li>
+        <li class="release reveal">
+          <div class="release-meta"><span class="ver">1.2.2</span><time datetime="2026-10-06">6. Oktober 2026</time></div>
+          <div>
+            <h3>Reinigung neu gebaut</h3>
+            <ul>
+              <li>DISM, SFC und CHKDSK hängen VELOX nicht mehr auf – mit Live-Prozent, Abbrechen und verständlichen Meldungen.</li>
+              <li>Erst scannen, dann löschen: jedes Reinigungsziel mit Größe, Umfang Schnell, Gründlich oder Alles.</li>
+              <li>Browser und Apps: nur der Cache wird geleert – Logins, Cookies und Verlauf bleiben.</li>
+              <li>Laufende Programme werden übersprungen.</li>
+            </ul>
+          </div>
+        </li>
+        <li class="release reveal">
+          <div class="release-meta"><span class="ver">1.2.1</span><time datetime="2026-10-06">6. Oktober 2026</time></div>
+          <div>
+            <h3>Startfehler behoben</h3>
+            <ul>
+              <li>Behoben: „Das Datenverzeichnis konnte nicht erstellt werden“ im Setup.</li>
+              <li>Behoben: Fehlerseite statt Startbildschirm beim Start von VELOX auf manchen Windows-11-PCs.</li>
+              <li>Lädt eine Seite nicht, springt VELOX auf einen Ersatz um, statt hängen zu bleiben.</li>
+            </ul>
+          </div>
+        </li>
+        <li class="release reveal">
+          <div class="release-meta"><span class="ver">1.2.0</span><time datetime="2026-10-06">6. Oktober 2026</time></div>
+          <div>
+            <h3>Neues Gesicht: „Versatz“</h3>
+            <ul>
+              <li>Neues Logo und neue Farben – überall gleich: im Setup, beim Start und in der App.</li>
+              <li>Startanimation mit Ton, abschaltbar unter Einstellungen.</li>
+              <li>Ruhigere Oberfläche: eine Akzentfarbe, klare Risiko-Farben, Zahlen gut lesbar untereinander.</li>
+            </ul>
+          </div>
+        </li>
+        <li class="release reveal">
+          <div class="release-meta"><span class="ver">1.1.1</span><time datetime="2026-10-06">6. Oktober 2026</time></div>
+          <div>
+            <h3>Stabiler Start</h3>
+            <ul>
+              <li>Behoben: „Die Side-by-Side-Konfiguration ist ungültig“ beim Start von 1.1.0.</li>
+              <li>VELOX beendet sich nicht mehr, wenn der PC aus dem Standby aufwacht.</li>
+              <li>Klare Meldungen auf Deutsch, wenn PowerShell blockiert ist – etwa durch den Virenschutz.</li>
+              <li>Läuft jetzt schon ab .NET Framework 4.7.2, also auch auf Windows 10 LTSC 2019.</li>
+            </ul>
+          </div>
+        </li>
+        <li class="release reveal">
+          <div class="release-meta"><span class="ver">1.1.0</span><time datetime="2026-10-06">6. Oktober 2026</time></div>
+          <div>
+            <h3>Setup und eigenes Fenster</h3>
+            <ul>
+              <li>VeloxSetup.exe: eine Datei zum Installieren, Aktualisieren und Entfernen.</li>
+              <li>VELOX läuft in einem eigenen Fenster mit Startbildschirm.</li>
+              <li>Nur noch ein Wiederherstellungspunkt statt einem pro Aktion – und schnelleres Anwenden.</li>
+              <li>Viel mehr Spiele mit echten Cover-Bildern: Steam, Epic, GOG, Ubisoft, EA, Battle.net, Riot, Xbox, Rockstar, FiveM.</li>
+              <li>Echte KI im KI-Optimierer: Claude Code, Claude API, Groq oder offline.</li>
+            </ul>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============================================================ final call -->
+  <section class="section final" aria-labelledby="final-title">
+    <div class="wrap">
+      <img class="mark" src="brand/mark.svg" alt="" width="56" height="52">
+      <h2 id="final-title">Bereit, Windows aufzuräumen?</h2>
+      <p>Kostenlos, mit Sicherung für jeden Schritt. Und wenn du erst mal nur schauen willst: Der Testmodus ändert nichts.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary btn-lg" href="https://github.com/georghatzmann-bit/vanity-/raw/claude/new-session-apxmkj/velox-tweaker/dist/VeloxSetup.exe" data-velox="download">
+          <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
+          Kostenlos herunterladen
+        </a>
+        <a class="btn btn-lg" href="#faq">Fragen? Zur FAQ</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img class="on-dark" src="brand/wordmark-small.svg" alt="VELOX" width="68" height="16">
+        <img class="on-light" src="brand/wordmark-small-light.svg" alt="VELOX" width="68" height="16">
+        <p>Der kostenlose PC-Tweaker für Windows 10 und 11. Ein unabhängiges Projekt – Windows ist eine Marke von Microsoft, VELOX hat mit Microsoft nichts zu tun.</p>
+      </div>
+      <nav aria-label="Produkt">
+        <h2>Produkt</h2>
+        <ul>
+          <li><a href="#funktionen">Funktionen</a></li>
+          <li><a href="#download">Download</a></li>
+          <li><a href="#changelog">Changelog</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Rechtliches">
+        <h2>Rechtliches</h2>
+        <ul>
+          <li><a href="impressum.html">Impressum</a></li>
+          <li><a href="datenschutz.html">Datenschutz</a></li>
+          <li><a href="https://github.com/georghatzmann-bit/vanity-/tree/claude/new-session-apxmkj/velox-tweaker" data-velox="source" rel="noopener">Quellcode auf GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="footer-bottom">
+      <span>© <span data-year>2026</span> VELOX</span>
+      <span>Version <span class="mono" data-velox="version">1.4.0</span> · Diese Seite setzt keine Cookies und zählt niemanden.</span>
+    </div>
+  </div>
+</footer>
+
+<dialog class="lightbox" id="lightbox" aria-label="Screenshot">
+  <div class="lightbox-bar"><span data-lightbox-title></span><button class="icon-btn" type="button" data-lightbox-close aria-label="Schließen"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="">
+</dialog>
+</body>
+</html>

@@ -17,6 +17,8 @@ import path from 'node:path';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { readPng, sampleModules, decodeMatrix } from './qr-decode.mjs';
+import { runQrSelftest } from './qr-selftest.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(here, '..', '..');
@@ -256,7 +258,7 @@ test('bootstrap renders, first-run scan, token removed from URL', async (t) => {
   const stored = await page.evaluate(() => sessionStorage.getItem('velox.token'));
   assert(stored && stored.length >= 32, 'token kept in sessionStorage');
   assert((await page.textContent('#topbar-title')) === 'Übersicht', 'overview title');
-  assert((await page.$$('#nav .nav-item')).length === 10, '10 nav items');
+  assert((await page.$$('#nav .nav-item')).length === 11, '11 nav items');
   assert(/Testmodus/.test(await page.textContent('#mode-chips')), 'Testmodus chip');
   await page.waitForFunction(() => document.querySelectorAll('.sys-card:not(.is-loading)').length === 6, null, { timeout: 30000 });
   const csp = await page.$eval('meta[http-equiv="Content-Security-Policy"]', m => m.content);
@@ -488,7 +490,7 @@ test('splash: M in the intro writes settings.startSound; the next start respects
 
 test('brand: no violet left, signal only where the kit allows it, AA contrast of accent text and badges', async (t) => {
   // the stylesheets themselves
-  for (const f of ['css/app.css', 'css/games.css', 'css/cleanup.css', 'brand/tokens.css', 'brand/tokens-app.css', 'brand/intro.css', 'index.html']) {
+  for (const f of ['css/app.css', 'css/games.css', 'css/cleanup.css', 'css/bios.css', 'brand/tokens.css', 'brand/tokens-app.css', 'brand/intro.css', 'index.html']) {
     const r = await rawRequest(t.server, 'GET', '/' + f);
     assert(r.status === 200, f + ' served');
     assert(!/7C5CFF|124,\s*92,\s*255|22D3EE|34,\s*211,\s*238/i.test(r.text), f + ' still contains the old violet/cyan');
@@ -508,7 +510,7 @@ test('brand: no violet left, signal only where the kit allows it, AA contrast of
     }
     return out;
   });
-  for (const id of ['overview', 'tweaks', 'presets', 'advisor', 'detweak', 'games', 'cleanup', 'apps', 'backups', 'settings']) {
+  for (const id of ['overview', 'tweaks', 'presets', 'advisor', 'detweak', 'games', 'bios', 'cleanup', 'apps', 'backups', 'settings']) {
     await goPage(page, id);
     const bad = await scan();
     assert(!bad.length, 'old accent on ' + id + ': ' + bad.join(' | '));
@@ -564,7 +566,7 @@ test('CSP: no violations anywhere (splash, every page, palette, dialogs, replay)
   const wjs = await rawRequest(t.server, 'GET', '/brand/light-worker.js');
   assert(wjs.status === 200 && /^text\/javascript/.test(wjs.headers['content-type'] || ''), 'light-worker.js served as JavaScript: ' + wjs.status + ' ' + wjs.headers['content-type']);
   await ready(page);
-  for (const id of ['overview', 'tweaks', 'presets', 'advisor', 'detweak', 'games', 'cleanup', 'apps', 'backups', 'settings']) await goPage(page, id);
+  for (const id of ['overview', 'tweaks', 'presets', 'advisor', 'detweak', 'games', 'bios', 'cleanup', 'apps', 'backups', 'settings']) await goPage(page, id);
   await page.keyboard.press('Control+k');
   await page.waitForSelector('.palette');
   await page.keyboard.press('Escape');
@@ -578,7 +580,7 @@ test('CSP: no violations anywhere (splash, every page, palette, dialogs, replay)
 });
 
 test('navigation: every page at 1360x880 and 900x600, no horizontal overflow', async (t) => {
-  const ids = ['overview', 'tweaks', 'presets', 'advisor', 'detweak', 'games', 'cleanup', 'apps', 'backups', 'settings'];
+  const ids = ['overview', 'tweaks', 'presets', 'advisor', 'detweak', 'games', 'bios', 'cleanup', 'apps', 'backups', 'settings'];
   for (const vp of [{ width: 1360, height: 880 }, { width: 900, height: 600 }]) {
     const page = await openApp(t, '', { viewport: vp });
     for (const id of ids) {
@@ -1769,6 +1771,201 @@ test('busy backend: page attaches to a running job (409 safe)', async (t) => {
   await page.goto(t.server.url);
   if (MODE === 'mock') await page.waitForSelector('.layer .job', { timeout: 15000 });
   await ready(page);
+});
+
+// ------------------------------------------------------------------ BIOS-Optimierer (core/Bios.ps1, ui/js/pages/bios.js)
+// The fake PC is tests/fixtures/bios/asus-5800x3d.json (real mode) = tests/ui/bios-sample.json (mock).
+/** Scrolls an element to the middle of the page, then clicks it like a mouse. */
+async function scrollClick(page, sel) {
+  await page.$eval(sel, (e) => e.scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(150);
+  await clickLikeAMouse(page, sel);
+}
+async function openBios(t, opts = {}) {
+  const page = await openApp(t, 'bios', opts);
+  await page.waitForSelector('.bs-item', { timeout: 30000 });
+  await idle(page);
+  return page;
+}
+/** Parses the phone link like the website does: everything after #, URLSearchParams. */
+function parseBiosLink(url) {
+  const i = url.indexOf('#');
+  return { base: url.slice(0, i), q: new URLSearchParams(url.slice(i + 1)) };
+}
+
+test('QR: Encoder bit-identisch zu einem zweiten Encoder, Versionen 1–40 dekodieren zurück', async () => {
+  const r = await runQrSelftest((m) => console.log(m));
+  assert(r.checks > 200, 'QR checks: ' + r.checks);
+  for (const n of r.notes) console.log('    NOTE ' + n);
+});
+
+test('BIOS: System, „X von Y passen schon“, Warnungen, Checkliste mit Anleitung für ASUS + AMD', async (t) => {
+  const page = await openBios(t);
+  assert((await page.textContent('#topbar-title')) === 'BIOS', 'title');
+  assert((await page.textContent('[data-testid="bios-count"]')) === '3', 'X: ' + await page.textContent('[data-testid="bios-count"]'));
+  assert(/von 6/.test(await page.textContent('.bs-count-of')), 'Y');
+  const sys = await page.textContent('[data-testid="bios-system"]');
+  for (const want of ['ASUS ROG STRIX B550-F GAMING', 'Version 2803', '12.03.2022', 'Ryzen 7 5800X3D', 'X3D, gesperrt', '2133 von 3600 MHz', 'RAM-Profil aus', 'Dual-Channel', 'Resizable BAR an', 'UEFI', 'Secure Boot aus', 'TPM 2.0', 'BitLocker an']) assert(sys.includes(want), 'system card shows ' + want + ': ' + sys);
+  const warn = await page.$$eval('[data-warning]', els => els.map(e => e.dataset.warning));
+  assert(warn.join(',') === 'bios-old,bitlocker,vbs-fps', 'warnings: ' + warn);
+  assert(/Strom/.test(await page.textContent('[data-warning="bios-old"]')), 'BIOS update comes with its risk note');
+  const key = await page.$eval('[data-warning="bitlocker"] a', a => a.href);
+  assert(key === 'https://aka.ms/myrecoverykey', 'recovery key link: ' + key);
+  // open items first; the one a detected game needs at the very top
+  const rows = await page.$$eval('[data-testid="bios-list"] .bs-item', els => els.map(e => e.dataset.id + ':' + e.dataset.status));
+  assert(rows.join(',') === 'secure-boot:todo,ram-profile:todo,uefi-csm:unknown,dual-channel:ok,rebar:ok,tpm:ok', 'core order: ' + rows);
+  const opt = await page.$$eval('[data-testid="bios-optional"] .bs-item', els => els.map(e => e.dataset.id));
+  assert(opt.join(',') === 'x3d-locked,c-states,virtualization,fan-curve', 'optional: ' + opt);
+  assert(/Wichtig für Valorant/.test(await page.textContent('.bs-item[data-id="secure-boot"]')), 'Valorant needs Secure Boot');
+  assert(/fehlt/.test(await page.textContent('.bs-item[data-id="ram-profile"] .bs-status')), 'status chip');
+  assert(/unbekannt – im BIOS prüfen/.test(await page.textContent('.bs-item[data-id="uefi-csm"] .bs-status')), 'unknown chip');
+  assert(/Entf/.test(await page.textContent('.bs-key')) && /F7/.test(await page.textContent('.bs-key')), 'BIOS key + advanced mode');
+  // expand: ASUS + AMD steps
+  assert(await page.$eval('.bs-item[data-id="ram-profile"] .bs-detail', d => d.hidden), 'collapsed at first');
+  await scrollClick(page, '.bs-item[data-id="ram-profile"] .bs-head');
+  await page.waitForSelector('.bs-item[data-id="ram-profile"] .bs-detail:not([hidden])');
+  const steps = await page.$$eval('.bs-item[data-id="ram-profile"] .bs-steps li', els => els.map(e => e.textContent));
+  assert(steps.length === 3 && /EXPO I/.test(steps[1]) && /D\.O\.C\.P\./.test(steps[1]), 'ASUS/AMD steps: ' + steps.join(' | '));
+  assert(/So geht’s bei ASUS/.test(await page.textContent('.bs-item[data-id="ram-profile"] .bs-detail')), 'vendor heading');
+  assert(/anders heißen/.test(await page.textContent('.bs-item[data-id="ram-profile"] .bs-path-note')), 'unverified path says so');
+  assert((await page.getAttribute('.bs-item[data-id="ram-profile"] .bs-head', 'aria-expanded')) === 'true', 'aria-expanded');
+  // the TPM path for ASUS was checked against ASUS docs: no "anders heißen" note
+  await scrollClick(page, '.bs-item[data-id="tpm"] .bs-head');
+  assert(!(await page.$('.bs-item[data-id="tpm"] .bs-path-note')), 'verified path: no note');
+  assert(/AMD fTPM configuration/.test(await page.textContent('.bs-item[data-id="tpm"] .bs-steps')), 'fTPM path for AMD');
+  assert(/Passt nicht zu deinem PC \(3\)/.test(await page.textContent('[data-testid="bios-hidden"] summary')), 'hidden items listed');
+  // status chips and risk badges readable (AA) against what is really behind them
+  const low = await page.evaluate(() => {
+    const parse = (c) => { const m = c.match(/rgba?\(([^)]+)\)/); const p = m[1].split(',').map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
+    const over = (top, bot) => ({ r: top.r * top.a + bot.r * (1 - top.a), g: top.g * top.a + bot.g * (1 - top.a), b: top.b * top.a + bot.b * (1 - top.a), a: 1 });
+    const bgOf = (el) => { const st = []; for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c.a > 0) { st.push(c); if (c.a >= 1) break; } } let acc = { r: 12, g: 13, b: 15, a: 1 }; for (let i = st.length - 1; i >= 0; i--) acc = over(st[i], acc); return acc; };
+    const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b); };
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    return Array.from(document.querySelectorAll('.bs-status, .bs-pill, .page-bios .badge')).map(el => ({ t: el.textContent.trim(), r: ratio(parse(getComputedStyle(el).color), bgOf(el)) })).filter(x => x.r < 4.5);
+  });
+  assert(!low.length, 'below AA: ' + JSON.stringify(low.slice(0, 4)));
+  await shot(page, 'state-bios-checklist');
+});
+
+test('BIOS: „Aufs Handy“ – QR-Code wird gezeichnet und dekodiert zurück zum Link; Daten nur im #-Teil', async (t) => {
+  const bctx = await t.browser.newContext({ viewport: { width: 1360, height: 880 }, deviceScaleFactor: 2 });
+  t.contexts.push(bctx);
+  const page = await bctx.newPage();
+  t.watch(page);
+  await page.goto(t.server.url + '#/bios');
+  await ready(page);
+  await page.waitForSelector('.bs-item', { timeout: 30000 });
+  await scrollClick(page, '[data-testid="bios-qr"]');
+  await page.waitForSelector('.layer .dialog [data-testid="bios-qr-code"] svg.qr');
+  await page.waitForTimeout(450);
+  const link = await page.textContent('[data-testid="bios-link"]');
+  const { base, q } = parseBiosLink(link);
+  assert(base === 'https://georghatzmann-bit.github.io/vanity-/bios.html' && !base.includes('?'), 'base URL without a query: ' + base);
+  assert(link.length <= 300, 'link short enough: ' + link.length);
+  assert(q.get('v') === '1' && q.get('p') === 'asus' && q.get('c') === 'amd', 'v/p/c: ' + link);
+  const s = q.get('s').split('.');
+  assert(s.slice(0, 3).join('.') === 'sbt.rpt.csu', 'display order + status letters: ' + q.get('s'));
+  assert(s.every(x => /^[a-z]{2}[otu]$/.test(x)), 'each entry is code + o/t/u: ' + q.get('s'));
+  assert(q.get('w') === 'bo.bl.vb' && q.get('g') === 'val', 'warnings + games: ' + link);
+  assert(q.get('b') === 'ROG STRIX B550-F GAMING' && q.get('i') === '2803' && q.get('d') === '20220312', 'board, BIOS version, date: ' + link);
+  // every code in the link is one the website's JSON knows
+  const texts = await page.evaluate(() => window.__velox.cache.bios.texts);
+  const codes = new Set(texts.items.map(i => i.code));
+  assert(s.every(x => codes.has(x.slice(0, 2))), 'codes from recommendations.json');
+  // the rendered code, read back from the pixels by an independent decoder
+  const png = await page.locator('[data-testid="bios-qr-code"]').screenshot();
+  const dec = decodeMatrix(sampleModules(readPng(png), 16));   // 16 px: the tile's rounded corners at 2x
+  assert(dec.text === link, 'QR decodes to the link: ' + dec.text);
+  console.log('    QR version ' + dec.version + ', level ' + dec.ecc + ', ' + link.length + ' Zeichen');
+  assert(/kein Browser/.test(await page.textContent('.bs-qr-privacy')), 'privacy line');
+  await shot(page, 'state-bios-qr');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.layer .dialog'));
+});
+
+test('BIOS: „Neustart ins BIOS“ fragt nach, zeigt den BitLocker-Schlüssel und pausiert BitLocker für einen Start', async (t) => {
+  const page = await openBios(t);
+  const before = MODE === 'mock' ? (await api(t.server, 'GET', '/__mock/stats')).json.biosReboots.length : 0;
+  await scrollClick(page, '[data-testid="bios-reboot"]');
+  await page.waitForSelector('.layer .dialog');
+  const dlg = await page.textContent('.layer .dialog');
+  assert(/BitLocker ist an/.test(dlg) && /aka\.ms\/myrecoverykey/.test(dlg), 'BitLocker warning + key: ' + dlg);
+  assert(await page.$eval('.bs-dlg-pause input', i => i.checked), 'pause is ticked by default');
+  await shot(page, 'state-bios-reboot-confirm');
+  await page.click('.layer .dialog [data-action="cancel"]');
+  await page.waitForFunction(() => !document.querySelector('.layer .dialog'));
+  await idle(page);
+  if (MODE === 'mock') assert((await api(t.server, 'GET', '/__mock/stats')).json.biosReboots.length === before, 'cancel starts nothing');
+  await scrollClick(page, '[data-testid="bios-reboot"]');
+  await page.waitForSelector('.layer .dialog [data-action="confirm"]');
+  await page.click('.layer .dialog [data-action="confirm"]');
+  await waitJobDone(page);
+  const toasts = await toastText(page);
+  assert(/Neustart ins BIOS protokolliert/.test(toasts) && /BitLocker ist für diesen einen Start pausiert/.test(toasts), 'toast: ' + toasts);
+  if (MODE === 'mock') {
+    const st = (await api(t.server, 'GET', '/__mock/stats')).json.biosReboots;
+    assert(st.length === before + 1 && st[st.length - 1].suspendBitLocker === true, 'job got suspendBitLocker: ' + JSON.stringify(st));
+  }
+});
+
+test('BIOS: Legacy-PC – Neustart ins BIOS gesperrt mit Grund, Legacy-Warnung, allgemeine Pfade', async (t) => {
+  await api(t.server, 'POST', '/__mock/bios', { fixture: 'dell-legacy' });
+  try {
+    const page = await openApp(t, 'bios');
+    await scrollClick(page, '[data-testid="bios-rescan"]');
+    await page.waitForFunction(() => window.__velox.cache.bios && window.__velox.cache.bios.vendor === 'generic', null, { timeout: 15000 });
+    await idle(page);
+    assert(await page.$eval('[data-testid="bios-reboot"]', b => b.disabled), 'reboot disabled');
+    assert(/Legacy/.test(await page.textContent('[data-testid="bios-reboot-note"]')), 'reason shown');
+    const warn = await page.$$eval('[data-warning]', els => els.map(e => e.dataset.warning));
+    assert(warn[0] === 'legacy-boot' && warn.includes('vendor-unknown') && warn.includes('not-admin'), 'warnings: ' + warn);
+    await scrollClick(page, '.bs-item[data-id="uefi-csm"] .bs-head');
+    assert(/So geht’s \(allgemein\)/.test(await page.textContent('.bs-item[data-id="uefi-csm"] .bs-detail')), 'generic steps');
+    assert(/MBR2GPT/.test(await page.textContent('.bs-item[data-id="uefi-csm"]')), 'MBR2GPT warning');
+    await shot(page, 'state-bios-legacy');
+  } finally { await api(t.server, 'POST', '/__mock/bios', { fixture: 'asus-5800x3d' }); }
+}, { mockOnly: true });
+
+test('BIOS: Druckansicht – schwarz auf weiß, alle Schritte offen, QR-Code im Kopf, ohne Menü', async (t) => {
+  const page = await openBios(t);
+  await page.emulateMedia({ media: 'print' });
+  const pr = await page.evaluate(() => ({
+    sidebar: getComputedStyle(document.querySelector('.sidebar')).display,
+    topbar: getComputedStyle(document.querySelector('.topbar')).display,
+    actions: getComputedStyle(document.querySelector('.bs-actions')).display,
+    head: getComputedStyle(document.querySelector('.bs-print-head')).display,
+    qr: !!document.querySelector('.bs-print-head svg.qr'),
+    bg: getComputedStyle(document.body).backgroundColor,
+    text: getComputedStyle(document.querySelector('.bs-title')).color,
+    closed: Array.from(document.querySelectorAll('.bs-detail')).filter(d => getComputedStyle(d).display === 'none').length,
+    details: document.querySelectorAll('.bs-detail').length
+  }));
+  assert(pr.sidebar === 'none' && pr.topbar === 'none' && pr.actions === 'none', 'menu + buttons hidden: ' + JSON.stringify(pr));
+  assert(pr.head !== 'none' && pr.qr, 'print header with QR code');
+  assert(pr.bg === 'rgb(255, 255, 255)' && pr.text === 'rgb(0, 0, 0)', 'black on white: ' + JSON.stringify(pr));
+  assert(pr.details >= 8 && pr.closed === 0, 'every step printed: ' + JSON.stringify(pr));
+  await shot(page, 'state-bios-print');
+  const pdf = await page.pdf({ format: 'A4' });
+  assert(pdf.length > 20000 && pdf.slice(0, 4).toString() === '%PDF', 'PDF rendered: ' + pdf.length);
+  await page.emulateMedia({ media: 'screen' });
+  assert(await page.$eval('.bs-print-head', e => getComputedStyle(e).display === 'none'), 'print header only in print');
+  // the print button calls window.print()
+  await page.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
+  await scrollClick(page, '[data-testid="bios-print"]');
+  assert((await page.evaluate(() => window.__printed)) === 1, 'Drucken -> window.print()');
+});
+
+test('Übersicht: Mainboard, BIOS-Version und RAM-Profil, Klick öffnet den BIOS-Check', async (t) => {
+  const page = await openApp(t, 'overview');
+  await page.waitForSelector('[data-testid="overview-bios"]:not([hidden])', { timeout: 30000 });
+  assert((await page.textContent('[data-testid="overview-board"]')) === 'ASUS ROG STRIX B550-F GAMING', 'board');
+  assert((await page.textContent('[data-testid="overview-bios-version"]')) === 'BIOS 2803 vom 12.03.2022', 'BIOS version');
+  assert(/RAM-Profil aus – 2133 statt 3600 MHz/.test(await page.textContent('[data-testid="overview-ram-profile"]')), 'RAM profile: ' + await page.textContent('[data-testid="overview-ram-profile"]'));
+  assert(/2133 von 3600 MHz/.test(await page.textContent('.sys-card[data-sys="ram"]')), 'RAM card shows the real speed');
+  await shot(page, 'state-overview-bios');
+  await scrollClick(page, '[data-testid="overview-bios"]');
+  await page.waitForSelector('.page[data-page="bios"]');
+  assert((await page.textContent('#topbar-title')) === 'BIOS', 'navigated');
 });
 
 test('heartbeat and shutdown beacon', async (t) => {

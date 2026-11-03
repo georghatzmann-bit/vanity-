@@ -1,0 +1,24 @@
+{
+  "comment": "Fake PC for the BIOS page (core/Bios.ps1): ASUS B550 + Ryzen 7 5800X3D + RTX 4070. Matches the simulated desktop profile (core/Scan.ps1). RAM profile off, old BIOS, Secure Boot off, BitLocker on, Valorant installed. Same field names as the CIM classes Get-VxBiosRealRaw reads.",
+  "now": "2026-11-01",
+  "admin": true,
+  "chassis": "desktop",
+  "baseBoard": { "Manufacturer": "ASUSTeK COMPUTER INC.", "Product": "ROG STRIX B550-F GAMING" },
+  "computerSystem": { "Manufacturer": "System manufacturer", "Model": "System Product Name", "HypervisorPresent": true },
+  "bios": { "Manufacturer": "American Megatrends Inc.", "SMBIOSBIOSVersion": "2803", "ReleaseDate": "2022-03-12" },
+  "processor": { "Name": "AMD Ryzen 7 5800X3D 8-Core Processor", "Manufacturer": "AuthenticAMD", "VirtualizationFirmwareEnabled": false },
+  "memory": [
+    { "Capacity": 17179869184, "Speed": 3600, "ConfiguredClockSpeed": 2133, "SMBIOSMemoryType": 26, "DeviceLocator": "DIMM_A2", "BankLabel": "BANK 1", "PartNumber": "F4-3600C16-16GVKC", "Manufacturer": "G Skill Intl" },
+    { "Capacity": 17179869184, "Speed": 3600, "ConfiguredClockSpeed": 2133, "SMBIOSMemoryType": 26, "DeviceLocator": "DIMM_B2", "BankLabel": "BANK 3", "PartNumber": "F4-3600C16-16GVKC", "Manufacturer": "G Skill Intl" }
+  ],
+  "gpus": [ { "Name": "NVIDIA GeForce RTX 4070", "PNPDeviceID": "PCI\\VEN_10DE&DEV_2786&SUBSYS_00000000&REV_A1\\4&1" } ],
+  "nvidiaSmi": "==============NVSMI LOG==============\n\nAttached GPUs                             : 1\nGPU 00000000:01:00.0\n    FB Memory Usage\n        Total                             : 12282 MiB\n        Reserved                          : 225 MiB\n        Used                              : 1012 MiB\n        Free                              : 11044 MiB\n    BAR1 Memory Usage\n        Total                             : 16384 MiB\n        Used                              : 5 MiB\n        Free                              : 16379 MiB\n    Conf Compute Protected Memory Usage\n        Total                             : 0 MiB\n",
+  "firmwareType": "uefi",
+  "secureBoot": 0,
+  "tpm": { "present": true, "enabled": true, "activated": true, "specVersion": "2.0, 0, 1.38", "manufacturer": "AMD" },
+  "deviceGuard": { "vbs": 2, "services": [2] },
+  "vmUse": [],
+  "bitlocker": { "protectionStatus": 1, "conversionStatus": 1 },
+  "services": ["vgc"],
+  "games": ["valorant valorant-win64-shipping.exe", "grand theft auto v gta5.exe"]
+}

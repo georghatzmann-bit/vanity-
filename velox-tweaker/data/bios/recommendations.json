@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "comment": "BIOS-Optimierer (core/Bios.ps1, ui/js/pages/bios.js). Texte für die App UND die Handy-Seite der VELOX-Website (Link-Format: docs/ARCHITECTURE.md, Abschnitt 'BIOS checklist link format'). Nur die App liest when/check/feature/direction/games.match. Geprüft mit: pwsh tools/Validate-Catalog.ps1.",
+  "statusLabels": { "o": "passt schon", "t": "fehlt", "u": "unbekannt – im BIOS prüfen" },
+  "riskLabels": { "safe": "Sicher", "moderate": "Mittel" },
+  "general": {
+    "pathNote": "Menünamen können je nach BIOS-Version anders heißen.",
+    "intro": "VELOX ändert nichts im BIOS – es liest nur aus und zeigt dir, was du selbst einstellen kannst.",
+    "saveNote": "Im BIOS gilt eine Änderung erst nach „Speichern und neu starten“. Weißt du nicht weiter: „Load Optimized Defaults“ setzt alles auf Werkseinstellung.",
+    "recoveryUrl": "https://aka.ms/myrecoverykey"
+  },
+  "vendors": {
+    "asus": { "name": "ASUS", "biosKey": "Entf (bei manchen Boards F2)", "advanced": "F7 schaltet zwischen EZ Mode und Advanced Mode um.", "save": "F10 und dann „OK“ = speichern und neu starten.", "help": "Das Handbuch deines Boards findest du auf asus.com unter Support." },
+    "msi": { "name": "MSI", "biosKey": "Entf", "advanced": "F7 schaltet zwischen EZ Mode und Advanced Mode um.", "save": "F10 und dann „Yes“ = speichern und neu starten.", "help": "Das Handbuch deines Boards findest du auf msi.com unter Support." },
+    "gigabyte": { "name": "Gigabyte", "biosKey": "Entf", "advanced": "F2 schaltet zwischen Easy Mode und Advanced Mode um.", "save": "F10 und dann „Yes“ = speichern und neu starten.", "help": "Das Handbuch deines Boards findest du auf gigabyte.com unter Support." },
+    "asrock": { "name": "ASRock", "biosKey": "F2 oder Entf", "advanced": "F6 schaltet zwischen Easy Mode und Advanced Mode um.", "save": "F10 und dann „Yes“ = speichern und neu starten.", "help": "Das Handbuch deines Boards findest du auf asrock.com unter Support." },
+    "generic": { "name": "dein Mainboard", "biosKey": "Entf oder F2 – bei Komplett-PCs und Laptops oft F1, F10 oder F12", "advanced": "Such nach „Advanced“, „Erweitert“ oder einem Schalter für den Experten-Modus.", "save": "Meist F10 = speichern und neu starten.", "help": "Das Handbuch zu deinem PC oder Mainboard nennt die genauen Menüs." }
+  },
+  "games": [
+    { "code": "val", "name": "Valorant", "needs": ["secureBoot", "tpm"], "match": ["valorant"], "services": ["vgc"] },
+    { "code": "lol", "name": "League of Legends", "needs": ["secureBoot", "tpm"], "match": ["league of legends", "leagueclient"] },
+    { "code": "fct", "name": "FACEIT", "needs": ["secureBoot", "tpm", "vbs"], "match": ["faceit"], "services": ["FACEIT"] },
+    { "code": "bf6", "name": "Battlefield 6", "needs": ["secureBoot", "tpm", "vbs"], "match": ["battlefield 6", "bf6"] },
+    { "code": "cod", "name": "Call of Duty", "needs": ["secureBoot", "tpm"], "match": ["call of duty", "black ops", "warzone", "cod.exe"] }
+  ],
+  "items": [
+    {
+      "id": "ram-profile", "code": "rp", "section": "core", "impact": 3, "risk": "safe",
+      "title": "RAM-Profil an (XMP / EXPO)",
+      "why": "Ohne Profil läuft dein Arbeitsspeicher oft nur mit Grundtakt – zum Beispiel 2133 statt 3600 MHz. Mit Profil läuft er so schnell, wie es auf der Packung steht. Das bringt in vielen Spielen spürbar mehr FPS und ruhigere Bildzeiten.",
+      "info": "Das Profil hat der RAM-Hersteller getestet. Der erste Start danach kann bei DDR5 ein paar Minuten dauern (der Speicher wird eingemessen) – nicht ausschalten. Stürzt der PC danach ab oder startet nicht sauber, schalte das Profil wieder aus.",
+      "when": { "formFactor": "desktop" },
+      "check": { "fact": "ram.profile", "ok": ["on"], "todo": ["off"] },
+      "steps": {
+        "generic": ["Ins BIOS und in den erweiterten Modus wechseln.", "Im Bereich „Overclocking“, „OC“ oder „Tweaker“ nach „XMP“, „EXPO“ oder „D.O.C.P.“ suchen.", "Profil 1 wählen und mit F10 speichern."],
+        "asus": { "amd": ["Advanced Mode (F7) → „Ai Tweaker“ (bei ROG-Boards „Extreme Tweaker“).", "„Ai Overclock Tuner“ auf „EXPO I“ stellen – bei DDR4-Boards heißt es „D.O.C.P.“.", "F10 → speichern und neu starten."], "intel": ["Advanced Mode (F7) → „Ai Tweaker“ (bei ROG-Boards „Extreme Tweaker“).", "„Ai Overclock Tuner“ auf „XMP I“ stellen.", "F10 → speichern und neu starten."] },
+        "msi": ["Im EZ Mode oben links auf „XMP“ / „A-XMP“ / „EXPO“ klicken und Profil 1 wählen.", "Oder im Advanced Mode (F7) → „OC“ → „Extreme Memory Profile (XMP)“ bzw. „AMD EXPO“ → Profil 1.", "F10 → speichern und neu starten."],
+        "gigabyte": ["Advanced Mode (F2) → „Tweaker“.", "„Extreme Memory Profile (X.M.P.)“ auf „Profile1“ stellen – auf AMD-Boards mit DDR5 heißt es „EXPO“.", "F10 → speichern und neu starten."],
+        "asrock": ["Advanced Mode (F6) → „OC Tweaker“ (manchmal unter „DRAM Configuration“).", "„Load XMP Setting“ bzw. „Load EXPO Setting“ auf Profil 1 stellen.", "F10 → speichern und neu starten."]
+      },
+      "verified": []
+    },
+    {
+      "id": "dual-channel", "code": "dc", "section": "core", "impact": 3, "risk": "safe",
+      "title": "RAM im Dual-Channel (richtige Steckplätze)",
+      "why": "Mit zwei Riegeln in den richtigen Steckplätzen arbeitet der Speicher doppelt so breit. Nur ein Riegel – oder zwei im selben Kanal – kostet in CPU-lastigen Spielen viele FPS.",
+      "info": "Das ist keine BIOS-Einstellung, sondern eine Frage der Steckplätze. Bei Laptops ist der Speicher oft fest verlötet.",
+      "check": { "fact": "ram.dualChannel", "ok": ["yes"], "todo": ["no"] },
+      "steps": {
+        "generic": ["PC herunterfahren und den Netzstecker ziehen.", "Zwei Riegel gehören fast immer in den zweiten und vierten Steckplatz vom Prozessor aus gezählt – meist „A2“ und „B2“ beschriftet. Das Handbuch deines Mainboards zeigt es genau.", "Hast du nur einen Riegel: ein zweiter, gleicher Riegel bringt Dual-Channel."]
+      },
+      "verified": []
+    },
+    {
+      "id": "rebar", "code": "rb", "section": "core", "impact": 2, "risk": "safe",
+      "title": "Resizable BAR an (mit Above 4G Decoding)",
+      "why": "Damit kann der Prozessor auf den ganzen Grafikspeicher auf einmal zugreifen. Das bringt in vielen neuen Spielen ein paar Prozent mehr FPS – bei Intel-Arc-Karten ist es Pflicht.",
+      "info": "Geht nur, wenn Windows im UEFI-Modus startet (CSM aus). Erst „Above 4G Decoding“ einschalten, dann „Re-Size BAR“. Manche Boards zeigen die zweite Option erst nach einmal Speichern und Neustart. Fehlt sie ganz, hilft oft ein BIOS-Update.",
+      "when": { "formFactor": "desktop", "gpuTags": ["rebar-capable"] },
+      "check": { "fact": "gpu.rebar", "ok": ["on"], "todo": ["off"] },
+      "steps": {
+        "generic": ["Zuerst CSM ausschalten (siehe Punkt „CSM aus“).", "Im Bereich „Advanced“ → „PCI Subsystem Settings“ (oder „PCIe“ / „IO Ports“) „Above 4G Decoding“ auf „Enabled“.", "„Re-Size BAR Support“ auf „Enabled“ oder „Auto“.", "F10 → speichern und neu starten."],
+        "asus": ["Advanced Mode (F7) → „Advanced“ → „PCI Subsystem Settings“.", "„Above 4G Decoding“ auf „Enabled“.", "„Re-Size BAR Support“ auf „Auto“ oder „Enabled“.", "F10 → speichern und neu starten."],
+        "msi": ["Advanced Mode (F7) → „Settings“ → „Advanced“ → „PCI Subsystem Settings“ (ältere Boards: „PCIe/PCI Sub-system Settings“).", "„Above 4G memory/Crypto Currency mining“ auf „Enabled“.", "„Re-Size BAR Support“ auf „Enabled“ – erscheint manchmal erst nach Speichern und erneutem Öffnen.", "F10 → speichern und neu starten."],
+        "gigabyte": ["Advanced Mode (F2) → „Settings“ → „IO Ports“ (manche Boards: „Advanced“ → „PCI Subsystem Settings“).", "„Above 4G Decoding“ auf „Enabled“.", "„Re-Size BAR Support“ auf „Auto“.", "F10 → speichern und neu starten."],
+        "asrock": ["„Boot“ → „CSM“ auf „Disabled“ (fehlt das Menü: erst „Fast Boot“ auf „Disabled“).", "„Advanced“ → „Chipset Configuration“ → „Above 4G Decoding“ auf „Enabled“.", "Darunter „C.A.M. (Clever Access Memory)“ bzw. „Re-Size BAR Support“ auf „Enabled“.", "F10 → speichern und neu starten."]
+      },
+      "verified": ["asrock"]
+    },
+    {
+      "id": "uefi-csm", "code": "cs", "section": "core", "impact": 1, "risk": "moderate",
+      "title": "CSM aus (reiner UEFI-Modus)",
+      "why": "CSM ist ein Kompatibilitätsmodus für sehr alte Hardware. Er blockiert Secure Boot und Resizable BAR. Moderne Grafikkarten und Windows 11 brauchen ihn nicht.",
+      "info": "Wichtig: Startet dein Windows noch im alten Legacy-Modus, startet es mit CSM aus nicht mehr. Dann muss die Festplatte zuerst mit dem Windows-Werkzeug „MBR2GPT“ umgestellt werden. VELOX zeigt dir oben, wie dein Windows startet.",
+      "check": { "fact": "firmware.csm", "ok": ["off"], "todo": ["on"] },
+      "steps": {
+        "generic": ["Im Bereich „Boot“ nach „CSM“ oder „Compatibility Support Module“ suchen.", "Auf „Disabled“ stellen bzw. den Boot-Modus auf „UEFI“.", "F10 → speichern und neu starten."],
+        "asus": ["Advanced Mode (F7) → „Boot“ → „CSM (Compatibility Support Module)“.", "„Launch CSM“ auf „Disabled“.", "F10 → speichern und neu starten."],
+        "msi": ["Advanced Mode (F7) → „Settings“ → „Advanced“ → „Windows OS Configuration“.", "„BIOS UEFI/CSM Mode“ auf „UEFI“.", "F10 → speichern und neu starten."],
+        "gigabyte": ["Advanced Mode (F2) → „Boot“.", "„CSM Support“ auf „Disabled“.", "F10 → speichern und neu starten."],
+        "asrock": ["Advanced Mode (F6) → „Boot“ → „CSM“.", "„CSM“ auf „Disabled“ (fehlt das Menü: erst „Fast Boot“ auf „Disabled“).", "F10 → speichern und neu starten."]
+      },
+      "verified": ["asrock"]
+    },
+    {
+      "id": "secure-boot", "code": "sb", "section": "core", "impact": 1, "risk": "safe",
+      "feature": "secureBoot", "direction": "on",
+      "title": "Secure Boot an",
+      "why": "Schützt den Start von Windows vor Schadsoftware. Viele Anti-Cheats verlangen es inzwischen: Valorant, League of Legends, FACEIT, Battlefield 6 und Call of Duty starten sonst nicht. Kostet keine FPS.",
+      "info": "Geht nur im UEFI-Modus (CSM aus). Zeigt das BIOS „Setup Mode“ oder ist Secure Boot ausgegraut, lade zuerst die Standardschlüssel („Install Default Secure Boot Keys“ / „Restore Factory Keys“).",
+      "check": { "fact": "firmware.secureBoot", "ok": ["on"], "todo": ["off"] },
+      "steps": {
+        "generic": ["Im Bereich „Boot“ oder „Security“ nach „Secure Boot“ suchen.", "Auf „Enabled“ stellen; falls nötig die Standardschlüssel laden („Default Keys“ / „Factory Keys“).", "F10 → speichern und neu starten."],
+        "asus": ["Advanced Mode (F7) → „Boot“ → „Secure Boot“.", "„OS Type“ auf „Windows UEFI mode“.", "Zeigt es „Setup Mode“: „Key Management“ → „Install Default Secure Boot keys“.", "F10 → speichern und neu starten."],
+        "msi": ["Advanced Mode (F7) → „Settings“ → „Security“ → „Secure Boot“.", "„Secure Boot“ auf „Enabled“; „Secure Boot Mode“ auf „Standard“ (lädt die Standardschlüssel).", "F10 → speichern und neu starten."],
+        "gigabyte": ["Advanced Mode (F2) → „Boot“ → „Secure Boot“.", "„Secure Boot“ auf „Enabled“; falls nötig „Restore Factory Keys“.", "F10 → speichern und neu starten."],
+        "asrock": ["Advanced Mode (F6) → „Security“ → „Secure Boot“.", "„Secure Boot“ auf „Enabled“; „Secure Boot Mode“ auf „Standard“ bzw. „Install Default Secure Boot Keys“.", "F10 → speichern und neu starten."]
+      },
+      "verified": []
+    },
+    {
+      "id": "tpm", "code": "tp", "section": "core", "impact": 1, "risk": "safe",
+      "feature": "tpm", "direction": "on",
+      "title": "TPM 2.0 an (fTPM / Intel PTT)",
+      "why": "Windows 11 braucht es, und Anti-Cheats wie Riot Vanguard, FACEIT und Call of Duty prüfen es. Bei fast allen PCs steckt das TPM im Prozessor und muss nur eingeschaltet werden.",
+      "info": "Ruckelt ein AMD-PC alle paar Minuten ganz kurz, war früher oft das fTPM schuld – ein BIOS-Update behebt das. Schalte TPM nie aus, solange BitLocker an ist: Dann fragt Windows beim Start nach dem Wiederherstellungsschlüssel.",
+      "check": { "fact": "tpm.state", "ok": ["on"], "todo": ["off", "old"] },
+      "steps": {
+        "generic": { "amd": ["Im Bereich „Advanced“ oder „Security“ nach „fTPM“ oder „Firmware TPM“ suchen.", "Auf „Enabled“ bzw. „Firmware TPM“ stellen.", "F10 → speichern und neu starten."], "intel": ["Im Bereich „Advanced“ oder „Security“ nach „PTT“ (Platform Trust Technology) suchen.", "Auf „Enabled“ stellen.", "F10 → speichern und neu starten."], "any": ["Im Bereich „Advanced“ oder „Security“ nach „TPM“, „fTPM“ oder „PTT“ suchen.", "Auf „Enabled“ stellen.", "F10 → speichern und neu starten."] },
+        "asus": { "amd": ["Advanced Mode (F7) → „Advanced“ → „AMD fTPM configuration“.", "„TPM Device Selection“ auf „Firmware TPM“.", "F10 → speichern und neu starten."], "intel": ["Advanced Mode (F7) → „Advanced“ → „PCH-FW Configuration“ (manchmal „Trusted Computing“).", "„PTT“ auf „Enable“.", "F10 → speichern und neu starten."] },
+        "msi": { "amd": ["Advanced Mode (F7) → „Settings“ → „Security“ → „Trusted Computing“.", "„Security Device Support“ auf „Enable“, „AMD fTPM switch“ auf „AMD CPU fTPM“.", "F10 → speichern und neu starten."], "intel": ["Advanced Mode (F7) → „Settings“ → „Security“ → „Trusted Computing“.", "„Security Device Support“ auf „Enable“, „TPM Device Selection“ auf „PTT“.", "F10 → speichern und neu starten."] },
+        "gigabyte": { "amd": ["Advanced Mode (F2) → „Settings“ → „Miscellaneous“.", "„AMD CPU fTPM“ auf „Enabled“.", "F10 → speichern und neu starten."], "intel": ["Advanced Mode (F2) → „Settings“ → „Miscellaneous“.", "„Intel Platform Trust Technology (PTT)“ auf „Enabled“.", "F10 → speichern und neu starten."] },
+        "asrock": { "amd": ["Advanced Mode (F6) → „Advanced“ → „CPU Configuration“.", "„AMD fTPM switch“ auf „AMD CPU fTPM“.", "F10 → speichern und neu starten."], "intel": ["Advanced Mode (F6) → „Security“.", "„Intel Platform Trust Technology“ auf „Enabled“.", "F10 → speichern und neu starten."] }
+      },
+      "verified": ["asus"]
+    },
+    {
+      "id": "intel-baseline", "code": "ib", "section": "core", "impact": 2, "risk": "safe",
+      "title": "Intel-Standardwerte (13. / 14. Generation)",
+      "why": "Viele Mainboards lassen Core-Prozessoren der 13. und 14. Generation ohne Stromgrenze laufen. Das macht sie heiß und kann sie auf Dauer instabil machen. Intel empfiehlt das Profil „Intel Default Settings“ und ein BIOS mit Microcode 0x12B oder neuer.",
+      "info": "In Spielen kostet das kaum Leistung. Typische Zeichen für das Problem waren Abstürze in Spielen und Shader-Fehler. Ein schon geschädigter Prozessor wird dadurch nicht repariert – dann hilft Intels Garantie.",
+      "when": { "formFactor": "desktop", "cpuTags": ["raptor-lake"] },
+      "steps": {
+        "generic": ["Zuerst das neueste BIOS deines Mainboards installieren (siehe „Passt dein PC?“).", "Im Bereich „Overclocking“ / „Tweaker“ das Profil „Intel Default Settings“ bzw. „Intel Baseline Profile“ wählen – bei Core i9 die Stufe „Performance“.", "F10 → speichern und neu starten."],
+        "asus": ["Zuerst das neueste BIOS installieren (EZ Flash).", "Advanced Mode (F7) → „Ai Tweaker“ / „Extreme Tweaker“ → „Intel Default Settings“ bzw. „Intel Baseline Profile“ wählen.", "F10 → speichern und neu starten."],
+        "msi": ["Zuerst das neueste BIOS installieren (M-Flash).", "Advanced Mode (F7) → „OC“ → „Intel Default Settings“ bzw. „CPU Cooler Tuning“ / „Intel Default Power Limits“.", "F10 → speichern und neu starten."],
+        "gigabyte": ["Zuerst das neueste BIOS installieren (Q-Flash).", "Advanced Mode (F2) → „Tweaker“ → „Intel Default Settings“ bzw. „Intel Default“-Profil wählen.", "F10 → speichern und neu starten."],
+        "asrock": ["Zuerst das neueste BIOS installieren (Instant Flash).", "Advanced Mode (F6) → „OC Tweaker“ → „Intel Default Settings“ / „Intel Baseline Profile“.", "F10 → speichern und neu starten."]
+      },
+      "verified": []
+    },
+    {
+      "id": "amd-pbo", "code": "po", "section": "optional", "impact": 2, "risk": "moderate",
+      "title": "Curve Optimizer (Undervolting) für Ryzen",
+      "why": "Mit einem negativen Curve-Optimizer-Wert braucht der Prozessor weniger Spannung: Er bleibt kühler und hält seinen Boost-Takt länger. Typisch sind ein paar Prozent mehr Leistung bei weniger Hitze.",
+      "info": "Nur, wenn du gern testest: in kleinen Schritten (−10, dann −15, −20) und nach jedem Schritt Spiele und einen Stabilitätstest laufen lassen. Bei Abstürzen den Wert verkleinern. Niemals Spannungen erhöhen – VELOX empfiehlt nur das Absenken. Bei X3D-Prozessoren: kein Übertakten, nur Curve Optimizer.",
+      "when": { "formFactor": "desktop", "cpuTags": ["ryzen-tunable"] },
+      "steps": {
+        "generic": ["Im Bereich „AMD Overclocking“ bzw. „Precision Boost Overdrive“ suchen.", "„Precision Boost Overdrive“ auf „Advanced“, „PBO Limits“ auf „Auto“ lassen.", "„Curve Optimizer“ → „All Cores“ → „Negative“ → Wert 10.", "F10, testen, dann in 5er-Schritten weiter (höchstens −30)."],
+        "asus": ["Advanced Mode (F7) → „Advanced“ → „AMD Overclocking“ → „Precision Boost Overdrive“ (auch unter „Ai Tweaker“).", "„Precision Boost Overdrive“ auf „Advanced“, „PBO Limits“ auf „Auto“.", "„Curve Optimizer“ → „All Cores“ → „Negative“ → 10.", "F10, testen, dann in 5er-Schritten weiter (höchstens −30)."],
+        "msi": ["Advanced Mode (F7) → „OC“ → „Advanced CPU Configuration“ → „AMD Overclocking“ (Hinweis bestätigen) → „Precision Boost Overdrive“.", "„Precision Boost Overdrive“ auf „Advanced“, „PBO Limits“ auf „Auto“.", "„Curve Optimizer“ → „All Cores“ → „Negative“ → 10.", "F10, testen, dann in 5er-Schritten weiter (höchstens −30)."],
+        "gigabyte": ["Advanced Mode (F2) → „Tweaker“ → „Advanced CPU Settings“ → „Precision Boost Overdrive“.", "„Precision Boost Overdrive“ auf „Advanced“, „PBO Limits“ auf „Auto“.", "„Curve Optimizer“ → „All Cores“ → „Negative“ → 10.", "F10, testen, dann in 5er-Schritten weiter (höchstens −30)."],
+        "asrock": ["Advanced Mode (F6) → „Advanced“ → „AMD Overclocking“ → „Precision Boost Overdrive“.", "„Precision Boost Overdrive“ auf „Advanced“, „PBO Limits“ auf „Auto“.", "„Curve Optimizer“ → „All Cores“ → „Negative“ → 10.", "F10, testen, dann in 5er-Schritten weiter (höchstens −30)."]
+      },
+      "statusText": { "u": "optional" },
+      "verified": []
+    },
+    {
+      "id": "x3d-locked", "code": "xl", "section": "optional", "impact": 2, "risk": "moderate",
+      "title": "5800X3D & Co.: nur sanft undervolten",
+      "why": "Die X3D-Prozessoren der Ryzen-5000-Reihe sind gesperrt: Übertakten geht nicht. Erlaubt ist nur ein negativer Curve Optimizer – er macht den Prozessor kühler und hält den Takt höher.",
+      "info": "Je nach Mainboard geht das im BIOS (neuere BIOS-Versionen, bei MSI „Kombo Strike“) oder unter Windows mit dem kostenlosen Programm „PBO2 Tuner“, das dann bei jedem Start mitlaufen muss. Fang mit −10 an, teste, geh höchstens bis −30. Niemals Spannung erhöhen.",
+      "when": { "formFactor": "desktop", "cpuTags": ["x3d-locked"] },
+      "steps": {
+        "generic": ["Neueres BIOS? Dann unter „AMD Overclocking“ → „Precision Boost Overdrive“ → „Curve Optimizer“ → „All Cores“ → „Negative“ → 10. Fehlt die Option, ist sie für dein Board gesperrt.", "Sonst unter Windows: „PBO2 Tuner“ mit −10 auf allen Kernen, testen, langsam steigern (höchstens −30).", "Bei Abstürzen den Wert wieder verkleinern."],
+        "msi": ["Advanced Mode (F7) → „OC“ → „Kombo Strike“ – das ist ein vereinfachter Curve Optimizer (Stufe 1 bis 3 ≈ −10 / −20 / −30).", "Mit Stufe 1 anfangen, Spiele und einen Stabilitätstest laufen lassen.", "F10 → speichern; bei Abstürzen eine Stufe zurück."]
+      },
+      "statusText": { "u": "optional" },
+      "verified": []
+    },
+    {
+      "id": "amd-mcr", "code": "mc", "section": "optional", "impact": 1, "risk": "moderate",
+      "title": "Schneller starten: Memory Context Restore",
+      "why": "PCs mit Ryzen 7000/9000 und DDR5 messen den Speicher oft bei jedem Start neu ein – das dauert. Mit „Memory Context Restore“ merkt sich das Board das Ergebnis und startet deutlich schneller.",
+      "info": "Bringt keine FPS, nur einen schnelleren Start. Wird der PC danach instabil oder startet nicht, schalte es wieder aus – bei manchen Speicher-Kits und BIOS-Versionen macht es Probleme.",
+      "when": { "formFactor": "desktop", "cpuTags": ["am5"], "ramType": ["DDR5"] },
+      "steps": {
+        "generic": ["Im Bereich „AMD Overclocking“ bzw. bei den RAM-Einstellungen („DDR Options“) nach „Memory Context Restore“ suchen.", "Auf „Enabled“ stellen.", "F10 → speichern und neu starten."]
+      },
+      "statusText": { "u": "optional" },
+      "verified": []
+    },
+    {
+      "id": "c-states", "code": "ct", "section": "optional", "impact": 1, "risk": "safe",
+      "title": "C-States: nur bei Rucklern anfassen",
+      "why": "C-States lassen den Prozessor in Pausen Strom sparen. Normal bleiben sie an („Auto“). Nur wenn ein Spiel trotz hoher FPS immer wieder kurz hakt, kann Ausschalten helfen – der PC braucht dann mehr Strom und wird wärmer.",
+      "steps": {
+        "generic": { "amd": ["„Advanced“ → „AMD CBS“ → „CPU Common Options“ → „Global C-state Control“.", "Nur bei Rucklern auf „Disabled“, sonst „Auto“ lassen.", "F10 → speichern und neu starten."], "intel": ["„Advanced“ → „CPU Configuration“ → „CPU Power Management“ → „CPU C-States“.", "Nur bei Rucklern auf „Disabled“, sonst „Auto“ lassen.", "F10 → speichern und neu starten."], "any": ["Nach „C-State“ suchen.", "Nur bei Rucklern auf „Disabled“, sonst „Auto“ lassen.", "F10 → speichern und neu starten."] }
+      },
+      "statusText": { "u": "Standard lassen" },
+      "verified": []
+    },
+    {
+      "id": "virtualization", "code": "vt", "section": "optional", "impact": 1, "risk": "moderate",
+      "feature": "vbs", "direction": "off",
+      "title": "Virtualisierung (SVM / VT-x): nur aus, wenn du sie nie brauchst",
+      "why": "Ist Virtualisierung an, nutzt Windows sie für die „Speicher-Integrität“ (VBS). Das kann ein paar Prozent FPS kosten. Ausschalten lohnt sich nur, wenn du keine virtuellen Maschinen, kein WSL und keine Android-Emulatoren (BlueStacks & Co.) nutzt.",
+      "info": "Einfacher und jederzeit umkehrbar: die Speicher-Integrität direkt in Windows ausschalten (Windows-Sicherheit → Gerätesicherheit → Kernisolierung). Battlefield 6 und FACEIT verlangen VBS – dann muss es an bleiben.",
+      "check": { "fact": "virtualization.advice", "ok": ["needed", "nocost"], "todo": [] },
+      "steps": {
+        "generic": { "amd": ["„Advanced“ → „CPU Configuration“ (bei MSI: „OC“ → „Advanced CPU Configuration“).", "„SVM Mode“ auf „Disabled“.", "F10 → speichern und neu starten."], "intel": ["„Advanced“ → „CPU Configuration“.", "„Intel Virtualization Technology“ (VT-x / VMX) auf „Disabled“.", "F10 → speichern und neu starten."], "any": ["Nach „SVM“, „VT-x“ oder „Virtualization“ suchen.", "Auf „Disabled“ stellen.", "F10 → speichern und neu starten."] }
+      },
+      "statusText": { "o": "passt so", "u": "kannst du ausschalten" },
+      "verified": []
+    },
+    {
+      "id": "fan-curve", "code": "fc", "section": "optional", "impact": 1, "risk": "safe",
+      "title": "Lüfterkurve: leise am Desktop, kühl im Spiel",
+      "why": "Eine gute Lüfterkurve hält Prozessor und Grafikkarte kühl, ohne dass der PC am Desktop rauscht. Kühle Chips halten ihren Boost-Takt länger.",
+      "info": "Faustregel: bis etwa 50 °C leise, ab 70 °C kräftig. Läuft ein Lüfter gar nicht, prüf zuerst das Kabel.",
+      "when": { "formFactor": "desktop" },
+      "steps": {
+        "generic": ["Im BIOS nach „Fan“, „Lüfter“ oder „Hardware Monitor“ suchen.", "Für den CPU-Lüfter ein Profil wie „Standard“ wählen oder die Kurve selbst ziehen.", "F10 → speichern und neu starten."],
+        "asus": ["„Q-Fan Control“ öffnen (F6 oder im EZ Mode).", "Für „CPU Fan“ das Profil „Standard“ wählen oder die Kurve selbst ziehen.", "F10 → speichern und neu starten."],
+        "msi": ["Im EZ Mode unten „Hardware Monitor“ öffnen.", "Für den CPU-Lüfter „Smart Fan Mode“ an und die Kurve anpassen.", "F10 → speichern und neu starten."],
+        "gigabyte": ["„Smart Fan“ öffnen (F6).", "Für „CPU_FAN“ ein Profil wählen oder die Kurve ziehen.", "F10 → speichern und neu starten."],
+        "asrock": ["Advanced Mode (F6) → „H/W Monitor“ → „FAN-Tastic Tuning“.", "Für den CPU-Lüfter ein Profil wählen oder die Kurve ziehen.", "F10 → speichern und neu starten."]
+      },
+      "statusText": { "u": "optional" },
+      "verified": []
+    }
+  ],
+  "warnings": [
+    { "id": "legacy-boot", "code": "lg", "severity": "bad", "title": "Windows startet im alten Legacy-Modus", "text": "Damit gehen Secure Boot und Resizable BAR nicht, und der Neustart direkt ins BIOS geht auch nicht. Schalte CSM jetzt NICHT einfach aus – sonst startet Windows nicht mehr. Erst muss die Festplatte von MBR auf GPT umgestellt werden (Windows-Werkzeug „MBR2GPT“). Das ist etwas für Erfahrene: vorher alles sichern." },
+    { "id": "intel-microcode", "code": "im", "severity": "bad", "title": "Wichtig: BIOS-Update für deinen Intel-Prozessor", "text": "Core-Prozessoren der 13. und 14. Generation brauchen ein BIOS mit Intel-Microcode 0x12B oder neuer (ab etwa Oktober 2024). Mit älteren BIOS-Versionen kann der Prozessor auf Dauer Schaden nehmen. Mach dieses Update zuerst – mit denselben Vorsichtsregeln wie unten beim BIOS-Update." },
+    { "id": "bios-old", "code": "bo", "severity": "warn", "title": "Dein BIOS ist über zwei Jahre alt", "text": "Ein BIOS-Update bringt oft Fehlerbehebungen, bessere RAM-Verträglichkeit und Sicherheits-Updates. Es ist aber das Einzige hier mit echtem Risiko: Fällt mitten im Update der Strom aus, kann das Mainboard unbrauchbar werden. Nur die Datei für genau dein Board von der Herstellerseite nehmen, mit dem Werkzeug im BIOS flashen (ASUS EZ Flash, MSI M-Flash, Gigabyte Q-Flash, ASRock Instant Flash) und den PC dabei nicht ausschalten. Danach steht alles auf Standard – mach das Update also vor den anderen Punkten." },
+    { "id": "bitlocker", "code": "bl", "severity": "warn", "title": "BitLocker ist an – Wiederherstellungsschlüssel bereithalten", "text": "Wenn du TPM, Secure Boot oder CSM änderst oder das BIOS aktualisierst, fragt Windows beim nächsten Start vielleicht nach dem 48-stelligen Wiederherstellungsschlüssel. Du findest ihn auf einem anderen Gerät unter aka.ms/myrecoverykey (mit deinem Microsoft-Konto anmelden). VELOX kann BitLocker vor dem Neustart ins BIOS für genau einen Start pausieren." },
+    { "id": "vbs-fps", "code": "vb", "severity": "info", "title": "Speicher-Integrität (VBS) ist an", "text": "Das kann in manchen Spielen ein paar Prozent FPS kosten. Du kannst sie in Windows ausschalten (Windows-Sicherheit → Gerätesicherheit → Kernisolierung) – der Schutz des Windows-Kerns wird dann schwächer.", "tweak": "security.hvci-off" },
+    { "id": "laptop", "code": "lp", "severity": "info", "title": "Laptop: im BIOS lässt sich wenig einstellen", "text": "Bei Laptops sind RAM-Takt, Resizable BAR und Lüfter meist fest eingestellt. Prüf vor allem Secure Boot und TPM – und ob der Hersteller ein BIOS-Update anbietet." },
+    { "id": "vendor-unknown", "code": "vu", "severity": "info", "title": "Allgemeine Anleitung für dein Mainboard", "text": "Für deinen Mainboard-Hersteller hat VELOX keine eigenen Menüpfade. Die Schritte sind allgemein gehalten – die Namen im BIOS können abweichen. Das Handbuch deines PCs oder Mainboards hilft weiter." },
+    { "id": "not-admin", "code": "ad", "severity": "info", "title": "Ohne Adminrechte sieht VELOX nicht alles", "text": "TPM und BitLocker lassen sich nur mit Administratorrechten auslesen. Starte VELOX normal (es fragt dann nach Adminrechten) – dann ist die Liste vollständiger." }
+  ]
+}
