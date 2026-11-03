@@ -1,0 +1,23 @@
+{
+  "comment": "Fake PC: ASRock B850 + Ryzen 7 9800X3D + Intel Arc B580, DDR5-6000 at 6000, BitLocker on, Call of Duty and FACEIT installed.",
+  "now": "2026-11-01",
+  "admin": true,
+  "chassis": "desktop",
+  "baseBoard": { "Manufacturer": "ASRock", "Product": "B850 Steel Legend WiFi" },
+  "computerSystem": { "Manufacturer": "To Be Filled By O.E.M.", "Model": "To Be Filled By O.E.M.", "HypervisorPresent": true },
+  "bios": { "Manufacturer": "American Megatrends International, LLC.", "SMBIOSBIOSVersion": "3.20", "ReleaseDate": "2025-09-01" },
+  "processor": { "Name": "AMD Ryzen 7 9800X3D 8-Core Processor", "Manufacturer": "AuthenticAMD", "VirtualizationFirmwareEnabled": false },
+  "memory": [
+    { "Capacity": 17179869184, "Speed": 6000, "ConfiguredClockSpeed": 6000, "SMBIOSMemoryType": 34, "DeviceLocator": "DDR5_A2", "BankLabel": "P0 CHANNEL A", "PartNumber": "TED532G6000C30BK", "Manufacturer": "Team Group Inc." },
+    { "Capacity": 17179869184, "Speed": 6000, "ConfiguredClockSpeed": 6000, "SMBIOSMemoryType": 34, "DeviceLocator": "DDR5_B2", "BankLabel": "P0 CHANNEL B", "PartNumber": "TED532G6000C30BK", "Manufacturer": "Team Group Inc." }
+  ],
+  "gpus": [ { "Name": "Intel(R) Arc(TM) B580 Graphics", "PNPDeviceID": "PCI\\VEN_8086&DEV_E20B" } ],
+  "firmwareType": "uefi",
+  "secureBoot": 1,
+  "tpm": { "present": true, "enabled": true, "activated": true, "specVersion": "2.0, 0, 1.59", "manufacturer": "AMD" },
+  "deviceGuard": { "vbs": 2, "services": [2] },
+  "vmUse": [],
+  "bitlocker": { "protectionStatus": 1, "conversionStatus": 1 },
+  "services": ["FACEIT"],
+  "games": ["call of duty cod.exe"]
+}

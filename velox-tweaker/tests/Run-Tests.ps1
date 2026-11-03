@@ -6,7 +6,7 @@
 .EXAMPLE
   pwsh tests/Run-Tests.ps1
   pwsh tests/Run-Tests.ps1 -Strict          # also fail when the real data/ catalog has errors
-  pwsh tests/Run-Tests.ps1 -Only engine     # run one group (compat, catalog, engine, realcatalog, detweak, advisor, claude, ai, server, review, restorepoint, speed, games, settings, clean)
+  pwsh tests/Run-Tests.ps1 -Only engine     # run one group (compat, catalog, engine, realcatalog, detweak, advisor, claude, ai, server, review, restorepoint, speed, games, settings, clean, bios)
 #>
 param(
     [switch]$Strict,
@@ -65,7 +65,7 @@ function New-TempDir([string]$Name) {
 
 # ------------------------------------------------------------------ load the backend in-process
 
-foreach ($n in @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Clean', 'Jobs', 'Server')) {
+foreach ($n in @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Clean', 'Bios', 'Jobs', 'Server')) {
     . (Join-Path (Join-Path $AppRoot 'core') ($n + '.ps1'))
 }
 Initialize-VxRuntime
@@ -1881,7 +1881,7 @@ Test-Case 'review' 'Kleinkram: BitLocker-Liste, Codepage, Wildcard ohne Leserech
     $ctx.CoreSources = @('function Get-VxMarker { 1 }')
     Assert-Equal @('function Get-VxMarker { 1 }') @(Get-VxCoreSources) 'gespeicherter Quelltext'
     $ctx.CoreSources = $null
-    Assert-Equal 11 @(Get-VxCoreSources).Count 'einmal gelesen'
+    Assert-Equal 12 @(Get-VxCoreSources).Count 'einmal gelesen'
     $vx = [IO.File]::ReadAllText((Join-Path $AppRoot 'Velox.ps1'))
     Assert-True ($vx -notmatch 'LiteralPath \$VxRoot -Recurse') 'Unblock nicht rekursiv über den Startordner'
     Assert-True ($vx -notmatch "'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths") 'kein Browser aus HKCU'
@@ -3100,6 +3100,270 @@ Test-Case 'clean' 'Reparatur-Skripte (ps) laufen isoliert: Zeitlimit statt Häng
         $r = Invoke-VxRunAction $t2 $null @{}
         Assert-True (-not $r.ok -and $r.message -match 'Dienst fehlt') ('Fehlertext: ' + $r.message)
     } finally { $ctx.Simulate = $true; $global:VxJob = $null }
+}
+
+# ==================================================================== bios (BIOS-Optimierer, core/Bios.ps1)
+# Fake PCs in tests/fixtures/bios: the same CIM field names the real reads use.
+function Invoke-BiosScan([string]$Fixture, [string]$SimProfile = 'desktop') {
+    $ctx = New-TestContext -SimProfile $SimProfile
+    $ctx.BiosFixture = $Fixture
+    $job = Invoke-TestJob 'bios-scan' @{}
+    if ($job.status -ne 'done') { throw ('bios-scan ' + $Fixture + ': ' + $job.error) }
+    return $job.result
+}
+function Get-BiosItem($R, [string]$Id) { return @($R.items | Where-Object { $_.id -eq $Id })[0] }
+function Get-BiosStatusMap($R) { $m = @{}; foreach ($i in @($R.items)) { $m[[string]$i.id] = [string]$i.status }; return $m }
+function Get-BiosIds($List) { return (@(@($List) | ForEach-Object { [string]$_.id }) -join ',') }
+
+Test-Case 'bios' 'ASUS + 5800X3D: RAM-Profil aus, Resizable BAR an (nvidia-smi), Secure Boot aus, BitLocker an, Valorant' {
+    $r = Invoke-BiosScan 'asus-5800x3d'
+    $f = $r.facts
+    Assert-Equal 'asus' $r.vendor 'Hersteller'
+    Assert-Equal 'ROG STRIX B550-F GAMING' $f.board.model 'Board'
+    Assert-Equal '2022-03-12' $f.bios.date 'BIOS-Datum'
+    Assert-Equal 55 $f.bios.ageMonths 'BIOS-Alter (Monate bis 2026-11-01)'
+    Assert-Equal 'locked' $f.cpu.x3d 'X3D gesperrt'
+    Assert-True (@($f.cpu.tags) -contains 'x3d-locked' -and @($f.cpu.tags) -notcontains 'ryzen-tunable') ('Tags: ' + ($f.cpu.tags -join ','))
+    Assert-Equal 'off' $f.ram.profile 'RAM-Profil'
+    Assert-Equal 'high' $f.ram.profileConfidence 'sicher (Speed 3600 > 2133)'
+    Assert-Equal 'yes' $f.ram.dualChannel 'Dual-Channel'
+    Assert-Equal 'on' $f.gpu.rebar 'ReBAR'
+    Assert-Equal 16384 $f.gpu.bar1MiB 'BAR1'
+    Assert-Equal 'off' $f.firmware.secureBoot 'Secure Boot'
+    Assert-Equal 'unknown' $f.firmware.csm 'CSM nicht sicher'
+    Assert-Equal 'on' $f.tpm.state 'TPM'
+    Assert-Equal 'firmware' $f.tpm.kind 'fTPM'
+    Assert-Equal 'on' $f.bitlocker.state 'BitLocker'
+    Assert-Equal 'val' (@($r.games | ForEach-Object { $_.code }) -join ',') 'Valorant erkannt'
+    $st = Get-BiosStatusMap $r
+    Assert-Equal 'todo' $st['ram-profile'] 'rp'
+    Assert-Equal 'ok' $st['dual-channel'] 'dc'
+    Assert-Equal 'ok' $st['rebar'] 'rb'
+    Assert-Equal 'unknown' $st['uefi-csm'] 'cs'
+    Assert-Equal 'todo' $st['secure-boot'] 'sb'
+    Assert-Equal 'ok' $st['tpm'] 'tp'
+    Assert-Equal 'unknown' $st['virtualization'] 'VBS läuft, keine VMs -> kann aus'
+    $sb = Get-BiosItem $r 'secure-boot'
+    Assert-Equal 'high' $sb.priority 'Valorant braucht Secure Boot'
+    Assert-True ($sb.note -match 'startet Valorant nicht') ('Hinweis: ' + $sb.note)
+    Assert-Equal 'ram-profile,dual-channel,rebar,uefi-csm,secure-boot,tpm,x3d-locked,c-states,virtualization,fan-curve' (Get-BiosIds $r.items) 'Liste'
+    Assert-Equal 'intel-baseline,amd-pbo,amd-mcr' (Get-BiosIds $r.hidden) 'nicht passend'
+    Assert-Equal 'bios-old,bitlocker,vbs-fps' (Get-BiosIds $r.warnings) 'Warnungen'
+    Assert-Equal 3 $r.summary.ok 'passt schon'
+    Assert-Equal 6 $r.summary.total 'Kernpunkte'
+    Assert-True ($r.reboot.available -and $r.reboot.bitlocker -eq 'on') 'Neustart ins BIOS möglich, BitLocker bekannt'
+    Assert-True ([string]$r.warnings[0].detail -match '12\.03\.2022') ('Detail: ' + $r.warnings[0].detail)
+    # texts for UI and phone page: no backend-only fields
+    foreach ($it in @($r.texts.items)) { foreach ($k in @('when', 'check', 'feature', 'direction')) { Assert-True (-not $it.Contains($k)) ($it.id + ' ohne ' + $k) } }
+    Assert-True ($r.texts.vendors.asus.biosKey -match 'Entf') 'Taste'
+}
+
+Test-Case 'bios' 'MSI + 7800X3D: EXPO an (6000 > JEDEC), Radeon -> ReBAR unbekannt, WSL + Battlefield 6 halten Virtualisierung an' {
+    $r = Invoke-BiosScan 'msi-7800x3d'
+    $f = $r.facts
+    Assert-Equal 'msi' $r.vendor 'MSI'
+    Assert-Equal '2025-06-10' $f.bios.date 'CIM-Datum'
+    Assert-Equal 'tunable' $f.cpu.x3d 'X3D frei'
+    Assert-True (@($f.cpu.tags) -contains 'am5' -and @($f.cpu.tags) -contains 'ryzen-tunable') 'AM5'
+    Assert-Equal 'on' $f.ram.profile 'EXPO an'
+    Assert-Equal 'DDR5' $f.ram.type 'DDR5'
+    Assert-Equal 'unknown' $f.gpu.rebar 'AMD: nicht messbar'
+    Assert-Equal 'AMD Radeon RX 7800 XT' $f.gpu.name 'die dedizierte Karte, nicht die iGPU'
+    Assert-Equal 'off' $f.firmware.csm 'Secure Boot an -> CSM aus'
+    Assert-Equal 'off' $f.bitlocker.state 'kein BitLocker'
+    Assert-Equal 'needed' $f.virtualization.advice 'gebraucht'
+    $st = Get-BiosStatusMap $r
+    Assert-Equal 'ok' $st['ram-profile'] 'rp'
+    Assert-Equal 'unknown' $st['rebar'] 'rb'
+    Assert-Equal 'ok' $st['virtualization'] 'vt passt'
+    Assert-True ((Get-BiosItem $r 'virtualization').note -match 'WSL') 'nennt WSL'
+    Assert-Equal 'Battlefield 6' ((Get-BiosItem $r 'virtualization').neededBy -join ',') 'BF6 braucht VBS'
+    Assert-True ($null -ne (Get-BiosItem $r 'amd-pbo') -and $null -ne (Get-BiosItem $r 'amd-mcr') -and $null -eq (Get-BiosItem $r 'x3d-locked')) 'PBO + MCR für AM5-X3D, kein 5800X3D-Hinweis'
+    Assert-Equal '' (Get-BiosIds $r.warnings) 'keine Warnungen (aktuelles BIOS, VBS gebraucht)'
+    Assert-Equal 5 $r.summary.ok 'passt'
+}
+
+Test-Case 'bios' 'Gigabyte + 14900K: RAM laut Typenbezeichnung zu langsam, beide Riegel in Kanal A, BAR1 256 MiB, Microcode-Warnung' {
+    $r = Invoke-BiosScan 'gigabyte-14900k'
+    $f = $r.facts
+    Assert-Equal 'gigabyte' $r.vendor 'Gigabyte'
+    Assert-Equal 'intel' $r.cpuVendor 'Intel'
+    Assert-True (@($f.cpu.tags) -contains 'raptor-lake' -and @($f.cpu.tags) -contains 'intel-k') 'Raptor Lake'
+    Assert-Equal 'off' $f.ram.profile 'aus'
+    Assert-Equal 'medium' $f.ram.profileConfidence 'nur aus der Typenbezeichnung'
+    Assert-Equal 6400 $f.ram.partMHz 'F5-6400…'
+    Assert-Equal 'no' $f.ram.dualChannel 'beide in Kanal A'
+    Assert-Equal 'off' $f.gpu.rebar 'BAR1 256'
+    Assert-Equal 'nocost' $f.virtualization.advice 'kein Hypervisor'
+    $st = Get-BiosStatusMap $r
+    Assert-Equal 'todo' $st['ram-profile'] 'rp'
+    Assert-True ((Get-BiosItem $r 'ram-profile').note -match 'Schätzung') 'ehrlich unsicher'
+    Assert-Equal 'todo' $st['dual-channel'] 'dc'
+    Assert-Equal 'todo' $st['rebar'] 'rb'
+    Assert-Equal 'unknown' $st['intel-baseline'] 'Intel-Standardwerte'
+    Assert-Equal 'intel-microcode,bios-old' (Get-BiosIds $r.warnings) 'Warnungen'
+}
+
+Test-Case 'bios' 'ASRock + 9800X3D: BitLocker an, Neustart ins BIOS pausiert BitLocker (Testmodus), FACEIT + Call of Duty' {
+    $r = Invoke-BiosScan 'asrock-9800x3d-bitlocker'
+    Assert-Equal 'asrock' $r.vendor 'ASRock'
+    Assert-Equal 'B850 Steel Legend WiFi' $r.facts.board.model 'Board (System-Name „To Be Filled“ ignoriert)'
+    Assert-Equal 'ASRock' $r.facts.board.vendorName 'Name'
+    Assert-Equal 'fct,cod' (@($r.games | ForEach-Object { $_.code }) -join ',') 'Spiele über Dienst + Name'
+    Assert-Equal 'FACEIT,Call of Duty' ((Get-BiosItem $r 'tpm').neededBy -join ',') 'TPM gebraucht'
+    Assert-Equal 'bitlocker' (Get-BiosIds $r.warnings) 'nur BitLocker (VBS braucht FACEIT)'
+    Assert-Equal 'unknown' (Get-BiosItem $r 'rebar').status 'Intel Arc: nicht messbar'
+    $job = Invoke-TestJob 'bios-reboot' @{ suspendBitLocker = $true }
+    Assert-Equal 'done' $job.status ('Job: ' + $job.error)
+    Assert-True ($job.result.simulated -and $job.result.bitlockerPaused) 'pausiert + nur protokolliert'
+    $log = (@($job.log | ForEach-Object { $_.msg }) -join ' | ')
+    Assert-True ($log -match 'shutdown /r /fw /t 10' -and $log -match 'BitLocker') ('Log: ' + $log)
+    $job = Invoke-TestJob 'bios-reboot' @{ suspendBitLocker = $false }
+    Assert-True ($job.status -eq 'done' -and -not $job.result.bitlockerPaused) 'ohne Pausieren'
+}
+
+Test-Case 'bios' 'Dell im Legacy-Modus ohne Adminrechte: allgemeine Pfade, CSM/Secure Boot fehlen, kein Neustart ins BIOS' {
+    $r = Invoke-BiosScan 'dell-legacy'
+    $f = $r.facts
+    Assert-Equal 'generic' $r.vendor 'kein eigener Hersteller'
+    Assert-Equal 'Dell' $f.board.vendorName 'Name ohne Inc.'
+    Assert-Equal 'legacy' $f.firmware.mode 'Legacy'
+    Assert-Equal 'on' $f.firmware.csm 'CSM an'
+    Assert-Equal 'off' $f.gpu.rebar 'ReBAR geht im Legacy-Modus nicht'
+    Assert-Equal 'unknown' $f.tpm.state 'TPM ohne Admin unbekannt'
+    Assert-Equal 'unknown' $f.bitlocker.state 'BitLocker ohne Admin unbekannt'
+    Assert-Equal 'unknown' $f.ram.profile '2666 = 2666: ehrlich unklar'
+    Assert-Equal 'no' $f.ram.dualChannel 'ein Riegel'
+    $st = Get-BiosStatusMap $r
+    Assert-Equal 'todo' $st['uefi-csm'] 'cs'
+    Assert-Equal 'todo' $st['secure-boot'] 'sb'
+    Assert-True ((Get-BiosItem $r 'uefi-csm').note -match 'MBR2GPT') 'warnt vor MBR2GPT'
+    Assert-True ($null -eq (Get-BiosItem $r 'rebar')) 'GTX 1060: kein ReBAR-Punkt'
+    Assert-Equal 'legacy-boot,bios-old,vendor-unknown,not-admin' (Get-BiosIds $r.warnings) 'Warnungen'
+    Assert-True (-not $r.reboot.available -and $r.reboot.reason -match 'Legacy') 'Neustart ins BIOS gesperrt'
+    $job = Invoke-TestJob 'bios-reboot' @{ suspendBitLocker = $true }
+    Assert-True ($job.status -eq 'error' -and $job.error -match 'UEFI' -and $job.error -notmatch 'at line|ScriptBlock') ('Fehler: ' + $job.error)
+}
+
+Test-Case 'bios' 'Laptop: RAM-Profil, ReBAR und Lüfter entfallen mit Grund; Übersicht bekommt Mainboard, BIOS und RAM-Profil' {
+    $r = Invoke-BiosScan 'laptop-intel' 'laptop'
+    Assert-Equal 'dual-channel,uefi-csm,secure-boot,tpm,c-states,virtualization' (Get-BiosIds $r.items) 'Laptop-Liste'
+    $h = @($r.hidden | Where-Object { $_.id -eq 'ram-profile' })[0]
+    Assert-True ($h.reason -match 'Laptops') ('Grund: ' + $h.reason)
+    Assert-Equal 'yes' $r.facts.ram.dualChannel 'Controller0/1 = zwei Kanäle'
+    Assert-True (@(Get-BiosIds $r.warnings) -match 'laptop') 'Laptop-Hinweis'
+    # the overview profile (simulated desktop) carries board + RAM profile of its fixture PC
+    $ctx = New-TestContext
+    $p = Get-VxProfile
+    Assert-Equal 'asus' $p.board.vendor 'Board im Profil'
+    Assert-Equal '2803' $p.board.biosVersion 'BIOS im Profil'
+    Assert-Equal 'off' $p.ram.profile 'RAM-Profil im Profil'
+    Assert-Equal 'uefi' $p.board.firmware 'Startmodus im Profil'
+    # a scan refreshes the profile in the state
+    $ctx.State.profile = Get-VxSimProfile 'desktop'
+    $ctx.BiosFixture = 'msi-7800x3d'
+    $null = Invoke-TestJob 'bios-scan' @{}
+    Assert-Equal 'msi' $ctx.State.profile.board.vendor 'State-Profil aktualisiert'
+    Assert-Equal 'on' $ctx.State.profile.ram.profile 'RAM-Profil aktualisiert'
+}
+
+Test-Case 'bios' 'Heuristiken: Typenbezeichnungen, Prozessor-Tags, RAM-Kanäle, BAR1, Hersteller, Datumsformate' {
+    $null = New-TestContext
+    foreach ($c in @(@('F4-3600C16D-16GVKC', 3600), @('F5-6000J3038F16GX2-TZ5RK', 6000), @('CMK16GX4M2B3200C16', 3200), @('CMH32GX5M2B6000C30', 6000), @('KF436C16BB/8', 3600), @('KF560C40BBK2-32', 6000), @('KF552C40BBK2-32', 5200),
+            @('HX432C16FB3/8', 3200), @('BL8G32C16U4B.M8FE1', 3200), @('CP16G60C36U5B.M8D1', 6000), @('TED532G6000C30BK', 6000), @('M378A1K43CB2-CTD', 0), @('HMA81GU6CJR8N-VK', 0), @('', 0))) {
+        Assert-Equal $c[1] (Get-VxRamPartSpeed $c[0]) ('Teilenummer ' + $c[0])
+    }
+    $tags = @{
+        'AMD Ryzen 7 5800X3D 8-Core Processor' = 'ryzen,x3d,x3d-locked'; 'AMD Ryzen 7 5700X3D 8-Core Processor' = 'ryzen,x3d,x3d-locked'
+        'AMD Ryzen 7 7800X3D 8-Core Processor' = 'ryzen,x3d,x3d-tunable,am5,ryzen-tunable'; 'AMD Ryzen 9 7950X3D 16-Core Processor' = 'ryzen,x3d,x3d-tunable,x3d-dual,am5,ryzen-tunable'
+        'AMD Ryzen 9 9950X3D 16-Core Processor' = 'ryzen,x3d,x3d-tunable,x3d-dual,am5,ryzen-tunable'; 'AMD Ryzen 5 5600X 6-Core Processor' = 'ryzen,ryzen-tunable'
+        'AMD Ryzen 7 7840HS w/ Radeon 780M Graphics' = 'ryzen'; 'AMD Ryzen 5 3600 6-Core Processor' = 'ryzen'
+        '13th Gen Intel(R) Core(TM) i9-13900K' = 'raptor-lake,intel-k'; '13th Gen Intel(R) Core(TM) i7-13700H' = ''; 'Intel(R) Core(TM) i5-14600KF' = 'raptor-lake,intel-k'
+        'Intel(R) Core(TM) Ultra 9 285K' = ''; 'Intel(R) Core(TM) i7-8700 CPU @ 3.20GHz' = ''; 'Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz' = 'intel-k'
+    }
+    foreach ($k in $tags.Keys) { Assert-Equal $tags[$k] (@(Get-VxCpuTags $k) -join ',') ('Tags ' + $k) }
+    foreach ($g in @(@('NVIDIA GeForce RTX 3060', 1), @('NVIDIA GeForce RTX 2080 Ti', 0), @('NVIDIA GeForce GTX 1660 SUPER', 0), @('AMD Radeon RX 6700 XT', 1), @('AMD Radeon RX 580 Series', 0), @('Intel(R) Arc(TM) A770 Graphics', 1))) {
+        Assert-Equal $g[1] @(Get-VxGpuTags $g[0]).Count ('ReBAR-fähig: ' + $g[0])
+    }
+    $mk = { param($loc, $bank) @{ locator = $loc; bank = $bank } }
+    foreach ($c in @(@(@('DIMM_A2', 'DIMM_B2'), 'yes'), @(@('ChannelA-DIMM0', 'ChannelB-DIMM0'), 'yes'), @(@('Controller0-ChannelA-DIMM0', 'Controller1-ChannelA-DIMM0'), 'yes'),
+            @(@('Controller0-ChannelA-DIMM0', 'Controller0-ChannelA-DIMM1'), 'no'), @(@('DIMM_A1', 'DIMM_A2'), 'no'), @(@('DIMM1', 'DIMM2'), 'unknown'), @(@('XMM1'), 'no'), @(@('A1', 'B1'), 'yes'), @(@('DDR4_A1', 'DDR4_B1'), 'yes'))) {
+        $mods = @($c[0] | ForEach-Object { & $mk $_ '' })
+        Assert-Equal $c[1] (Get-VxDualChannelInfo $mods).dualChannel ('Kanäle ' + ($c[0] -join '+'))
+    }
+    Assert-Equal 'yes' (Get-VxDualChannelInfo @((& $mk 'DIMM 0' 'P0 CHANNEL A'), (& $mk 'DIMM 0' 'P0 CHANNEL B'))).dualChannel 'BankLabel P0 CHANNEL A/B'
+    $rp = { param($speed, $conf, $type, $part) Get-VxRamProfileInfo @(@{ speed = $speed; configured = $conf; type = $type; part = $part }) }
+    Assert-Equal 'off/high' ((& $rp 3600 2133 'DDR4' '') | ForEach-Object { $_.profile + '/' + $_.confidence }) 'Speed > konfiguriert'
+    Assert-Equal 'off/medium' ((& $rp 2133 2133 'DDR4' 'F4-3200C16-8GVKB') | ForEach-Object { $_.profile + '/' + $_.confidence }) 'nur die Teilenummer'
+    Assert-Equal 'on/high' ((& $rp 2133 3600 'DDR4' '') | ForEach-Object { $_.profile + '/' + $_.confidence }) 'XMP an'
+    Assert-Equal 'on/medium' ((& $rp 3200 3200 'DDR4' '') | ForEach-Object { $_.profile + '/' + $_.confidence }) 'DDR4-3200: läuft wie gebaut'
+    Assert-Equal 'unknown/low' ((& $rp 4800 4800 'DDR5' '') | ForEach-Object { $_.profile + '/' + $_.confidence }) 'DDR5 Grundtakt, nichts bekannt'
+    Assert-Equal 'unknown' (Get-VxRamProfileInfo @()).profile 'nichts gelesen'
+    Assert-Equal 16384 (Get-VxBar1MiB "BAR1 Memory Usage`r`n    Total : 16384 MiB`r`n") 'CRLF'
+    Assert-Equal $null (Get-VxBar1MiB 'FB Memory Usage Total : 8192 MiB') 'ohne BAR1'
+    foreach ($c in @(@('ASUSTeK COMPUTER INC.', 'asus'), @('Micro-Star International Co., Ltd.', 'msi'), @('Gigabyte Technology Co., Ltd.', 'gigabyte'), @('ASRock', 'asrock'), @('Dell Inc.', 'generic'), @('LENOVO', 'generic'))) {
+        Assert-Equal $c[1] (Get-VxBoardVendor $c[0]) ('Hersteller ' + $c[0])
+    }
+    Assert-Equal '2025-06-10' (ConvertTo-VxBiosDate '20250610000000.000000+000') 'CIM'
+    Assert-Equal '2021-02-10' (ConvertTo-VxBiosDate '02/10/2021') 'US'
+    Assert-Equal $null (ConvertTo-VxBiosDate 'gestern') 'unlesbar'
+    Assert-Equal 'A, B und C' (Join-VxGermanList @('A', 'B', 'C')) 'Liste'
+}
+
+Test-Case 'bios' 'Nur lesen: core/Bios.ps1 schreibt nichts ins BIOS, nur shutdown /r /fw und BitLocker-Pause für einen Start' {
+    $src = [IO.File]::ReadAllText((Join-Path (Join-Path $AppRoot 'core') 'Bios.ps1'))
+    foreach ($bad in @('Set-CimInstance', 'Set-WmiInstance', 'bcdedit', 'Set-VxRegValue', 'Set-VxRealRegValue', 'Remove-VxReg', 'New-VxRealRegKey', 'Suspend-BitLocker', 'Disable-BitLocker', 'Clear-Tpm', 'Set-Tpm')) {
+        Assert-True (-not $src.Contains($bad)) ('kein ' + $bad)
+    }
+    $methods = @([regex]::Matches($src, "-MethodName '([A-Za-z]+)'") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    Assert-Equal 'DisableKeyProtectors,GetConversionStatus,GetProtectionStatus' ($methods -join ',') 'nur diese CIM-Methoden'
+    Assert-True ($src -match "DisableCount = \[uint32\]1") 'BitLocker nur für genau einen Start'
+    $natives = @([regex]::Matches($src, "Get-VxSystemTool '([a-z.-]+)'") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    Assert-Equal 'shutdown.exe' ($natives -join ',') 'einziges Systemprogramm'
+}
+
+Test-Case 'bios' 'Daten: Validator prüft data/bios/recommendations.json; Link-Kürzel stehen in ARCHITECTURE.md; Mock-Daten = Backend' {
+    $null = New-TestContext
+    $real = Join-Path (Join-Path (Join-Path $AppRoot 'data') 'bios') 'recommendations.json'
+    $dir = New-TempDir 'badbios'
+    $null = Copy-Item -Path (Join-Path $FixtureData '*') -Destination $dir -Recurse
+    [void][IO.Directory]::CreateDirectory((Join-Path $dir 'bios'))
+    $txt = [IO.File]::ReadAllText($real, [Text.Encoding]::UTF8)
+    $txt = $txt.Replace('"code": "rp"', '"code": "RP1"').Replace('"id": "dual-channel", "code": "dc", "section": "core", "impact": 3, "risk": "safe"', '"id": "dual-channel", "code": "dc", "section": "core", "impact": 3, "risk": "risky"')
+    $txt = $txt.Replace('"cpuTags": ["x3d-locked"]', '"cpuTags": ["x3d-quantum"]').Replace('"fact": "gpu.rebar", "ok": ["on"]', '"fact": "gpu.rebar", "ok": ["an"]')
+    $txt = $txt.Replace('"title": "Secure Boot an"', '"title": "Secure \"Boot\" an"').Replace('{ "id": "laptop",', '{ "id": "laptop-x",')
+    $txt = $txt.Replace('"steps": {' + "`n" + '        "generic": ["Im Bereich „Boot“ nach', '"steps": {' + "`n" + '        "generik": ["Im Bereich „Boot“ nach')
+    [IO.File]::WriteAllText((Join-Path (Join-Path $dir 'bios') 'recommendations.json'), $txt, (New-Object Text.UTF8Encoding($false)))
+    $out = @(& $HostExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path (Join-Path $AppRoot 'tools') 'Validate-Catalog.ps1') -DataDir $dir 2>&1 | ForEach-Object { [string]$_ })
+    $vt = $out -join "`n"
+    foreach ($want in @('code must be two letters', 'risk must be safe|moderate', "unknown cpu tag 'x3d-quantum'", "check.ok value 'an'", 'use German quotes', 'unknown warning id', "warning 'laptop' missing", 'steps.generic missing')) {
+        Assert-True ($vt -match [regex]::Escape($want)) ('Validator meldet: ' + $want)
+    }
+    # the website's phone page keeps a byte-identical copy (website/assets/data/bios/recommendations.json)
+    $site = [IO.Path]::Combine([IO.Path]::Combine([IO.Path]::Combine([IO.Path]::Combine([IO.Path]::Combine($AppRoot, 'website'), 'assets'), 'data'), 'bios'), 'recommendations.json')
+    if ([IO.File]::Exists($site)) { Assert-True ([Convert]::ToBase64String([IO.File]::ReadAllBytes($site)) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes($real))) 'website/assets/data/bios/recommendations.json = data/bios/recommendations.json (kopieren!)' }
+    else { Add-Note 'website/assets/data/bios/recommendations.json fehlt – Kopie für die Handy-Seite nicht geprüft.' }
+    # every code the link can carry is documented for the website (docs/ARCHITECTURE.md)
+    $arch = [IO.File]::ReadAllText((Join-Path (Join-Path $AppRoot 'docs') 'ARCHITECTURE.md'), [Text.Encoding]::UTF8)
+    $data = Read-VxJsonFile $real
+    foreach ($x in @($data.items) + @($data.warnings) + @($data.games)) { Assert-True ($arch.Contains('| `' + [string]$x.code + '` |')) ('Kürzel in ARCHITECTURE.md: ' + $x.code) }
+    # the UI mock serves exactly what the backend produces for its fake PCs (VELOX_UPDATE_SNAPSHOTS=1 rewrites it)
+    $snapFile = Join-Path (Join-Path (Join-Path $AppRoot 'tests') 'ui') 'bios-sample.json'
+    $now = [ordered]@{}
+    foreach ($fx in @('asus-5800x3d', 'dell-legacy')) {
+        $r = Invoke-BiosScan $fx
+        $r.Remove('scanned'); $r.Remove('durationMs')
+        $now[$fx] = $r
+    }
+    $nowJson = ConvertTo-Json -InputObject $now -Depth 30 -Compress
+    if ([Environment]::GetEnvironmentVariable('VELOX_UPDATE_SNAPSHOTS') -eq '1') {
+        [IO.File]::WriteAllText($snapFile, (ConvertTo-Json -InputObject $now -Depth 30) + "`n", (New-Object Text.UTF8Encoding($false)))
+        Add-Note 'tests/ui/bios-sample.json neu geschrieben.'
+    }
+    Assert-True ([IO.File]::Exists($snapFile)) 'tests/ui/bios-sample.json fehlt (VELOX_UPDATE_SNAPSHOTS=1 pwsh tests/Run-Tests.ps1 -Only bios)'
+    $old = ConvertTo-Json -InputObject (ConvertFrom-Json ([IO.File]::ReadAllText($snapFile, [Text.Encoding]::UTF8))) -Depth 30 -Compress
+    $cmp = ConvertTo-Json -InputObject (ConvertFrom-Json $nowJson) -Depth 30 -Compress
+    Assert-True ($old -eq $cmp) 'tests/ui/bios-sample.json ist veraltet: VELOX_UPDATE_SNAPSHOTS=1 pwsh tests/Run-Tests.ps1 -Only bios'
 }
 
 # ------------------------------------------------------------------ summary

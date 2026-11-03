@@ -88,12 +88,16 @@ const P = {
   flask: '<path d="M9.5 3.5h5M10.5 3.5v5.2L5 18.3A1.5 1.5 0 0 0 6.3 20.5h11.4a1.5 1.5 0 0 0 1.3-2.2l-5.5-9.6V3.5"/><path d="M7.5 14.5h9"/>',
   cloud: '<path d="M7 18.5a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.5 1.6A3.8 3.8 0 0 1 17.5 18.5H7Z"/>',
   send: '<path d="M20.5 3.5 10 14M20.5 3.5 14 20.5l-4-6.5-6.5-4 17-6.5Z"/>',
+  phone: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.2"/><path d="M10.5 18.5h3"/>',
+  printer: '<path d="M7 8.5V3.5h10v5"/><rect x="3.5" y="8.5" width="17" height="8" rx="1.8"/><path d="M7 14h10v6.5H7z"/><path d="M16.5 11.5h.01"/>',
+  qr: '<rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM14 18.5v2M18 14h2.5"/>',
+  board: '<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><rect x="8" y="8" width="5.5" height="5.5" rx=".8"/><path d="M16.5 7v3M16.5 13v4M7 16.5h5.5M3.5 6.5H6M3.5 10H6M3.5 13.5H6"/>',
   // the brand mark (brand/mark.svg): the wordmark's V, cut once, the upper half one step ahead, the foot in signal
   logo: '<g transform="translate(1.3 2) scale(.2)" stroke="none"><path fill="currentColor" d="M22.84 0L47.84 0L52.56 44L28.63 44ZM63.18 44L81.84 0L106.84 0L87.11 44Z"/><path fill="#FF5A1F" d="M46.41 52L47.7 64L52.79 52L76.52 52L55 100L29 100L22.68 52Z"/></g>'
 };
 
 const ALIAS = {
-  video: 'broadcast',
+  video: 'broadcast', bios: 'board', mainboard: 'board',
   overview: 'home', tweaks: 'sliders', presets: 'stack', advisor: 'brain', detweak: 'undo', games: 'gamepad', cleanup: 'broom', apps: 'package', backups: 'archive', settings: 'cog',
   shieldcheck: 'shieldCheck', 'shield-check': 'shieldCheck', gauge2: 'gauge', crown: 'trophy', competitive: 'target', esport: 'target', fivem: 'car', privacy: 'eye-off', streaming: 'broadcast',
   laptop: 'battery', clean: 'broom', safe: 'shieldCheck', ultimate: 'rocket', balanced: 'scale', trash2: 'trash', wifi2: 'wifi', bolt2: 'bolt', cpu2: 'cpu', 'alert-triangle': 'alert', warning: 'alert'

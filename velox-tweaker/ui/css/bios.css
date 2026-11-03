@@ -1,0 +1,187 @@
+/* VELOX - BIOS-Optimierer (ui/js/pages/bios.js). Same system as app.css: ink + bone, one signal
+   colour (only the primary button), hairlines, numbers in --mono, 4/8/12/16/24/32 spacing.
+   Status chips: "passt schon" in the Sicher green, "fehlt" in bone with a hairline (the open item
+   is the bright one), "unbekannt" muted with a dashed edge - never the signal, never the Mittel gold
+   (that colour means risk). The print view at the end turns the page into a plain checklist. */
+
+/* ------------------------------------------------------------------ hero */
+.bs-hero { display: grid; gap: 20px; padding: 24px 32px; overflow: hidden; }
+.bs-hero-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 520px); align-items: center; gap: 32px; }
+.bs-count { display: grid; gap: 4px; min-width: 0; }
+.bs-count-line { display: flex; align-items: baseline; gap: 8px; }
+.bs-count-num { font: 600 56px/1.05 var(--mono); letter-spacing: -.04em; font-variant-numeric: tabular-nums; color: var(--text); }
+.bs-count-of { font: 500 var(--fs-1) var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.bs-count-of::after { content: " passen schon"; font-family: var(--font); font-size: var(--fs-2); }
+.bs-count-of:empty::after { content: ""; }
+.bs-count-sub { font-size: var(--fs-3); color: var(--muted); }
+.bs-count-sub.is-todo { color: var(--text-2); }
+.bs-hero-side { display: grid; gap: 12px; justify-items: start; }
+.bs-intro { font-size: var(--fs-3); color: var(--muted); max-width: 520px; }
+.bs-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bs-reboot-note { font-size: var(--fs-3); color: var(--muted); max-width: 520px; }
+.bs-hero-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px; box-shadow: inset 0 1px 0 var(--s4); font-size: var(--fs-3); }
+.page-bios.is-loading .bs-count-num { color: var(--faint); }
+
+/* ------------------------------------------------------------------ system facts */
+.bs-sys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.bs-fact { display: grid; gap: 6px; align-content: start; padding: 16px; min-height: 112px; transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
+.bs-fact:hover { background: var(--s2); box-shadow: var(--edge-hi); }
+.bs-fact-head { display: flex; align-items: center; gap: 8px; color: var(--faint); }
+.bs-fact-label { font-size: var(--fs-3); font-weight: 500; }
+.bs-fact-value { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bs-fact-subs { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: var(--fs-3); color: var(--muted); min-width: 0; }
+.bs-fact[data-fact="bios"] .bs-fact-value, .bs-fact[data-fact="ram"] .bs-fact-value { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.bs-fact.is-loading { min-height: 112px; }
+.bs-pill {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: var(--r-chip);
+  font-size: 11.5px; font-weight: 600; color: var(--text-2); background: var(--tint-2); white-space: nowrap;
+}
+.bs-pill.is-ok { color: var(--risk-safe); background: var(--risk-safe-bg); }
+.bs-pill.is-todo { color: var(--text); background: transparent; box-shadow: inset 0 0 0 1px var(--vx-line-2); }
+
+/* ------------------------------------------------------------------ "Passt dein PC?" */
+.bs-warn-card { display: grid; padding: 8px; }
+.bs-warn { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: var(--r-ctl); }
+.bs-warn + .bs-warn { box-shadow: inset 0 1px 0 var(--s4); }
+.bs-warn-icon { flex: none; width: 32px; height: 32px; border-radius: var(--r-ctl); display: grid; place-items: center; background: var(--s3); color: var(--text); }
+.bs-warn.is-bad .bs-warn-icon { color: var(--err); background: rgba(var(--err-rgb), .1); }
+.bs-warn.is-warn .bs-warn-icon { color: var(--warn); background: rgba(var(--warn-rgb), .1); }
+.bs-warn-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.bs-warn-text p { font-size: var(--fs-3); color: var(--muted); max-width: 820px; }
+.bs-warn-text .bs-warn-detail { color: var(--text-2); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.bs-warn > .btn { flex: none; align-self: center; }
+.bs-ok-line { display: flex; align-items: center; gap: 12px; padding: 12px; color: var(--text-2); font-size: var(--fs-3); }
+.bs-ok-line .icon { color: var(--ok); flex: none; }
+
+/* ------------------------------------------------------------------ checklist */
+.bs-key { color: var(--muted); }
+.bs-key strong { color: var(--text); font-family: var(--mono); font-weight: 600; }
+.bs-list-card { padding: 8px; }
+.bs-list { display: grid; }
+.bs-item { display: grid; border-radius: var(--r-ctl); transition: background-color var(--t-fast); }
+.bs-item + .bs-item { box-shadow: inset 0 1px 0 var(--s4); }
+.bs-item:hover, .bs-item.is-open { background: var(--tint-1); }
+.bs-head {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; text-align: left; border-radius: var(--r-ctl);
+  transition: background-color var(--t-fast);
+}
+.bs-head:hover { background: var(--tint-2); }
+.bs-head:active { transform: scale(.995); }
+.bs-title { flex: 1; min-width: 0; font-weight: 600; }
+.bs-badges { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.bs-chev { flex: none; color: var(--faint); transition: transform var(--t) var(--ease), color var(--t-fast); }
+.bs-head:hover .bs-chev { color: var(--text); }
+.bs-head[aria-expanded="true"] .bs-chev { transform: rotate(180deg); }
+.bs-status {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; min-width: 112px; height: 24px; padding: 0 8px;
+  border-radius: var(--r-chip); font-size: var(--fs-3); font-weight: 600; white-space: nowrap;
+}
+.bs-status.is-ok { color: var(--risk-safe); background: var(--risk-safe-bg); }
+.bs-status.is-todo { color: var(--text); box-shadow: inset 0 0 0 1px var(--vx-line-2); background: var(--tint-2); }
+.bs-status.is-unknown { color: var(--muted); box-shadow: inset 0 0 0 1px var(--s4); outline: 1px dashed var(--vx-line-2); outline-offset: -1px; }
+.bs-note { margin: -6px 12px 10px calc(112px + 24px); font-size: var(--fs-3); color: var(--muted); }
+.bs-detail { margin: 0 12px 16px calc(112px + 24px); display: grid; gap: 12px; max-width: 820px; animation: enter 220ms var(--ease) both; }
+.bs-detail[hidden] { display: none; }
+.bs-why { color: var(--text-2); }
+.bs-info { font-size: var(--fs-3); color: var(--muted); }
+.bs-steps-wrap { display: grid; gap: 8px; padding: 12px 16px; border-radius: var(--r-ctl); background: var(--well); box-shadow: inset 0 0 0 1px var(--s4); }
+.bs-steps-title { font-size: var(--fs-3); font-weight: 600; color: var(--faint); }
+.bs-steps { margin: 0; padding: 0; list-style: none; counter-reset: bs; display: grid; gap: 8px; }
+.bs-steps li { counter-increment: bs; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; }
+.bs-steps li::before {
+  content: counter(bs); width: 20px; height: 20px; border-radius: 3px; display: grid; place-items: center;
+  font: 600 11px/1 var(--mono); color: var(--text); box-shadow: inset 0 0 0 1px var(--vx-line-2); margin-top: 1px;
+}
+.bs-path-note { font-size: var(--fs-3); color: var(--faint); }
+.bs-empty { padding: 12px; font-size: var(--fs-3); }
+.bs-hidden { font-size: var(--fs-3); color: var(--muted); padding: 0 4px; }
+.bs-hidden summary { cursor: pointer; width: max-content; max-width: 100%; padding: 4px 0; color: var(--faint); font-weight: 600; transition: color var(--t-fast); }
+.bs-hidden summary:hover { color: var(--text); }
+.bs-hidden ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.bs-hidden strong { color: var(--text-2); font-weight: 600; }
+
+/* ------------------------------------------------------------------ dialogs */
+.bs-qr-body { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 20px; align-items: start; }
+.bs-qr-tile { width: 216px; height: 216px; padding: 0; border-radius: var(--r-ctl); overflow: hidden; background: var(--vx-bone); }
+.qr { display: block; width: 100%; height: 100%; }
+.qr-bg { fill: var(--vx-bone); }
+.qr-fg { fill: var(--vx-ink); }
+.bs-qr-side { display: grid; gap: 12px; min-width: 0; }
+.bs-qr-privacy { display: flex; gap: 8px; align-items: flex-start; font-size: var(--fs-3); color: var(--muted); }
+.bs-qr-privacy .icon { flex: none; margin-top: 2px; color: var(--text); }
+.bs-url {
+  display: block; padding: 8px 10px; border-radius: var(--r-ctl); background: var(--well); box-shadow: inset 0 0 0 1px var(--s4);
+  font: 400 11px/1.5 var(--mono); color: var(--text-2); word-break: break-all; user-select: all; max-height: 120px; overflow: auto;
+}
+.bs-dlg-warn { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: var(--r-ctl); background: rgba(var(--warn-rgb), .06); box-shadow: inset 0 0 0 1px rgba(var(--warn-rgb), .24); }
+.bs-dlg-warn > .icon { flex: none; color: var(--warn); margin-top: 2px; }
+.bs-dlg-warn p { font-size: var(--fs-3); color: var(--text-2); margin: 4px 0; }
+.bs-dlg-link { font: 600 var(--fs-2) var(--mono); color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.bs-dlg-link:hover { color: var(--text); text-decoration-thickness: 2px; }
+.bs-dlg-note { font-size: var(--fs-3); }
+
+/* ------------------------------------------------------------------ overview: board + RAM profile */
+.bios-strip { display: flex; align-items: center; gap: 16px; padding: 16px; color: inherit; }
+.bios-strip-icon { flex: none; width: 40px; height: 40px; border-radius: var(--r-ctl); display: grid; place-items: center; color: var(--text); background: var(--s3); }
+.bios-strip-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.bios-strip-label { font-size: var(--fs-3); color: var(--faint); font-weight: 500; }
+.bios-strip-value { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bios-strip-sub { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-3); color: var(--muted); }
+.bios-strip-sub .is-warn { color: var(--warn); }
+.bios-strip-sub .is-ok { color: var(--ok); }
+.bios-strip-go { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-3); font-weight: 600; color: var(--muted); transition: color var(--t-fast); }
+.bios-strip:hover .bios-strip-go { color: var(--text); }
+
+/* ------------------------------------------------------------------ narrow windows */
+@media (max-width: 1240px) {
+  .bs-hero-main { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .bs-sys { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1000px) {
+  .bs-hero { padding: 20px; }
+  .bs-head { flex-wrap: wrap; }
+  .bs-title { flex-basis: calc(100% - 160px); }
+  .bs-note, .bs-detail { margin-left: 12px; }
+  .bs-qr-body { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .bios-strip-go span { display: none; }
+}
+
+/* ------------------------------------------------------------------ print / "Liste drucken"
+   Only while the BIOS page is shown: a plain black-on-white checklist with every step and the QR code. */
+.bs-print-head { display: none; }
+@media print {
+  @page { margin: 14mm; }
+  :root:has(.page-bios) { color-scheme: light; }
+  :root:has(.page-bios), :root:has(.page-bios) body { background: #fff; color: #000; overflow: visible; height: auto; }
+  :root:has(.page-bios) .sidebar, :root:has(.page-bios) .topbar, :root:has(.page-bios) .pending,
+  :root:has(.page-bios) .banners, :root:has(.page-bios) #toasts, :root:has(.page-bios) #layers,
+  :root:has(.page-bios) #splash, :root:has(.page-bios) .bs-hero-foot, :root:has(.page-bios) .bs-actions,
+  :root:has(.page-bios) .bs-intro, :root:has(.page-bios) .bs-reboot-note, :root:has(.page-bios) .bs-chev,
+  :root:has(.page-bios) .bs-hidden { display: none !important; }
+  :root:has(.page-bios) .shell, :root:has(.page-bios) .main-col, :root:has(.page-bios) .main { display: block; height: auto; overflow: visible; position: static; }
+  :root:has(.page-bios) .content { max-width: none; padding: 0; }
+  .page-bios, .page-bios * { animation: none !important; transition: none !important; box-shadow: none !important; color: #000 !important; background: transparent !important; }
+  .page-bios { gap: 10px; }
+  .page-bios .card { border: 1px solid #999; border-radius: 4px; break-inside: avoid; }
+  .page-bios .bs-print-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 8px; border-bottom: 2px solid #000; }
+  .bs-print-text h1 { font-size: 18px; margin-bottom: 4px; }
+  .bs-print-text p { font-size: 11px; }
+  .bs-print-qr { display: grid; justify-items: center; gap: 4px; font-size: 10px; }
+  .bs-print-qr .qr { width: 34mm; height: 34mm; }
+  .page-bios .qr-bg { fill: #fff; }
+  .page-bios .qr-fg { fill: #000; }
+  .page-bios .bs-hero { padding: 8px 12px; }
+  .page-bios .bs-count-num { font-size: 28px; }
+  .page-bios .bs-sys { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .page-bios .bs-fact { min-height: 0; padding: 6px 8px; }
+  .page-bios .bs-detail, .page-bios .bs-detail[hidden] { display: grid !important; margin-left: 12px; }
+  .page-bios .bs-note { margin-left: 12px; }
+  .page-bios .bs-item { break-inside: avoid; border-top: 1px solid #ccc; }
+  .page-bios .bs-steps-wrap { border: 1px dashed #999; }
+  .page-bios .bs-steps li::before { border: 1px solid #000; color: #000 !important; }
+  .page-bios .bs-warn > .btn { display: none !important; }
+  .page-bios .bs-status { border: 1px solid #000; outline: none; }
+  .page-bios .bs-status.is-todo { font-weight: 800; }
+  .page-bios .badge { border: 1px solid #777; }
+  .page-bios .enter { opacity: 1 !important; transform: none !important; }
+}

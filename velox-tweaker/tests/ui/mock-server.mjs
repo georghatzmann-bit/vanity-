@@ -16,6 +16,7 @@
 //   POST /__mock/reset   rebuild all state from scratch
 //   POST /__mock/mode    { hosted: bool } bootstrap.mode.hosted (VELOX.exe window, ARCHITECTURE section 11)
 //   POST /__mock/ai      { claudeCode: 'ready'|'logged-out'|'missing', failNext: '<provider>' } KI provider state
+//   POST /__mock/bios    { fixture: 'asus-5800x3d'|'dell-legacy' } which fake PC bios-scan reports (tests/ui/bios-sample.json)
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -226,7 +227,8 @@ function buildWorld() {
       { id: 'task:NvTmRep', name: 'NVIDIA Telemetry Report', command: 'C:\\Program Files\\NVIDIA Corporation\\NvTelemetry\\NvTmRep.exe', location: 'Aufgabenplanung', enabled: true },
       { id: 'hklm-run|SecurityHealth', name: 'SecurityHealth', command: '%windir%\\system32\\SecurityHealthSystray.exe', location: 'Alle Benutzer (Registry)', enabled: true }
     ],
-    stats: { heartbeats: 0, shutdowns: 0, bootstraps: 0, jobs: {}, unauthorized: 0, settingsPosts: [] },
+    stats: { heartbeats: 0, shutdowns: 0, bootstraps: 0, jobs: {}, unauthorized: 0, settingsPosts: [], biosReboots: [] },
+    biosFixture: 'asus-5800x3d',
     shutdownTimer: null,
     shutdownSession: '',
     shutdownAt: 0,
@@ -264,7 +266,7 @@ function journalFor(t, mode) {
 
 // ---------------------------------------------------------------- jobs
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const MUTATING = new Set(['apply', 'revert', 'restorepoint', 'restore', 'detweak', 'run-action', 'startup-set', 'game-boost', 'explorer-restart', 'reboot', 'restorepoint-clean']);
+const MUTATING = new Set(['apply', 'revert', 'restorepoint', 'restore', 'detweak', 'run-action', 'startup-set', 'game-boost', 'explorer-restart', 'reboot', 'restorepoint-clean', 'bios-reboot']);
 
 function newJob(type, params) {
   const job = { id: crypto.randomBytes(6).toString('hex'), type, status: 'running', progress: 0, step: 'Wird vorbereitet …', log: [], result: null, error: null, _cancel: false, _params: params,
@@ -720,8 +722,39 @@ const JOBS = {
   },
   async 'pick-file'(p, ctx) { await ctx.tick(0.3); ctx.log('info', 'Testmodus: kein Dateidialog.'); return { path: null }; },
   async 'explorer-restart'(p, ctx) { ctx.step('Explorer wird neu gestartet …', 0.5); await ctx.tick(2); W.state.needs.explorer = false; ctx.log('ok', 'Explorer neu gestartet (Testmodus).'); return { ok: true }; },
-  async reboot(p, ctx) { ctx.step('Neustart wird geplant …', 0.5); await ctx.tick(); ctx.log('info', 'Testmodus: shutdown /r /t 10 nur protokolliert.'); return { ok: true }; }
+  async reboot(p, ctx) { ctx.step('Neustart wird geplant …', 0.5); await ctx.tick(); ctx.log('info', 'Testmodus: shutdown /r /t 10 nur protokolliert.'); return { ok: true }; },
+  // BIOS-Optimierer: the backend's own output for its fake PCs (tests/ui/bios-sample.json, kept in
+  // step with core/Bios.ps1 by the 'bios' backend test)
+  async 'bios-scan'(p, ctx) {
+    ctx.step('Lese BIOS und Mainboard …', 0.2); await ctx.tick(0.6);
+    const r = JSON.parse(JSON.stringify(biosSample()[W.biosFixture]));
+    r.scanned = iso(new Date());
+    if (W.state.profile) {
+      const f = r.facts;
+      W.state.profile.board = { vendor: f.board.vendor, vendorName: f.board.vendorName, model: f.board.model, biosVersion: f.bios.version, biosDate: f.bios.date, firmware: f.firmware.mode };
+      W.state.profile.ram = Object.assign({}, W.state.profile.ram, { profile: f.ram.profile, profileConfidence: f.ram.profileConfidence });
+    }
+    const s = r.summary;
+    ctx.log('ok', 'BIOS-Check: ' + s.ok + ' von ' + s.total + ' Punkten passen schon, ' + s.todo + ' fehlen, ' + s.unknown + ' unklar.');
+    return r;
+  },
+  async 'bios-reboot'(p, ctx) {
+    const f = biosSample()[W.biosFixture].facts;
+    ctx.step('Prüfe, ob der Neustart ins BIOS geht …', 0.3); await ctx.tick();
+    if (f.firmware.mode !== 'uefi') throw new Error('Dein PC startet nicht im UEFI-Modus – der Neustart direkt ins BIOS geht dann nicht. Starte normal neu und drück beim Start die BIOS-Taste (meist Entf oder F2).');
+    const paused = !!p.suspendBitLocker && f.bitlocker.state === 'on';
+    if (paused) ctx.log('info', '[Testmodus] BitLocker würde für genau einen Neustart pausiert.');
+    ctx.log('info', '[Testmodus] shutdown /r /fw /t 10 wurde nur protokolliert – der PC startet nicht neu.');
+    W.stats.biosReboots.push({ suspendBitLocker: !!p.suspendBitLocker });
+    return { ok: true, simulated: true, bitlockerPaused: paused };
+  }
 };
+
+let BIOS_SAMPLE = null;
+function biosSample() {
+  if (!BIOS_SAMPLE) BIOS_SAMPLE = JSON.parse(fs.readFileSync(path.join(here, 'bios-sample.json'), 'utf8'));
+  return BIOS_SAMPLE;
+}
 
 async function applyRevert(p, ctx, mode) {
   const ids = Array.isArray(p.ids) ? p.ids : [];
@@ -1001,6 +1034,7 @@ async function handle(req, res) {
     if (body.reset) { W.settings.claude.hasKey = false; W.settings.ai = { provider: '', claudeCode: { model: 'sonnet' }, groq: { hasKey: false, model: '' } }; W.claudeCode = opt.claudeCode; W.aiFailNext = null; }
     return send(res, 200, { claudeCode: W.claudeCode, settings: W.settings });
   }
+  if (m('POST', /^\/__mock\/bios$/)) { if (body.fixture && biosSample()[body.fixture]) W.biosFixture = body.fixture; return send(res, 200, { fixture: W.biosFixture }); }
   if (m('POST', /^\/__mock\/mode$/)) { W.hosted = !!body.hosted; return send(res, 200, { hosted: W.hosted }); }
   if (m('POST', /^\/__mock\/state$/)) { if (body.needs) Object.assign(W.state.needs, body.needs); return send(res, 200, W.state); }
   return send(res, 404, { error: 'not found' });

@@ -1,0 +1,24 @@
+{
+  "comment": "Fake laptop matching the simulated laptop profile: ASUS ROG Strix G15, i7-12700H, RTX 3060 Laptop GPU.",
+  "now": "2026-11-01",
+  "admin": true,
+  "chassis": "laptop",
+  "baseBoard": { "Manufacturer": "ASUSTeK COMPUTER INC.", "Product": "G513RM" },
+  "computerSystem": { "Manufacturer": "ASUSTeK COMPUTER INC.", "Model": "ROG Strix G513RM", "HypervisorPresent": true },
+  "bios": { "Manufacturer": "American Megatrends International, LLC.", "SMBIOSBIOSVersion": "G513RM.324", "ReleaseDate": "2025-02-14" },
+  "processor": { "Name": "12th Gen Intel(R) Core(TM) i7-12700H", "Manufacturer": "GenuineIntel", "VirtualizationFirmwareEnabled": false },
+  "memory": [
+    { "Capacity": 8589934592, "Speed": 3200, "ConfiguredClockSpeed": 3200, "SMBIOSMemoryType": 26, "DeviceLocator": "Controller0-ChannelA-DIMM0", "BankLabel": "BANK 0", "PartNumber": "M471A1K43EB1-CWE", "Manufacturer": "Samsung" },
+    { "Capacity": 8589934592, "Speed": 3200, "ConfiguredClockSpeed": 3200, "SMBIOSMemoryType": 26, "DeviceLocator": "Controller1-ChannelA-DIMM0", "BankLabel": "BANK 0", "PartNumber": "M471A1K43EB1-CWE", "Manufacturer": "Samsung" }
+  ],
+  "gpus": [ { "Name": "NVIDIA GeForce RTX 3060 Laptop GPU", "PNPDeviceID": "PCI\\VEN_10DE&DEV_2560" }, { "Name": "Intel(R) Iris(R) Xe Graphics", "PNPDeviceID": "PCI\\VEN_8086&DEV_46A6" } ],
+  "nvidiaSmi": "    BAR1 Memory Usage\n        Total                             : 8192 MiB\n",
+  "firmwareType": "uefi",
+  "secureBoot": 1,
+  "tpm": { "present": true, "enabled": true, "activated": true, "specVersion": "2.0, 0, 1.38", "manufacturer": "INTC" },
+  "deviceGuard": { "vbs": 2, "services": [2] },
+  "vmUse": [],
+  "bitlocker": { "protectionStatus": 1, "conversionStatus": 1 },
+  "services": [],
+  "games": []
+}

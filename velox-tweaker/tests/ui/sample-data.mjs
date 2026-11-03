@@ -361,9 +361,11 @@ export const detweak = {
 export const profiles = {
   desktop: {
     os: { caption: 'Windows 11 Pro', build: 22631, displayVersion: '23H2', isWin11: true, edition: 'Professional' },
-    cpu: { name: 'AMD Ryzen 7 7800X3D 8-Core Processor', vendor: 'amd', cores: 8, threads: 16, maxMHz: 4200 },
-    gpus: [{ name: 'NVIDIA GeForce RTX 4070 SUPER', vendor: 'nvidia', vramGB: 12, driver: '32.0.15.6636' }],
-    ram: { totalGB: 32, type: 'DDR5', speedMHz: 6000, configuredMHz: 6000, modules: 2 },
+    // the same PC as the BIOS page's fake PC (tests/fixtures/bios/asus-5800x3d.json, core/Scan.ps1 Get-VxSimProfile)
+    cpu: { name: 'AMD Ryzen 7 5800X3D 8-Core Processor', vendor: 'amd', cores: 8, threads: 16, maxMHz: 3400 },
+    gpus: [{ name: 'NVIDIA GeForce RTX 4070', vendor: 'nvidia', vramGB: 12, driver: '32.0.15.6094' }],
+    ram: { totalGB: 32, type: 'DDR4', speedMHz: 3600, configuredMHz: 2133, modules: 2, profile: 'off', profileConfidence: 'high' },
+    board: { vendor: 'asus', vendorName: 'ASUS', model: 'ROG STRIX B550-F GAMING', biosVersion: '2803', biosDate: '2022-03-12', firmware: 'uefi' },
     disks: [{ model: 'Samsung SSD 990 PRO 1TB', media: 'ssd', bus: 'nvme', sizeGB: 1000 }, { model: 'WDC WD20EZBX', media: 'hdd', bus: 'sata', sizeGB: 2000 }],
     systemDisk: 'ssd',
     systemDriveFreeGB: 412.4,
@@ -382,7 +384,8 @@ export const profiles = {
     os: { caption: 'Windows 10 Home', build: 19045, displayVersion: '22H2', isWin11: false, edition: 'Core' },
     cpu: { name: '12th Gen Intel(R) Core(TM) i7-12700H', vendor: 'intel', cores: 14, threads: 20, maxMHz: 2300 },
     gpus: [{ name: 'NVIDIA GeForce RTX 3060 Laptop GPU', vendor: 'nvidia', vramGB: 6, driver: '31.0.15.5222' }, { name: 'Intel(R) Iris(R) Xe Graphics', vendor: 'intel', vramGB: 1, driver: '31.0.101.5186' }],
-    ram: { totalGB: 16, type: 'DDR4', speedMHz: 3200, configuredMHz: 3200, modules: 2 },
+    ram: { totalGB: 16, type: 'DDR4', speedMHz: 3200, configuredMHz: 3200, modules: 2, profile: 'on', profileConfidence: 'medium' },
+    board: { vendor: 'asus', vendorName: 'ASUS', model: 'G513RM', biosVersion: 'G513RM.324', biosDate: '2025-02-14', firmware: 'uefi' },
     disks: [{ model: 'SAMSUNG MZVL2512HCJQ', media: 'ssd', bus: 'nvme', sizeGB: 512 }],
     systemDisk: 'ssd',
     systemDriveFreeGB: 61.2,

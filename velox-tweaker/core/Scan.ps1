@@ -190,7 +190,7 @@ function Get-VxFormFactor([object[]]$ChassisTypes, [object[]]$Batteries) {
 function Get-VxRealProfile {
     $p = [ordered]@{
         os = $null; cpu = $null; gpus = @(); ram = $null; disks = @(); systemDisk = 'unknown'; systemDriveFreeGB = $null
-        formFactor = 'desktop'; battery = $false; display = $null; power = $null; security = $null; gaming = $null
+        formFactor = 'desktop'; battery = $false; display = $null; power = $null; security = $null; gaming = $null; board = $null
         network = @(); startupCount = $null; uptimeHours = $null; tempMB = $null; foreignCount = $null
     }
     $osObj = $null
@@ -265,7 +265,30 @@ function Get-VxRealProfile {
         }
         if ($conf -eq 0) { $conf = $speed }
         $p.ram = [ordered]@{ totalGB = [math]::Round($total / 1GB); type = $type; speedMHz = $speed; configuredMHz = $conf; modules = $mods.Count }
+        # XMP / EXPO on or off (core/Bios.ps1, the same heuristic as the BIOS page)
+        try {
+            $rp = Get-VxRamProfileInfo @(ConvertTo-VxRamModules $mods)
+            $p.ram.profile = $rp.profile
+            $p.ram.profileConfidence = $rp.confidence
+        } catch { $null = $_ }
     } catch { Write-VxLog 'warn' ('Arbeitsspeicher nicht lesbar: ' + $_.Exception.Message) }
+    # mainboard + BIOS version (Übersicht, BIOS page)
+    try {
+        $bb = @(Get-VxCim 'Win32_BaseBoard')[0]
+        $bi = @(Get-VxCim 'Win32_BIOS')[0]
+        $csys = $null
+        try { $csys = @(Get-VxCim 'Win32_ComputerSystem')[0] } catch { $null = $_ }
+        $vendor = Get-VxBoardVendor ([string]$bb.Manufacturer)
+        $vraw = [string]$bb.Manufacturer
+        if ($vendor -eq 'generic' -and $null -ne $csys) { $vendor = Get-VxBoardVendor ([string]$csys.Manufacturer); if (-not $vraw -or $vraw -match '(?i)default string|to be filled') { $vraw = [string]$csys.Manufacturer } }
+        $model = ([string]$bb.Product).Trim()
+        if ((-not $model -or $model -match '(?i)^(base board|default string|to be filled.*|not applicable)$') -and $null -ne $csys) { $model = ([string]$csys.Model).Trim() }
+        $bdate = $null
+        if ($bi.ReleaseDate) { $bdate = ([datetime]$bi.ReleaseDate).ToString('yyyy-MM-dd') }
+        $fw = $null
+        try { $fw = Get-VxFirmwareTypeNative; if ($fw -eq 'bios') { $fw = 'legacy' } } catch { $null = $_ }
+        $p.board = [ordered]@{ vendor = $vendor; vendorName = (Get-VxBoardVendorName $vendor $vraw); model = $model; biosVersion = ([string]$bi.SMBIOSBIOSVersion).Trim(); biosDate = $bdate; firmware = $fw }
+    } catch { Write-VxLog 'warn' ('Mainboard nicht lesbar: ' + $_.Exception.Message) }
     try {
         $ns = 'root/Microsoft/Windows/Storage'
         $disks = @()
@@ -367,6 +390,8 @@ function Get-VxProfile {
         foreach ($k in @('gameMode', 'gameDvr')) { if ($null -ne $g[$k]) { $p.gaming[$k] = $g[$k] } }
         $h = Get-VxRegValue 'HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode'
         if ($h.exists) { $p.gaming.hags = ([long]$h.value -eq 2) }
+        # board, BIOS and RAM profile of the fixture PC the BIOS page shows (tests/fixtures/bios)
+        try { Set-VxProfileBoard $p (Get-VxBiosFacts -NoGames) } catch { $null = $_ }
     } else {
         $p = Get-VxRealProfile
         try {

@@ -15,12 +15,13 @@ import presets from './pages/presets.js';
 import advisor from './pages/advisor.js';
 import detweak from './pages/detweak.js';
 import games from './pages/games.js';
+import bios from './pages/bios.js';
 import cleanup from './pages/cleanup.js';
 import apps from './pages/apps.js';
 import backups from './pages/backups.js';
 import settings from './pages/settings.js';
 
-const PAGES = [overview, tweaks, presets, advisor, detweak, games, cleanup, apps, backups, settings];
+const PAGES = [overview, tweaks, presets, advisor, detweak, games, bios, cleanup, apps, backups, settings];
 const PAGE_BY_ID = new Map(PAGES.map(p => [p.id, p]));
 const root = document.documentElement;
 const SCAN_FRESH_MS = 30 * 60 * 1000;
@@ -48,6 +49,8 @@ const JOB_META = {
   'pick-file': { title: 'Datei auswählen', fail: 'Dateiauswahl fehlgeschlagen', icon: 'file' },
   'explorer-restart': { title: 'Explorer wird neu gestartet', fail: 'Explorer-Neustart fehlgeschlagen', icon: 'refresh', mutating: true },
   reboot: { title: 'Neustart wird vorbereitet', fail: 'Neustart nicht geplant', icon: 'restart', mutating: true },
+  'bios-scan': { title: 'BIOS wird ausgelesen', fail: 'BIOS-Check fehlgeschlagen', icon: 'chip', cancel: true },
+  'bios-reboot': { title: 'Neustart ins BIOS wird vorbereitet', fail: 'Neustart ins BIOS nicht geplant', icon: 'restart', mutating: true },
   'restorepoint-list': { title: 'Wiederherstellungspunkte werden gelesen', fail: 'Wiederherstellungspunkte nicht lesbar', icon: 'shieldCheck', cancel: true },
   'restorepoint-clean': { title: 'Alte Wiederherstellungspunkte werden gelöscht', fail: 'Löschen fehlgeschlagen', icon: 'trash', cancel: true, mutating: true }
 };
@@ -75,7 +78,7 @@ const ctx = {
   app: { name: 'VELOX', version: '' }, mode: {}, categories: [], tweaks: [], byId: new Map(), catById: new Map(), presets: [],
   settings: {}, state: { statuses: {}, profile: null, lastScan: null, needs: {} },
   pending: new Map(),
-  cache: { advisor: null, detweak: null, clean: null, startup: null, games: null, backups: null, goal: null, detweakCount: null },
+  cache: { advisor: null, detweak: null, clean: null, startup: null, games: null, backups: null, goal: null, detweakCount: null, bios: null },
   busy: null,
   scanning: false,
   // > 0 while the UI re-reads state or catalog after a job (busy is already null then, but the
@@ -768,6 +771,7 @@ function resultToast(type, r, opts = {}) {
     case 'restore': toast({ type: r.failed ? 'warn' : 'ok', title: plural(r.restored || 0, 'Wert', 'Werte') + ' wiederhergestellt', text: r.failed ? r.failed + ' konnten nicht zurückgesetzt werden' + (r.errors && r.errors.length ? ': ' + friendlyError(r.errors[0]) : '.') : 'Dein PC ist wieder auf dem Stand vor dieser Sicherung.' + needsSuffix(r.needs).replace(' · ', ' ') }); break;
     case 'explorer-restart': toast({ type: 'ok', title: 'Explorer neu gestartet' }); break;
     case 'reboot': toast({ type: 'info', title: ctx.mode.simulate ? 'Neustart protokolliert (Testmodus)' : 'Neustart in 10 Sekunden', text: ctx.mode.simulate ? 'Im Testmodus startet der PC nicht neu.' : 'Speichere jetzt deine offenen Dateien.' }); break;
+    case 'bios-reboot': toast({ type: 'info', title: r.simulated ? 'Neustart ins BIOS protokolliert (Testmodus)' : 'Neustart ins BIOS in 10 Sekunden', text: (r.simulated ? 'Im Testmodus startet der PC nicht neu.' : 'Speichere jetzt deine offenen Dateien. Der PC öffnet danach direkt das BIOS.') + (r.bitlockerPaused ? ' BitLocker ist für diesen einen Start pausiert.' : '') }); break;
     default: break;
   }
 }
@@ -896,6 +900,7 @@ function openPalette() {
     { label: 'Wiederherstellungspunkt erstellen', hint: 'Sicherheitsnetz für Windows', icon: 'shieldCheck', run: () => runJob('restorepoint', { label: 'Manuell' }) },
     { label: 'System neu scannen', hint: 'Hardware und Status neu lesen', icon: 'refresh', run: () => initialScan(false, true) },
     { label: 'Explorer neu starten', hint: 'Taskleiste und Explorer neu laden', icon: 'refresh', run: () => runJob('explorer-restart', {}) },
+    { label: 'BIOS-Check öffnen', hint: 'Was du im BIOS für deine Spiele einstellen solltest', icon: 'chip', run: () => navigate('bios') },
     { label: 'Vorgemerkte Änderungen anwenden', hint: 'Anwenden-Leiste ausführen', icon: 'check', run: () => applyPending(), when: () => ctx.pending.size > 0 },
     { label: 'Animationen umschalten', hint: 'Voll / Reduziert', icon: 'motion', run: () => saveSettings({ motion: ctx.settings.motion === 'reduced' ? 'full' : 'reduced' }) }
   ];
